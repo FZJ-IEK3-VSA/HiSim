@@ -19,6 +19,7 @@ from hisim import utils
 from hisim.component import ConfigBase
 from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -565,32 +566,32 @@ class PVSystem(cp.Component):
 
             if timestep == 1:
                 # delete weather data for PV preprocessing from dictionary -> save memory
-                if self.simulation_repository.exist_entry(
-                    Weather.Weather_DirectNormalIrradianceExtra_yearly_forecast
+                if SingletonSimRepository().exist_entry(
+                    key=SingletonDictKeyEnum.Weather_DirectNormalIrradianceExtra_yearly_forecast
                 ):
-                    self.simulation_repository.delete_entry(
-                        Weather.Weather_DirectNormalIrradianceExtra_yearly_forecast
+                    SingletonSimRepository().delete_entry(
+                        key=SingletonDictKeyEnum.Weather_DirectNormalIrradianceExtra_yearly_forecast
                     )
-                    self.simulation_repository.delete_entry(
-                        Weather.Weather_DirectNormalIrradiance_yearly_forecast
+                    SingletonSimRepository().delete_entry(
+                        key=SingletonDictKeyEnum.Weather_DirectNormalIrradiance_yearly_forecast
                     )
-                    self.simulation_repository.delete_entry(
-                        Weather.Weather_DiffuseHorizontalIrradiance_yearly_forecast
+                    SingletonSimRepository().delete_entry(
+                        key=SingletonDictKeyEnum.Weather_DiffuseHorizontalIrradiance_yearly_forecast
                     )
-                    self.simulation_repository.delete_entry(
-                        Weather.Weather_GlobalHorizontalIrradiance_yearly_forecast
+                    SingletonSimRepository().delete_entry(
+                        key=SingletonDictKeyEnum.Weather_GlobalHorizontalIrradiance_yearly_forecast
                     )
-                    self.simulation_repository.delete_entry(
-                        Weather.Weather_Azimuth_yearly_forecast
+                    SingletonSimRepository().delete_entry(
+                        key=SingletonDictKeyEnum.Weather_Azimuth_yearly_forecast
                     )
-                    self.simulation_repository.delete_entry(
-                        Weather.Weather_ApparentZenith_yearly_forecast
+                    SingletonSimRepository().delete_entry(
+                        key=SingletonDictKeyEnum.Weather_ApparentZenith_yearly_forecast
                     )
-                    self.simulation_repository.delete_entry(
-                        Weather.Weather_TemperatureOutside_yearly_forecast
+                    SingletonSimRepository().delete_entry(
+                        key=SingletonDictKeyEnum.Weather_TemperatureOutside_yearly_forecast
                     )
-                    self.simulation_repository.delete_entry(
-                        Weather.Weather_WindSpeed_yearly_forecast
+                    SingletonSimRepository().delete_entry(
+                        key=SingletonDictKeyEnum.Weather_WindSpeed_yearly_forecast
                     )
 
     def i_save_state(self) -> None:
@@ -625,29 +626,29 @@ class PVSystem(cp.Component):
             # when predictive control is activated, the PV simulation is run beforhand to make forecasting easier
             if self.my_simulation_parameters.predictive_control:
                 # get yearly weather data from dictionary
-                dni_extra = self.simulation_repository.get_entry(
-                    Weather.Weather_DirectNormalIrradianceExtra_yearly_forecast
+                dni_extra = SingletonSimRepository().get_entry(
+                    key=SingletonDictKeyEnum.Weather_DirectNormalIrradianceExtra_yearly_forecast
                 )
-                DNI = self.simulation_repository.get_entry(
-                    Weather.Weather_DirectNormalIrradiance_yearly_forecast
+                DNI = SingletonSimRepository().get_entry(
+                    key=SingletonDictKeyEnum.Weather_DirectNormalIrradiance_yearly_forecast
                 )
-                DHI = self.simulation_repository.get_entry(
-                    Weather.Weather_DiffuseHorizontalIrradiance_yearly_forecast
+                DHI = SingletonSimRepository().get_entry(
+                    key=SingletonDictKeyEnum.Weather_DiffuseHorizontalIrradiance_yearly_forecast
                 )
-                GHI = self.simulation_repository.get_entry(
-                    Weather.Weather_GlobalHorizontalIrradiance_yearly_forecast
+                GHI = SingletonSimRepository().get_entry(
+                    key=SingletonDictKeyEnum.Weather_GlobalHorizontalIrradiance_yearly_forecast
                 )
-                azimuth = self.simulation_repository.get_entry(
-                    Weather.Weather_Azimuth_yearly_forecast
+                azimuth = SingletonSimRepository().get_entry(
+                    key=SingletonDictKeyEnum.Weather_Azimuth_yearly_forecast
                 )
-                apparent_zenith = self.simulation_repository.get_entry(
-                    Weather.Weather_ApparentZenith_yearly_forecast
+                apparent_zenith = SingletonSimRepository().get_entry(
+                    key=SingletonDictKeyEnum.Weather_ApparentZenith_yearly_forecast
                 )
-                temperature = self.simulation_repository.get_entry(
-                    Weather.Weather_TemperatureOutside_yearly_forecast
+                temperature = SingletonSimRepository().get_entry(
+                    key=SingletonDictKeyEnum.Weather_TemperatureOutside_yearly_forecast
                 )
-                wind_speed = self.simulation_repository.get_entry(
-                    Weather.Weather_WindSpeed_yearly_forecast
+                wind_speed = SingletonSimRepository().get_entry(
+                    key=SingletonDictKeyEnum.Weather_WindSpeed_yearly_forecast
                 )
 
                 x = []
@@ -677,6 +678,13 @@ class PVSystem(cp.Component):
             else:
                 self.data = [0] * self.my_simulation_parameters.timesteps
                 self.data_length = self.my_simulation_parameters.timesteps
+
+        if self.my_simulation_parameters.predictive:        
+            pv_forecast_yearly=[self.output[t] * self.pvconfig.power for t in range(self.my_simulation_parameters.timesteps)]
+            SingletonSimRepository().set_entry(
+                key=SingletonDictKeyEnum.pv_forecast_yearly,
+                entry=pv_forecast_yearly
+            )                                                                         
 
         self.modules = pd.read_csv(
             os.path.join(utils.HISIMPATH["photovoltaic"]["modules"]), index_col=0,

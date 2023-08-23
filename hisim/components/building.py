@@ -715,11 +715,11 @@ class Building(dynamic_component.DynamicComponent):
 
         stsv.set_output_value(
             self.heat_flow_rate_to_thermal_mass_node_channel,
-            self.heat_flux_thermal_mass_in_watt
+            self.heat_flux_thermal_mass_in_watt,
         )
         stsv.set_output_value(
             self.heat_flow_rates_to_internal_surface_node_channel,
-            self.heat_flux_internal_room_surface_in_watt
+            self.heat_flux_internal_room_surface_in_watt,
         )
 
         # Saves solar gains cache
@@ -741,7 +741,83 @@ class Building(dynamic_component.DynamicComponent):
 
     def i_prepare_simulation(self,) -> None:
         """Prepare the simulation."""
-        pass
+        if self.my_simulation_parameters.predictive:
+
+            # get weather forecast to compute forecasted solar gains
+            # ambient_temperature_forecast = SingletonSimRepository().get_entry(
+            #     key=SingletonDictKeyEnum.Weather_TemperatureOutside_yearly_forecast
+            # )
+            # altitude_forecast = SingletonSimRepository().get_entry(
+            #     key=SingletonDictKeyEnum.Weather_Altitude_yearly_forecast
+            # )
+            azimuth_forecast = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.Weather_Azimuth_yearly_forecast
+            )
+            apparent_zenith_forecast = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.Weather_ApparentZenith_yearly_forecast
+            )
+            direct_horizontal_irradiance_forecast = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.Weather_DiffuseHorizontalIrradiance_yearly_forecast
+            )
+            direct_normal_irradiance_forecast = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.Weather_DirectNormalIrradiance_yearly_forecast
+            )
+            direct_normal_irradiance_extra_forecast = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.Weather_DirectNormalIrradianceExtra_yearly_forecast
+            )
+            global_horizontal_irradiance_forecast = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.Weather_GlobalHorizontalIrradiance_yearly_forecast
+            )
+
+            solar_gains_forecast = []
+            for i in range(self.my_simulation_parameters.timesteps):
+                solar_gains_forecast_yearly = self.get_solar_heat_gain_through_windows(
+                    azimuth=azimuth_forecast[i],
+                    direct_normal_irradiance=direct_normal_irradiance_forecast[i],
+                    direct_horizontal_irradiance=direct_horizontal_irradiance_forecast[i],
+                    global_horizontal_irradiance=global_horizontal_irradiance_forecast[i],
+                    direct_normal_irradiance_extra=direct_normal_irradiance_extra_forecast[i],
+                    apparent_zenith=apparent_zenith_forecast[i],
+                )
+
+                solar_gains_forecast.append(solar_gains_forecast_yearly)
+
+            # get internal gains forecast
+            internal_gains_forecast = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.heating_by_residents_yearly_forecast
+            )
+
+            # compute the forecast of phi_ia phi_st and phi_m
+            phi_m_forecast: list = []
+            phi_st_forecast: list = []
+            phi_ia_forecast: list = []
+            for i in range(self.my_simulation_parameters.timesteps):
+                (
+                    _,
+                    phi_ia_yearly,
+                    phi_st_yearly,
+                    phi_m_yearly,
+                ) = self.calc_heat_flow(
+                    internal_gains_forecast[i],
+                    solar_gains_forecast[i],
+                )
+                phi_m_forecast.append(phi_m_yearly)
+                phi_st_forecast.append(phi_st_yearly)
+                phi_ia_forecast.append(phi_ia_yearly)
+
+            # disturbance forecast for model predictive control
+            SingletonSimRepository().set_entry(
+                key=SingletonDictKeyEnum.Heat_flux_thermal_mass_node_forecast,
+                entry=phi_m_forecast,
+            )
+            SingletonSimRepository().set_entry(
+                key=SingletonDictKeyEnum.Heat_flux_surface_node_forecast,
+                entry=phi_st_forecast,
+            )
+            SingletonSimRepository().set_entry(
+                key=SingletonDictKeyEnum.Heat_flux_indoor_air_node_forecast,
+                entry=phi_ia_forecast,
+            )
 
     def i_restore_state(self,) -> None:
         """Restore the previous state."""
@@ -804,27 +880,27 @@ class Building(dynamic_component.DynamicComponent):
         # state space represntation is used for tuning of the pid and as a prediction model in the model predictive controller
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.Thermal_transmission_coefficient_glazing,
-            entry=self.transmission_heat_transfer_coefficient_for_windows_and_door_in_watt_per_kelvin
+            entry=self.transmission_heat_transfer_coefficient_for_windows_and_door_in_watt_per_kelvin,
         )
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.Thermal_transmission_Surface_IndoorAir,
-            entry=self.heat_transfer_coefficient_between_indoor_air_and_internal_surface_in_watt_per_kelvin
+            entry=self.heat_transfer_coefficient_between_indoor_air_and_internal_surface_in_watt_per_kelvin,
         )
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.Thermal_transmission_coefficient_opaque_em,
-            entry=self.external_part_of_transmission_heat_transfer_coefficient_for_opaque_elements_in_watt_per_kelvin
+            entry=self.external_part_of_transmission_heat_transfer_coefficient_for_opaque_elements_in_watt_per_kelvin,
         )
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.Thermal_transmission_coefficient_opaque_ms,
-            entry=self.internal_part_of_transmission_heat_transfer_coefficient_for_opaque_elements_in_watt_per_kelvin
+            entry=self.internal_part_of_transmission_heat_transfer_coefficient_for_opaque_elements_in_watt_per_kelvin,
         )
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.Thermal_transmission_coefficient_ventillation,
-            entry=self.thermal_conductance_by_ventilation_in_watt_per_kelvin
+            entry=self.thermal_conductance_by_ventilation_in_watt_per_kelvin,
         )
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.Thermal_capacity_envelope,
-            entry=self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin
+            entry=self.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin,
         )
 
     def get_physical_param(self,):
@@ -1496,7 +1572,7 @@ class Building(dynamic_component.DynamicComponent):
                 * self.total_internal_surface_area_in_m2
             )
         ) * (0.5 * internal_heat_gains_in_watt + solar_heat_gains_in_watt)
-        return self.heat_loss_in_watt
+        return self.heat_loss_in_watt,self.heat_flux_indoor_air_in_watt,self.heat_flux_internal_room_surface_in_watt,self.heat_flux_thermal_mass_in_watt
 
     # =====================================================================================================================================
     # Determination of different temperatures T_air, T_s, T_m,t and T_m and global heat transfer Phi_m_tot which are used in crank-nicolson method.

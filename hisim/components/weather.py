@@ -420,23 +420,13 @@ class Weather(Component):
     Weather_Temperature_Forecast_24h = "Weather_Temperature_Forecast_24h"
     DailyAverageOutsideTemperatures = "DailyAverageOutsideTemperatures"
 
-    Weather_TemperatureOutside_yearly_forecast = (
-        "Weather_TemperatureOutside_yearly_forecast"
-    )
-    Weather_DirectNormalIrradiance_yearly_forecast = (
-        "Weather_DirectNormalIrradiance_yearly_forecast"
-    )
-    Weather_DiffuseHorizontalIrradiance_yearly_forecast = (
-        "Weather_DiffuseHorizontalIrradiance_yearly_forecast"
-    )
-    Weather_DirectNormalIrradianceExtra_yearly_forecast = (
-        "Weather_DirectNormalIrradianceExtra_yearly_forecast"
-    )
-    Weather_GlobalHorizontalIrradiance_yearly_forecast = (
-        "Weather_GlobalHorizontalIrradiance_yearly_forecast"
-    )
-    Weather_Azimuth_yearly_forecast = "Weather_Azimuth_yearly_forecast"
-    Weather_ApparentZenith_yearly_forecast = "Weather_ApparentZenith_yearly_forecast"
+    # Weather_TemperatureOutside_yearly_forecast = "Weather_TemperatureOutside_yearly_forecast"
+    # Weather_DiffuseHorizontalIrradiance_yearly_forecast = "Weather_DiffuseHorizontalIrradiance_yearly_forecast"
+    # Weather_DirectNormalIrradiance_yearly_forecast = "Weather_DirectNormalIrradiance_yearly_forecast"
+    # Weather_DirectNormalIrradianceExtra_yearly_forecast = "Weather_DirectNormalIrradianceExtra_yearly_forecast"
+    # Weather_GlobalHorizontalIrradiance_yearly_forecast = "Weather_GlobalHorizontalIrradiance_yearly_forecast"
+    # Weather_Azimuth_yearly_forecast = "Weather_Azimuth_yearly_forecast"
+    # Weather_ApparentZenith_yearly_forecast = "Weather_ApparentZenith_yearly_forecast"
     Weather_WindSpeed_yearly_forecast = "Weather_WindSpeed_yearly_forecast"
 
     @utils.measure_execution_time
@@ -784,31 +774,41 @@ class Weather(Component):
 
         # write one year forecast to simulation repository for PV processing -> if PV forecasts are needed
         if self.my_simulation_parameters.predictive_control:
-            self.simulation_repository.set_entry(
-                self.Weather_TemperatureOutside_yearly_forecast, self.temperature_list
+            SingletonSimRepository().set_entry(
+                key=SingletonDictKeyEnum.Weather_TemperatureOutside_yearly_forecast,
+                entry=self.temperature_list
             )
-            self.simulation_repository.set_entry(
-                self.Weather_DiffuseHorizontalIrradiance_yearly_forecast, self.DHI_list
+            SingletonSimRepository().set_entry(
+                key=SingletonDictKeyEnum.Weather_DiffuseHorizontalIrradiance_yearly_forecast,
+                entry=self.DHI_list
             )
-            self.simulation_repository.set_entry(
-                self.Weather_DirectNormalIrradiance_yearly_forecast, self.DNI_list
+            SingletonSimRepository().set_entry(
+                key=SingletonDictKeyEnum.Weather_DirectNormalIrradiance_yearly_forecast,
+                entry=self.DNI_list
             )
-            self.simulation_repository.set_entry(
-                self.Weather_DirectNormalIrradianceExtra_yearly_forecast,
-                self.DNIextra_list,
+            SingletonSimRepository().set_entry(
+                key=SingletonDictKeyEnum.Weather_DirectNormalIrradianceExtra_yearly_forecast,
+                entry=self.DNIextra_list,
             )
-            self.simulation_repository.set_entry(
-                self.Weather_GlobalHorizontalIrradiance_yearly_forecast, self.GHI_list
+            SingletonSimRepository().set_entry(
+                key=SingletonDictKeyEnum.Weather_GlobalHorizontalIrradiance_yearly_forecast,
+                entry=self.GHI_list
             )
-            self.simulation_repository.set_entry(
-                self.Weather_Azimuth_yearly_forecast, self.azimuth_list
+            SingletonSimRepository().set_entry(
+                key=SingletonDictKeyEnum.Weather_Azimuth_yearly_forecast,
+                entry=self.azimuth_list
             )
-            self.simulation_repository.set_entry(
-                self.Weather_ApparentZenith_yearly_forecast, self.apparent_zenith_list
+            SingletonSimRepository().set_entry(
+                key=SingletonDictKeyEnum.Weather_ApparentZenith_yearly_forecast,
+                entry=self.apparent_zenith_list
             )
-            self.simulation_repository.set_entry(
-                self.Weather_WindSpeed_yearly_forecast, self.wind_speed_list
+            SingletonSimRepository().set_entry(
+                key=SingletonDictKeyEnum.Weather_WindSpeed_yearly_forecast,
+                entry=self.wind_speed_list
             )
+            SingletonSimRepository().set_entry(
+                key=SingletonDictKeyEnum.Weather_Altitude_yearly_forecast,
+                entry=self.altitude_list)
 
     def interpolate(self, pd_database: Any, year: int) -> Any:
         """Interpolates a time series."""

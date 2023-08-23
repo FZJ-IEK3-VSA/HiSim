@@ -499,6 +499,13 @@ class Occupancy(cp.Component):
             database.to_csv(cache_filepath)
             del data
             del database  # utils.save_cache("Occupancy", parameters, database)
+
+        if self.my_simulation_parameters.predictive:
+            SingletonSimRepository().set_entry(
+                key=SingletonDictKeyEnum.heating_by_residents_yearly_forecast,
+                entry=self.heating_by_residents
+            )
+
         self.max_hot_water_demand = max(self.water_consumption)
 
     def write_to_report(self):

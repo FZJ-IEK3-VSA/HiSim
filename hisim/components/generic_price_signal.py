@@ -11,6 +11,7 @@ from hisim import component as cp
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 from hisim import loadtypes as lt
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -131,6 +132,8 @@ class PriceSignal(cp.Component):
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
         """Outputs price signal of time step."""
+        priceinjectionforecast = [0.1]
+        pricepurchaseforecast = [0.5]
         if (
             self.my_simulation_parameters.predictive_control
             and self.my_simulation_parameters.prediction_horizon
@@ -146,22 +149,22 @@ class PriceSignal(cp.Component):
         elif (
             self.price_signal_config.price_signal_type =='Prices at second half of 2021'
         ):
-            priceinjectionforecast= [ self.price_signal_config.price_injection ] * int( 
-                self.my_simulation_parameters.system_config.prediction_horizon 
-                / self.my_simulation_parameters.seconds_per_timestep 
-            )
+            priceinjectionforecast = list(np.array([self.price_signal_config.price_injection]) * int(
+                self.my_simulation_parameters.prediction_horizon
+                / self.my_simulation_parameters.seconds_per_timestep
+            ))
         elif self.price_signal_config.pricing_scheme=='dynamic':
             pricepurchaseforecast=self.price_signal_config.static_tou_price
         elif self.price_signal_config.pricing_scheme=='fixed':
             pricepurchaseforecast=self.price_signal_config.fixed_price
         elif self.price_signal_config.price_signal_type =='dummy':
-            priceinjectionforecast = [ 10  ] * int( 
-                self.my_simulation_parameters.system_config.prediction_horizon 
+            priceinjectionforecast = [10] * int(
+                self.my_simulation_parameters.prediction_horizon
                 / self.my_simulation_parameters.seconds_per_timestep 
             )
-            pricepurchaseforecast = [ 50  ] * int( 
-                self.my_simulation_parameters.system_config.prediction_horizon 
-                / self.my_simulation_parameters.seconds_per_timestep 
+            pricepurchaseforecast = [50] * int(
+                self.my_simulation_parameters.prediction_horizon
+                / self.my_simulation_parameters.seconds_per_timestep
             )
             # pricepurchaseforecast = [ ]
             # for step in range( self.day ):
@@ -174,11 +177,13 @@ class PriceSignal(cp.Component):
             priceinjectionforecast = [0.1]
             pricepurchaseforecast = [0.5]
 
-        self.simulation_repository.set_entry(
-            self.Price_Injection_Forecast_24h, priceinjectionforecast
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.Price_Injection_Forecast_24h,
+            entry=priceinjectionforecast
         )
-        self.simulation_repository.set_entry(
-            self.Price_Purchase_Forecast_24h, pricepurchaseforecast
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.Price_Purchase_Forecast_24h,
+            entry=pricepurchaseforecast
         )
         stsv.set_output_value(self.PricePurchaseC, pricepurchaseforecast[0])
         stsv.set_output_value(self.PriceInjectionC, priceinjectionforecast[0])

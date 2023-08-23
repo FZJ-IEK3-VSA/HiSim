@@ -402,7 +402,6 @@ class MpcController(cp.Component):
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""
         if self.my_simulation_parameters.predictive:
-            Building.build()
             """Get forecasted disturbance (weather)"""
             self.temp_forecast = SingletonSimRepository().get_entry(
                 key=SingletonDictKeyEnum.Weather_TemperatureOutside_yearly_forecast

@@ -441,24 +441,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             self.total_electricity_consumption_channel,
             consumption_uncontrolled + consumption_ems_controlled,
         )
-        # if flexible_electricity > 0:
-        #     # Todo: put the following lines in an extra condition maybe (and recalc flexible_electricity inbetween);
-        #     #  order could then be changed by something similar to source_weights
-        #     stsv.set_output_value(
-        #         self.building_temperature_modifier,
-        #         self.building_temperature_offset_value,
-        #     )
-        #     stsv.set_output_value(
-        #         self.storage_temperature_modifier, self.storage_temperature_offset_value
-        #     )
-        #     stsv.set_output_value(
-        #         self.simple_hot_water_storage_temperature_modifier,
-        #         self.simple_hot_water_storage_temperature_offset_value,
-        #     )
-        # else:
-        #     stsv.set_output_value(self.building_temperature_modifier, 0)
-        #     stsv.set_output_value(self.storage_temperature_modifier, 0)
-        #     stsv.set_output_value(self.simple_hot_water_storage_temperature_modifier, 0)
         """
         elif self.strategy == "seasonal_storage":
             self.seasonal_storage(delta_demand=delta_demand, stsv=stsv)

@@ -241,7 +241,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.consumption_ems_controlled_inputs = self.get_dynamic_inputs(
             tags=[lt.InandOutputType.ELECTRICITY_REAL]
         )
-        print("test")
 
     def write_to_report(self):
         """Writes relevant information to report."""

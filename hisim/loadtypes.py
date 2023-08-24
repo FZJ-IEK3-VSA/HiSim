@@ -182,6 +182,10 @@ class ComponentType(str, enum.Enum):
     BUFFER = "Buffer"
     HEATERS = [HEAT_PUMP, GAS_HEATER]
 
+    # different heat_pump types
+    HEAT_PUMP_BUILDING = "HeatPumpBuilding"  # Heatpump for heating the house
+    HEAT_PUMP_DHW = "HeatPumpDHW"  # heatpump for heating domnestic hot water
+
 
 @enum.unique
 class HeatingSystems(str, enum.Enum):

@@ -511,7 +511,7 @@ def household_5_advanced_hp_ev_pv_battery(
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             source_tags=[
-                lt.ComponentType.HEAT_PUMP,
+                lt.ComponentType.HEAT_PUMP_DHW,
                 lt.InandOutputType.ELECTRICITY_REAL,
             ],
             # source_weight=my_dhw_heatpump_config.source_weight,
@@ -521,7 +521,7 @@ def household_5_advanced_hp_ev_pv_battery(
         my_electricity_controller.add_component_output(
             source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
             source_tags=[
-                lt.ComponentType.HEAT_PUMP,
+                lt.ComponentType.HEAT_PUMP_DHW,
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
             # source_weight=my_domnestic_hot_water_heatpump.config.source_weight,
@@ -555,7 +555,7 @@ def household_5_advanced_hp_ev_pv_battery(
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             source_tags=[
-                lt.ComponentType.HEAT_PUMP,
+                lt.ComponentType.HEAT_PUMP_BUILDING,
                 lt.InandOutputType.ELECTRICITY_REAL,
             ],
             source_weight=3,
@@ -564,7 +564,7 @@ def household_5_advanced_hp_ev_pv_battery(
         my_electricity_controller.add_component_output(
             source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
             source_tags=[
-                lt.ComponentType.HEAT_PUMP,
+                lt.ComponentType.HEAT_PUMP_BUILDING,
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
             source_weight=3,

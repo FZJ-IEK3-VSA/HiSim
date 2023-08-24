@@ -294,9 +294,36 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             else:
                 stsv.set_output_value(output=output, value=0)
 
+        elif component_type in [lt.ComponentType.HEAT_PUMP_DHW,lt.ComponentType.HEAT_PUMP]:  # Todo: lt.ComponentType.HEAT_PUMP is from old version, kept here just to avoid errors
+            if deltademand > 0:
+                stsv.set_output_value(
+                    self.storage_temperature_modifier, self.storage_temperature_offset_value
+                )
+                stsv.set_output_value(output=output, value=deltademand)
+                deltademand = deltademand - previous_signal
+            else:
+                stsv.set_output_value(self.storage_temperature_modifier, 0)
+                stsv.set_output_value(output=output, value=deltademand)
+
+        elif component_type == lt.ComponentType.HEAT_PUMP_BUILDING:
+            if deltademand > 0:
+                stsv.set_output_value(
+                    self.building_temperature_modifier,
+                    self.building_temperature_offset_value,
+                )
+                stsv.set_output_value(
+                    self.simple_hot_water_storage_temperature_modifier,
+                    self.simple_hot_water_storage_temperature_offset_value,
+                )
+                stsv.set_output_value(output=output, value=deltademand)
+                deltademand = deltademand - previous_signal
+            else:
+                stsv.set_output_value(self.building_temperature_modifier, 0)
+                stsv.set_output_value(self.simple_hot_water_storage_temperature_modifier, 0)
+                stsv.set_output_value(output=output, value=deltademand)
+
         elif component_type in [
             lt.ComponentType.ELECTROLYZER,
-            lt.ComponentType.HEAT_PUMP,
             lt.ComponentType.SMART_DEVICE,
             lt.ComponentType.CAR_BATTERY,
         ]:
@@ -332,6 +359,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 lt.ComponentType.FUEL_CELL,
                 lt.ComponentType.ELECTROLYZER,
                 lt.ComponentType.HEAT_PUMP,
+                lt.ComponentType.HEAT_PUMP_BUILDING,
+                lt.ComponentType.HEAT_PUMP_DHW,
                 lt.ComponentType.SMART_DEVICE,
                 lt.ComponentType.CAR_BATTERY,
             ]:
@@ -339,6 +368,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     lt.ComponentType.BATTERY,
                     lt.ComponentType.ELECTROLYZER,
                     lt.ComponentType.HEAT_PUMP,
+                    lt.ComponentType.HEAT_PUMP_BUILDING,
+                    lt.ComponentType.HEAT_PUMP_DHW,
                     lt.ComponentType.SMART_DEVICE,
                     lt.ComponentType.CAR_BATTERY,
                 ]:
@@ -414,24 +445,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             self.total_electricity_consumption_channel,
             consumption_uncontrolled + consumption_ems_controlled,
         )
-        if flexible_electricity > 0:
-            # Todo: put the following lines in an extra condition maybe (and recalc flexible_electricity inbetween);
-            #  order could then be changed by something similar to source_weights
-            stsv.set_output_value(
-                self.building_temperature_modifier,
-                self.building_temperature_offset_value,
-            )
-            stsv.set_output_value(
-                self.storage_temperature_modifier, self.storage_temperature_offset_value
-            )
-            stsv.set_output_value(
-                self.simple_hot_water_storage_temperature_modifier,
-                self.simple_hot_water_storage_temperature_offset_value,
-            )
-        else:
-            stsv.set_output_value(self.building_temperature_modifier, 0)
-            stsv.set_output_value(self.storage_temperature_modifier, 0)
-            stsv.set_output_value(self.simple_hot_water_storage_temperature_modifier, 0)
         """
         elif self.strategy == "seasonal_storage":
             self.seasonal_storage(delta_demand=delta_demand, stsv=stsv)

@@ -241,6 +241,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.consumption_ems_controlled_inputs = self.get_dynamic_inputs(
             tags=[lt.InandOutputType.ELECTRICITY_REAL]
         )
+        print("test")
 
     def write_to_report(self):
         """Writes relevant information to report."""
@@ -359,6 +360,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 lt.ComponentType.FUEL_CELL,
                 lt.ComponentType.ELECTROLYZER,
                 lt.ComponentType.HEAT_PUMP,
+                lt.ComponentType.HEAT_PUMP_BUILDING,
+                lt.ComponentType.HEAT_PUMP_DHW,
                 lt.ComponentType.SMART_DEVICE,
                 lt.ComponentType.CAR_BATTERY,
             ]:
@@ -366,6 +369,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     lt.ComponentType.BATTERY,
                     lt.ComponentType.ELECTROLYZER,
                     lt.ComponentType.HEAT_PUMP,
+                    lt.ComponentType.HEAT_PUMP_BUILDING,
+                    lt.ComponentType.HEAT_PUMP_DHW,
                     lt.ComponentType.SMART_DEVICE,
                     lt.ComponentType.CAR_BATTERY,
                 ]:

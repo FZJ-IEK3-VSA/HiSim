@@ -81,6 +81,7 @@ class HouseholdAdvancedHPDieselCarPVConfig:
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments
         )
+        # set_heating_threshold_temperature_in_celsius = 16.0 # used for hp and hds
 
         household_config = HouseholdAdvancedHPDieselCarPVConfig(
             building_type="blub",
@@ -133,6 +134,9 @@ class HouseholdAdvancedHPDieselCarPVConfig:
         household_config.hp_controller_config.mode = (
             2  # use heating and cooling as default
         )
+        # Todo: check out heating treshold to avoid heating before cooling
+        # household_config.hp_controller_config.set_heating_threshold_outside_temperature_in_celsius = set_heating_threshold_temperature_in_celsius
+        # household_config.hdscontroller_config.set_heating_threshold_outside_temperature_in_celsius = set_heating_threshold_temperature_in_celsius
         return household_config
 
 

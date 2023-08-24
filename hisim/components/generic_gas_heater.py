@@ -310,7 +310,7 @@ class GasHeater(Component):
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float]:
+    ) -> Tuple[float, float, float]:
         """Calculate OPEX costs, consisting of energy and maintenance costs."""
         for index, output in enumerate(all_outputs):
             if (
@@ -330,4 +330,4 @@ class GasHeater(Component):
 
         opex_cost_per_simulated_period_in_euro += self.calc_maintenance_cost()
 
-        return opex_cost_per_simulated_period_in_euro, co2_per_simulated_period_in_kg
+        return opex_cost_per_simulated_period_in_euro, co2_per_simulated_period_in_kg, self.config.consumption

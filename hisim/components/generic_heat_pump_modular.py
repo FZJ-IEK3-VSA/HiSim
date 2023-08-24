@@ -376,7 +376,7 @@ class ModularHeatPump(cp.Component):
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float]:
+    ) -> Tuple[float, float, float]:
         """Calculate OPEX costs, consisting of maintenance costs snd write total energy consumption to component-config.
 
         No electricity costs for components except for Electricity Meter,
@@ -396,4 +396,4 @@ class ModularHeatPump(cp.Component):
                     1,
                 )
 
-        return self.calc_maintenance_cost(), 0.0
+        return self.calc_maintenance_cost(), 0.0, self.config.consumption

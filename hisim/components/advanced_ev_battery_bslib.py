@@ -227,11 +227,13 @@ class CarBattery(Component):
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float]:
+    ) -> Tuple[float, float, float]:
         """Calculate OPEX costs.
 
         No electricity costs for components except for Electricity Meter,
         because part of electricity consumption is feed by PV
+
+        electricity_consumption is considered vor generic_car already
         """
         for index, output in enumerate(all_outputs):
             if (
@@ -256,7 +258,7 @@ class CarBattery(Component):
                     )
         # Todo: Battery Aging like in component advanced_battery_bslib? Or is this considered in maintenance cost of car?
 
-        return 0, 0
+        return 0, 0, 0
 
 
 @dataclass

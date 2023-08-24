@@ -233,7 +233,7 @@ class ElectricityMeter(DynamicComponent):
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float]:
+    ) -> Tuple[float, float, float]:
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
         for index, output in enumerate(all_outputs):
             if (
@@ -271,7 +271,7 @@ class ElectricityMeter(DynamicComponent):
             self.config.total_energy_from_grid_in_kwh * co2_per_unit
         )
 
-        return opex_cost_per_simulated_period_in_euro, co2_per_simulated_period_in_kg
+        return opex_cost_per_simulated_period_in_euro, co2_per_simulated_period_in_kg, 0
 
 
 @dataclass

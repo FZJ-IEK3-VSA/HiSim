@@ -695,11 +695,11 @@ class SimpleHotWaterStorage(cp.Component):
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float]:
+    ) -> Tuple[float, float, float]:
         # pylint: disable=unused-argument
         """Calculate OPEX costs, consisting of maintenance costs for Heat Distribution System."""
 
-        return self.calc_maintenance_cost(), 0
+        return self.calc_maintenance_cost(), 0, 0
 
 
 @dataclass_json

@@ -22,13 +22,14 @@ def opex_calculation(
         "Component",
         "Operational Costs in EUR",
         "Operational C02 footprint in kg",
+        "Consumption in kWh"
     ]
     opex_table_as_list_of_list = []
 
     for component in components:
         component_unwrapped = component.my_component
         # cost and co2_footprint are calculated per simulated period
-        cost, co2_footprint = component_unwrapped.get_cost_opex(
+        cost, co2_footprint, consumption = component_unwrapped.get_cost_opex(
             all_outputs=all_outputs,
             postprocessing_results=postprocessing_results,
         )
@@ -40,6 +41,7 @@ def opex_calculation(
                 component_unwrapped.component_name,
                 round(cost, 2),
                 round(co2_footprint, 2),
+                consumption,
             ]
         )
 
@@ -48,6 +50,7 @@ def opex_calculation(
             "Total",
             round(total_operational_cost, 2),
             round(total_operational_co2_footprint, 2),
+            "---",
         ]
     )
     pathname = os.path.join(

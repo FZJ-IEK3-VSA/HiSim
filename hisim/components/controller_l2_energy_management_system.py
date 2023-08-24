@@ -294,10 +294,14 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             else:
                 stsv.set_output_value(output=output, value=0)
 
-        elif component_type in [lt.ComponentType.HEAT_PUMP_DHW,lt.ComponentType.HEAT_PUMP]:  # Todo: lt.ComponentType.HEAT_PUMP is from old version, kept here just to avoid errors
+        elif component_type in [
+            lt.ComponentType.HEAT_PUMP_DHW,
+            lt.ComponentType.HEAT_PUMP,
+        ]:  # Todo: lt.ComponentType.HEAT_PUMP is from old version, kept here just to avoid errors
             if deltademand > 0:
                 stsv.set_output_value(
-                    self.storage_temperature_modifier, self.storage_temperature_offset_value
+                    self.storage_temperature_modifier,
+                    self.storage_temperature_offset_value,
                 )
                 stsv.set_output_value(output=output, value=deltademand)
                 deltademand = deltademand - previous_signal
@@ -319,7 +323,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 deltademand = deltademand - previous_signal
             else:
                 stsv.set_output_value(self.building_temperature_modifier, 0)
-                stsv.set_output_value(self.simple_hot_water_storage_temperature_modifier, 0)
+                stsv.set_output_value(
+                    self.simple_hot_water_storage_temperature_modifier, 0
+                )
                 stsv.set_output_value(output=output, value=deltademand)
 
         elif component_type in [

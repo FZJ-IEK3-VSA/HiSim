@@ -1,5 +1,6 @@
 """Air-conditioned household."""
 from typing import Optional
+# import numpy as np
 # import os
 from hisim.simulator import SimulationParameters
 from hisim.simulator import Simulator
@@ -397,6 +398,14 @@ def household_air_conditioner_generic(
             battery_control_state=[],
             batt_soc_actual_timestep=[],
             batt_soc_normalized_timestep=[],
+            h_tr_w = 0.0,
+            h_tr_ms = 0.0,
+            h_tr_em = 0.0,
+            h_ve_adj = 0.0,
+            h_tr_is = 0.0,
+            c_m = 0.0,
+            cop_coef = [0] * 2,
+            eer_coef = [0] * 2,
         )
         my_mpc_controller = controller_mpc.MpcController(
             config=my_mpc_controller_config,

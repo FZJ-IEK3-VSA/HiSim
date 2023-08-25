@@ -93,6 +93,15 @@ class MpcControllerConfig(ConfigBase):
     battery_control_state: list
     batt_soc_actual_timestep: list
     batt_soc_normalized_timestep: list
+    # thermal building model
+    h_tr_w: float
+    h_tr_ms: float
+    h_tr_em: float
+    h_ve_adj: float
+    h_tr_is: float
+    c_m: float
+    cop_coef: float
+    eer_coef: float
 
     @classmethod
     def get_default_config(cls):
@@ -142,6 +151,14 @@ class MpcControllerConfig(ConfigBase):
             battery_control_state=[],
             batt_soc_actual_timestep=[],
             batt_soc_normalized_timestep=[],
+            h_tr_w = 0.0,
+            h_tr_ms = 0.0,
+            h_tr_em = 0.0,
+            h_ve_adj = 0.0,
+            h_tr_is = 0.0,
+            c_m = 0.0,
+            cop_coef = [0] * 2,
+            eer_coef = [0] * 2,
         )
 
 
@@ -384,6 +401,15 @@ class MpcController(cp.Component):
         self.battery_control_state = self.mpcconfig.battery_control_state
         self.batt_soc_actual_timestep = self.mpcconfig.batt_soc_actual_timestep
         self.batt_soc_normalized_timestep = self.mpcconfig.batt_soc_normalized_timestep
+
+        self.h_tr_w = self.mpcconfig.h_tr_w
+        self.h_tr_ms = self.mpcconfig.h_tr_ms
+        self.h_tr_em = self.mpcconfig.h_tr_em
+        self.h_ve_adj = self.mpcconfig.h_ve_adj
+        self.h_tr_is = self.mpcconfig.h_tr_is
+        self.c_m = self.mpcconfig.c_m
+        self.cop_coef = self.mpcconfig.cop_coef
+        self.eer_coef = self.mpcconfig.eer_coef
 
     def get_weather_default_connections(self):
         """Get default connections from the weather component."""

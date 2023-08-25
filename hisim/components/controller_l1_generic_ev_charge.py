@@ -101,9 +101,11 @@ class L1Controller(cp.Component):
     CarLocation = "CarLocation"
     StateOfCharge = "StateOfCharge"
     ElectricityTarget = "ElectricityTarget"
+    AcBatteryPower = "AcBatteryPower"
 
     # Outputs
     ToOrFromBattery = "ToOrFromBattery"
+    BatteryChargingPowerToEMS = "BatteryChargingPowerToEMS"
 
     def __init__(
         self,
@@ -144,6 +146,14 @@ class L1Controller(cp.Component):
             mandatory=True,
         )
 
+        self.ac_battery_power_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.AcBatteryPower,
+            lt.LoadTypes.ELECTRICITY,
+            lt.Units.WATT,
+            mandatory=True,
+        )
+
         if self.clever:
             self.electricity_target: cp.ComponentInput = self.add_input(
                 self.component_name,
@@ -159,7 +169,15 @@ class L1Controller(cp.Component):
             field_name=self.ToOrFromBattery,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
-            output_description="Set power for EV charging in Watt.",
+            output_description="Set power for EV charging (and discharging) in Watt.",
+        )
+
+        self.battery_charging_power_to_ems_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.BatteryChargingPowerToEMS,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            output_description="Real Power for EV charging in Watt. Signal send to L2EMSElectricityController",
         )
 
         self.add_default_connections(self.get_default_connections_from_generic_car())
@@ -194,6 +212,13 @@ class L1Controller(cp.Component):
                 L1Controller.StateOfCharge,
                 battery_classname,
                 advanced_ev_battery_bslib.CarBattery.StateOfCharge,
+            )
+        )
+        connections.append(
+            cp.ComponentConnection(
+                L1Controller.AcBatteryPower,
+                battery_classname,
+                advanced_ev_battery_bslib.CarBattery.AcBatteryPower,
             )
         )
         return connections
@@ -253,6 +278,15 @@ class L1Controller(cp.Component):
             )
             self.processed_state = self.state.clone()
         stsv.set_output_value(self.p_set, self.state.power)
+
+        ac_battery_power =  stsv.get_input_value(self.ac_battery_power_channel)
+        if ac_battery_power > 0:
+            # charging of EV
+            stsv.set_output_value(self.battery_charging_power_to_ems_channel, ac_battery_power)
+        else:
+            # no charging of EV
+            stsv.set_output_value(self.battery_charging_power_to_ems_channel, 0)
+
 
     def build(
         self,

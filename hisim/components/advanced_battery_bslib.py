@@ -241,7 +241,7 @@ class Battery(Component):
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float]:
+    ) -> Tuple[float, float, float]:
         """Calculate OPEX costs, consisting of battery aging and maintenance costs.
 
         Battery aging is ROUGHLY approximated by costs for each virtual charging cycle used in simulated period
@@ -288,7 +288,7 @@ class Battery(Component):
             self.calc_maintenance_cost() + battery_aging_costs_in_euro
         )
 
-        return opex_cost_per_simulated_period_in_euro, 0
+        return opex_cost_per_simulated_period_in_euro, 0, 0
 
 
 @dataclass

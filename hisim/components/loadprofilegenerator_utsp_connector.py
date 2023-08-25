@@ -594,7 +594,7 @@ class UtspLpgConnector(cp.Component):
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float]:
+    ) -> Tuple[float, float, float]:
         """Calculate OPEX costs, snd write total energy consumption to component-config.
 
         No electricity costs for components except for Electricity Meter,
@@ -613,4 +613,4 @@ class UtspLpgConnector(cp.Component):
                     1,
                 )
 
-        return 0, 0
+        return 0, 0, self.utsp_config.consumption

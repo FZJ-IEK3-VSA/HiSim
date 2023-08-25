@@ -56,7 +56,7 @@ class HouseholdAdvancedHPEvPvConfig:
     number_of_apartments: int
     # dhw_controlable: bool  # if dhw is controlled by EMS
     # heatpump_controlable: bool  # if heatpump is controlled by EMS
-    surplus_control: bool  # decision on the consideration of smart control for EV charging and heat pump and dhw
+    surplus_control: bool  # decision on the consideration of smart control for heat pump and dhw
     # simulation_parameters: SimulationParameters
     # total_base_area_in_m2: float
     occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig
@@ -447,15 +447,16 @@ def household_4_advanced_hp_ev_pv(
         car_battery.connect_only_predefined_connections(car_battery_controller)
 
         my_electricity_controller.add_component_input_and_connect(
-            source_component_class=car_battery,
-            source_component_output=car_battery.AcBatteryPower,
+            source_component_class=car_battery_controller,
+            source_component_output=car_battery_controller.BatteryChargingPowerToEMS,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             source_tags=[
                 lt.ComponentType.CAR_BATTERY,
                 lt.InandOutputType.ELECTRICITY_REAL,
             ],
-            source_weight=car_battery.source_weight,
+            # source_weight=car_battery.source_weight,
+            source_weight=1,
         )
 
         electricity_target = my_electricity_controller.add_component_output(

@@ -457,15 +457,16 @@ def household_5_advanced_hp_ev_pv_battery(
         car_battery.connect_only_predefined_connections(car_battery_controller)
 
         my_electricity_controller.add_component_input_and_connect(
-            source_component_class=car_battery,
-            source_component_output=car_battery.AcBatteryPower,
+            source_component_class=car_battery_controller,
+            source_component_output=car_battery_controller.BatteryChargingPowerToEMS,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             source_tags=[
                 lt.ComponentType.CAR_BATTERY,
                 lt.InandOutputType.ELECTRICITY_REAL,
             ],
-            source_weight=car_battery.source_weight,
+            # source_weight=car_battery.source_weight,
+            source_weight=1,
         )
 
         electricity_target = my_electricity_controller.add_component_output(

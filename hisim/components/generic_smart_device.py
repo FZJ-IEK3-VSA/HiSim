@@ -346,7 +346,7 @@ class SmartDevice(cp.Component):
 
     def get_cost_opex(
         self, all_outputs: List, postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float]:
+    ) -> Tuple[float, float, float]:
         for index, output in enumerate(all_outputs):
             if (
                 output.component_name == self.component_name
@@ -359,4 +359,4 @@ class SmartDevice(cp.Component):
                     * self.my_simulation_parameters.seconds_per_timestep
                     / 3.6e6
                 )
-        return self.consumption * euro_per_unit, self.consumption * co2_per_unit
+        return self.consumption * euro_per_unit, self.consumption * co2_per_unit, self.consumption

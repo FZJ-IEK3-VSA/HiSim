@@ -162,7 +162,7 @@
     "name": "CarBattery",
     "source_weight": 1,
     "system_id": "SG1",
-    "p_inv_custom": 10000.0,
+    "p_inv_custom": 11000.0,
     "e_bat_custom": 30,
     "charge": 0,
     "discharge": 0
@@ -177,6 +177,7 @@
       }
     },
     "battery_set": 0.8,
+    "lower_threshold_charging_power": 1100.0,
     "co2_footprint": 100,
     "cost": 1000,
     "lifetime": 10,

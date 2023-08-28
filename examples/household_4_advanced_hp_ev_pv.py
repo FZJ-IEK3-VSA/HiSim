@@ -56,7 +56,8 @@ class HouseholdAdvancedHPEvPvConfig:
     number_of_apartments: int
     # dhw_controlable: bool  # if dhw is controlled by EMS
     # heatpump_controlable: bool  # if heatpump is controlled by EMS
-    surplus_control: bool  # decision on the consideration of smart control for heat pump and dhw
+    surplus_control: bool  # decision on the consideration of smart control for heat pump and dhw, excluded EV
+    surplus_control_car: bool  # decision on the consideration of smart control for EV charging
     # simulation_parameters: SimulationParameters
     # total_base_area_in_m2: float
     occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig
@@ -96,6 +97,7 @@ class HouseholdAdvancedHPEvPvConfig:
             # dhw_controlable=False,
             # heatpump_controlable=False,
             surplus_control=False,
+            surplus_control_car=False,
             # simulation_parameters=SimulationParameters.one_day_only(2022),
             # total_base_area_in_m2=121.2,
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
@@ -216,6 +218,7 @@ def household_4_advanced_hp_ev_pv(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     # my_simulation_parameters.surplus_control = my_config.surplus_control # Todo: need to find solution for this, because electric vehicle charger is also controlled by my_simulation_parameters.surplus_control
+    my_simulation_parameters.surplus_control = my_config.surplus_control_car
     clever = my_config.surplus_control
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
@@ -453,36 +456,48 @@ def household_4_advanced_hp_ev_pv(
         car_battery_controller.connect_only_predefined_connections(car_battery)
         car_battery.connect_only_predefined_connections(car_battery_controller)
 
-        my_electricity_controller.add_component_input_and_connect(
-            source_component_class=car_battery_controller,
-            source_component_output=car_battery_controller.BatteryChargingPowerToEMS,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            source_tags=[
-                lt.ComponentType.CAR_BATTERY,
-                lt.InandOutputType.ELECTRICITY_REAL,
-            ],
-            # source_weight=car_battery.source_weight,
-            source_weight=1,
-        )
+        if my_config.surplus_control_car:
+            my_electricity_controller.add_component_input_and_connect(
+                source_component_class=car_battery_controller,
+                source_component_output=car_battery_controller.BatteryChargingPowerToEMS,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.ComponentType.CAR_BATTERY,
+                    lt.InandOutputType.ELECTRICITY_REAL,
+                ],
+                # source_weight=car_battery.source_weight,
+                source_weight=1,
+            )
 
-        electricity_target = my_electricity_controller.add_component_output(
-            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-            source_tags=[
-                lt.ComponentType.CAR_BATTERY,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            # source_weight=car_battery_controller.source_weight,
-            source_weight=1,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target Electricity for EV Battery Controller. ",
-        )
+            electricity_target = my_electricity_controller.add_component_output(
+                source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+                source_tags=[
+                    lt.ComponentType.CAR_BATTERY,
+                    lt.InandOutputType.ELECTRICITY_TARGET,
+                ],
+                # source_weight=car_battery_controller.source_weight,
+                source_weight=1,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                output_description="Target Electricity for EV Battery Controller. ",
+            )
 
-        car_battery_controller.connect_dynamic_input(
-            input_fieldname=controller_l1_generic_ev_charge.L1Controller.ElectricityTarget,
-            src_object=electricity_target,
-        )
+            car_battery_controller.connect_dynamic_input(
+                input_fieldname=controller_l1_generic_ev_charge.L1Controller.ElectricityTarget,
+                src_object=electricity_target,
+            )
+        else:
+            my_electricity_controller.add_component_input_and_connect(
+                source_component_class=car_battery_controller,
+                source_component_output=car_battery_controller.BatteryChargingPowerToEMS,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                ],
+                source_weight=999,
+            )
 
     # -----------------------------------------------------------------------------------------------------------------
     # connect EMS

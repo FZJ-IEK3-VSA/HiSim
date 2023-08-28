@@ -8,7 +8,8 @@ from hisim.components import weather
 from hisim.components import generic_pv_system
 from hisim.components import building
 from hisim.components import generic_heat_pump
-from hisim.components import sumbuilder
+from hisim.components import electricity_meter
+from hisim import loadtypes
 
 
 def basic_household_with_default_connections(
@@ -54,6 +55,10 @@ def basic_household_with_default_connections(
     azimuth = 180
     tilt = 30
     source_weight = 0
+    pv_co2_footprint = power * 1e-3 * 130.7
+    pv_cost = power * 1e-3 * 535.81
+    pv_maintenance_cost_as_percentage_of_investment = 0.01
+    pv_lifetime = 25
 
     # Set heat pump controller
     temperature_air_heating_in_celsius = 16.0
@@ -94,13 +99,6 @@ def basic_household_with_default_connections(
     )
     my_sim.add_component(my_weather)
 
-    # Build Grid and connect building inputs
-    my_base_electricity_load_profile = sumbuilder.ElectricityGrid(
-        config=sumbuilder.ElectricityGridConfig.get_default_electricity_grid(),
-        my_simulation_parameters=my_simulation_parameters,
-    )
-    my_sim.add_component(my_base_electricity_load_profile)
-
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
     my_sim.add_component(my_building)
 
@@ -117,6 +115,10 @@ def basic_household_with_default_connections(
         inverter_name=inverter_name,
         source_weight=source_weight,
         name=name,
+        co2_footprint=pv_co2_footprint,
+        cost=pv_cost,
+        maintenance_cost_as_percentage_of_investment=pv_maintenance_cost_as_percentage_of_investment,
+        lifetime=pv_lifetime,
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
@@ -124,6 +126,12 @@ def basic_household_with_default_connections(
     )
     my_sim.add_component(my_photovoltaic_system)
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)
+
+    # Build Electricity Meter
+    my_electricity_meter = electricity_meter.ElectricityMeter(
+        my_simulation_parameters=my_simulation_parameters,
+        config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
+    )
 
     my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
         config=generic_heat_pump.GenericHeatPumpControllerConfig(
@@ -140,8 +148,8 @@ def basic_household_with_default_connections(
     # depending on previous loads, hard to define default connections
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.ElectricityInput,
-        my_base_electricity_load_profile.component_name,
-        my_base_electricity_load_profile.ElectricityOutput,
+        my_electricity_meter.component_name,
+        my_electricity_meter.ElectricityToOrFromGrid,
     )
     my_sim.add_component(my_heat_pump_controller)
 
@@ -154,6 +162,41 @@ def basic_household_with_default_connections(
     )
 
     my_sim.add_component(my_heat_pump)
+
+    # Electricity Grid
+    my_electricity_meter.add_component_input_and_connect(
+        source_component_class=my_photovoltaic_system,
+        source_component_output=my_photovoltaic_system.ElectricityOutput,
+        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
+        source_unit=loadtypes.Units.WATT,
+        source_tags=[
+            loadtypes.ComponentType.PV,
+            loadtypes.InandOutputType.ELECTRICITY_PRODUCTION,
+        ],
+        source_weight=999,
+    )
+
+    my_electricity_meter.add_component_input_and_connect(
+        source_component_class=my_occupancy,
+        source_component_output=my_occupancy.ElectricityOutput,
+        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
+        source_unit=loadtypes.Units.WATT,
+        source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+        source_weight=999,
+    )
+
+    my_electricity_meter.add_component_input_and_connect(
+        source_component_class=my_heat_pump,
+        source_component_output=my_heat_pump.ElectricityOutput,
+        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
+        source_unit=loadtypes.Units.WATT,
+        source_tags=[
+            loadtypes.ComponentType.HEAT_PUMP,
+            loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+        ],
+        source_weight=999,
+    )
+    my_sim.add_component(my_electricity_meter)
 
     # depending on type of heating device, hard to define default connections
     my_building.connect_input(

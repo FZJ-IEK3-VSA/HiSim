@@ -50,8 +50,12 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     profile_with_washing_machine_and_dishwasher: bool
 
     @classmethod
-    def get_default_UTSP_connector_config(cls) -> Any:
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return UtspLpgConnector.get_full_classname()
 
+    @classmethod
+    def get_default_UTSP_connector_config(cls) -> Any:
         """Creates a default configuration. Chooses default values for the LPG parameters."""
 
         config = UtspLpgConnectorConfig(
@@ -620,16 +624,21 @@ class UtspLpgConnector(cp.Component):
         return self.utsp_config.get_string_dict()
 
     def get_cost_opex(
-        self, all_outputs: List, postprocessing_results: pd.DataFrame,
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
     ) -> Tuple[float, float]:
+        """Calculate OPEX costs, snd write total energy consumption to component-config.
+
+        No electricity costs for components except for Electricity Meter,
+        because part of electricity consumption is feed by PV
+        """
         for index, output in enumerate(all_outputs):
             print(output.component_name, output.load_type)
             if (
                 output.component_name == "UTSPConnector"
                 and output.load_type == lt.LoadTypes.ELECTRICITY
             ):
-                co2_per_unit = 0.4
-                euro_per_unit = 0.25
                 self.utsp_config.consumption = round(
                     sum(postprocessing_results.iloc[:, index])
                     * self.my_simulation_parameters.seconds_per_timestep
@@ -637,7 +646,4 @@ class UtspLpgConnector(cp.Component):
                     1,
                 )
 
-        return (
-            self.utsp_config.consumption * euro_per_unit,
-            self.utsp_config.consumption * co2_per_unit,
-        )
+        return 0, 0

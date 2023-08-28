@@ -71,7 +71,9 @@ class HouseholdAdvancedHPDieselCarConfig:
 
         # set number of apartments (mandatory for dhw storage config)
         number_of_apartments = 1
-        SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments)
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments
+        )
 
         household_config = HouseholdAdvancedHPDieselCarConfig(
             building_type="blub",
@@ -115,7 +117,9 @@ class HouseholdAdvancedHPDieselCarConfig:
             electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
         )
         household_config.hp_config.group_id = 1  # use modulating heatpump as default
-        household_config.hp_controller_config.mode = 2  # use heating and cooling as default
+        household_config.hp_controller_config.mode = (
+            2  # use heating and cooling as default
+        )
         return household_config
 
 
@@ -326,7 +330,7 @@ def household_advanced_hp_diesel_car(
     )
 
     my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterTemperatureFromHeatDistributionSystem,
+        my_simple_hot_water_storage.WaterTemperatureFromHeatDistribution,
         my_heat_distribution.component_name,
         my_heat_distribution.WaterTemperatureOutput,
     )

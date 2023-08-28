@@ -1,5 +1,7 @@
 """Simple Car (LPG connected) and configuration.
-Evaluates diesel or electricity consumption based on driven kilometers and processes Car Location for charging stations."""
+
+Evaluates diesel or electricity consumption based on driven kilometers and processes Car Location for charging stations.
+"""
 
 # -*- coding: utf-8 -*-
 from typing import List, Any, Tuple
@@ -15,6 +17,7 @@ import numpy as np
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
+from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim import utils
 
 __authors__ = "Johanna Ganglbauer"
@@ -47,6 +50,8 @@ class CarConfig(cp.ConfigBase):
     cost: float
     #: lifetime of car in years
     lifetime: float
+    # maintenance cost as share of investment [0..1]
+    maintenance_cost_as_percentage_of_investment: float
     #: consumption of the car in kWh or l
     consumption: float
 
@@ -66,6 +71,7 @@ class CarConfig(cp.ConfigBase):
             co2_footprint=9139.3,
             cost=32035.0,
             lifetime=18,
+            maintenance_cost_as_percentage_of_investment=0.02,
             consumption=0,
         )
         return config
@@ -80,6 +86,7 @@ class CarConfig(cp.ConfigBase):
             consumption_per_km=0.15,
             co2_footprint=8899.4,
             cost=44498.0,
+            maintenance_cost_as_percentage_of_investment=0.02,
             lifetime=18,
             consumption=0,
         )
@@ -195,8 +202,11 @@ class Car(cp.Component):
             stsv.set_output_value(self.fuel_consumption, liters_used)
 
     def get_cost_opex(
-        self, all_outputs: List, postprocessing_results: pd.DataFrame,
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
     ) -> Tuple[float, float]:
+        """Calculate OPEX costs, consisting of energy and maintenance costs."""
         for index, output in enumerate(all_outputs):
             if output.component_name == self.config.name + "_w" + str(
                 self.config.source_weight
@@ -205,23 +215,24 @@ class Car(cp.Component):
                     self.config.consumption = round(
                         sum(postprocessing_results.iloc[:, index]), 1
                     )
-                    # be careful, this is hard coded and should be placed somewhere else!
-                    co2_per_unit = 2.6
-                    euro_per_unit = 1.6
+                    co2_per_unit = EmissionFactorsAndCostsForFuelsConfig.diesel_footprint_in_kg_per_l
+                    euro_per_unit = EmissionFactorsAndCostsForFuelsConfig.diesel_costs_in_euro_per_l
+
+                    opex_cost_per_simulated_period_in_euro = self.calc_maintenance_cost() + self.config.consumption * euro_per_unit
+                    co2_per_simulated_period_in_kg = self.config.consumption * co2_per_unit
+
                 elif output.unit == lt.Units.WATT:
-                    co2_per_unit = 0.4
-                    euro_per_unit = 0.25
                     self.config.consumption = round(
                         sum(postprocessing_results.iloc[:, index])
                         * self.my_simulation_parameters.seconds_per_timestep
                         / 3.6e6,
                         1,
                     )
+                    # No electricity costs for components except for Electricity Meter, because part of electricity consumption is feed by PV
+                    opex_cost_per_simulated_period_in_euro = self.calc_maintenance_cost()
+                    co2_per_simulated_period_in_kg = 0.0
 
-        return (
-            self.config.consumption * euro_per_unit,
-            self.config.consumption * co2_per_unit,
-        )
+        return opex_cost_per_simulated_period_in_euro, co2_per_simulated_period_in_kg
 
     def build(self, config: CarConfig, occupancy_config: Any) -> None:
         """Loads necesary data and saves config to class."""

@@ -2,7 +2,10 @@
 # clean
 import os
 import re
+from typing import Any
 from dataclasses import dataclass
+import numpy as np
+from hisim import result_path_provider
 
 
 class Chart:  # noqa: too-few-public-methods
@@ -21,7 +24,7 @@ class Chart:  # noqa: too-few-public-methods
         "SEP",
         "OCT",
         "NOV",
-        "DEZ",
+        "DEC",
     ]
     label_months_lowercase = [
         "January",
@@ -59,10 +62,10 @@ class Chart:  # noqa: too-few-public-methods
 
         if hasattr(units, "value"):
             self.units = units.value
-            self.ylabel = units.value
+            # self.ylabel = units.value
         else:
             self.units = units
-            self.ylabel = units
+            # self.ylabel = units
         self.time_correction_factor = time_correction_factor
 
         self.title: str = ""
@@ -106,6 +109,30 @@ class Chart:  # noqa: too-few-public-methods
             self.filename = f"{self.type.lower()}_{self.component_name}_{self.output_type}{self.figure_format.value}"
         self.filepath = os.path.join(self.directory_path, self.filename)
         self.filepath2 = os.path.join(self.component_output_folder_path, self.filename)
+        result_path_provider.check_path_length(path=self.filepath)
+        result_path_provider.check_path_length(path=self.filepath2)
+
+    def rescale_y_axis(self, y_values: Any, units: Any) -> tuple[Any, Any]:
+        """Rescale y_values of plots."""
+        max_scale = np.max(np.abs(y_values))
+        if units != "-":
+            scale = ""
+            if max_scale >= 1e12:
+                y_values = y_values * 1e-12
+                scale = "T"
+            elif 1e9 <= max_scale < 1e12:
+                y_values = y_values * 1e-9
+                scale = "G"
+            elif 1e6 <= max_scale < 1e9:
+                y_values = y_values * 1e-6
+                scale = "M"
+            elif 1e3 <= max_scale < 1e6:
+                y_values = y_values * 1e-3
+                scale = "k"
+
+            units = f"{scale}{units}"
+
+        return y_values, units
 
 
 @dataclass

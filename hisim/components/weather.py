@@ -166,19 +166,20 @@ class LocationEnum(Enum):
         "Madrid",
         "NSRDB",
         "Madrid",
-        "232500_40.45_-3.70_2019.csv",
+        "Madrid",
         WeatherDataSourceEnum.NSRDB,
     )  # noqa: invalid-name
     Seville = (
         "Seville",
         "NSRDB",
         "Seville",
-        "172617_37.37_-5.98_2019.csv",
+        "Seville",
         WeatherDataSourceEnum.NSRDB,
     )  # noqa: invalid-name
     Athens = (
         "Athens",
         "NSRDB",
+        "Athens",
         "Athens",
         WeatherDataSourceEnum.NSRDB,
     )  # noqa: invalid-name
@@ -186,11 +187,13 @@ class LocationEnum(Enum):
         "Belgrade",
         "NSRDB",
         "Belgrade",
+        "Belgrade",
         WeatherDataSourceEnum.NSRDB,
     )  # noqa: invalid-name
     Cyprus = (
         "Cyprus",
         "NSRDB",
+        "Cyprus",
         "Cyprus",
         WeatherDataSourceEnum.NSRDB,
     )  # noqa: invalid-name
@@ -198,11 +201,13 @@ class LocationEnum(Enum):
         "Ljubljana",
         "NSRDB",
         "Ljubljana",
+        "Ljubljana",
         WeatherDataSourceEnum.NSRDB,
     )  # noqa: invalid-name
     Milan = (
         "Milan",
         "NSRDB",
+        "Milan",
         "Milan",
         WeatherDataSourceEnum.NSRDB,
     )  # noqa: invalid-name
@@ -210,11 +215,13 @@ class LocationEnum(Enum):
         "Sarajevo",
         "NSRDB",
         "Sarajevo",
+        "Sarajevo",
         WeatherDataSourceEnum.NSRDB,
     )  # noqa: invalid-name
     Vranje = (
         "Vranje",
         "NSRDB",
+        "Vranje",
         "Vranje",
         WeatherDataSourceEnum.NSRDB,
     )  # noqa: invalid-name

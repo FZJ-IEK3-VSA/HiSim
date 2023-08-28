@@ -14,13 +14,15 @@ from hisim.postprocessing import charts
 from hisim import log
 from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
-from hisim import loadtypes as lt
 from hisim.postprocessing.chart_singleday import ChartSingleDay
 from hisim.postprocessing.compute_kpis import compute_kpis
 from hisim.postprocessing.generate_csv_for_housing_database import (
     generate_csv_for_database,
 )
-from hisim.postprocessing.opex_cost_calculation import opex_calculation
+from hisim.postprocessing.opex_and_capex_cost_calculation import (
+    opex_calculation,
+    capex_calculation,
+)
 from hisim.postprocessing.system_chart import SystemChart
 from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
@@ -37,7 +39,6 @@ class PostProcessor:
     def __init__(self):
         """Initializes the post processing."""
         self.dirname: str
-        # self.report_image_entries: List[ReportImageEntry] = []
         self.chapter_counter: int = 1
         self.figure_counter: int = 1
 
@@ -46,51 +47,6 @@ class PostProcessor:
         if dirname is None:
             raise ValueError("No results directory name was defined.")
         self.dirname = dirname
-
-    @utils.measure_execution_time
-    def plot_sankeys(self, ppdt: PostProcessingDataTransfer) -> None:
-        """For plotting the sankeys."""
-        for i_display_name in [
-            name for name, display_name in lt.DisplayNames.__members__.items()
-        ]:
-            my_sankey = charts.SankeyHISIM(
-                name=i_display_name,
-                component_name=i_display_name,
-                output_description=None,
-                units=lt.Units.ANY,
-                directorypath=ppdt.simulation_parameters.result_directory,
-                time_correction_factor=ppdt.time_correction_factor,
-                figure_format=ppdt.simulation_parameters.figure_format,
-            )
-            my_sankey.plot(data=ppdt.all_outputs)
-        if any(
-            component_output.component_name == "HeatPump"
-            for component_output in ppdt.all_outputs
-        ):
-            my_sankey = charts.SankeyHISIM(
-                name="HeatPump",
-                component_name="HeatPump",
-                output_description=None,
-                units=lt.Units.ANY,
-                directorypath=ppdt.simulation_parameters.result_directory,
-                time_correction_factor=ppdt.time_correction_factor,
-                figure_format=ppdt.simulation_parameters.figure_format,
-            )
-            my_sankey.plot_heat_pump(data=ppdt.all_outputs)
-        if any(
-            component_output.component_name == "Building"
-            for component_output in ppdt.all_outputs
-        ):
-            my_sankey = charts.SankeyHISIM(
-                name="Building",
-                component_name="Building",
-                output_description=None,
-                units=lt.Units.ANY,
-                directorypath=ppdt.simulation_parameters.result_directory,
-                time_correction_factor=ppdt.time_correction_factor,
-                figure_format=ppdt.simulation_parameters.figure_format,
-            )
-            my_sankey.plot_building(data=ppdt.all_outputs)
 
     @utils.measure_execution_time
     @utils.measure_memory_leak
@@ -155,14 +111,7 @@ class PostProcessor:
             end = timer()
             duration = end - start
             log.information("Making bar plots took " + f"{duration:1.2f}s.")
-        # Plot sankey
-        if PostProcessingOptions.PLOT_SANKEY in ppdt.post_processing_options:
-            log.information("Making sankey plots.")
-            start = timer()
-            self.make_sankey_plots()
-            end = timer()
-            duration = end - start
-            log.information("Making sankey plots took " + f"{duration:1.2f}s.")
+
         # Export all results to CSV
         if PostProcessingOptions.EXPORT_TO_CSV in ppdt.post_processing_options:
             log.information("Making CSV exports.")
@@ -193,9 +142,16 @@ class PostProcessor:
             )
         if PostProcessingOptions.COMPUTE_OPEX in ppdt.post_processing_options:
             log.information(
-                "Computing operational costs and C02 emissions produced in operation."
+                "Computing and writing operational costs and C02 emissions produced in operation to report."
             )
-            opex_calculation(components=ppdt.wrapped_components, all_outputs=ppdt.all_outputs, postprocessing_results=ppdt.results)
+            start = timer()
+            self.compute_and_write_opex_costs_to_report(ppdt, report)
+            end = timer()
+            duration = end - start
+            log.information(
+                "Computing and writing operational costs and C02 emissions produced in operation to report took "
+                + f"{duration:1.2f}s."
+            )
         if (
             PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT
             in ppdt.post_processing_options
@@ -232,6 +188,18 @@ class PostProcessor:
             duration = end - start
             log.information(
                 "Writing network charts toreport took " + f"{duration:1.2f}s."
+            )
+        if PostProcessingOptions.COMPUTE_CAPEX in ppdt.post_processing_options:
+            log.information(
+                "Computing and writing investment costs and C02 emissions from production of devices to report."
+            )
+            start = timer()
+            self.compute_and_write_capex_costs_to_report(ppdt, report)
+            end = timer()
+            duration = end - start
+            log.information(
+                "Computing and writing investment costs and C02 emissions from production of devices to report took "
+                + f"{duration:1.2f}s."
             )
         if (
             PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
@@ -364,11 +332,6 @@ class PostProcessor:
         log.information("Exporting to csv.")
         self.export_results_to_csv(ppdt)
 
-    def make_sankey_plots(self) -> None:
-        """Makes Sankey plots. Needs work."""
-        log.information("Plotting sankeys.")
-        # TODO:   self.plot_sankeys()
-
     def make_bar_charts(
         self,
         ppdt: PostProcessingDataTransfer,
@@ -463,7 +426,7 @@ class PostProcessor:
                 output_description=output.output_description,
                 figure_format=ppdt.simulation_parameters.figure_format,
             )
-            my_entry = my_line.plot(data=ppdt.results.iloc[:, index], units=output.unit)
+            my_entry = my_line.plot(data=ppdt.results.iloc[:, index])
             report_image_entries.append(my_entry)
             del my_line
 
@@ -496,21 +459,16 @@ class PostProcessor:
         self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
     ) -> None:
         """Write simulation parameters to report."""
-        report.open()
-        report.write_heading_with_style_heading_one(
-            [str(self.chapter_counter) + ". Simulation Parameters"]
+        lines = [
+            "The following information was used to configure the HiSim Building Simulation."
+        ]
+        simulation_parameters_list = ppdt.simulation_parameters.get_unique_key_as_list()
+        lines += simulation_parameters_list
+        self.write_new_chapter_with_text_content_to_report(
+            report=report,
+            lines=lines,
+            headline=". Simulation Parameters",
         )
-        report.write_with_normal_alignment(
-            [
-                "The following information was used to configure the HiSim Building Simulation."
-            ]
-        )
-        report.write_with_normal_alignment(
-            ppdt.simulation_parameters.get_unique_key_as_list()
-        )
-        self.chapter_counter = self.chapter_counter + 1
-        report.page_break()
-        report.close()
 
     def write_components_to_report(
         self,
@@ -620,19 +578,16 @@ class PostProcessor:
         self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
     ) -> None:
         """Write all outputs to report."""
-        report.open()
         all_output_names: List[Optional[str]]
         all_output_names = []
         output: ComponentOutput
         for output in ppdt.all_outputs:
             all_output_names.append(output.full_name + " [" + output.unit + "]")
-        report.write_heading_with_style_heading_one(
-            [str(self.chapter_counter) + ". All Outputs"]
+        self.write_new_chapter_with_text_content_to_report(
+            report=report,
+            lines=all_output_names,
+            headline=". All Outputs",
         )
-        self.chapter_counter = self.chapter_counter + 1
-        report.write_with_normal_alignment(all_output_names)
-        report.page_break()
-        report.close()
 
     def write_network_charts_to_report(
         self,
@@ -667,13 +622,79 @@ class PostProcessor:
             all_outputs=ppdt.all_outputs,
             simulation_parameters=ppdt.simulation_parameters,
         )
-        lines = kpi_compute_return
+        self.write_new_chapter_with_table_to_report(
+            report=report,
+            table_as_list_of_list=kpi_compute_return,
+            headline=". KPIs",
+            comment=["Here a comment on calculation of numbers will follow"],
+        )
+
+    def compute_and_write_opex_costs_to_report(
+        self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
+    ) -> None:
+        """Computes OPEX costs and operational CO2-emissions and writes them to report and csv."""
+        opex_compute_return = opex_calculation(
+            components=ppdt.wrapped_components,
+            all_outputs=ppdt.all_outputs,
+            postprocessing_results=ppdt.results,
+            simulation_parameters=ppdt.simulation_parameters,
+        )
+        self.write_new_chapter_with_table_to_report(
+            report=report,
+            table_as_list_of_list=opex_compute_return,
+            headline=". Operational Costs and Emissions for simulated period",
+            comment=[
+                "\n",
+                "Comments:",
+                "Operational Costs are the sum of fuel costs and maintenance costs for the devices, calculated for the simulated period.",
+                "Emissions are fuel emissions emitted during simulad period.",
+            ],
+        )
+
+    def compute_and_write_capex_costs_to_report(
+        self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
+    ) -> None:
+        """Computes CAPEX costs and CO2-emissions for production of devices and writes them to report and csv."""
+        capex_compute_return = capex_calculation(
+            components=ppdt.wrapped_components,
+            simulation_parameters=ppdt.simulation_parameters,
+        )
+        self.write_new_chapter_with_table_to_report(
+            report=report,
+            table_as_list_of_list=capex_compute_return,
+            headline=". Investment Cost and CO2-Emissions of devices for simulated period",
+            comment=["Here a comment on calculation of numbers will follow"],
+        )
+
+    def write_new_chapter_with_text_content_to_report(
+        self, report: reportgenerator.ReportGenerator, lines: List, headline: str
+    ) -> None:
+        """Write new chapter with headline and some general information e.g. KPIs to report."""
         report.open()
         report.write_heading_with_style_heading_one(
-            [str(self.chapter_counter) + ". KPIs"]
+            [str(self.chapter_counter) + headline]
         )
         report.write_with_normal_alignment(lines)
         self.chapter_counter = self.chapter_counter + 1
+        report.page_break()
+        report.close()
+
+    def write_new_chapter_with_table_to_report(
+        self,
+        report: reportgenerator.ReportGenerator,
+        table_as_list_of_list: List,
+        headline: str,
+        comment: List,
+    ) -> None:
+        """Write new chapter with headline and a table to report."""
+        report.open()
+        report.write_heading_with_style_heading_one(
+            [str(self.chapter_counter) + headline]
+        )
+        report.write_tables_to_report(table_as_list_of_list)
+        report.write_with_normal_alignment(comment)
+        self.chapter_counter = self.chapter_counter + 1
+        report.page_break()
         report.close()
 
     def open_dir_in_file_explorer(self, ppdt: PostProcessingDataTransfer) -> None:
@@ -749,7 +770,6 @@ class PostProcessor:
 
         # got through all components and read values, variables and units
         for column in ppdt.results_hourly:
-
             for index, timestep in enumerate(timeseries):
                 values = ppdt.results_hourly[column].values
                 column_splitted = str(

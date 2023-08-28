@@ -96,7 +96,6 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         my_double: ChartSingleDay = ChartSingleDay(
             self.output,
             self.component_name,
-            self.ylabel,
             self.directory_path,
             self.time_correction_factor,
             self.day,
@@ -118,19 +117,13 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         my_double.line2 = my_double.ax2.plot(
             self.data.index, other.data, label=other.property, linewidth=5
         )
-        my_double.ax2.set_ylabel(f"{other.ylabel}")
-        my_double.ax2.xaxis.set_major_formatter(DateFormatter("%H:%M"))
         return my_double
 
     def close(self):
         """Closes a chart and saves."""
-        plt.xticks(fontsize=self.fontsize_ticks)
-        plt.yticks(fontsize=self.fontsize_ticks)
-        self.axis.xaxis.set_major_formatter(DateFormatter("%H:%M"))
-        self.axis.set_ylabel(f"[{self.ylabel}]", fontsize=self.fontsize_label)
         if hasattr(self, "line2"):
             self.ax2.xaxis.set_major_formatter(DateFormatter("%H:%M"))
-        # plt.savefig(self.filepath)
+
         plt.savefig(self.filepath2)
         plt.close()
 
@@ -142,9 +135,10 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         _fig, self.axis = plt.subplots(figsize=self.figsize, dpi=self.dpi)
         plt.xticks(fontsize=self.fontsize_ticks)
         plt.yticks(fontsize=self.fontsize_ticks)
-        if abs(max(single_day_data)) > 1.5e3:
-            single_day_data = single_day_data * 1e-3
-            self.ylabel = f"k{self.ylabel}"
+
+        single_day_data, self.units = self.rescale_y_axis(
+            y_values=single_day_data, units=self.units
+        )
         plt.title(self.title, fontsize=self.fontsize_title)
         plt.plot(
             single_day_data.index,
@@ -154,9 +148,8 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
             label=self.property,
         )
         plt.grid(True)
-        self.axis.set_ylabel(self.ylabel)
         plt.xlabel("Time [hours]", fontsize=self.fontsize_label)
-        plt.ylabel(self.ylabel, fontsize=self.fontsize_label)
+        plt.ylabel(f"[{self.units}]", fontsize=self.fontsize_label)
         plt.tight_layout()
         self.axis.xaxis.set_major_formatter(DateFormatter("%H:%M"))
         if close:

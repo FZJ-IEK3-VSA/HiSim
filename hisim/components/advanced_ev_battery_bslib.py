@@ -112,7 +112,7 @@ class CarBattery(Component):
         self.e_bat_custom = self.battery_config.e_bat_custom
 
         # Component has states
-        self.state = EVBatteryState()
+        self.state = EVBatteryState(soc=0.5)
         self.previous_state = self.state.clone()
 
         # Load battery object with parameters from bslib database

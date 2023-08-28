@@ -14,6 +14,6 @@ def test_household_with_gas_heater():
     """ Single day. """
     path = "../examples/household_with_gas_heater.py"
     func = "household_gas_heater"
-    mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
+    mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     hisim_main.main(path, func, mysimpar)
     log.information(os.getcwd())

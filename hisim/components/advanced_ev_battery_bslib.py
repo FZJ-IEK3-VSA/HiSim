@@ -112,7 +112,7 @@ class CarBattery(Component):
         self.e_bat_custom = self.battery_config.e_bat_custom
 
         # Component has states
-        self.state = EVBatteryState()
+        self.state = EVBatteryState(soc=0.5)
         self.previous_state = self.state.clone()
 
         # Load battery object with parameters from bslib database
@@ -205,11 +205,23 @@ class CarBattery(Component):
         p_set = stsv.get_input_value(self.p_set)
         soc = self.state.soc
 
-        # Simulate on timestep
-        results = self.BAT.simulate(p_load=p_set, soc=soc, dt=dt)
-        p_bs = results[0]
-        p_bat = results[1]
-        soc = results[2]
+        # Simulate battery charging
+        if p_set >= 0:
+            results = self.BAT.simulate(p_load=p_set, soc=soc, dt=dt)
+            p_bs = results[0]
+            p_bat = results[1]
+            soc = results[2]
+
+        # Simulate battery discharge without losses (this is included in the car consumption of the car component)
+        else:
+            soc = soc + (p_set * self.my_simulation_parameters.seconds_per_timestep / 3600) / (self.e_bat_custom * 1e3)
+            if soc < 0:
+                raise ValueError(
+                    "Car cannot drive, because battery is empty." +
+                    "This points towards a major problem in the battery configuration - or the consumption pattern of the car."
+                )
+            p_bs = 0
+            p_bat = 0
 
         # write values for output time series
         stsv.set_output_value(self.p_bs, p_bs)

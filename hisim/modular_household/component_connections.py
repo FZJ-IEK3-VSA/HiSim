@@ -78,12 +78,13 @@ def configure_pv_system(
     """
     if pv_peak_power is not None:
         my_pv_system_config = generic_pv_system.PVSystem.get_default_config(
-            power=pv_peak_power, source_weight=count
+            power=pv_peak_power, source_weight=count,
         )
     else:
         my_pv_system_config = generic_pv_system.PVSystem.get_default_config(
-            source_weight=count
+            source_weight=count,
         )
+    my_pv_system_config.location = my_weather.weather_config.location
     count += 1
     my_pv_system = generic_pv_system.PVSystem(
         my_simulation_parameters=my_simulation_parameters,
@@ -173,14 +174,13 @@ def configure_cars(
 
     # create all cars
     my_cars: List[generic_car.Car] = []
-    for car in names:
+    for _ in names:
         # decide if they are diesel driven or electricity driven and initialize config
         if ev_included:
             my_car_config = generic_car.CarConfig.get_default_ev_config()
         else:
             my_car_config = generic_car.CarConfig.get_default_diesel_config()
         # reset name and source weight
-        my_car_config.name = car
         my_car_config.source_weight = count
         my_cars.append(
             generic_car.Car(
@@ -229,12 +229,17 @@ def configure_ev_batteries(
     if mobility_set.Name is None:
         raise Exception("For EV configuration mobility set is obligatory.")
 
-    if charging_station_set is None:
+    if charging_station_set is not None:
+        charging_power = float(
+            (charging_station_set.Name or "").split("with ")[1].split(" kW")[0]
+        )
+    else:
         raise Exception("For EV configuration charging station set is obligatory.")
 
     for car in my_cars:
         car_battery_config = advanced_ev_battery_bslib.CarBatteryConfig.get_default_config()
         car_battery_config.source_weight = car.config.source_weight
+        car_battery_config.p_inv_custom = charging_power * 1e3
         my_carbattery = advanced_ev_battery_bslib.CarBattery(
             my_simulation_parameters=my_simulation_parameters, config=car_battery_config
         )
@@ -246,6 +251,7 @@ def configure_ev_batteries(
             )
         )
         car_battery_controller_config.source_weight = car.config.source_weight
+        car_battery_controller_config.lower_threshold_charging_power = charging_power * 1e3 * 0.1  # 10 % of charging power for acceptable efficiencies
         if clever:
             car_battery_controller_config.battery_set = (
                 0.4  # lower threshold for soc of car battery in clever case

@@ -924,7 +924,7 @@ class Weather(Component):
         start_index = 0
         for index in range(0, total_number_of_timesteps_temperature_list):
             daily_average_temperature = float(
-                np.mean(temperaturelist[start_index : start_index + timestep_24h])
+                np.mean(temperaturelist[start_index: start_index + timestep_24h])
             )
             if index == start_index + timestep_24h:
                 start_index = index
@@ -980,7 +980,7 @@ def read_test_reference_year_data(weatherconfig: WeatherConfig, year: int) -> An
     return data
 
 
-def read_dwd_data(filepath: str, year: int) -> Any:
+def read_dwd_data(filepath: str, year: int) -> pd.DataFrame:
     """Reads the DWD data."""
     # get the geoposition
     with open(filepath + ".dat", encoding="utf-8") as file_stream:
@@ -1019,7 +1019,7 @@ def read_dwd_data(filepath: str, year: int) -> Any:
     return data
 
 
-def read_nsrdb_data(filepath, year):
+def read_nsrdb_data(filepath: str, year: int) -> pd.DataFrame:
     """Reads a set of NSRDB data."""
     # get data
     data = pd.read_csv(filepath + ".dat", sep=",", skiprows=list(range(0, 11)))
@@ -1044,20 +1044,20 @@ def read_nsrdb_data(filepath, year):
     return data
 
 
-def read_nsrdb_15min_data(filepath, year):
+def read_nsrdb_15min_data(filepath: str, year: int) -> pd.DataFrame:
     """Reads a set of NSRDB data in 15 min resolution."""
     data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
     # get data
     data.index = pd.date_range(
-        f"{year}-01-01 00:00:00", periods=24 * 4 * 365, freq="900S", tz="Europe/Berlin"
+        f"{year}-01-01 00:00:00", periods=24 * 4 * 365, freq="900S", tz="UTC"
     )
     data = data.rename(columns={"Temperature": "T", "Wind Speed": "Wspd",})
     return data
 
 
 def calculate_direct_normal_radiation(
-    direct_horizontal_irradation, lon, lat, zenith_tol=87.0
-):
+    direct_horizontal_irradation: pd.Series, lon: float, lat: float, zenith_tol: float = 87.0
+) -> pd.Series:
     """Calculates the direct NORMAL irradiance from the direct horizontal irradiance with the help of the PV lib.
 
     Based on the tsib project @[tsib-kotzur] (Check header)
@@ -1086,6 +1086,6 @@ def calculate_direct_normal_radiation(
     DNI = direct_horizontal_irradation.div(
         solar_pos["apparent_zenith"].apply(math.radians).apply(math.cos)
     )
-    if DNI.isnull().values.any():
+    if sum(DNI.isnull()) > 0:
         raise ValueError("Something went wrong...")
     return DNI

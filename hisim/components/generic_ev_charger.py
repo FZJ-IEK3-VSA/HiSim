@@ -48,7 +48,7 @@ class VehiclePureConfig(cp.ConfigBase):
             manufacturer="Tesla",
             model="Model 3 v3",
             soc=1.0,
-            profile="CH01",
+            profile="CHR01",
         )
 
 

@@ -17,6 +17,7 @@ from hisim.component import (
     ComponentOutput,
     ConfigBase,
     SingleTimeStepValues,
+    OpexCostDataClass,
 )
 from hisim.components import controller_l1_generic_ev_charge
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes, Units
@@ -227,7 +228,7 @@ class CarBattery(Component):
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float, float]:
+    ) -> OpexCostDataClass:
         """Calculate OPEX costs.
 
         No electricity costs for components except for Electricity Meter,
@@ -258,7 +259,13 @@ class CarBattery(Component):
                     )
         # Todo: Battery Aging like in component advanced_battery_bslib? Or is this considered in maintenance cost of car?
 
-        return 0, 0, 0
+        opex_cost_data_class = OpexCostDataClass(
+            opex_cost=0,
+            co2_footprint=0,
+            consumption=0,
+        )
+
+        return opex_cost_data_class
 
 
 @dataclass

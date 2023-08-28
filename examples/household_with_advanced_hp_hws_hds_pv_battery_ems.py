@@ -258,7 +258,7 @@ def household_with_hplib_hws_hds_pv_battery_ems(
     # -----------------------------------------------------------------------------------------------------------------
     # Connect Water Storage
     my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterTemperatureFromHeatDistributionSystem,
+        my_simple_hot_water_storage.WaterTemperatureFromHeatDistribution,
         my_heat_distribution_system.component_name,
         my_heat_distribution_system.WaterTemperatureOutput,
     )

@@ -87,6 +87,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
             and self.model_name is not None
             and self.variant_name is not None
             and self.datetime_string is not None
+            and self.hash_number is not None
         ):
             if self.sorting_option == SortingOptionEnum.DEEP:
                 path = os.path.join(
@@ -111,6 +112,15 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
                         self.model_name,
                         self.variant_name + "_" + str(idx),
                     )
+            elif (
+                self.sorting_option
+                == SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION
+            ):
+
+                path = os.path.join(
+                    self.base_path, self.model_name, self.variant_name + "_" + self.hash_number
+                )
+
             elif self.sorting_option == SortingOptionEnum.FLAT:
                 path = os.path.join(
                     self.base_path,

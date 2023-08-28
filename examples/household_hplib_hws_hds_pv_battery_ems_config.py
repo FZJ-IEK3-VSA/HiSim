@@ -112,7 +112,7 @@ def household_hplib_hws_hds_pv_battery_ems_config(
 
     # Set Simulation Parameters
     year = 2021
-    seconds_per_timestep = 60
+    seconds_per_timestep = 60 * 60
 
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year_all_options(
@@ -330,7 +330,7 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     # -----------------------------------------------------------------------------------------------------------------
     # Connect Water Storage
     my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterTemperatureFromHeatDistributionSystem,
+        my_simple_hot_water_storage.WaterTemperatureFromHeatDistribution,
         my_heat_distribution_system.component_name,
         my_heat_distribution_system.WaterTemperatureOutput,
     )

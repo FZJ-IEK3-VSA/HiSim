@@ -291,10 +291,7 @@ class Component:
 
     def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame, ) -> OpexCostDataClass:
         # pylint: disable=unused-argument
-        """Calculates operational cost and operational co2 footprint during simulation time frame.
-
-        :return: [operational cost in euro, operational co2 footprint in kg, consumption in kWh (for DIesel in l]
-        """
+        """Calculates operational cost, operational co2 footprint and consumption in kWh (for DIesel in l) during simulation time frame."""
         return OpexCostDataClass.get_default_opex_cost_data_class()
 
     @staticmethod
@@ -352,7 +349,7 @@ class OpexCostDataClass:
     consumption: float
 
     @classmethod
-    def get_default_opex_cost_data_class(cls):
+    def get_default_opex_cost_data_class(cls) -> OpexCostDataClass:
         return OpexCostDataClass(
             opex_cost=0,
             co2_footprint=0,

@@ -129,7 +129,7 @@ class PyAmChartGenerator:
             "results",
             result_path_strip,
         )
-        log.information(f"Data folder path: {self.folder_path}.")
+        log.information(f"Data folder path: {self.folder_path}")
         self.hisim_chartbase = ChartFontsAndSize()
         self.hisim_chartbase.figsize = (10, 8)
 
@@ -175,14 +175,13 @@ class PyAmChartGenerator:
         )
         dict_of_different_pyam_dataframes_of_different_simulation_parameters = {}
 
-        for file in glob.glob(
-            os.path.join(folder_path, "**", f"*{kind_of_data_set}*.csv")
-        ):
+
+        for file in glob.glob(os.path.join(folder_path, "**", f"*{kind_of_data_set}*.csv")):
             file_df = pd.read_csv(filepath_or_buffer=file)
 
             # if scenario values are no strings, transform them
             file_df["Scenario"] = file_df["Scenario"].transform(str)
-
+            
             # create pyam dataframe
             pyam_dataframe = pyam.IamDataFrame(file_df)
 
@@ -190,6 +189,9 @@ class PyAmChartGenerator:
             dict_of_different_pyam_dataframes_of_different_simulation_parameters[
                 f"{simulation_duration}"
             ] = pyam_dataframe
+    
+        if dict_of_different_pyam_dataframes_of_different_simulation_parameters == {}:
+            raise ValueError(f"The dictionary is empty. Please check your filepath {folder_path} if there is the right csv file.")
 
         return dict_of_different_pyam_dataframes_of_different_simulation_parameters
 
@@ -542,6 +544,7 @@ class PyAmChartGenerator:
             filter_unit=filter_unit,
             filter_year=filter_year,
         )
+        print("filtered scatter data", filtered_data)
         x_data = x_data_variable
         y_data = y_data_variable
         fig, a_x = plt.subplots(

@@ -260,7 +260,8 @@ class PyamDataCollector:
         index: int,
     ) -> Any:
         """Rename the scenario of the given dataframe adding parameter key and value."""
-        dataframe["scenario"] = f"{parameter_key}_{list_with_parameter_values[index]}"
+        value = round(list_with_parameter_values[index],1)
+        dataframe["scenario"] = f"{parameter_key}_{value}"
         return dataframe["scenario"]
 
     def rename_scenario_name_of_dataframe_with_index(

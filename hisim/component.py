@@ -289,14 +289,13 @@ class Component:
             raise ValueError("Error: Component " + self.component_name + " has no outputs defined")
         return self.outputs
 
-    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame, ) -> Tuple[float, float, float]:
+    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame, ) -> OpexCostDataClass:
         # pylint: disable=unused-argument
         """Calculates operational cost and operational co2 footprint during simulation time frame.
 
         :return: [operational cost in euro, operational co2 footprint in kg, consumption in kWh (for DIesel in l]
-        :rtype: Tuple[float,float]
         """
-        return 0, 0, 0
+        return OpexCostDataClass.get_default_opex_cost_data_class()
 
     @staticmethod
     def get_cost_capex(config: ConfigBase) -> Tuple[float, float, float]:
@@ -343,3 +342,19 @@ class Component:
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         """ Abstract. Gets called after the iterations are finished at each time step for potential debugging purposes. """
         pass  # noqa
+
+
+@dataclass
+class OpexCostDataClass:
+    """Return element of type OpexCostDataClass in function get_opex_cost from Component"""
+    opex_cost: float
+    co2_footprint: float
+    consumption: float
+
+    @classmethod
+    def get_default_opex_cost_data_class(cls):
+        return OpexCostDataClass(
+            opex_cost=0,
+            co2_footprint=0,
+            consumption=0,
+        )

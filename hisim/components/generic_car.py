@@ -19,6 +19,7 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim import utils
+from hisim.component import OpexCostDataClass
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -205,7 +206,7 @@ class Car(cp.Component):
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float, float]:
+    ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of energy and maintenance costs."""
         for index, output in enumerate(all_outputs):
             if output.component_name == self.config.name + "_w" + str(
@@ -232,7 +233,13 @@ class Car(cp.Component):
                     opex_cost_per_simulated_period_in_euro = self.calc_maintenance_cost()
                     co2_per_simulated_period_in_kg = 0.0
 
-        return opex_cost_per_simulated_period_in_euro, co2_per_simulated_period_in_kg, self.config.consumption
+        opex_cost_data_class = OpexCostDataClass(
+            opex_cost=opex_cost_per_simulated_period_in_euro,
+            co2_footprint=co2_per_simulated_period_in_kg,
+            consumption=self.config.consumption,
+        )
+
+        return opex_cost_data_class
 
     def build(self, config: CarConfig, occupancy_config: Any) -> None:
         """Loads necesary data and saves config to class."""

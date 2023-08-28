@@ -8,7 +8,7 @@ import pandas as pd
 
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim.component import ComponentInput
+from hisim.component import ComponentInput, OpexCostDataClass
 from hisim.dynamic_component import (
     DynamicComponent,
     DynamicConnectionInput,
@@ -233,7 +233,7 @@ class ElectricityMeter(DynamicComponent):
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float, float]:
+    ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
         for index, output in enumerate(all_outputs):
             if (
@@ -270,8 +270,13 @@ class ElectricityMeter(DynamicComponent):
         co2_per_simulated_period_in_kg = (
             self.config.total_energy_from_grid_in_kwh * co2_per_unit
         )
+        opex_cost_data_class = OpexCostDataClass(
+            opex_cost=opex_cost_per_simulated_period_in_euro,
+            co2_footprint=co2_per_simulated_period_in_kg,
+            consumption=0,
+        )
 
-        return opex_cost_per_simulated_period_in_euro, co2_per_simulated_period_in_kg, 0
+        return opex_cost_data_class
 
 
 @dataclass

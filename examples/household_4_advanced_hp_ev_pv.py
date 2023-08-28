@@ -86,6 +86,9 @@ class HouseholdAdvancedHPEvPvConfig:
             key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments
         )
         charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
+        charging_power = float(
+            (charging_station_set.Name or "").split("with ")[1].split(" kW")[0]
+        )
 
         household_config = HouseholdAdvancedHPEvPvConfig(
             building_type="blub",
@@ -144,6 +147,10 @@ class HouseholdAdvancedHPEvPvConfig:
         household_config.hp_controller_config.mode = (
             2  # use heating and cooling as default
         )
+        household_config.car_battery_config.p_inv_custom = (
+            charging_power * 1e3
+        )  # set charging power from battery and controller to same value, to reduce error in simulation of battery
+
         return household_config
 
 

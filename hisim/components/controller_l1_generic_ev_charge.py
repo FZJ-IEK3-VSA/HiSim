@@ -62,12 +62,16 @@ class ChargingStationConfig(cp.ConfigBase):
         charging_station_set: JsonReference = ChargingStationSets.Charging_At_Home_with_03_7_kW,
     ) -> "ChargingStationConfig":
         """Returns default configuration of charging station and desired SOC Level."""
+        charging_power = float(
+            (charging_station_set.Name or "").split("with ")[1].split(" kW")[0]
+        )
+        lower_threshold_charging_power = charging_power * 1e3 * 0.1  # 10 % of charging power for acceptable efficiencies
         config = ChargingStationConfig(
             name="L1EVChargeControl",
             source_weight=1,
             charging_station_set=charging_station_set,
             battery_set=0.8,
-            lower_threshold_charging_power=370,
+            lower_threshold_charging_power=lower_threshold_charging_power,
             co2_footprint=100,  # estimated value  # Todo: check value
             cost=1000,  # Todo: check value
             lifetime=10,  # estimated value  # Todo: check value

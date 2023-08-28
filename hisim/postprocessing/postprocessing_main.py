@@ -14,7 +14,6 @@ from hisim.postprocessing import charts
 from hisim import log
 from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
-from hisim import loadtypes as lt
 from hisim.postprocessing.chart_singleday import ChartSingleDay
 from hisim.postprocessing.compute_kpis import compute_kpis
 from hisim.postprocessing.generate_csv_for_housing_database import (
@@ -40,7 +39,6 @@ class PostProcessor:
     def __init__(self):
         """Initializes the post processing."""
         self.dirname: str
-        # self.report_image_entries: List[ReportImageEntry] = []
         self.chapter_counter: int = 1
         self.figure_counter: int = 1
 
@@ -49,51 +47,6 @@ class PostProcessor:
         if dirname is None:
             raise ValueError("No results directory name was defined.")
         self.dirname = dirname
-
-    @utils.measure_execution_time
-    def plot_sankeys(self, ppdt: PostProcessingDataTransfer) -> None:
-        """For plotting the sankeys."""
-        for i_display_name in [
-            name for name, display_name in lt.DisplayNames.__members__.items()
-        ]:
-            my_sankey = charts.SankeyHISIM(
-                name=i_display_name,
-                component_name=i_display_name,
-                output_description=None,
-                units=lt.Units.ANY,
-                directorypath=ppdt.simulation_parameters.result_directory,
-                time_correction_factor=ppdt.time_correction_factor,
-                figure_format=ppdt.simulation_parameters.figure_format,
-            )
-            my_sankey.plot(data=ppdt.all_outputs)
-        if any(
-            component_output.component_name == "HeatPump"
-            for component_output in ppdt.all_outputs
-        ):
-            my_sankey = charts.SankeyHISIM(
-                name="HeatPump",
-                component_name="HeatPump",
-                output_description=None,
-                units=lt.Units.ANY,
-                directorypath=ppdt.simulation_parameters.result_directory,
-                time_correction_factor=ppdt.time_correction_factor,
-                figure_format=ppdt.simulation_parameters.figure_format,
-            )
-            my_sankey.plot_heat_pump(data=ppdt.all_outputs)
-        if any(
-            component_output.component_name == "Building"
-            for component_output in ppdt.all_outputs
-        ):
-            my_sankey = charts.SankeyHISIM(
-                name="Building",
-                component_name="Building",
-                output_description=None,
-                units=lt.Units.ANY,
-                directorypath=ppdt.simulation_parameters.result_directory,
-                time_correction_factor=ppdt.time_correction_factor,
-                figure_format=ppdt.simulation_parameters.figure_format,
-            )
-            my_sankey.plot_building(data=ppdt.all_outputs)
 
     @utils.measure_execution_time
     @utils.measure_memory_leak
@@ -158,14 +111,7 @@ class PostProcessor:
             end = timer()
             duration = end - start
             log.information("Making bar plots took " + f"{duration:1.2f}s.")
-        # Plot sankey
-        if PostProcessingOptions.PLOT_SANKEY in ppdt.post_processing_options:
-            log.information("Making sankey plots.")
-            start = timer()
-            self.make_sankey_plots()
-            end = timer()
-            duration = end - start
-            log.information("Making sankey plots took " + f"{duration:1.2f}s.")
+
         # Export all results to CSV
         if PostProcessingOptions.EXPORT_TO_CSV in ppdt.post_processing_options:
             log.information("Making CSV exports.")
@@ -386,11 +332,6 @@ class PostProcessor:
         log.information("Exporting to csv.")
         self.export_results_to_csv(ppdt)
 
-    def make_sankey_plots(self) -> None:
-        """Makes Sankey plots. Needs work."""
-        log.information("Plotting sankeys.")
-        # TODO:   self.plot_sankeys()
-
     def make_bar_charts(
         self,
         ppdt: PostProcessingDataTransfer,
@@ -485,7 +426,7 @@ class PostProcessor:
                 output_description=output.output_description,
                 figure_format=ppdt.simulation_parameters.figure_format,
             )
-            my_entry = my_line.plot(data=ppdt.results.iloc[:, index], units=output.unit)
+            my_entry = my_line.plot(data=ppdt.results.iloc[:, index])
             report_image_entries.append(my_entry)
             del my_line
 

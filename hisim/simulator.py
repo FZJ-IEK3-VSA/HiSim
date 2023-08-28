@@ -430,7 +430,9 @@ class Simulator:
                 Units.DEGREES,
                 Units.WATT,
             ):
-                temp_df_monthly = temp_df.resample("M").interpolate(method="linear")
+                temp_df_monthly = temp_df.resample(
+                    "M"
+                ).mean()  # interpolate(method="linear")
                 temp_df_cumulative_data = temp_df.mean()
             else:
                 temp_df_monthly = temp_df.resample("M").sum()
@@ -451,10 +453,11 @@ class Simulator:
                     Units.ANY,
                     Units.METER_PER_SECOND,
                     Units.DEGREES,
+                    Units.WATT,
                 ):
-                    temp_df_hourly = temp_df.resample("60T").interpolate(
-                        method="linear"
-                    )
+                    temp_df_hourly = temp_df.resample(
+                        "60T"
+                    ).mean()  # .interpolate(method="linear")
                 else:
                     temp_df_hourly = temp_df.resample("60T").sum()
 

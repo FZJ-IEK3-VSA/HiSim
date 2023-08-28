@@ -556,8 +556,10 @@ class PyAmChartGenerator:
             y=y_data,
         )
 
-        y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")  # pylint: disable=unused-variable
-        # x_tick_labels, scale_x, x_tick_locations = self.set_axis_scale(a_x, x_or_y="x")
+        y_tick_labels, scale, y_tick_locations = self.set_axis_scale(  # pylint: disable=unused-variable
+            a_x, x_or_y="y"
+        )
+
         plt.yticks(
             ticks=y_tick_locations,
             labels=y_tick_labels,

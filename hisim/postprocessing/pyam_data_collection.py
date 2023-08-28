@@ -441,6 +441,7 @@ class PyamDataCollector:
 
         dict_with_csv_files_for_each_parameter: Dict = defaultdict(list)
         dict_with_parameter_key_values: Dict = defaultdict(list)
+        dict_with_opex_and_capex_costs: Dict = defaultdict(list)
 
         for folder in list_with_pyam_data_folders:  # type: ignore
 
@@ -453,6 +454,11 @@ class PyamDataCollector:
                 dict_with_csv_files_for_each_parameter=dict_with_csv_files_for_each_parameter,
                 dict_with_parameter_key_values=dict_with_parameter_key_values,
             )
+            
+            # # get opex and capex costs and add to dict
+            # dict_with_opex_and_capex_costs = self.get_opex_and_capex_cost_from_json(folder=folder)
+            
+            
 
         # add to each item in the dict also the default example
         for key in dict_with_csv_files_for_each_parameter.keys():
@@ -514,6 +520,16 @@ class PyamDataCollector:
                 shutil.rmtree(whole_parent_folder, ignore_errors=True)
 
         return list_of_pyam_folders_which_have_only_unique_configs
+    
+    def get_opex_and_capex_cost_from_json(self, folder: str):
+        """Get opex and capex cost from json file."""
+        for file in os.listdir(folder):
+
+            if ".json" in file:
+                with open(os.path.join(folder, file), "r", encoding="utf-8") as openfile:
+                    config_dict = json.load(openfile)
+                    opex_capex_cost = config_dict["opexCapexCosts"]
+                    return opex_capex_cost
 
 
 class PyamDataTypeEnum(enum.Enum):

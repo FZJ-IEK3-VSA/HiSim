@@ -767,6 +767,35 @@ class PostProcessor:
         # set pyam year or timeseries
         year = ppdt.simulation_parameters.year
         timeseries = ppdt.results_hourly.index
+        
+        #######################################################
+        # add opex and capex cost to cumulative dict
+        # write opex and capex costs to json
+        opex_compute_return = opex_calculation(
+            components=ppdt.wrapped_components,
+            all_outputs=ppdt.all_outputs,
+            postprocessing_results=ppdt.results,
+            simulation_parameters=ppdt.simulation_parameters,
+        )
+        
+        capex_compute_return = capex_calculation(
+            components=ppdt.wrapped_components,
+            simulation_parameters=ppdt.simulation_parameters,
+        )
+        opex_dict = {f"{opex_compute_return[0][0]}": [i[0] for i in opex_compute_return[1:]],f"{opex_compute_return[0][1]}": [i[1] for i in opex_compute_return[1:]],f"{opex_compute_return[0][2]}": [i[2] for i in opex_compute_return[1:]] }
+        capex_dict = {f"{capex_compute_return[0][0]}": [i[0] for i in capex_compute_return[1:]],f"{capex_compute_return[0][1]}": [i[1] for i in capex_compute_return[1:]],f"{capex_compute_return[0][2]}": [i[2] for i in capex_compute_return[1:]] }
+        
+        # make dict in pyam format
+        operational_costs_variables = []
+        operational_costs_values = []
+        for i in opex_dict[1:]:
+            variable_name = f"{i[0]}|{opex_compute_return[0][1]}"
+            operational_cost_value = i[1]
+            operational_costs_variables.append(variable_name)
+            operational_costs_values.append(value)
+        
+        log.information("op costs vatiables"+ str(operational_costs_variables))
+        #########################################################
 
         # got through all components and read values, variables and units
         for column in ppdt.results_hourly:
@@ -802,7 +831,8 @@ class PostProcessor:
                 simple_dict_hourly_data["unit"].append(unit)
                 simple_dict_hourly_data["time"].append(timestep)
                 simple_dict_hourly_data["value"].append(values[index])
-
+                
+        
         for column in ppdt.results_cumulative:
             value = ppdt.results_cumulative[column].values[0]
 
@@ -827,6 +857,21 @@ class PostProcessor:
             simple_dict_cumulative_data["unit"].append(unit)
             simple_dict_cumulative_data["year"].append(year)
             simple_dict_cumulative_data["value"].append(value)
+            
+            
+        
+            if column_splitted[0] in opex_dict[0]:
+                simple_dict_cumulative_data["model"].append(model)
+                simple_dict_cumulative_data["scenario"].append(scenario)
+                simple_dict_cumulative_data["region"].append(region)
+                simple_dict_cumulative_data["variable"].append(f"{column_splitted[0]}|{opex_dict.keys()[1]}")
+                simple_dict_cumulative_data["unit"].append(unit)
+                simple_dict_cumulative_data["year"].append(year)
+                simple_dict_cumulative_data["value"].append(value)
+            
+            
+            
+        
 
         # create dataframe
         simple_df_hourly_data = pd.DataFrame(simple_dict_hourly_data)
@@ -856,21 +901,6 @@ class PostProcessor:
         for component in ppdt.wrapped_components:
             json_generator_config.add_component(config=component.my_component.config)
 
-        # write opex and capex costs to json
-        opex_compute_return = opex_calculation(
-            components=ppdt.wrapped_components,
-            all_outputs=ppdt.all_outputs,
-            postprocessing_results=ppdt.results,
-            simulation_parameters=ppdt.simulation_parameters,
-        )
-        
-        capex_compute_return = capex_calculation(
-            components=ppdt.wrapped_components,
-            simulation_parameters=ppdt.simulation_parameters,
-        )
-        opex_dict = {f"{opex_compute_return[0][0]}": [i[0] for i in opex_compute_return[1:]],f"{opex_compute_return[0][1]}": [i[1] for i in opex_compute_return[1:]],f"{opex_compute_return[0][2]}": [i[2] for i in opex_compute_return[1:]] }
-        capex_dict = {f"{capex_compute_return[0][0]}": [i[0] for i in capex_compute_return[1:]],f"{capex_compute_return[0][1]}": [i[1] for i in capex_compute_return[1:]],f"{capex_compute_return[0][2]}": [i[2] for i in capex_compute_return[1:]] }
-        
         json_generator_config.set_opex_and_capex_cost_dict(opex_and_capex_cost_dict={"opex": opex_dict, "capex": capex_dict})
 
         # save the json config

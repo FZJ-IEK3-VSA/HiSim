@@ -309,7 +309,7 @@ class PVSystem(cp.Component):
             "open_rack_glass_glass"
         ]
         super().__init__(
-            self.pvconfig.name + "_w" + str(self.pvconfig.source_weight),
+            self.pvconfig.name, # + "_w" + str(self.pvconfig.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
         )

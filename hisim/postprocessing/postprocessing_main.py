@@ -770,7 +770,6 @@ class PostProcessor:
         
         #######################################################
         # add opex and capex cost to cumulative dict
-        # write opex and capex costs to json
         opex_compute_return = opex_calculation(
             components=ppdt.wrapped_components,
             all_outputs=ppdt.all_outputs,
@@ -782,19 +781,70 @@ class PostProcessor:
             components=ppdt.wrapped_components,
             simulation_parameters=ppdt.simulation_parameters,
         )
-        opex_dict = {f"{opex_compute_return[0][0]}": [i[0] for i in opex_compute_return[1:]],f"{opex_compute_return[0][1]}": [i[1] for i in opex_compute_return[1:]],f"{opex_compute_return[0][2]}": [i[2] for i in opex_compute_return[1:]] }
-        capex_dict = {f"{capex_compute_return[0][0]}": [i[0] for i in capex_compute_return[1:]],f"{capex_compute_return[0][1]}": [i[1] for i in capex_compute_return[1:]],f"{capex_compute_return[0][2]}": [i[2] for i in capex_compute_return[1:]] }
-        
-        # make dict in pyam format
-        operational_costs_variables = []
-        operational_costs_values = []
-        for i in opex_dict[1:]:
-            variable_name = f"{i[0]}|{opex_compute_return[0][1]}"
+
+        # transform opex and capex information to right pyam format and add to dict_cumulative_data
+        for i in opex_compute_return[1:]:
+            operational_cost_variable_name = f"{i[0]}|{opex_compute_return[0][1]}"
             operational_cost_value = i[1]
-            operational_costs_variables.append(variable_name)
-            operational_costs_values.append(value)
+            operational_cost_unit = "EUR"
+            simple_dict_cumulative_data["model"].append(model)
+            simple_dict_cumulative_data["scenario"].append(scenario)
+            simple_dict_cumulative_data["region"].append(region)
+            simple_dict_cumulative_data["variable"].append(operational_cost_variable_name)
+            simple_dict_cumulative_data["unit"].append(operational_cost_unit)
+            simple_dict_cumulative_data["year"].append(year)
+            simple_dict_cumulative_data["value"].append(operational_cost_value)
+
+            operational_co2_footprint_variable_name = f"{i[0]}|{opex_compute_return[0][2]}"
+            operational_co2_footprint_value = i[2]
+            operational_co2_footprint_unit = "kg"
+            simple_dict_cumulative_data["model"].append(model)
+            simple_dict_cumulative_data["scenario"].append(scenario)
+            simple_dict_cumulative_data["region"].append(region)
+            simple_dict_cumulative_data["variable"].append(operational_co2_footprint_variable_name)
+            simple_dict_cumulative_data["unit"].append(operational_co2_footprint_unit)
+            simple_dict_cumulative_data["year"].append(year)
+            simple_dict_cumulative_data["value"].append(operational_co2_footprint_value)
+
+        for i in capex_compute_return[1:]:
+            investment_cost_variable_name = f"{i[0]}|{capex_compute_return[0][1]}"
+            investment_cost_value = i[1]
+            investment_cost_unit = "EUR"
+            simple_dict_cumulative_data["model"].append(model)
+            simple_dict_cumulative_data["scenario"].append(scenario)
+            simple_dict_cumulative_data["region"].append(region)
+            simple_dict_cumulative_data["variable"].append(investment_cost_variable_name)
+            simple_dict_cumulative_data["unit"].append(investment_cost_unit)
+            simple_dict_cumulative_data["year"].append(year)
+            simple_dict_cumulative_data["value"].append(investment_cost_value)
+
+            device_co2_footprint_variable_name = f"{i[0]}|{capex_compute_return[0][2]}"
+            device_co2_footprint_value = i[2]
+            device_co2_footprint_unit = "kg"
+            simple_dict_cumulative_data["model"].append(model)
+            simple_dict_cumulative_data["scenario"].append(scenario)
+            simple_dict_cumulative_data["region"].append(region)
+            simple_dict_cumulative_data["variable"].append(device_co2_footprint_variable_name)
+            simple_dict_cumulative_data["unit"].append(device_co2_footprint_unit)
+            simple_dict_cumulative_data["year"].append(year)
+            simple_dict_cumulative_data["value"].append(device_co2_footprint_value)
+
+            lifetime_variable_name = f"{i[0]}|{capex_compute_return[0][3]}"
+            lifetime_value = i[3]
+            lifetime_unit = "a"
+            simple_dict_cumulative_data["model"].append(model)
+            simple_dict_cumulative_data["scenario"].append(scenario)
+            simple_dict_cumulative_data["region"].append(region)
+            simple_dict_cumulative_data["variable"].append(lifetime_variable_name)
+            simple_dict_cumulative_data["unit"].append(lifetime_unit)
+            simple_dict_cumulative_data["year"].append(year)
+            simple_dict_cumulative_data["value"].append(lifetime_value)
+
+            
+            
+        # add to whole cumulative dictionary
         
-        log.information("op costs vatiables"+ str(operational_costs_variables))
+        
         #########################################################
 
         # got through all components and read values, variables and units
@@ -858,17 +908,7 @@ class PostProcessor:
             simple_dict_cumulative_data["year"].append(year)
             simple_dict_cumulative_data["value"].append(value)
             
-            
-        
-            if column_splitted[0] in opex_dict[0]:
-                simple_dict_cumulative_data["model"].append(model)
-                simple_dict_cumulative_data["scenario"].append(scenario)
-                simple_dict_cumulative_data["region"].append(region)
-                simple_dict_cumulative_data["variable"].append(f"{column_splitted[0]}|{opex_dict.keys()[1]}")
-                simple_dict_cumulative_data["unit"].append(unit)
-                simple_dict_cumulative_data["year"].append(year)
-                simple_dict_cumulative_data["value"].append(value)
-            
+
             
             
         
@@ -900,8 +940,6 @@ class PostProcessor:
         )
         for component in ppdt.wrapped_components:
             json_generator_config.add_component(config=component.my_component.config)
-
-        json_generator_config.set_opex_and_capex_cost_dict(opex_and_capex_cost_dict={"opex": opex_dict, "capex": capex_dict})
 
         # save the json config
         json_generator_config.save_to_json(

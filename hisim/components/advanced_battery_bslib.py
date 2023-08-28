@@ -116,9 +116,9 @@ class Battery(Component):
         """
         self.battery_config = config
         super().__init__(
-            name=self.battery_config.name
-            + "_w"
-            + str(self.battery_config.source_weight),
+            name=self.battery_config.name,
+            # + "_w"
+            # + str(self.battery_config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
         )

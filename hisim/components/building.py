@@ -95,7 +95,7 @@ class BuildingConfig(cp.ConfigBase):
     def get_default_german_single_family_home(cls,) -> Any:
         """Get a default Building."""
         config = BuildingConfig(
-            name="Building_1",
+            name="Building",
             building_code="DE.N.SFH.05.Gen.ReEx.001.002",
             building_heat_capacity_class="medium",
             initial_internal_temperature_in_celsius=23,

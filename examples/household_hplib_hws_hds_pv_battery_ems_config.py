@@ -225,7 +225,7 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     my_photovoltaic_system_config = (
         generic_pv_system.PVSystemConfig.get_default_PV_system()
     )
-    my_photovoltaic_system_config.power = pv_power
+    my_photovoltaic_system_config.power_in_watt_peak = pv_power
     my_photovoltaic_system_config.azimuth = azimuth
     my_photovoltaic_system_config.tilt = tilt
 

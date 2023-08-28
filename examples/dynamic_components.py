@@ -127,7 +127,7 @@ def dynamic_components_demonstration(
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig(
         time=time,
         location="Aachen",
-        power=power,
+        power_in_watt_peak=power,
         load_module_data=load_module_data,
         module_name=module_name,
         integrate_inverter=integrate_inverter,

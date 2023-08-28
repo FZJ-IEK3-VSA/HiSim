@@ -275,7 +275,7 @@ def household_air_conditioner_generic(my_sim: Simulator, control: str,  my_simul
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig(
         time=time,
         location=location,
-        power=power,
+        power_in_watt_peak=power,
         load_module_data=load_module_data,
         module_name=module_name,
         integrate_inverter=integrate_inverter,

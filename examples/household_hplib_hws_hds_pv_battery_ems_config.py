@@ -22,7 +22,7 @@ from hisim.components import (
 from hisim.component import ConfigBase
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
-# from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim import log
 
@@ -115,12 +115,21 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     seconds_per_timestep = 60 * 60
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(
+        my_simulation_parameters = SimulationParameters.one_day_only(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-        # my_simulation_parameters.post_processing_options.append(
-        #     PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
-        # )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
+        )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.COMPUTE_OPEX
+        )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.COMPUTE_CAPEX
+        )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER
+        )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Set Photovoltaic System

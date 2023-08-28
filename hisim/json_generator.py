@@ -43,6 +43,7 @@ class ConfigFile(JSONWizard):
     my_simulation_parameters: Optional[SimulationParameters] = None
     my_module_config: Optional[Dict[str, Any]] = None
     pyam_data_information: Optional[Dict[str, Any]] = None
+    opex_capex_costs: Optional[Dict[str, Any]] = None
 
 
 class JsonConfigurationGenerator:
@@ -70,6 +71,12 @@ class JsonConfigurationGenerator:
     ) -> None:
         """Sets some pyam information concerning the data."""
         self.config_file.pyam_data_information = pyam_data_information_dict
+        
+    def set_opex_and_capex_cost_dict(
+        self, opex_and_capex_cost_dict: Dict[str, Any]
+    ) -> None:
+        """Sets some opex and capex costs."""
+        self.config_file.opex_capex_costs = opex_and_capex_cost_dict
 
     def add_component(self, config: Type[ConfigBase]) -> ComponentEntry:
         """Adds a component and returns a component entry."""

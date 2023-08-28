@@ -841,7 +841,7 @@ class PostProcessor:
             "duration in days": ppdt.simulation_parameters.duration.days,
         }
 
-        # write json config with all component configs, module config, pyam information dict and simulation parameters
+        # write json config with all component configs, module config, pyam information dict, opex and capex costs and simulation parameters
         json_generator_config = JsonConfigurationGenerator(name=f"{scenario}")
         json_generator_config.set_simulation_parameters(
             my_simulation_parameters=ppdt.simulation_parameters
@@ -855,6 +855,23 @@ class PostProcessor:
         )
         for component in ppdt.wrapped_components:
             json_generator_config.add_component(config=component.my_component.config)
+
+        # write opex and capex costs to json
+        opex_compute_return = opex_calculation(
+            components=ppdt.wrapped_components,
+            all_outputs=ppdt.all_outputs,
+            postprocessing_results=ppdt.results,
+            simulation_parameters=ppdt.simulation_parameters,
+        )
+        
+        capex_compute_return = capex_calculation(
+            components=ppdt.wrapped_components,
+            simulation_parameters=ppdt.simulation_parameters,
+        )
+        opex_dict = {f"{opex_compute_return[0][0]}": [i[0] for i in opex_compute_return[1:]],f"{opex_compute_return[0][1]}": [i[1] for i in opex_compute_return[1:]],f"{opex_compute_return[0][2]}": [i[2] for i in opex_compute_return[1:]] }
+        capex_dict = {f"{capex_compute_return[0][0]}": [i[0] for i in capex_compute_return[1:]],f"{capex_compute_return[0][1]}": [i[1] for i in capex_compute_return[1:]],f"{capex_compute_return[0][2]}": [i[2] for i in capex_compute_return[1:]] }
+        
+        json_generator_config.set_opex_and_capex_cost_dict(opex_and_capex_cost_dict={"opex": opex_dict, "capex": capex_dict})
 
         # save the json config
         json_generator_config.save_to_json(
@@ -875,3 +892,4 @@ class PostProcessor:
             index=None,
         )  # type: ignore
         simple_df_yearly_data.to_csv(path_or_buf=file_name_yearly, index=None)  # type: ignore
+        

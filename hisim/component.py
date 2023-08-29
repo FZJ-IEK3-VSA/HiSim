@@ -343,13 +343,16 @@ class Component:
 
 @dataclass
 class OpexCostDataClass:
-    """Return element of type OpexCostDataClass in function get_opex_cost from Component"""
+
+    """Return element of type OpexCostDataClass in function get_opex_cost from Component."""
+
     opex_cost: float
     co2_footprint: float
     consumption: float
 
     @classmethod
     def get_default_opex_cost_data_class(cls) -> OpexCostDataClass:
+        """Return the Default for all Components without Opex Costs."""
         return OpexCostDataClass(
             opex_cost=0,
             co2_footprint=0,

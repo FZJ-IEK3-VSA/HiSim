@@ -648,6 +648,7 @@ class PostProcessor:
                 "Comments:",
                 "Operational Costs are the sum of fuel costs and maintenance costs for the devices, calculated for the simulated period.",
                 "Emissions are fuel emissions emitted during simulad period.",
+                "Consumption for Diesel_Car in l, for EV in kWh."
             ],
         )
 

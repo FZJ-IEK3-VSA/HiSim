@@ -30,6 +30,7 @@ from hisim import loadtypes as lt
 from hisim import log, utils
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig, PhysicsConfig
 from hisim.simulationparameters import SimulationParameters
+from hisim.component import OpexCostDataClass
 
 
 @dataclass_json
@@ -627,7 +628,7 @@ class UtspLpgConnector(cp.Component):
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float]:
+    ) -> OpexCostDataClass:
         """Calculate OPEX costs, snd write total energy consumption to component-config.
 
         No electricity costs for components except for Electricity Meter,
@@ -646,4 +647,10 @@ class UtspLpgConnector(cp.Component):
                     1,
                 )
 
-        return 0, 0
+        opex_cost_data_class = OpexCostDataClass(
+            opex_cost=0,
+            co2_footprint=0,
+            consumption=self.utsp_config.consumption,
+        )
+
+        return opex_cost_data_class

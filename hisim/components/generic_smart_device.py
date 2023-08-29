@@ -17,6 +17,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
+from hisim.component import OpexCostDataClass
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -350,7 +351,7 @@ class SmartDevice(cp.Component):
 
     def get_cost_opex(
         self, all_outputs: List, postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float]:
+    ) -> OpexCostDataClass:
         for index, output in enumerate(all_outputs):
             if (
                 output.component_name == self.component_name
@@ -363,4 +364,11 @@ class SmartDevice(cp.Component):
                     * self.my_simulation_parameters.seconds_per_timestep
                     / 3.6e6
                 )
-        return self.consumption * euro_per_unit, self.consumption * co2_per_unit
+
+        opex_cost_data_class = OpexCostDataClass(
+            opex_cost=self.consumption * euro_per_unit,
+            co2_footprint=self.consumption * co2_per_unit,
+            consumption=self.consumption,
+        )
+
+        return opex_cost_data_class

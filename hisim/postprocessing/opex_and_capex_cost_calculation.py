@@ -7,6 +7,7 @@ import pandas as pd
 from hisim import log
 from hisim.simulationparameters import SimulationParameters
 from hisim.component_wrapper import ComponentWrapper
+from hisim.component import OpexCostDataClass
 
 
 def opex_calculation(
@@ -22,16 +23,20 @@ def opex_calculation(
         "Component",
         "Operational Costs in EUR",
         "Operational C02 footprint in kg",
+        "Consumption in kWh"
     ]
     opex_table_as_list_of_list = []
 
     for component in components:
         component_unwrapped = component.my_component
         # cost and co2_footprint are calculated per simulated period
-        cost, co2_footprint = component_unwrapped.get_cost_opex(
+        opex_cost_data_class: OpexCostDataClass = component_unwrapped.get_cost_opex(
             all_outputs=all_outputs,
             postprocessing_results=postprocessing_results,
         )
+        cost = opex_cost_data_class.opex_cost
+        co2_footprint = opex_cost_data_class.co2_footprint
+        consumption = opex_cost_data_class.consumption
         total_operational_cost += cost
         total_operational_co2_footprint += co2_footprint
 
@@ -40,6 +45,7 @@ def opex_calculation(
                 component_unwrapped.component_name,
                 round(cost, 2),
                 round(co2_footprint, 2),
+                consumption,
             ]
         )
 
@@ -48,6 +54,7 @@ def opex_calculation(
             "Total",
             round(total_operational_cost, 2),
             round(total_operational_co2_footprint, 2),
+            "---",
         ]
     )
     pathname = os.path.join(

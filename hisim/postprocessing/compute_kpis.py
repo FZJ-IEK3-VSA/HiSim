@@ -497,14 +497,14 @@ def compute_kpis(
     table.append(["CO2 emitted due energy use:", f"{co2:3.0f}", "kg"])
     table.append(
         [
-            "Annual investment cost for equipment (old version):",
+            "Annual investment costs for equipment (old version):",
             f"{investment_cost:3.0f}",
             "EUR",
         ]
     )
     table.append(
         [
-            "Annual CO2 Footprint for equipment (old version):",
+            "Annual CO2 footprint for equipment (old version):",
             f"{co2_footprint:3.0f}",
             "kg",
         ]
@@ -512,7 +512,7 @@ def compute_kpis(
     table.append(["------", "---", "---"])
     table.append(
         [
-            "Investment cost for equipment per simulated period:",
+            "Investment costs for equipment per simulated period:",
             f"{total_investment_cost_per_simulated_period:3.0f}",
             "EUR",
         ]
@@ -526,14 +526,14 @@ def compute_kpis(
     )
     table.append(
         [
-            "System operational Cost for simulated period:",
+            "System operational costs for simulated period:",
             f"{total_operational_cost:3.0f}",
             "EUR",
         ]
     )
     table.append(
         [
-            "System operational Emissions for simulated period:",
+            "System operational emissions for simulated period:",
             f"{total_operational_emisions:3.0f}",
             "kg",
         ]

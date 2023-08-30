@@ -224,7 +224,8 @@ class PVSystemConfig(ConfigBase):
     def get_default_PV_system(cls):
         """Gets a default PV system."""
         power_in_watt = 10e3  # W
-        return PVSystemConfig(
+        
+        config = PVSystemConfig(
             time=2019,
             power_in_watt_peak=power_in_watt,
             load_module_data=False,
@@ -241,6 +242,10 @@ class PVSystemConfig(ConfigBase):
             maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
             lifetime=25,  # value from emission_factros_and_costs_devices.csv
         )
+        
+        config.name = config.name + "_w" + str(config.source_weight)
+        
+        return config
 
 
 class PVSystem(cp.Component):

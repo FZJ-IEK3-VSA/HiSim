@@ -13,6 +13,7 @@ import pyam
 import pandas as pd
 import matplotlib.pyplot as plt
 import plotly
+import string
 from html2image import Html2Image
 from hisim.postprocessing.pyam_data_collection import PyamDataTypeEnum
 from hisim.postprocessing.chartbase import ChartFontsAndSize
@@ -27,16 +28,12 @@ class PyAmChartGenerator:
         self,
         simulation_duration_to_check: str,
         data_processing_mode: Any,
-        variables_to_check: List[str],
+        variables_to_check_for_hourly_data: Optional[List[str]] = None,
+        variables_to_check_for_yearly_data: Optional[List[str]] = None,
     ) -> None:
         """Initialize the class."""
 
         self.datetime_string = datetime.datetime.now().strftime("%Y%m%d_%H%M")
-
-        if variables_to_check == []:
-            raise ValueError(
-                "The list is empty. Please indicate which variables you want to analyze and plot."
-            )
 
         if data_processing_mode == PyamDataProcessingModeEnum.PROCESS_ALL_DATA:
 
@@ -115,18 +112,34 @@ class PyAmChartGenerator:
             folder_path=self.folder_path, kind_of_data=PyamDataTypeEnum.HOURLY
         )
 
-        self.make_plots_with_specific_kind_of_data(
-            kind_of_data=PyamDataTypeEnum.YEARLY,
-            dict_of_data=dict_of_yearly_pyam_dataframes_for_different_simulation_durations,
-            simulation_duration_key=simulation_duration_to_check,
-            variables_to_check=variables_to_check,
-        )
-        self.make_plots_with_specific_kind_of_data(
-            kind_of_data=PyamDataTypeEnum.HOURLY,
-            dict_of_data=dict_of_hourly_pyam_dataframes_for_different_simulation_durations,
-            simulation_duration_key=simulation_duration_to_check,
-            variables_to_check=variables_to_check,
-        )
+        if (
+            variables_to_check_for_yearly_data != []
+            and variables_to_check_for_yearly_data is not None
+        ):
+            self.make_plots_with_specific_kind_of_data(
+                kind_of_data=PyamDataTypeEnum.YEARLY,
+                dict_of_data=dict_of_yearly_pyam_dataframes_for_different_simulation_durations,
+                simulation_duration_key=simulation_duration_to_check,
+                variables_to_check=variables_to_check_for_yearly_data,
+            )
+        else:
+            log.information(
+                "Variable list for yearly data is not given and will not be plotted or anaylzed."
+            )
+        if (
+            variables_to_check_for_hourly_data != []
+            and variables_to_check_for_hourly_data is not None
+        ):
+            self.make_plots_with_specific_kind_of_data(
+                kind_of_data=PyamDataTypeEnum.HOURLY,
+                dict_of_data=dict_of_hourly_pyam_dataframes_for_different_simulation_durations,
+                simulation_duration_key=simulation_duration_to_check,
+                variables_to_check=variables_to_check_for_hourly_data,
+            )
+        else:
+            log.information(
+                "Variable list for hourly data is not given and will not be plotted or anaylzed."
+            )
 
     def get_dataframe_and_create_pyam_dataframe_for_all_data(
         self, folder_path: str, kind_of_data: Any
@@ -199,9 +212,15 @@ class PyAmChartGenerator:
         for variable_to_check in variables_to_check:
 
             # prepare path for plots
+            print(variable_to_check)
             self.path_addition = "".join(
-                filter(lambda x: x.isalpha(), variable_to_check)
+                [
+                    x
+                    for x in variable_to_check
+                    if x in string.ascii_letters or x.isspace() or x == "2"
+                ]
             )
+
             self.plot_path_complete = os.path.join(
                 self.path_for_plots, self.path_addition
             )
@@ -243,7 +262,7 @@ class PyAmChartGenerator:
 
                 self.make_box_plot_for_pyam_dataframe(
                     filtered_data=filtered_data,
-                    # comparison_mode=comparion_mode,
+                    comparison_mode=comparion_mode,
                     title=self.path_addition,
                 )
                 self.make_pie_plot_for_pyam_dataframe(
@@ -399,10 +418,7 @@ class PyAmChartGenerator:
         plt.close()
 
     def make_box_plot_for_pyam_dataframe(
-        self,
-        filtered_data: pyam.IamDataFrame,
-        # comparison_mode: str,
-        title: str,
+        self, filtered_data: pyam.IamDataFrame, comparison_mode: str, title: str,
     ) -> None:
         """Make box plot."""
         log.information("Make box plot.")
@@ -412,7 +428,7 @@ class PyAmChartGenerator:
         )
 
         filtered_data.plot.box(
-            ax=a_x, by="variable", x="year", title=title, legend=True,
+            ax=a_x, by=comparison_mode, x="year", title=title, legend=True,
         )
 
         y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
@@ -446,11 +462,17 @@ class PyAmChartGenerator:
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
         filtered_data.plot.pie(
-            ax=a_x, value="value", category=comparison_mode, title=title,
+            ax=a_x,
+            value="value",
+            category=comparison_mode,
+            title=title,
+            legend=True,
+            labels=None,
         )
 
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
         fig.subplots_adjust(right=0.75, left=0.3)
+        plt.tight_layout()
 
         fig.savefig(os.path.join(self.plot_path_complete, "pie_plot.png"))
         plt.close()
@@ -721,11 +743,15 @@ class PyAmChartGenerator:
         self, filtered_data: pyam.IamDataFrame, path_to_save: str, kind_of_data_set: str
     ) -> None:
         """Use pandas describe method to get statistical values of certain data."""
+        # create a excel writer object
+        with pd.ExcelWriter(
+            path=os.path.join(path_to_save, f"{kind_of_data_set}_statistics.xlsx"),
+            mode="w",
+        ) as writer:
+            filtered_data.data.to_excel(excel_writer=writer, sheet_name="filtered data")
+            statistical_data = filtered_data.data.describe()
 
-        statistical_data = filtered_data.data.describe()
-        statistical_data.to_excel(
-            os.path.join(path_to_save, f"{kind_of_data_set}_statistics.xlsx")
-        )
+            statistical_data.to_excel(excel_writer=writer, sheet_name="statistics")
 
 
 class PyamDataProcessingModeEnum(enum.Enum):
@@ -744,17 +770,41 @@ class PyamDataProcessingModeEnum(enum.Enum):
     PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES = 7
 
 
-total_opex_and_capex_data = [
-    "Total|Investment in EUR",
-    "Total|Operational Costs in EUR",
-    "Total|Device CO2-footprint in kg",
+# examples for variables to check
+# kpi data only in yearly format
+kpi_data = [
+    "Consumption",
+    "Production",
+    "Self-consumption",
+    "Injection",
+    "Self-consumption rate",
+    "Cost for energy use",
+    "CO2 emitted due energy use",
+    "Battery losses",
+    "Autarky rate",
+    "Annual investment cost for equipment (old version)",
+    "Annual CO2 Footprint for equipment (old version)",
+    "Investment cost for equipment per simulated period",
+    "CO2 footprint for equipment per simulated period",
+    "System operational Cost for simulated period",
+    "System operational Emissions for simulated period",
+    "Total costs for simulated period",
+    "Total emissions for simulated period",
 ]
 
-electricity_data = ["*|*|ElectricityToOrFromGrid", "*|*|TotalElectricityConsumption"]
+electricity_data = [
+    "L2EMSElectricityController|Electricity|ElectricityToOrFromGrid",
+    "PVSystem|Electricity|ElectricityOutput",
+]
+
+occuancy_consumption = [
+    "Occupancy|Electricity|ElectricityOutput",
+    "Occupancy|WarmWater|WaterConsumption",
+]
 
 heating_demand = [
     "HeatPumpHPLib|Heating|ThermalOutputPower",
-    "HeatDistributionSystem|Heating|ThermalOutputPower",
+    # "HeatDistributionSystem|Heating|ThermalOutputPower",
     "Building|Heating|TheoreticalThermalBuildingDemand",
 ]
 
@@ -764,7 +814,8 @@ def main():
     PyAmChartGenerator(
         simulation_duration_to_check=str(365),
         data_processing_mode=PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_SIZES,
-        variables_to_check=heating_demand,
+        # variables_to_check_for_hourly_data=heating_demand + electricity_data + occuancy_consumption,
+        variables_to_check_for_yearly_data=kpi_data,
     )
 
 

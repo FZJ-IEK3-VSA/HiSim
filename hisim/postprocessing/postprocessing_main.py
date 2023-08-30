@@ -771,125 +771,23 @@ class PostProcessor:
             ppdt=ppdt, simple_dict_cumulative_data=simple_dict_cumulative_data
         )
 
-        # # add opex and capex cost to cumulative dict
-        # opex_compute_return = opex_calculation(
-        #     components=ppdt.wrapped_components,
-        #     all_outputs=ppdt.all_outputs,
-        #     postprocessing_results=ppdt.results,
-        #     simulation_parameters=ppdt.simulation_parameters,
-        # )
-
-        # capex_compute_return = capex_calculation(
-        #     components=ppdt.wrapped_components,
-        #     simulation_parameters=ppdt.simulation_parameters,
-        # )
-
-        # # transform opex and capex information to right pyam format and add to simple_dict_cumulative_data
-        # for i in opex_compute_return[1:]:
-
-        #     operational_cost_variable_name = f"{i[0]}|{opex_compute_return[0][1]}"
-        #     operational_cost_value = i[1]
-        #     operational_cost_unit = "€"
-
-        #     simple_dict_cumulative_data["model"].append(model)
-        #     simple_dict_cumulative_data["scenario"].append(scenario)
-        #     simple_dict_cumulative_data["region"].append(region)
-        #     simple_dict_cumulative_data["variable"].append(
-        #         operational_cost_variable_name
-        #     )
-        #     simple_dict_cumulative_data["unit"].append(operational_cost_unit)
-        #     simple_dict_cumulative_data["year"].append(year)
-        #     simple_dict_cumulative_data["value"].append(operational_cost_value)
-
-        #     operational_co2_footprint_variable_name = (
-        #         f"{i[0]}|{opex_compute_return[0][2]}"
-        #     )
-        #     operational_co2_footprint_value = i[2]
-        #     operational_co2_footprint_unit = "kg"
-
-        #     simple_dict_cumulative_data["model"].append(model)
-        #     simple_dict_cumulative_data["scenario"].append(scenario)
-        #     simple_dict_cumulative_data["region"].append(region)
-        #     simple_dict_cumulative_data["variable"].append(
-        #         operational_co2_footprint_variable_name
-        #     )
-        #     simple_dict_cumulative_data["unit"].append(operational_co2_footprint_unit)
-        #     simple_dict_cumulative_data["year"].append(year)
-        #     simple_dict_cumulative_data["value"].append(operational_co2_footprint_value)
-
-        # for i in capex_compute_return[1:]:
-
-        #     investment_cost_variable_name = f"{i[0]}|{capex_compute_return[0][1]}"
-        #     investment_cost_value = i[1]
-        #     investment_cost_unit = "€"
-
-        #     simple_dict_cumulative_data["model"].append(model)
-        #     simple_dict_cumulative_data["scenario"].append(scenario)
-        #     simple_dict_cumulative_data["region"].append(region)
-        #     simple_dict_cumulative_data["variable"].append(
-        #         investment_cost_variable_name
-        #     )
-        #     simple_dict_cumulative_data["unit"].append(investment_cost_unit)
-        #     simple_dict_cumulative_data["year"].append(year)
-        #     simple_dict_cumulative_data["value"].append(investment_cost_value)
-
-        #     device_co2_footprint_variable_name = f"{i[0]}|{capex_compute_return[0][2]}"
-        #     device_co2_footprint_value = i[2]
-        #     device_co2_footprint_unit = "kg"
-
-        #     simple_dict_cumulative_data["model"].append(model)
-        #     simple_dict_cumulative_data["scenario"].append(scenario)
-        #     simple_dict_cumulative_data["region"].append(region)
-        #     simple_dict_cumulative_data["variable"].append(
-        #         device_co2_footprint_variable_name
-        #     )
-        #     simple_dict_cumulative_data["unit"].append(device_co2_footprint_unit)
-        #     simple_dict_cumulative_data["year"].append(year)
-        #     simple_dict_cumulative_data["value"].append(device_co2_footprint_value)
-
-        #     lifetime_variable_name = f"{i[0]}|{capex_compute_return[0][3]}"
-        #     lifetime_value = i[3]
-        #     lifetime_unit = "a"
-
-        #     simple_dict_cumulative_data["model"].append(model)
-        #     simple_dict_cumulative_data["scenario"].append(scenario)
-        #     simple_dict_cumulative_data["region"].append(region)
-        #     simple_dict_cumulative_data["variable"].append(lifetime_variable_name)
-        #     simple_dict_cumulative_data["unit"].append(lifetime_unit)
-        #     simple_dict_cumulative_data["year"].append(year)
-        #     simple_dict_cumulative_data["value"].append(lifetime_value)
-
         # got through all components and read output values, variables and units for simple_dict_hourly_data
         for column in ppdt.results_hourly:
 
             for index, timestep in enumerate(timeseries):
                 values = ppdt.results_hourly[column].values
-                column_splitted = str(
-                    "".join(
-                        [
-                            x
-                            for x in column
-                            if x in string.ascii_letters + "'- " + string.digits
-                        ]
-                    )
-                ).split(sep=" ")
 
-                variable = "".join(
-                    [
-                        column_splitted[0],
-                        "|",
-                        column_splitted[3],
-                        "|",
-                        column_splitted[2],
-                    ]
+                (
+                    variable_name,
+                    unit,
+                ) = self.get_variable_name_and_unit_from_ppdt_results_column(
+                    column=column
                 )
-
-                unit = column_splitted[5]
 
                 simple_dict_hourly_data["model"].append(self.model)
                 simple_dict_hourly_data["scenario"].append(self.scenario)
                 simple_dict_hourly_data["region"].append(self.region)
-                simple_dict_hourly_data["variable"].append(variable)
+                simple_dict_hourly_data["variable"].append(variable_name)
                 simple_dict_hourly_data["unit"].append(unit)
                 simple_dict_hourly_data["time"].append(timestep)
                 simple_dict_hourly_data["value"].append(values[index])
@@ -898,24 +796,15 @@ class PostProcessor:
         for column in ppdt.results_cumulative:
             value = ppdt.results_cumulative[column].values[0]
 
-            column_splitted = str(
-                "".join(
-                    [
-                        x
-                        for x in column
-                        if x in string.ascii_letters + "'- " + string.digits
-                    ]
-                )
-            ).split(sep=" ")
-            variable = "".join(
-                [column_splitted[0], "|", column_splitted[3], "|", column_splitted[2]]
-            )
+            (
+                variable_name,
+                unit,
+            ) = self.get_variable_name_and_unit_from_ppdt_results_column(column=column)
 
-            unit = column_splitted[5]
             simple_dict_cumulative_data["model"].append(self.model)
             simple_dict_cumulative_data["scenario"].append(self.scenario)
             simple_dict_cumulative_data["region"].append(self.region)
-            simple_dict_cumulative_data["variable"].append(variable)
+            simple_dict_cumulative_data["variable"].append(variable_name)
             simple_dict_cumulative_data["unit"].append(unit)
             simple_dict_cumulative_data["year"].append(self.year)
             simple_dict_cumulative_data["value"].append(value)
@@ -972,7 +861,8 @@ class PostProcessor:
         self,
         ppdt: PostProcessingDataTransfer,
         simple_dict_cumulative_data: Dict[str, Any],
-    ):
+    ) -> None:
+        """Write kpis in pyam dictionary."""
 
         kpi_compute_return = compute_kpis(
             components=ppdt.wrapped_components,
@@ -995,3 +885,25 @@ class PostProcessor:
                 simple_dict_cumulative_data["unit"].append(variable_unit)
                 simple_dict_cumulative_data["year"].append(self.year)
                 simple_dict_cumulative_data["value"].append(variable_value)
+
+    def get_variable_name_and_unit_from_ppdt_results_column(self, column: str) -> tuple[str, str]:
+        """Get variable name and unit for pyam dictionary."""
+
+        column_splitted = str(
+            "".join(
+                [
+                    x
+                    for x in column
+                    if x
+                    in string.ascii_letters + "'- " + string.digits + "_" + "°" + "/"
+                ]
+            )
+        ).split(sep=" ")
+
+        variable_name = "".join(
+            [column_splitted[0], "|", column_splitted[3], "|", column_splitted[2]]
+        )
+
+        unit = column_splitted[5]
+
+        return variable_name, unit

@@ -20,10 +20,15 @@ class PyamDataCollector:
     """PyamDataCollector class which collects and concatenate the pyam data from the examples/results."""
 
     def __init__(
-        self, data_collection_mode: Any, path_to_default_config: Optional[str] = None
+        self,
+        data_collection_mode: Any,
+        folder_from_which_data_will_be_collected: str = os.path.join(
+            os.pardir, os.pardir, "examples", "results"
+        ),
+        path_to_default_config: Optional[str] = None,
     ) -> None:
         """Initialize the class."""
-        result_folder = os.path.join(os.pardir, os.pardir, "examples", "results")
+        result_folder = folder_from_which_data_will_be_collected  # os.path.join(os.pardir, os.pardir, "examples", "results")
         self.pyam_data_folder = os.path.join(
             os.pardir, os.pardir, "examples", "results_for_scenario_comparison", "data"
         )
@@ -521,19 +526,6 @@ class PyamDataCollector:
 
         return list_of_pyam_folders_which_have_only_unique_configs
 
-    def get_opex_and_capex_cost_from_json(self, folder: str):
-        """Get opex and capex cost from json file."""
-        for file in os.listdir(folder):
-
-            if ".json" in file:
-                with open(
-                    os.path.join(folder, file), "r", encoding="utf-8"
-                ) as openfile:
-                    config_dict = json.load(openfile)
-                    opex_capex_cost = config_dict["opexCapexCosts"]
-                    return opex_capex_cost
-
-
 class PyamDataTypeEnum(enum.Enum):
 
     """PyamDataTypeEnum class.
@@ -561,6 +553,9 @@ def main():
     PyamDataCollector(
         data_collection_mode=PyamDataCollectionModeEnum.COLLECT_AND_SORT_DATA_ACCORDING_TO_PARAMETER_KEYS,
         path_to_default_config="please insert path to your default module config",
+        folder_from_which_data_will_be_collected=os.path.join(
+            os.pardir, os.pardir, "examples", "results"
+        ),
     )
 
 

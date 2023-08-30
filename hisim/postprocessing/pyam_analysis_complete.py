@@ -13,12 +13,12 @@ class PyamDataAnalysis:
 
         pyam_data_collection.PyamDataCollector(
             data_collection_mode=pyam_data_collection.PyamDataCollectionModeEnum.COLLECT_AND_SORT_DATA_ACCORDING_TO_PARAMETER_KEYS,
-            path_to_default_config= "/storage_cluster/internal/home/k-rieck/jobs_hisim/cluster-hisim-paper/job_array_for_hisim_mass_simu_one/default_building_pv_config.json" # r"C:\Users\k.rieck\Cluster_stuff_copied\job_array_for_hisim_mass_simu_one\default_building_pv_config.json",
+            path_to_default_config="/storage_cluster/internal/home/k-rieck/jobs_hisim/cluster-hisim-paper/job_array_for_hisim_mass_simu_one/default_building_pv_config.json",  # r"C:\Users\k.rieck\Cluster_stuff_copied\job_array_for_hisim_mass_simu_one\default_building_pv_config.json",
         )
-        # pyam_data_processing.PyAmChartGenerator(
-        #     simulation_duration_to_check=str(365),
-        #     data_processing_mode=pyam_data_processing.PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_POWERS,
-        # )
+        pyam_data_processing.PyAmChartGenerator(
+            simulation_duration_to_check=str(365),
+            data_processing_mode=pyam_data_processing.PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_POWERS,
+        )
 
 
 def main():

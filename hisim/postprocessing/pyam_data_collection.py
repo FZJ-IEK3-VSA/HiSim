@@ -61,9 +61,9 @@ class PyamDataCollector:
             for key in dict_with_csv_files_for_each_parameter.keys():
                 print("parameter key ", key)
                 print("##################")
-                list_with_pyam_data_paths_for_one_parameter = (
-                    dict_with_csv_files_for_each_parameter[key]
-                )
+                list_with_pyam_data_paths_for_one_parameter = dict_with_csv_files_for_each_parameter[
+                    key
+                ]
 
                 (
                     all_simulation_durations,
@@ -260,7 +260,9 @@ class PyamDataCollector:
         index: int,
     ) -> Any:
         """Rename the scenario of the given dataframe adding parameter key and value."""
-        value = round(list_with_parameter_values[index],1)
+        value = list_with_parameter_values[index]
+        if not isinstance(value, str):
+            value = round(value, 1)
         dataframe["scenario"] = f"{parameter_key}_{value}"
         return dataframe["scenario"]
 
@@ -454,11 +456,9 @@ class PyamDataCollector:
                 dict_with_csv_files_for_each_parameter=dict_with_csv_files_for_each_parameter,
                 dict_with_parameter_key_values=dict_with_parameter_key_values,
             )
-            
+
             # # get opex and capex costs and add to dict
             # dict_with_opex_and_capex_costs = self.get_opex_and_capex_cost_from_json(folder=folder)
-            
-            
 
         # add to each item in the dict also the default example
         for key in dict_with_csv_files_for_each_parameter.keys():
@@ -520,13 +520,15 @@ class PyamDataCollector:
                 shutil.rmtree(whole_parent_folder, ignore_errors=True)
 
         return list_of_pyam_folders_which_have_only_unique_configs
-    
+
     def get_opex_and_capex_cost_from_json(self, folder: str):
         """Get opex and capex cost from json file."""
         for file in os.listdir(folder):
 
             if ".json" in file:
-                with open(os.path.join(folder, file), "r", encoding="utf-8") as openfile:
+                with open(
+                    os.path.join(folder, file), "r", encoding="utf-8"
+                ) as openfile:
                     config_dict = json.load(openfile)
                     opex_capex_cost = config_dict["opexCapexCosts"]
                     return opex_capex_cost

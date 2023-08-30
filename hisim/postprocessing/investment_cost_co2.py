@@ -30,9 +30,7 @@ def read_in_component_costs() -> pd.DataFrame:
     return price_frame
 
 
-def compute_investment_cost(
-    components: List[ComponentWrapper],
-) -> Tuple[float, float]:
+def compute_investment_cost(components: List[ComponentWrapper],) -> Tuple[float, float]:
     """Iterates over all components and computes annual investment cost and annual C02 footprint respectively.
 
     :param components: List of all configured components in the HiSIM example.
@@ -54,7 +52,9 @@ def compute_investment_cost(
             component_capacity = 1.0
         elif isinstance(component.my_component, generic_pv_system.PVSystem):
             column = price_frame.iloc[price_frame.index == "Photovoltaic panel"]
-            component_capacity = component.my_component.pvconfig.power_in_watt_peak * 1e-3
+            component_capacity = (
+                component.my_component.pvconfig.power_in_watt_peak * 1e-3
+            )
         elif isinstance(component.my_component, generic_heat_source.HeatSource):
             if component.my_component.config.fuel == LoadTypes.DISTRICTHEATING:
                 column = price_frame.iloc[

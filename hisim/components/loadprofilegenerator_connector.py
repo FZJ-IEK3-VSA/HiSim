@@ -42,7 +42,7 @@ class OccupancyConfig(cp.ConfigBase):
     @classmethod
     def get_default_CHS01(cls) -> Any:
         config = OccupancyConfig(
-            name="Occupancy_1", profile_name="CH01", country_name="DE"
+            name="Occupancy", profile_name="CH01", country_name="DE"
         )
         return config
 

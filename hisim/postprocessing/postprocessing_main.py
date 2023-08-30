@@ -465,9 +465,7 @@ class PostProcessor:
         simulation_parameters_list = ppdt.simulation_parameters.get_unique_key_as_list()
         lines += simulation_parameters_list
         self.write_new_chapter_with_text_content_to_report(
-            report=report,
-            lines=lines,
-            headline=". Simulation Parameters",
+            report=report, lines=lines, headline=". Simulation Parameters",
         )
 
     def write_components_to_report(
@@ -584,9 +582,7 @@ class PostProcessor:
         for output in ppdt.all_outputs:
             all_output_names.append(output.full_name + " [" + output.unit + "]")
         self.write_new_chapter_with_text_content_to_report(
-            report=report,
-            lines=all_output_names,
-            headline=". All Outputs",
+            report=report, lines=all_output_names, headline=". All Outputs",
         )
 
     def write_network_charts_to_report(
@@ -731,6 +727,7 @@ class PostProcessor:
         else:
             log.information("This pyam_data path exists already: " + pyam_data_folder)
 
+        # --------------------------------------------------------------------------------------------------------------------------------------------------------------
         # make dictionaries with pyam data structure for hourly and yearly data
         simple_dict_hourly_data: Dict = {
             "model": [],
@@ -751,103 +748,118 @@ class PostProcessor:
             "value": [],
         }
         # set pyam model name
-        model = "".join(["HiSim_", ppdt.module_filename])
+        self.model = "".join(["HiSim_", ppdt.module_filename])
 
         # set pyam scenario name
         if SingletonSimRepository().exist_entry(
             key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME
         ):
-            scenario = SingletonSimRepository().get_entry(
+            self.scenario = SingletonSimRepository().get_entry(
                 key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME
             )
         else:
-            scenario = ppdt.setup_function
+            self.scenario = ppdt.setup_function
         # set pyam region
-        region = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
+        self.region = SingletonSimRepository().get_entry(
+            key=SingletonDictKeyEnum.LOCATION
+        )
         # set pyam year or timeseries
-        year = ppdt.simulation_parameters.year
+        self.year = ppdt.simulation_parameters.year
         timeseries = ppdt.results_hourly.index
-        
-        #######################################################
-        # add opex and capex cost to cumulative dict
-        opex_compute_return = opex_calculation(
-            components=ppdt.wrapped_components,
-            all_outputs=ppdt.all_outputs,
-            postprocessing_results=ppdt.results,
-            simulation_parameters=ppdt.simulation_parameters,
-        )
-        
-        capex_compute_return = capex_calculation(
-            components=ppdt.wrapped_components,
-            simulation_parameters=ppdt.simulation_parameters,
+
+        self.write_kpis_in_pyam_dict(
+            ppdt=ppdt, simple_dict_cumulative_data=simple_dict_cumulative_data
         )
 
-        # transform opex and capex information to right pyam format and add to dict_cumulative_data
-        for i in opex_compute_return[1:]:
-            operational_cost_variable_name = f"{i[0]}|{opex_compute_return[0][1]}"
-            operational_cost_value = i[1]
-            operational_cost_unit = "EUR"
-            simple_dict_cumulative_data["model"].append(model)
-            simple_dict_cumulative_data["scenario"].append(scenario)
-            simple_dict_cumulative_data["region"].append(region)
-            simple_dict_cumulative_data["variable"].append(operational_cost_variable_name)
-            simple_dict_cumulative_data["unit"].append(operational_cost_unit)
-            simple_dict_cumulative_data["year"].append(year)
-            simple_dict_cumulative_data["value"].append(operational_cost_value)
+        # # add opex and capex cost to cumulative dict
+        # opex_compute_return = opex_calculation(
+        #     components=ppdt.wrapped_components,
+        #     all_outputs=ppdt.all_outputs,
+        #     postprocessing_results=ppdt.results,
+        #     simulation_parameters=ppdt.simulation_parameters,
+        # )
 
-            operational_co2_footprint_variable_name = f"{i[0]}|{opex_compute_return[0][2]}"
-            operational_co2_footprint_value = i[2]
-            operational_co2_footprint_unit = "kg"
-            simple_dict_cumulative_data["model"].append(model)
-            simple_dict_cumulative_data["scenario"].append(scenario)
-            simple_dict_cumulative_data["region"].append(region)
-            simple_dict_cumulative_data["variable"].append(operational_co2_footprint_variable_name)
-            simple_dict_cumulative_data["unit"].append(operational_co2_footprint_unit)
-            simple_dict_cumulative_data["year"].append(year)
-            simple_dict_cumulative_data["value"].append(operational_co2_footprint_value)
+        # capex_compute_return = capex_calculation(
+        #     components=ppdt.wrapped_components,
+        #     simulation_parameters=ppdt.simulation_parameters,
+        # )
 
-        for i in capex_compute_return[1:]:
-            investment_cost_variable_name = f"{i[0]}|{capex_compute_return[0][1]}"
-            investment_cost_value = i[1]
-            investment_cost_unit = "EUR"
-            simple_dict_cumulative_data["model"].append(model)
-            simple_dict_cumulative_data["scenario"].append(scenario)
-            simple_dict_cumulative_data["region"].append(region)
-            simple_dict_cumulative_data["variable"].append(investment_cost_variable_name)
-            simple_dict_cumulative_data["unit"].append(investment_cost_unit)
-            simple_dict_cumulative_data["year"].append(year)
-            simple_dict_cumulative_data["value"].append(investment_cost_value)
+        # # transform opex and capex information to right pyam format and add to simple_dict_cumulative_data
+        # for i in opex_compute_return[1:]:
 
-            device_co2_footprint_variable_name = f"{i[0]}|{capex_compute_return[0][2]}"
-            device_co2_footprint_value = i[2]
-            device_co2_footprint_unit = "kg"
-            simple_dict_cumulative_data["model"].append(model)
-            simple_dict_cumulative_data["scenario"].append(scenario)
-            simple_dict_cumulative_data["region"].append(region)
-            simple_dict_cumulative_data["variable"].append(device_co2_footprint_variable_name)
-            simple_dict_cumulative_data["unit"].append(device_co2_footprint_unit)
-            simple_dict_cumulative_data["year"].append(year)
-            simple_dict_cumulative_data["value"].append(device_co2_footprint_value)
+        #     operational_cost_variable_name = f"{i[0]}|{opex_compute_return[0][1]}"
+        #     operational_cost_value = i[1]
+        #     operational_cost_unit = "€"
 
-            lifetime_variable_name = f"{i[0]}|{capex_compute_return[0][3]}"
-            lifetime_value = i[3]
-            lifetime_unit = "a"
-            simple_dict_cumulative_data["model"].append(model)
-            simple_dict_cumulative_data["scenario"].append(scenario)
-            simple_dict_cumulative_data["region"].append(region)
-            simple_dict_cumulative_data["variable"].append(lifetime_variable_name)
-            simple_dict_cumulative_data["unit"].append(lifetime_unit)
-            simple_dict_cumulative_data["year"].append(year)
-            simple_dict_cumulative_data["value"].append(lifetime_value)
+        #     simple_dict_cumulative_data["model"].append(model)
+        #     simple_dict_cumulative_data["scenario"].append(scenario)
+        #     simple_dict_cumulative_data["region"].append(region)
+        #     simple_dict_cumulative_data["variable"].append(
+        #         operational_cost_variable_name
+        #     )
+        #     simple_dict_cumulative_data["unit"].append(operational_cost_unit)
+        #     simple_dict_cumulative_data["year"].append(year)
+        #     simple_dict_cumulative_data["value"].append(operational_cost_value)
 
-            
-            
-        # add to whole cumulative dictionary
-        
-        
-        #########################################################
+        #     operational_co2_footprint_variable_name = (
+        #         f"{i[0]}|{opex_compute_return[0][2]}"
+        #     )
+        #     operational_co2_footprint_value = i[2]
+        #     operational_co2_footprint_unit = "kg"
 
-        # got through all components and read values, variables and units
+        #     simple_dict_cumulative_data["model"].append(model)
+        #     simple_dict_cumulative_data["scenario"].append(scenario)
+        #     simple_dict_cumulative_data["region"].append(region)
+        #     simple_dict_cumulative_data["variable"].append(
+        #         operational_co2_footprint_variable_name
+        #     )
+        #     simple_dict_cumulative_data["unit"].append(operational_co2_footprint_unit)
+        #     simple_dict_cumulative_data["year"].append(year)
+        #     simple_dict_cumulative_data["value"].append(operational_co2_footprint_value)
+
+        # for i in capex_compute_return[1:]:
+
+        #     investment_cost_variable_name = f"{i[0]}|{capex_compute_return[0][1]}"
+        #     investment_cost_value = i[1]
+        #     investment_cost_unit = "€"
+
+        #     simple_dict_cumulative_data["model"].append(model)
+        #     simple_dict_cumulative_data["scenario"].append(scenario)
+        #     simple_dict_cumulative_data["region"].append(region)
+        #     simple_dict_cumulative_data["variable"].append(
+        #         investment_cost_variable_name
+        #     )
+        #     simple_dict_cumulative_data["unit"].append(investment_cost_unit)
+        #     simple_dict_cumulative_data["year"].append(year)
+        #     simple_dict_cumulative_data["value"].append(investment_cost_value)
+
+        #     device_co2_footprint_variable_name = f"{i[0]}|{capex_compute_return[0][2]}"
+        #     device_co2_footprint_value = i[2]
+        #     device_co2_footprint_unit = "kg"
+
+        #     simple_dict_cumulative_data["model"].append(model)
+        #     simple_dict_cumulative_data["scenario"].append(scenario)
+        #     simple_dict_cumulative_data["region"].append(region)
+        #     simple_dict_cumulative_data["variable"].append(
+        #         device_co2_footprint_variable_name
+        #     )
+        #     simple_dict_cumulative_data["unit"].append(device_co2_footprint_unit)
+        #     simple_dict_cumulative_data["year"].append(year)
+        #     simple_dict_cumulative_data["value"].append(device_co2_footprint_value)
+
+        #     lifetime_variable_name = f"{i[0]}|{capex_compute_return[0][3]}"
+        #     lifetime_value = i[3]
+        #     lifetime_unit = "a"
+
+        #     simple_dict_cumulative_data["model"].append(model)
+        #     simple_dict_cumulative_data["scenario"].append(scenario)
+        #     simple_dict_cumulative_data["region"].append(region)
+        #     simple_dict_cumulative_data["variable"].append(lifetime_variable_name)
+        #     simple_dict_cumulative_data["unit"].append(lifetime_unit)
+        #     simple_dict_cumulative_data["year"].append(year)
+        #     simple_dict_cumulative_data["value"].append(lifetime_value)
+
+        # got through all components and read output values, variables and units for simple_dict_hourly_data
         for column in ppdt.results_hourly:
 
             for index, timestep in enumerate(timeseries):
@@ -874,15 +886,15 @@ class PostProcessor:
 
                 unit = column_splitted[5]
 
-                simple_dict_hourly_data["model"].append(model)
-                simple_dict_hourly_data["scenario"].append(scenario)
-                simple_dict_hourly_data["region"].append(region)
+                simple_dict_hourly_data["model"].append(self.model)
+                simple_dict_hourly_data["scenario"].append(self.scenario)
+                simple_dict_hourly_data["region"].append(self.region)
                 simple_dict_hourly_data["variable"].append(variable)
                 simple_dict_hourly_data["unit"].append(unit)
                 simple_dict_hourly_data["time"].append(timestep)
                 simple_dict_hourly_data["value"].append(values[index])
-                
-        
+
+        # got through all components and read output values, variables and units for simple_dict_cumulative_data
         for column in ppdt.results_cumulative:
             value = ppdt.results_cumulative[column].values[0]
 
@@ -900,34 +912,44 @@ class PostProcessor:
             )
 
             unit = column_splitted[5]
-            simple_dict_cumulative_data["model"].append(model)
-            simple_dict_cumulative_data["scenario"].append(scenario)
-            simple_dict_cumulative_data["region"].append(region)
+            simple_dict_cumulative_data["model"].append(self.model)
+            simple_dict_cumulative_data["scenario"].append(self.scenario)
+            simple_dict_cumulative_data["region"].append(self.region)
             simple_dict_cumulative_data["variable"].append(variable)
             simple_dict_cumulative_data["unit"].append(unit)
-            simple_dict_cumulative_data["year"].append(year)
+            simple_dict_cumulative_data["year"].append(self.year)
             simple_dict_cumulative_data["value"].append(value)
-            
 
-            
-            
-        
-
-        # create dataframe
+        # create dataframes
         simple_df_hourly_data = pd.DataFrame(simple_dict_hourly_data)
         simple_df_yearly_data = pd.DataFrame(simple_dict_cumulative_data)
 
+        # write csv files with all hourly and yearly data in the pyam data folder
+        file_name_hourly = os.path.join(
+            pyam_data_folder,
+            f"{ppdt.module_filename}_hourly_results_for_{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{self.region}.csv",
+        )
+        file_name_yearly = os.path.join(
+            pyam_data_folder,
+            f"{ppdt.module_filename}_yearly_results_for_{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{self.region}.csv",
+        )
+        simple_df_hourly_data.to_csv(
+            path_or_buf=file_name_hourly, index=None,
+        )  # type: ignore
+        simple_df_yearly_data.to_csv(path_or_buf=file_name_yearly, index=None)  # type: ignore
+
+        # --------------------------------------------------------------------------------------------------------------------------------------------------------------
         # create dictionary with all import pyam information
         data_information_dict = {
-            "model": model,
-            "scenario": scenario,
-            "region": region,
-            "year": year,
+            "model": self.model,
+            "scenario": self.scenario,
+            "region": self.region,
+            "year": self.year,
             "duration in days": ppdt.simulation_parameters.duration.days,
         }
 
-        # write json config with all component configs, module config, pyam information dict, opex and capex costs and simulation parameters
-        json_generator_config = JsonConfigurationGenerator(name=f"{scenario}")
+        # write json config with all component configs, module config, pyam information dict and simulation parameters
+        json_generator_config = JsonConfigurationGenerator(name=f"{self.scenario}")
         json_generator_config.set_simulation_parameters(
             my_simulation_parameters=ppdt.simulation_parameters
         )
@@ -946,18 +968,30 @@ class PostProcessor:
             filename=os.path.join(pyam_data_folder, "data_information_for_pyam.json")
         )
 
-        # write csv files with all hourly and yearly data in the pyam data folder
-        file_name_hourly = os.path.join(
-            pyam_data_folder,
-            f"{ppdt.module_filename}_hourly_results_for_{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}.csv",
+    def write_kpis_in_pyam_dict(
+        self,
+        ppdt: PostProcessingDataTransfer,
+        simple_dict_cumulative_data: Dict[str, Any],
+    ):
+
+        kpi_compute_return = compute_kpis(
+            components=ppdt.wrapped_components,
+            results=ppdt.results,
+            all_outputs=ppdt.all_outputs,
+            simulation_parameters=ppdt.simulation_parameters,
         )
-        file_name_yearly = os.path.join(
-            pyam_data_folder,
-            f"{ppdt.module_filename}_yearly_results_for_{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}.csv",
-        )
-        simple_df_hourly_data.to_csv(
-            path_or_buf=file_name_hourly,
-            index=None,
-        )  # type: ignore
-        simple_df_yearly_data.to_csv(path_or_buf=file_name_yearly, index=None)  # type: ignore
-        
+
+        for i in kpi_compute_return:
+
+            if "---" not in i:
+                variable_name = "".join(x for x in i[0] if x != ":")
+                variable_value = "".join(x for x in i[1] if x in string.digits)
+                variable_unit = i[2]
+
+                simple_dict_cumulative_data["model"].append(self.model)
+                simple_dict_cumulative_data["scenario"].append(self.scenario)
+                simple_dict_cumulative_data["region"].append(self.region)
+                simple_dict_cumulative_data["variable"].append(variable_name)
+                simple_dict_cumulative_data["unit"].append(variable_unit)
+                simple_dict_cumulative_data["year"].append(self.year)
+                simple_dict_cumulative_data["value"].append(variable_value)

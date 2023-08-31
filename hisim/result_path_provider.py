@@ -17,14 +17,13 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
     According to your storting options and your input information a result path is created.
     """
 
-    def __init__(
-        self,
-    ):
+    def __init__(self,):
         """Initialize the class."""
         self.base_path: Optional[str] = None
         self.model_name: Optional[str] = None
         self.variant_name: Optional[str] = None
         self.hash_number: Optional[str] = None
+        self.sampling_mode: Optional[str] = None
         self.sorting_option: Any = SortingOptionEnum.FLAT
         self.time_resolution_in_seconds: Optional[int] = None
         self.simulation_duration_in_days: Optional[int] = None
@@ -37,6 +36,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         variant_name: Optional[str],
         hash_number: Optional[int],
         sorting_option: Any,
+        sampling_mode: Optional[str] = None,
     ) -> None:
         """Set important result path information."""
         self.set_base_path(module_directory=module_directory)
@@ -44,6 +44,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         self.set_variant_name(variant_name=variant_name)
         self.set_sorting_option(sorting_option=sorting_option)
         self.set_hash_number(hash_number=hash_number)
+        self.set_sampling_mode(sampling_mode=sampling_mode)
 
     def set_base_path(self, module_directory: str) -> None:
         """Set base path."""
@@ -66,6 +67,10 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         else:
             hash_number_str = str(hash_number)
         self.hash_number = hash_number_str
+
+    def set_sampling_mode(self, sampling_mode: Optional[str]) -> None:
+        """Set sampling mode."""
+        self.sampling_mode = sampling_mode
 
     def set_sorting_option(self, sorting_option: Any) -> None:
         """Set sorting option."""
@@ -100,26 +105,54 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
                 self.sorting_option
                 == SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION
             ):
-                # schauen ob verzeichnis schon da und aufsteigende nummer anängen
+                # schauen ob verzeichnis schon da und aufsteigende nummer anhängen
                 idx = 1
-                path = os.path.join(
-                    self.base_path, self.model_name, self.variant_name + "_" + str(idx)
-                )
-                while os.path.exists(path):
-                    idx = idx + 1
+
+                if self.sampling_mode is not None:
+                    path = os.path.join(
+                        self.base_path,
+                        self.model_name,
+                        self.sampling_mode,
+                        self.variant_name + "_" + str(idx),
+                    )
+                    while os.path.exists(path):
+                        idx = idx + 1
+                        path = os.path.join(
+                            self.base_path,
+                            self.model_name,
+                            self.sampling_mode,
+                            self.variant_name + "_" + str(idx),
+                        )
+                else:
                     path = os.path.join(
                         self.base_path,
                         self.model_name,
                         self.variant_name + "_" + str(idx),
                     )
+                    while os.path.exists(path):
+                        idx = idx + 1
+                        path = os.path.join(
+                            self.base_path,
+                            self.model_name,
+                            self.variant_name + "_" + str(idx),
+                        )
             elif (
                 self.sorting_option
                 == SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION
             ):
-
-                path = os.path.join(
-                    self.base_path, self.model_name, self.variant_name + "_" + self.hash_number
-                )
+                if self.sampling_mode is not None:
+                    path = os.path.join(
+                        self.base_path,
+                        self.model_name,
+                        self.sampling_mode,
+                        self.variant_name + "_" + self.hash_number,
+                    )
+                else:
+                    path = os.path.join(
+                        self.base_path,
+                        self.model_name,
+                        self.variant_name + "_" + self.hash_number,
+                    )
 
             elif self.sorting_option == SortingOptionEnum.FLAT:
                 path = os.path.join(
@@ -138,7 +171,7 @@ def check_path_length(path: str) -> None:
 
     character_limit_according_to_windows = 256
     # check if the system is windows
-    is_windows = sys.platform.startswith('win')
+    is_windows = sys.platform.startswith("win")
     if is_windows and len(path) >= character_limit_according_to_windows:
         raise NameError(
             f"The path {path} exceeds the limit of 256 characters which is the limit for Windows. Please make your path shorter."

@@ -237,6 +237,7 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     my_photovoltaic_system_config.power_in_watt_peak = pv_power
     my_photovoltaic_system_config.azimuth = azimuth
     my_photovoltaic_system_config.tilt = tilt
+    my_photovoltaic_system_config.name = "PVSystem"
 
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
@@ -306,6 +307,7 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     my_advanced_battery_config = (
         advanced_battery_bslib.BatteryConfig.get_default_config()
     )
+    my_advanced_battery_config.name = "Battery"
     my_advanced_battery = advanced_battery_bslib.Battery(
         my_simulation_parameters=my_simulation_parameters,
         config=my_advanced_battery_config,
@@ -437,8 +439,12 @@ def household_hplib_hws_hds_pv_battery_ems_config(
     my_sim.add_component(my_electricity_controller)
 
     # Set Results Path
+    # if config_filename is given, get hash number and sampling mode for result path
     if config_filename is not None:
-        hash_number = re.findall(r"\-?\d+", config_filename)[0]
+        config_filename_splitted = config_filename.split("/")
+        hash_number = re.findall(r"\-?\d+", config_filename_splitted[-1])[0]
+        sampling_mode = config_filename_splitted[-2]
+
         sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION
 
         SingletonSimRepository().set_entry(
@@ -449,9 +455,11 @@ def household_hplib_hws_hds_pv_battery_ems_config(
             "Singleton Scenario is set "
             + f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_{hash_number}"
         )
+    # if config_filename is not given, make result path with index enumeration
     else:
         hash_number = None
         sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION
+        sampling_mode = None
 
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
@@ -459,4 +467,5 @@ def household_hplib_hws_hds_pv_battery_ems_config(
         variant_name=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s",
         hash_number=hash_number,
         sorting_option=sorting_option,
+        sampling_mode=sampling_mode,
     )

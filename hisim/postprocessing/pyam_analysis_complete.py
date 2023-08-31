@@ -21,7 +21,7 @@ class PyamDataAnalysis:
         )
         pyam_data_processing.PyAmChartGenerator(
             simulation_duration_to_check=str(365),
-            data_processing_mode=pyam_data_processing.PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_SIZES,
+            data_processing_mode=pyam_data_processing.PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_TYPES,
             variables_to_check_for_hourly_data=pyam_data_processing.heating_demand
             + pyam_data_processing.electricity_data
             + pyam_data_processing.occuancy_consumption,

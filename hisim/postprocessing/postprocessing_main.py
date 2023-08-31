@@ -886,7 +886,9 @@ class PostProcessor:
                 simple_dict_cumulative_data["year"].append(self.year)
                 simple_dict_cumulative_data["value"].append(variable_value)
 
-    def get_variable_name_and_unit_from_ppdt_results_column(self, column: str) -> tuple[str, str]:
+    def get_variable_name_and_unit_from_ppdt_results_column(
+        self, column: str
+    ) -> tuple[str, str]:
         """Get variable name and unit for pyam dictionary."""
 
         column_splitted = str(

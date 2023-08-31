@@ -526,6 +526,7 @@ class PyamDataCollector:
 
         return list_of_pyam_folders_which_have_only_unique_configs
 
+
 class PyamDataTypeEnum(enum.Enum):
 
     """PyamDataTypeEnum class.

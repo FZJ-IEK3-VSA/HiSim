@@ -182,11 +182,7 @@
     "strategy": "optimize_own_consumption",
     "limit_to_shave": 0,
     "building_temperature_offset_value": 0,
-    "storage_temperature_offset_value": [
-      0
-    ],
-    "simple_hot_water_storage_temperature_offset_value": [
-      0
-    ]
+    "storage_temperature_offset_value": 0,
+    "simple_hot_water_storage_temperature_offset_value": 0
   }
 }

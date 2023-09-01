@@ -88,10 +88,32 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
     """Surplus electricity controller - time step based.
 
-    Iteratively goes through hierachy of devices given by
-    source weights of components and passes available surplus
+    Iteratively goes through connected inputs by hierachy of 
+    source weights of inputs and passes available surplus
     electricity to each device. Needs to be configured with
     dynamic In- and Outputs.
+
+    Recognises production of any component when dynamic input
+    is labeled with the flag "CONSUMPTION" and the 
+    related source weight is set to 999.
+
+    Recognised non controllable consumption of any component
+    when dynamic input is labeld with the flag 
+    "CONSUMPTION_UNCONTROLLED" and the related source weight
+    is set to 999.
+
+    For each component, which should receive signals from the
+    EMS, the EMS needs to be connected with one dynamic input
+    with the tag "ELECTRICITY_REAL" and the source weight of
+    the related component. This signal reflects the real
+    consumption/production of the device, which is needed to
+    update the energy balance in the EMS.
+    In addition, the EMS needs to be connected with one dynamic
+    output with the tag "ELECTRICITY_TARGET" with the
+    source weight of the related component. This signal sends
+    information on the available surplus electricity to the
+    component, which receives signals from the EMS.
+
     """
 
     # Inputs

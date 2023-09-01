@@ -5,6 +5,7 @@ from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
+
 @pytest.mark.base
 def test_occupancy():
     """

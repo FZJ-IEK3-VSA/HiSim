@@ -25,7 +25,7 @@ def test_chp_system():
         )
     my_electrolyzer_controller_config = controller_l1_electrolyzer.L1ElectrolyzerConfig.get_default_config()
     my_electrolyzer_controller = controller_l1_electrolyzer.L1GenericElectrolyzerController(
-        config=my_electrolyzer_controller_config, my_simulation_parameters=my_simulation_parameters
+        my_config=my_electrolyzer_controller_config, my_simulation_parameters=my_simulation_parameters
         )
 
     # Set Fake Inputs

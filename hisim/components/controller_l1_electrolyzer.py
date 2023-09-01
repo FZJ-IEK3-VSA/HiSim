@@ -97,16 +97,18 @@ class L1GenericElectrolyzerController(cp.Component):
     # Similar components to connect to:
     # 1. Building
     @utils.measure_execution_time
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: L1ElectrolyzerConfig,) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, my_config: L1ElectrolyzerConfig,) -> None:
 
-        super().__init__(name=config.name + "_w" + str(config.source_weight), my_simulation_parameters=my_simulation_parameters,)
-        self.config = config
+        super().__init__(
+            name=my_config.name + "_w" + str(my_config.source_weight),
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=my_config,)
         self.minimum_runtime_in_timesteps = int(
-            config.min_operation_time_in_seconds
+            my_config.min_operation_time_in_seconds
             / self.my_simulation_parameters.seconds_per_timestep
         )
         self.minimum_resting_time_in_timesteps = int(
-            config.min_idle_time_in_seconds / self.my_simulation_parameters.seconds_per_timestep
+            my_config.min_idle_time_in_seconds / self.my_simulation_parameters.seconds_per_timestep
         )
 
         self.state = L1ElectrolyzerControllerState()

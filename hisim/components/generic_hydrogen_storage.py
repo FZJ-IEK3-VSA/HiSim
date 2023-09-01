@@ -41,7 +41,7 @@ class GenericHydrogenStorageConfig(cp.ConfigBase):
     energy_for_charge: float
     #: energy demand for the discharging process in Wh/kg
     energy_for_discharge: float
-    #: permanent hydrogen loyy in % per day
+    #: permanent hydrogen loss in % per day
     loss_factor_per_day: float
 
     @staticmethod
@@ -50,7 +50,7 @@ class GenericHydrogenStorageConfig(cp.ConfigBase):
         """Returns default configuration for hydrogen storage"""
         config = GenericHydrogenStorageConfig(
             name="HydrogenStorage",
-            source_weight=1,
+            source_weight=source_weight,
             min_capacity=0,
             max_capacity=capacity,
             max_charging_rate=max_charging_rate,

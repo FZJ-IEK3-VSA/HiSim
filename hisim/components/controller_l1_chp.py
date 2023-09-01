@@ -181,37 +181,37 @@ class L1CHPController(cp.Component):
 
     @utils.measure_execution_time
     def __init__(
-        self, my_simulation_parameters: SimulationParameters, config: L1CHPControllerConfig
+        self, my_simulation_parameters: SimulationParameters, my_config: L1CHPControllerConfig
     ) -> None:
         """For initializing."""
-        if not config.__class__.__name__ == L1CHPControllerConfig.__name__:
-            raise ValueError("Wrong config class. Got a " + config.__class__.__name__)
+        if not my_config.__class__.__name__ == L1CHPControllerConfig.__name__:
+            raise ValueError("Wrong config class. Got a " + my_config.__class__.__name__)
         super().__init__(
-            name=config.name + "_w" + str(config.source_weight),
+            name=my_config.name + "_w" + str(my_config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
+            my_config=my_config,
         )
-        self.config: L1CHPControllerConfig = config
         self.minimum_runtime_in_timesteps = int(
-            config.min_operation_time_in_seconds
+            my_config.min_operation_time_in_seconds
             / self.my_simulation_parameters.seconds_per_timestep
         )
         self.minimum_resting_time_in_timesteps = int(
-            config.min_idle_time_in_seconds
+            my_config.min_idle_time_in_seconds
             / self.my_simulation_parameters.seconds_per_timestep
         )
         """ Initializes the class. """
-        if config.day_of_heating_season_begin is None:
+        if my_config.day_of_heating_season_begin is None:
             raise ValueError("Day of heating season begin was None")
-        if config.day_of_heating_season_end is None:
+        if my_config.day_of_heating_season_end is None:
             raise ValueError("Day of heating season end was None")
         self.heating_season_begin = (
-            config.day_of_heating_season_begin
+            my_config.day_of_heating_season_begin
             * 24
             * 3600
             / self.my_simulation_parameters.seconds_per_timestep
         )
         self.heating_season_end = (
-            config.day_of_heating_season_end
+            my_config.day_of_heating_season_end
             * 24
             * 3600
             / self.my_simulation_parameters.seconds_per_timestep

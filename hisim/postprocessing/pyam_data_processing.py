@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 import plotly
 import string
 from html2image import Html2Image
-from hisim.postprocessing.pyam_data_collection import PyamDataTypeEnum
+from hisim.postprocessing.pyam_data_collection import PyamDataTypeEnum, PyamDataProcessingModeEnum
 from hisim.postprocessing.chartbase import ChartFontsAndSize
 from hisim import log
 
@@ -28,8 +28,10 @@ class PyAmChartGenerator:
         self,
         simulation_duration_to_check: str,
         data_processing_mode: Any,
+        analyze_yearly_or_hourly_data: Any = None,
         variables_to_check_for_hourly_data: Optional[List[str]] = None,
         variables_to_check_for_yearly_data: Optional[List[str]] = None,
+        
     ) -> None:
         """Initialize the class."""
 
@@ -42,7 +44,7 @@ class PyAmChartGenerator:
 
         elif (
             data_processing_mode
-            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_TYPES
+            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
         ):
             data_path_strip = "data_with_different_building_types"
             result_path_strip = "results_different_building_types"
@@ -105,41 +107,52 @@ class PyAmChartGenerator:
         self.hisim_chartbase = ChartFontsAndSize()
         self.hisim_chartbase.figsize = (10, 8)
 
-        dict_of_yearly_pyam_dataframes_for_different_simulation_durations = self.get_dataframe_and_create_pyam_dataframe_for_all_data(
-            folder_path=self.folder_path, kind_of_data=PyamDataTypeEnum.YEARLY
-        )
-        dict_of_hourly_pyam_dataframes_for_different_simulation_durations = self.get_dataframe_and_create_pyam_dataframe_for_all_data(
-            folder_path=self.folder_path, kind_of_data=PyamDataTypeEnum.HOURLY
-        )
+        if analyze_yearly_or_hourly_data == PyamDataTypeEnum.YEARLY:
 
-        if (
+            dict_of_yearly_pyam_dataframes_for_different_simulation_durations = self.get_dataframe_and_create_pyam_dataframe_for_all_data(
+                folder_path=self.folder_path, kind_of_data=PyamDataTypeEnum.YEARLY
+            )
+
+            if (
             variables_to_check_for_yearly_data != []
             and variables_to_check_for_yearly_data is not None
-        ):
-            self.make_plots_with_specific_kind_of_data(
-                kind_of_data=PyamDataTypeEnum.YEARLY,
-                dict_of_data=dict_of_yearly_pyam_dataframes_for_different_simulation_durations,
-                simulation_duration_key=simulation_duration_to_check,
-                variables_to_check=variables_to_check_for_yearly_data,
+            ):
+                self.make_plots_with_specific_kind_of_data(
+                    kind_of_data=PyamDataTypeEnum.YEARLY,
+                    dict_of_data=dict_of_yearly_pyam_dataframes_for_different_simulation_durations,
+                    simulation_duration_key=simulation_duration_to_check,
+                    variables_to_check=variables_to_check_for_yearly_data,
+                )
+            else:
+                log.information(
+                    "Variable list for yearly data is not given and will not be plotted or anaylzed."
+                )
+
+        elif analyze_yearly_or_hourly_data == PyamDataTypeEnum.HOURLY:
+
+            dict_of_hourly_pyam_dataframes_for_different_simulation_durations = self.get_dataframe_and_create_pyam_dataframe_for_all_data(
+                folder_path=self.folder_path, kind_of_data=PyamDataTypeEnum.HOURLY
             )
-        else:
-            log.information(
-                "Variable list for yearly data is not given and will not be plotted or anaylzed."
-            )
-        if (
+            if (
             variables_to_check_for_hourly_data != []
             and variables_to_check_for_hourly_data is not None
         ):
-            self.make_plots_with_specific_kind_of_data(
-                kind_of_data=PyamDataTypeEnum.HOURLY,
-                dict_of_data=dict_of_hourly_pyam_dataframes_for_different_simulation_durations,
-                simulation_duration_key=simulation_duration_to_check,
-                variables_to_check=variables_to_check_for_hourly_data,
-            )
+                self.make_plots_with_specific_kind_of_data(
+                    kind_of_data=PyamDataTypeEnum.HOURLY,
+                    dict_of_data=dict_of_hourly_pyam_dataframes_for_different_simulation_durations,
+                    simulation_duration_key=simulation_duration_to_check,
+                    variables_to_check=variables_to_check_for_hourly_data,
+                )
+            else:
+                log.information(
+                    "Variable list for hourly data is not given and will not be plotted or anaylzed."
+                )
+            
         else:
-            log.information(
-                "Variable list for hourly data is not given and will not be plotted or anaylzed."
-            )
+            raise ValueError("analyze_yearly_or_hourly_data variable is not set or has incompatible value.")
+
+
+
 
     def get_dataframe_and_create_pyam_dataframe_for_all_data(
         self, folder_path: str, kind_of_data: Any
@@ -502,7 +515,7 @@ class PyAmChartGenerator:
             filter_unit=filter_unit,
             filter_year=filter_year,
         )
-        print("filtered scatter data", filtered_data)
+
         x_data = x_data_variable
         y_data = y_data_variable
         fig, a_x = plt.subplots(
@@ -754,20 +767,6 @@ class PyAmChartGenerator:
             statistical_data.to_excel(excel_writer=writer, sheet_name="statistics")
 
 
-class PyamDataProcessingModeEnum(enum.Enum):
-
-    """PyamDataProcessingModeEnum class.
-
-    Here it is defined what kind of data processing you want to make.
-    """
-
-    PROCESS_ALL_DATA = 1
-    PROCESS_FOR_DIFFERENT_BUILDING_TYPES = 2
-    PROCESS_FOR_DIFFERENT_BUILDING_SIZES = 3
-    PROCESS_FOR_DIFFERENT_PV_POWERS = 4
-    PROCESS_FOR_DIFFERENT_PV_SIZES = 5
-    PROCESS_FOR_DIFFERENT_PV_AZIMUTH_ANGLES = 6
-    PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES = 7
 
 
 # examples for variables to check

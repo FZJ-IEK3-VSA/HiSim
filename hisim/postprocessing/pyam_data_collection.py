@@ -10,7 +10,7 @@ from collections import defaultdict
 import shutil
 import pyam
 import pandas as pd
-
+import re
 
 from hisim import log
 
@@ -21,14 +21,16 @@ class PyamDataCollector:
 
     def __init__(
         self,
-        data_collection_mode: Any,
+        data_processing_mode: Any,
         folder_from_which_data_will_be_collected: str = os.path.join(
             os.pardir, os.pardir, "examples", "results"
         ),
+        analyze_yearly_or_hourly_data: Any = None,
         path_to_default_config: Optional[str] = None,
+        
     ) -> None:
         """Initialize the class."""
-        result_folder = folder_from_which_data_will_be_collected  # os.path.join(os.pardir, os.pardir, "examples", "results")
+        result_folder = folder_from_which_data_will_be_collected
         self.pyam_data_folder = os.path.join(
             os.pardir, os.pardir, "examples", "results_for_scenario_comparison", "data"
         )
@@ -43,79 +45,92 @@ class PyamDataCollector:
         list_with_pyam_data_folders = self.get_list_of_all_relevant_pyam_data_folders(
             result_path=result_folder
         )
-
+        
         if (
-            data_collection_mode
-            == PyamDataCollectionModeEnum.COLLECT_AND_SORT_DATA_ACCORDING_TO_PARAMETER_KEYS
+            data_processing_mode
+            == PyamDataProcessingModeEnum.PROCESS_ALL_DATA
         ):
 
-            log.information(f"Data Collection Mode is {data_collection_mode}")
-
-            default_config_dict = self.get_default_config(
-                path_to_default_config=path_to_default_config
-            )
-
-            (
-                dict_with_csv_files_for_each_parameter,
-                dict_with_parameter_key_values,
-            ) = self.go_through_all_pyam_data_folders_and_collect_file_paths_according_to_parameters(
-                list_with_pyam_data_folders=list_with_pyam_data_folders,
-                default_config_dict=default_config_dict,
-            )
-
-            for key in dict_with_csv_files_for_each_parameter.keys():
-                print("parameter key ", key)
-                print("##################")
-                list_with_pyam_data_paths_for_one_parameter = dict_with_csv_files_for_each_parameter[
-                    key
-                ]
-
-                (
-                    all_simulation_durations,
-                    all_hourly_csv_files,
-                    all_yearly_csv_files,
-                ) = self.import_data_from_file(
-                    paths_to_check=list_with_pyam_data_paths_for_one_parameter
-                )
-
-                (
-                    dict_of_yearly_csv_data,
-                    dict_of_hourly_csv_data,
-                ) = self.make_dictionaries_with_simulation_duration_keys(
-                    simulation_durations=all_simulation_durations,
-                    hourly_data=all_hourly_csv_files,
-                    yearly_data=all_yearly_csv_files,
-                )
-
-                self.read_csv_and_generate_pyam_dataframe(
-                    dict_of_csv_to_read=dict_of_yearly_csv_data,
-                    kind_of_data=PyamDataTypeEnum.YEARLY,
-                    parameter_key=key,
-                    list_with_parameter_key_values=dict_with_parameter_key_values[key],
-                    rename_scenario=True,
-                )
-                self.read_csv_and_generate_pyam_dataframe(
-                    dict_of_csv_to_read=dict_of_hourly_csv_data,
-                    kind_of_data=PyamDataTypeEnum.HOURLY,
-                    parameter_key=key,
-                    list_with_parameter_key_values=dict_with_parameter_key_values[key],
-                    rename_scenario=True,
-                )
-                print("\n")
+            log.information(f"Data Collection Mode is {data_processing_mode}")
+            
+            parameter_key=None
 
         elif (
-            data_collection_mode
-            == PyamDataCollectionModeEnum.COLLECT_ALL_DATA_WITHOUT_SORTING
+            data_processing_mode
+            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_SIZES
         ):
+            parameter_key = "total_base_area_in_m2"
+        
+        elif (
+            data_processing_mode
+            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
+        ):
+            parameter_key = "building_code"
+            
+        elif (
+            data_processing_mode
+            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_POWERS
+        ):
+            parameter_key = "pv_power"
+            
+            
+        elif (
+            data_processing_mode
+            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_AZIMUTH_ANGLES
+        ):
+            parameter_key = "pv_azimuth"
+            
+            
+        elif (
+            data_processing_mode
+            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES
+        ):
+            parameter_key = "pv_tilt"
 
-            log.information(f"Data Collection Mode is {data_collection_mode}")
 
-            (
-                all_simulation_durations,
-                all_hourly_csv_files,
-                all_yearly_csv_files,
-            ) = self.import_data_from_file(paths_to_check=list_with_pyam_data_folders)
-            (
+        else:
+            raise ValueError(
+                "Analysis mode is not part of the PyamDataProcessingModeEnum class."
+            )
+            
+        log.information(f"Data Collection Mode is {data_processing_mode}")
+
+        default_config_dict = self.get_default_config(
+            path_to_default_config=path_to_default_config
+        )
+
+        (
+            dict_with_csv_files_for_each_parameter,
+            dict_with_parameter_key_values,
+        ) = self.go_through_all_pyam_data_folders_and_collect_file_paths_according_to_parameters(
+            list_with_pyam_data_folders=list_with_pyam_data_folders,
+            default_config_dict=default_config_dict,
+        )
+
+        print("parameter key ", parameter_key)
+        print("##################")
+        if parameter_key is None:
+            list_with_parameter_key_values = None
+            path_to_check = list_with_pyam_data_folders
+        
+        elif parameter_key in dict_with_csv_files_for_each_parameter and parameter_key in dict_with_parameter_key_values:
+            list_with_parameter_key_values=dict_with_parameter_key_values[parameter_key]
+            path_to_check = dict_with_csv_files_for_each_parameter[
+                parameter_key
+            ]
+        
+        else:
+            raise KeyError(f"The parameter key {parameter_key} was not found in the dictionary dict_with_csv_files_for_each_parameter or dict_with_parameter_key_values.")
+
+        (
+            all_simulation_durations,
+            all_hourly_csv_files,
+            all_yearly_csv_files,
+        ) = self.import_data_from_file(
+            paths_to_check=path_to_check
+        )
+        
+        (
                 dict_of_yearly_csv_data,
                 dict_of_hourly_csv_data,
             ) = self.make_dictionaries_with_simulation_duration_keys(
@@ -123,21 +138,25 @@ class PyamDataCollector:
                 hourly_data=all_hourly_csv_files,
                 yearly_data=all_yearly_csv_files,
             )
+        if analyze_yearly_or_hourly_data == PyamDataTypeEnum.YEARLY:
             self.read_csv_and_generate_pyam_dataframe(
                 dict_of_csv_to_read=dict_of_yearly_csv_data,
                 kind_of_data=PyamDataTypeEnum.YEARLY,
                 rename_scenario=True,
+                parameter_key=parameter_key,
+                list_with_parameter_key_values=list_with_parameter_key_values
             )
+        elif analyze_yearly_or_hourly_data == PyamDataTypeEnum.HOURLY:
             self.read_csv_and_generate_pyam_dataframe(
                 dict_of_csv_to_read=dict_of_hourly_csv_data,
                 kind_of_data=PyamDataTypeEnum.HOURLY,
                 rename_scenario=True,
+                parameter_key=parameter_key,
+                list_with_parameter_key_values=list_with_parameter_key_values
             )
-
         else:
-            raise ValueError(
-                "Analysis mode is not part of the PyamDataCollectionModeEnum class."
-            )
+            raise ValueError("analyze_yearly_or_hourly_data variable is not set or has incompatible value.")
+        print("\n")
 
     def clean_result_directory_from_unfinished_results(
         self, result_path: str
@@ -299,6 +318,10 @@ class PyamDataCollector:
             for csv_file in csv_data_list:
 
                 dataframe = pd.read_csv(csv_file)
+
+                # add hash colum to dataframe so hash does not get lost when scenario is renamed
+                hash_number = re.findall(r"\-?\d+", dataframe["scenario"][0])[-1]
+                dataframe["hash"] = [hash_number] * len(dataframe["scenario"])
 
                 if rename_scenario is True:
                     if (
@@ -538,21 +561,25 @@ class PyamDataTypeEnum(enum.Enum):
     YEARLY = "yearly"
 
 
-class PyamDataCollectionModeEnum(enum.Enum):
+class PyamDataProcessingModeEnum(enum.Enum):
 
-    """PyamDataCollectionModeEnum class.
+    """PyamDataProcessingModeEnum class.
 
-    Here it is defined what kind of data collection you want to make.
+    Here it is defined what kind of data processing you want to make.
     """
 
-    COLLECT_AND_SORT_DATA_ACCORDING_TO_PARAMETER_KEYS = 1
-    COLLECT_ALL_DATA_WITHOUT_SORTING = 2
-
+    PROCESS_ALL_DATA = 1
+    PROCESS_FOR_DIFFERENT_BUILDING_CODES = 2
+    PROCESS_FOR_DIFFERENT_BUILDING_SIZES = 3
+    PROCESS_FOR_DIFFERENT_PV_POWERS = 4
+    PROCESS_FOR_DIFFERENT_PV_SIZES = 5
+    PROCESS_FOR_DIFFERENT_PV_AZIMUTH_ANGLES = 6
+    PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES = 7
 
 def main():
     """Main function to execute the pyam data collection."""
     PyamDataCollector(
-        data_collection_mode=PyamDataCollectionModeEnum.COLLECT_AND_SORT_DATA_ACCORDING_TO_PARAMETER_KEYS,
+        data_processing_mode=PyamDataCollectionModeEnum.COLLECT_AND_SORT_DATA_ACCORDING_TO_PARAMETER_KEYS,
         path_to_default_config="please insert path to your default module config",
         folder_from_which_data_will_be_collected=os.path.join(
             os.pardir, os.pardir, "examples", "results"

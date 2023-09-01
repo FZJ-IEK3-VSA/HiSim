@@ -108,14 +108,14 @@ class GenericHydrogenStorage(cp.Component):
         self.state = GenericHydrogenStorageState()
         self.previous_state = GenericHydrogenStorageState()
 
-        self.HydrogenInputC: cp.ComponentInput = self.add_input(
+        self.hydrogen_input_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.HydrogenInput,
             lt.LoadTypes.HYDROGEN,
             lt.Units.KG_PER_SEC,
             True,
         )
-        self.HydrogenOutputC: cp.ComponentInput = self.add_input(
+        self.hydrogen_output_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.HydrogenOutput,
             lt.LoadTypes.HYDROGEN,
@@ -123,7 +123,7 @@ class GenericHydrogenStorage(cp.Component):
             True,
         )
 
-        self.HydrogenSOCC: cp.ComponentOutput = self.add_output(
+        self.hydrogen_soc: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.HydrogenSOC,
             load_type=lt.LoadTypes.HYDROGEN,
@@ -269,8 +269,8 @@ class GenericHydrogenStorage(cp.Component):
     ) -> None:
 
         # get input values
-        charging_rate = stsv.get_input_value(self.HydrogenInputC)
-        discharging_rate = stsv.get_input_value(self.HydrogenOutputC)
+        charging_rate = stsv.get_input_value(self.hydrogen_input_channel)
+        discharging_rate = stsv.get_input_value(self.hydrogen_output_channel)
 
         if charging_rate < 0:
             raise Exception(
@@ -303,7 +303,7 @@ class GenericHydrogenStorage(cp.Component):
         # delta not released and delta not stored is not used so far -> must be taken into account later
         percent_fill = 100 * self.state.fill / self.config.max_capacity
 
-        stsv.set_output_value(self.HydrogenSOCC, percent_fill)
+        stsv.set_output_value(self.hydrogen_soc, percent_fill)
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         # alle ausgabewerte die zu überprüfen sind können hiermit fehlerausgabeüberprüft werden

@@ -29,7 +29,7 @@ def test_chp_system():
     chp_controller_config = controller_l1_chp.L1CHPControllerConfig.get_default_config_fuel_cell_with_buffer()
     chp_controller_config.electricity_threshold = chp_config.p_el / 2
     my_chp_controller = controller_l1_chp.L1CHPController(
-        my_simulation_parameters=my_simulation_parameters, my_config=chp_controller_config
+        my_simulation_parameters=my_simulation_parameters, config=chp_controller_config
         )
 
     # Set Fake Inputs

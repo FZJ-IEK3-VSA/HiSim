@@ -1142,7 +1142,7 @@ def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, m
     # add treshold electricity to chp controller and add it to simulation
     chp_controller_config.electricity_threshold = chp_config.p_el / 2
     my_chp_controller = controller_l1_chp.L1CHPController(
-        my_simulation_parameters=my_simulation_parameters, my_config=chp_controller_config
+        my_simulation_parameters=my_simulation_parameters, config=chp_controller_config
     )
     my_chp_controller.connect_only_predefined_connections(my_boiler)
     my_chp_controller.connect_only_predefined_connections(my_building)
@@ -1239,7 +1239,7 @@ def configure_chp_with_buffer(
     # add chop controller and adopt electricity threshold
     chp_controller_config.electricity_threshold = chp_config.p_el / 2
     my_chp_controller = controller_l1_chp.L1CHPController(
-        my_simulation_parameters=my_simulation_parameters, my_config=chp_controller_config,
+        my_simulation_parameters=my_simulation_parameters, config=chp_controller_config,
     )
     my_chp_controller.connect_only_predefined_connections(my_boiler)
     my_chp_controller.connect_input(
@@ -1446,7 +1446,7 @@ def configure_elctrolysis_h2storage_fuelcell_system(
     # add treshold electricity to chp controller and add it to simulation
     chp_controller_config.electricity_threshold = chp_config.p_el / 2
     my_chp_controller = controller_l1_chp.L1CHPController(
-        my_simulation_parameters=my_simulation_parameters, my_config=chp_controller_config
+        my_simulation_parameters=my_simulation_parameters, config=chp_controller_config
     )
     my_chp_controller.connect_only_predefined_connections(my_boiler)
     my_chp_controller.connect_only_predefined_connections(my_building)
@@ -1550,7 +1550,7 @@ def configure_elctrolysis_h2storage_fuelcell_system_with_buffer(
     # add treshold electricity to chp controller and add it to simulation
     chp_controller_config.electricity_threshold = chp_config.p_el / 2
     my_chp_controller = controller_l1_chp.L1CHPController(
-        my_simulation_parameters=my_simulation_parameters, my_config=chp_controller_config
+        my_simulation_parameters=my_simulation_parameters, config=chp_controller_config
     )
     my_chp_controller.connect_only_predefined_connections(my_boiler)
     my_chp_controller.connect_input(

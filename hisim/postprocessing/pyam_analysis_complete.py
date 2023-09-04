@@ -3,7 +3,7 @@
 import time
 import os
 from hisim.postprocessing import pyam_data_collection, pyam_data_processing
-from typing import Any, List
+from typing import Any, List, Optional
 
 class PyamDataAnalysis:
 
@@ -17,22 +17,24 @@ class PyamDataAnalysis:
         data_processing_mode: Any,
         variables_to_check_for_hourly_data: List[str],
         variables_to_check_for_yearly_data: List[str],
+        scenarios_to_check: Optional[List[str]] = None,
         analyze_yearly_or_hourly_data: Any = None,
     ) -> None:
         """Initialize the class."""
 
-        pyam_data_collection.PyamDataCollector(
-            data_processing_mode=data_processing_mode,
-            folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
-            path_to_default_config=path_to_default_config,
-            analyze_yearly_or_hourly_data= analyze_yearly_or_hourly_data,
-        )
+        # pyam_data_collection.PyamDataCollector(
+        #     data_processing_mode=data_processing_mode,
+        #     folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
+        #     path_to_default_config=path_to_default_config,
+        #     analyze_yearly_or_hourly_data= analyze_yearly_or_hourly_data,
+        # )
         pyam_data_processing.PyAmChartGenerator(
             simulation_duration_to_check=simulation_duration_to_check,
             analyze_yearly_or_hourly_data=analyze_yearly_or_hourly_data,
             data_processing_mode=data_processing_mode,
             variables_to_check_for_hourly_data=variables_to_check_for_hourly_data,
             variables_to_check_for_yearly_data=variables_to_check_for_yearly_data,
+            scenarios_to_check=scenarios_to_check,
         )
 
 
@@ -54,13 +56,15 @@ def main():
         pyam_data_collection.PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
     )
 
-    variables_to_check_for_hourly_data = (
+    list_with_variables_to_check_for_hourly_data = (
         pyam_data_processing.heating_demand
         + pyam_data_processing.electricity_data
         + pyam_data_processing.occuancy_consumption
     )
 
-    variables_to_check_for_yearly_data = pyam_data_processing.heating_demand # pyam_data_processing.kpi_data + 
+    list_with_variables_to_check_for_yearly_data = pyam_data_processing.heating_demand # pyam_data_processing.kpi_data + 
+    
+    scenarios_to_check = "DE.N.SFH."
 
     # -------------------------------------------------------------------------------------------------------------------------------------
 
@@ -70,8 +74,9 @@ def main():
         path_to_default_config=path_to_default_config,
         simulation_duration_to_check=simulation_duration_to_check,
         data_processing_mode=data_processing_mode,
-        variables_to_check_for_hourly_data=variables_to_check_for_hourly_data,
-        variables_to_check_for_yearly_data=variables_to_check_for_yearly_data,
+        variables_to_check_for_hourly_data=list_with_variables_to_check_for_hourly_data,
+        variables_to_check_for_yearly_data=list_with_variables_to_check_for_yearly_data,
+        scenarios_to_check=scenarios_to_check,
     )
 
 

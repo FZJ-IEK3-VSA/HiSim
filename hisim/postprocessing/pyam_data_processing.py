@@ -31,6 +31,7 @@ class PyAmChartGenerator:
         analyze_yearly_or_hourly_data: Any = None,
         variables_to_check_for_hourly_data: Optional[List[str]] = None,
         variables_to_check_for_yearly_data: Optional[List[str]] = None,
+        scenarios_to_check: Any= None #Optional[List[str]] = None,
         
     ) -> None:
         """Initialize the class."""
@@ -110,7 +111,7 @@ class PyAmChartGenerator:
         if analyze_yearly_or_hourly_data == PyamDataTypeEnum.YEARLY:
 
             dict_of_yearly_pyam_dataframes_for_different_simulation_durations = self.get_dataframe_and_create_pyam_dataframe_for_all_data(
-                folder_path=self.folder_path, kind_of_data=PyamDataTypeEnum.YEARLY
+                folder_path=self.folder_path, kind_of_data=PyamDataTypeEnum.YEARLY, scenario_to_check=scenarios_to_check
             )
 
             if (
@@ -155,7 +156,7 @@ class PyAmChartGenerator:
 
 
     def get_dataframe_and_create_pyam_dataframe_for_all_data(
-        self, folder_path: str, kind_of_data: Any
+        self, folder_path: str, kind_of_data: Any, scenario_to_check: Any #Optional[List[str]]
     ) -> Dict:
         """Get csv data and create pyam dataframes."""
 
@@ -180,10 +181,15 @@ class PyAmChartGenerator:
 
             # if scenario values are no strings, transform them
             file_df["Scenario"] = file_df["Scenario"].transform(str)
+            
+            # filter scenarios
+            if scenario_to_check is not None and scenario_to_check != []:
+                file_df = self.check_if_scenario_exists_and_filter_dataframe_for_scenarios(data_frame=file_df, scenario_to_check=scenario_to_check)
+                print("file_df", file_df)
+
 
             # create pyam dataframe
             pyam_dataframe = pyam.IamDataFrame(file_df)
-
             simulation_duration = re.findall(string=file, pattern=r"\d+")[-1]
             dict_of_different_pyam_dataframes_of_different_simulation_parameters[
                 f"{simulation_duration}"
@@ -211,10 +217,6 @@ class PyAmChartGenerator:
         if pyam_dataframe.empty:
             raise ValueError("Pyam dataframe is empty.")
 
-        log.information("Pyam dataframe columns " + str(pyam_dataframe.dimensions))
-        log.information("Pyam dataframe scenarios " + str(pyam_dataframe.scenario))
-        # log.information("Pyam Variables " + str(pyam_dataframe.variable))
-
         sub_results_folder = f"simulation_duration_of_{simulation_duration_key}_days"
         sub_sub_results_folder = f"pyam_results_{self.datetime_string}"
 
@@ -223,9 +225,9 @@ class PyAmChartGenerator:
         )
 
         for variable_to_check in variables_to_check:
+            print("Check variable ", variable_to_check)
 
             # prepare path for plots
-            print(variable_to_check)
             self.path_addition = "".join(
                 [
                     x
@@ -240,6 +242,7 @@ class PyAmChartGenerator:
             if os.path.exists(self.plot_path_complete) is False:
                 os.makedirs(self.plot_path_complete)
 
+            print("pyam df", pyam_dataframe.data)
             filtered_data = self.filter_pyam_dataframe(
                 pyam_dataframe=pyam_dataframe,
                 filter_model=None,
@@ -249,11 +252,14 @@ class PyAmChartGenerator:
                 filter_unit=None,
                 filter_year=None,
             )
+            print("filtered df", filtered_data.data)
+                    
+            log.information("Pyam dataframe scenarios " + str(filtered_data.scenario))
 
             # determine whether you want to compare one variable for different scenarios or different variables for one scenario
-            comparion_mode = self.decide_for_scenario_or_variable_comparison(
-                filtered_data=filtered_data
-            )
+            comparion_mode = "scenario" # self.decide_for_scenario_or_variable_comparison(
+            #     filtered_data=filtered_data
+            # )
 
             if kind_of_data == PyamDataTypeEnum.YEARLY:
                 kind_of_data_set = "yearly"
@@ -709,9 +715,10 @@ class PyAmChartGenerator:
         if filter_scenario is not None:
             if filter_scenario not in filtered_data.scenario:
                 raise ValueError(
-                    f"Scenario {filter_scenario} not found in the pyam dataframe."
+                f"Scenario {filter_scenario} not found in the pyam dataframe."
                 )
             filtered_data = filtered_data.filter(scenario=filter_scenario)
+
         if filter_variables is not None:
             # if filter_variables not in filtered_data.variable:
             #     raise ValueError(f"Variable {filter_variables} not found in the pyam dataframe.")
@@ -767,7 +774,24 @@ class PyAmChartGenerator:
             statistical_data.to_excel(excel_writer=writer, sheet_name="statistics")
 
 
+    def check_if_scenario_exists_and_filter_dataframe_for_scenarios(self, data_frame: pd.DataFrame, scenario_to_check: str):
+        
+        scenario_list = []
 
+        try:
+            for scenario in data_frame["Scenario"]:
+                # string comparison
+                if scenario_to_check in scenario:
+                    scenario_list.append(scenario)
+
+        except Exception as exc:
+            raise ValueError(
+            f"Scenarios with {scenario_to_check} were not found in the pyam dataframe."
+        )
+        # only take rows from dataframe which are in selected scenarios
+        df_filtered_for_specific_scenarios = data_frame.loc[data_frame["Scenario"].isin(scenario_list)]
+        return df_filtered_for_specific_scenarios
+        
 
 # examples for variables to check
 # kpi data only in yearly format

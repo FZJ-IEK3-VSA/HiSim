@@ -759,17 +759,25 @@ class PostProcessor:
             )
         else:
             self.scenario = ppdt.setup_function
+
         # set pyam region
-        self.region = SingletonSimRepository().get_entry(
+        if SingletonSimRepository().exist_entry(
             key=SingletonDictKeyEnum.LOCATION
-        )
+        ):
+            self.region = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.LOCATION
+            )
+        else:
+            self.region = ""
+
         # set pyam year or timeseries
         self.year = ppdt.simulation_parameters.year
         timeseries = ppdt.results_hourly.index
 
-        self.write_kpis_in_pyam_dict(
-            ppdt=ppdt, simple_dict_cumulative_data=simple_dict_cumulative_data
-        )
+        if PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT in ppdt.post_processing_options:
+            self.write_kpis_in_pyam_dict(
+                ppdt=ppdt, simple_dict_cumulative_data=simple_dict_cumulative_data
+            )
 
         # got through all components and read output values, variables and units for simple_dict_hourly_data
         for column in ppdt.results_hourly:

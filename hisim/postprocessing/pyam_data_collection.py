@@ -95,32 +95,34 @@ class PyamDataCollector:
             
         log.information(f"Data Collection Mode is {data_processing_mode}")
 
-        default_config_dict = self.get_default_config(
-            path_to_default_config=path_to_default_config
-        )
-
-        (
-            dict_with_csv_files_for_each_parameter,
-            dict_with_parameter_key_values,
-        ) = self.go_through_all_pyam_data_folders_and_collect_file_paths_according_to_parameters(
-            list_with_pyam_data_folders=list_with_pyam_data_folders,
-            default_config_dict=default_config_dict,
-        )
-
         print("parameter key ", parameter_key)
         print("##################")
         if parameter_key is None:
             list_with_parameter_key_values = None
             path_to_check = list_with_pyam_data_folders
+            
+        elif parameter_key is not None and path_to_default_config is not None:
+            
+            default_config_dict = self.get_default_config(
+            path_to_default_config=path_to_default_config
+            )
+
+            (
+                dict_with_csv_files_for_each_parameter,
+                dict_with_parameter_key_values,
+            ) = self.go_through_all_pyam_data_folders_and_collect_file_paths_according_to_parameters(
+                list_with_pyam_data_folders=list_with_pyam_data_folders,
+                default_config_dict=default_config_dict,
+            )
         
-        elif parameter_key in dict_with_csv_files_for_each_parameter and parameter_key in dict_with_parameter_key_values:
-            list_with_parameter_key_values=dict_with_parameter_key_values[parameter_key]
-            path_to_check = dict_with_csv_files_for_each_parameter[
-                parameter_key
-            ]
-        
-        else:
-            raise KeyError(f"The parameter key {parameter_key} was not found in the dictionary dict_with_csv_files_for_each_parameter or dict_with_parameter_key_values.")
+            if parameter_key in dict_with_csv_files_for_each_parameter and parameter_key in dict_with_parameter_key_values:
+                list_with_parameter_key_values=dict_with_parameter_key_values[parameter_key]
+                path_to_check = dict_with_csv_files_for_each_parameter[
+                    parameter_key
+                ]
+            
+            else:
+                raise KeyError(f"The parameter key {parameter_key} was not found in the dictionary dict_with_csv_files_for_each_parameter or dict_with_parameter_key_values.")
 
         (
             all_simulation_durations,

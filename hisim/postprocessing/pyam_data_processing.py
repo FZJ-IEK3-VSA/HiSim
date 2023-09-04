@@ -46,8 +46,8 @@ class PyAmChartGenerator:
             data_processing_mode
             == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
         ):
-            data_path_strip = "data_with_different_building_types"
-            result_path_strip = "results_different_building_types"
+            data_path_strip = "data_with_different_building_codes"
+            result_path_strip = "results_different_building_codes"
 
         elif (
             data_processing_mode
@@ -441,7 +441,7 @@ class PyAmChartGenerator:
         )
 
         filtered_data.plot.box(
-            ax=a_x, by=comparison_mode, x="year", title=title, legend=True,
+            ax=a_x, by="scenario", x="year", title=title, legend=True, # comparison_mode
         )
 
         y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
@@ -774,21 +774,21 @@ class PyAmChartGenerator:
 kpi_data = [
     "Consumption",
     "Production",
-    "Self-consumption",
-    "Injection",
+    # "Self-consumption",
+    # "Injection",
     "Self-consumption rate",
-    "Cost for energy use",
-    "CO2 emitted due energy use",
-    "Battery losses",
+    # "Cost for energy use",
+    # "CO2 emitted due energy use",
+    # "Battery losses",
     "Autarky rate",
     "Annual investment cost for equipment (old version)",
     "Annual CO2 Footprint for equipment (old version)",
-    "Investment cost for equipment per simulated period",
-    "CO2 footprint for equipment per simulated period",
-    "System operational Cost for simulated period",
-    "System operational Emissions for simulated period",
-    "Total costs for simulated period",
-    "Total emissions for simulated period",
+    # "Investment cost for equipment per simulated period",
+    # "CO2 footprint for equipment per simulated period",
+    # "System operational Cost for simulated period",
+    # "System operational Emissions for simulated period",
+    # "Total costs for simulated period",
+    # "Total emissions for simulated period",
 ]
 
 electricity_data = [

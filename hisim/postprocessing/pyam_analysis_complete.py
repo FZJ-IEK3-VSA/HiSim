@@ -42,21 +42,25 @@ def main():
     # Inputs for pyam analysis
     # -------------------------------------------------------------------------------------------------------------------------------------
     analyze_yearly_or_hourly_data=pyam_data_collection.PyamDataTypeEnum.YEARLY
+
     folder_from_which_data_will_be_collected = "/storage_cluster/internal/home/k-rieck/repositories/HiSim/examples/results/household_hplib_hws_hds_pv_battery_ems_config/german_tabula_buildings_20230831_1608"
 
     path_to_default_config = "/storage_cluster/internal/home/k-rieck/jobs_hisim/cluster-hisim-paper/job_array_for_hisim_mass_simu_one/default_building_pv_config.json"
     # path_to_default_config = r"C:\Users\k.rieck\Cluster_stuff_copied\job_array_for_hisim_mass_simu_one\default_building_pv_config.json"
 
     simulation_duration_to_check = str(365)
+
     data_processing_mode = (
-        pyam_data_collection.PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_SIZES
+        pyam_data_collection.PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
     )
+
     variables_to_check_for_hourly_data = (
         pyam_data_processing.heating_demand
         + pyam_data_processing.electricity_data
         + pyam_data_processing.occuancy_consumption
     )
-    variables_to_check_for_yearly_data = pyam_data_processing.kpi_data
+
+    variables_to_check_for_yearly_data = pyam_data_processing.heating_demand # pyam_data_processing.kpi_data + 
 
     # -------------------------------------------------------------------------------------------------------------------------------------
 

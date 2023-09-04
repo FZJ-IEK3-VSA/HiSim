@@ -578,13 +578,15 @@ class PyamDataProcessingModeEnum(enum.Enum):
 
 def main():
     """Main function to execute the pyam data collection."""
+
     PyamDataCollector(
-        data_processing_mode=PyamDataCollectionModeEnum.COLLECT_AND_SORT_DATA_ACCORDING_TO_PARAMETER_KEYS,
-        path_to_default_config="please insert path to your default module config",
-        folder_from_which_data_will_be_collected=os.path.join(
+            data_processing_mode=PyamDataProcessingModeEnum.PROCESS_ALL_DATA,
+            folder_from_which_data_will_be_collected=os.path.join(
             os.pardir, os.pardir, "examples", "results"
-        ),
-    )
+            ),
+            path_to_default_config="please insert path to your default module config",
+            analyze_yearly_or_hourly_data=PyamDataTypeEnum.YEARLY,
+        )
 
 
 if __name__ == "__main__":

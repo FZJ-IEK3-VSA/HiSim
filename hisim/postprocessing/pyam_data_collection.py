@@ -22,11 +22,13 @@ class PyamDataCollector:
     def __init__(
         self,
         data_processing_mode: Any,
+        simulation_duration_to_check: str,
+        analyze_yearly_or_hourly_data: Any,
         folder_from_which_data_will_be_collected: str = os.path.join(
             os.pardir, os.pardir, "examples", "results"
         ),
-        analyze_yearly_or_hourly_data: Any = None,
         path_to_default_config: Optional[str] = None,
+        
         
     ) -> None:
         """Initialize the class."""
@@ -126,39 +128,42 @@ class PyamDataCollector:
 
         (
             all_simulation_durations,
-            all_hourly_csv_files,
+            #all_hourly_csv_files,
             all_yearly_csv_files,
         ) = self.import_data_from_file(
-            paths_to_check=path_to_check
+            paths_to_check=path_to_check,
+            simulation_duration_to_check=simulation_duration_to_check,
+            analyze_yearly_or_hourly_data=analyze_yearly_or_hourly_data,
         )
+        print(all_yearly_csv_files, all_simulation_durations)
         
-        (
-                dict_of_yearly_csv_data,
-                dict_of_hourly_csv_data,
-            ) = self.make_dictionaries_with_simulation_duration_keys(
-                simulation_durations=all_simulation_durations,
-                hourly_data=all_hourly_csv_files,
-                yearly_data=all_yearly_csv_files,
-            )
-        if analyze_yearly_or_hourly_data == PyamDataTypeEnum.YEARLY:
-            self.read_csv_and_generate_pyam_dataframe(
-                dict_of_csv_to_read=dict_of_yearly_csv_data,
-                kind_of_data=PyamDataTypeEnum.YEARLY,
-                rename_scenario=True,
-                parameter_key=parameter_key,
-                list_with_parameter_key_values=list_with_parameter_key_values
-            )
-        elif analyze_yearly_or_hourly_data == PyamDataTypeEnum.HOURLY:
-            self.read_csv_and_generate_pyam_dataframe(
-                dict_of_csv_to_read=dict_of_hourly_csv_data,
-                kind_of_data=PyamDataTypeEnum.HOURLY,
-                rename_scenario=True,
-                parameter_key=parameter_key,
-                list_with_parameter_key_values=list_with_parameter_key_values
-            )
-        else:
-            raise ValueError("analyze_yearly_or_hourly_data variable is not set or has incompatible value.")
-        print("\n")
+        # (
+        #         dict_of_yearly_csv_data,
+        #         dict_of_hourly_csv_data,
+        #     ) = self.make_dictionaries_with_simulation_duration_keys(
+        #         simulation_durations=all_simulation_durations,
+        #         hourly_data=all_hourly_csv_files,
+        #         yearly_data=all_yearly_csv_files,
+        #     )
+        # if analyze_yearly_or_hourly_data == PyamDataTypeEnum.YEARLY:
+        #     self.read_csv_and_generate_pyam_dataframe(
+        #         dict_of_csv_to_read=dict_of_yearly_csv_data,
+        #         kind_of_data=PyamDataTypeEnum.YEARLY,
+        #         rename_scenario=True,
+        #         parameter_key=parameter_key,
+        #         list_with_parameter_key_values=list_with_parameter_key_values
+        #     )
+        # elif analyze_yearly_or_hourly_data == PyamDataTypeEnum.HOURLY:
+        #     self.read_csv_and_generate_pyam_dataframe(
+        #         dict_of_csv_to_read=dict_of_hourly_csv_data,
+        #         kind_of_data=PyamDataTypeEnum.HOURLY,
+        #         rename_scenario=True,
+        #         parameter_key=parameter_key,
+        #         list_with_parameter_key_values=list_with_parameter_key_values
+        #     )
+        # else:
+        #     raise ValueError("analyze_yearly_or_hourly_data variable is not set or has incompatible value.")
+        # print("\n")
 
     def clean_result_directory_from_unfinished_results(
         self, result_path: str
@@ -184,7 +189,7 @@ class PyamDataCollector:
         return list_with_no_duplicates
 
     def import_data_from_file(
-        self, paths_to_check: List[str]
+        self, paths_to_check: List[str], simulation_duration_to_check: str, analyze_yearly_or_hourly_data: Any
     ) -> tuple[List, List, List]:
         """Import data from result files."""
         log.information("Importing pyam_data from csv files.")
@@ -192,16 +197,25 @@ class PyamDataCollector:
         all_yearly_csv_files = []
         all_hourly_csv_files = []
         all_simulation_durations = []
+        
+        if analyze_yearly_or_hourly_data == PyamDataTypeEnum.HOURLY:
+            kind_of_data_set = "hourly"
+        elif analyze_yearly_or_hourly_data == PyamDataTypeEnum.YEARLY:
+            kind_of_data_set = "yearly"
+        else:
+            raise ValueError(
+                "analyze_yearly_or_hourly_data was not found in the pyamdatacollectorenum class."
+            )
 
         for folder in paths_to_check:  # type: ignore
 
             for file in os.listdir(folder):  # type: ignore
                 # get yearly data
-                if "yearly_results" in file and file.endswith(".csv"):
+                if kind_of_data_set in file and file.endswith(".csv"):
                     all_yearly_csv_files.append(os.path.join(folder, file))  # type: ignore
 
-                if "hourly_results" in file and file.endswith(".csv"):
-                    all_hourly_csv_files.append(os.path.join(folder, file))  # type: ignore
+                # if "hourly_results" in file and file.endswith(".csv"):
+                #     all_hourly_csv_files.append(os.path.join(folder, file))  # type: ignore
 
                 # get simulation durations
                 if ".json" in file:
@@ -210,11 +224,12 @@ class PyamDataCollector:
                         simulation_duration = json_file["pyamDataInformation"].get(
                             "duration in days"
                         )
-                        all_simulation_durations.append(simulation_duration)
+                        if simulation_duration_to_check == simulation_duration:
+                            all_simulation_durations.append(simulation_duration)
 
         all_simulation_durations = list(set(all_simulation_durations))
 
-        return all_simulation_durations, all_hourly_csv_files, all_yearly_csv_files
+        return all_simulation_durations, all_yearly_csv_files #all_hourly_csv_files, 
 
     def make_dictionaries_with_simulation_duration_keys(
         self,
@@ -351,7 +366,7 @@ class PyamDataCollector:
 
                 index = index + 1
 
-            df_pyam_for_one_simulation_duration = pyam.IamDataFrame(appended_dataframe)
+            # df_pyam_for_one_simulation_duration = pyam.IamDataFrame(appended_dataframe)
             # convert unit "Watt" to "Watthour" because it makes plots more readable later, conversion factor is 1/3600s
             # df_pyam_for_one_simulation_duration = df_pyam_for_one_simulation_duration.convert_unit(
             #     current="W", to="Wh", factor=1 / 3600, inplace=False
@@ -363,7 +378,8 @@ class PyamDataCollector:
                 kind_of_data=kind_of_data,
                 parameter_key=parameter_key,
             )
-            df_pyam_for_one_simulation_duration.to_csv(filename)
+            #df_pyam_for_one_simulation_duration.to_csv(filename)
+            appended_dataframe.to_csv(filename)
 
     def store_pyam_data_with_the_right_name_and_in_the_right_path(
         self,

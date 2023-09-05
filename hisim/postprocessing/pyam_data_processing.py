@@ -138,16 +138,26 @@ class PyAmChartGenerator:
 
         elif analyze_yearly_or_hourly_data == PyamDataTypeEnum.HOURLY:
 
-            dict_of_hourly_pyam_dataframes_for_different_simulation_durations = self.get_dataframe_and_create_pyam_dataframe_for_all_data(
-                folder_path=self.folder_path, kind_of_data=PyamDataTypeEnum.HOURLY
+            # dict_of_hourly_pyam_dataframes_for_different_simulation_durations = self.get_dataframe_and_create_pyam_dataframe_for_all_data(
+            #     folder_path=self.folder_path, kind_of_data=PyamDataTypeEnum.HOURLY
+            # )
+            pyam_dataframe = self.get_dataframe_and_create_pyam_dataframe_for_all_data(
+                folder_path=self.folder_path, kind_of_data=PyamDataTypeEnum.HOURLY, list_of_scenarios_to_check=list_of_scenarios_to_check,
             )
             if (
             variables_to_check_for_hourly_data != []
             and variables_to_check_for_hourly_data is not None
         ):
+                # self.make_plots_with_specific_kind_of_data(
+                #     kind_of_data=PyamDataTypeEnum.HOURLY,
+                #     dict_of_data=dict_of_hourly_pyam_dataframes_for_different_simulation_durations,
+                #     simulation_duration_key=simulation_duration_to_check,
+                #     variables_to_check=variables_to_check_for_hourly_data,
+                # )
                 self.make_plots_with_specific_kind_of_data(
                     kind_of_data=PyamDataTypeEnum.HOURLY,
-                    dict_of_data=dict_of_hourly_pyam_dataframes_for_different_simulation_durations,
+                    # dict_of_data=dict_of_yearly_pyam_dataframes_for_different_simulation_durations,
+                    pyam_dataframe=pyam_dataframe,
                     simulation_duration_key=simulation_duration_to_check,
                     variables_to_check=variables_to_check_for_hourly_data,
                 )

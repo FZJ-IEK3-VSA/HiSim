@@ -14,20 +14,21 @@ class PyamDataAnalysis:
         folder_from_which_data_will_be_collected: str,
         path_to_default_config: str,
         simulation_duration_to_check: str,
+        analyze_yearly_or_hourly_data: Any,
         data_processing_mode: Any,
         variables_to_check_for_hourly_data: List[str],
         variables_to_check_for_yearly_data: List[str],
         list_of_scenarios_to_check: Optional[List[str]] = None,
-        analyze_yearly_or_hourly_data: Any = None,
+        
     ) -> None:
         """Initialize the class."""
 
-        # pyam_data_collection.PyamDataCollector(
-        #     data_processing_mode=data_processing_mode,
-        #     folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
-        #     path_to_default_config=path_to_default_config,
-        #     analyze_yearly_or_hourly_data= analyze_yearly_or_hourly_data,
-        # )
+        pyam_data_collection.PyamDataCollector(
+            data_processing_mode=data_processing_mode,
+            folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
+            path_to_default_config=path_to_default_config,
+            analyze_yearly_or_hourly_data= analyze_yearly_or_hourly_data,
+        )
         pyam_data_processing.PyAmChartGenerator(
             simulation_duration_to_check=simulation_duration_to_check,
             analyze_yearly_or_hourly_data=analyze_yearly_or_hourly_data,
@@ -43,7 +44,7 @@ def main():
 
     # Inputs for pyam analysis
     # -------------------------------------------------------------------------------------------------------------------------------------
-    analyze_yearly_or_hourly_data=pyam_data_collection.PyamDataTypeEnum.YEARLY
+    analyze_yearly_or_hourly_data=pyam_data_collection.PyamDataTypeEnum.HOURLY
 
     folder_from_which_data_will_be_collected = "/storage_cluster/internal/home/k-rieck/repositories/HiSim/examples/results/household_hplib_hws_hds_pv_battery_ems_config/german_tabula_buildings_20230831_1608"
 
@@ -58,8 +59,8 @@ def main():
 
     list_with_variables_to_check_for_hourly_data = (
         pyam_data_processing.heating_demand
-        + pyam_data_processing.electricity_data
-        + pyam_data_processing.occuancy_consumption
+        # + pyam_data_processing.electricity_data
+        # + pyam_data_processing.occuancy_consumption
     )
 
     list_with_variables_to_check_for_yearly_data = pyam_data_processing.heating_demand # pyam_data_processing.kpi_data + 
@@ -69,7 +70,7 @@ def main():
     # -------------------------------------------------------------------------------------------------------------------------------------
 
     PyamDataAnalysis(
-        analyze_yearly_or_hourly_data=pyam_data_collection.PyamDataTypeEnum.YEARLY,
+        analyze_yearly_or_hourly_data=analyze_yearly_or_hourly_data,
         folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
         path_to_default_config=path_to_default_config,
         simulation_duration_to_check=simulation_duration_to_check,

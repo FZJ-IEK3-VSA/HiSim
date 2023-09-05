@@ -7,7 +7,7 @@ import shutil
 from typing import Any, List, Optional, Tuple
 
 import pandas as pd
-from utspclient.helpers.lpgdata import TransportationDeviceSets, TravelRouteSets
+from utspclient.helpers.lpgdata import TransportationDeviceSets, TravelRouteSets, EnergyIntensityType
 
 import hisim.loadtypes as lt
 import hisim.log
@@ -91,7 +91,7 @@ def modular_household_explicit(
 
     # Set simulation parameters
     year = 2021
-    seconds_per_timestep = 60 * 15
+    seconds_per_timestep = 60 * 60
 
     household_config = read_in_configs(my_sim.my_module_config_path)
 
@@ -120,6 +120,9 @@ def modular_household_explicit(
         )
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE
+        )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.EXPORT_TO_CSV
         )
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT
@@ -259,7 +262,8 @@ def modular_household_explicit(
                 name="UTSPConnector",
                 url=arche_type_config_.url,
                 api_key=arche_type_config_.api_key,
-                household=occupancy_profile,  # type: ignore
+                household=occupancy_profile,
+                energy_intensity=EnergyIntensityType.EnergySaving,
                 result_path=hisim.utils.HISIMPATH["results"],
                 travel_route_set=this_mobility_distance,
                 transportation_device_set=this_mobility_set,

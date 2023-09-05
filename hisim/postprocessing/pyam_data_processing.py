@@ -229,7 +229,7 @@ class PyAmChartGenerator:
         )
 
         for variable_to_check in variables_to_check:
-            print("Check variable ", variable_to_check)
+            log.information("Check variable "+ str(variable_to_check))
 
             # prepare path for plots
             self.path_addition = "".join(
@@ -283,17 +283,18 @@ class PyAmChartGenerator:
                 #     title=self.path_addition,
                 # )
 
-                self.make_box_plot_for_pyam_dataframe(
+                try:
+                    self.make_box_plot_for_pyam_dataframe(
                     filtered_data=filtered_data,
                     comparison_mode=comparion_mode,
                     title=self.path_addition,
-                )
-                self.make_pie_plot_for_pyam_dataframe(
+                    )
+                    self.make_pie_plot_for_pyam_dataframe(
                     filtered_data=filtered_data,
                     comparison_mode=comparion_mode,
                     title=self.path_addition,
-                )
-                self.make_scatter_plot_for_pyam_dataframe(
+                    )
+                    self.make_scatter_plot_for_pyam_dataframe(
                     pyam_dataframe=pyam_dataframe,
                     filter_model=None,
                     filter_scenario=None,
@@ -304,7 +305,11 @@ class PyAmChartGenerator:
                     filter_year=None,
                     x_data_variable="Weather|Temperature|DailyAverageOutsideTemperatures",
                     y_data_variable="HeatPumpHPLib|Heating|ThermalOutputPower",
-                )
+                    )
+                    
+                except:
+                    log.information("Something went wrong for plotting.")
+                    pass
 
                 # self.make_stack_plot_for_pyam_dataframe(pyam_dataframe=pyam_dataframe, filter_model=None, filter_scenario=None,
                 # filter_variables="EMS|ElectricityToOrFromGrid|-",

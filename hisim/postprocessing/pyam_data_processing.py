@@ -31,7 +31,7 @@ class PyAmChartGenerator:
         analyze_yearly_or_hourly_data: Any = None,
         variables_to_check_for_hourly_data: Optional[List[str]] = None,
         variables_to_check_for_yearly_data: Optional[List[str]] = None,
-        scenarios_to_check: Any= None #Optional[List[str]] = None,
+        list_of_scenarios_to_check: Optional[List[str]] = None,
         
     ) -> None:
         """Initialize the class."""
@@ -110,9 +110,15 @@ class PyAmChartGenerator:
 
         if analyze_yearly_or_hourly_data == PyamDataTypeEnum.YEARLY:
 
-            dict_of_yearly_pyam_dataframes_for_different_simulation_durations = self.get_dataframe_and_create_pyam_dataframe_for_all_data(
-                folder_path=self.folder_path, kind_of_data=PyamDataTypeEnum.YEARLY, scenario_to_check=scenarios_to_check
+            # dict_of_yearly_pyam_dataframes_for_different_simulation_durations = self.get_dataframe_and_create_pyam_dataframe_for_all_data(
+            #     folder_path=self.folder_path, kind_of_data=PyamDataTypeEnum.YEARLY, scenario_to_check=scenarios_to_check
+            # )
+            pyam_dataframe = self.get_dataframe_and_create_pyam_dataframe_for_all_data(
+                folder_path=self.folder_path, kind_of_data=PyamDataTypeEnum.YEARLY, list_of_scenarios_to_check=list_of_scenarios_to_check,
             )
+            print("pyam df", pyam_dataframe.data)
+
+            
 
             if (
             variables_to_check_for_yearly_data != []
@@ -120,7 +126,8 @@ class PyAmChartGenerator:
             ):
                 self.make_plots_with_specific_kind_of_data(
                     kind_of_data=PyamDataTypeEnum.YEARLY,
-                    dict_of_data=dict_of_yearly_pyam_dataframes_for_different_simulation_durations,
+                    # dict_of_data=dict_of_yearly_pyam_dataframes_for_different_simulation_durations,
+                    pyam_dataframe=pyam_dataframe,
                     simulation_duration_key=simulation_duration_to_check,
                     variables_to_check=variables_to_check_for_yearly_data,
                 )
@@ -156,7 +163,7 @@ class PyAmChartGenerator:
 
 
     def get_dataframe_and_create_pyam_dataframe_for_all_data(
-        self, folder_path: str, kind_of_data: Any, scenario_to_check: Any #Optional[List[str]]
+        self, folder_path: str, kind_of_data: Any, list_of_scenarios_to_check: Optional[List[str]]
     ) -> Dict:
         """Get csv data and create pyam dataframes."""
 
@@ -181,38 +188,45 @@ class PyAmChartGenerator:
 
             # if scenario values are no strings, transform them
             file_df["Scenario"] = file_df["Scenario"].transform(str)
+
             
             # filter scenarios
-            if scenario_to_check is not None and scenario_to_check != []:
-                file_df = self.check_if_scenario_exists_and_filter_dataframe_for_scenarios(data_frame=file_df, scenario_to_check=scenario_to_check)
-                print("file_df", file_df)
-
+            print("scenario to check", list_of_scenarios_to_check)
+            if list_of_scenarios_to_check is not None and list_of_scenarios_to_check != []:
+                file_df = self.check_if_scenario_exists_and_filter_dataframe_for_scenarios(data_frame=file_df, list_of_scenarios_to_check=list_of_scenarios_to_check)
 
             # create pyam dataframe
             pyam_dataframe = pyam.IamDataFrame(file_df)
-            simulation_duration = re.findall(string=file, pattern=r"\d+")[-1]
-            dict_of_different_pyam_dataframes_of_different_simulation_parameters[
-                f"{simulation_duration}"
-            ] = pyam_dataframe
+            
+            
+            return pyam_dataframe
+            
+            
+            
+        #     simulation_duration = re.findall(string=file, pattern=r"\d+")[-1]
+        #     dict_of_different_pyam_dataframes_of_different_simulation_parameters[
+        #         f"{simulation_duration}"
+        #     ] = pyam_dataframe
 
-        if dict_of_different_pyam_dataframes_of_different_simulation_parameters == {}:
-            raise ValueError(
-                f"The dictionary is empty. Please check your filepath {folder_path} if there is the right csv file."
-            )
+        # if dict_of_different_pyam_dataframes_of_different_simulation_parameters == {}:
+        #     raise ValueError(
+        #         f"The dictionary is empty. Please check your filepath {folder_path} if there is the right csv file."
+        #     )
 
-        return dict_of_different_pyam_dataframes_of_different_simulation_parameters
+        # return dict_of_different_pyam_dataframes_of_different_simulation_parameters
 
     def make_plots_with_specific_kind_of_data(
         self,
         kind_of_data: Any,
-        dict_of_data: Dict[str, pyam.IamDataFrame],
+        pyam_dataframe: pyam.IamDataFrame,
+        # dict_of_data: Dict[str, pyam.IamDataFrame],
         simulation_duration_key: str,
         variables_to_check: List[str],
     ) -> None:
         """Make plots for different kind of data."""
 
         log.information(f"Simulation duration: {simulation_duration_key} days.")
-        pyam_dataframe = dict_of_data[simulation_duration_key]
+        #pyam_dataframe = dict_of_data[simulation_duration_key]
 
         if pyam_dataframe.empty:
             raise ValueError("Pyam dataframe is empty.")
@@ -242,7 +256,6 @@ class PyAmChartGenerator:
             if os.path.exists(self.plot_path_complete) is False:
                 os.makedirs(self.plot_path_complete)
 
-            print("pyam df", pyam_dataframe.data)
             filtered_data = self.filter_pyam_dataframe(
                 pyam_dataframe=pyam_dataframe,
                 filter_model=None,
@@ -252,7 +265,6 @@ class PyAmChartGenerator:
                 filter_unit=None,
                 filter_year=None,
             )
-            print("filtered df", filtered_data.data)
                     
             log.information("Pyam dataframe scenarios " + str(filtered_data.scenario))
 
@@ -273,11 +285,11 @@ class PyAmChartGenerator:
                     kind_of_data_set=kind_of_data_set,
                 )
 
-                self.make_bar_plot_for_pyam_dataframe(
-                    filtered_data=filtered_data,
-                    comparison_mode=comparion_mode,
-                    title=self.path_addition,
-                )
+                # self.make_bar_plot_for_pyam_dataframe(
+                #     filtered_data=filtered_data,
+                #     comparison_mode=comparion_mode,
+                #     title=self.path_addition,
+                # )
 
                 self.make_box_plot_for_pyam_dataframe(
                     filtered_data=filtered_data,
@@ -774,23 +786,82 @@ class PyAmChartGenerator:
             statistical_data.to_excel(excel_writer=writer, sheet_name="statistics")
 
 
-    def check_if_scenario_exists_and_filter_dataframe_for_scenarios(self, data_frame: pd.DataFrame, scenario_to_check: str):
+    def check_if_scenario_exists_and_filter_dataframe_for_scenarios(self, data_frame: pd.DataFrame, list_of_scenarios_to_check: List[str]):
         
-        scenario_list = []
-
+        aggregated_scenario_dict = {key: [] for key in list_of_scenarios_to_check}
+        # from collections import defaultdict
+        # df_filtered_for_specific_scenarios = defaultdict[pd.DataFrame]
         try:
-            for scenario in data_frame["Scenario"]:
+            for given_scenario in data_frame["Scenario"]:
                 # string comparison
-                if scenario_to_check in scenario:
-                    scenario_list.append(scenario)
+                for scenario_to_check in list_of_scenarios_to_check:
+                    if scenario_to_check in given_scenario and given_scenario not in aggregated_scenario_dict[scenario_to_check]:
+                        aggregated_scenario_dict[scenario_to_check].append(given_scenario)
 
         except Exception as exc:
             raise ValueError(
             f"Scenarios with {scenario_to_check} were not found in the pyam dataframe."
         )
+        concat_df = pd.DataFrame()
         # only take rows from dataframe which are in selected scenarios
-        df_filtered_for_specific_scenarios = data_frame.loc[data_frame["Scenario"].isin(scenario_list)]
-        return df_filtered_for_specific_scenarios
+        for key, value in aggregated_scenario_dict.items():
+            print("key, value", key, value)
+            df_filtered_for_specific_scenarios = data_frame.loc[data_frame["Scenario"].isin(value)]
+            df_filtered_for_specific_scenarios["Scenario"] = [key] * len(df_filtered_for_specific_scenarios["Scenario"])
+            concat_df = pd.concat([concat_df,df_filtered_for_specific_scenarios])
+        
+        # new_df = self.aggregate_dataframe_according_to_scenario_categories(data_frame=df_filtered_for_specific_scenarios, scenario_to_check=scenario_to_check)
+        return concat_df
+    
+    def aggregate_dataframe_according_to_scenario_categories(self, data_frame: pd.DataFrame, scenario_to_check: Any):
+        
+
+        variables = {key: {} for key in data_frame["Variable"]}
+        # order according to variables
+        for variable in data_frame["Variable"]:
+            for column in data_frame.columns:
+                entries = list(data_frame.loc[data_frame["Variable"]== variable][column])
+                variables[variable].update({column: entries})
+                
+        # now aggregate data
+        for variable_key, variable_dict in variables.items():
+            # avoid that values duplicate
+            dict_keys_that_contain_values = []
+            for key in variable_dict.keys():
+                variable_dict[key] = list(set(variable_dict[key]))
+                # get key which contains the values of data (for yearly data the key is the year, for hourly data the key is the datetime)
+                if not key.isalpha():
+                    dict_keys_that_contain_values.append(key)
+                
+            
+
+            # iterate over all years or datetime keys
+            for dict_key_with_values in dict_keys_that_contain_values:
+                # if more than value exist, take mean or sum of these values
+                if len(variable_dict[dict_key_with_values]) > 1:
+                    # take mean value for these units
+                    if variable_dict["Unit"] in ["%", "-", "W", "kg/s", "m/s", "°C"]:
+                        variable_dict[dict_key_with_values] = np.mean(variable_dict[dict_key_with_values])
+                    # and take sum for these units
+                    else:
+                        variable_dict[dict_key_with_values] = np.sum(variable_dict[dict_key_with_values])
+
+
+        # make new df with aggregated data for specific scenarios that were given
+        new_dict = {key: [] for key in data_frame}
+        for dictio in variables.values():
+
+            dictio["Scenario"] = scenario_to_check
+
+            for key, value in dictio.items():
+                if isinstance(value, list):
+                    value = value[0]
+                new_dict[key].append(value)
+                
+        new_df = pd.DataFrame(new_dict)
+        return new_df
+            
+            
         
 
 # examples for variables to check

@@ -17,7 +17,7 @@ class PyamDataAnalysis:
         data_processing_mode: Any,
         variables_to_check_for_hourly_data: List[str],
         variables_to_check_for_yearly_data: List[str],
-        scenarios_to_check: Optional[List[str]] = None,
+        list_of_scenarios_to_check: Optional[List[str]] = None,
         analyze_yearly_or_hourly_data: Any = None,
     ) -> None:
         """Initialize the class."""
@@ -34,7 +34,7 @@ class PyamDataAnalysis:
             data_processing_mode=data_processing_mode,
             variables_to_check_for_hourly_data=variables_to_check_for_hourly_data,
             variables_to_check_for_yearly_data=variables_to_check_for_yearly_data,
-            scenarios_to_check=scenarios_to_check,
+            list_of_scenarios_to_check=list_of_scenarios_to_check,
         )
 
 
@@ -64,7 +64,7 @@ def main():
 
     list_with_variables_to_check_for_yearly_data = pyam_data_processing.heating_demand # pyam_data_processing.kpi_data + 
     
-    scenarios_to_check = "DE.N.SFH."
+    list_of_scenarios_to_check = ["DE.N.SFH.05.Gen.ReEx.","DE.N.MFH.05.Gen.ReEx.","DE.N.TH.05.Gen.ReEx.","DE.N.AB.05.Gen.ReEx."]
 
     # -------------------------------------------------------------------------------------------------------------------------------------
 
@@ -76,7 +76,7 @@ def main():
         data_processing_mode=data_processing_mode,
         variables_to_check_for_hourly_data=list_with_variables_to_check_for_hourly_data,
         variables_to_check_for_yearly_data=list_with_variables_to_check_for_yearly_data,
-        scenarios_to_check=scenarios_to_check,
+        list_of_scenarios_to_check=list_of_scenarios_to_check
     )
 
 

@@ -429,6 +429,7 @@ class Simulator:
                 Units.METER_PER_SECOND,
                 Units.DEGREES,
                 Units.WATT,
+                Units.KG_PER_SEC
             ):
                 temp_df_monthly = temp_df.resample(
                     "M"

@@ -487,9 +487,6 @@ class PyamDataCollector:
                 dict_with_parameter_key_values=dict_with_parameter_key_values,
             )
 
-            # # get opex and capex costs and add to dict
-            # dict_with_opex_and_capex_costs = self.get_opex_and_capex_cost_from_json(folder=folder)
-
         # add to each item in the dict also the default example
         for key in dict_with_csv_files_for_each_parameter.keys():
             dict_with_csv_files_for_each_parameter[key].append(

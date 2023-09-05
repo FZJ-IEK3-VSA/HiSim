@@ -465,7 +465,9 @@ class PostProcessor:
         simulation_parameters_list = ppdt.simulation_parameters.get_unique_key_as_list()
         lines += simulation_parameters_list
         self.write_new_chapter_with_text_content_to_report(
-            report=report, lines=lines, headline=". Simulation Parameters",
+            report=report,
+            lines=lines,
+            headline=". Simulation Parameters",
         )
 
     def write_components_to_report(
@@ -582,7 +584,9 @@ class PostProcessor:
         for output in ppdt.all_outputs:
             all_output_names.append(output.full_name + " [" + output.unit + "]")
         self.write_new_chapter_with_text_content_to_report(
-            report=report, lines=all_output_names, headline=". All Outputs",
+            report=report,
+            lines=all_output_names,
+            headline=". All Outputs",
         )
 
     def write_network_charts_to_report(
@@ -761,9 +765,7 @@ class PostProcessor:
             self.scenario = ppdt.setup_function
 
         # set pyam region
-        if SingletonSimRepository().exist_entry(
-            key=SingletonDictKeyEnum.LOCATION
-        ):
+        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.LOCATION):
             self.region = SingletonSimRepository().get_entry(
                 key=SingletonDictKeyEnum.LOCATION
             )
@@ -774,7 +776,10 @@ class PostProcessor:
         self.year = ppdt.simulation_parameters.year
         timeseries = ppdt.results_hourly.index
 
-        if PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT in ppdt.post_processing_options:
+        if (
+            PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
+            in ppdt.post_processing_options
+        ):
             self.write_kpis_in_pyam_dict(
                 ppdt=ppdt, simple_dict_cumulative_data=simple_dict_cumulative_data
             )
@@ -831,7 +836,8 @@ class PostProcessor:
             f"{ppdt.module_filename}_yearly_results_for_{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{self.region}.csv",
         )
         simple_df_hourly_data.to_csv(
-            path_or_buf=file_name_hourly, index=None,
+            path_or_buf=file_name_hourly,
+            index=None,
         )  # type: ignore
         simple_df_yearly_data.to_csv(path_or_buf=file_name_yearly, index=None)  # type: ignore
 

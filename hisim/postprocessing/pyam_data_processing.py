@@ -15,7 +15,10 @@ import matplotlib.pyplot as plt
 import plotly
 import string
 from html2image import Html2Image
-from hisim.postprocessing.pyam_data_collection import PyamDataTypeEnum, PyamDataProcessingModeEnum
+from hisim.postprocessing.pyam_data_collection import (
+    PyamDataTypeEnum,
+    PyamDataProcessingModeEnum,
+)
 from hisim.postprocessing.chartbase import ChartFontsAndSize
 from hisim import log
 
@@ -32,7 +35,6 @@ class PyAmChartGenerator:
         variables_to_check_for_hourly_data: Optional[List[str]] = None,
         variables_to_check_for_yearly_data: Optional[List[str]] = None,
         list_of_scenarios_to_check: Optional[List[str]] = None,
-        
     ) -> None:
         """Initialize the class."""
 
@@ -108,25 +110,20 @@ class PyAmChartGenerator:
         self.hisim_chartbase = ChartFontsAndSize()
         self.hisim_chartbase.figsize = (10, 8)
 
+        pyam_dataframe = self.get_dataframe_and_create_pyam_dataframe_for_all_data(
+            folder_path=self.folder_path,
+            analyze_yearly_or_hourly_data=analyze_yearly_or_hourly_data,
+            list_of_scenarios_to_check=list_of_scenarios_to_check,
+        )
+
         if analyze_yearly_or_hourly_data == PyamDataTypeEnum.YEARLY:
 
-            # dict_of_yearly_pyam_dataframes_for_different_simulation_durations = self.get_dataframe_and_create_pyam_dataframe_for_all_data(
-            #     folder_path=self.folder_path, kind_of_data=PyamDataTypeEnum.YEARLY, scenario_to_check=scenarios_to_check
-            # )
-            pyam_dataframe = self.get_dataframe_and_create_pyam_dataframe_for_all_data(
-                folder_path=self.folder_path, kind_of_data=PyamDataTypeEnum.YEARLY, list_of_scenarios_to_check=list_of_scenarios_to_check,
-            )
-            print("pyam df", pyam_dataframe.data)
-
-            
-
             if (
-            variables_to_check_for_yearly_data != []
-            and variables_to_check_for_yearly_data is not None
+                variables_to_check_for_yearly_data != []
+                and variables_to_check_for_yearly_data is not None
             ):
                 self.make_plots_with_specific_kind_of_data(
-                    kind_of_data=PyamDataTypeEnum.YEARLY,
-                    # dict_of_data=dict_of_yearly_pyam_dataframes_for_different_simulation_durations,
+                    analyze_yearly_or_hourly_data=analyze_yearly_or_hourly_data,
                     pyam_dataframe=pyam_dataframe,
                     simulation_duration_key=simulation_duration_to_check,
                     variables_to_check=variables_to_check_for_yearly_data,
@@ -138,25 +135,13 @@ class PyAmChartGenerator:
 
         elif analyze_yearly_or_hourly_data == PyamDataTypeEnum.HOURLY:
 
-            # dict_of_hourly_pyam_dataframes_for_different_simulation_durations = self.get_dataframe_and_create_pyam_dataframe_for_all_data(
-            #     folder_path=self.folder_path, kind_of_data=PyamDataTypeEnum.HOURLY
-            # )
-            pyam_dataframe = self.get_dataframe_and_create_pyam_dataframe_for_all_data(
-                folder_path=self.folder_path, kind_of_data=PyamDataTypeEnum.HOURLY, list_of_scenarios_to_check=list_of_scenarios_to_check,
-            )
             if (
-            variables_to_check_for_hourly_data != []
-            and variables_to_check_for_hourly_data is not None
-        ):
-                # self.make_plots_with_specific_kind_of_data(
-                #     kind_of_data=PyamDataTypeEnum.HOURLY,
-                #     dict_of_data=dict_of_hourly_pyam_dataframes_for_different_simulation_durations,
-                #     simulation_duration_key=simulation_duration_to_check,
-                #     variables_to_check=variables_to_check_for_hourly_data,
-                # )
+                variables_to_check_for_hourly_data != []
+                and variables_to_check_for_hourly_data is not None
+            ):
+
                 self.make_plots_with_specific_kind_of_data(
-                    kind_of_data=PyamDataTypeEnum.HOURLY,
-                    # dict_of_data=dict_of_yearly_pyam_dataframes_for_different_simulation_durations,
+                    analyze_yearly_or_hourly_data=analyze_yearly_or_hourly_data,
                     pyam_dataframe=pyam_dataframe,
                     simulation_duration_key=simulation_duration_to_check,
                     variables_to_check=variables_to_check_for_hourly_data,
@@ -165,21 +150,23 @@ class PyAmChartGenerator:
                 log.information(
                     "Variable list for hourly data is not given and will not be plotted or anaylzed."
                 )
-            
+
         else:
-            raise ValueError("analyze_yearly_or_hourly_data variable is not set or has incompatible value.")
-
-
-
+            raise ValueError(
+                "analyze_yearly_or_hourly_data variable is not set or has incompatible value."
+            )
 
     def get_dataframe_and_create_pyam_dataframe_for_all_data(
-        self, folder_path: str, kind_of_data: Any, list_of_scenarios_to_check: Optional[List[str]]
-    ) -> Dict:
+        self,
+        folder_path: str,
+        analyze_yearly_or_hourly_data: Any,
+        list_of_scenarios_to_check: Optional[List[str]],
+    ) -> pyam.IamDataFrame:
         """Get csv data and create pyam dataframes."""
 
-        if kind_of_data == PyamDataTypeEnum.YEARLY:
+        if analyze_yearly_or_hourly_data == PyamDataTypeEnum.YEARLY:
             kind_of_data_set = "yearly"
-        elif kind_of_data == PyamDataTypeEnum.HOURLY:
+        elif analyze_yearly_or_hourly_data == PyamDataTypeEnum.HOURLY:
             kind_of_data_set = "hourly"
         else:
             raise ValueError(
@@ -188,7 +175,6 @@ class PyAmChartGenerator:
         log.information(
             f"Read csv files and create one big pyam dataframe for {kind_of_data_set} data."
         )
-        dict_of_different_pyam_dataframes_of_different_simulation_parameters = {}
 
         for file in glob.glob(
             os.path.join(folder_path, "**", f"*{kind_of_data_set}*.csv")
@@ -197,46 +183,35 @@ class PyAmChartGenerator:
             file_df = pd.read_csv(filepath_or_buffer=file)
 
             # if scenario values are no strings, transform them
-            file_df["Scenario"] = file_df["Scenario"].transform(str)
+            file_df["scenario"] = file_df["scenario"].transform(str)
 
-            
             # filter scenarios
-            print("scenario to check", list_of_scenarios_to_check)
-            if list_of_scenarios_to_check is not None and list_of_scenarios_to_check != []:
-                file_df = self.check_if_scenario_exists_and_filter_dataframe_for_scenarios(data_frame=file_df, list_of_scenarios_to_check=list_of_scenarios_to_check)
+            if (
+                list_of_scenarios_to_check is not None
+                and list_of_scenarios_to_check != []
+            ):
+                file_df = (
+                    self.check_if_scenario_exists_and_filter_dataframe_for_scenarios(
+                        data_frame=file_df,
+                        list_of_scenarios_to_check=list_of_scenarios_to_check,
+                    )
+                )
 
             # create pyam dataframe
             pyam_dataframe = pyam.IamDataFrame(file_df)
-            
-            
+
             return pyam_dataframe
-            
-            
-            
-        #     simulation_duration = re.findall(string=file, pattern=r"\d+")[-1]
-        #     dict_of_different_pyam_dataframes_of_different_simulation_parameters[
-        #         f"{simulation_duration}"
-        #     ] = pyam_dataframe
-
-        # if dict_of_different_pyam_dataframes_of_different_simulation_parameters == {}:
-        #     raise ValueError(
-        #         f"The dictionary is empty. Please check your filepath {folder_path} if there is the right csv file."
-        #     )
-
-        # return dict_of_different_pyam_dataframes_of_different_simulation_parameters
 
     def make_plots_with_specific_kind_of_data(
         self,
-        kind_of_data: Any,
+        analyze_yearly_or_hourly_data: Any,
         pyam_dataframe: pyam.IamDataFrame,
-        # dict_of_data: Dict[str, pyam.IamDataFrame],
         simulation_duration_key: str,
         variables_to_check: List[str],
     ) -> None:
         """Make plots for different kind of data."""
 
         log.information(f"Simulation duration: {simulation_duration_key} days.")
-        #pyam_dataframe = dict_of_data[simulation_duration_key]
 
         if pyam_dataframe.empty:
             raise ValueError("Pyam dataframe is empty.")
@@ -275,15 +250,17 @@ class PyAmChartGenerator:
                 filter_unit=None,
                 filter_year=None,
             )
-                    
+
             log.information("Pyam dataframe scenarios " + str(filtered_data.scenario))
 
             # determine whether you want to compare one variable for different scenarios or different variables for one scenario
-            comparion_mode = "scenario" # self.decide_for_scenario_or_variable_comparison(
+            comparion_mode = (
+                "scenario"  # self.decide_for_scenario_or_variable_comparison(
+            )
             #     filtered_data=filtered_data
             # )
 
-            if kind_of_data == PyamDataTypeEnum.YEARLY:
+            if analyze_yearly_or_hourly_data == PyamDataTypeEnum.YEARLY:
                 kind_of_data_set = "yearly"
                 log.information(
                     f"Yearly Data Processing for Simulation Duration of {simulation_duration_key} Days:"
@@ -331,7 +308,8 @@ class PyAmChartGenerator:
                 #     pyam_dataframe=pyam_dataframe, filter_model=None, filter_scenario="2227458627882477145", filter_variables="*|*|ElectricityOutput",
                 # filter_region=None, filter_unit=None, filter_year=None
                 # )
-            elif kind_of_data == PyamDataTypeEnum.HOURLY:
+
+            elif analyze_yearly_or_hourly_data == PyamDataTypeEnum.HOURLY:
                 kind_of_data_set = "hourly"
                 log.information(
                     f"Hourly Data Processing for Simulation Duration of {simulation_duration_key} Days:"
@@ -360,7 +338,10 @@ class PyAmChartGenerator:
                 )
 
     def make_line_plot_for_pyam_dataframe(
-        self, filtered_data: pyam.IamDataFrame, comparison_mode: str, title: str,
+        self,
+        filtered_data: pyam.IamDataFrame,
+        comparison_mode: str,
+        title: str,
     ) -> None:
         """Make line plot."""
         log.information("Make line plot with hourly data.")
@@ -369,7 +350,9 @@ class PyAmChartGenerator:
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
         filtered_data.plot.line(
-            ax=a_x, color=comparison_mode, title=title,
+            ax=a_x,
+            color=comparison_mode,
+            title=title,
         )
 
         y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
@@ -383,7 +366,8 @@ class PyAmChartGenerator:
             fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
-            xlabel="Time", fontsize=self.hisim_chartbase.fontsize_label,
+            xlabel="Time",
+            fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
@@ -392,7 +376,10 @@ class PyAmChartGenerator:
         plt.close()
 
     def make_line_plot_with_filling_for_pyam_dataframe(
-        self, filtered_data: pyam.IamDataFrame, comparison_mode: str, title: str,
+        self,
+        filtered_data: pyam.IamDataFrame,
+        comparison_mode: str,
+        title: str,
     ) -> None:
         """Make line plot with filling."""
         log.information("Make line plot with filling.")
@@ -402,7 +389,10 @@ class PyAmChartGenerator:
         )
 
         filtered_data.plot(
-            ax=a_x, color=comparison_mode, title=title, fill_between=True,
+            ax=a_x,
+            color=comparison_mode,
+            title=title,
+            fill_between=True,
         )
 
         y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
@@ -416,7 +406,8 @@ class PyAmChartGenerator:
             fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
-            xlabel="Time", fontsize=self.hisim_chartbase.fontsize_label,
+            xlabel="Time",
+            fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
@@ -425,7 +416,10 @@ class PyAmChartGenerator:
         plt.close()
 
     def make_bar_plot_for_pyam_dataframe(
-        self, filtered_data: pyam.IamDataFrame, comparison_mode: str, title: str,
+        self,
+        filtered_data: pyam.IamDataFrame,
+        comparison_mode: str,
+        title: str,
     ) -> None:
         """Make bar plot."""
         log.information("Make bar plot.")
@@ -459,7 +453,10 @@ class PyAmChartGenerator:
         plt.close()
 
     def make_box_plot_for_pyam_dataframe(
-        self, filtered_data: pyam.IamDataFrame, comparison_mode: str, title: str,
+        self,
+        filtered_data: pyam.IamDataFrame,
+        comparison_mode: str,
+        title: str,
     ) -> None:
         """Make box plot."""
         log.information("Make box plot.")
@@ -469,7 +466,11 @@ class PyAmChartGenerator:
         )
 
         filtered_data.plot.box(
-            ax=a_x, by="scenario", x="year", title=title, legend=True, # comparison_mode
+            ax=a_x,
+            by="scenario",
+            x="year",
+            title=title,
+            legend=True,  # comparison_mode
         )
 
         y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
@@ -494,7 +495,10 @@ class PyAmChartGenerator:
         plt.close()
 
     def make_pie_plot_for_pyam_dataframe(
-        self, filtered_data: pyam.IamDataFrame, comparison_mode: str, title: str,
+        self,
+        filtered_data: pyam.IamDataFrame,
+        comparison_mode: str,
+        title: str,
     ) -> None:
         """Make pie plot."""
         log.information("Make pie plot.")
@@ -550,7 +554,9 @@ class PyAmChartGenerator:
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
         filtered_data.plot.scatter(
-            ax=a_x, x=x_data, y=y_data,
+            ax=a_x,
+            x=x_data,
+            y=y_data,
         )
 
         (
@@ -623,10 +629,12 @@ class PyAmChartGenerator:
         # convert html file to png
         hti = Html2Image()
         with open(
-            os.path.join(self.plot_path_complete, "sankey_plot.html"), encoding="utf8",
+            os.path.join(self.plot_path_complete, "sankey_plot.html"),
+            encoding="utf8",
         ) as file:
             hti.screenshot(
-                file.read(), save_as="sankey_plot.png",
+                file.read(),
+                save_as="sankey_plot.png",
             )
 
         # change directory of sankey output file
@@ -737,7 +745,7 @@ class PyAmChartGenerator:
         if filter_scenario is not None:
             if filter_scenario not in filtered_data.scenario:
                 raise ValueError(
-                f"Scenario {filter_scenario} not found in the pyam dataframe."
+                    f"Scenario {filter_scenario} not found in the pyam dataframe."
                 )
             filtered_data = filtered_data.filter(scenario=filter_scenario)
 
@@ -795,44 +803,57 @@ class PyAmChartGenerator:
 
             statistical_data.to_excel(excel_writer=writer, sheet_name="statistics")
 
+    def check_if_scenario_exists_and_filter_dataframe_for_scenarios(
+        self, data_frame: pd.DataFrame, list_of_scenarios_to_check: List[str]
+    ) -> pd.DataFrame:
 
-    def check_if_scenario_exists_and_filter_dataframe_for_scenarios(self, data_frame: pd.DataFrame, list_of_scenarios_to_check: List[str]):
-        
-        aggregated_scenario_dict = {key: [] for key in list_of_scenarios_to_check}
-        # from collections import defaultdict
-        # df_filtered_for_specific_scenarios = defaultdict[pd.DataFrame]
-        try:
-            for given_scenario in data_frame["Scenario"]:
-                # string comparison
-                for scenario_to_check in list_of_scenarios_to_check:
-                    if scenario_to_check in given_scenario and given_scenario not in aggregated_scenario_dict[scenario_to_check]:
-                        aggregated_scenario_dict[scenario_to_check].append(given_scenario)
+        aggregated_scenario_dict: Dict = {key: [] for key in list_of_scenarios_to_check}
 
-        except Exception as exc:
-            raise ValueError(
-            f"Scenarios with {scenario_to_check} were not found in the pyam dataframe."
-        )
+        for given_scenario in data_frame["scenario"]:
+            # string comparison
+
+            for scenario_to_check in list_of_scenarios_to_check:
+                if (
+                    scenario_to_check in given_scenario
+                    and given_scenario
+                    not in aggregated_scenario_dict[scenario_to_check]
+                ):
+                    aggregated_scenario_dict[scenario_to_check].append(given_scenario)
+        # raise error if dict is empty
+        for key, value in aggregated_scenario_dict.items():
+            if value == []:
+                raise ValueError(
+                    f"Scenarios containing {key} were not found in the pyam dataframe."
+                )
+
         concat_df = pd.DataFrame()
         # only take rows from dataframe which are in selected scenarios
         for key, value in aggregated_scenario_dict.items():
-            print("key, value", key, value)
-            df_filtered_for_specific_scenarios = data_frame.loc[data_frame["Scenario"].isin(value)]
-            df_filtered_for_specific_scenarios["Scenario"] = [key] * len(df_filtered_for_specific_scenarios["Scenario"])
-            concat_df = pd.concat([concat_df,df_filtered_for_specific_scenarios])
-        
+
+            df_filtered_for_specific_scenarios = data_frame.loc[
+                data_frame["scenario"].isin(value)
+            ]
+            df_filtered_for_specific_scenarios["scenario"] = [key] * len(
+                df_filtered_for_specific_scenarios["scenario"]
+            )
+            concat_df = pd.concat([concat_df, df_filtered_for_specific_scenarios])
+
         # new_df = self.aggregate_dataframe_according_to_scenario_categories(data_frame=df_filtered_for_specific_scenarios, scenario_to_check=scenario_to_check)
         return concat_df
-    
-    def aggregate_dataframe_according_to_scenario_categories(self, data_frame: pd.DataFrame, scenario_to_check: Any):
-        
 
-        variables = {key: {} for key in data_frame["Variable"]}
+    def aggregate_dataframe_according_to_scenario_categories(
+        self, data_frame: pd.DataFrame, scenario_to_check: Any
+    ) -> pd.DataFrame:
+
+        variables: Dict = {key: {} for key in data_frame["Variable"]}
         # order according to variables
         for variable in data_frame["Variable"]:
             for column in data_frame.columns:
-                entries = list(data_frame.loc[data_frame["Variable"]== variable][column])
+                entries = list(
+                    data_frame.loc[data_frame["Variable"] == variable][column]
+                )
                 variables[variable].update({column: entries})
-                
+
         # now aggregate data
         for variable_key, variable_dict in variables.items():
             # avoid that values duplicate
@@ -842,8 +863,6 @@ class PyAmChartGenerator:
                 # get key which contains the values of data (for yearly data the key is the year, for hourly data the key is the datetime)
                 if not key.isalpha():
                     dict_keys_that_contain_values.append(key)
-                
-            
 
             # iterate over all years or datetime keys
             for dict_key_with_values in dict_keys_that_contain_values:
@@ -851,14 +870,17 @@ class PyAmChartGenerator:
                 if len(variable_dict[dict_key_with_values]) > 1:
                     # take mean value for these units
                     if variable_dict["Unit"] in ["%", "-", "W", "kg/s", "m/s", "°C"]:
-                        variable_dict[dict_key_with_values] = np.mean(variable_dict[dict_key_with_values])
+                        variable_dict[dict_key_with_values] = np.mean(
+                            variable_dict[dict_key_with_values]
+                        )
                     # and take sum for these units
                     else:
-                        variable_dict[dict_key_with_values] = np.sum(variable_dict[dict_key_with_values])
-
+                        variable_dict[dict_key_with_values] = np.sum(
+                            variable_dict[dict_key_with_values]
+                        )
 
         # make new df with aggregated data for specific scenarios that were given
-        new_dict = {key: [] for key in data_frame}
+        new_dict: Dict = {key: [] for key in data_frame}
         for dictio in variables.values():
 
             dictio["Scenario"] = scenario_to_check
@@ -867,12 +889,10 @@ class PyAmChartGenerator:
                 if isinstance(value, list):
                     value = value[0]
                 new_dict[key].append(value)
-                
+
         new_df = pd.DataFrame(new_dict)
         return new_df
-            
-            
-        
+
 
 # examples for variables to check
 # kpi data only in yearly format

@@ -19,17 +19,18 @@ class PyamDataAnalysis:
         data_processing_mode: Any,
         variables_to_check_for_hourly_data: List[str],
         variables_to_check_for_yearly_data: List[str],
+        aggregate_data: bool = False,
         list_of_scenarios_to_check: Optional[List[str]] = None,
     ) -> None:
         """Initialize the class."""
 
-        # pyam_data_collection.PyamDataCollector(
-        #     data_processing_mode=data_processing_mode,
-        #     folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
-        #     path_to_default_config=path_to_default_config,
-        #     analyze_yearly_or_hourly_data=analyze_yearly_or_hourly_data,
-        #     simulation_duration_to_check=simulation_duration_to_check,
-        # )
+        pyam_data_collection.PyamDataCollector(
+            data_processing_mode=data_processing_mode,
+            folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
+            path_to_default_config=path_to_default_config,
+            analyze_yearly_or_hourly_data=analyze_yearly_or_hourly_data,
+            simulation_duration_to_check=simulation_duration_to_check,
+        )
         pyam_data_processing.PyAmChartGenerator(
             simulation_duration_to_check=simulation_duration_to_check,
             analyze_yearly_or_hourly_data=analyze_yearly_or_hourly_data,
@@ -37,6 +38,7 @@ class PyamDataAnalysis:
             variables_to_check_for_hourly_data=variables_to_check_for_hourly_data,
             variables_to_check_for_yearly_data=variables_to_check_for_yearly_data,
             list_of_scenarios_to_check=list_of_scenarios_to_check,
+            aggregate_data=aggregate_data,
         )
 
 
@@ -81,6 +83,8 @@ def main():
         "001.002",
         "001.003",
     ]
+    
+    aggregate_data = False
 
     # -------------------------------------------------------------------------------------------------------------------------------------
 
@@ -93,6 +97,7 @@ def main():
         variables_to_check_for_hourly_data=list_with_variables_to_check_for_hourly_data,
         variables_to_check_for_yearly_data=list_with_variables_to_check_for_yearly_data,
         list_of_scenarios_to_check=list_of_scenarios_to_check,
+        aggregate_data=aggregate_data
     )
 
 

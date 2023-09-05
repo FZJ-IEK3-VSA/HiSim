@@ -22,6 +22,8 @@ from hisim.postprocessing.pyam_data_collection import (
 from hisim.postprocessing.chartbase import ChartFontsAndSize
 from hisim import log
 
+from ordered_set import OrderedSet
+
 
 class PyAmChartGenerator:
 
@@ -31,7 +33,8 @@ class PyAmChartGenerator:
         self,
         simulation_duration_to_check: str,
         data_processing_mode: Any,
-        analyze_yearly_or_hourly_data: Any = None,
+        analyze_yearly_or_hourly_data: Any,
+        aggregate_data: bool = False,
         variables_to_check_for_hourly_data: Optional[List[str]] = None,
         variables_to_check_for_yearly_data: Optional[List[str]] = None,
         list_of_scenarios_to_check: Optional[List[str]] = None,
@@ -114,7 +117,9 @@ class PyAmChartGenerator:
             folder_path=self.folder_path,
             analyze_yearly_or_hourly_data=analyze_yearly_or_hourly_data,
             list_of_scenarios_to_check=list_of_scenarios_to_check,
+            aggregate_data=aggregate_data,
         )
+        
 
         if analyze_yearly_or_hourly_data == PyamDataTypeEnum.YEARLY:
 
@@ -160,6 +165,7 @@ class PyAmChartGenerator:
         self,
         folder_path: str,
         analyze_yearly_or_hourly_data: Any,
+        aggregate_data: bool,
         list_of_scenarios_to_check: Optional[List[str]],
     ) -> pyam.IamDataFrame:
         """Get csv data and create pyam dataframes."""
@@ -181,6 +187,7 @@ class PyAmChartGenerator:
         ):
 
             file_df = pd.read_csv(filepath_or_buffer=file)
+            
 
             # if scenario values are no strings, transform them
             file_df["scenario"] = file_df["scenario"].transform(str)
@@ -190,12 +197,10 @@ class PyAmChartGenerator:
                 list_of_scenarios_to_check is not None
                 and list_of_scenarios_to_check != []
             ):
-                file_df = (
-                    self.check_if_scenario_exists_and_filter_dataframe_for_scenarios(
+                file_df = self.check_if_scenario_exists_and_filter_dataframe_for_scenarios(
                         data_frame=file_df,
                         list_of_scenarios_to_check=list_of_scenarios_to_check,
-                    )
-                )
+                        aggregate_data=aggregate_data)
 
             # create pyam dataframe
             pyam_dataframe = pyam.IamDataFrame(file_df)
@@ -349,6 +354,7 @@ class PyAmChartGenerator:
         fig, a_x = plt.subplots(
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
+
         filtered_data.plot.line(
             ax=a_x,
             color=comparison_mode,
@@ -804,7 +810,7 @@ class PyAmChartGenerator:
             statistical_data.to_excel(excel_writer=writer, sheet_name="statistics")
 
     def check_if_scenario_exists_and_filter_dataframe_for_scenarios(
-        self, data_frame: pd.DataFrame, list_of_scenarios_to_check: List[str]
+        self, data_frame: pd.DataFrame, list_of_scenarios_to_check: List[str], aggregate_data: bool
     ) -> pd.DataFrame:
 
         aggregated_scenario_dict: Dict = {key: [] for key in list_of_scenarios_to_check}
@@ -820,78 +826,110 @@ class PyAmChartGenerator:
                 ):
                     aggregated_scenario_dict[scenario_to_check].append(given_scenario)
         # raise error if dict is empty
-        for key, value in aggregated_scenario_dict.items():
-            if value == []:
+        for key_scenario_to_check, given_scenario in aggregated_scenario_dict.items():
+            if given_scenario == []:
                 raise ValueError(
-                    f"Scenarios containing {key} were not found in the pyam dataframe."
+                    f"Scenarios containing {key_scenario_to_check} were not found in the pyam dataframe."
                 )
 
         concat_df = pd.DataFrame()
         # only take rows from dataframe which are in selected scenarios
-        for key, value in aggregated_scenario_dict.items():
+        for key_scenario_to_check, given_scenario in aggregated_scenario_dict.items():
 
             df_filtered_for_specific_scenarios = data_frame.loc[
-                data_frame["scenario"].isin(value)
+                data_frame["scenario"].isin(given_scenario)
             ]
-            df_filtered_for_specific_scenarios["scenario"] = [key] * len(
-                df_filtered_for_specific_scenarios["scenario"]
-            )
+            df_filtered_for_specific_scenarios["scenario"] = [key_scenario_to_check]* len(df_filtered_for_specific_scenarios["scenario"])
             concat_df = pd.concat([concat_df, df_filtered_for_specific_scenarios])
 
-        # new_df = self.aggregate_dataframe_according_to_scenario_categories(data_frame=df_filtered_for_specific_scenarios, scenario_to_check=scenario_to_check)
+        if aggregate_data is True:
+            concat_df = self.aggregate_dataframe_according_to_scenario_categories(data_frame=concat_df, list_of_scenarios_to_check=list_of_scenarios_to_check)
         return concat_df
 
     def aggregate_dataframe_according_to_scenario_categories(
-        self, data_frame: pd.DataFrame, scenario_to_check: Any
+        self, data_frame: pd.DataFrame, list_of_scenarios_to_check: List[str]
     ) -> pd.DataFrame:
+        
+        log.information(f"Data will be aggregated according to specified scenarios {list_of_scenarios_to_check}.")
+        existing_variables = list(OrderedSet(data_frame["variable"]))
 
-        variables: Dict = {key: {} for key in data_frame["Variable"]}
-        # order according to variables
-        for variable in data_frame["Variable"]:
-            for column in data_frame.columns:
-                entries = list(
-                    data_frame.loc[data_frame["Variable"] == variable][column]
-                )
-                variables[variable].update({column: entries})
+        new_dict: Dict = {key: [] for key in data_frame.columns}
+        for scenario_to_check in list_of_scenarios_to_check:
+            
+            splitted_df_according_to_scenario = data_frame.loc[data_frame["scenario"]==scenario_to_check]
+            
+            for variable in existing_variables:
+                all_examples_of_one_variable = splitted_df_according_to_scenario.loc[splitted_df_according_to_scenario["variable"]==variable]
 
-        # now aggregate data
-        for variable_key, variable_dict in variables.items():
-            # avoid that values duplicate
-            dict_keys_that_contain_values = []
-            for key in variable_dict.keys():
-                variable_dict[key] = list(set(variable_dict[key]))
-                # get key which contains the values of data (for yearly data the key is the year, for hourly data the key is the datetime)
-                if not key.isalpha():
-                    dict_keys_that_contain_values.append(key)
+                unit = list(all_examples_of_one_variable["unit"])[0]
 
-            # iterate over all years or datetime keys
-            for dict_key_with_values in dict_keys_that_contain_values:
-                # if more than value exist, take mean or sum of these values
-                if len(variable_dict[dict_key_with_values]) > 1:
-                    # take mean value for these units
-                    if variable_dict["Unit"] in ["%", "-", "W", "kg/s", "m/s", "°C"]:
-                        variable_dict[dict_key_with_values] = np.mean(
-                            variable_dict[dict_key_with_values]
-                        )
-                    # and take sum for these units
+                
+                for index, time in enumerate(list(OrderedSet(splitted_df_according_to_scenario["time"]))):
+
+                    values_for_this_time_step = list(all_examples_of_one_variable["value"].loc[all_examples_of_one_variable["time"]==time])
+                    if unit in ["%", "-", "W", "kg/s", "m/s", "°C"]:
+                        aggregated_value = np.mean(values_for_this_time_step)
                     else:
-                        variable_dict[dict_key_with_values] = np.sum(
-                            variable_dict[dict_key_with_values]
-                        )
+                        aggregated_value = np.sum(values_for_this_time_step)
 
-        # make new df with aggregated data for specific scenarios that were given
-        new_dict: Dict = {key: [] for key in data_frame}
-        for dictio in variables.values():
 
-            dictio["Scenario"] = scenario_to_check
+                    for column in all_examples_of_one_variable.columns:
+                        if column == "value":
+                            new_dict[column].append(aggregated_value)
+                        else:
 
-            for key, value in dictio.items():
-                if isinstance(value, list):
-                    value = value[0]
-                new_dict[key].append(value)
+                            new_dict[column].append(list(all_examples_of_one_variable[column])[index])
 
         new_df = pd.DataFrame(new_dict)
         return new_df
+
+        # variables: Dict = {key: {} for key in data_frame["variable"]}
+        # # order according to variables
+        # for variable in data_frame["variable"]:
+        #     for column in data_frame.columns:
+        #         entries = list(
+        #             data_frame.loc[data_frame["variable"] == variable][column]
+        #         )
+        #         variables[variable].update({column: entries})
+        # print("variables", variables)
+        # # now aggregate data
+        # for variable_key, variable_dict in variables.items():
+        #     # avoid that values duplicate
+        #     dict_keys_that_contain_values = []
+        #     for key in variable_dict.keys():
+        #         variable_dict[key] = list(set(variable_dict[key]))
+        #         # get key which contains the values of data (for yearly data the key is the year, for hourly data the key is the datetime)
+        #         if not key.isalpha():
+        #             dict_keys_that_contain_values.append(key)
+
+        #     # iterate over all years or datetime keys
+        #     for dict_key_with_values in dict_keys_that_contain_values:
+        #         # if more than value exist, take mean or sum of these values
+        #         if len(variable_dict[dict_key_with_values]) > 1:
+        #             # take mean value for these units
+        #             if variable_dict["unit"] in ["%", "-", "W", "kg/s", "m/s", "°C"]:
+        #                 variable_dict[dict_key_with_values] = np.mean(
+        #                     variable_dict[dict_key_with_values]
+        #                 )
+        #             # and take sum for these units
+        #             else:
+        #                 variable_dict[dict_key_with_values] = np.sum(
+        #                     variable_dict[dict_key_with_values]
+        #                 )
+
+        # # make new df with aggregated data for specific scenarios that were given
+        # new_dict: Dict = {key: [] for key in data_frame}
+        # for dictio in variables.values():
+
+        #     dictio["scenario"] = scenario_to_check
+
+        #     for key, value in dictio.items():
+        #         if isinstance(value, list):
+        #             value = value[0]
+        #         new_dict[key].append(value)
+
+        # new_df = pd.DataFrame(new_dict)
+        # return new_df
 
 
 # examples for variables to check

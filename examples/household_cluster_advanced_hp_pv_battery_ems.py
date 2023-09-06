@@ -133,6 +133,9 @@ def household_cluster_advanced_hp_pv_battery_ems(
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.COMPUTE_CAPEX
         )
+        my_simulation_parameters.pos_processing_options.append(
+            PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
+        )
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER
         )

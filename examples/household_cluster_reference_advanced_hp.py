@@ -115,7 +115,7 @@ def household_cluster_reference_advanced_hp(
     seconds_per_timestep = 60
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(
+        my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         my_simulation_parameters.post_processing_options.append(
@@ -126,6 +126,9 @@ def household_cluster_reference_advanced_hp(
         )
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.COMPUTE_CAPEX
+        )
+        my_simulation_parameters.pos_processing_options.append(
+            PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
         )
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER
@@ -445,7 +448,7 @@ def household_cluster_reference_advanced_hp(
         )
         log.information(
             "Singleton Scenario is set "
-            + f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_{hash_number}"
+            + f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_with_dhw_{hash_number}"
         )
     # if config_filename is not given, make result path with index enumeration
     else:

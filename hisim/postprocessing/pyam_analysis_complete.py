@@ -78,26 +78,26 @@ def main():
     #     "DE.N.TH",
     #     "DE.N.AB",
     # ]
-    # list_of_scenarios_to_check = [
-    #     "001.001",
-    #     "001.002",
-    #     "001.003",
-    # ]
-    
     list_of_scenarios_to_check = [
-        "01.Gen",
-        "02.Gen",
-        "03.Gen",
-        "04.Gen",
-        "05.Gen",
-        "06.Gen",
-        "07.Gen",
-        "08.Gen",
-        "09.Gen",
-        "10.Gen",
-        "11.Gen",
-        "12.Gen",
+        "001.001",
+        "001.002",
+        "001.003",
     ]
+    
+    # list_of_scenarios_to_check = [
+    #     "01.Gen",
+    #     "02.Gen",
+    #     "03.Gen",
+    #     "04.Gen",
+    #     "05.Gen",
+    #     "06.Gen",
+    #     "07.Gen",
+    #     "08.Gen",
+    #     "09.Gen",
+    #     "10.Gen",
+    #     "11.Gen",
+    #     "12.Gen",
+    # ]
     
     aggregate_data = False
 

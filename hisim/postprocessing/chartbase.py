@@ -2,7 +2,7 @@
 # clean
 import os
 import re
-from typing import Any
+from typing import Any, Tuple
 from dataclasses import dataclass
 import numpy as np
 from hisim import result_path_provider
@@ -112,7 +112,7 @@ class Chart:  # noqa: too-few-public-methods
         result_path_provider.check_path_length(path=self.filepath)
         result_path_provider.check_path_length(path=self.filepath2)
 
-    def rescale_y_axis(self, y_values: Any, units: Any) -> tuple[Any, Any]:
+    def rescale_y_axis(self, y_values: Any, units: Any) -> Tuple[Any, Any]:
         """Rescale y_values of plots."""
         max_scale = np.max(np.abs(y_values))
         if units != "-":

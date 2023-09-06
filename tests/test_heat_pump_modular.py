@@ -11,15 +11,15 @@ from hisim.simulationparameters import SimulationParameters
 @pytest.mark.base
 def test_heat_pump_modular():
 
-    #simulation parameters
+    # simulation parameters
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
     
-    #default config
+    # default config
     my_hp_config = generic_heat_pump_modular.HeatPumpConfig.get_default_config_heating()
     l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller("HP1")
 
-    #definition of outputs
+    # definition of outputs
     number_of_outputs = 6
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
@@ -32,26 +32,26 @@ def test_heat_pump_modular():
     my_heat_pump_controller_l1 = controller_l1_heatpump.L1HeatPumpController(config=l1_config,
                                                                              my_simulation_parameters=my_simulation_parameters)
 
-    #definition of weather output
+    # definition of weather output
     t_air_outdoorC = cp.ComponentOutput("FakeTemperatureOutside",
                                         "TemperatureAir",
                                         lt.LoadTypes.TEMPERATURE,
                                         lt.Units.WATT)
     
-    #definition of building output
+    # definition of building output
     t_mC = cp.ComponentOutput("FakeHouse",
                               "TemperatureMean",
                               lt.LoadTypes.TEMPERATURE,
                               lt.Units.CELSIUS)
 
     
-    #definition of electricity surplus
+    # definition of electricity surplus
     ElectricityTargetC = cp.ComponentOutput('FakeSurplusSignal',
                                             'ElectricityTarget',
                                             lt.LoadTypes.ELECTRICITY,
                                             lt.Units.WATT)
     
-    #connection of in- and outputs
+    # connection of in- and outputs
     my_heat_pump.temperature_outside_channel.source_output = t_air_outdoorC
     my_heat_pump.heat_controller_power_modifier_channel.source_output = my_heat_pump_controller_l1.heat_pump_target_percentage_channel
     my_heat_pump_controller_l1.storage_temperature_channel.source_output = t_mC

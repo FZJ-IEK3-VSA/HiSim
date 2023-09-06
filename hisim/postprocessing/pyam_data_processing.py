@@ -983,6 +983,7 @@ def main():
         data_processing_mode=PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_SIZES,
         # variables_to_check_for_hourly_data=heating_demand + electricity_data + occuancy_consumption,
         variables_to_check_for_yearly_data=kpi_data,
+        analyze_yearly_or_hourly_data=PyamDataTypeEnum.YEARLY,
     )
 
 

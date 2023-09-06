@@ -255,18 +255,16 @@ def modular_household_explicit(
         else:
             this_mobility_distance = mobility_distance
 
-        my_occupancy_config = (
-            loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-                name="UTSPConnector",
-                url=arche_type_config_.url,
-                api_key=arche_type_config_.api_key,
-                household=occupancy_profile,
-                result_path=hisim.utils.HISIMPATH["results"],
-                travel_route_set=this_mobility_distance,
-                transportation_device_set=this_mobility_set,
-                charging_station_set=charging_station,
-                consumption=0,
-            )
+        my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
+            name="UTSPConnector",
+            url=arche_type_config_.url,
+            api_key=arche_type_config_.api_key,
+            household=occupancy_profile,
+            result_path=hisim.utils.HISIMPATH["results"],
+            travel_route_set=this_mobility_distance,
+            transportation_device_set=this_mobility_set,
+            charging_station_set=charging_station,
+            consumption=0,
         )
 
         my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
@@ -276,9 +274,7 @@ def modular_household_explicit(
     else:
         # Build occupancy
         my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-            "Occupancy",
-            occupancy_profile or "",
-            location,
+            "Occupancy", occupancy_profile or "", location,
         )
         my_occupancy = loadprofilegenerator_connector.Occupancy(
             config=my_occupancy_config,
@@ -347,11 +343,9 @@ def modular_household_explicit(
         my_electricity_controller_config = (
             controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
         )
-        my_electricity_controller = (
-            controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-                my_simulation_parameters=my_simulation_parameters,
-                config=my_electricity_controller_config,
-            )
+        my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_electricity_controller_config,
         )
 
         my_electricity_controller.add_component_inputs_and_connect(

@@ -129,11 +129,8 @@ def household_gas_heater(
     hdscontroller_config = (
         heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
     )
-    my_heat_distribution_controller = (
-        heat_distribution_system.HeatDistributionController(
-            config=hdscontroller_config,
-            my_simulation_parameters=my_simulation_parameters,
-        )
+    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
+        config=hdscontroller_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # =================================================================================================================================

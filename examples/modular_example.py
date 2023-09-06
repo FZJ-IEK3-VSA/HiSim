@@ -40,7 +40,10 @@ def cleanup_old_result_folders():
 
 
 def cleanup_old_lpg_requests():
-    """Removes old results of loadprofilegenerator_connector_utsp."""
+    """ Removes old results of loadprofilegenerator_connector_utsp. """
+    if not os.path.exists(hisim.utils.HISIMPATH["utsp_results"]):
+        # no old data exists, nothing to remove
+        return
     files_in_folder = os.listdir(hisim.utils.HISIMPATH["utsp_results"])
     for file in files_in_folder:
         full_path = os.path.join(hisim.utils.HISIMPATH["utsp_results"], file)
@@ -85,7 +88,7 @@ def modular_household_explicit(
     cleanup_old_lpg_requests()
 
     # Set simulation parameters
-    year = 2019
+    year = 2021
     seconds_per_timestep = 60 * 15
 
     # read the modular household config file
@@ -266,6 +269,7 @@ def modular_household_explicit(
                 transportation_device_set=this_mobility_set,
                 charging_station_set=charging_station,
                 consumption=0,
+                profile_with_washing_machine_and_dishwasher=not smart_devices_included,
             )
         )
 
@@ -276,9 +280,7 @@ def modular_household_explicit(
     else:
         # Build occupancy
         my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-            "Occupancy",
-            occupancy_profile or "",
-            location,
+            "Occupancy", occupancy_profile or "", location, not smart_devices_included,
         )
         my_occupancy = loadprofilegenerator_connector.Occupancy(
             config=my_occupancy_config,
@@ -324,16 +326,13 @@ def modular_household_explicit(
                 consumption.append(car)
 
     # """SMART DEVICES"""
-    if utsp_connected:
+    if smart_devices_included:
         my_smart_devices, count = component_connections.configure_smart_devices(
             my_sim=my_sim,
             my_simulation_parameters=my_simulation_parameters,
             count=count,
             smart_devices_included=smart_devices_included,
         )
-        if not smart_devices_included or clever is False:
-            for device in my_smart_devices:
-                consumption.append(device)
 
     # """SURPLUS CONTROLLER"""
     if needs_ems(

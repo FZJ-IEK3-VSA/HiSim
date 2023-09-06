@@ -112,6 +112,7 @@ class HouseholdAdvancedHpEvPvBatteryConfig:
                 charging_station_set=charging_station_set,
                 name="UTSPConnector",
                 consumption=0.0,
+                profile_with_washing_machine_and_dishwasher=True,
             ),
             pv_config=generic_pv_system.PVSystemConfig.get_default_PV_system(),
             building_config=building.BuildingConfig.get_default_german_single_family_home(),

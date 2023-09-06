@@ -16,7 +16,7 @@
 #     cat.generate_json_for_cfg_automator()
 #     path = "../examples/json_config_example.py"
 #     func = "execute_json_config_example"
-#     mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
+#     mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
 #     mysimpar.enable_all_options()
 #     hisim_main.main(path, func, mysimpar)
 #     log.information(os.getcwd())

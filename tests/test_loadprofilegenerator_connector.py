@@ -5,20 +5,21 @@ from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
+
 @pytest.mark.base
 def test_occupancy():
     """
-    Tests Occupancy profile for profile CH01
+    Tests Occupancy profile for profile CHR01
     Year heating generated: 1719 kWh
     """
 
-    my_occupancy_profile = "CH01"
+    my_occupancy_profile = "CHR01 Couple both at Work"
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
+    my_simulation_parameters = SimulationParameters.full_year(2021, seconds_per_timestep)
     my_simulation_parameters.predictive_control = False
-    my_occupancy_config=loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
     SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=1)
-    my_occupancy_config.profile_name=my_occupancy_profile
+    my_occupancy_config.profile_name = my_occupancy_profile
     my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
 
     number_of_outputs = fft.get_number_of_outputs([my_occupancy])
@@ -30,24 +31,26 @@ def test_occupancy():
     my_occupancy.i_simulate(0, stsv, False)
     number_of_residents = []
     heating_by_residents = []
+    heating_by_devices = []
     electricity_consumption = []
     water_consumption = []
     for i in range(24 * 60 * 365):
         my_occupancy.i_simulate(i, stsv,  False)
         number_of_residents.append(stsv.values[my_occupancy.number_of_residentsC.global_index])
         heating_by_residents.append(stsv.values[my_occupancy.heating_by_residentsC.global_index])
+        heating_by_devices.append(stsv.values[my_occupancy.heating_by_devices_channel.global_index])
         electricity_consumption.append(stsv.values[my_occupancy.electricity_outputC.global_index])
         water_consumption.append(stsv.values[my_occupancy.water_consumptionC.global_index])
 
     year_heating_by_occupancy = sum(heating_by_residents) / (seconds_per_timestep * 1E3)
-    assert year_heating_by_occupancy == 1719.355
+    assert year_heating_by_occupancy == 1443.2325
     # pdb.set_trace()
 
-#def test_profile():
+# def test_profile():
 #    cProfile.run('test_occupancy()')
 
 
-#def test_occupancy_dummy():
+# def test_occupancy_dummy():
 #    my_occupancy_profile = "DummyElectricity01"
 #    number_of_outputs = 4
 #    stsv = component.SingleTimeStepValues(number_of_outputs)
@@ -75,4 +78,4 @@ def test_occupancy():
 #
 #    #assert False
 #    # year_heating_by_occupancy = sum(heating_by_residents)/(60*1E3)
-#    assert year_heating_by_occupancy == 1719.355
+#    assert year_heating_by_occupancy == 1443.2325

@@ -19,6 +19,7 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim import utils
+from hisim.component import OpexCostDataClass
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -205,7 +206,7 @@ class Car(cp.Component):
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float, float]:
+    ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of energy and maintenance costs."""
         for index, output in enumerate(all_outputs):
             if output.component_name == self.config.name + "_w" + str(
@@ -234,7 +235,13 @@ class Car(cp.Component):
                     opex_cost_per_simulated_period_in_euro = self.calc_maintenance_cost()
                     co2_per_simulated_period_in_kg = 0.0
 
-        return opex_cost_per_simulated_period_in_euro, co2_per_simulated_period_in_kg, self.config.consumption
+        opex_cost_data_class = OpexCostDataClass(
+            opex_cost=opex_cost_per_simulated_period_in_euro,
+            co2_footprint=co2_per_simulated_period_in_kg,
+            consumption=self.config.consumption,
+        )
+
+        return opex_cost_data_class
 
     def build(self, config: CarConfig, occupancy_config: Any) -> None:
         """Loads necesary data and saves config to class."""
@@ -295,37 +302,72 @@ class Car(cp.Component):
                 + time_resolution_original.minute * 60
                 + time_resolution_original.second
             )
-            steps_ratio = int(
+            minutes_per_timestep = int(
                 self.my_simulation_parameters.seconds_per_timestep
                 / seconds_per_timestep_original
             )
 
-            # extract values for location and distance of car
-            car_location = car_location["Values"]
-            meters_driven = meters_driven["Values"]
+            simulation_time_span = (
+                self.my_simulation_parameters.end_date
+                - self.my_simulation_parameters.start_date
+            )
+            minutes_per_timestep = int(self.my_simulation_parameters.seconds_per_timestep / 60)
+            steps_desired = int(
+                simulation_time_span.days
+                * 24
+                * (3600 / self.my_simulation_parameters.seconds_per_timestep)
+            )
+            steps_desired_in_minutes = steps_desired * minutes_per_timestep
 
+            # extract values for location and distance of car,
+            # include time information and
             # translate car location to integers (according to location_translator)
-            car_location = [location_translator[elem] for elem in car_location]
+            initial_data = pd.DataFrame({
+                "Time": pd.date_range(
+                start=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1),
+                end=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1) +
+                dt.timedelta(days=simulation_time_span.days) - dt.timedelta(seconds=60),
+                freq="T"
+                ),
+                "meters_driven": meters_driven["Values"][:steps_desired_in_minutes],
+                "car_location": [
+                    location_translator[elem] for elem in car_location["Values"]
+                    ][:steps_desired_in_minutes],
+                })
+            initial_data = utils.convert_lpg_data_to_utc(
+                data=initial_data, year=self.my_simulation_parameters.year
+                )
+            meters_driven = pd.to_numeric(
+                initial_data["meters_driven"]
+            ).tolist()
+            car_location = pd.to_numeric(
+                initial_data["car_location"]
+            ).tolist()
+
 
             # sum / extract most common value from data to match hisim time resolution
-            for i in range(int(len(meters_driven) / steps_ratio)):
-                self.meters_driven.append(
-                    sum(meters_driven[i * steps_ratio : (i + 1) * steps_ratio])
-                )  # sum
-                location_list = car_location[
-                    i * steps_ratio : (i + 1) * steps_ratio
-                ]  # extract list
-                occurence_count = most_frequent(
-                    input_list=location_list
-                )  # extract most common
-                self.car_location.append(occurence_count)
+            if minutes_per_timestep > 1:
+                for i in range(steps_desired):
+                    self.meters_driven.append(
+                        sum(meters_driven[i * minutes_per_timestep: (i + 1) * minutes_per_timestep])
+                    )  # sum
+                    location_list = car_location[
+                        i * minutes_per_timestep: (i + 1) * minutes_per_timestep
+                    ]  # extract list
+                    occurence_count = most_frequent(
+                        input_list=location_list
+                    )  # extract most common
+                    self.car_location.append(occurence_count)
+            else:
+                self.meters_driven = meters_driven
+                self.car_location = car_location
 
             # save data in cache
-            data = np.transpose([self.car_location, self.meters_driven])
-            database = pd.DataFrame(data, columns=["car_location", "meters_driven"])
-
+            database = pd.DataFrame({
+                "car_location": self.car_location,
+                "meters_driven": self.meters_driven,
+                })
             database.to_csv(cache_filepath)
-            del data
             del database
 
     def write_to_report(self) -> List[str]:

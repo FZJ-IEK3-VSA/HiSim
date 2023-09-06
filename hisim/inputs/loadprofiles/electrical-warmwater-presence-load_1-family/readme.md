@@ -6,7 +6,13 @@
 
 **Summary**:
 
-Data contains electricity consumption, warm water consumption and resident presence profiles from family CH01, obtained from Load Profile Generator.
+Data contains electricity consumption, electricity consumption excluding Flexibility Devices, warm water consumption, inner device heat gains and resident presence profiles from family CHR01, obtained from Load Profile Generator.
+To create the profiles, the following calculation settings of the LPG are needed:
+
+- Device profile in external time resolution for the entire house
+- Houshold sum profiles
+- Household sums with the flexible devices excluded as csv
+- Statistics about the bodily activity level
 
 **Content**
 

@@ -17,6 +17,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
+from hisim.component import OpexCostDataClass
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -327,12 +328,16 @@ class SmartDevice(cp.Component):
                 electricity_profile.append(elem_el)
 
         self.source_weight = source_weight
-        self.earliest_start = earliest_start + [
+        earliest_start = earliest_start + [
             self.my_simulation_parameters.timesteps
         ]  # append value to continue simulation after last necesary run of flexible device at end of year
-        self.latest_start = latest_start + [
+        self.earliest_start = utils.convert_lpg_timestep_to_utc(data=earliest_start, year=self.my_simulation_parameters.year,
+                                                                seconds_per_timestep=seconds_per_timestep)
+        latest_start = latest_start + [
             self.my_simulation_parameters.timesteps + 999
         ]  # append value to continue simulation after last necesary run of smart device at end of year
+        self.latest_start = utils.convert_lpg_timestep_to_utc(data=latest_start, year=self.my_simulation_parameters.year,
+                                                         seconds_per_timestep=seconds_per_timestep)
         self.electricity_profile = electricity_profile
         self.state = SmartDeviceState()
         self.previous_state = SmartDeviceState()
@@ -346,7 +351,7 @@ class SmartDevice(cp.Component):
 
     def get_cost_opex(
         self, all_outputs: List, postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float, float]:
+    ) -> OpexCostDataClass:
         for index, output in enumerate(all_outputs):
             if (
                 output.component_name == self.component_name
@@ -359,4 +364,11 @@ class SmartDevice(cp.Component):
                     * self.my_simulation_parameters.seconds_per_timestep
                     / 3.6e6
                 )
-        return self.consumption * euro_per_unit, self.consumption * co2_per_unit, self.consumption
+
+        opex_cost_data_class = OpexCostDataClass(
+            opex_cost=self.consumption * euro_per_unit,
+            co2_footprint=self.consumption * co2_per_unit,
+            consumption=self.consumption,
+        )
+
+        return opex_cost_data_class

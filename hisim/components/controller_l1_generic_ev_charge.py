@@ -16,6 +16,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.components import generic_car
 from hisim.components import advanced_ev_battery_bslib
+from hisim.component import OpexCostDataClass
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -347,7 +348,7 @@ class L1Controller(cp.Component):
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float, float]:
+    ) -> OpexCostDataClass:
         # pylint: disable=unused-argument
         """Calculate OPEX costs, consisting of maintenance costs snd write total energy consumption to component-config.
 
@@ -356,5 +357,10 @@ class L1Controller(cp.Component):
 
         elecricity_consumption is calculated for generic_car already
         """
+        opex_cost_data_class = OpexCostDataClass(
+            opex_cost=self.calc_maintenance_cost(),
+            co2_footprint=0,
+            consumption=0,
+        )
 
-        return self.calc_maintenance_cost(), 0, 0
+        return opex_cost_data_class

@@ -13,6 +13,7 @@ from hisim.component import (
     SingleTimeStepValues,
     ComponentInput,
     ComponentOutput,
+    OpexCostDataClass,
 )
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
@@ -695,11 +696,16 @@ class SimpleHotWaterStorage(cp.Component):
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float, float]:
+    ) -> OpexCostDataClass:
         # pylint: disable=unused-argument
         """Calculate OPEX costs, consisting of maintenance costs for Heat Distribution System."""
+        opex_cost_data_class = OpexCostDataClass(
+            opex_cost=self.calc_maintenance_cost(),
+            co2_footprint=0,
+            consumption=0,
+        )
 
-        return self.calc_maintenance_cost(), 0, 0
+        return opex_cost_data_class
 
 
 @dataclass_json

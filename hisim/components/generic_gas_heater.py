@@ -14,6 +14,7 @@ from hisim.component import (
     ComponentInput,
     ComponentOutput,
     ConfigBase,
+    OpexCostDataClass,
 )
 from hisim.components.controller_l1_generic_gas_heater import (
     GenericGasHeaterControllerL1,
@@ -310,7 +311,7 @@ class GasHeater(Component):
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float, float]:
+    ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of energy and maintenance costs."""
         for index, output in enumerate(all_outputs):
             if (
@@ -329,5 +330,10 @@ class GasHeater(Component):
         co2_per_simulated_period_in_kg = self.config.consumption * co2_per_unit
 
         opex_cost_per_simulated_period_in_euro += self.calc_maintenance_cost()
+        opex_cost_data_class = OpexCostDataClass(
+            opex_cost=opex_cost_per_simulated_period_in_euro,
+            co2_footprint=co2_per_simulated_period_in_kg,
+            consumption=self.config.consumption,
+        )
 
-        return opex_cost_per_simulated_period_in_euro, co2_per_simulated_period_in_kg, self.config.consumption
+        return opex_cost_data_class

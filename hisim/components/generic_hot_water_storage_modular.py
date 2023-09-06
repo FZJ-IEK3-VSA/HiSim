@@ -29,6 +29,7 @@ from hisim.components.loadprofilegenerator_connector import Occupancy
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.component import OpexCostDataClass
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -596,8 +597,13 @@ class HotWaterStorage(dycp.DynamicComponent):
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float, float]:
+    ) -> OpexCostDataClass:
         # pylint: disable=unused-argument
         """Calculate OPEX costs, consisting of maintenance costs for DHW Storage."""
+        opex_cost_data_class = OpexCostDataClass(
+            opex_cost=self.calc_maintenance_cost(),
+            co2_footprint=0,
+            consumption=0,
+        )
 
-        return self.calc_maintenance_cost(), 0, 0
+        return opex_cost_data_class

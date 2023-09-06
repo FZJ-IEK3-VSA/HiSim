@@ -125,6 +125,12 @@ def test_house(
         my_occupancy.HeatingByResidents,
     )
 
+    my_building.connect_input(
+        my_building.HeatingByDevices,
+        my_occupancy.component_name,
+        my_occupancy.HeatingByDevices,
+    )
+
     # =========================================================================================================================================================
     # Add Components to Simulator and run all timesteps
 

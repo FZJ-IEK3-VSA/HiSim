@@ -58,7 +58,7 @@ def household_with_hds_and_advanced_hp(
     hp_controller_mode = (
         2  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
     )
-    set_heating_threshold_outside_temperature_for_heat_pump_in_celsius = None
+    set_heating_threshold_outside_temperature_for_heat_pump_in_celsius = 16.0
     set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = 20.0
 
     # Set Heat Pump
@@ -79,7 +79,7 @@ def household_with_hds_and_advanced_hp(
     # Set Heat Distribution Controller
     hds_controller_name = "HeatDistributionSystemController"
     set_heating_threshold_outside_temperature_for_heat_distribution_system_in_celsius = (
-        None
+        16.0
     )
     set_heating_temperature_for_building_in_celsius = 19.0
     set_cooling_temperature_for_building_in_celsius = 24.0

@@ -21,7 +21,7 @@ from hisim.components import (
 )
 from hisim.modular_household import component_connections
 from hisim.modular_household.interface_configs.modular_household_config import (
-    read_in_configs,
+    read_in_configs, write_config
 )
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
@@ -91,7 +91,7 @@ def modular_household_explicit(
 
     # Set simulation parameters
     year = 2021
-    seconds_per_timestep = 60 * 60
+    seconds_per_timestep = 60 * 15
 
     household_config = read_in_configs(my_sim.my_module_config_path)
 
@@ -109,21 +109,21 @@ def modular_household_explicit(
         my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.PLOT_CARPET
-        )
+        # my_simulation_parameters.post_processing_options.append(
+        #     PostProcessingOptions.PLOT_CARPET
+        # )
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.GENERATE_PDF_REPORT
         )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
-        )
+        # my_simulation_parameters.post_processing_options.append(
+        #     PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
+        # )
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE
         )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.EXPORT_TO_CSV
-        )
+        # my_simulation_parameters.post_processing_options.append(
+        #     PostProcessingOptions.EXPORT_TO_CSV
+        # )
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT
         )

@@ -480,7 +480,7 @@ def configure_water_heating(
     heater_config.power_th = (
         my_occupancy.max_hot_water_demand
         * (4180 / 3600)
-        * 1.0
+        * 0.5
         * (3600 / my_simulation_parameters.seconds_per_timestep)
         * (
             HouseholdWarmWaterDemandConfig.ww_temperature_demand

@@ -72,7 +72,6 @@ def compute_seasonal(
             )
         ].sum()
         * factor
-        / 94
     )
     csv_frame_seasonal.loc[index_in_seasonal_frame, "Summer-Night"] = (
         output_night[
@@ -85,7 +84,6 @@ def compute_seasonal(
             )
         ].sum()
         * factor
-        / 94
     )
     csv_frame_seasonal.loc[index_in_seasonal_frame, "Winter-Day"] = (
         output_day[
@@ -95,7 +93,6 @@ def compute_seasonal(
             )
         ].sum()
         * factor
-        / 92
     )
     csv_frame_seasonal.loc[index_in_seasonal_frame, "Winter-Night"] = (
         output_night[
@@ -108,7 +105,6 @@ def compute_seasonal(
             )
         ].sum()
         * factor
-        / 92
     )
     csv_frame_seasonal.loc[index_in_seasonal_frame, "Intermediate-Day"] = (
         output_day[
@@ -122,7 +118,6 @@ def compute_seasonal(
             )
         ].sum()
         * factor
-        / 179
     )
     csv_frame_seasonal.loc[index_in_seasonal_frame, "Intermediate-Night"] = (
         output_night[
@@ -142,7 +137,6 @@ def compute_seasonal(
             )
         ].sum()
         * factor
-        / 179
     )
 
     return csv_frame_seasonal

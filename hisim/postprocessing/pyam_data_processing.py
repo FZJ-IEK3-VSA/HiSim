@@ -548,9 +548,7 @@ class PyAmChartGenerator:
             y_tick_labels,
             unit,  # pylint: disable=unused-variable
             y_tick_locations,
-        ) = self.set_axis_scale(
-            a_x, x_or_y="y", unit=filtered_data.unit[0]
-        )
+        ) = self.set_axis_scale(a_x, x_or_y="y", unit=filtered_data.unit[0])
 
         plt.yticks(
             ticks=y_tick_locations,

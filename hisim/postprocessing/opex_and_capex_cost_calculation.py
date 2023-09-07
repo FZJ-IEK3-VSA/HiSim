@@ -23,7 +23,7 @@ def opex_calculation(
         "Component",
         "Operational Costs in EUR",
         "Operational C02 footprint in kg",
-        "Consumption in kWh"
+        "Consumption in kWh",
     ]
     opex_table_as_list_of_list = []
 

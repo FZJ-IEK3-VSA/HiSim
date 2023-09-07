@@ -104,12 +104,18 @@ class PostProcessor:
             end = timer()
             duration = end - start
             log.information("Making single day plots took " + f"{duration:1.2f}s.")
-        
+
         # make monthly bar plots only if simulation duration approximately a year
-        if PostProcessingOptions.PLOT_MONTHLY_BAR_CHARTS in ppdt.post_processing_options and ppdt.simulation_parameters.duration.days >= 360:
+        if (
+            PostProcessingOptions.PLOT_MONTHLY_BAR_CHARTS
+            in ppdt.post_processing_options
+            and ppdt.simulation_parameters.duration.days >= 360
+        ):
             log.information("Making monthly bar charts.")
             start = timer()
-            self.make_monthly_bar_charts(ppdt, report_image_entries=report_image_entries)
+            self.make_monthly_bar_charts(
+                ppdt, report_image_entries=report_image_entries
+            )
             end = timer()
             duration = end - start
             log.information("Making monthly bar plots took " + f"{duration:1.2f}s.")
@@ -650,7 +656,7 @@ class PostProcessor:
                 "Comments:",
                 "Operational Costs are the sum of fuel costs and maintenance costs for the devices, calculated for the simulated period.",
                 "Emissions are fuel emissions emitted during simulad period.",
-                "Consumption for Diesel_Car in l, for EV in kWh."
+                "Consumption for Diesel_Car in l, for EV in kWh.",
             ],
         )
 

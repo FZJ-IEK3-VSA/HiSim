@@ -546,9 +546,9 @@ class PyAmChartGenerator:
 
         (
             y_tick_labels,
-            unit,
+            unit,  # pylint: disable=unused-variable
             y_tick_locations,
-        ) = self.set_axis_scale(  # pylint: disable=unused-variable
+        ) = self.set_axis_scale(
             a_x, x_or_y="y", unit=filtered_data.unit[0]
         )
 

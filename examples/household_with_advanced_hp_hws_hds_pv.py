@@ -14,6 +14,8 @@ from hisim.components import simple_hot_water_storage
 from hisim.components import heat_distribution_system
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes
+from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -56,7 +58,7 @@ def household_with_hds_and_advanced_hp(
     hp_controller_mode = (
         2  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
     )
-    set_heating_threshold_outside_temperature_for_heat_pump_in_celsius = 16.0
+    set_heating_threshold_outside_temperature_for_heat_pump_in_celsius = None
     set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = 20.0
 
     # Set Heat Pump
@@ -100,6 +102,9 @@ def household_with_hds_and_advanced_hp(
     )
     my_simulation_parameters.post_processing_options.append(
         PostProcessingOptions.PLOT_LINE
+    )
+    my_simulation_parameters.post_processing_options.append(
+        PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
     )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
@@ -304,3 +309,11 @@ def household_with_hds_and_advanced_hp(
     my_sim.add_component(my_simple_hot_water_storage)
     my_sim.add_component(my_heat_pump_controller)
     my_sim.add_component(my_heat_pump)
+
+    ResultPathProviderSingleton().set_important_result_path_information(
+            module_directory=my_sim.module_directory,
+            model_name=my_sim.setup_function,
+            variant_name=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s",
+            hash_number=None,
+            sorting_option=SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION,
+        )

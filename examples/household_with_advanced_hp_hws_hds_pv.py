@@ -57,7 +57,7 @@ def household_with_hds_and_advanced_hp(
         2  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
     )
     set_heating_threshold_outside_temperature_for_heat_pump_in_celsius = 16.0
-    set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = 22.0
+    set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = 20.0
 
     # Set Heat Pump
     model: str = "Generic"
@@ -89,11 +89,17 @@ def household_with_hds_and_advanced_hp(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
+        my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     my_simulation_parameters.post_processing_options.append(
         PostProcessingOptions.EXPORT_TO_CSV
+    )
+    my_simulation_parameters.post_processing_options.append(
+        PostProcessingOptions.PLOT_CARPET
+    )
+    my_simulation_parameters.post_processing_options.append(
+        PostProcessingOptions.PLOT_LINE
     )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 

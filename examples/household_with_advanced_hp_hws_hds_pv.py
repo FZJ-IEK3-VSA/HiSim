@@ -83,7 +83,6 @@ def household_with_hds_and_advanced_hp(
     )
     set_heating_temperature_for_building_in_celsius = 19.0
     set_cooling_temperature_for_building_in_celsius = 24.0
-    set_cooling_threshold_water_temperature_in_celsius_for_dew_protection = 17.0
     heating_system = heat_distribution_system.HeatingSystemType.FLOORHEATING
 
     # =================================================================================================================================
@@ -118,7 +117,6 @@ def household_with_hds_and_advanced_hp(
             set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
             heating_system=heating_system,
-            set_cooling_threshold_water_temperature_in_celsius_for_dew_protection=set_cooling_threshold_water_temperature_in_celsius_for_dew_protection,
         ),
     )
     # Build Building
@@ -311,9 +309,9 @@ def household_with_hds_and_advanced_hp(
     my_sim.add_component(my_heat_pump)
 
     ResultPathProviderSingleton().set_important_result_path_information(
-            module_directory=my_sim.module_directory,
-            model_name=my_sim.setup_function,
-            variant_name=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s",
-            hash_number=None,
-            sorting_option=SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION,
-        )
+        module_directory=my_sim.module_directory,
+        model_name=my_sim.setup_function,
+        variant_name=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s",
+        hash_number=None,
+        sorting_option=SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION,
+    )

@@ -378,7 +378,8 @@ class HeatDistribution(cp.Component):
             self.residence_temperature_input_channel
         )
 
-        if state_controller == 1:
+        # if state_controller == 1:
+        if state_controller == 1 or state_controller == -1:
 
             (
                 self.water_temperature_output_in_celsius,
@@ -638,9 +639,9 @@ class HeatDistributionController(cp.Component):
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.HeatingFlowTemperature} will follow.",
         )
-
         self.controller_heat_distribution_mode: str = "off"
         self.previous_controller_heat_distribution_mode: str = "off"
+
 
         self.add_default_connections(self.get_default_connections_from_building())
         self.add_default_connections(self.get_default_connections_from_weather())
@@ -789,18 +790,39 @@ class HeatDistributionController(cp.Component):
                 set_cooling_threshold_water_temperature_in_celsius_for_dew_protection=self.set_cooling_threshold_water_temperature_in_celsius_for_dew_protection,
             )
 
-            if (
-                self.controller_heat_distribution_mode == "on"
-                and summer_heating_mode == "on"
-                and dew_point_protection_mode == "off"
-            ):
-                self.state_controller = 1
-            elif self.controller_heat_distribution_mode == "on" and (
-                summer_heating_mode == "off" or dew_point_protection_mode == "on"
-            ):
-                self.state_controller = 0
+            # if (
+            #     self.controller_heat_distribution_mode == "on"
+            #     and summer_heating_mode == "on"
+            #     and dew_point_protection_mode == "off"
+            # ):
+            #     self.state_controller = 1
+            # elif self.controller_heat_distribution_mode == "on" and (
+            #     summer_heating_mode == "off" or dew_point_protection_mode == "on"
+            # ):
+            #     self.state_controller = 0
+            # elif self.controller_heat_distribution_mode == "off":
+            #     self.state_controller = 0
+            
+            if self.controller_heat_distribution_mode == "heating":
+                # if summer_heating_mode == "on" and dew_point_protection_mode == "off":
+                #     self.state_controller = 1
+                # elif summer_heating_mode == "off" or dew_point_protection_mode == "on":
+                #     self.state_controller = 0
+                if summer_heating_mode == "on":
+                    self.state_controller = 1
+                elif summer_heating_mode == "off":
+                    self.state_controller = 0
+            
+            elif self.controller_heat_distribution_mode == "cooling":
+                # if dew_point_protection_mode == "off":
+                #     self.state_controller = -1
+                # else:
+                #     self.state_controller = 0
+                self.state_controller = -1
+                
             elif self.controller_heat_distribution_mode == "off":
                 self.state_controller = 0
+
             else:
 
                 raise ValueError(
@@ -819,15 +841,28 @@ class HeatDistributionController(cp.Component):
     ) -> None:
         """Set conditions for the valve in heat distribution."""
 
-        if self.controller_heat_distribution_mode == "on":
+        # if self.controller_heat_distribution_mode == "on":
+        #     # no heat exchange with building if theres no demand
+        #     if theoretical_thermal_building_demand_in_watt == 0:
+        #         self.controller_heat_distribution_mode = "off"
+        #         return
+        # elif self.controller_heat_distribution_mode == "off":
+        #     # if heating or cooling is needed for building
+        #     if theoretical_thermal_building_demand_in_watt != 0:
+        #         self.controller_heat_distribution_mode = "on"
+        #         return
+        
+        if self.controller_heat_distribution_mode == "cooling" or self.controller_heat_distribution_mode == "heating":
             # no heat exchange with building if theres no demand
             if theoretical_thermal_building_demand_in_watt == 0:
                 self.controller_heat_distribution_mode = "off"
                 return
         elif self.controller_heat_distribution_mode == "off":
             # if heating or cooling is needed for building
-            if theoretical_thermal_building_demand_in_watt != 0:
-                self.controller_heat_distribution_mode = "on"
+            if theoretical_thermal_building_demand_in_watt > 0:
+                self.controller_heat_distribution_mode = "heating"
+            elif theoretical_thermal_building_demand_in_watt < 0:
+                self.controller_heat_distribution_mode = "cooling"
                 return
 
         else:
@@ -855,7 +890,7 @@ class HeatDistributionController(cp.Component):
         else:
             raise ValueError(
                 f"daily average temperature {daily_average_outside_temperature_in_celsius}°C"
-                f"or heating threshold temperature {set_heating_threshold_temperature_in_celsius}°C is not acceptable."
+                f"or heating threshold temperature {set_heating_threshold_temperature_in_celsius}°C is invalid."
             )
 
         return heating_mode
@@ -882,7 +917,7 @@ class HeatDistributionController(cp.Component):
         else:
             raise ValueError(
                 f"daily average temperature {water_input_temperature_in_celsius}°C"
-                f"or cooling threshold water temperature {set_cooling_threshold_water_temperature_in_celsius_for_dew_protection}°C is not acceptable."
+                f"or cooling threshold water temperature {set_cooling_threshold_water_temperature_in_celsius_for_dew_protection}°C is invalid."
             )
 
         return dew_point_protection_mode

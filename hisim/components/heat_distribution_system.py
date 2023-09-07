@@ -101,7 +101,7 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
             set_heating_threshold_outside_temperature_in_celsius=16.0,
             heating_reference_temperature_in_celsius=-14.0,
             set_heating_temperature_for_building_in_celsius=19,
-            set_cooling_temperature_for_building_in_celsius=25,
+            set_cooling_temperature_for_building_in_celsius=24,
         )
 
 

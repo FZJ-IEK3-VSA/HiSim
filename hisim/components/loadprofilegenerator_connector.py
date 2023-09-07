@@ -472,7 +472,7 @@ class Occupancy(cp.Component):
             pre_electricity_consumption = pd.read_csv(
                 profile_path,
                 sep=";",
-                decimal=".",
+                decimal=",",
                 encoding="utf-8",
                 usecols=["Sum [kWh]"],
             ).loc[: (steps_desired_in_minutes - 1)]
@@ -486,24 +486,27 @@ class Occupancy(cp.Component):
             pre_water_consumption = pd.read_csv(
                 utils.HISIMPATH["occupancy"][self.profile_name]["water_consumption"],
                 sep=";",
-                decimal=".",
+                decimal=",",
                 encoding="utf-8",
                 usecols=["Sum [L]"],
             ).loc[: (steps_desired_in_minutes - 1)]
             water_consumption = pd.to_numeric(
                 pre_water_consumption.loc[:, "Sum [L]"] * scaling_water_consumption
-            ).tolist()
-
-            pre_heating_by_devices = pd.read_csv(
-                utils.HISIMPATH["occupancy"][self.profile_name]["heating_by_devices"],
-                sep=";",
-                decimal=".",
-                encoding="utf-8",
-                usecols=["Time", "Sum [kWh]"],
-            ).loc[: (steps_desired_in_minutes - 1)]
-            heating_by_devices = pd.to_numeric(
-                pre_heating_by_devices.loc[:, "Sum [kWh]"] * 1000 * 60
-            ).tolist()  # 1 kWh/min == 60W / min
+                ).tolist()
+            
+            if self.profile_name == "AVG":
+                heating_by_devices = [0] * len(water_consumption)
+            else:
+                pre_heating_by_devices = pd.read_csv(
+                    utils.HISIMPATH["occupancy"][self.profile_name]["heating_by_devices"],
+                    sep=";",
+                    decimal=".",
+                    encoding="utf-8",
+                    usecols=["Time", "Sum [kWh]"],
+                ).loc[:(steps_desired_in_minutes - 1)]
+                heating_by_devices = pd.to_numeric(
+                    pre_heating_by_devices.loc[:, "Sum [kWh]"] * 1000 * 60
+                ).tolist()  # 1 kWh/min == 60W / min
 
             # convert heat gains and number of persons to data frame and evaluate
             initial_data = pd.DataFrame(
@@ -519,16 +522,16 @@ class Occupancy(cp.Component):
                         - dt.timedelta(seconds=60),
                         freq="T",
                     ),
-                    "number_of_residents": number_of_residents,
-                    "heating_by_residents": heating_by_residents,
-                    "electricity_consumption": electricity_consumption,
-                    "water_consumption": water_consumption,
-                    "heating_by_devices": heating_by_devices,
-                }
-            )
-            initial_data = utils.convert_lpg_data_to_utc(
-                data=initial_data, year=self.my_simulation_parameters.year
-            )
+                "number_of_residents": number_of_residents,
+                "heating_by_residents": heating_by_residents,
+                "electricity_consumption": electricity_consumption,
+                "water_consumption": water_consumption,
+                "heating_by_devices": heating_by_devices,
+                })
+            if self.profile_name != "AVG":
+                initial_data = utils.convert_lpg_data_to_utc(
+                    data=initial_data, year=self.my_simulation_parameters.year
+                    )
 
             # extract everything from data frame
             self.electricity_consumption = initial_data[

@@ -341,14 +341,16 @@ class PyAmChartGenerator:
             title=title,
         )
 
-        y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
+        y_tick_labels, unit, y_tick_locations = self.set_axis_scale(
+            a_x, x_or_y="y", unit=filtered_data.unit[0]
+        )
         plt.yticks(
             ticks=y_tick_locations,
             labels=y_tick_labels,
             fontsize=self.hisim_chartbase.fontsize_ticks,
         )
         plt.ylabel(
-            ylabel=f"{scale}{filtered_data.unit[0]}",
+            ylabel=f"{unit}",
             fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
@@ -380,14 +382,16 @@ class PyAmChartGenerator:
             fill_between=True,
         )
 
-        y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
+        y_tick_labels, unit, y_tick_locations = self.set_axis_scale(
+            a_x, x_or_y="y", unit=filtered_data.unit[0]
+        )
         plt.yticks(
             ticks=y_tick_locations,
             labels=y_tick_labels,
             fontsize=self.hisim_chartbase.fontsize_ticks,
         )
         plt.ylabel(
-            ylabel=f"{scale}{filtered_data.unit[0]}",
+            ylabel=f"{unit}",
             fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
@@ -413,14 +417,16 @@ class PyAmChartGenerator:
         )
         filtered_data.plot.bar(ax=a_x, stacked=True, bars=comparison_mode)
 
-        y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
+        y_tick_labels, unit, y_tick_locations = self.set_axis_scale(
+            a_x, x_or_y="y", unit=filtered_data.unit[0]
+        )
         plt.yticks(
             ticks=y_tick_locations,
             labels=y_tick_labels,
             fontsize=self.hisim_chartbase.fontsize_ticks,
         )
         plt.ylabel(
-            ylabel=f"{scale}{filtered_data.unit[0]}",
+            ylabel=f"{unit}",
             fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
@@ -456,14 +462,16 @@ class PyAmChartGenerator:
             legend=True,
         )
 
-        y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
+        y_tick_labels, unit, y_tick_locations = self.set_axis_scale(
+            a_x, x_or_y="y", unit=filtered_data.unit[0]
+        )
         plt.yticks(
             ticks=y_tick_locations,
             labels=y_tick_labels,
             fontsize=self.hisim_chartbase.fontsize_ticks,
         )
         plt.ylabel(
-            ylabel=f"{scale}{filtered_data.unit[0]}",
+            ylabel=f"{unit}",
             fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
@@ -536,8 +544,12 @@ class PyAmChartGenerator:
             y=y_data,
         )
 
-        y_tick_labels, scale, y_tick_locations = self.set_axis_scale(  # pylint: disable=unused-variable
-            a_x, x_or_y="y"
+        (
+            y_tick_labels,
+            unit,
+            y_tick_locations,
+        ) = self.set_axis_scale(  # pylint: disable=unused-variable
+            a_x, x_or_y="y", unit=filtered_data.unit[0]
         )
 
         plt.yticks(
@@ -632,14 +644,16 @@ class PyAmChartGenerator:
         )
         filtered_data.plot.stack(titel=title)
 
-        y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
+        y_tick_labels, unit, y_tick_locations = self.set_axis_scale(
+            a_x, x_or_y="y", unit=filtered_data.unit[0]
+        )
         plt.yticks(
             ticks=y_tick_locations,
             labels=y_tick_labels,
             fontsize=self.hisim_chartbase.fontsize_ticks,
         )
         plt.ylabel(
-            ylabel=f"{scale}{filtered_data.unit[0]}",
+            ylabel=f"{unit}",
             fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
@@ -652,7 +666,9 @@ class PyAmChartGenerator:
         fig.subplots_adjust(right=0.55)
         fig.savefig(os.path.join(self.plot_path_complete, "stack_plot.png"))
 
-    def set_axis_scale(self, a_x: Any, x_or_y: Any) -> Tuple[float, str, Any]:
+    def set_axis_scale(
+        self, a_x: Any, x_or_y: Any, unit: Any
+    ) -> Tuple[float, str, Any]:
         """Get axis and unit and scale it properly."""
 
         if x_or_y == "x":
@@ -667,26 +683,37 @@ class PyAmChartGenerator:
 
         max_scale = max(abs(max_ticks), abs(min_ticks))
 
-        if max_scale >= 1e12:
-            new_tick_values = tick_values * 1e-12
-            scale = "T"
-        elif 1e9 <= max_scale < 1e12:
-            new_tick_values = tick_values * 1e-9
-            scale = "G"
-        elif 1e6 <= max_scale < 1e9:
-            new_tick_values = tick_values * 1e-6
-            scale = "M"
-        elif 1e3 <= max_scale < 1e6:
-            new_tick_values = tick_values * 1e-3
-            scale = "k"
-        elif -1e3 <= max_scale < 1e3:
-            new_tick_values = tick_values
-            scale = ""
+        new_tick_values = tick_values
+        scale = ""
+
+        if unit not in ["-", "%"]:
+
+            # if k already in unit, remove k first and then scale
+            if unit in ["kg", "kWh", "kg/s", "kW"]:
+                tick_values = tick_values * 1e3
+                unit = unit.strip("k")
+
+            if max_scale >= 1e12:
+                new_tick_values = tick_values * 1e-12
+                scale = "T"
+            elif 1e9 <= max_scale < 1e12:
+                new_tick_values = tick_values * 1e-9
+                scale = "G"
+            elif 1e6 <= max_scale < 1e9:
+                new_tick_values = tick_values * 1e-6
+                scale = "M"
+            elif 1e3 <= max_scale < 1e6:
+                new_tick_values = tick_values * 1e-3
+                scale = "k"
+            elif -1e3 <= max_scale < 1e3:
+                new_tick_values = tick_values
+                scale = ""
 
         tick_locations = tick_values
         tick_labels = np.round(new_tick_values, 1)
+        unit = f"{scale}{unit}"
 
-        return tick_labels, scale, tick_locations
+        return tick_labels, unit, tick_locations
 
     def filter_pyam_dataframe(
         self,
@@ -788,8 +815,8 @@ class PyamDataProcessingModeEnum(enum.Enum):
 def main():
     """Main function to execute the pyam data processing."""
     PyAmChartGenerator(
-        simulation_duration_to_check=str(365),
-        data_processing_mode=PyamDataProcessingModeEnum.PROCESS_ALL_DATA,
+        simulation_duration_to_check=str(1),
+        data_processing_mode=PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_TYPES,
     )
 
 

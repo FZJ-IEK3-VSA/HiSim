@@ -12,10 +12,8 @@ from hisim.components import advanced_heat_pump_hplib
 from hisim.components import electricity_meter
 from hisim.components import simple_hot_water_storage
 from hisim.components import heat_distribution_system
-from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes
-from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -90,21 +88,10 @@ def household_with_hds_and_advanced_hp(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(
+        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.EXPORT_TO_CSV
-    )
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.PLOT_CARPET
-    )
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.PLOT_LINE
-    )
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
-    )
+
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Heat Distribution Controller
@@ -307,11 +294,3 @@ def household_with_hds_and_advanced_hp(
     my_sim.add_component(my_simple_hot_water_storage)
     my_sim.add_component(my_heat_pump_controller)
     my_sim.add_component(my_heat_pump)
-
-    ResultPathProviderSingleton().set_important_result_path_information(
-        module_directory=my_sim.module_directory,
-        model_name=my_sim.setup_function,
-        variant_name=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s",
-        hash_number=None,
-        sorting_option=SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION,
-    )

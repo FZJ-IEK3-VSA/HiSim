@@ -522,6 +522,11 @@ def household_3_advanced_hp_diesel_car_pv_battery(
         source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_REAL],
         source_weight=4,
     )
+    # my_electricity_controller.connect_input(
+    #     my_electricity_controller.BatteryStateOfCharge,
+    #     my_advanced_battery.component_name,
+    #     my_advanced_battery.StateOfCharge,
+    # )
 
     electricity_to_or_from_battery_target = (
         my_electricity_controller.add_component_output(

@@ -193,9 +193,7 @@ class PyamDataCollector:
         return all_csv_files
 
     def make_dictionaries_with_simulation_duration_keys(
-        self,
-        simulation_duration_to_check: str,
-        all_csv_files: List[str],
+        self, simulation_duration_to_check: str, all_csv_files: List[str],
     ) -> Dict:
         """Make dictionaries containing csv files of hourly or yearly data and according to the simulation duration of the data."""
 

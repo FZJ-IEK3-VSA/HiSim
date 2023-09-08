@@ -34,7 +34,6 @@ class PyAmChartGenerator:
         simulation_duration_to_check: str,
         data_processing_mode: Any,
         analyze_yearly_or_hourly_data: Any,
-        aggregate_data: bool = False,
         variables_to_check_for_hourly_data: Optional[List[str]] = None,
         variables_to_check_for_yearly_data: Optional[List[str]] = None,
         list_of_scenarios_to_check: Optional[List[str]] = None,
@@ -117,9 +116,7 @@ class PyAmChartGenerator:
             folder_path=self.folder_path,
             analyze_yearly_or_hourly_data=analyze_yearly_or_hourly_data,
             list_of_scenarios_to_check=list_of_scenarios_to_check,
-            aggregate_data=aggregate_data,
         )
-        
 
         if analyze_yearly_or_hourly_data == PyamDataTypeEnum.YEARLY:
 
@@ -165,7 +162,6 @@ class PyAmChartGenerator:
         self,
         folder_path: str,
         analyze_yearly_or_hourly_data: Any,
-        aggregate_data: bool,
         list_of_scenarios_to_check: Optional[List[str]],
     ) -> pyam.IamDataFrame:
         """Get csv data and create pyam dataframes."""
@@ -187,7 +183,6 @@ class PyAmChartGenerator:
         ):
 
             file_df = pd.read_csv(filepath_or_buffer=file)
-            
 
             # if scenario values are no strings, transform them
             file_df["scenario"] = file_df["scenario"].transform(str)
@@ -198,9 +193,9 @@ class PyAmChartGenerator:
                 and list_of_scenarios_to_check != []
             ):
                 file_df = self.check_if_scenario_exists_and_filter_dataframe_for_scenarios(
-                        data_frame=file_df,
-                        list_of_scenarios_to_check=list_of_scenarios_to_check,
-                        aggregate_data=aggregate_data)
+                    data_frame=file_df,
+                    list_of_scenarios_to_check=list_of_scenarios_to_check,
+                )
 
             # create pyam dataframe
             pyam_dataframe = pyam.IamDataFrame(file_df)
@@ -229,7 +224,7 @@ class PyAmChartGenerator:
         )
 
         for variable_to_check in variables_to_check:
-            log.information("Check variable "+ str(variable_to_check))
+            log.information("Check variable " + str(variable_to_check))
 
             # prepare path for plots
             self.path_addition = "".join(
@@ -285,28 +280,28 @@ class PyAmChartGenerator:
 
                 try:
                     self.make_box_plot_for_pyam_dataframe(
-                    filtered_data=filtered_data,
-                    comparison_mode=comparion_mode,
-                    title=self.path_addition,
+                        filtered_data=filtered_data,
+                        comparison_mode=comparion_mode,
+                        title=self.path_addition,
                     )
                     self.make_pie_plot_for_pyam_dataframe(
-                    filtered_data=filtered_data,
-                    comparison_mode=comparion_mode,
-                    title=self.path_addition,
+                        filtered_data=filtered_data,
+                        comparison_mode=comparion_mode,
+                        title=self.path_addition,
                     )
                     self.make_scatter_plot_for_pyam_dataframe(
-                    pyam_dataframe=pyam_dataframe,
-                    filter_model=None,
-                    filter_scenario=None,
-                    filter_variables=None,
-                    title="HP vs Outside Temperatures",
-                    filter_region=None,
-                    filter_unit=None,
-                    filter_year=None,
-                    x_data_variable="Weather|Temperature|DailyAverageOutsideTemperatures",
-                    y_data_variable="HeatPumpHPLib|Heating|ThermalOutputPower",
+                        pyam_dataframe=pyam_dataframe,
+                        filter_model=None,
+                        filter_scenario=None,
+                        filter_variables=None,
+                        title="HP vs Outside Temperatures",
+                        filter_region=None,
+                        filter_unit=None,
+                        filter_year=None,
+                        x_data_variable="Weather|Temperature|DailyAverageOutsideTemperatures",
+                        y_data_variable="HeatPumpHPLib|Heating|ThermalOutputPower",
                     )
-                    
+
                 except:
                     log.information("Something went wrong for plotting.")
                     pass
@@ -348,10 +343,7 @@ class PyAmChartGenerator:
                 )
 
     def make_line_plot_for_pyam_dataframe(
-        self,
-        filtered_data: pyam.IamDataFrame,
-        comparison_mode: str,
-        title: str,
+        self, filtered_data: pyam.IamDataFrame, comparison_mode: str, title: str,
     ) -> None:
         """Make line plot."""
         log.information("Make line plot with hourly data.")
@@ -361,9 +353,7 @@ class PyAmChartGenerator:
         )
 
         filtered_data.plot.line(
-            ax=a_x,
-            color=comparison_mode,
-            title=title,
+            ax=a_x, color=comparison_mode, title=title,
         )
 
         y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
@@ -377,8 +367,7 @@ class PyAmChartGenerator:
             fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
-            xlabel="Time",
-            fontsize=self.hisim_chartbase.fontsize_label,
+            xlabel="Time", fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
@@ -387,10 +376,7 @@ class PyAmChartGenerator:
         plt.close()
 
     def make_line_plot_with_filling_for_pyam_dataframe(
-        self,
-        filtered_data: pyam.IamDataFrame,
-        comparison_mode: str,
-        title: str,
+        self, filtered_data: pyam.IamDataFrame, comparison_mode: str, title: str,
     ) -> None:
         """Make line plot with filling."""
         log.information("Make line plot with filling.")
@@ -400,10 +386,7 @@ class PyAmChartGenerator:
         )
 
         filtered_data.plot(
-            ax=a_x,
-            color=comparison_mode,
-            title=title,
-            fill_between=True,
+            ax=a_x, color=comparison_mode, title=title, fill_between=True,
         )
 
         y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
@@ -417,8 +400,7 @@ class PyAmChartGenerator:
             fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
-            xlabel="Time",
-            fontsize=self.hisim_chartbase.fontsize_label,
+            xlabel="Time", fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
@@ -427,10 +409,7 @@ class PyAmChartGenerator:
         plt.close()
 
     def make_bar_plot_for_pyam_dataframe(
-        self,
-        filtered_data: pyam.IamDataFrame,
-        comparison_mode: str,
-        title: str,
+        self, filtered_data: pyam.IamDataFrame, comparison_mode: str, title: str,
     ) -> None:
         """Make bar plot."""
         log.information("Make bar plot.")
@@ -464,10 +443,7 @@ class PyAmChartGenerator:
         plt.close()
 
     def make_box_plot_for_pyam_dataframe(
-        self,
-        filtered_data: pyam.IamDataFrame,
-        comparison_mode: str,
-        title: str,
+        self, filtered_data: pyam.IamDataFrame, comparison_mode: str, title: str,
     ) -> None:
         """Make box plot."""
         log.information("Make box plot.")
@@ -506,10 +482,7 @@ class PyAmChartGenerator:
         plt.close()
 
     def make_pie_plot_for_pyam_dataframe(
-        self,
-        filtered_data: pyam.IamDataFrame,
-        comparison_mode: str,
-        title: str,
+        self, filtered_data: pyam.IamDataFrame, comparison_mode: str, title: str,
     ) -> None:
         """Make pie plot."""
         log.information("Make pie plot.")
@@ -565,9 +538,7 @@ class PyAmChartGenerator:
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
         filtered_data.plot.scatter(
-            ax=a_x,
-            x=x_data,
-            y=y_data,
+            ax=a_x, x=x_data, y=y_data,
         )
 
         (
@@ -640,12 +611,10 @@ class PyAmChartGenerator:
         # convert html file to png
         hti = Html2Image()
         with open(
-            os.path.join(self.plot_path_complete, "sankey_plot.html"),
-            encoding="utf8",
+            os.path.join(self.plot_path_complete, "sankey_plot.html"), encoding="utf8",
         ) as file:
             hti.screenshot(
-                file.read(),
-                save_as="sankey_plot.png",
+                file.read(), save_as="sankey_plot.png",
             )
 
         # change directory of sankey output file
@@ -815,7 +784,7 @@ class PyAmChartGenerator:
             statistical_data.to_excel(excel_writer=writer, sheet_name="statistics")
 
     def check_if_scenario_exists_and_filter_dataframe_for_scenarios(
-        self, data_frame: pd.DataFrame, list_of_scenarios_to_check: List[str], aggregate_data: bool
+        self, data_frame: pd.DataFrame, list_of_scenarios_to_check: List[str]
     ) -> pd.DataFrame:
 
         aggregated_scenario_dict: Dict = {key: [] for key in list_of_scenarios_to_check}
@@ -844,124 +813,44 @@ class PyAmChartGenerator:
             df_filtered_for_specific_scenarios = data_frame.loc[
                 data_frame["scenario"].isin(given_scenario)
             ]
-            df_filtered_for_specific_scenarios["scenario"] = [key_scenario_to_check]* len(df_filtered_for_specific_scenarios["scenario"])
+            df_filtered_for_specific_scenarios["scenario"] = [
+                key_scenario_to_check
+            ] * len(df_filtered_for_specific_scenarios["scenario"])
             concat_df = pd.concat([concat_df, df_filtered_for_specific_scenarios])
 
-        if aggregate_data is True:
-            concat_df = self.aggregate_dataframe_according_to_scenario_categories(data_frame=concat_df, list_of_scenarios_to_check=list_of_scenarios_to_check)
         return concat_df
 
-    def aggregate_dataframe_according_to_scenario_categories(
-        self, data_frame: pd.DataFrame, list_of_scenarios_to_check: List[str]
-    ) -> pd.DataFrame:
-        
-        log.information(f"Data will be aggregated according to specified scenarios {list_of_scenarios_to_check}.")
-        existing_variables = list(OrderedSet(data_frame["variable"]))
 
-        new_dict: Dict = {key: [] for key in data_frame.columns}
-        for scenario_to_check in list_of_scenarios_to_check:
-            
-            splitted_df_according_to_scenario = data_frame.loc[data_frame["scenario"]==scenario_to_check]
-            
-            for variable in existing_variables:
-                all_examples_of_one_variable = splitted_df_according_to_scenario.loc[splitted_df_according_to_scenario["variable"]==variable]
-
-                unit = list(all_examples_of_one_variable["unit"])[0]
-
-                
-                for index, time in enumerate(list(OrderedSet(splitted_df_according_to_scenario["time"]))):
-
-                    values_for_this_time_step = list(all_examples_of_one_variable["value"].loc[all_examples_of_one_variable["time"]==time])
-                    if unit in ["%", "-", "W", "kg/s", "m/s", "°C"]:
-                        aggregated_value = np.mean(values_for_this_time_step)
-                    else:
-                        aggregated_value = np.sum(values_for_this_time_step)
-
-
-                    for column in all_examples_of_one_variable.columns:
-                        if column == "value":
-                            new_dict[column].append(aggregated_value)
-                        else:
-
-                            new_dict[column].append(list(all_examples_of_one_variable[column])[index])
-
-        new_df = pd.DataFrame(new_dict)
-        return new_df
-
-        # variables: Dict = {key: {} for key in data_frame["variable"]}
-        # # order according to variables
-        # for variable in data_frame["variable"]:
-        #     for column in data_frame.columns:
-        #         entries = list(
-        #             data_frame.loc[data_frame["variable"] == variable][column]
-        #         )
-        #         variables[variable].update({column: entries})
-        # print("variables", variables)
-        # # now aggregate data
-        # for variable_key, variable_dict in variables.items():
-        #     # avoid that values duplicate
-        #     dict_keys_that_contain_values = []
-        #     for key in variable_dict.keys():
-        #         variable_dict[key] = list(set(variable_dict[key]))
-        #         # get key which contains the values of data (for yearly data the key is the year, for hourly data the key is the datetime)
-        #         if not key.isalpha():
-        #             dict_keys_that_contain_values.append(key)
-
-        #     # iterate over all years or datetime keys
-        #     for dict_key_with_values in dict_keys_that_contain_values:
-        #         # if more than value exist, take mean or sum of these values
-        #         if len(variable_dict[dict_key_with_values]) > 1:
-        #             # take mean value for these units
-        #             if variable_dict["unit"] in ["%", "-", "W", "kg/s", "m/s", "°C"]:
-        #                 variable_dict[dict_key_with_values] = np.mean(
-        #                     variable_dict[dict_key_with_values]
-        #                 )
-        #             # and take sum for these units
-        #             else:
-        #                 variable_dict[dict_key_with_values] = np.sum(
-        #                     variable_dict[dict_key_with_values]
-        #                 )
-
-        # # make new df with aggregated data for specific scenarios that were given
-        # new_dict: Dict = {key: [] for key in data_frame}
-        # for dictio in variables.values():
-
-        #     dictio["scenario"] = scenario_to_check
-
-        #     for key, value in dictio.items():
-        #         if isinstance(value, list):
-        #             value = value[0]
-        #         new_dict[key].append(value)
-
-        # new_df = pd.DataFrame(new_dict)
-        # return new_df
-
-
-# examples for variables to check
+# examples for variables to check (check names of your variables before your evaluation, if they are correct)
 # kpi data only in yearly format
 kpi_data = [
     "Consumption",
     "Production",
-    # "Self-consumption",
+    "Self-consumption",
     # "Injection",
     "Self-consumption rate",
     # "Cost for energy use",
     # "CO2 emitted due energy use",
     # "Battery losses",
     "Autarky rate",
-    "Annual investment cost for equipment (old version)",
-    "Annual CO2 Footprint for equipment (old version)",
+    # "Annual investment cost for equipment (old version)",
+    # "Annual CO2 Footprint for equipment (old version)",
     # "Investment cost for equipment per simulated period",
     # "CO2 footprint for equipment per simulated period",
     # "System operational Cost for simulated period",
     # "System operational Emissions for simulated period",
-    # "Total costs for simulated period",
-    # "Total emissions for simulated period",
+    "Total costs for simulated period",
+    "Total emissions for simulated period",
 ]
 
 electricity_data = [
-    "L2EMSElectricityController|Electricity|ElectricityToOrFromGrid",
-    "PVSystem|Electricity|ElectricityOutput",
+    # "L2EMSElectricityController|Electricity|ElectricityToOrFromGrid",
+    # "PVSystem|Electricity|ElectricityOutput", # check if pv was used or not
+    "ElectricityMeter|Electricity|ElectricityToOrFromGrid",
+    "ElectricityMeter|Electricity|ElectricityConsumption",
+    "ElectricityMeter|Electricity|ElectricityProduction"
+    "ElectricityMeter|Electricity|CumulativeConsumption",
+    "ElectricityMeter|Electricity|CumulativeProduction",
 ]
 
 occuancy_consumption = [
@@ -970,9 +859,10 @@ occuancy_consumption = [
 ]
 
 heating_demand = [
-    "HeatPumpHPLib|Heating|ThermalOutputPower",
+    "HeatPump|Heating|ThermalOutputPower",
     # "HeatDistributionSystem|Heating|ThermalOutputPower",
-    "Building|Heating|TheoreticalThermalBuildingDemand",
+    # "Building|Heating|TheoreticalThermalBuildingDemand",
+    "Building|Temperature|TemperatureIndoorAir",
 ]
 
 

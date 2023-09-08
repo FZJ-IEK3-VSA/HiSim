@@ -12,8 +12,8 @@ from hisim.components import advanced_heat_pump_hplib
 from hisim.components import electricity_meter
 from hisim.components import simple_hot_water_storage
 from hisim.components import heat_distribution_system
-from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes
+
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -57,7 +57,7 @@ def household_with_hds_and_advanced_hp(
         2  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
     )
     set_heating_threshold_outside_temperature_for_heat_pump_in_celsius = 16.0
-    set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = 22.0
+    set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = 20.0
 
     # Set Heat Pump
     model: str = "Generic"
@@ -77,11 +77,10 @@ def household_with_hds_and_advanced_hp(
     # Set Heat Distribution Controller
     hds_controller_name = "HeatDistributionSystemController"
     set_heating_threshold_outside_temperature_for_heat_distribution_system_in_celsius = (
-        None
+        16.0
     )
     set_heating_temperature_for_building_in_celsius = 19.0
     set_cooling_temperature_for_building_in_celsius = 24.0
-    set_cooling_threshold_water_temperature_in_celsius_for_dew_protection = 17.0
     heating_system = heat_distribution_system.HeatingSystemType.FLOORHEATING
 
     # =================================================================================================================================
@@ -92,9 +91,7 @@ def household_with_hds_and_advanced_hp(
         my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.EXPORT_TO_CSV
-    )
+
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Heat Distribution Controller
@@ -107,7 +104,6 @@ def household_with_hds_and_advanced_hp(
             set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
             heating_system=heating_system,
-            set_cooling_threshold_water_temperature_in_celsius_for_dew_protection=set_cooling_threshold_water_temperature_in_celsius_for_dew_protection,
         ),
     )
     # Build Building

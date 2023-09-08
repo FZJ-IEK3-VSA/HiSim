@@ -86,14 +86,14 @@ def building_temperature_control(
             min_temperature_reached_in_celsius = float(min(results[column].values))
             max_temperature_reached_in_celsius = float(max(results[column].values))
 
-            return (
-                set_heating_temperature_in_celsius,
-                set_cooling_temperature_in_celsius,
-                time_in_hours_of_building_being_below_heating_set_temperature,
-                time_in_hours_of_building_being_above_cooling_set_temperature,
-                min_temperature_reached_in_celsius,
-                max_temperature_reached_in_celsius,
-            )
+    return (
+        set_heating_temperature_in_celsius,
+        set_cooling_temperature_in_celsius,
+        time_in_hours_of_building_being_below_heating_set_temperature,
+        time_in_hours_of_building_being_above_cooling_set_temperature,
+        min_temperature_reached_in_celsius,
+        max_temperature_reached_in_celsius,
+    )
 
 
 def read_in_fuel_costs() -> pd.DataFrame:

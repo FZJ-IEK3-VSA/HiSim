@@ -29,6 +29,7 @@ from hisim.components.loadprofilegenerator_connector import Occupancy
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.component import OpexCostDataClass
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -92,19 +93,7 @@ class StorageConfig(cp.ConfigBase):
                 + "This might be because the building was not initialized before the loadprofilegenerator_connector."
                 + "Please check the order of the initialization of the components in your example."
             )
-        # get default number of households
-        if SingletonSimRepository().exist_entry(
-            key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS
-        ):
-            number_of_households = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS
-            )
-        else:
-            raise KeyError(
-                "Key for number of apartments was not found in the singleton sim repository."
-                + "This might be because the building was not initialized before the loadprofilegenerator_connector."
-                + "Please check the order of the initialization of the components in your example."
-            )
+
         volume = 230 * max(number_of_households, 1)
         radius = (volume * 1e-3 / (4 * np.pi)) ** (
             1 / 3
@@ -440,12 +429,12 @@ class HotWaterStorage(dycp.DynamicComponent):
         """Sets chp default connections in hot water storage."""
         hisim.log.information("setting chp default connections in hot water storaage")
         connections = []
-        chp_classname = generic_CHP.GCHP.get_classname()
+        chp_classname = generic_CHP.SimpleCHP.get_classname()
         connections.append(
             cp.ComponentConnection(
                 HotWaterStorage.ThermalPowerCHP,
                 chp_classname,
-                generic_heat_source.HeatSource.ThermalPowerDelivered,
+                generic_CHP.SimpleCHP.ThermalPowerOutputBoiler,
             )
         )
         return connections
@@ -493,10 +482,7 @@ class HotWaterStorage(dycp.DynamicComponent):
 
     def write_to_report(self):
         """Writes to report."""
-        lines = []
-        lines.append(f"Name: {self.name + str(self.source_weight)}")
-        lines.append(f"Volume: {self.volume:4.0f} l")
-        return lines
+        return self.config.get_string_dict()
 
     def i_save_state(self):
         """Abstract. Gets called at the beginning of a timestep to save the state."""
@@ -519,7 +505,7 @@ class HotWaterStorage(dycp.DynamicComponent):
                 * self.my_simulation_parameters.seconds_per_timestep
                 * 1e-3
             )  # 1e-3 conversion J to kJ
-        elif self.thermal_power_chp_channel.source_output is not None:
+        if self.thermal_power_chp_channel.source_output is not None:
             thermal_energy_delivered = (
                 thermal_energy_delivered
                 + stsv.get_input_value(self.thermal_power_chp_channel)
@@ -593,8 +579,13 @@ class HotWaterStorage(dycp.DynamicComponent):
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float]:
+    ) -> OpexCostDataClass:
         # pylint: disable=unused-argument
         """Calculate OPEX costs, consisting of maintenance costs for DHW Storage."""
+        opex_cost_data_class = OpexCostDataClass(
+            opex_cost=self.calc_maintenance_cost(),
+            co2_footprint=0,
+            consumption=0,
+        )
 
-        return self.calc_maintenance_cost(), 0
+        return opex_cost_data_class

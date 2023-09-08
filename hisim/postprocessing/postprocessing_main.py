@@ -110,13 +110,21 @@ class PostProcessor:
             end = timer()
             duration = end - start
             log.information("Making single day plots took " + f"{duration:1.2f}s.")
-        if PostProcessingOptions.PLOT_BAR_CHARTS in ppdt.post_processing_options:
-            log.information("Making bar charts.")
+
+        # make monthly bar plots only if simulation duration approximately a year
+        if (
+            PostProcessingOptions.PLOT_MONTHLY_BAR_CHARTS
+            in ppdt.post_processing_options
+            and ppdt.simulation_parameters.duration.days >= 360
+        ):
+            log.information("Making monthly bar charts.")
             start = timer()
-            self.make_bar_charts(ppdt, report_image_entries=report_image_entries)
+            self.make_monthly_bar_charts(
+                ppdt, report_image_entries=report_image_entries
+            )
             end = timer()
             duration = end - start
-            log.information("Making bar plots took " + f"{duration:1.2f}s.")
+            log.information("Making monthly bar plots took " + f"{duration:1.2f}s.")
 
         # Export all results to CSV
         if PostProcessingOptions.EXPORT_TO_CSV in ppdt.post_processing_options:
@@ -231,7 +239,7 @@ class PostProcessor:
                 elif isinstance(
                     elem.my_component, loadprofilegenerator_connector.Occupancy
                 ):
-                    occupancy_config = elem.my_component.occupancyConfig
+                    occupancy_config = elem.my_component.occupancy_config
             if len(building_data) == 0:
                 log.warning(
                     "Building needs to be defined to generate csv for housing data base."
@@ -338,7 +346,7 @@ class PostProcessor:
         log.information("Exporting to csv.")
         self.export_results_to_csv(ppdt)
 
-    def make_bar_charts(
+    def make_monthly_bar_charts(
         self,
         ppdt: PostProcessingDataTransfer,
         report_image_entries: List[ReportImageEntry],
@@ -650,6 +658,7 @@ class PostProcessor:
                 "Comments:",
                 "Operational Costs are the sum of fuel costs and maintenance costs for the devices, calculated for the simulated period.",
                 "Emissions are fuel emissions emitted during simulad period.",
+                "Consumption for Diesel_Car in l, for EV in kWh.",
             ],
         )
 

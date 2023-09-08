@@ -174,6 +174,7 @@ class Building(dynamic_component.DynamicComponent):
 
     # Inputs -> occupancy
     HeatingByResidents = "HeatingByResidents"
+    HeatingByDevices = "HeatingByDevices"
 
     # Inputs -> weather
     Altitude = "Altitude"
@@ -292,6 +293,7 @@ class Building(dynamic_component.DynamicComponent):
         self.equivalent_heat_flux_in_watt: float
         self.next_thermal_mass_temperature_in_celsius: float
         self.internal_heat_gains_through_occupancy_in_watt: float = 0
+        self.internal_heat_gains_through_devices_in_watt: float = 0
 
         # reference taken from TABULA (* Check header) as Q_ht [kWh/m2.a], before q_ht_ref
         self.total_heat_transfer_reference_in_kilowatthour_per_m2_per_year: float = 0
@@ -433,6 +435,14 @@ class Building(dynamic_component.DynamicComponent):
         self.occupancy_heat_gain_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.HeatingByResidents,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            True,
+        )
+
+        self.device_heat_gain_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.HeatingByDevices,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             True,
@@ -580,6 +590,13 @@ class Building(dynamic_component.DynamicComponent):
                 Occupancy.HeatingByResidents,
             )
         )
+        connections.append(
+            cp.ComponentConnection(
+                Building.HeatingByDevices,
+                occupancy_classname,
+                Occupancy.HeatingByDevices,
+            )
+        )
         return connections
 
     def get_default_connections_from_utsp(self,):
@@ -592,6 +609,13 @@ class Building(dynamic_component.DynamicComponent):
                 Building.HeatingByResidents,
                 utsp_classname,
                 UtspLpgConnector.HeatingByResidents,
+            )
+        )
+        connections.append(
+            cp.ComponentConnection(
+                Building.HeatingByDevices,
+                utsp_classname,
+                UtspLpgConnector.HeatingByDevices,
             )
         )
         return connections
@@ -625,6 +649,10 @@ class Building(dynamic_component.DynamicComponent):
 
         self.internal_heat_gains_through_occupancy_in_watt = stsv.get_input_value(
             self.occupancy_heat_gain_channel
+        )
+
+        self.internal_heat_gains_through_devices_in_watt = stsv.get_input_value(
+            self.device_heat_gain_channel
         )
 
         temperature_outside_in_celsius = stsv.get_input_value(
@@ -669,7 +697,7 @@ class Building(dynamic_component.DynamicComponent):
             indoor_air_temperature_in_celsius,
         ) = self.calc_crank_nicolson(
             thermal_power_delivered_in_watt=thermal_power_delivered_in_watt,
-            internal_heat_gains_in_watt=self.internal_heat_gains_through_occupancy_in_watt,
+            internal_heat_gains_in_watt=self.internal_heat_gains_through_occupancy_in_watt + self.internal_heat_gains_through_devices_in_watt,
             solar_heat_gains_in_watt=solar_heat_gain_through_windows,
             outside_temperature_in_celsius=temperature_outside_in_celsius,
             thermal_mass_temperature_prev_in_celsius=previous_thermal_mass_temperature_in_celsius,

@@ -7,6 +7,7 @@ from os import path, makedirs
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import pandas as pd
+import datetime as dt
 import numpy as np
 
 # Owned
@@ -38,11 +39,13 @@ class OccupancyConfig(cp.ConfigBase):
     name: str
     profile_name: str
     country_name: str
+    profile_with_washing_machine_and_dishwasher: bool
 
     @classmethod
     def get_default_CHS01(cls) -> Any:
         config = OccupancyConfig(
-            name="Occupancy", profile_name="CH01", country_name="DE"
+            name="Occupancy_1", profile_name="CHR01 Couple both at Work", country_name="DE",
+            profile_with_washing_machine_and_dishwasher=True,
         )
         return config
 
@@ -125,6 +128,7 @@ class Occupancy(cp.Component):
 
     NumberByResidents = "NumberByResidents"
     HeatingByResidents = "HeatingByResidents"
+    HeatingByDevices = "HeatingByDevices"
     ElectricityOutput = "ElectricityOutput"
     WaterConsumption = "WaterConsumption"
 
@@ -142,7 +146,13 @@ class Occupancy(cp.Component):
             my_config=config,
         )
         self.profile_name = config.profile_name
-        self.occupancyConfig = config
+        self.occupancy_config = config
+
+        if self.my_simulation_parameters.year != 2021:
+            raise Exception(
+                "LPG data is only available for 2021, if other years are needed, "+
+                "use loadprofilegenerator_utsp_connector instead."
+            )
         self.build()
 
         if SingletonSimRepository().exist_entry(
@@ -202,6 +212,13 @@ class Occupancy(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for {self.HeatingByResidents} will follow.",
+        )
+        self.heating_by_devices_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatingByDevices,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description="Inner device heat gains, which heat the building (not intentionally)",
         )
         self.electricity_outputC: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -303,6 +320,11 @@ class Occupancy(cp.Component):
             * self.scaling_factor_according_to_number_of_apartments,
         )
         stsv.set_output_value(
+            self.heating_by_devices_channel,
+            self.heating_by_devices[timestep]
+            * self.scaling_factor_according_to_number_of_apartments,
+        )
+        stsv.set_output_value(
             self.electricity_outputC,
             self.electricity_consumption[timestep]
             * self.scaling_factor_according_to_number_of_apartments,
@@ -348,7 +370,7 @@ class Occupancy(cp.Component):
         Also does the averaging to the desired time resolution conversion to the output format desired."""
         file_exists, cache_filepath = utils.get_cache_file(
             component_key=self.component_name,
-            parameter_class=self.occupancyConfig,
+            parameter_class=self.occupancy_config,
             my_simulation_parameters=self.my_simulation_parameters,
         )
 
@@ -365,6 +387,7 @@ class Occupancy(cp.Component):
             )
             self.number_of_residents = dataframe["number_of_residents"].tolist()
             self.heating_by_residents = dataframe["heating_by_residents"].tolist()
+            self.heating_by_devices = dataframe["heating_by_devices"].tolist()
             self.electricity_consumption = dataframe["electricity_consumption"].tolist()
             self.water_consumption = dataframe["water_consumption"].tolist()
 
@@ -379,7 +402,7 @@ class Occupancy(cp.Component):
             (
                 scaling_electricity_consumption,
                 scaling_water_consumption,
-            ) = self.occupancyConfig.get_factors_from_country_and_profile()
+            ) = self.occupancy_config.get_factors_from_country_and_profile()
             # load occupancy profile
             occupancy_profile = []
             filepaths = utils.HISIMPATH["occupancy"][self.profile_name][
@@ -391,119 +414,137 @@ class Occupancy(cp.Component):
                 occupancy_profile.append(json_filex)
 
             # see how long csv files from LPG are to check if averaging has to be done and calculate desired length
-            steps_original = len(occupancy_profile[0]["Values"])
-            steps_desired = int(
-                365 * 24 * (3600 / self.my_simulation_parameters.seconds_per_timestep)
+            simulation_time_span = (
+                self.my_simulation_parameters.end_date
+                - self.my_simulation_parameters.start_date
             )
-            steps_ratio = int(steps_original / steps_desired)
+            minutes_per_timestep = int(self.my_simulation_parameters.seconds_per_timestep / 60)
+            steps_desired = int(
+                simulation_time_span.days
+                * 24
+                * (3600 / self.my_simulation_parameters.seconds_per_timestep)
+            )
+            steps_desired_in_minutes = steps_desired * minutes_per_timestep
 
             # initialize number of residence and heating by residents
-            self.heating_by_residents = [0] * steps_desired
-            self.number_of_residents = [0] * steps_desired
+            heating_by_residents = [0] * steps_desired_in_minutes
+            number_of_residents = [0] * steps_desired_in_minutes
+
+            # compute heat gains and number of persons
+            for mode, gain in enumerate(gain_per_person):
+                for timestep in range(steps_desired_in_minutes):
+                    number_of_residents[timestep] += occupancy_profile[mode][
+                        "Values"
+                    ][timestep]
+                    heating_by_residents[timestep] = (
+                        heating_by_residents[timestep]
+                        + gain * occupancy_profile[mode]["Values"][timestep]
+                    )
+
+            if self.occupancy_config.profile_with_washing_machine_and_dishwasher:
+                profile_path = utils.HISIMPATH["occupancy"][self.profile_name]["electricity_consumption"]
+            else:
+                profile_path = utils.HISIMPATH["occupancy"][self.profile_name]["electricity_consumption_without_washing_machine_and_dishwasher"]
 
             # load electricity consumption and water consumption
             pre_electricity_consumption = pd.read_csv(
-                utils.HISIMPATH["occupancy"][self.profile_name][
-                    "electricity_consumption"
-                ],
+                profile_path,
                 sep=";",
-                decimal=",",
-                encoding="cp1252",
-            )
+                decimal=".",
+                encoding="utf-8",
+                usecols=["Sum [kWh]"],
+            ).loc[: (steps_desired_in_minutes - 1)]
+            electricity_consumption = pd.to_numeric(
+                pre_electricity_consumption.loc[:, "Sum [kWh]"] * 1000 * 60 * scaling_electricity_consumption
+                ).tolist() # 1 kWh/min == 60 000 W / min
+            
             pre_water_consumption = pd.read_csv(
                 utils.HISIMPATH["occupancy"][self.profile_name]["water_consumption"],
                 sep=";",
-                decimal=",",
-                encoding="cp1252",
-            )
+                decimal=".",
+                encoding="utf-8",
+                usecols=["Sum [L]"],
+            ).loc[:(steps_desired_in_minutes - 1)]
+            water_consumption = pd.to_numeric(
+                pre_water_consumption.loc[:, "Sum [L]"] * scaling_water_consumption
+                ).tolist()
 
-            # convert electricity consumption and water consumption to desired format and unit
-            self.electricity_consumption = pd.to_numeric(
-                pre_electricity_consumption["Sum [kWh]"]
-                * 1000
-                * 60
-                * scaling_electricity_consumption
-            ).tolist()  # 1 kWh/min == 60 000 W / min
-            self.water_consumption = pd.to_numeric(
-                pre_water_consumption["Sum [L]"] * scaling_water_consumption
-            ).tolist()
+            pre_heating_by_devices = pd.read_csv(
+                utils.HISIMPATH["occupancy"][self.profile_name]["heating_by_devices"],
+                sep=";",
+                decimal=".",
+                encoding="utf-8",
+                usecols=["Time", "Sum [kWh]"],
+            ).loc[:(steps_desired_in_minutes - 1)]
+            heating_by_devices = pd.to_numeric(
+                pre_heating_by_devices.loc[:, "Sum [kWh]"] * 1000 * 60
+            ).tolist()  # 1 kWh/min == 60W / min
 
-            # process data when time resolution of inputs matches timeresolution of simulation
-            if steps_original == steps_desired:
-                for mode in range(len(gain_per_person)):
-                    for timestep in range(steps_original):
-                        self.number_of_residents[timestep] += occupancy_profile[mode][
-                            "Values"
-                        ][timestep]
-                        self.heating_by_residents[timestep] = (
-                            self.heating_by_residents[timestep]
-                            + gain_per_person[mode]
-                            * occupancy_profile[mode]["Values"][timestep]
-                        )
-
-            # average data, when time resolution of inputs is coarser than time resolution of simulation
-            elif steps_original > steps_desired:
-                for mode in range(len(gain_per_person)):
-                    for timestep in range(steps_desired):
-                        number_of_residents_av = (
-                            sum(
-                                occupancy_profile[mode]["Values"][
-                                    timestep
-                                    * steps_ratio : (timestep + 1)
-                                    * steps_ratio
-                                ]
-                            )
-                            / steps_ratio
-                        )
-                        self.number_of_residents[timestep] += np.round(
-                            number_of_residents_av
-                        )
-                        self.heating_by_residents[timestep] = (
-                            self.heating_by_residents[timestep]
-                            + gain_per_person[mode] * number_of_residents_av
-                        )
-                # power needs averaging, not sum
-                self.electricity_consumption = [
-                    sum(self.electricity_consumption[n : n + steps_ratio]) / steps_ratio
-                    for n in range(0, steps_original, steps_ratio)
-                ]
-                self.water_consumption = [
-                    sum(self.water_consumption[n : n + steps_ratio])
-                    for n in range(0, steps_original, steps_ratio)
-                ]
-
-            else:
-                raise Exception(
-                    "input from LPG is given in wrong time resolution - or at least cannot be interpolated correctly"
+            # convert heat gains and number of persons to data frame and evaluate
+            initial_data = pd.DataFrame({
+                "Time": pd.date_range(
+                    start=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1),
+                    end=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1) +
+                    dt.timedelta(days=simulation_time_span.days) - dt.timedelta(seconds=60),
+                    freq="T"
+                    ),
+                "number_of_residents": number_of_residents,
+                "heating_by_residents": heating_by_residents,
+                "electricity_consumption": electricity_consumption,
+                "water_consumption": water_consumption,
+                "heating_by_devices": heating_by_devices,
+                })
+            initial_data = utils.convert_lpg_data_to_utc(
+                data=initial_data, year=self.my_simulation_parameters.year
                 )
 
-            # Saves data in cache
-            data = np.transpose(
-                [
-                    self.number_of_residents,
-                    self.heating_by_residents,
-                    self.electricity_consumption,
-                    self.water_consumption,
+            # extract everything from data frame
+            self.electricity_consumption = initial_data["electricity_consumption"].tolist()
+            self.heating_by_residents = initial_data["heating_by_residents"].tolist()
+            self.number_of_residents = initial_data["number_of_residents"].tolist()
+            self.water_consumption = initial_data["water_consumption"].tolist()
+            self.heating_by_devices = initial_data["heating_by_devices"].tolist()
+
+            # average data, when time resolution of inputs is coarser than time resolution of simulation
+            if minutes_per_timestep > 1:
+                # power needs averaging, not sum
+                self.electricity_consumption = [
+                    sum(self.electricity_consumption[n: n + minutes_per_timestep]) / minutes_per_timestep
+                    for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
-            )
-            database = pd.DataFrame(
-                data,
-                columns=[
-                    "number_of_residents",
-                    "heating_by_residents",
-                    "electricity_consumption",
-                    "water_consumption",
-                ],
-            )
+                self.heating_by_devices = [
+                    sum(self.heating_by_devices[n: n + minutes_per_timestep]) / minutes_per_timestep
+                    for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
+                ]
+                self.water_consumption = [
+                    sum(self.water_consumption[n: n + minutes_per_timestep])
+                    for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
+                ]
+                self.heating_by_residents = [
+                    sum(self.heating_by_residents[n: n + minutes_per_timestep]) / minutes_per_timestep
+                    for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
+                ]
+                self.number_of_residents = [
+                    sum(self.number_of_residents[n: n + minutes_per_timestep]) / minutes_per_timestep
+                    for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
+                ]
+
+            # Saves data in cache
+            database = pd.DataFrame({
+                "number_of_residents": self.number_of_residents,
+                "heating_by_residents": self.heating_by_residents,
+                "electricity_consumption": self.electricity_consumption,
+                "water_consumption": self.water_consumption,
+                "heating_by_devices": self.heating_by_devices,
+                })
 
             database.to_csv(cache_filepath)
-            del data
             del database  # utils.save_cache("Occupancy", parameters, database)
         self.max_hot_water_demand = max(self.water_consumption)
 
     def write_to_report(self):
         """Writes a report."""
-        return self.occupancyConfig.get_string_dict()
+        return self.occupancy_config.get_string_dict()
 
     def get_scaling_factor_according_to_number_of_apartments(
         self, real_number_of_apartments: float

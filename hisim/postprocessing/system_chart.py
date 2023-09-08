@@ -8,6 +8,7 @@ import os
 import pydot
 
 from hisim import log
+from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.report_image_entries import SystemChartEntry
 
@@ -20,7 +21,7 @@ class SystemChart:
         """Initizalizes the class."""
         self.ppdt: PostProcessingDataTransfer = ppdt
 
-    def make_chart(self) -> List[SystemChartEntry]:
+    def make_chart(self) -> List[SystemChartEntry]:  # type: ignore
         """Makes different charts. Entry point for the class."""
         files: List[SystemChartEntry] = []
         file1 = self.make_graphviz_chart(
@@ -47,10 +48,24 @@ class SystemChart:
         )
         if file3 is not None:
             files.append(file3)
+        file4 = self.make_graphviz_chart(
+            with_labels=True,
+            with_class_names=False,
+            filename=f"System_with_Edge_labels_and_results{self.ppdt.simulation_parameters.figure_format}",
+            caption="System Chart with labels and cumulative result values on all edges.",
+            with_results=True,
+        )
+        if file4 is not None:
+            files.append(file4)
         return files
 
     def make_graphviz_chart(
-        self, with_labels: bool, with_class_names: bool, filename: str, caption: str
+        self,
+        with_labels: bool,
+        with_class_names: bool,
+        filename: str,
+        caption: str,
+        with_results: bool = False,
     ) -> Optional[SystemChartEntry]:
         """Generates the system charts with graphviz."""
 
@@ -93,6 +108,14 @@ class SystemChart:
                         + " in "
                         + component_input.unit
                     )
+                    if with_results:
+                        # result value is either sum or mean value, according to distinction in func "get_std_results()" in simulator.py
+                        if isinstance(component_input.source_output, ComponentOutput):
+                            output_cumulative_result = self.ppdt.results_cumulative.at[
+                                0, component_input.source_output.get_pretty_name()
+                            ]
+                            this_edge_label += f": {round(output_cumulative_result,3)}"
+
                     this_edge_label = this_edge_label.replace("°C", "&#8451;")
                     if key not in edge_labels:
                         edge_labels[key] = this_edge_label

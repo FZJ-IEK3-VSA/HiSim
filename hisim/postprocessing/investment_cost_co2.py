@@ -9,6 +9,9 @@ from hisim.components import (
     generic_heat_source,
     advanced_battery_bslib,
     generic_car,
+    generic_CHP,
+    generic_hydrogen_storage,
+    generic_electrolyzer,
 )
 
 from hisim.utils import HISIMPATH
@@ -85,7 +88,24 @@ def compute_investment_cost(components: List[ComponentWrapper],) -> Tuple[float,
             elif component.my_component.config.fuel == LoadTypes.DIESEL:
                 column = price_frame.iloc[price_frame.index == "Diesel vehicle"]
             component_capacity = 1.0
-
+        elif isinstance(component.my_component, generic_CHP.SimpleCHP):
+            if component.my_component.config.use == LoadTypes.GAS:
+                column = price_frame.iloc[
+                    price_frame.index == "Gas powered Combined Heat and Power"
+                ]
+            elif component.my_component.config.use == LoadTypes.HYDROGEN:
+                column = price_frame.iloc[price_frame.index == "Hydrogen fuelcell"]
+            component_capacity = component.my_component.config.p_fuel * 1e-3
+        elif isinstance(
+            component.my_component, generic_hydrogen_storage.GenericHydrogenStorage
+        ):
+            column = price_frame.iloc[price_frame.index == "Hydrogen Storage"]
+            component_capacity = component.my_component.config.max_capacity
+        elif isinstance(
+            component.my_component, generic_electrolyzer.GenericElectrolyzer
+        ):
+            column = price_frame.iloc[price_frame.index == "Electrolyzer"]
+            component_capacity = component.my_component.config.max_power * 1e-3
         else:
             continue
         co2_emissions = (

@@ -18,6 +18,7 @@ from hisim.component import (
     SingleTimeStepValues,
     ConfigBase,
     ComponentConnection,
+    OpexCostDataClass,
 )
 from hisim.components import weather, simple_hot_water_storage, heat_distribution_system
 from hisim.loadtypes import LoadTypes, Units, InandOutputType
@@ -466,7 +467,7 @@ class HeatPumpHplib(Component):
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float]:
+    ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of maintenance costs.
 
         No electricity costs for components except for Electricity Meter,
@@ -483,8 +484,13 @@ class HeatPumpHplib(Component):
                     / 3.6e6,
                     1,
                 )
+        opex_cost_data_class = OpexCostDataClass(
+            opex_cost=self.calc_maintenance_cost(),
+            co2_footprint=0,
+            consumption=self.config.consumption,
+        )
 
-        return self.calc_maintenance_cost(), 0.0
+        return opex_cost_data_class
 
 
 @dataclass

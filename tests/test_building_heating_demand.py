@@ -180,6 +180,11 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
         my_occupancy.HeatingByResidents,
     )
     my_building.connect_input(
+        my_building.HeatingByDevices,
+        my_occupancy.component_name,
+        my_occupancy.HeatingByDevices,
+    )
+    my_building.connect_input(
         my_building.ThermalPowerDelivered,
         my_idealized_electric_heater.component_name,
         my_idealized_electric_heater.ThermalPowerDelivered,
@@ -240,5 +245,5 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
     np.testing.assert_allclose(
         energy_need_for_heating_given_by_tabula_in_kilowatt_hour_per_year_per_m2,
         energy_need_for_heating_from_idealized_electric_heater_in_kilowatt_hour_per_year_per_m2,
-        rtol=0.15,
+        rtol=0.3,
     )

@@ -18,6 +18,7 @@ from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim import log
+from hisim.component import OpexCostDataClass
 
 __authors__ = "Katharina Rieck, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -505,11 +506,16 @@ class HeatDistribution(cp.Component):
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float]:
+    ) -> OpexCostDataClass:
         # pylint: disable=unused-argument
         """Calculate OPEX costs, consisting of maintenance costs for Heat Distribution System."""
+        opex_cost_data_class = OpexCostDataClass(
+            opex_cost=self.calc_maintenance_cost(),
+            co2_footprint=0,
+            consumption=0,
+        )
 
-        return self.calc_maintenance_cost(), 0
+        return opex_cost_data_class
 
 
 class HeatDistributionController(cp.Component):

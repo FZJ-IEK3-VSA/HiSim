@@ -19,7 +19,6 @@ from hisim import utils
 PATH = "../examples/household_for_test_sim_repository.py"
 FUNC = "test_house"
 
-
 @utils.measure_execution_time
 @pytest.mark.base
 def test_house(
@@ -123,6 +122,12 @@ def test_house(
         my_building.HeatingByResidents,
         my_occupancy.component_name,
         my_occupancy.HeatingByResidents,
+    )
+
+    my_building.connect_input(
+        my_building.HeatingByDevices,
+        my_occupancy.component_name,
+        my_occupancy.HeatingByDevices,
     )
 
     # =========================================================================================================================================================

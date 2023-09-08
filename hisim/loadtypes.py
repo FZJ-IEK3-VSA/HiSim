@@ -38,7 +38,7 @@ class OccupancyProfiles(str, enum.Enum):
 
     """To parse LPG predefined household strings."""
 
-    CH01 = "CH01"
+    CHR01 = "CHR01 Couple both at Work"
 
 
 class BuildingCodes(str, enum.Enum):

@@ -1,5 +1,6 @@
-"""Implementation of shiftable household devices like washing machines, dish washers or dryers. Takes load profiles and time windows, where the activation can be shifted within from LoadProfileGenerator and
-activates the device when surplus from PV is available. The device is activated at the end of the time window when no surplus was available. This file contains the class SmartDevice and SmartDevice State,
+"""Implementation of shiftable household devices like washing machines, dish washers or dryers.
+Takes load profiles and time windows, where the activation can be shifted within from LoadProfileGenerator and activates the device when surplus from PV is available.
+The device is activated at the end of the time window when no surplus was available. This file contains the class SmartDevice and SmartDevice State,
 the configuration is automatically adopted from the information provided by the LPG. """
 
 # Generic/Built-in
@@ -17,6 +18,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
+from hisim.component import OpexCostDataClass
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -309,30 +311,35 @@ class SmartDevice(cp.Component):
                 # append first timestep which may not fill  the entire 15 minutes
                 elem_el.append(sum(el[:offset]) / offset)
 
+                i = 0
                 for i in range(z - 2):
                     elem_el.append(
                         sum(
                             el[
                                 offset
-                                + minutes_per_timestep * i : offset
+                                + minutes_per_timestep * i: offset
                                 + (i + 1) * minutes_per_timestep
                             ]
                         )
                         / minutes_per_timestep
                     )
 
-                last = el[offset + (i + 1) * minutes_per_timestep :]
+                last = el[offset + (i + 1) * minutes_per_timestep:]
                 if offset != minutes_per_timestep:
                     elem_el.append(sum(last) / (minutes_per_timestep - offset))
                 electricity_profile.append(elem_el)
 
         self.source_weight = source_weight
-        self.earliest_start = earliest_start + [
+        earliest_start = earliest_start + [
             self.my_simulation_parameters.timesteps
         ]  # append value to continue simulation after last necesary run of flexible device at end of year
-        self.latest_start = latest_start + [
+        self.earliest_start = utils.convert_lpg_timestep_to_utc(data=earliest_start, year=self.my_simulation_parameters.year,
+                                                                seconds_per_timestep=seconds_per_timestep)
+        latest_start = latest_start + [
             self.my_simulation_parameters.timesteps + 999
         ]  # append value to continue simulation after last necesary run of smart device at end of year
+        self.latest_start = utils.convert_lpg_timestep_to_utc(data=latest_start, year=self.my_simulation_parameters.year,
+                                                         seconds_per_timestep=seconds_per_timestep)
         self.electricity_profile = electricity_profile
         self.state = SmartDeviceState()
         self.previous_state = SmartDeviceState()
@@ -346,7 +353,7 @@ class SmartDevice(cp.Component):
 
     def get_cost_opex(
         self, all_outputs: List, postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float]:
+    ) -> OpexCostDataClass:
         for index, output in enumerate(all_outputs):
             if (
                 output.component_name == self.component_name
@@ -359,4 +366,11 @@ class SmartDevice(cp.Component):
                     * self.my_simulation_parameters.seconds_per_timestep
                     / 3.6e6
                 )
-        return self.consumption * euro_per_unit, self.consumption * co2_per_unit
+
+        opex_cost_data_class = OpexCostDataClass(
+            opex_cost=self.consumption * euro_per_unit,
+            co2_footprint=self.consumption * co2_per_unit,
+            consumption=self.consumption,
+        )
+
+        return opex_cost_data_class

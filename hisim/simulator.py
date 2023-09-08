@@ -362,7 +362,7 @@ class Simulator:
             results_monthly=results_merged_monthly,
             results_cumulative=results_merged_cumulative,
             results_hourly=results_merged_hourly,
-            results_daily=results_merged_daily
+            results_daily=results_merged_daily,
         )
         log.information("Finished preparing post processing")
         return ppdt
@@ -439,12 +439,8 @@ class Simulator:
                 Units.KG_PER_SEC,
                 Units.PERCENT,
             ):
-                temp_df_monthly = temp_df.resample(
-                    "M"
-                ).mean()
-                temp_df_daily = temp_df.resample(
-                    "D"
-                ).mean()
+                temp_df_monthly = temp_df.resample("M").mean()
+                temp_df_daily = temp_df.resample("D").mean()
                 temp_df_cumulative = temp_df.mean()
             else:
                 temp_df_monthly = temp_df.resample("M").sum()
@@ -457,9 +453,7 @@ class Simulator:
             ]
             results_merged_monthly.index = temp_df_monthly.index
             # daily results
-            results_merged_daily[temp_df_daily.columns[0]] = temp_df_daily.values[
-                :, 0
-            ]
+            results_merged_daily[temp_df_daily.columns[0]] = temp_df_daily.values[:, 0]
             results_merged_daily.index = temp_df_daily.index
 
             # cumulative results
@@ -498,5 +492,4 @@ class Simulator:
             results_merged_monthly,
             results_merged_daily,
             results_merged_hourly,
-            
         )

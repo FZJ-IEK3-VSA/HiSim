@@ -2,18 +2,15 @@
 
 
 import glob
-import time
 import datetime
 import os
 from typing import Dict, Any, Tuple, Optional, List
-import re
-import enum
+import string
 import numpy as np
 import pyam
 import pandas as pd
 import matplotlib.pyplot as plt
 import plotly
-import string
 from html2image import Html2Image
 from hisim.postprocessing.pyam_data_collection import (
     PyamDataTypeEnum,
@@ -21,8 +18,6 @@ from hisim.postprocessing.pyam_data_collection import (
 )
 from hisim.postprocessing.chartbase import ChartFontsAndSize
 from hisim import log
-
-from ordered_set import OrderedSet
 
 
 class PyAmChartGenerator:
@@ -33,9 +28,8 @@ class PyAmChartGenerator:
         self,
         simulation_duration_to_check: str,
         data_processing_mode: Any,
-        analyze_yearly_or_hourly_data: Any,
-        variables_to_check_for_hourly_data: Optional[List[str]] = None,
-        variables_to_check_for_yearly_data: Optional[List[str]] = None,
+        time_resolution_of_data_set: Any,
+        variables_to_check: Optional[List[str]] = None,
         list_of_scenarios_to_check: Optional[List[str]] = None,
     ) -> None:
         """Initialize the class."""
@@ -114,43 +108,67 @@ class PyAmChartGenerator:
 
         pyam_dataframe = self.get_dataframe_and_create_pyam_dataframe_for_all_data(
             folder_path=self.folder_path,
-            analyze_yearly_or_hourly_data=analyze_yearly_or_hourly_data,
+            time_resolution_of_data_set=time_resolution_of_data_set,
             list_of_scenarios_to_check=list_of_scenarios_to_check,
         )
 
-        if analyze_yearly_or_hourly_data == PyamDataTypeEnum.YEARLY:
+        if time_resolution_of_data_set == PyamDataTypeEnum.YEARLY:
 
-            if (
-                variables_to_check_for_yearly_data != []
-                and variables_to_check_for_yearly_data is not None
-            ):
+            if variables_to_check != [] and variables_to_check is not None:
                 self.make_plots_with_specific_kind_of_data(
-                    analyze_yearly_or_hourly_data=analyze_yearly_or_hourly_data,
+                    time_resolution_of_data_set=time_resolution_of_data_set,
                     pyam_dataframe=pyam_dataframe,
                     simulation_duration_key=simulation_duration_to_check,
-                    variables_to_check=variables_to_check_for_yearly_data,
+                    variables_to_check=variables_to_check,
                 )
             else:
                 log.information(
                     "Variable list for yearly data is not given and will not be plotted or anaylzed."
                 )
 
-        elif analyze_yearly_or_hourly_data == PyamDataTypeEnum.HOURLY:
+        elif time_resolution_of_data_set == PyamDataTypeEnum.HOURLY:
 
-            if (
-                variables_to_check_for_hourly_data != []
-                and variables_to_check_for_hourly_data is not None
-            ):
+            if variables_to_check != [] and variables_to_check is not None:
 
                 self.make_plots_with_specific_kind_of_data(
-                    analyze_yearly_or_hourly_data=analyze_yearly_or_hourly_data,
+                    time_resolution_of_data_set=time_resolution_of_data_set,
                     pyam_dataframe=pyam_dataframe,
                     simulation_duration_key=simulation_duration_to_check,
-                    variables_to_check=variables_to_check_for_hourly_data,
+                    variables_to_check=variables_to_check,
                 )
             else:
                 log.information(
                     "Variable list for hourly data is not given and will not be plotted or anaylzed."
+                )
+
+        elif time_resolution_of_data_set == PyamDataTypeEnum.DAILY:
+
+            if variables_to_check != [] and variables_to_check is not None:
+
+                self.make_plots_with_specific_kind_of_data(
+                    time_resolution_of_data_set=time_resolution_of_data_set,
+                    pyam_dataframe=pyam_dataframe,
+                    simulation_duration_key=simulation_duration_to_check,
+                    variables_to_check=variables_to_check,
+                )
+            else:
+                log.information(
+                    "Variable list for daily data is not given and will not be plotted or anaylzed."
+                )
+
+        elif time_resolution_of_data_set == PyamDataTypeEnum.MONTHLY:
+
+            if variables_to_check != [] and variables_to_check is not None:
+
+                self.make_plots_with_specific_kind_of_data(
+                    time_resolution_of_data_set=time_resolution_of_data_set,
+                    pyam_dataframe=pyam_dataframe,
+                    simulation_duration_key=simulation_duration_to_check,
+                    variables_to_check=variables_to_check,
+                )
+            else:
+                log.information(
+                    "Variable list for monthly data is not given and will not be plotted or anaylzed."
                 )
 
         else:
@@ -161,15 +179,19 @@ class PyAmChartGenerator:
     def get_dataframe_and_create_pyam_dataframe_for_all_data(
         self,
         folder_path: str,
-        analyze_yearly_or_hourly_data: Any,
+        time_resolution_of_data_set: Any,
         list_of_scenarios_to_check: Optional[List[str]],
     ) -> pyam.IamDataFrame:
         """Get csv data and create pyam dataframes."""
 
-        if analyze_yearly_or_hourly_data == PyamDataTypeEnum.YEARLY:
-            kind_of_data_set = "yearly"
-        elif analyze_yearly_or_hourly_data == PyamDataTypeEnum.HOURLY:
+        if time_resolution_of_data_set == PyamDataTypeEnum.HOURLY:
             kind_of_data_set = "hourly"
+        elif time_resolution_of_data_set == PyamDataTypeEnum.YEARLY:
+            kind_of_data_set = "yearly"
+        elif time_resolution_of_data_set == PyamDataTypeEnum.DAILY:
+            kind_of_data_set = "daily"
+        elif time_resolution_of_data_set == PyamDataTypeEnum.MONTHLY:
+            kind_of_data_set = "monthly"
         else:
             raise ValueError(
                 "This kind of data was not found in the pyamdaacollectorenum class."
@@ -204,7 +226,7 @@ class PyAmChartGenerator:
 
     def make_plots_with_specific_kind_of_data(
         self,
-        analyze_yearly_or_hourly_data: Any,
+        time_resolution_of_data_set: Any,
         pyam_dataframe: pyam.IamDataFrame,
         simulation_duration_key: str,
         variables_to_check: List[str],
@@ -260,7 +282,7 @@ class PyAmChartGenerator:
             #     filtered_data=filtered_data
             # )
 
-            if analyze_yearly_or_hourly_data == PyamDataTypeEnum.YEARLY:
+            if time_resolution_of_data_set == PyamDataTypeEnum.YEARLY:
                 kind_of_data_set = "yearly"
                 log.information(
                     f"Yearly Data Processing for Simulation Duration of {simulation_duration_key} Days:"
@@ -280,9 +302,7 @@ class PyAmChartGenerator:
 
                 try:
                     self.make_box_plot_for_pyam_dataframe(
-                        filtered_data=filtered_data,
-                        comparison_mode=comparion_mode,
-                        title=self.path_addition,
+                        filtered_data=filtered_data, title=self.path_addition,
                     )
                     self.make_pie_plot_for_pyam_dataframe(
                         filtered_data=filtered_data,
@@ -302,8 +322,12 @@ class PyAmChartGenerator:
                         y_data_variable="HeatPumpHPLib|Heating|ThermalOutputPower",
                     )
 
-                except:
-                    log.information("Something went wrong for plotting.")
+                except Exception:
+                    log.information(
+                        f"Something went wrong plotting the variable {variable_to_check}."
+                    )
+
+                finally:
                     pass
 
                 # self.make_stack_plot_for_pyam_dataframe(pyam_dataframe=pyam_dataframe, filter_model=None, filter_scenario=None,
@@ -314,7 +338,7 @@ class PyAmChartGenerator:
                 # filter_region=None, filter_unit=None, filter_year=None
                 # )
 
-            elif analyze_yearly_or_hourly_data == PyamDataTypeEnum.HOURLY:
+            elif time_resolution_of_data_set == PyamDataTypeEnum.HOURLY:
                 kind_of_data_set = "hourly"
                 log.information(
                     f"Hourly Data Processing for Simulation Duration of {simulation_duration_key} Days:"
@@ -443,7 +467,7 @@ class PyAmChartGenerator:
         plt.close()
 
     def make_box_plot_for_pyam_dataframe(
-        self, filtered_data: pyam.IamDataFrame, comparison_mode: str, title: str,
+        self, filtered_data: pyam.IamDataFrame, title: str,
     ) -> None:
         """Make box plot."""
         log.information("Make box plot.")
@@ -453,11 +477,7 @@ class PyAmChartGenerator:
         )
 
         filtered_data.plot.box(
-            ax=a_x,
-            by="scenario",
-            x="year",
-            title=title,
-            legend=True,  # comparison_mode
+            ax=a_x, by="scenario", x="year", title=title, legend=True,
         )
 
         y_tick_labels, scale, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y")
@@ -543,11 +563,9 @@ class PyAmChartGenerator:
 
         (
             y_tick_labels,
-            scale,
+            scale,  # pylint: disable=unused-variable
             y_tick_locations,
-        ) = self.set_axis_scale(  # pylint: disable=unused-variable
-            a_x, x_or_y="y"
-        )
+        ) = self.set_axis_scale(a_x, x_or_y="y")
 
         plt.yticks(
             ticks=y_tick_locations,
@@ -774,7 +792,7 @@ class PyAmChartGenerator:
     ) -> None:
         """Use pandas describe method to get statistical values of certain data."""
         # create a excel writer object
-        with pd.ExcelWriter(
+        with pd.ExcelWriter(  # pylint: disable=abstract-class-instantiated
             path=os.path.join(path_to_save, f"{kind_of_data_set}_statistics.xlsx"),
             mode="w",
         ) as writer:
@@ -786,6 +804,7 @@ class PyAmChartGenerator:
     def check_if_scenario_exists_and_filter_dataframe_for_scenarios(
         self, data_frame: pd.DataFrame, list_of_scenarios_to_check: List[str]
     ) -> pd.DataFrame:
+        """Check if scenario exists and filter dataframe for scenario."""
 
         aggregated_scenario_dict: Dict = {key: [] for key in list_of_scenarios_to_check}
 
@@ -822,7 +841,7 @@ class PyAmChartGenerator:
 
 
 # examples for variables to check (check names of your variables before your evaluation, if they are correct)
-# kpi data only in yearly format
+# kpi data has no time series, so only choose when you analyze yearly data
 kpi_data = [
     "Consumption",
     "Production",
@@ -866,18 +885,31 @@ heating_demand = [
 ]
 
 
-def main():
-    """Main function to execute the pyam data processing."""
-    PyAmChartGenerator(
-        simulation_duration_to_check=str(365),
-        data_processing_mode=PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_SIZES,
-        # variables_to_check_for_hourly_data=heating_demand + electricity_data + occuancy_consumption,
-        variables_to_check_for_yearly_data=kpi_data,
-        analyze_yearly_or_hourly_data=PyamDataTypeEnum.YEARLY,
-    )
+# examples for scenarios to filter
+building_type = [
+    "DE.N.SFH",
+    "DE.N.MFH",
+    "DE.N.TH",
+    "DE.N.AB",
+]
 
+building_refurbishment_state = [
+    "001.001",
+    "001.002",
+    "001.003",
+]
 
-if __name__ == "__main__":
-    start_time = time.time()
-    main()
-    print(f"---{time.time() - start_time} seconds ___")
+building_age = [
+    "01.Gen",
+    "02.Gen",
+    "03.Gen",
+    "04.Gen",
+    "05.Gen",
+    "06.Gen",
+    "07.Gen",
+    "08.Gen",
+    "09.Gen",
+    "10.Gen",
+    "11.Gen",
+    "12.Gen",
+]

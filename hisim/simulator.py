@@ -343,10 +343,12 @@ class Simulator:
         execution_time = end_counter - start_counter
         log.information(f"Simulation took {execution_time:1.2f}s.")
         (
+            results_merged_cumulative,
             results_merged_monthly,
-            results_merged_all_data,
+            results_merged_daily,
             results_merged_hourly,
         ) = self.get_std_results(self.results_data_frame)
+
         ppdt = PostProcessingDataTransfer(
             results=self.results_data_frame,
             all_outputs=self.all_outputs,
@@ -358,8 +360,9 @@ class Simulator:
             my_module_config_path=self.my_module_config_path,
             execution_time=execution_time,
             results_monthly=results_merged_monthly,
-            results_cumulative=results_merged_all_data,
+            results_cumulative=results_merged_cumulative,
             results_hourly=results_merged_hourly,
+            results_daily=results_merged_daily
         )
         log.information("Finished preparing post processing")
         return ppdt
@@ -403,7 +406,7 @@ class Simulator:
 
     def get_std_results(
         self, results_data_frame: pd.DataFrame
-    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Converts results into a pretty dataframe for post processing."""
         pd_timeline = pd.date_range(
             start=self._simulation_parameters.start_date,
@@ -414,8 +417,9 @@ class Simulator:
 
         results_data_frame.index = pd_timeline
         results_merged_monthly = pd.DataFrame()
+        results_merged_daily = pd.DataFrame()
         results_merged_hourly = pd.DataFrame()
-        results_merged_cumulative_data = pd.DataFrame()
+        results_merged_cumulative = pd.DataFrame()
         for i_column in range(n_columns):
             temp_df = pd.DataFrame(
                 results_data_frame.values[:, i_column],
@@ -425,36 +429,56 @@ class Simulator:
 
             if self.all_outputs[i_column].unit in (
                 Units.CELSIUS,
+                Units.KELVIN,
                 Units.ANY,
                 Units.METER_PER_SECOND,
                 Units.DEGREES,
                 Units.WATT,
-                Units.KG_PER_SEC
+                Units.KILOWATT,
+                Units.WATT_PER_SQUARE_METER,
+                Units.KG_PER_SEC,
+                Units.PERCENT,
             ):
                 temp_df_monthly = temp_df.resample(
                     "M"
-                ).mean()  # interpolate(method="linear")
-                temp_df_cumulative_data = temp_df.mean()
+                ).mean()
+                temp_df_daily = temp_df.resample(
+                    "D"
+                ).mean()
+                temp_df_cumulative = temp_df.mean()
             else:
                 temp_df_monthly = temp_df.resample("M").sum()
-                temp_df_cumulative_data = temp_df.sum()
+                temp_df_daily = temp_df.resample("D").sum()
+                temp_df_cumulative = temp_df.sum()
 
+            # monthly results
             results_merged_monthly[temp_df_monthly.columns[0]] = temp_df_monthly.values[
                 :, 0
             ]
             results_merged_monthly.index = temp_df_monthly.index
+            # daily results
+            results_merged_daily[temp_df_daily.columns[0]] = temp_df_daily.values[
+                :, 0
+            ]
+            results_merged_daily.index = temp_df_daily.index
 
-            results_merged_cumulative_data[
+            # cumulative results
+            results_merged_cumulative[
                 temp_df_monthly.columns[0]
-            ] = temp_df_cumulative_data.values
+            ] = temp_df_cumulative.values
 
             if self._simulation_parameters.seconds_per_timestep != 3600:
                 if self.all_outputs[i_column].unit in (
                     Units.CELSIUS,
+                    Units.KELVIN,
                     Units.ANY,
                     Units.METER_PER_SECOND,
                     Units.DEGREES,
                     Units.WATT,
+                    Units.KILOWATT,
+                    Units.WATT_PER_SQUARE_METER,
+                    Units.KG_PER_SEC,
+                    Units.PERCENT,
                 ):
                     temp_df_hourly = temp_df.resample(
                         "60T"
@@ -470,7 +494,9 @@ class Simulator:
                 results_merged_hourly[temp_df.columns[0]] = temp_df.values[:, 0]
 
         return (
+            results_merged_cumulative,
             results_merged_monthly,
-            results_merged_cumulative_data,
+            results_merged_daily,
             results_merged_hourly,
+            
         )

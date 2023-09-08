@@ -1,16 +1,15 @@
 """Data Collection for Scenario Comparison with Pyam."""
 # clean
 import glob
-import time
 import os
 from typing import Dict, Any, Optional, List
 import json
 import enum
 from collections import defaultdict
 import shutil
-import pyam
-import pandas as pd
 import re
+import pandas as pd
+
 
 from hisim import log
 
@@ -23,7 +22,7 @@ class PyamDataCollector:
         self,
         data_processing_mode: Any,
         simulation_duration_to_check: str,
-        analyze_yearly_or_hourly_data: Any,
+        time_resolution_of_data_set: Any,
         folder_from_which_data_will_be_collected: str = os.path.join(
             os.pardir, os.pardir, "examples", "results"
         ),
@@ -125,7 +124,7 @@ class PyamDataCollector:
 
         all_csv_files = self.import_data_from_file(
             paths_to_check=path_to_check,
-            analyze_yearly_or_hourly_data=analyze_yearly_or_hourly_data,
+            analyze_yearly_or_hourly_data=time_resolution_of_data_set,
         )
 
         dict_of_csv_data = self.make_dictionaries_with_simulation_duration_keys(
@@ -135,7 +134,7 @@ class PyamDataCollector:
 
         self.read_csv_and_generate_pyam_dataframe(
             dict_of_csv_to_read=dict_of_csv_data,
-            analyze_yearly_or_hourly_data=analyze_yearly_or_hourly_data,
+            time_resolution_of_data_set=time_resolution_of_data_set,
             rename_scenario=True,
             parameter_key=parameter_key,
             list_with_parameter_key_values=list_with_parameter_key_values,
@@ -178,6 +177,10 @@ class PyamDataCollector:
             kind_of_data_set = "hourly"
         elif analyze_yearly_or_hourly_data == PyamDataTypeEnum.YEARLY:
             kind_of_data_set = "yearly"
+        elif analyze_yearly_or_hourly_data == PyamDataTypeEnum.DAILY:
+            kind_of_data_set = "daily"
+        elif analyze_yearly_or_hourly_data == PyamDataTypeEnum.MONTHLY:
+            kind_of_data_set = "monthly"
         else:
             raise ValueError(
                 "analyze_yearly_or_hourly_data was not found in the pyamdatacollectorenum class."
@@ -251,14 +254,14 @@ class PyamDataCollector:
     def read_csv_and_generate_pyam_dataframe(
         self,
         dict_of_csv_to_read: Dict[str, list[str]],
-        analyze_yearly_or_hourly_data: Any,
+        time_resolution_of_data_set: Any,
         rename_scenario: bool = False,
         parameter_key: Optional[str] = None,
         list_with_parameter_key_values: Optional[List[Any]] = None,
     ) -> None:
         """Read the csv files and generate the pyam dataframe."""
         log.information(
-            f"Read csv files and generate pyam dataframes for {analyze_yearly_or_hourly_data}."
+            f"Read csv files and generate pyam dataframes for {time_resolution_of_data_set}."
         )
 
         appended_dataframe = pd.DataFrame()
@@ -309,7 +312,7 @@ class PyamDataCollector:
         filename = self.store_pyam_data_with_the_right_name_and_in_the_right_path(
             pyam_data_folder=self.pyam_data_folder,
             simulation_duration_key=simulation_duration_key,
-            analyze_yearly_or_hourly_data=analyze_yearly_or_hourly_data,
+            time_resolution_of_data_set=time_resolution_of_data_set,
             parameter_key=parameter_key,
         )
         appended_dataframe.to_csv(filename)
@@ -318,15 +321,19 @@ class PyamDataCollector:
         self,
         pyam_data_folder: str,
         simulation_duration_key: str,
-        analyze_yearly_or_hourly_data: Any,
+        time_resolution_of_data_set: Any,
         parameter_key: Optional[str] = None,
     ) -> str:
         """Store csv files in the pyam data folder with the right filename and path."""
 
-        if analyze_yearly_or_hourly_data == PyamDataTypeEnum.HOURLY:
+        if time_resolution_of_data_set == PyamDataTypeEnum.HOURLY:
             kind_of_data_set = "hourly"
-        elif analyze_yearly_or_hourly_data == PyamDataTypeEnum.YEARLY:
+        elif time_resolution_of_data_set == PyamDataTypeEnum.YEARLY:
             kind_of_data_set = "yearly"
+        elif time_resolution_of_data_set == PyamDataTypeEnum.DAILY:
+            kind_of_data_set = "daily"
+        elif time_resolution_of_data_set == PyamDataTypeEnum.MONTHLY:
+            kind_of_data_set = "monthly"
         else:
             raise ValueError(
                 "This kind of data was not found in the pyamdatacollectorenum class."
@@ -508,6 +515,8 @@ class PyamDataTypeEnum(enum.Enum):
     """
 
     HOURLY = "hourly"
+    DAILY = "daily"
+    MONTHLY = "monthly"
     YEARLY = "yearly"
 
 
@@ -525,23 +534,3 @@ class PyamDataProcessingModeEnum(enum.Enum):
     PROCESS_FOR_DIFFERENT_PV_SIZES = 5
     PROCESS_FOR_DIFFERENT_PV_AZIMUTH_ANGLES = 6
     PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES = 7
-
-
-def main():
-    """Main function to execute the pyam data collection."""
-
-    PyamDataCollector(
-        data_processing_mode=PyamDataProcessingModeEnum.PROCESS_ALL_DATA,
-        folder_from_which_data_will_be_collected=os.path.join(
-            os.pardir, os.pardir, "examples", "results"
-        ),
-        path_to_default_config=None,
-        analyze_yearly_or_hourly_data=PyamDataTypeEnum.YEARLY,
-        simulation_duration_to_check=str(365),
-    )
-
-
-if __name__ == "__main__":
-    start_time = time.time()
-    main()
-    print(f"---{time.time() - start_time} seconds ___")

@@ -2,8 +2,8 @@
 # clean
 import time
 import os
-from hisim.postprocessing import pyam_data_collection, pyam_data_processing
 from typing import Any, List, Optional
+from hisim.postprocessing import pyam_data_collection, pyam_data_processing
 
 
 class PyamDataAnalysis:
@@ -15,10 +15,9 @@ class PyamDataAnalysis:
         folder_from_which_data_will_be_collected: str,
         path_to_default_config: str,
         simulation_duration_to_check: str,
-        analyze_yearly_or_hourly_data: Any,
+        time_resolution_of_data_set: Any,
         data_processing_mode: Any,
-        variables_to_check_for_hourly_data: List[str],
-        variables_to_check_for_yearly_data: List[str],
+        variables_to_check: List[str],
         list_of_scenarios_to_check: Optional[List[str]] = None,
     ) -> None:
         """Initialize the class."""
@@ -27,15 +26,14 @@ class PyamDataAnalysis:
             data_processing_mode=data_processing_mode,
             folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
             path_to_default_config=path_to_default_config,
-            analyze_yearly_or_hourly_data=analyze_yearly_or_hourly_data,
+            time_resolution_of_data_set=time_resolution_of_data_set,
             simulation_duration_to_check=simulation_duration_to_check,
         )
         pyam_data_processing.PyAmChartGenerator(
             simulation_duration_to_check=simulation_duration_to_check,
-            analyze_yearly_or_hourly_data=analyze_yearly_or_hourly_data,
+            time_resolution_of_data_set=time_resolution_of_data_set,
             data_processing_mode=data_processing_mode,
-            variables_to_check_for_hourly_data=variables_to_check_for_hourly_data,
-            variables_to_check_for_yearly_data=variables_to_check_for_yearly_data,
+            variables_to_check=variables_to_check,
             list_of_scenarios_to_check=list_of_scenarios_to_check,
         )
 
@@ -45,20 +43,20 @@ def main():
 
     # Inputs for pyam analysis
     # -------------------------------------------------------------------------------------------------------------------------------------
-    analyze_yearly_or_hourly_data = pyam_data_collection.PyamDataTypeEnum.YEARLY
+    time_resolution_of_data_set = pyam_data_collection.PyamDataTypeEnum.DAILY
 
     cluster_storage_path = "/storage_cluster/internal/home/k-rieck/"
 
     folder_from_which_data_will_be_collected = os.path.join(
         cluster_storage_path,
-        "repositories/HiSim/examples/results/household_cluster_reference_advanced_hp/german_tabula_buildings_20230906_1147",
+        "repositories/HiSim/examples/results/household_cluster_reference_advanced_hp/german_tabula_buildings_20230908_1231",
     )
     # folder_from_which_data_will_be_collected = (
     #     r"C:\Users\k.rieck\Cluster_stuff_copied\examples_results"
     # )
     path_to_default_config = os.path.join(
         cluster_storage_path,
-        "jobs_hisim/cluster-hisim-paper/job_array_for_hisim_mass_simu_one/default_building_pv_config.json",
+        "jobs_hisim/cluster-hisim-paper/job_array_for_hisim_mass_simus/default_building_pv_config.json",
     )
     # path_to_default_config = r"C:\Users\k.rieck\Cluster_stuff_copied\job_array_for_hisim_mass_simu_one\default_building_pv_config.json"
 
@@ -68,55 +66,24 @@ def main():
         pyam_data_collection.PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
     )
 
-    list_with_variables_to_check_for_hourly_data = (
-        pyam_data_processing.heating_demand
-        # + pyam_data_processing.electricity_data
-        # + pyam_data_processing.occuancy_consumption
-    )
-
-    list_with_variables_to_check_for_yearly_data = (
+    list_with_variables_to_check = (
         pyam_data_processing.kpi_data
         + pyam_data_processing.heating_demand
         + pyam_data_processing.electricity_data
-    )  #
+        # + pyam_data_processing.occuancy_consumption
+    )
 
-    list_of_scenarios_to_check = [
-        "DE.N.SFH",
-        "DE.N.MFH",
-        "DE.N.TH",
-        "DE.N.AB",
-    ]
-    # list_of_scenarios_to_check = [
-    #     "001.001",
-    #     "001.002",
-    #     "001.003",
-    # ]
-
-    # list_of_scenarios_to_check = [
-    #     "01.Gen",
-    #     "02.Gen",
-    #     "03.Gen",
-    #     "04.Gen",
-    #     "05.Gen",
-    #     "06.Gen",
-    #     "07.Gen",
-    #     "08.Gen",
-    #     "09.Gen",
-    #     "10.Gen",
-    #     "11.Gen",
-    #     "12.Gen",
-    # ]
+    list_of_scenarios_to_check = pyam_data_processing.building_type
 
     # -------------------------------------------------------------------------------------------------------------------------------------
 
     PyamDataAnalysis(
-        analyze_yearly_or_hourly_data=analyze_yearly_or_hourly_data,
         folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
+        time_resolution_of_data_set=time_resolution_of_data_set,
         path_to_default_config=path_to_default_config,
         simulation_duration_to_check=simulation_duration_to_check,
         data_processing_mode=data_processing_mode,
-        variables_to_check_for_hourly_data=list_with_variables_to_check_for_hourly_data,
-        variables_to_check_for_yearly_data=list_with_variables_to_check_for_yearly_data,
+        variables_to_check=list_with_variables_to_check,
         list_of_scenarios_to_check=list_of_scenarios_to_check,
     )
 

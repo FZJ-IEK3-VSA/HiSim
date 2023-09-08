@@ -67,7 +67,7 @@ def log(prio: int, message: str) -> None:
     else:
         raise ValueError("Unknown log priority: " + str(prio))
     if prio <= LOGGING_LEVEL:
-        print(str(prio_string) + ":" + message, flush=True)
+        print(str(prio_string) + ":" + message)
     with open('hisim_simulation.log', 'a', encoding="utf-8") as filestream:
         filestream.write(message + "\n")
 

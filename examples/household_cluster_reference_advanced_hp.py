@@ -151,7 +151,7 @@ def household_cluster_reference_advanced_hp(
         2  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
     )
     set_heating_threshold_outside_temperature_for_heat_pump_in_celsius = 16.0
-    set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = 22.0
+    set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = 20.0
 
     # Set Heat Pump
     model: str = "Generic"
@@ -170,31 +170,16 @@ def household_cluster_reference_advanced_hp(
     hp_maintenance_cost_as_percentage_of_investment = 0.025
     hp_consumption = 0
 
-    # Set Heat Distribution Controller
-    hds_controller_name = "HeatDistributionSystemController"
-    set_heating_threshold_outside_temperature_for_heat_distribution_system_in_celsius = (
-        None
-    )
-    set_heating_temperature_for_building_in_celsius = 19.0
-    set_cooling_temperature_for_building_in_celsius = 24.0
-    set_cooling_threshold_water_temperature_in_celsius_for_dew_protection = 17.0
-    heating_system = heat_distribution_system.HeatingSystemType.FLOORHEATING
 
     # =================================================================================================================================
     # Build Components
 
     # Build Heat Distribution Controller
+    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
+    my_heat_distribution_controller_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
         my_simulation_parameters=my_simulation_parameters,
-        config=heat_distribution_system.HeatDistributionControllerConfig(
-            name=hds_controller_name,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_distribution_system_in_celsius,
-            set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
-            set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
-            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-            heating_system=heating_system,
-            set_cooling_threshold_water_temperature_in_celsius_for_dew_protection=set_cooling_threshold_water_temperature_in_celsius_for_dew_protection,
-        ),
+        config=my_heat_distribution_controller_config
     )
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()

@@ -223,6 +223,14 @@ def household_3_debugging(
     clever = my_config.surplus_control
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
+    # Build heat Distribution System Controller
+    my_heat_distribution_controller = (
+        heat_distribution_system.HeatDistributionController(
+            config=my_config.hds_controller_config,
+            my_simulation_parameters=my_simulation_parameters,
+        )
+    )
+
     # Build Occupancy
     my_occupancy_config = my_config.occupancy_config
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
@@ -245,14 +253,6 @@ def household_3_debugging(
     my_building = building.Building(
         config=my_config.building_config,
         my_simulation_parameters=my_simulation_parameters,
-    )
-
-    # Build heat Distribution System Controller
-    my_heat_distribution_controller = (
-        heat_distribution_system.HeatDistributionController(
-            config=my_config.hds_controller_config,
-            my_simulation_parameters=my_simulation_parameters,
-        )
     )
 
     # Build Heat Distribution System

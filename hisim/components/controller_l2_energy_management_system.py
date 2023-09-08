@@ -122,6 +122,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
     # Inputs
     ElectricityToElectrolyzerUnused = "ElectricityToElectrolyzerUnused"
+    # BatteryStateOfCharge = "BatteryStateOfCharge"
 
     # Outputs
     ElectricityToElectrolyzerTarget = "ElectricityToElectrolyzerTarget"
@@ -162,6 +163,10 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.production_inputs: List[ComponentInput] = []
         self.consumption_uncontrolled_inputs: List[ComponentInput] = []
         self.consumption_ems_controlled_inputs: List[ComponentInput] = []
+        # self.battery_state_of_charge: float = 0
+        # self.ac_power_to_battery_output_channel: cp.ComponentOutput
+        # self.ac_power_from_battery_input_channel: cp.ComponentInput
+
 
         self.mode: Any
         self.strategy = self.ems_config.strategy
@@ -184,6 +189,13 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             unit=lt.Units.WATT,
             mandatory=False,
         )
+        # self.battery_state_of_charge_channel: cp.ComponentInput = self.add_input(
+        #     object_name=self.component_name,
+        #     field_name=self.BatteryStateOfCharge,
+        #     load_type=lt.LoadTypes.ANY,
+        #     unit=lt.Units.ANY,
+        #     mandatory=False,
+        # )
 
         # Outputs
         self.electricity_to_or_from_grid: cp.ComponentOutput = self.add_output(
@@ -275,6 +287,11 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 self.outputs_sorted.append(output)
             else:
                 raise Exception("Danamic input is not conncted to dynamic output")
+
+            # # Todo: used to recalculate consumption from grid
+            # if self.components_sorted[ind] == lt.ComponentType.BATTERY:
+            #     self.ac_power_to_battery_output_channel = self.outputs_sorted[ind]
+            #     self.ac_power_from_battery_input_channel = self.inputs_sorted[ind]
 
         self.production_inputs = self.get_dynamic_inputs(
             tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION]
@@ -423,6 +440,23 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         flexible_electricity = self.state.production - self.state.consumption_uncontrolled
         if self.strategy == "optimize_own_consumption":
             self.optimize_own_consumption_iterative(delta_demand=flexible_electricity, stsv=stsv, )
+
+        # # Todo: this is not working yet
+        # # avoid consoumption from grid, if battery SOC > 0. Discharge Battery before consumption from grid
+        # self.battery_state_of_charge = stsv.get_input_value(self.battery_state_of_charge_channel)
+        # ac_power_from_battery = stsv.get_input_value(component_input=self.ac_power_from_battery_input_channel)
+        # if flexible_electricity < 0 and self.battery_state_of_charge > 0.2 and ac_power_from_battery <= 0:  # Todo: SOC= 0.2 just put to avoid heavy discharging here
+        #     battery_discharge_power_max = -5000.0  # Todo: write default value into config. the value should be similar to "custom_pv_inverter_power_generic_in_watt" in BatteryConfig. Attention on negative sign
+        #
+        #     # battery cannot deliver whole power demand
+        #     if flexible_electricity < battery_discharge_power_max - ac_power_from_battery:
+        #         stsv.set_output_value(output=self.ac_power_to_battery_output_channel, value=battery_discharge_power_max)
+        #         flexible_electricity -= battery_discharge_power_max - ac_power_from_battery
+        #     # battery can deliver whole power demand
+        #     else:
+        #         stsv.set_output_value(output=self.ac_power_to_battery_output_channel, value=flexible_electricity + ac_power_from_battery)
+        #         electricity_to_grid = 0
+        # # Todo: possible alternative to this: give battery the source_tag "production", if electricity_to_grid < 0 (grid consumption)
 
         # Set other output values
         electricity_to_grid = (

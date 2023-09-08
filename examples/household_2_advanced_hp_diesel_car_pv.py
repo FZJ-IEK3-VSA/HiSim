@@ -60,7 +60,7 @@ class HouseholdAdvancedHPDieselCarPVConfig:
     occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig
     pv_config: generic_pv_system.PVSystemConfig
     building_config: building.BuildingConfig
-    hdscontroller_config: heat_distribution_system.HeatDistributionControllerConfig
+    hds_controller_config: heat_distribution_system.HeatDistributionControllerConfig
     hds_config: heat_distribution_system.HeatDistributionConfig
     hp_controller_config: advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config
     hp_config: advanced_heat_pump_hplib.HeatPumpHplibConfig
@@ -81,7 +81,8 @@ class HouseholdAdvancedHPDieselCarPVConfig:
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments
         )
-        # set_heating_threshold_temperature_in_celsius = 16.0 # used for hp and hds
+        heating_reference_temperature_in_celsius: float = -7
+        set_heating_threshold_outside_temperature_in_celsius: float = 16.0
 
         household_config = HouseholdAdvancedHPDieselCarPVConfig(
             building_type="blub",
@@ -105,7 +106,7 @@ class HouseholdAdvancedHPDieselCarPVConfig:
             ),
             pv_config=generic_pv_system.PVSystemConfig.get_default_PV_system(),
             building_config=building.BuildingConfig.get_default_german_single_family_home(),
-            hdscontroller_config=(
+            hds_controller_config=(
                 heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
             ),
             hds_config=(
@@ -131,13 +132,25 @@ class HouseholdAdvancedHPDieselCarPVConfig:
                 controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
             ),
         )
+        # adjust HeatPump
         household_config.hp_config.group_id = 1  # use modulating heatpump as default
         household_config.hp_controller_config.mode = (
             2  # use heating and cooling as default
         )
-        # Todo: check out heating treshold to avoid heating before cooling
-        # household_config.hp_controller_config.set_heating_threshold_outside_temperature_in_celsius = set_heating_threshold_temperature_in_celsius
-        # household_config.hdscontroller_config.set_heating_threshold_outside_temperature_in_celsius = set_heating_threshold_temperature_in_celsius
+        # set same heating threshold
+        household_config.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius = set_heating_threshold_outside_temperature_in_celsius
+        household_config.hp_controller_config.set_heating_threshold_outside_temperature_in_celsius = set_heating_threshold_outside_temperature_in_celsius
+
+        # set same heating reference temperature
+        household_config.hds_controller_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
+        household_config.hp_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
+        household_config.building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
+
+        household_config.hp_config.flow_temperature_in_celsius = 21  # Todo: check value
+
+        # set dhw storage volume, because default(volume = 230) leads to an error
+        household_config.dhw_storage_config.volume = 250
+
         return household_config
 
 
@@ -206,6 +219,14 @@ def household_2_advanced_hp_diesel_car_pv(
     clever = my_config.surplus_control
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
+    # Build heat Distribution System Controller
+    my_heat_distribution_controller = (
+        heat_distribution_system.HeatDistributionController(
+            config=my_config.hds_controller_config,
+            my_simulation_parameters=my_simulation_parameters,
+        )
+    )
+
     # Build Occupancy
     my_occupancy_config = my_config.occupancy_config
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
@@ -228,14 +249,6 @@ def household_2_advanced_hp_diesel_car_pv(
     my_building = building.Building(
         config=my_config.building_config,
         my_simulation_parameters=my_simulation_parameters,
-    )
-
-    # Build heat Distribution System Controller
-    my_heat_distribution_controller = (
-        heat_distribution_system.HeatDistributionController(
-            config=my_config.hdscontroller_config,
-            my_simulation_parameters=my_simulation_parameters,
-        )
     )
 
     # Build Heat Distribution System

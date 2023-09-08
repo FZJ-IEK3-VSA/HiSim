@@ -53,7 +53,7 @@
   },
   "building_config": {
     "name": "Building_1",
-    "heating_reference_temperature_in_celsius": -14,
+    "heating_reference_temperature_in_celsius": -7,
     "building_code": "DE.N.SFH.05.Gen.ReEx.001.002",
     "building_heat_capacity_class": "medium",
     "initial_internal_temperature_in_celsius": 23,
@@ -61,14 +61,13 @@
     "total_base_area_in_m2": null,
     "number_of_apartments": null
   },
-  "hdscontroller_config": {
+  "hds_controller_config": {
     "name": "HeatDistributionController",
     "heating_system": 2,
     "set_heating_threshold_outside_temperature_in_celsius": 16.0,
-    "heating_reference_temperature_in_celsius": -14.0,
-    "set_heating_temperature_for_building_in_celsius": 18,
-    "set_cooling_temperature_for_building_in_celsius": 25,
-    "set_cooling_threshold_water_temperature_in_celsius_for_dew_protection": 17.0
+    "heating_reference_temperature_in_celsius": -7,
+    "set_heating_temperature_for_building_in_celsius": 19,
+    "set_cooling_temperature_for_building_in_celsius": 24
   },
   "hds_config": {
     "name": "HeatDistributionSystem",
@@ -80,7 +79,7 @@
   "hp_controller_config": {
     "name": "HeatPumpController",
     "mode": 2,
-    "set_heating_threshold_outside_temperature_in_celsius": null,
+    "set_heating_threshold_outside_temperature_in_celsius": 16.0,
     "set_cooling_threshold_outside_temperature_in_celsius": 20.0
   },
   "hp_config": {
@@ -88,7 +87,7 @@
     "model": "Generic",
     "group_id": 1,
     "heating_reference_temperature_in_celsius": -7,
-    "flow_temperature_in_celsius": 52,
+    "flow_temperature_in_celsius": 21,
     "set_thermal_output_power_in_watt": 8000,
     "cycling_mode": true,
     "minimum_running_time_in_seconds": 600,
@@ -102,7 +101,7 @@
   "simple_hot_water_storage_config": {
     "name": "SimpleHotWaterStorage",
     "volume_heating_water_storage_in_liter": 500,
-    "temperature_loss_in_celsius_per_hour": 0.21,
+    "temperature_loss_in_celsius_per_hour": 0.125,
     "heat_exchanger_is_present": true,
     "co2_footprint": 100,
     "cost": 7255.0,
@@ -139,12 +138,12 @@
     "source_weight": 1,
     "use": "Boiler",
     "volume": 250,
-    "surface": 2.306587685805036,
+    "surface": 2.181868240447087,
     "u_value": 0.36,
     "energy_full_cycle": null,
     "power": 0,
     "co2_footprint": 0,
-    "cost": 3627.5,
+    "cost": 3337.2999999999997,
     "lifetime": 20,
     "maintenance_cost_as_percentage_of_investment": 0.02
   },

@@ -63,7 +63,7 @@ class HouseholdAdvancedHPEvPvConfig:
     occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig
     pv_config: generic_pv_system.PVSystemConfig
     building_config: building.BuildingConfig
-    hdscontroller_config: heat_distribution_system.HeatDistributionControllerConfig
+    hds_controller_config: heat_distribution_system.HeatDistributionControllerConfig
     hds_config: heat_distribution_system.HeatDistributionConfig
     hp_controller_config: advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config
     hp_config: advanced_heat_pump_hplib.HeatPumpHplibConfig
@@ -90,6 +90,8 @@ class HouseholdAdvancedHPEvPvConfig:
         charging_power = float(
             (charging_station_set.Name or "").split("with ")[1].split(" kW")[0]
         )
+        heating_reference_temperature_in_celsius: float = -7
+        set_heating_threshold_outside_temperature_in_celsius: float = 16.0
 
         household_config = HouseholdAdvancedHPEvPvConfig(
             building_type="blub",
@@ -114,7 +116,7 @@ class HouseholdAdvancedHPEvPvConfig:
             ),
             pv_config=generic_pv_system.PVSystemConfig.get_default_PV_system(),
             building_config=building.BuildingConfig.get_default_german_single_family_home(),
-            hdscontroller_config=(
+            hds_controller_config=(
                 heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
             ),
             hds_config=(
@@ -146,13 +148,29 @@ class HouseholdAdvancedHPEvPvConfig:
                 controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
             ),
         )
+        # adjust HeatPump
         household_config.hp_config.group_id = 1  # use modulating heatpump as default
         household_config.hp_controller_config.mode = (
             2  # use heating and cooling as default
         )
+        # set same heating threshold
+        household_config.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius = set_heating_threshold_outside_temperature_in_celsius
+        household_config.hp_controller_config.set_heating_threshold_outside_temperature_in_celsius = set_heating_threshold_outside_temperature_in_celsius
+
+        # set same heating reference temperature
+        household_config.hds_controller_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
+        household_config.hp_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
+        household_config.building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
+
+        household_config.hp_config.flow_temperature_in_celsius = 21  # Todo: check value
+
+        # set dhw storage volume, because default(volume = 230) leads to an error
+        household_config.dhw_storage_config.volume = 250
+
+        # set charging power from battery and controller to same value, to reduce error in simulation of battery
         household_config.car_battery_config.p_inv_custom = (
             charging_power * 1e3
-        )  # set charging power from battery and controller to same value, to reduce error in simulation of battery
+        )
 
         return household_config
 
@@ -250,7 +268,7 @@ def household_4_advanced_hp_ev_pv(
     # Build heat Distribution System Controller
     my_heat_distribution_controller = (
         heat_distribution_system.HeatDistributionController(
-            config=my_config.hdscontroller_config,
+            config=my_config.hds_controller_config,
             my_simulation_parameters=my_simulation_parameters,
         )
     )

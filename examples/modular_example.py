@@ -181,30 +181,22 @@ def modular_household_explicit(
         )
     clever = my_simulation_parameters.surplus_control
     pv_included = system_config_.pv_included  # True or False
-    if pv_included:
-        pv_peak_power = system_config_.pv_peak_power
+    pv_peak_power = system_config_.pv_peak_power or 5e3  # set default
     smart_devices_included = system_config_.smart_devices_included  # True or False
     buffer_included = system_config_.buffer_included
-    buffer_volume = system_config_.buffer_volume
-    if buffer_volume is None:
-        buffer_volume = 1
-        hisim.log.information("Default volume is used for buffer storage. ")
-    elif buffer_volume < 1:
+    buffer_volume = system_config_.buffer_volume or 1  # set default
+    if buffer_volume < 1:
         raise Exception(
             "Buffer volume cannot be smaller than default: choose values greater than one"
         )
     battery_included = system_config_.battery_included
-    if battery_included:
-        battery_capacity = system_config_.battery_capacity
+    battery_capacity = system_config_.battery_capacity or 5  # set default
     chp_included = system_config_.chp_included
-    if chp_included:
-        chp_power = system_config_.chp_power
-    h2_storage_included = system_config_.h2_storage_included
-    if h2_storage_included:
-        h2_storage_size = system_config_.h2_storage_size
-    electrolyzer_included = system_config_.electrolyzer_included
-    if electrolyzer_included:
-        electrolyzer_power = system_config_.electrolyzer_power
+    chp_power = system_config_.chp_power or 1  # set default
+    hydrogen_setup_included = system_config_.hydrogen_setup_included
+    fuel_cell_power = system_config_.fuel_cell_power or 1  # set default
+    h2_storage_size = system_config_.h2_storage_size or 200  # TODO: replace default
+    electrolyzer_power = system_config_.electrolyzer_power or 1  # set default
     ev_included = system_config_.ev_included
     charging_station = system_config_.charging_station
 
@@ -338,6 +330,7 @@ def modular_household_explicit(
     if needs_ems(
         battery_included,
         chp_included,
+        hydrogen_setup_included,
         ev_included,
         heating_system_installed,
         smart_devices_included,
@@ -391,7 +384,7 @@ def modular_household_explicit(
         lt.HeatingSystems.HEAT_PUMP,
         lt.HeatingSystems.ELECTRIC_HEATING,
     ]:
-        count = component_connections.configure_water_heating_electric(
+        my_boiler, count = component_connections.configure_water_heating_electric(
             my_sim=my_sim,
             my_simulation_parameters=my_simulation_parameters,
             my_occupancy=my_occupancy,
@@ -401,10 +394,9 @@ def modular_household_explicit(
             controlable=clever,
             count=count,
         )
-        """TODO: add heat pump cost. """
 
     else:
-        count = component_connections.configure_water_heating(
+        my_boiler, count = component_connections.configure_water_heating(
             my_sim=my_sim,
             my_simulation_parameters=my_simulation_parameters,
             my_occupancy=my_occupancy,
@@ -477,6 +469,59 @@ def modular_household_explicit(
                 count=count,
             )
 
+    # """natural gas CHP"""
+    if chp_included and not buffer_included:
+        count = component_connections.configure_chp(
+            my_sim=my_sim,
+            my_simulation_parameters=my_simulation_parameters,
+            my_building=my_building,
+            my_boiler=my_boiler,
+            my_electricity_controller=my_electricity_controller,
+            chp_power=chp_power,
+            controlable=clever,
+            count=count,
+        )
+    if chp_included and buffer_included:
+        count = component_connections.configure_chp_with_buffer(
+            my_sim=my_sim,
+            my_simulation_parameters=my_simulation_parameters,
+            my_buffer=my_buffer,
+            my_boiler=my_boiler,
+            my_electricity_controller=my_electricity_controller,
+            chp_power=chp_power,
+            controlable=clever,
+            count=count,
+        )
+
+    # """hydrogen storage with fuel cell and electrolyzer"""
+    if hydrogen_setup_included and not buffer_included:
+        count = component_connections.configure_elctrolysis_h2storage_fuelcell_system(
+            my_sim=my_sim,
+            my_simulation_parameters=my_simulation_parameters,
+            my_building=my_building,
+            my_boiler=my_boiler,
+            my_electricity_controller=my_electricity_controller,
+            fuel_cell_power=fuel_cell_power,
+            h2_storage_size=h2_storage_size,
+            electrolyzer_power=electrolyzer_power * pv_peak_power,
+            controlable=clever,
+            count=count,
+        )
+
+    if hydrogen_setup_included and buffer_included:
+        count = component_connections.configure_elctrolysis_h2storage_fuelcell_system_with_buffer(
+            my_sim=my_sim,
+            my_simulation_parameters=my_simulation_parameters,
+            my_buffer=my_buffer,
+            my_boiler=my_boiler,
+            my_electricity_controller=my_electricity_controller,
+            fuel_cell_power=fuel_cell_power,
+            h2_storage_size=h2_storage_size,
+            electrolyzer_power=electrolyzer_power * pv_peak_power,
+            controlable=clever,
+            count=count,
+        )
+
     # """BATTERY"""
     if battery_included and clever:
         count = component_connections.configure_battery(
@@ -512,6 +557,7 @@ def modular_household_explicit(
     if needs_ems(
         battery_included,
         chp_included,
+        hydrogen_setup_included,
         ev_included,
         heating_system_installed,
         smart_devices_included,
@@ -531,6 +577,7 @@ def modular_household_explicit(
 def needs_ems(
     battery_included,
     chp_included,
+    hydrogen_setup_included,
     ev_included,
     heating_system_installed,
     smart_devices_included,
@@ -540,6 +587,8 @@ def needs_ems(
     if battery_included:
         return True
     if chp_included:
+        return True
+    if hydrogen_setup_included:
         return True
     if smart_devices_included:
         return True

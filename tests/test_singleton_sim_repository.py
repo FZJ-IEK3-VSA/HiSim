@@ -19,7 +19,6 @@ from hisim import utils
 PATH = "../examples/household_for_test_sim_repository.py"
 FUNC = "test_house"
 
-
 @utils.measure_execution_time
 @pytest.mark.base
 def test_house(

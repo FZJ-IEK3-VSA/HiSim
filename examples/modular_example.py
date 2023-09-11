@@ -90,7 +90,7 @@ def modular_household_explicit(
     cleanup_old_lpg_requests()
 
     # Set simulation parameters
-    year = 2021
+    year = 2019
     seconds_per_timestep = 60 * 15
 
     household_config = read_in_configs(my_sim.my_module_config_path)

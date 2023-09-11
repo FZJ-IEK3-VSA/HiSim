@@ -171,7 +171,7 @@ class Occupancy(cp.Component):
         self.profile_name = config.profile_name
         self.occupancy_config = config
 
-        if self.my_simulation_parameters.year != 2021:
+        if self.profile_name != "AVG" and self.my_simulation_parameters.year != 2021:
             raise Exception(
                 "LPG data is only available for 2021, if other years are needed, "
                 + "use loadprofilegenerator_utsp_connector instead."

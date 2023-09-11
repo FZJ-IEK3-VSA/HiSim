@@ -91,6 +91,7 @@ jobs:
         prospector hisim/postprocessing/chart_singleday.py
         prospector hisim/postprocessing/compute_kpis.py
         prospector hisim/postprocessing/generate_csv_for_housing_database.py
+        prospector hisim/postprocessing/opex_and_capex_cost_calculation.py
         prospector hisim/postprocessing/postprocessing_datatransfer.py
         prospector hisim/postprocessing/postprocessing_main.py
         prospector hisim/postprocessing/reportgenerator.py

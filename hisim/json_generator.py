@@ -44,6 +44,7 @@ class ConfigFile(JSONWizard):
     my_module_config: Optional[Dict[str, Any]] = None
     pyam_data_information: Optional[Dict[str, Any]] = None
 
+
 class JsonConfigurationGenerator:
 
     """Class to generate Json config files that can be used to start calculations without Python."""

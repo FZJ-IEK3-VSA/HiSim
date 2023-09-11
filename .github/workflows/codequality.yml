@@ -104,6 +104,13 @@ jobs:
         prospector tests/test_gas_heater.py
         prospector tests/test_generic_gas_heater.py
         prospector tests/test_simple_hot_water_storage.py
+        prospector hisim/components/controller_l1_generic_electrolyzer.py
+        prospector hisim/components/generic_eletrolyzer_h2.py
+        prospector hisim/components/generic_eletrolyzer.py
+        prospector tests/test_generic_electrolyzer_and_h2_storage.py
+        prospector tests/test_generic_electrolyzer_h2.py
+        prospector tests/test_generic_electrolyzer.py
+        
 
 
 

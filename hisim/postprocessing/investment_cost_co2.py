@@ -56,7 +56,7 @@ def compute_investment_cost(components: List[ComponentWrapper],) -> Tuple[float,
         elif isinstance(component.my_component, generic_pv_system.PVSystem):
             column = price_frame.iloc[price_frame.index == "Photovoltaic panel"]
             component_capacity = (
-                component.my_component.pvconfig.power_in_watt_peak * 1e-3
+                component.my_component.pvconfig.power * 1e-3
             )
         elif isinstance(component.my_component, generic_heat_source.HeatSource):
             if component.my_component.config.fuel == LoadTypes.DISTRICTHEATING:

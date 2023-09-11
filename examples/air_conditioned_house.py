@@ -286,7 +286,7 @@ def household_air_conditioner_generic(
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig(
         time=time,
         location=location,
-        power_in_watt_peak=power,
+        power=power,
         load_module_data=load_module_data,
         module_name=module_name,
         integrate_inverter=integrate_inverter,

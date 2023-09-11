@@ -95,6 +95,7 @@ def household_with_hds_and_advanced_hp(
     my_simulation_parameters.post_processing_options.append(
         PostProcessingOptions.EXPORT_TO_CSV
     )
+
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Heat Distribution Controller

@@ -88,7 +88,6 @@ class BatteryConfig(ConfigBase):
             lifetime_in_cycles=5e3,  # todo set correct values
             maintenance_cost_as_percentage_of_investment=0.02,  # SOURCE: https://solarenergie.de/stromspeicher/preise
         )
-        config.name = config.name + "_w" + str(config.source_weight)
         return config
 
 
@@ -118,9 +117,9 @@ class Battery(Component):
         """
         self.battery_config = config
         super().__init__(
-            name=self.battery_config.name,
-            # + "_w"
-            # + str(self.battery_config.source_weight),
+            name=self.battery_config.name
+            + "_w"
+            + str(self.battery_config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
         )

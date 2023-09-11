@@ -339,9 +339,11 @@ def modular_household_explicit(
         my_electricity_controller_config = (
             controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
         )
-        my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_electricity_controller_config,
+        my_electricity_controller = (
+            controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
+                my_simulation_parameters=my_simulation_parameters,
+                config=my_electricity_controller_config,
+            )
         )
 
         my_electricity_controller.add_component_inputs_and_connect(

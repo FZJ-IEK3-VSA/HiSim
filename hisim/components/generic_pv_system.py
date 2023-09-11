@@ -206,7 +206,7 @@ class PVSystemConfig(ConfigBase):
     module_name: str
     integrate_inverter: bool
     inverter_name: str
-    power_in_watt_peak: float
+    power: float
     azimuth: float
     tilt: float
     load_module_data: bool
@@ -223,11 +223,10 @@ class PVSystemConfig(ConfigBase):
     @classmethod
     def get_default_PV_system(cls):
         """Gets a default PV system."""
-        power_in_watt = 10e3  # W
-        
-        config = PVSystemConfig(
+        power = 10e3  # W
+        return PVSystemConfig(
             time=2019,
-            power_in_watt_peak=power_in_watt,
+            power=power,
             load_module_data=False,
             module_name="Hanwha_HSL60P6_PA_4_250T__2013_",
             integrate_inverter=True,
@@ -237,15 +236,11 @@ class PVSystemConfig(ConfigBase):
             tilt=30,
             source_weight=0,
             location="Aachen",
-            co2_footprint=power_in_watt * 1e-3 * 330.51,  # value from emission_factros_and_costs_devices.csv
-            cost=power_in_watt * 1e-3 * 794.41,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=power * 1e-3 * 330.51,  # value from emission_factros_and_costs_devices.csv
+            cost=power * 1e-3 * 794.41,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
             lifetime=25,  # value from emission_factros_and_costs_devices.csv
         )
-        
-        config.name = config.name + "_w" + str(config.source_weight)
-        
-        return config
 
 
 class PVSystem(cp.Component):
@@ -259,7 +254,7 @@ class PVSystem(cp.Component):
     location : str, optional
         Object Location with temperature and solar data. The default is "Aachen".
     power : float, optional
-        Power in Wp to be provided by the PV System. The default is 10E3.
+        Power in kWp to be provided by the PV System. The default is 10E3.
     load_module_data : bool
         Access the PV data base (True) or not (False). The default is False
     module_name : str, optional
@@ -314,7 +309,7 @@ class PVSystem(cp.Component):
             "open_rack_glass_glass"
         ]
         super().__init__(
-            self.pvconfig.name, # + "_w" + str(self.pvconfig.source_weight),
+            self.pvconfig.name + "_w" + str(self.pvconfig.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
         )
@@ -390,7 +385,7 @@ class PVSystem(cp.Component):
         self.add_default_connections(self.get_default_connections_from_weather())
 
     @staticmethod
-    def get_default_config(power_in_Wp: float = 10e3, source_weight: int = 1) -> Any:
+    def get_default_config(power: float = 10e3, source_weight: int = 1) -> Any:
         config = PVSystemConfig(
             name="PVSystem",
             time=2019,
@@ -398,13 +393,13 @@ class PVSystem(cp.Component):
             module_name="Hanwha_HSL60P6_PA_4_250T__2013_",
             integrate_inverter=True,
             inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
-            power_in_watt_peak=power_in_Wp,
+            power=power,
             azimuth=180,
             tilt=30,
             load_module_data=False,
             source_weight=source_weight,
-            co2_footprint=power_in_Wp * 1e-3 * 130.7,  # value from emission_factros_and_costs_devices.csv
-            cost=power_in_Wp * 1e-3 * 535.81,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=power * 1e-3 * 130.7,  # value from emission_factros_and_costs_devices.csv
+            cost=power * 1e-3 * 535.81,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
             lifetime=25,  # value from emission_factros_and_costs_devices.csv
         )
@@ -498,7 +493,7 @@ class PVSystem(cp.Component):
             # if(len(self.output) < timestep)
             #   raise Exception("Somehow the precalculated list of values for the PV system seems to be incorrect. Please delete the cache.")
             stsv.set_output_value(
-                self.electricity_outputC, self.output[timestep] * self.pvconfig.power_in_watt_peak
+                self.electricity_outputC, self.output[timestep] * self.pvconfig.power
             )
         else:
             DNI = stsv.get_input_value(self.DNIC)
@@ -542,7 +537,7 @@ class PVSystem(cp.Component):
                 surface_tilt=self.pvconfig.tilt,
             )
 
-            resultingvalue = ac_power * self.pvconfig.power_in_watt_peak
+            resultingvalue = ac_power * self.pvconfig.power
             # if you wanted to access the temperature forecast from the weather component:
             # val = self.simulation_repository.get_entry(Weather.Weather_Temperature_Forecast_24h)
             stsv.set_output_value(self.electricity_outputC, resultingvalue)
@@ -564,7 +559,7 @@ class PVSystem(cp.Component):
             if last_forecast_timestep > len(self.output):
                 last_forecast_timestep = len(self.output)
             pvforecast = [
-                self.output[t] * self.pvconfig.power_in_watt_peak
+                self.output[t] * self.pvconfig.power
                 for t in range(timestep, last_forecast_timestep)
             ]
             self.simulation_repository.set_dynamic_entry(
@@ -630,7 +625,7 @@ class PVSystem(cp.Component):
         else:
             self.coordinates = self.simulation_repository.get_entry("weather_location")
             # Factor to guarantee peak power based on module with 250 Wh
-            self.ac_power_factor = math.ceil((self.pvconfig.power_in_watt_peak * 1e3) / 250)
+            self.ac_power_factor = math.ceil((self.pvconfig.power * 1e3) / 250)
 
             # when predictive control is activated, the PV simulation is run beforhand to make forecasting easier
             if self.my_simulation_parameters.predictive_control:

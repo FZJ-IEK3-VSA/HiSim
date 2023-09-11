@@ -217,8 +217,8 @@ class Building(dynamic_component.DynamicComponent):
         # =================================================================================================================================
         # Initialization of variables
 
-        self.set_heating_temperature_in_celsius_default: float = 18
-        self.set_cooling_temperature_in_celsius_default: float = 25
+        self.set_heating_temperature_in_celsius_default: float = 19
+        self.set_cooling_temperature_in_celsius_default: float = 24
 
         (self.is_in_cache, self.cache_file_path,) = utils.get_cache_file(
             self.component_name, self.buildingconfig, self.my_simulation_parameters,

@@ -3,7 +3,7 @@
 """Postprocessing option computes overall consumption, production,self-consumption and injection as well as selfconsumption rate and autarky rate."""
 
 import os
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Any
 from pathlib import Path
 
 import pandas as pd
@@ -17,6 +17,83 @@ from hisim.component_wrapper import ComponentWrapper
 from hisim.components import generic_hot_water_storage_modular
 from hisim import log
 from hisim.postprocessing.investment_cost_co2 import compute_investment_cost
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+
+
+def building_temperature_control(
+    results: pd.DataFrame, seconds_per_timestep: int
+) -> Tuple[Any, Any, float, float, float, float]:
+    """Check the building indoor air temperature.
+
+    Check for all timesteps and count the
+    time when the temperature is outside of the building set temperatures
+    in order to verify if energy system provides enough heating and cooling.
+    """
+
+    time_indices_of_building_being_below_heating_set_temperature = []
+    time_indices_of_building_being_above_cooling_set_temperature = []
+    for column in results.columns:
+
+        if "TemperatureIndoorAir" in column.split(sep=" "):
+
+            if SingletonSimRepository().exist_entry(
+                key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING
+            ) and SingletonSimRepository().exist_entry(
+                key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING
+            ):
+                set_heating_temperature_in_celsius = SingletonSimRepository().get_entry(
+                    key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING
+                )
+                set_cooling_temperature_in_celsius = SingletonSimRepository().get_entry(
+                    key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING
+                )
+
+            else:
+                # take set heating and cooling default temperatures from building component otherwise
+                set_heating_temperature_in_celsius = 19.0
+                set_cooling_temperature_in_celsius = 24.0
+
+            for temperature in results[column].values:
+
+                if temperature < set_heating_temperature_in_celsius:
+                    time_indices_of_building_being_below_heating_set_temperature.append(
+                        results[column].index
+                    )
+
+                elif temperature > set_cooling_temperature_in_celsius:
+                    time_indices_of_building_being_above_cooling_set_temperature.append(
+                        results[column].index
+                    )
+
+            length_time_list_below_heating_set_temperature = len(
+                time_indices_of_building_being_below_heating_set_temperature
+            )
+            length_time_list_above_cooling_set_temperature = len(
+                time_indices_of_building_being_above_cooling_set_temperature
+            )
+            time_in_hours_of_building_being_below_heating_set_temperature = (
+                length_time_list_below_heating_set_temperature
+                * seconds_per_timestep
+                / 3600
+            )
+            time_in_hours_of_building_being_above_cooling_set_temperature = (
+                length_time_list_above_cooling_set_temperature
+                * seconds_per_timestep
+                / 3600
+            )
+
+            # get also max and min indoor air temperature
+            min_temperature_reached_in_celsius = float(min(results[column].values))
+            max_temperature_reached_in_celsius = float(max(results[column].values))
+
+    return (
+        set_heating_temperature_in_celsius,
+        set_cooling_temperature_in_celsius,
+        time_in_hours_of_building_being_below_heating_set_temperature,
+        time_in_hours_of_building_being_above_cooling_set_temperature,
+        min_temperature_reached_in_celsius,
+        max_temperature_reached_in_celsius,
+    )
 
 
 def read_in_fuel_costs() -> pd.DataFrame:
@@ -479,6 +556,17 @@ def compute_kpis(
         total_investment_cost_per_simulated_period = 0
         total_device_co2_footprint_per_simulated_period = 0
 
+    # building temp control
+    (
+        set_heating_temperature_in_celsius,
+        set_cooling_temperature_in_celsius,
+        time_in_hours_of_building_being_below_heating_set_temperature,
+        time_in_hours_of_building_being_above_cooling_set_temperature,
+        min_temperature_reached_in_celsius,
+        max_temperature_reached_in_celsius,
+    ) = building_temperature_control(
+        results=results, seconds_per_timestep=simulation_parameters.seconds_per_timestep
+    )
     # initialize table for report
     table: List = []
     table.append(["KPI", "Value", "Unit"])
@@ -554,6 +642,34 @@ def compute_kpis(
             "Total Emissions for simulated period:",
             f"{(total_device_co2_footprint_per_simulated_period + total_operational_emisions):3.0f}",
             "kg",
+        ]
+    )
+    table.append(
+        [
+            f"Time of building indoor air temperature being below set temperature {set_heating_temperature_in_celsius} °C:",
+            f"{(time_in_hours_of_building_being_below_heating_set_temperature):3.0f}",
+            "h",
+        ]
+    )
+    table.append(
+        [
+            "Minimum building indoor air temperature reached:",
+            f"{(min_temperature_reached_in_celsius):3.0f}",
+            "°C",
+        ]
+    )
+    table.append(
+        [
+            f"Time of building indoor air temperature being above set temperature {set_cooling_temperature_in_celsius} °C:",
+            f"{(time_in_hours_of_building_being_above_cooling_set_temperature):3.0f}",
+            "h",
+        ]
+    )
+    table.append(
+        [
+            "Maximum building indoor air temperature reached:",
+            f"{(max_temperature_reached_in_celsius):3.0f}",
+            "°C",
         ]
     )
 

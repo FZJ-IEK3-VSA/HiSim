@@ -1,5 +1,5 @@
 """Green hydrogen electrolyzer."""
-
+# clean
 import os
 from typing import List
 import json
@@ -41,7 +41,7 @@ class ElectrolyzerConfig(cp.ConfigBase):
         return Electrolyzer.get_full_classname()
 
     name: str
-    electrolyzer_type: str
+    type: str
     nom_load: float  # [kW]
     max_load: float  # [kW]
     nom_h2_flow_rate: float  # [m^3/h]
@@ -56,7 +56,7 @@ class ElectrolyzerConfig(cp.ConfigBase):
         """Gets a default Alkaline Eletrolyzer."""
         config = ElectrolyzerConfig(
             name="Alkaline_electrolyzer",
-            electrolyzer_type="Alkaline",
+            type="Alkaline",
             nom_load=100.0,  # [kW]
             max_load=110.0,  # [kW]
             nom_h2_flow_rate=100.0,  # [m^3/h]
@@ -86,7 +86,7 @@ class ElectrolyzerConfig(cp.ConfigBase):
         config_json = cls.read_config(electrolyzer_name)
         config = ElectrolyzerConfig(
             name=electrolyzer_name,  # config_json.get("name", "")
-            electrolyzer_type=config_json.get("electrolyzer_type", ""),
+            type=config_json.get("type", ""),
             nom_load=config_json.get("nom_load", 0.0),
             max_load=config_json.get("max_load", 0.0),
             nom_h2_flow_rate=config_json.get("nom_h2_flow_rate", 0.0),
@@ -166,7 +166,7 @@ class Electrolyzer(cp.Component):
         """Constructs all the neccessary attributes."""
         self.electrolyzerconfig = config
 
-        self.technology_type = config.electrolyzer_type
+        self.technology_type = config.type
         self.nom_load = config.nom_load
         self.max_load = config.max_load
         self.nom_h2_flow_rate = config.nom_h2_flow_rate
@@ -407,7 +407,7 @@ class Electrolyzer(cp.Component):
 
         # Calculates system_power from stack power
         system_power = stack_power + aux_power
-        #print("system_power: ", system_power)
+        # print("system_power: ", system_power)
 
         interp_function_h2_production_rate = interpolate.interp1d(
             system_power, h2_production_rate, kind="quadratic"
@@ -607,8 +607,8 @@ class Electrolyzer(cp.Component):
             electrolyzer_type, nominal_load, nom_h2_flow_rate, faraday_eff, i_cell_nom
         )
         # Current hydrogen prduction and specific hydrogen production rate
-        #print("self.state: ", self.state)
-        #print("self.current_load_state: ", self.current_load_state)
+        # print("self.state: ", self.state)
+        # print("self.current_load_state: ", self.current_load_state)
         (
             self.current_h2_production_rate,
             self.current_spec_h2_production_rate,

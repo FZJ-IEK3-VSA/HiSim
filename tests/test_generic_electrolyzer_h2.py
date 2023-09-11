@@ -1,3 +1,5 @@
+# clean
+
 from hisim import component as cp
 from hisim.components import generic_eletrolyzer_h2
 from hisim import loadtypes as lt
@@ -15,7 +17,7 @@ def test_electrolyzer():
     )
 
     name: str = "Test-lyzer"
-    electrolyzer_type: str = "Alkaline"
+    type: str = "Alkaline"
     nom_load: float = 800.0  # [kW]
     max_load: float = 1000.0  # [kW]
     nom_h2_flow_rate: float = 186.9  # [m^3/h]
@@ -30,7 +32,7 @@ def test_electrolyzer():
     # Setup Electrolyzer
     my_electrolyzer_config = generic_eletrolyzer_h2.ElectrolyzerConfig(
         name=name,
-        electrolyzer_type=electrolyzer_type,
+        type=type,
         nom_load=nom_load,
         max_load=max_load,
         nom_h2_flow_rate=nom_h2_flow_rate,

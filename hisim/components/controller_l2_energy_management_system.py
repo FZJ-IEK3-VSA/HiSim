@@ -47,13 +47,12 @@ class EMSConfig(cp.ConfigBase):
     strategy: str
     # limit for peak shaving option, more or less obsolete because only "optimize_own_consumption" is used at the moment.
     limit_to_shave: float
-    # increase in buiding set temperatures when PV surplus is available for heating
+    # increase in buiding set temperatures for heating when PV surplus is available. Must be smaller than difference between set_heating_temperature and set_cooling_temperature
     building_temperature_offset_value: float
     # increase in buffer set temperatures when PV surplus is available for heating
     storage_temperature_offset_value: float
     # increase in SimpleHotWaterStorage set temperatures when PV surplus is available for heating
     simple_hot_water_storage_temperature_offset_value: float
-    # Todo: does building temperature modifier and simplehotwaterstorage temperature modifier work both together?
 
     @classmethod
     def get_default_config_ems(cls) -> "EMSConfig":
@@ -130,7 +129,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     ElectricityToOrFromGrid = "ElectricityToOrFromGrid"
     TotalElectricityConsumption = "TotalElectricityConsumption"
     FlexibleElectricity = "FlexibleElectricity"
-    BuildingTemperatureModifier = "BuildingTemperatureModifier"
+    BuildingTemperatureModifier = "BuildingTemperatureModifier"  # connect to HDS controller and Building
     StorageTemperatureModifier = "StorageTemperatureModifier"  # used for L1HeatPumpController  # Todo: change name?
     SimpleHotWaterStorageTemperatureModifier = (
         "SimpleHotWaterStorageTemperatureModifier"  # used for HeatPumpHplibController

@@ -1,6 +1,6 @@
 """Test for manual calculation of thermal conductances H_tr in building module.
 
-The aim is to implement scalability in the building module by scaling up the area of the building. 
+The aim is to implement scalability in the building module by scaling up the area of the building.
 Therefore some functions must be adjusted which are tested here before.
 """
 # clean

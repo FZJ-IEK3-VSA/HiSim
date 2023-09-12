@@ -54,7 +54,8 @@ class HouseholdAdvancedHPDieselCarPVConfig:
     number_of_apartments: int
     # dhw_controlable: bool  # if dhw is controlled by EMS
     # heatpump_controlable: bool  # if heatpump is controlled by EMS
-    surplus_control: bool  # decision on the consideration of smart control for heat pump and dhw
+    surplus_control: bool  # decision on the consideration of smart control for heat pump and dhw, increase storage temperatures
+    surplus_control_building_temperature_modifier: bool  # increase set_room_temperature in case of surplus electricity
     # simulation_parameters: SimulationParameters
     # total_base_area_in_m2: float
     occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig
@@ -90,6 +91,7 @@ class HouseholdAdvancedHPDieselCarPVConfig:
             # dhw_controlable=False,
             # heatpump_controlable=False,
             surplus_control=False,
+            surplus_control_building_temperature_modifier=False,
             # simulation_parameters=SimulationParameters.one_day_only(2022),
             # total_base_area_in_m2=121.2,
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
@@ -509,7 +511,7 @@ def household_2_advanced_hp_diesel_car_pv(
         )
 
     # connect EMS BuildingTemperatureModifier with set_heating_temperature_for_building_in_celsius
-    if clever:
+    if my_config.surplus_control_building_temperature_modifier:
         my_heat_distribution_controller.connect_input(
             my_heat_distribution_controller.BuildingTemperatureModifier,
             my_electricity_controller.component_name,

@@ -6,7 +6,7 @@ from typing import Optional, Any
 import re
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-
+import os
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
@@ -170,16 +170,19 @@ def household_cluster_reference_advanced_hp(
     hp_maintenance_cost_as_percentage_of_investment = 0.025
     hp_consumption = 0
 
-
     # =================================================================================================================================
     # Build Components
 
     # Build Heat Distribution Controller
-    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
-    my_heat_distribution_controller_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
+    my_heat_distribution_controller_config = (
+        heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
+    )
+    my_heat_distribution_controller_config.heating_reference_temperature_in_celsius = (
+        heating_reference_temperature_in_celsius
+    )
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
         my_simulation_parameters=my_simulation_parameters,
-        config=my_heat_distribution_controller_config
+        config=my_heat_distribution_controller_config,
     )
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
@@ -279,13 +282,12 @@ def household_cluster_reference_advanced_hp(
     )
 
     my_dhw_heatpump_controller_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-        name="DHWHeatpumpController"
+        name="DHWHeatPumpController"
     )
 
     my_dhw_storage_config = (
         generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
     )
-    my_dhw_storage_config.name = "DHWStorage"
     my_dhw_storage_config.compute_default_cycle(
         temperature_difference_in_kelvin=my_dhw_heatpump_controller_config.t_max_heating_in_celsius
         - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
@@ -429,11 +431,11 @@ def household_cluster_reference_advanced_hp(
 
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
-            entry=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_with_dhw_{hash_number}",
+            entry=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_{hash_number}",
         )
         log.information(
             "Singleton Scenario is set "
-            + f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_with_dhw_{hash_number}"
+            + f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_{hash_number}"
         )
     # if config_filename is not given, make result path with index enumeration
     else:
@@ -444,7 +446,7 @@ def household_cluster_reference_advanced_hp(
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
         model_name=my_sim.setup_function,
-        variant_name=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_with_dhw",
+        variant_name=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s",
         hash_number=hash_number,
         sorting_option=sorting_option,
         sampling_mode=sampling_mode,

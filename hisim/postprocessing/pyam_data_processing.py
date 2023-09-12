@@ -12,6 +12,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import plotly
 from html2image import Html2Image
+from ordered_set import OrderedSet
 from hisim.postprocessing.pyam_data_collection import (
     PyamDataTypeEnum,
     PyamDataProcessingModeEnum,
@@ -106,74 +107,23 @@ class PyAmChartGenerator:
         self.hisim_chartbase = ChartFontsAndSize()
         self.hisim_chartbase.figsize = (10, 8)
 
+        # read data, sort data according to scenarios if wanted, and create pyam dataframe
         pyam_dataframe = self.get_dataframe_and_create_pyam_dataframe_for_all_data(
             folder_path=self.folder_path,
             time_resolution_of_data_set=time_resolution_of_data_set,
             list_of_scenarios_to_check=list_of_scenarios_to_check,
         )
 
-        if time_resolution_of_data_set == PyamDataTypeEnum.YEARLY:
-
-            if variables_to_check != [] and variables_to_check is not None:
-                self.make_plots_with_specific_kind_of_data(
-                    time_resolution_of_data_set=time_resolution_of_data_set,
-                    pyam_dataframe=pyam_dataframe,
-                    simulation_duration_key=simulation_duration_to_check,
-                    variables_to_check=variables_to_check,
-                )
-            else:
-                log.information(
-                    "Variable list for yearly data is not given and will not be plotted or anaylzed."
-                )
-
-        elif time_resolution_of_data_set == PyamDataTypeEnum.HOURLY:
-
-            if variables_to_check != [] and variables_to_check is not None:
-
-                self.make_plots_with_specific_kind_of_data(
-                    time_resolution_of_data_set=time_resolution_of_data_set,
-                    pyam_dataframe=pyam_dataframe,
-                    simulation_duration_key=simulation_duration_to_check,
-                    variables_to_check=variables_to_check,
-                )
-            else:
-                log.information(
-                    "Variable list for hourly data is not given and will not be plotted or anaylzed."
-                )
-
-        elif time_resolution_of_data_set == PyamDataTypeEnum.DAILY:
-
-            if variables_to_check != [] and variables_to_check is not None:
-
-                self.make_plots_with_specific_kind_of_data(
-                    time_resolution_of_data_set=time_resolution_of_data_set,
-                    pyam_dataframe=pyam_dataframe,
-                    simulation_duration_key=simulation_duration_to_check,
-                    variables_to_check=variables_to_check,
-                )
-            else:
-                log.information(
-                    "Variable list for daily data is not given and will not be plotted or anaylzed."
-                )
-
-        elif time_resolution_of_data_set == PyamDataTypeEnum.MONTHLY:
-
-            if variables_to_check != [] and variables_to_check is not None:
-
-                self.make_plots_with_specific_kind_of_data(
-                    time_resolution_of_data_set=time_resolution_of_data_set,
-                    pyam_dataframe=pyam_dataframe,
-                    simulation_duration_key=simulation_duration_to_check,
-                    variables_to_check=variables_to_check,
-                )
-            else:
-                log.information(
-                    "Variable list for monthly data is not given and will not be plotted or anaylzed."
-                )
-
+        if variables_to_check != [] and variables_to_check is not None:
+            self.make_plots_with_specific_kind_of_data(
+                time_resolution_of_data_set=time_resolution_of_data_set,
+                pyam_dataframe=pyam_dataframe,
+                simulation_duration_key=simulation_duration_to_check,
+                variables_to_check=variables_to_check,
+            )
         else:
-            raise ValueError(
-                "analyze_yearly_or_hourly_data variable is not set or has incompatible value."
+            log.information(
+                "Variable list for data is not given and will not be plotted or anaylzed."
             )
 
     def get_dataframe_and_create_pyam_dataframe_for_all_data(
@@ -263,6 +213,7 @@ class PyAmChartGenerator:
             if os.path.exists(self.plot_path_complete) is False:
                 os.makedirs(self.plot_path_complete)
 
+            # filter data according to variable
             filtered_data = self.filter_pyam_dataframe(
                 pyam_dataframe=pyam_dataframe,
                 filter_model=None,
@@ -273,14 +224,10 @@ class PyAmChartGenerator:
                 filter_year=None,
             )
 
-            log.information("Pyam dataframe scenarios " + str(filtered_data.scenario))
-
             # determine whether you want to compare one variable for different scenarios or different variables for one scenario
-            comparion_mode = (
-                "scenario"  # self.decide_for_scenario_or_variable_comparison(
+            comparion_mode = self.decide_for_scenario_or_variable_comparison(
+                filtered_data=filtered_data
             )
-            #     filtered_data=filtered_data
-            # )
 
             if time_resolution_of_data_set == PyamDataTypeEnum.YEARLY:
                 kind_of_data_set = "yearly"
@@ -294,54 +241,52 @@ class PyAmChartGenerator:
                     kind_of_data_set=kind_of_data_set,
                 )
 
+                self.make_box_plot_for_pyam_dataframe(
+                    filtered_data=filtered_data, title=self.path_addition,
+                )
+                self.make_pie_plot_for_pyam_dataframe(
+                    filtered_data=filtered_data,
+                    comparison_mode=comparion_mode,
+                    title=self.path_addition,
+                )
+
                 # self.make_bar_plot_for_pyam_dataframe(
                 #     filtered_data=filtered_data,
                 #     comparison_mode=comparion_mode,
                 #     title=self.path_addition,
                 # )
 
-                try:
-                    self.make_box_plot_for_pyam_dataframe(
-                        filtered_data=filtered_data, title=self.path_addition,
-                    )
-                    self.make_pie_plot_for_pyam_dataframe(
-                        filtered_data=filtered_data,
-                        comparison_mode=comparion_mode,
-                        title=self.path_addition,
-                    )
-                    self.make_scatter_plot_for_pyam_dataframe(
-                        pyam_dataframe=pyam_dataframe,
-                        filter_model=None,
-                        filter_scenario=None,
-                        filter_variables=None,
-                        title="HP vs Outside Temperatures",
-                        filter_region=None,
-                        filter_unit=None,
-                        filter_year=None,
-                        x_data_variable="Weather|Temperature|DailyAverageOutsideTemperatures",
-                        y_data_variable="HeatPumpHPLib|Heating|ThermalOutputPower",
-                    )
-
-                except Exception:
-                    log.information(
-                        f"Something went wrong plotting the variable {variable_to_check}."
-                    )
-
-                finally:
-                    pass
-
-                # self.make_stack_plot_for_pyam_dataframe(pyam_dataframe=pyam_dataframe, filter_model=None, filter_scenario=None,
-                # filter_variables="EMS|ElectricityToOrFromGrid|-",
-                # title="Electricity to or from Grid", filter_region=None, filter_unit=None, filter_year=None)
-                # self.make_sankey_plot_for_pyam_dataframe(
-                #     pyam_dataframe=pyam_dataframe, filter_model=None, filter_scenario="2227458627882477145", filter_variables="*|*|ElectricityOutput",
-                # filter_region=None, filter_unit=None, filter_year=None
+                # self.make_scatter_plot_for_pyam_dataframe(
+                #     pyam_dataframe=pyam_dataframe,
+                #     filter_model=None,
+                #     filter_scenario=None,
+                #     filter_variables=None,
+                #     title="HP vs Outside Temperatures",
+                #     filter_region=None,
+                #     filter_unit=None,
+                #     filter_year=None,
+                #     x_data_variable="Weather|Temperature|DailyAverageOutsideTemperatures",
+                #     y_data_variable="HeatPumpHPLib|Heating|ThermalOutputPower",
                 # )
 
-            elif time_resolution_of_data_set == PyamDataTypeEnum.HOURLY:
-                kind_of_data_set = "hourly"
+            elif time_resolution_of_data_set in (
+                PyamDataTypeEnum.HOURLY,
+                PyamDataTypeEnum.DAILY,
+                PyamDataTypeEnum.MONTHLY,
+            ):
+
+                if time_resolution_of_data_set == PyamDataTypeEnum.HOURLY:
+                    kind_of_data_set = "hourly"
+                    line_plot_marker_size = 2
+                elif time_resolution_of_data_set == PyamDataTypeEnum.DAILY:
+                    kind_of_data_set = "daily"
+                    line_plot_marker_size = 3
+                elif time_resolution_of_data_set == PyamDataTypeEnum.MONTHLY:
+                    kind_of_data_set = "monthly"
+                    line_plot_marker_size = 5
+
                 log.information(
-                    f"Hourly Data Processing for Simulation Duration of {simulation_duration_key} Days:"
+                    f"{kind_of_data_set} Data Processing for Simulation Duration of {simulation_duration_key} Days:"
                 )
                 # get statistical data
                 self.get_statistics_of_data_and_write_to_excel(
@@ -352,14 +297,16 @@ class PyAmChartGenerator:
 
                 self.make_line_plot_for_pyam_dataframe(
                     filtered_data=filtered_data,
-                    comparison_mode=comparion_mode,
                     title=self.path_addition,
+                    line_plot_marker_size=line_plot_marker_size,
                 )
-                self.make_line_plot_with_filling_for_pyam_dataframe(
-                    filtered_data=filtered_data,
-                    comparison_mode=comparion_mode,
-                    title=self.path_addition,
-                )
+
+                # so far only working when scenarios_to_check are set
+                # self.make_line_plot_with_filling_for_pyam_dataframe(
+                #     filtered_data=filtered_data,
+                #     comparison_mode=comparion_mode,
+                #     title=self.path_addition,
+                # )
 
             else:
                 raise ValueError(
@@ -367,18 +314,43 @@ class PyAmChartGenerator:
                 )
 
     def make_line_plot_for_pyam_dataframe(
-        self, filtered_data: pyam.IamDataFrame, comparison_mode: str, title: str,
+        self, filtered_data: pyam.IamDataFrame, title: str, line_plot_marker_size: int
     ) -> None:
         """Make line plot."""
-        log.information("Make line plot with hourly data.")
+        log.information("Make line plot with data.")
 
         fig, a_x = plt.subplots(
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
+        x_data = list(OrderedSet(list(filtered_data.data["time"])))
 
-        filtered_data.plot.line(
-            ax=a_x, color=comparison_mode, title=title,
-        )
+        # filtered_data.plot.line(
+        #     ax=a_x, color=comparison_mode, title=title,
+        # )
+
+        # alternative manual way to make line plots
+        for scenario in filtered_data.scenario:
+            filtered_data_per_scenario = filtered_data.data.loc[
+                filtered_data.data["scenario"] == scenario
+            ]
+            mean_values_aggregated_according_to_scenarios = []
+            for time_value in x_data:
+
+                mean_value_per_scenario_per_timestep = np.mean(
+                    filtered_data_per_scenario.loc[
+                        filtered_data_per_scenario["time"] == time_value
+                    ]["value"]
+                )
+
+                mean_values_aggregated_according_to_scenarios.append(
+                    mean_value_per_scenario_per_timestep
+                )
+
+            y_data = mean_values_aggregated_according_to_scenarios
+
+            plt.plot(
+                x_data, y_data, "-o", markersize=line_plot_marker_size, label=scenario
+            )
 
         y_tick_labels, unit, y_tick_locations = self.set_axis_scale(
             a_x, x_or_y="y", unit=filtered_data.unit[0]
@@ -389,14 +361,14 @@ class PyAmChartGenerator:
             fontsize=self.hisim_chartbase.fontsize_ticks,
         )
         plt.ylabel(
-            ylabel=f"{unit}",
-            fontsize=self.hisim_chartbase.fontsize_label,
+            ylabel=f"{unit}", fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
             xlabel="Time", fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
+        plt.legend(fontsize=ChartFontsAndSize.fontsize_legend)
 
         fig.savefig(os.path.join(self.plot_path_complete, "line_plot.png"))
         plt.close()
@@ -424,8 +396,7 @@ class PyAmChartGenerator:
             fontsize=self.hisim_chartbase.fontsize_ticks,
         )
         plt.ylabel(
-            ylabel=f"{unit}",
-            fontsize=self.hisim_chartbase.fontsize_label,
+            ylabel=f"{unit}", fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
             xlabel="Time", fontsize=self.hisim_chartbase.fontsize_label,
@@ -456,8 +427,7 @@ class PyAmChartGenerator:
             fontsize=self.hisim_chartbase.fontsize_ticks,
         )
         plt.ylabel(
-            ylabel=f"{unit}",
-            fontsize=self.hisim_chartbase.fontsize_label,
+            ylabel=f"{unit}", fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
             xlabel=filtered_data.time_col.capitalize(),
@@ -495,8 +465,7 @@ class PyAmChartGenerator:
             fontsize=self.hisim_chartbase.fontsize_ticks,
         )
         plt.ylabel(
-            ylabel=f"{unit}",
-            fontsize=self.hisim_chartbase.fontsize_label,
+            ylabel=f"{unit}", fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
             xlabel=filtered_data.time_col.capitalize(),
@@ -675,8 +644,7 @@ class PyAmChartGenerator:
             fontsize=self.hisim_chartbase.fontsize_ticks,
         )
         plt.ylabel(
-            ylabel=f"{unit}",
-            fontsize=self.hisim_chartbase.fontsize_label,
+            ylabel=f"{unit}", fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
             xlabel=filtered_data.time_col.capitalize(),
@@ -881,11 +849,15 @@ kpi_data = [
     # "System operational Emissions for simulated period",
     "Total costs for simulated period",
     "Total emissions for simulated period",
+    "Time of building indoor air temperature being below set temperature 19 °C",
+    "Minimum building indoor air temperature reached",
+    "Time of building indoor air temperature being above set temperature 24 °C",
+    "Maximum building indoor air temperature reached",
 ]
 
 electricity_data = [
     # "L2EMSElectricityController|Electricity|ElectricityToOrFromGrid",
-    # "PVSystem|Electricity|ElectricityOutput", # check if pv was used or not
+    # "PVSystem_w0|Electricity|ElectricityOutput", # check if pv was used or not
     "ElectricityMeter|Electricity|ElectricityToOrFromGrid",
     "ElectricityMeter|Electricity|ElectricityConsumption",
     "ElectricityMeter|Electricity|ElectricityProduction"

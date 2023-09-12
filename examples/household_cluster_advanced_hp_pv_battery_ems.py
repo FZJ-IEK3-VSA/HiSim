@@ -118,10 +118,10 @@ def household_cluster_advanced_hp_pv_battery_ems(
 
     # Set Simulation Parameters
     year = 2021
-    seconds_per_timestep = 60 * 60
+    seconds_per_timestep = 60
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only(
+        my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         my_simulation_parameters.post_processing_options.append(
@@ -185,8 +185,12 @@ def household_cluster_advanced_hp_pv_battery_ems(
     # Build Components
 
     # Build Heat Distribution Controller
-    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
-    my_heat_distribution_controller_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
+    my_heat_distribution_controller_config = (
+        heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
+    )
+    my_heat_distribution_controller_config.heating_reference_temperature_in_celsius = (
+        heating_reference_temperature_in_celsius
+    )
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
         my_simulation_parameters=my_simulation_parameters,
         config=my_heat_distribution_controller_config,
@@ -230,7 +234,6 @@ def household_cluster_advanced_hp_pv_battery_ems(
     my_photovoltaic_system_config.power_in_watt_peak = pv_power
     my_photovoltaic_system_config.azimuth = azimuth
     my_photovoltaic_system_config.tilt = tilt
-    my_photovoltaic_system_config.name = "PVSystem"
 
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
@@ -240,7 +243,7 @@ def household_cluster_advanced_hp_pv_battery_ems(
     # Build Heat Pump Controller
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
         config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config(
-            name="HeatPumpHplibController",
+            name="HeatPumpController",
             mode=hp_controller_mode,
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_pump_in_celsius,
             set_cooling_threshold_outside_temperature_in_celsius=set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius,
@@ -251,7 +254,7 @@ def household_cluster_advanced_hp_pv_battery_ems(
     # Build Heat Pump
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
         config=advanced_heat_pump_hplib.HeatPumpHplibConfig(
-            name="HeatPumpHPLib",
+            name="HeatPump",
             model=model,
             group_id=group_id,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
@@ -300,7 +303,6 @@ def household_cluster_advanced_hp_pv_battery_ems(
     my_advanced_battery_config = (
         advanced_battery_bslib.BatteryConfig.get_default_config()
     )
-    my_advanced_battery_config.name = "Battery"
     my_advanced_battery = advanced_battery_bslib.Battery(
         my_simulation_parameters=my_simulation_parameters,
         config=my_advanced_battery_config,
@@ -328,7 +330,6 @@ def household_cluster_advanced_hp_pv_battery_ems(
     my_dhw_storage_config = (
         generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
     )
-    my_dhw_storage_config.name = "DHWStorage"
     my_dhw_storage_config.compute_default_cycle(
         temperature_difference_in_kelvin=my_dhw_heatpump_controller_config.t_max_heating_in_celsius
         - my_dhw_heatpump_controller_config.t_min_heating_in_celsius

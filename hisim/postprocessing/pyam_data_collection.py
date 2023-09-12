@@ -514,7 +514,7 @@ class PyamDataTypeEnum(enum.Enum):
     Here it is defined what kind of data you want to collect.
     """
 
-    HOURLY = "hourly"
+    HOURLY = "hourly"  # hourly not working yet
     DAILY = "daily"
     MONTHLY = "monthly"
     YEARLY = "yearly"

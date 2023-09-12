@@ -43,13 +43,14 @@ def main():
 
     # Inputs for pyam analysis
     # -------------------------------------------------------------------------------------------------------------------------------------
-    time_resolution_of_data_set = pyam_data_collection.PyamDataTypeEnum.DAILY
+    time_resolution_of_data_set = pyam_data_collection.PyamDataTypeEnum.MONTHLY
 
     cluster_storage_path = "/storage_cluster/internal/home/k-rieck/"
 
     folder_from_which_data_will_be_collected = os.path.join(
         cluster_storage_path,
-        "repositories/HiSim/examples/results/household_cluster_reference_advanced_hp/german_tabula_buildings_20230908_1231",
+        # "repositories/HiSim/examples/results/household_cluster_reference_advanced_hp/german_tabula_buildings_20230908_1231/",
+        "repositories/HiSim/examples/results/pyam_testing/german_tabula_buildings_20230908_1231/",
     )
     # folder_from_which_data_will_be_collected = (
     #     r"C:\Users\k.rieck\Cluster_stuff_copied\examples_results"
@@ -67,13 +68,17 @@ def main():
     )
 
     list_with_variables_to_check = (
-        pyam_data_processing.kpi_data
-        + pyam_data_processing.heating_demand
-        + pyam_data_processing.electricity_data
-        # + pyam_data_processing.occuancy_consumption
-    )
+        pyam_data_processing.occuancy_consumption + pyam_data_processing.heating_demand
+    )  # (
+    # pyam_data_processing.kpi_data
+    # + pyam_data_processing.heating_demand
+    # + pyam_data_processing.electricity_data
+    # + pyam_data_processing.occuancy_consumption
+    # )
 
-    list_of_scenarios_to_check = pyam_data_processing.building_type
+    # list_of_scenarios_to_check = pyam_data_processing.building_type
+
+    list_of_scenarios_to_check = None  # ["001.002"]
 
     # -------------------------------------------------------------------------------------------------------------------------------------
 

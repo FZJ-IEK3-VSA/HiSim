@@ -90,8 +90,8 @@ def modular_household_explicit(
     cleanup_old_lpg_requests()
 
     # Set simulation parameters
-    year = 2019
-    seconds_per_timestep = 60 * 15
+    year = 2021
+    seconds_per_timestep = 60 * 60
 
     household_config = read_in_configs(my_sim.my_module_config_path)
 
@@ -115,15 +115,15 @@ def modular_household_explicit(
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.GENERATE_PDF_REPORT
         )
-        # my_simulation_parameters.post_processing_options.append(
-        #     PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
-        # )
         my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE
+            PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
         )
         # my_simulation_parameters.post_processing_options.append(
-        #     PostProcessingOptions.EXPORT_TO_CSV
+        #     PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE
         # )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.EXPORT_TO_CSV
+        )
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT
         )

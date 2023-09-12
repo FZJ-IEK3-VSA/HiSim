@@ -65,7 +65,7 @@ class CarBatteryConfig(ConfigBase):
             name="CarBattery",
             system_id="SG1",
             p_inv_custom=1e4,
-            e_bat_custom=30,
+            e_bat_custom=40,
             source_weight=1,
             charge=0,
             discharge=0,

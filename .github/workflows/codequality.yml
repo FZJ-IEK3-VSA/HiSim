@@ -41,6 +41,8 @@ jobs:
         prospector examples/household_with_gas_heater_with_controller.py
         prospector examples/household_with_heatpump_and_pv.py
         prospector examples/simple_examples.py
+        prospector examples/household_with_advanced_hp_hws_hds_pv.py
+        prospector examples/household_with_advanced_hp_hws_hds_pv_battery_ems.py
         prospector hisim/component.py
         prospector hisim/component_wrapper.py
         prospector hisim/dynamic_component.py
@@ -76,6 +78,8 @@ jobs:
         prospector hisim/components/idealized_electric_heater.py
         prospector hisim/components/simple_hot_water_storage.py
         prospector hisim/components/sumbuilder.py
+        prospector hisim/components/advanced_heat_pump_hplib.py
+        prospector hisim/components/electricity_meter.py
         prospector hisim/modular_household/component_connections.py
         prospector hisim/modular_household/interface_configs/system_config.py
         prospector hisim/postprocessing/chartbase.py
@@ -87,6 +91,11 @@ jobs:
         prospector hisim/postprocessing/postprocessing_main.py
         prospector hisim/postprocessing/reportgenerator.py
         prospector hisim/postprocessing/system_chart.py
+        prospector hisim/postprocessing/pyam_analysis_complete.py
+        prospector hisim/postprocessing/pyam_data_collection.py
+        prospector hisim/postprocessing/pyam_data_processing.py
+        prospector hisim/postprocessing/report_image_entries.py
+        
         prospector tests/functions_for_testing.py
         prospector tests/test_advanced_battery_bslib.py
         prospector tests/test_building.py
@@ -104,12 +113,12 @@ jobs:
         prospector tests/test_gas_heater.py
         prospector tests/test_generic_gas_heater.py
         prospector tests/test_simple_hot_water_storage.py
-        prospector hisim/components/controller_l1_generic_electrolyzer.py
-        prospector hisim/components/generic_eletrolyzer_h2.py
-        prospector hisim/components/generic_eletrolyzer.py
-        prospector tests/test_generic_electrolyzer_and_h2_storage.py
-        prospector tests/test_generic_electrolyzer_h2.py
-        prospector tests/test_generic_electrolyzer.py
+        prospector tests/test_building_manual_calculation_thermal_conductances.py
+        prospector tests/test_heat_distribution_system.py
+        prospector tests/test_house_with_pyam_postprocessing.py
+        prospector tests/test_electricity_meter.py
+
+
         
 
 

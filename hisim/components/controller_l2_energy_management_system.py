@@ -47,7 +47,8 @@ class EMSConfig(cp.ConfigBase):
     strategy: str
     # limit for peak shaving option, more or less obsolete because only "optimize_own_consumption" is used at the moment.
     limit_to_shave: float
-    # increase in buiding set temperatures for heating when PV surplus is available. Must be smaller than difference between set_heating_temperature and set_cooling_temperature
+    # increase building set temperatures for heating when PV surplus is available.
+    # Must be smaller than difference of set_heating_temperature and set_cooling_temperature
     building_temperature_offset_value: float
     # increase in buffer set temperatures when PV surplus is available for heating
     storage_temperature_offset_value: float

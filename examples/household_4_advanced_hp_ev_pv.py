@@ -156,13 +156,23 @@ class HouseholdAdvancedHPEvPvConfig:
             2  # use heating and cooling as default
         )
         # set same heating threshold
-        household_config.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius = set_heating_threshold_outside_temperature_in_celsius
-        household_config.hp_controller_config.set_heating_threshold_outside_temperature_in_celsius = set_heating_threshold_outside_temperature_in_celsius
+        household_config.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
+            set_heating_threshold_outside_temperature_in_celsius
+        )
+        household_config.hp_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
+            set_heating_threshold_outside_temperature_in_celsius
+        )
 
         # set same heating reference temperature
-        household_config.hds_controller_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
-        household_config.hp_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
-        household_config.building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
+        household_config.hds_controller_config.heating_reference_temperature_in_celsius = (
+            heating_reference_temperature_in_celsius
+        )
+        household_config.hp_config.heating_reference_temperature_in_celsius = (
+            heating_reference_temperature_in_celsius
+        )
+        household_config.building_config.heating_reference_temperature_in_celsius = (
+            heating_reference_temperature_in_celsius
+        )
 
         household_config.hp_config.flow_temperature_in_celsius = 21  # Todo: check value
 
@@ -170,9 +180,7 @@ class HouseholdAdvancedHPEvPvConfig:
         household_config.dhw_storage_config.volume = 250
 
         # set charging power from battery and controller to same value, to reduce error in simulation of battery
-        household_config.car_battery_config.p_inv_custom = (
-            charging_power * 1e3
-        )
+        household_config.car_battery_config.p_inv_custom = charging_power * 1e3
 
         return household_config
 
@@ -238,8 +246,9 @@ def household_4_advanced_hp_ev_pv(
         my_simulation_parameters = SimulationParameters.full_year_all_options(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-    # my_simulation_parameters.surplus_control = my_config.surplus_control # Todo: need to find solution for this, because electric vehicle charger is also controlled by my_simulation_parameters.surplus_control
-    my_simulation_parameters.surplus_control = my_config.surplus_control_car
+    my_simulation_parameters.surplus_control = (
+        my_config.surplus_control_car
+    )  # EV charger is controlled by simulation_parameters
     clever = my_config.surplus_control
     my_sim.set_simulation_parameters(my_simulation_parameters)
 

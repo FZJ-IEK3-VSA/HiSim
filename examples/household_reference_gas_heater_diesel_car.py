@@ -78,7 +78,7 @@ class ReferenceHouseholdConfig:
         heating_reference_temperature_in_celsius: float = -7
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0
 
-        household_config =  ReferenceHouseholdConfig(
+        household_config = ReferenceHouseholdConfig(
             building_type="blub",
             number_of_apartments=number_of_apartments,
             # simulation_parameters=SimulationParameters.one_day_only(2022),
@@ -123,16 +123,23 @@ class ReferenceHouseholdConfig:
         )
 
         # set same heating threshold
-        household_config.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius = set_heating_threshold_outside_temperature_in_celsius
+        household_config.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
+            set_heating_threshold_outside_temperature_in_celsius
+        )
 
         # set same heating reference temperature
-        household_config.hds_controller_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
-        household_config.building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
+        household_config.hds_controller_config.heating_reference_temperature_in_celsius = (
+            heating_reference_temperature_in_celsius
+        )
+        household_config.building_config.heating_reference_temperature_in_celsius = (
+            heating_reference_temperature_in_celsius
+        )
 
         # set dhw storage volume, because default(volume = 230) leads to an error
         household_config.dhw_storage_config.volume = 250
 
         return household_config
+
 
 def household_reference_gas_heater_diesel_car(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None

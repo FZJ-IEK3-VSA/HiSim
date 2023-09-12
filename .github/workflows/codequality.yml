@@ -115,7 +115,7 @@ jobs:
         prospector tests/test_simple_hot_water_storage.py
         prospector tests/test_building_manual_calculation_thermal_conductances.py
         prospector tests/test_heat_distribution_system.py
-        prospector tests/test_house_with_pyam_postprocessing.py
+        prospector tests/test_house_with_pyam_postprocessingoption.py
         prospector tests/test_electricity_meter.py
 
 

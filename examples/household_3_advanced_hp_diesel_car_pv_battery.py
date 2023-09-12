@@ -147,13 +147,23 @@ class HouseholdAdvancedHPDieselCarPVBatteryConfig:
         household_config.hp_config.minimum_running_time_in_seconds = 900  # default value leads to switching on-off very often
 
         # set same heating threshold
-        household_config.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius = set_heating_threshold_outside_temperature_in_celsius
-        household_config.hp_controller_config.set_heating_threshold_outside_temperature_in_celsius = set_heating_threshold_outside_temperature_in_celsius
+        household_config.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
+            set_heating_threshold_outside_temperature_in_celsius
+        )
+        household_config.hp_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
+            set_heating_threshold_outside_temperature_in_celsius
+        )
 
         # set same heating reference temperature
-        household_config.hds_controller_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
-        household_config.hp_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
-        household_config.building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
+        household_config.hds_controller_config.heating_reference_temperature_in_celsius = (
+            heating_reference_temperature_in_celsius
+        )
+        household_config.hp_config.heating_reference_temperature_in_celsius = (
+            heating_reference_temperature_in_celsius
+        )
+        household_config.building_config.heating_reference_temperature_in_celsius = (
+            heating_reference_temperature_in_celsius
+        )
 
         household_config.hp_config.flow_temperature_in_celsius = 21  # Todo: check value
 
@@ -225,7 +235,6 @@ def household_3_advanced_hp_diesel_car_pv_battery(
         my_simulation_parameters = SimulationParameters.full_year_all_options(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-    # my_simulation_parameters.surplus_control = my_config.surplus_control # Todo: need to find solution for this, because electric vehicle charger is also controlled by my_simulation_parameters.surplus_control
     clever = my_config.surplus_control
     my_sim.set_simulation_parameters(my_simulation_parameters)
 

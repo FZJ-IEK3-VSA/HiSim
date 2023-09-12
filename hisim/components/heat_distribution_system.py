@@ -569,6 +569,7 @@ class HeatDistributionController(cp.Component):
             my_config=config,
         )
         self.state_controller: int = 0
+        self.building_temperature_modifier: float = 0
 
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING,
@@ -718,8 +719,6 @@ class HeatDistributionController(cp.Component):
             heating_reference_temperature_in_celsius
         )
         self.heating_system_type = heating_system_type
-
-        self.building_temperature_modifier: float
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""

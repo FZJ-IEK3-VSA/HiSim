@@ -176,7 +176,7 @@ class Electrolyzer(cp.Component):
         self.ramp_down_rate = config.ramp_down_rate
 
 
-        self.state = 0
+        self.state = 0.0
         self.current_h2_production_rate = 0.0
         self.current_spec_h2_production_rate = 0.0
         self.current_flow_rate_oxygen = 0.0

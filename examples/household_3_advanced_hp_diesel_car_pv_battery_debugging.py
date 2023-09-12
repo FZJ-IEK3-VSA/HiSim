@@ -518,7 +518,18 @@ def household_3_debugging(
             source_weight=999,
         )
 
-    # Todo: connect EMS BuildingTemperatureModifier with Building temperature with option to choose in config, similar to dhw and hp
+    # connect EMS BuildingTemperatureModifier with set_heating_temperature_for_building_in_celsius
+    if clever:
+        my_heat_distribution_controller.connect_input(
+            my_heat_distribution_controller.BuildingTemperatureModifier,
+            my_electricity_controller.component_name,
+            my_electricity_controller.BuildingTemperatureModifier,
+        )
+        my_building.connect_input(
+            my_building.BuildingTemperatureModifier,
+            my_electricity_controller.component_name,
+            my_electricity_controller.BuildingTemperatureModifier,
+        )
 
     # connect EMS with PV
     my_electricity_controller.add_component_input_and_connect(

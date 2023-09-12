@@ -1,7 +1,7 @@
 {
     "Electrolyzer variants": {
         "KumaTec - PEM-40-100": {
-            "type": "PEM",
+            "electrolyzer_type": "PEM",
             "name": "KumaTec - PEM-40-100",
             "nom_load": 10.0,
             "min_load": 100.0,
@@ -17,7 +17,7 @@
             "ramp_down_rate": 0.2
         },
         "McPhy - McLyzer 200": {
-            "type": "Alkaline",
+            "electrolyzer_type": "Alkaline",
             "name": "McPhy - McLyzer 200",
             "nom_load": 1000.0,
             "min_load": 200.0,
@@ -33,7 +33,7 @@
             "ramp_down_rate": 0.2
         },
         "McPhy - McLyzer 3200": {
-            "type": "Alkaline",
+            "electrolyzer_type": "Alkaline",
             "name": "McPhy - McLyzer 3200",
             "nom_load": 16000.0,
             "min_load": 1600.0,
@@ -49,7 +49,7 @@
             "ramp_down_rate": 0.2
         },
         "NEL - MC250": {
-            "type": "PEM",
+            "electrolyzer_type": "PEM",
             "name": "NEL - MC250",
             "nom_load": 1250.0,
             "min_load": 125.0,
@@ -65,7 +65,7 @@
             "ramp_down_rate": 0.32
         },
         "NEL - MC500": {
-            "type": "PEM",
+            "electrolyzer_type": "PEM",
             "name": "NEL - MC500",
             "nom_load": 2500.0,
             "min_load": 250.0,
@@ -81,7 +81,7 @@
             "ramp_down_rate": 0.16
         },
         "elogen - E4000": {
-            "type": "PEM",
+            "electrolyzer_type": "PEM",
             "name": "elogen - E4000",
             "nom_load": 20000.0,
             "min_load": 1000.0,
@@ -97,7 +97,7 @@
             "ramp_down_rate": 0.16
         },
         "Sunfire - HYLINK SOEC": {
-            "type": "Solid-Oxide",
+            "electrolyzer_type": "Solid-Oxide",
             "name": "Sunfire - HYLINK SOEC",
             "nom_load": 2475.0,
             "min_load": 135.0,

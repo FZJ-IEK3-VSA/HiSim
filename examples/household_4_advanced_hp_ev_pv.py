@@ -155,6 +155,10 @@ class HouseholdAdvancedHPEvPvConfig:
         household_config.hp_controller_config.mode = (
             2  # use heating and cooling as default
         )
+        household_config.hp_config.set_thermal_output_power_in_watt = 6000  # default value leads to switching on-off very often
+        household_config.hp_config.minimum_idle_time_in_seconds = 900  # default value leads to switching on-off very often
+        household_config.hp_config.minimum_running_time_in_seconds = 900  # default value leads to switching on-off very often
+
         # set same heating threshold
         household_config.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius = set_heating_threshold_outside_temperature_in_celsius
         household_config.hp_controller_config.set_heating_threshold_outside_temperature_in_celsius = set_heating_threshold_outside_temperature_in_celsius

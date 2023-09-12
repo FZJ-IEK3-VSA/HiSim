@@ -2,6 +2,8 @@
 
 See library on https://github.com/FZJ-IEK3-VSA/hplib/tree/main/hplib
 """
+
+# clean
 from typing import Any, List, Optional, Tuple
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -25,7 +27,6 @@ from hisim.loadtypes import LoadTypes, Units, InandOutputType
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.components.heat_distribution_system import HeatingSystemType
-from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim import log
 
 

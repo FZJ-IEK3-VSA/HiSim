@@ -126,6 +126,9 @@ class ReferenceHouseholdConfig:
         household_config.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
             set_heating_threshold_outside_temperature_in_celsius
         )
+        household_config.gasheater_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
+            set_heating_threshold_outside_temperature_in_celsius
+        )
 
         # set same heating reference temperature
         household_config.hds_controller_config.heating_reference_temperature_in_celsius = (

@@ -41,7 +41,7 @@ class ElectrolyzerConfig(cp.ConfigBase):
         return Electrolyzer.get_full_classname()
 
     name: str
-    type: str
+    electrolyzer_type: str
     nom_load: float  # [kW]
     max_load: float  # [kW]
     nom_h2_flow_rate: float  # [m^3/h]
@@ -56,7 +56,7 @@ class ElectrolyzerConfig(cp.ConfigBase):
         """Gets a default Alkaline Eletrolyzer."""
         config = ElectrolyzerConfig(
             name="Alkaline_electrolyzer",
-            type="Alkaline",
+            electrolyzer_type="Alkaline",
             nom_load=100.0,  # [kW]
             max_load=110.0,  # [kW]
             nom_h2_flow_rate=100.0,  # [m^3/h]
@@ -75,7 +75,7 @@ class ElectrolyzerConfig(cp.ConfigBase):
         config_file = os.path.join(
             utils.HISIMPATH["inputs"], "electrolyzer_manufacturer_config.json"
         )
-        with open(config_file, "r") as json_file:
+        with open(config_file, "r", encoding="utf-8") as json_file:
             data = json.load(json_file)
             return data.get("Electrolyzer variants", {}).get(electrolyzer_name, {})
 
@@ -86,7 +86,7 @@ class ElectrolyzerConfig(cp.ConfigBase):
         config_json = cls.read_config(electrolyzer_name)
         config = ElectrolyzerConfig(
             name=electrolyzer_name,  # config_json.get("name", "")
-            type=config_json.get("type", ""),
+            electrolyzer_type=config_json.get("electrolyzer_type", ""),
             nom_load=config_json.get("nom_load", 0.0),
             max_load=config_json.get("max_load", 0.0),
             nom_h2_flow_rate=config_json.get("nom_h2_flow_rate", 0.0),
@@ -107,7 +107,7 @@ class Electrolyzer(cp.Component):
     name : str
         Name of the electrolyzer variant.
 
-    type : str
+    electrolyzer_type : str
         Technology type of the electrolyzer.
 
     nom_load : float
@@ -166,7 +166,7 @@ class Electrolyzer(cp.Component):
         """Constructs all the neccessary attributes."""
         self.electrolyzerconfig = config
 
-        self.technology_type = config.type
+        self.technology_type = config.electrolyzer_type
         self.nom_load = config.nom_load
         self.max_load = config.max_load
         self.nom_h2_flow_rate = config.nom_h2_flow_rate
@@ -174,6 +174,13 @@ class Electrolyzer(cp.Component):
         self.i_cell_nom = config.i_cell_nom
         self.ramp_up_rate = config.ramp_up_rate
         self.ramp_down_rate = config.ramp_down_rate
+
+
+        self.state = 0.0
+        self.current_h2_production_rate = 0.0
+        self.current_spec_h2_production_rate = 0.0
+        self.current_flow_rate_oxygen = 0.0
+        self.current_flow_rate_water = 0.0
 
         super().__init__(
             name=self.electrolyzerconfig.name,
@@ -346,7 +353,7 @@ class Electrolyzer(cp.Component):
         data_file = os.path.join(
             utils.HISIMPATH["inputs"], "electrolyzer_polarization_curve_data.json"
         )
-        with open(data_file, "r") as file:
+        with open(data_file, "r", encoding="utf-8") as file:
             data = json.load(file)
 
         # Check if the provided technology is valid
@@ -407,7 +414,7 @@ class Electrolyzer(cp.Component):
 
         # Calculates system_power from stack power
         system_power = stack_power + aux_power
-        #print("system_power: ", system_power)
+        # print("system_power: ", system_power)
 
         interp_function_h2_production_rate = interpolate.interp1d(
             system_power, h2_production_rate, kind="quadratic"
@@ -607,8 +614,8 @@ class Electrolyzer(cp.Component):
             electrolyzer_type, nominal_load, nom_h2_flow_rate, faraday_eff, i_cell_nom
         )
         # Current hydrogen prduction and specific hydrogen production rate
-        #print("self.state: ", self.state)
-        #print("self.current_load_state: ", self.current_load_state)
+        # print("self.state: ", self.state)
+        # print("self.current_load_state: ", self.current_load_state)
         (
             self.current_h2_production_rate,
             self.current_spec_h2_production_rate,

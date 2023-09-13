@@ -80,7 +80,7 @@ class CSVLoader(cp.Component):
             self.Output1,
             self.csvconfig.loadtype,
             self.csvconfig.unit,
-            output_description="CSV loader output 1"
+            output_description="CSV loader output 1",
         )
         self.output1.display_name = self.csvconfig.column_name
         self.multiplier = self.csvconfig.multiplier
@@ -129,7 +129,7 @@ class CSVLoader(cp.Component):
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
-    
+
     def write_to_report(self) -> List[str]:
         """Writes a report."""
         return self.csvconfig.get_string_dict()

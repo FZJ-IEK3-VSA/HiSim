@@ -1,7 +1,7 @@
 """Electricity meter module should replace the sumbuilder. """
 # clean
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List
 
 from dataclasses_json import dataclass_json
 import pandas as pd

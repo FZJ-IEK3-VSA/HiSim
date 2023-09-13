@@ -128,9 +128,11 @@ class Units(str, enum.Enum):
 
     # Volume
     LITER = "L"
+    CUBICMETERS = "m^3"
 
     # Volume per time
     LITER_PER_TIMESTEP = "Liter per timestep"
+    CUBICMETERS_PER_SECOND = "Cubic meters per second"
 
     # Mass
     KG = "kg"
@@ -147,6 +149,7 @@ class Units(str, enum.Enum):
 
     # Time
     SECONDS = "s"
+    HOURS = "h"
     TIMESTEPS = "timesteps"
     YEARS = "years"
 

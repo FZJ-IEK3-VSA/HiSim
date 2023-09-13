@@ -78,7 +78,6 @@ def household_with_hplib_hws_hds_pv_battery_ems(
     hp_maintenance_cost_as_percentage_of_investment = 0.025
     hp_consumption = 0
 
-
     # =================================================================================================================================
     # Build Components
 
@@ -105,11 +104,17 @@ def household_with_hplib_hws_hds_pv_battery_ems(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Heat Distribution Controller
-    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
-    my_heat_distribution_controller_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
-    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_heat_distribution_controller_config,
+    my_heat_distribution_controller_config = (
+        heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
+    )
+    my_heat_distribution_controller_config.heating_reference_temperature_in_celsius = (
+        heating_reference_temperature_in_celsius
+    )
+    my_heat_distribution_controller = (
+        heat_distribution_system.HeatDistributionController(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_heat_distribution_controller_config,
+        )
     )
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()

@@ -161,7 +161,6 @@ def test_house_with_pyam(
         my_simulation_parameters=my_simulation_parameters,
     )
 
-
     # Build Heat Pump Controller
     my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
         config=generic_heat_pump.GenericHeatPumpControllerConfig(

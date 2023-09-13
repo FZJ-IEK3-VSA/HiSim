@@ -22,6 +22,7 @@ class CSVLoaderConfig(cp.ConfigBase):
     sep: str
     decimal: str
     multiplier: float
+    output_description: str
 
     @classmethod
     def get_main_classname(cls):
@@ -79,6 +80,7 @@ class CSVLoader(cp.Component):
             self.Output1,
             self.csvconfig.loadtype,
             self.csvconfig.unit,
+            output_description="CSV loader output 1",
         )
         self.output1.display_name = self.csvconfig.column_name
         self.multiplier = self.csvconfig.multiplier
@@ -118,8 +120,16 @@ class CSVLoader(cp.Component):
             self.output1, float(self.column[timestep]) * self.multiplier
         )
 
+    def i_prepare_simulation(self) -> None:
+        """Prepare the simulation."""
+        pass
+
     def i_save_state(self) -> None:
         pass
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
+
+    def write_to_report(self) -> List[str]:
+        """Writes a report."""
+        return self.csvconfig.get_string_dict()

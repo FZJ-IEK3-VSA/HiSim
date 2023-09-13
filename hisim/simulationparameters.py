@@ -82,7 +82,7 @@ class SimulationParameters(JSONWizard):
         self.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         # self.post_processing_options.append(PostProcessingOptions.PLOT_SANKEY)
         self.post_processing_options.append(PostProcessingOptions.PLOT_SINGLE_DAYS)
-        self.post_processing_options.append(PostProcessingOptions.PLOT_BAR_CHARTS)
+        self.post_processing_options.append(PostProcessingOptions.PLOT_MONTHLY_BAR_CHARTS)
         self.post_processing_options.append(
             PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER
         )

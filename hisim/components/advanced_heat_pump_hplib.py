@@ -95,6 +95,33 @@ class HeatPumpHplibConfig(ConfigBase):
             maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
             consumption=0,
         )
+        
+    @classmethod
+    def get_scaled_advanced_hp_lib(cls):
+        """Gets a default heat pump with scaling according to heating load of the building."""
+        
+        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND):
+            set_thermal_output_power_in_watt = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND)
+        else:
+            raise KeyError("No entry exists for the key Maxthermalbuildingdemand. You need to initialize your building component before the hplib or else take the default config of hplib.")
+
+        return HeatPumpHplibConfig(
+            name="AdvancedHeatPumpHPLib",
+            model="Generic",
+            group_id=4,
+            heating_reference_temperature_in_celsius=-7,
+            flow_temperature_in_celsius=52,
+            set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
+            cycling_mode=True,
+            minimum_running_time_in_seconds=600,
+            minimum_idle_time_in_seconds=600,
+            co2_footprint=set_thermal_output_power_in_watt * 1e-3 * 165.84,  # value from emission_factros_and_costs_devices.csv
+            cost=set_thermal_output_power_in_watt * 1e-3 * 1513.74,  # value from emission_factros_and_costs_devices.csv
+            lifetime=10,  # value from emission_factros_and_costs_devices.csv
+            maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
+            consumption=0)
+         
+
 
 
 class HeatPumpHplib(Component):
@@ -535,7 +562,7 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
         return HeatPumpHplibControllerL1Config(
             name="HeatPumpController",
             mode=1,
-            set_heating_threshold_outside_temperature_in_celsius=None,
+            set_heating_threshold_outside_temperature_in_celsius=16.0,
             set_cooling_threshold_outside_temperature_in_celsius=20.0,
         )
 

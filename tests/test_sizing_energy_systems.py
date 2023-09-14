@@ -8,12 +8,13 @@ import math
 import numpy as np
 import pytest
 from typing import Tuple, List, Any
-from hisim import component
+from hisim import component as cp
 from hisim.components import weather, building, loadprofilegenerator_connector, generic_pv_system, advanced_heat_pump_hplib, advanced_battery_bslib, simple_hot_water_storage
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim import utils
 from tests import functions_for_testing as fft
+from hisim import loadtypes as lt
 
 @pytest.mark.buildingtest
 @utils.measure_execution_time
@@ -21,27 +22,35 @@ def test_energy_system_scalability():
     """Test function for the scability of the whole energy system."""
 
     (
-        original_pv_electricity_output
+        original_pv_electricity_output_in_watt,
+        original_hplib_thermal_outout_power_in_watt
     ) = simulation_for_one_timestep(
         scaling_factor_for_absolute_conditioned_floor_area=1,
         scaling_factor_for_rooftop_area=1
     )
+    
+    log.information("original pv and hplib output " + str(original_pv_electricity_output_in_watt) + " " + str(original_hplib_thermal_outout_power_in_watt) + "\n")
 
-    # calculate pv electricity output and respective scaling factor when
+    # calculate outputs and respective scaling factor when
     # the rooftop floor area is scaled with factor=5
     (
-        scaled_pv_electricity_output
+        scaled_pv_electricity_output_in_watt,
+        scaled_hplib_thermal_outout_power_in_watt
     ) = simulation_for_one_timestep(
         scaling_factor_for_absolute_conditioned_floor_area=5,
         scaling_factor_for_rooftop_area=5
     )
+    
+    log.information("scaled pv and hplib output " + str(scaled_pv_electricity_output_in_watt) + " " + str(scaled_hplib_thermal_outout_power_in_watt)+ "\n")
 
     # now compare the two results and test if pv output is upscaled correctly
-    np.testing.assert_allclose(scaled_pv_electricity_output, original_pv_electricity_output * 5, rtol=0.01)
+    np.testing.assert_allclose(scaled_pv_electricity_output_in_watt, original_pv_electricity_output_in_watt * 5, rtol=0.01)
+
+    np.testing.assert_allclose(scaled_hplib_thermal_outout_power_in_watt, original_hplib_thermal_outout_power_in_watt * 5, rtol=0.01)
 
 def simulation_for_one_timestep(
     scaling_factor_for_absolute_conditioned_floor_area: int, scaling_factor_for_rooftop_area: int,
-) -> Any: #Tuple[List[float], Any]:
+) -> Tuple[Any, Any]:
     """Test function for the example house for one timestep."""
 
     # Set simu params
@@ -49,7 +58,7 @@ def simulation_for_one_timestep(
     my_simulation_parameters = SimulationParameters.full_year(
         year=2021, seconds_per_timestep=seconds_per_timestep
     )
-    repo = component.SimRepository()
+    repo = cp.SimRepository()
     # Set building inputs
     absolute_conditioned_floor_area_in_m2 = 121.2 * scaling_factor_for_absolute_conditioned_floor_area
     rooftop_area_in_m2 = 168.9 * scaling_factor_for_rooftop_area
@@ -97,13 +106,40 @@ def simulation_for_one_timestep(
     my_pv = generic_pv_system.PVSystem(my_simulation_parameters=my_simulation_parameters, config=my_pv_config)
     my_pv.set_sim_repo(repo)
     my_pv.i_prepare_simulation()
+    
 
-    number_of_outputs = fft.get_number_of_outputs(
-        [my_occupancy, my_weather, my_residence, my_pv]
-    )
-    stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(
+    # Set hplib
+    my_hplib_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib()
+    my_hplib = advanced_heat_pump_hplib.HeatPumpHplib(my_simulation_parameters=my_simulation_parameters, config=my_hplib_config)
+
+    # ------------------------------------------------------------------------------------------------------------------------------------
+    # Create fake component outputs as inputs for simulation
+    on_off_switch = cp.ComponentOutput("Fake_on_off_switch",
+                              "Fake_on_off_switch",
+                                       lt.LoadTypes.ANY,
+                                       lt.Units.ANY)
+    t_in_primary = cp.ComponentOutput("Fake_t_in_primary",
+                              "Fake_t_in_primary",
+                                      lt.LoadTypes.ANY,
+                                      lt.Units.ANY)
+    t_in_secondary = cp.ComponentOutput("Fake_t_in_secondary",
+                              "Fake_t_in_secondary",
+                                        lt.LoadTypes.ANY,
+                                        lt.Units.ANY)
+    t_amb = cp.ComponentOutput("Fake_t_amb",
+                              "Fake_t_amb",
+                               lt.LoadTypes.ANY,
+                               lt.Units.ANY)
+    
+    # ------------------------------------------------------------------------------------------------------------------------------------
+    my_hplib.state = advanced_heat_pump_hplib.HeatPumpState(time_on=0, time_off=0, time_on_cooling=0, on_off_previous=1)
+
+    number_of_outputs = fft.get_number_of_outputs([on_off_switch,t_in_primary,t_in_secondary,t_amb,my_occupancy, my_weather, my_residence, my_pv, my_hplib])
+
+    stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(
         number_of_outputs
     )
+
     my_residence.temperature_outside_channel.source_output = (
         my_weather.air_temperature_output
     )
@@ -125,8 +161,13 @@ def simulation_for_one_timestep(
     my_pv.GHIC.source_output = my_weather.GHI_output
     my_pv.apparent_zenithC.source_output = my_weather.apparent_zenith_output
     my_pv.wind_speedC.source_output = my_weather.wind_speed_output
+    
+    my_hplib.on_off_switch.source_output = on_off_switch
+    my_hplib.t_in_primary.source_output = t_in_primary
+    my_hplib.t_in_secondary.source_output = t_in_secondary
+    my_hplib.t_amb.source_output = t_amb
 
-    fft.add_global_index_of_components([my_occupancy, my_weather, my_residence, my_pv])
+    fft.add_global_index_of_components([on_off_switch,t_in_primary,t_in_secondary,t_amb,my_occupancy, my_weather, my_residence, my_pv, my_hplib])
 
     my_residence.seconds_per_timestep = seconds_per_timestep
 
@@ -135,14 +176,19 @@ def simulation_for_one_timestep(
     my_weather.i_simulate(60000, stsv, False)
     my_residence.i_simulate(60000, stsv, False)
     my_pv.i_simulate(60000,stsv,False)
+    my_hplib.i_simulate(60000, stsv, False)
     
     
-    pv_electricity_output = stsv.values[-1]
-    log.information(f"Occupancy Outputs: {stsv.values[0:5]}")
-    log.information(f"Weather Outputs: {stsv.values[5:15]}")
-    log.information(f"Residence Outputs: {stsv.values[15:24]}")
-    log.information(f"PV Outputs: {stsv.values[24:]}")
+    log.information("len outputs " + str(len(stsv.values)))
+    log.information(f"Occupancy Outputs: {stsv.values[-33:-28]}") # 5 outputs
+    log.information(f"Weather Outputs: {stsv.values[-28:-18]}") # 10 outputs
+    log.information(f"Residence Outputs: {stsv.values[-18:-9]}") # 9 outputs
+    log.information(f"PV Outputs: {stsv.values[-9]}") # 1 output
+    log.information(f"HPlib Outputs: {stsv.values[-8:]} \n") # 8 outputs
     
-    return pv_electricity_output
+    pv_electricity_output_in_watt = stsv.values[-9]
+    hplib_thermal_power_output_in_watt = stsv.values[-8]
+    
+    return pv_electricity_output_in_watt, hplib_thermal_power_output_in_watt
 
 

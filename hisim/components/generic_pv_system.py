@@ -242,6 +242,23 @@ class PVSystemConfig(ConfigBase):
             lifetime=25,  # value from emission_factros_and_costs_devices.csv
         )
 
+    @classmethod
+    def size_pv_system(cls, rooftop_area_in_m2: float, share_of_maximum_pv_power: float = 1.0) -> float:
+        """Size the pv system according to the rooftop type and the share of the maximum pv power that should be used."""
+        
+        # get area of module
+        if self.pvconfig.load_module_data:
+            # load module data online
+            modules = pvlib.pvsystem.retrieve_sam(name="SandiaMod")
+            self.module = modules[self.pvconfig.module_name]
+            # get inverter data
+            inverters = pvlib.pvsystem.retrieve_sam("cecinverter")
+            self.inverter = inverters[self.pvconfig.inverter_name]
+        else:
+            # load module and inverter data from csv
+            module = self.modules[self.pvconfig.module_name]
+            self.module = pd.to_numeric(module, errors="coerce")
+        module_used = pvlib.retrieve_sam()
 
 class PVSystem(cp.Component):
     """

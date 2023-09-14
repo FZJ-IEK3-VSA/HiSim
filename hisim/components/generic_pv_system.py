@@ -241,24 +241,45 @@ class PVSystemConfig(ConfigBase):
             maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
             lifetime=25,  # value from emission_factros_and_costs_devices.csv
         )
+        
+    @classmethod
+    def get_scaled_PV_system(cls, rooftop_area_in_m2: float, share_of_maximum_pv_power: float = 1.0, module_name: str = "Hanwha_HSL60P6_PA_4_250T__2013_", load_module_data: bool = False ):
+        """Gets a default PV system with scaling according to rooftop area."""
+        total_pv_power_in_watt = cls.size_pv_system(rooftop_area_in_m2=rooftop_area_in_m2, share_of_maximum_pv_power=share_of_maximum_pv_power, module_name=module_name)
+        return PVSystemConfig(
+            time=2019,
+            power=total_pv_power_in_watt,
+            load_module_data=load_module_data,
+            module_name=module_name,
+            integrate_inverter=True,
+            inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
+            name="PVSystem",
+            azimuth=180,
+            tilt=30,
+            source_weight=0,
+            location="Aachen",
+            co2_footprint=total_pv_power_in_watt * 1e-3 * 330.51,  # value from emission_factros_and_costs_devices.csv
+            cost=total_pv_power_in_watt * 1e-3 * 794.41,  # value from emission_factros_and_costs_devices.csv
+            maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
+            lifetime=25,  # value from emission_factros_and_costs_devices.csv
+        )
 
     @classmethod
-    def size_pv_system(cls, rooftop_area_in_m2: float, share_of_maximum_pv_power: float = 1.0) -> float:
+    def size_pv_system(cls, rooftop_area_in_m2: float, share_of_maximum_pv_power: float = 1.0, module_name: str = "Hanwha_HSL60P6_PA_4_250T__2013_") -> float:
         """Size the pv system according to the rooftop type and the share of the maximum pv power that should be used."""
         
-        # get area of module
-        if self.pvconfig.load_module_data:
-            # load module data online
-            modules = pvlib.pvsystem.retrieve_sam(name="SandiaMod")
-            self.module = modules[self.pvconfig.module_name]
-            # get inverter data
-            inverters = pvlib.pvsystem.retrieve_sam("cecinverter")
-            self.inverter = inverters[self.pvconfig.inverter_name]
+        # get area and power of module
+        if module_name == "Hanwha_HSL60P6_PA_4_250T__2013_":
+            module_area_in_m2 = 1.65
+            module_power_in_watt = 250
+        
         else:
-            # load module and inverter data from csv
-            module = self.modules[self.pvconfig.module_name]
-            self.module = pd.to_numeric(module, errors="coerce")
-        module_used = pvlib.retrieve_sam()
+            raise ValueError("Module name not given in this function. Please check or add your module information.")
+        
+        total_pv_power_in_watt = ( rooftop_area_in_m2 / module_area_in_m2 * module_power_in_watt) * share_of_maximum_pv_power
+        
+        return total_pv_power_in_watt
+        
 
 class PVSystem(cp.Component):
     """

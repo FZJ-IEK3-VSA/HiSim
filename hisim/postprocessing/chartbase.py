@@ -115,8 +115,15 @@ class Chart:  # noqa: too-few-public-methods
     def rescale_y_axis(self, y_values: Any, units: Any) -> Tuple[Any, Any]:
         """Rescale y_values of plots."""
         max_scale = np.max(np.abs(y_values))
-        if units != "-":
+
+        if units not in ["-", "%"]:
             scale = ""
+
+            # if k already in unit, remove k first and then scale
+            if units in ["kg", "kWh", "kg/s", "kW"]:
+                y_values = y_values * 1e3
+                units = units.strip("k")
+
             if max_scale >= 1e12:
                 y_values = y_values * 1e-12
                 scale = "T"

@@ -148,21 +148,22 @@ class PostProcessor:
             end = timer()
             duration = end - start
             log.information("Making single day plots took " + f"{duration:1.2f}s.")
-        if PostProcessingOptions.PLOT_BAR_CHARTS in ppdt.post_processing_options:
-            log.information("Making bar charts.")
+
+        # make monthly bar plots only if simulation duration approximately a year
+        if (
+            PostProcessingOptions.PLOT_MONTHLY_BAR_CHARTS
+            in ppdt.post_processing_options
+            and ppdt.simulation_parameters.duration.days >= 360
+        ):
+            log.information("Making monthly bar charts.")
             start = timer()
-            self.make_bar_charts(ppdt, report_image_entries=report_image_entries)
+            self.make_monthly_bar_charts(
+                ppdt, report_image_entries=report_image_entries
+            )
             end = timer()
             duration = end - start
-            log.information("Making bar plots took " + f"{duration:1.2f}s.")
-        # Plot sankey
-        if PostProcessingOptions.PLOT_SANKEY in ppdt.post_processing_options:
-            log.information("Making sankey plots.")
-            start = timer()
-            self.make_sankey_plots()
-            end = timer()
-            duration = end - start
-            log.information("Making sankey plots took " + f"{duration:1.2f}s.")
+            log.information("Making monthly bar plots took " + f"{duration:1.2f}s.")
+
         # Export all results to CSV
         if PostProcessingOptions.EXPORT_TO_CSV in ppdt.post_processing_options:
             log.information("Making CSV exports.")
@@ -364,12 +365,7 @@ class PostProcessor:
         log.information("Exporting to csv.")
         self.export_results_to_csv(ppdt)
 
-    def make_sankey_plots(self) -> None:
-        """Makes Sankey plots. Needs work."""
-        log.information("Plotting sankeys.")
-        # TODO:   self.plot_sankeys()
-
-    def make_bar_charts(
+    def make_monthly_bar_charts(
         self,
         ppdt: PostProcessingDataTransfer,
         report_image_entries: List[ReportImageEntry],
@@ -667,7 +663,55 @@ class PostProcessor:
             all_outputs=ppdt.all_outputs,
             simulation_parameters=ppdt.simulation_parameters,
         )
-        lines = kpi_compute_return
+        self.write_new_chapter_with_table_to_report(
+            report=report,
+            table_as_list_of_list=kpi_compute_return,
+            headline=". KPIs",
+            comment=["Here a comment on calculation of numbers will follow"],
+        )
+
+    def compute_and_write_opex_costs_to_report(
+        self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
+    ) -> None:
+        """Computes OPEX costs and operational CO2-emissions and writes them to report and csv."""
+        opex_compute_return = opex_calculation(
+            components=ppdt.wrapped_components,
+            all_outputs=ppdt.all_outputs,
+            postprocessing_results=ppdt.results,
+            simulation_parameters=ppdt.simulation_parameters,
+        )
+        self.write_new_chapter_with_table_to_report(
+            report=report,
+            table_as_list_of_list=opex_compute_return,
+            headline=". Operational Costs and Emissions for simulated period",
+            comment=[
+                "\n",
+                "Comments:",
+                "Operational Costs are the sum of fuel costs and maintenance costs for the devices, calculated for the simulated period.",
+                "Emissions are fuel emissions emitted during simulad period.",
+                "Consumption for Diesel_Car in l, for EV in kWh.",
+            ],
+        )
+
+    def compute_and_write_capex_costs_to_report(
+        self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
+    ) -> None:
+        """Computes CAPEX costs and CO2-emissions for production of devices and writes them to report and csv."""
+        capex_compute_return = capex_calculation(
+            components=ppdt.wrapped_components,
+            simulation_parameters=ppdt.simulation_parameters,
+        )
+        self.write_new_chapter_with_table_to_report(
+            report=report,
+            table_as_list_of_list=capex_compute_return,
+            headline=". Investment Cost and CO2-Emissions of devices for simulated period",
+            comment=["Here a comment on calculation of numbers will follow"],
+        )
+
+    def write_new_chapter_with_text_content_to_report(
+        self, report: reportgenerator.ReportGenerator, lines: List, headline: str
+    ) -> None:
+        """Write new chapter with headline and some general information e.g. KPIs to report."""
         report.open()
         report.write_heading_with_style_heading_one(
             [str(self.chapter_counter) + ". KPIs"]

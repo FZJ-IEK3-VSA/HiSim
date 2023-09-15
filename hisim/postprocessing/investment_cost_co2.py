@@ -2,16 +2,17 @@
 
 Functions from this file are called in Postprocessing option compute_kpis."""
 
-from hisim.components import (generic_hot_water_storage_modular,
-                              generic_pv_system,
-                              generic_smart_device,
-                              generic_heat_source,
-                              advanced_battery_bslib,
-                              generic_car,
-                              generic_CHP,
-                              generic_hydrogen_storage,
-                              generic_electrolyzer,
-                              )
+from hisim.components import (
+    generic_hot_water_storage_modular,
+    generic_pv_system,
+    generic_smart_device,
+    generic_heat_source,
+    advanced_battery_bslib,
+    generic_car,
+    generic_CHP,
+    generic_hydrogen_storage,
+    generic_electrolyzer,
+)
 
 from hisim.utils import HISIMPATH
 import pandas as pd
@@ -89,14 +90,20 @@ def compute_investment_cost(
             component_capacity = 1.0
         elif isinstance(component.my_component, generic_CHP.SimpleCHP):
             if component.my_component.config.use == LoadTypes.GAS:
-                column = price_frame.iloc[price_frame.index == "Gas powered Combined Heat and Power"]
+                column = price_frame.iloc[
+                    price_frame.index == "Gas powered Combined Heat and Power"
+                ]
             elif component.my_component.config.use == LoadTypes.HYDROGEN:
                 column = price_frame.iloc[price_frame.index == "Hydrogen fuelcell"]
             component_capacity = component.my_component.config.p_fuel * 1e-3
-        elif isinstance(component.my_component, generic_hydrogen_storage.GenericHydrogenStorage):
+        elif isinstance(
+            component.my_component, generic_hydrogen_storage.GenericHydrogenStorage
+        ):
             column = price_frame.iloc[price_frame.index == "Hydrogen Storage"]
             component_capacity = component.my_component.config.max_capacity
-        elif isinstance(component.my_component, generic_electrolyzer.GenericElectrolyzer):
+        elif isinstance(
+            component.my_component, generic_electrolyzer.GenericElectrolyzer
+        ):
             column = price_frame.iloc[price_frame.index == "Electrolyzer"]
             component_capacity = component.my_component.config.max_power * 1e-3
         else:

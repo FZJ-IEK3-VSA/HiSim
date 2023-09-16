@@ -569,9 +569,10 @@ def compute_kpis(
     ) = building_temperature_control(
         results=results, seconds_per_timestep=simulation_parameters.seconds_per_timestep
     )
+    table_headline: List[object] = ["KPI", "Value", "Unit"]
     # initialize table for report
     table: List = []
-    table.append(["KPI", "Value", "Unit"])
+    table.append(table_headline)
     table.append(["Consumption:", f"{consumption_sum:4.0f}", "kWh"])
     table.append(["Production:", f"{production_sum:4.0f}", "kWh"])
     table.append(["Self-Consumption:", f"{self_consumption_sum:4.0f}", "kWh"])
@@ -689,5 +690,10 @@ def compute_kpis(
     config_file_written = kpi_config.to_json()  # type: ignore
     with open(pathname, "w", encoding="utf-8") as outfile:
         outfile.write(config_file_written)
+
+    # write whole table to csv file
+    pathname_csv = os.path.join(simulation_parameters.result_directory, "kpi_results.csv")
+    kpi_df = pd.DataFrame(table, columns=table_headline)
+    kpi_df.to_csv(pathname_csv, index=False, header=False, encoding="utf8")
 
     return table

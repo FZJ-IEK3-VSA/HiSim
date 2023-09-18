@@ -20,7 +20,6 @@ from hisim.components import (
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim import utils
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 
 @pytest.mark.buildingtest
@@ -39,7 +38,6 @@ def test_energy_system_scalability():
         original_storage_modular_size_in_liter_for_dhw,
     ) = simulation_for_one_timestep(
         scaling_factor_for_absolute_conditioned_floor_area=1,
-        scaling_factor_for_rooftop_area=1,
     )
 
     log.information(
@@ -78,7 +76,6 @@ def test_energy_system_scalability():
         scaled_storage_modular_size_in_liter_for_dhw,
     ) = simulation_for_one_timestep(
         scaling_factor_for_absolute_conditioned_floor_area=5,
-        scaling_factor_for_rooftop_area=5,
     )
 
     log.information(
@@ -146,7 +143,6 @@ def test_energy_system_scalability():
 
 def simulation_for_one_timestep(
     scaling_factor_for_absolute_conditioned_floor_area: int,
-    scaling_factor_for_rooftop_area: int,
 ) -> Tuple[Any, float, float, float, float, float, float]:
     """Test function for the example house for one timestep."""
 
@@ -189,12 +185,14 @@ def simulation_for_one_timestep(
 
     # Set hplib
     my_hplib_config = (
-        advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(heating_load_of_building_in_watt=my_residence_information.building_heating_load_in_watt)
+        advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
+            heating_load_of_building_in_watt=my_residence_information.building_heating_load_in_watt)
     )
 
     # Set Hot Water Storage
     my_simple_hot_water_storage_config = (
-        simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(heating_load_of_building_in_watt=my_residence_information.building_heating_load_in_watt)
+        simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
+            heating_load_of_building_in_watt=my_residence_information.building_heating_load_in_watt)
     )
 
     # Set Battery

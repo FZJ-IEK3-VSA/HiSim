@@ -85,7 +85,8 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
 
         # https://www.baunetzwissen.de/heizung/fachwissen/speicher/dimensionierung-von-pufferspeichern-161296
         # approx. 60l per kW power of heating system
-        # here we say power heating system should correspond to heating load of building (see also https://www.sciencedirect.com/science/article/pii/S2352152X2201533X?via%3Dihub)
+        # here we say power heating system should correspond to heating load of building
+        # (see also https://www.sciencedirect.com/science/article/pii/S2352152X2201533X?via%3Dihub)
         volume_heating_water_storage_in_liter: float = (
             set_thermal_output_power_in_watt * 1e-3 * 60
         )

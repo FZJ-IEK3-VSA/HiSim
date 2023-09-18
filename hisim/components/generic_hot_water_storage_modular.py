@@ -90,7 +90,7 @@ class StorageConfig(cp.ConfigBase):
         else:
             raise KeyError(
                 "Key for number of apartments was not found in the singleton sim repository."
-                + "This might be because the building was not initialized before the loadprofilegenerator_connector."
+                + "This might be because the building was not initialized before the hot water storage modular."
                 + "Please check the order of the initialization of the components in your example."
             )
 

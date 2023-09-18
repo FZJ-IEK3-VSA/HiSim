@@ -1,17 +1,15 @@
 """Test for scaling of the energy system.
 
-Depending on the building floor area and the rooftop area the energy system components,
+Depending on building properties like rooftop area, floor area, number of apartments and heating load the energy system components,
 such as pv system, battery, heat pumps, water storage, etc. need to be scaled up.
 """
 # clean
 
-import numpy as np
-import pytest
 from typing import Tuple, Any
-
+import pytest
+import numpy as np
 from hisim.components import (
     building,
-    loadprofilegenerator_connector,
     generic_pv_system,
     advanced_heat_pump_hplib,
     advanced_battery_bslib,
@@ -149,7 +147,7 @@ def test_energy_system_scalability():
 def simulation_for_one_timestep(
     scaling_factor_for_absolute_conditioned_floor_area: int,
     scaling_factor_for_rooftop_area: int,
-) -> Tuple[Any, Any]:
+) -> Tuple[Any, float, float, float, float, float, float]:
     """Test function for the example house for one timestep."""
 
     # Set simu params
@@ -171,12 +169,11 @@ def simulation_for_one_timestep(
     my_residence_config.absolute_conditioned_floor_area_in_m2 = (
         absolute_conditioned_floor_area_in_m2
     )
-    my_residence = building.Building(
+    building.Building(
         config=my_residence_config,
         my_simulation_parameters=my_simulation_parameters,
     )
-    # my_residence.set_sim_repo(repo)
-    # my_residence.i_prepare_simulation()
+
     number_of_apartments = SingletonSimRepository().get_entry(
         key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS
     )
@@ -189,15 +186,6 @@ def simulation_for_one_timestep(
 
     log.information("Heating load of building in W " + str(heating_load_in_watt))
     log.information("Number of apartmens in building " + str(number_of_apartments))
-
-    # Set Occupancy
-    my_occupancy_config = (
-        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
-    )
-    my_occupancy = loadprofilegenerator_connector.Occupancy(
-        config=my_occupancy_config,
-        my_simulation_parameters=my_simulation_parameters,
-    )
 
     # Set PV
     my_pv_config = generic_pv_system.PVSystemConfig.get_scaled_PV_system(

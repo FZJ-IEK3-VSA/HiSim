@@ -78,7 +78,7 @@ class StorageConfig(cp.ConfigBase):
         return HotWaterStorage.get_full_classname()
 
     @classmethod
-    def get_default_config_boiler(cls) -> "StorageConfig":
+    def get_default_config_for_boiler_scaled(cls) -> "StorageConfig":
         """Returns default configuration for boiler."""
         # get default number of households
         if SingletonSimRepository().exist_entry(

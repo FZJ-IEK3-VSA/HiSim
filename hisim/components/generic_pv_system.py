@@ -221,7 +221,7 @@ class PVSystemConfig(ConfigBase):
     lifetime: float
 
     @classmethod
-    def get_default_PV_system(cls):
+    def get_default_PV_system(cls) -> "PVSystemConfig":
         """Gets a default PV system."""
         power = 10e3  # W
         return PVSystemConfig(
@@ -243,7 +243,7 @@ class PVSystemConfig(ConfigBase):
         )
         
     @classmethod
-    def get_scaled_PV_system(cls, rooftop_area_in_m2: float, share_of_maximum_pv_power: float = 1.0, module_name: str = "Hanwha_HSL60P6_PA_4_250T__2013_", load_module_data: bool = False ):
+    def get_scaled_PV_system(cls, rooftop_area_in_m2: float, share_of_maximum_pv_power: float = 1.0, module_name: str = "Hanwha_HSL60P6_PA_4_250T__2013_", load_module_data: bool = False ) -> "PVSystemConfig":
         """Gets a default PV system with scaling according to rooftop area."""
         total_pv_power_in_watt = cls.size_pv_system(rooftop_area_in_m2=rooftop_area_in_m2, share_of_maximum_pv_power=share_of_maximum_pv_power, module_name=module_name)
         return PVSystemConfig(

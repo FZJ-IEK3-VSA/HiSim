@@ -160,7 +160,6 @@ def simulation_for_one_timestep(
     absolute_conditioned_floor_area_in_m2 = (
         121.2 * scaling_factor_for_absolute_conditioned_floor_area
     )
-    rooftop_area_in_m2 = 168.9 * scaling_factor_for_rooftop_area
 
     # Set Residence
     my_residence_config = (

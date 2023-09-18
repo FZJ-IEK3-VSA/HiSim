@@ -97,13 +97,10 @@ class HeatPumpHplibConfig(ConfigBase):
         )
         
     @classmethod
-    def get_scaled_advanced_hp_lib(cls):
+    def get_scaled_advanced_hp_lib(cls, heating_load_of_building_in_watt: float):
         """Gets a default heat pump with scaling according to heating load of the building."""
-        
-        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND):
-            set_thermal_output_power_in_watt = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND)
-        else:
-            raise KeyError("No entry exists for the key Maxthermalbuildingdemand. You need to initialize your building component before the hplib or else take the default config of hplib.")
+
+        set_thermal_output_power_in_watt = heating_load_of_building_in_watt
 
         return HeatPumpHplibConfig(
             name="AdvancedHeatPumpHPLib",

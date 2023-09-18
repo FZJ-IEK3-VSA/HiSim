@@ -275,8 +275,13 @@ class PVSystemConfig(ConfigBase):
         
         else:
             raise ValueError("Module name not given in this function. Please check or add your module information.")
-        
-        total_pv_power_in_watt = ( rooftop_area_in_m2 / module_area_in_m2 * module_power_in_watt) * share_of_maximum_pv_power
+   
+        # scale rooftop area with limiting factor due to shading and obstacles like chimneys etc.
+        # see p.18 in following paper https://www.mdpi.com/1996-1073/15/15/5536 (Stanleys work)
+        limiting_factor_for_rooftop = 0.6
+        effective_rooftop_area_in_m2 = rooftop_area_in_m2 * limiting_factor_for_rooftop
+
+        total_pv_power_in_watt = ( effective_rooftop_area_in_m2 / module_area_in_m2 * module_power_in_watt) * share_of_maximum_pv_power
         
         return total_pv_power_in_watt
         

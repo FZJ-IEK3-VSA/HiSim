@@ -310,15 +310,6 @@ class Building(dynamic_component.DynamicComponent):
 
         self.get_building()
         self.build()
-        self.get_physical_param()
-        self.get_number_of_apartments(
-            conditioned_floor_area_in_m2=self.scaled_conditioned_floor_area_in_m2,
-            scaling_factor=self.scaling_factor,
-        )
-        self.max_thermal_building_demand_in_watt = self.calc_max_thermal_building_demand(
-            heating_reference_temperature_in_celsius=config.heating_reference_temperature_in_celsius,
-            initial_temperature_in_celsius=config.initial_internal_temperature_in_celsius,
-        )
 
         self.state: BuildingState = BuildingState(
             thermal_mass_temperature_in_celsius=config.initial_internal_temperature_in_celsius,
@@ -326,40 +317,7 @@ class Building(dynamic_component.DynamicComponent):
         )
         self.previous_state = self.state.self_copy()
 
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=self.number_of_apartments
-        )
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND,
-            entry=self.max_thermal_building_demand_in_watt,
-        )
-        if SingletonSimRepository().exist_entry(
-            key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING
-        ):
-            self.set_heating_temperature_in_celsius = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING
-            )
-        else:
-            self.set_heating_temperature_in_celsius = (
-                self.set_heating_temperature_in_celsius_default
-            )
-            log.warning(
-                f"Default temperature threshold for heating in building is used, which is {self.set_heating_temperature_in_celsius} °C."
-            )
-
-        if SingletonSimRepository().exist_entry(
-            key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING
-        ):
-            self.set_cooling_temperature_in_celsius = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING
-            )
-        else:
-            self.set_cooling_temperature_in_celsius = (
-                self.set_cooling_temperature_in_celsius_default
-            )
-            log.warning(
-                f"Default temperature thresholds for cooling in building is used, which is {self.set_cooling_temperature_in_celsius} °C."
-            )
+        self.return_building_information()
 
         # =================================================================================================================================
         # Input channels
@@ -779,19 +737,20 @@ class Building(dynamic_component.DynamicComponent):
         """Doublecheck."""
         pass
 
+
     def build(self,):
         """Build function.
 
         The function sets important constants and parameters for the calculations.
-        It imports the building dataset from TABULA and gets phys params and thermal conductances.
+        It imports the building dataset from TABULA and gets phys params and thermal conductances etc.
         """
 
         self.seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
         self.timesteps = self.my_simulation_parameters.timesteps
-        self.parameters = [
-            self.building_heat_capacity_class,
-            self.buildingcode,
-        ]
+        # self.parameters = [
+        #     self.building_heat_capacity_class,
+        #     self.buildingcode,
+        # ]
 
         # CONSTANTS
         # Heat transfer coefficient between nodes "m" and "s" (12.2.2 E64 P79); labeled as h_ms in paper [2] (*** Check header)
@@ -826,6 +785,28 @@ class Building(dynamic_component.DynamicComponent):
         self.get_physical_param()
         # Gets conductances
         self.get_conductances()
+
+        # Get number of apartments
+        self.get_number_of_apartments(
+            conditioned_floor_area_in_m2=self.scaled_conditioned_floor_area_in_m2,
+            scaling_factor=self.scaling_factor,
+        )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=self.number_of_apartments
+        )
+        # Get heating load of building
+        self.max_thermal_building_demand_in_watt = self.calc_max_thermal_building_demand(
+            heating_reference_temperature_in_celsius=self.buildingconfig.heating_reference_temperature_in_celsius,
+            initial_temperature_in_celsius=self.buildingconfig.initial_internal_temperature_in_celsius,
+        )
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND,
+            entry=self.max_thermal_building_demand_in_watt,
+        )
+        
+        # Get set temperatures for heating and cooling 
+        self.get_set_temperatures_for_heating_and_cooling()
+
 
         # if self.my_simulation_parameters.system_config.predictive:
         # send building parameters 5r1c to PID controller and to the MPC controller to generate an equivalent state space model
@@ -864,6 +845,10 @@ class Building(dynamic_component.DynamicComponent):
         )
 
         self.room_height_in_m2 = float(self.buildingdata["h_room"].values[0])
+        
+        self.rooftop_area_in_m2 = float(self.buildingdata["A_Roof_1"].values[0]) + float(self.buildingdata["A_Roof_2"].values[0])
+        
+        self.number_of_storeys = float(self.buildingdata["n_Storey"].values[0])
 
         # Get scaled areas
         self.scaling_over_conditioned_floor_area()
@@ -978,6 +963,39 @@ class Building(dynamic_component.DynamicComponent):
                 raise ValueError("Number of apartments can not be negative.")
 
         self.number_of_apartments = number_of_apartments
+        
+        
+    def get_set_temperatures_for_heating_and_cooling(self):
+        """Get set temperatures for heating and cooling.
+        Either import from SingletonSimRepository or use default values."""
+        
+        if SingletonSimRepository().exist_entry(
+            key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING
+        ):
+            self.set_heating_temperature_in_celsius = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING
+            )
+        else:
+            self.set_heating_temperature_in_celsius = (
+                self.set_heating_temperature_in_celsius_default
+            )
+            log.warning(
+                f"Default temperature threshold for heating in building is used, which is {self.set_heating_temperature_in_celsius} °C."
+            )
+
+        if SingletonSimRepository().exist_entry(
+            key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING
+        ):
+            self.set_cooling_temperature_in_celsius = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING
+            )
+        else:
+            self.set_cooling_temperature_in_celsius = (
+                self.set_cooling_temperature_in_celsius_default
+            )
+            log.warning(
+                f"Default temperature thresholds for cooling in building is used, which is {self.set_cooling_temperature_in_celsius} °C."
+            )
 
     def get_windows(self,):
         """Retrieve data about windows sizes.
@@ -1177,7 +1195,31 @@ class Building(dynamic_component.DynamicComponent):
                 )
             else:
                 self.scaled_window_areas_in_m2.append(window_area_in_m2)
+                
+                
+        # scale rooftop area with the same factor as conditioned floor area
+        self.rooftop_area_in_m2 = self.scale_rooftop_area(rooftop_area_from_tabula_in_m2=self.rooftop_area_in_m2, scaling_factor_of_floor_area=self.scaling_factor, number_of_storeys=self.number_of_storeys)
+        
+        
+    
+    def scale_rooftop_area(self, rooftop_area_from_tabula_in_m2: float, scaling_factor_of_floor_area: float, number_of_storeys: float):
+        """Scale rooftop area of building according to floor area and number of storeys. """
+        
+        # devide scaling factor of total floor area by number of storeys 
+        scaling_factor_for_rooftop = scaling_factor_of_floor_area / number_of_storeys
+        
+        return rooftop_area_from_tabula_in_m2 * scaling_factor_for_rooftop
+        
 
+    def return_building_information(self):
+        """Collect the important properties of the building to pass to other components."""
+        building_information_class = BuildingInformation(building_conditioned_floor_area_in_m2=self.scaled_conditioned_floor_area_in_m2,
+                                                         building_rooftop_area_in_m2=self.rooftop_area_in_m2,
+                                                         building_heating_load_in_watt=self.max_thermal_building_demand_in_watt,
+                                                         building_number_of_apartments=self.number_of_apartments,
+                                                         building_number_of_storeys=self.number_of_storeys
+                                                         )
+        return building_information_class
     # =====================================================================================================================================
 
     def __str__(self,):
@@ -2054,3 +2096,15 @@ class Window:
             return 0
 
         return poa_irrad["poa_direct"] * reduction_factor_with_area
+
+
+@dataclass_json  
+@dataclass
+class BuildingInformation:
+    """Class for collecting important building parameters to pass to other components."""
+    
+    building_conditioned_floor_area_in_m2: float
+    building_rooftop_area_in_m2: float
+    building_heating_load_in_watt: float
+    building_number_of_apartments: float
+    building_number_of_storeys: float

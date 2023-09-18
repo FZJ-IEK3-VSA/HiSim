@@ -76,16 +76,14 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         return config
     
     @classmethod
-    def get_scaled_hot_water_storage(cls):
+    def get_scaled_hot_water_storage(cls, heating_load_of_building_in_watt: float):
         """Gets a default storage with scaling according to heating load of the building."""
-        
-        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND):
-            set_thermal_output_power_in_watt = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND)
-        else:
-            raise KeyError("No entry exists for the key Maxthermalbuildingdemand. You need to initialize your building component before the hot water storage or else take the default config of hot water storage.")
+
+        set_thermal_output_power_in_watt = heating_load_of_building_in_watt
 
         # https://www.baunetzwissen.de/heizung/fachwissen/speicher/dimensionierung-von-pufferspeichern-161296
-        # approx. 60l per kW power of heating system (here we say power heating system should correspond to heating load of building)
+        # approx. 60l per kW power of heating system
+        # here we say power heating system should correspond to heating load of building (see also https://www.sciencedirect.com/science/article/pii/S2352152X2201533X?via%3Dihub)
         volume_heating_water_storage_in_liter: float = set_thermal_output_power_in_watt * 1e-3 * 60
         config = SimpleHotWaterStorageConfig(
             name="SimpleHotWaterStorage",

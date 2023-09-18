@@ -202,11 +202,9 @@ def household_reference_gas_heater_diesel_car(
     )
 
     # Build Gas Heater Controller
-    my_gasheater_controller = (
-        controller_l1_generic_gas_heater.GenericGasHeaterControllerL1(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_config.gasheater_controller_config,
-        )
+    my_gasheater_controller = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.gasheater_controller_config,
     )
 
     # Build Gasheater
@@ -216,11 +214,9 @@ def household_reference_gas_heater_diesel_car(
     )
 
     # Build heat Distribution System Controller
-    my_heat_distribution_controller = (
-        heat_distribution_system.HeatDistributionController(
-            config=my_config.hdscontroller_config,
-            my_simulation_parameters=my_simulation_parameters,
-        )
+    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
+        config=my_config.hdscontroller_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Distribution System
@@ -260,11 +256,9 @@ def household_reference_gas_heater_diesel_car(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 
-    my_domnestic_hot_water_heatpump_controller = (
-        controller_l1_heatpump.L1HeatPumpController(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_dhw_heatpump_controller_config,
-        )
+    my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_dhw_heatpump_controller_config,
     )
 
     my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(

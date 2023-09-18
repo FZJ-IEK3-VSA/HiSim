@@ -212,8 +212,7 @@ def household_advanced_hp_diesel_car_pv_battery(
 
     # Build PV
     my_photovoltaic_system = generic_pv_system.PVSystem(
-        config=my_config.pv_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.pv_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Building
@@ -223,11 +222,9 @@ def household_advanced_hp_diesel_car_pv_battery(
     )
 
     # Build heat Distribution System Controller
-    my_heat_distribution_controller = (
-        heat_distribution_system.HeatDistributionController(
-            config=my_config.hdscontroller_config,
-            my_simulation_parameters=my_simulation_parameters,
-        )
+    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
+        config=my_config.hdscontroller_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Distribution System
@@ -249,8 +246,7 @@ def household_advanced_hp_diesel_car_pv_battery(
     my_heat_pump_config.name = "HeatPumpHPLib"
 
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
-        config=my_heat_pump_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_pump_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Water Storage
@@ -285,11 +281,9 @@ def household_advanced_hp_diesel_car_pv_battery(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 
-    my_domnestic_hot_water_heatpump_controller = (
-        controller_l1_heatpump.L1HeatPumpController(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_dhw_heatpump_controller_config,
-        )
+    my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_dhw_heatpump_controller_config,
     )
 
     my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
@@ -324,11 +318,9 @@ def household_advanced_hp_diesel_car_pv_battery(
     )
 
     # Build EMS
-    my_electricity_controller = (
-        controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_config.electricity_controller_config,
-        )
+    my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.electricity_controller_config,
     )
 
     # Build Battery
@@ -454,18 +446,13 @@ def household_advanced_hp_diesel_car_pv_battery(
         source_weight=2,
     )
 
-    electricity_to_or_from_battery_target = (
-        my_electricity_controller.add_component_output(
-            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-            source_tags=[
-                lt.ComponentType.BATTERY,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_weight=2,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target electricity for Battery Control. ",
-        )
+    electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
+        source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET,],
+        source_weight=2,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        output_description="Target electricity for Battery Control. ",
     )
 
     # -----------------------------------------------------------------------------------------------------------------

@@ -200,7 +200,7 @@ def test_house_with_idealized_electric_heater_for_heating_test(
     # Test Air Temperature of Building
 
     building_indoor_air_temperatures = my_sim.results_data_frame[
-        "Building_1 - TemperatureIndoorAir [Temperature - °C]"
+        "Building - TemperatureIndoorAir [Temperature - °C]"
     ]
 
     for air_temperature in building_indoor_air_temperatures.values:

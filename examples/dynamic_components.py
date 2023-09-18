@@ -66,13 +66,17 @@ def dynamic_components_demonstration(
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
-    my_advanced_battery_config_1 = advanced_battery_bslib.BatteryConfig.get_default_config()
+    my_advanced_battery_config_1 = (
+        advanced_battery_bslib.BatteryConfig.get_default_config()
+    )
     my_advanced_battery_config_1.system_id = "SG1"
     my_advanced_battery_config_1.custom_battery_capacity_generic_in_kilowatt_hour = 10.0
     my_advanced_battery_config_1.custom_pv_inverter_power_generic_in_watt = 5.0
     my_advanced_battery_config_1.source_weight = 1
 
-    my_advanced_battery_config_2 = advanced_battery_bslib.BatteryConfig.get_default_config()
+    my_advanced_battery_config_2 = (
+        advanced_battery_bslib.BatteryConfig.get_default_config()
+    )
     my_advanced_battery_config_2.system_id = "SG1"
     my_advanced_battery_config_2.custom_battery_capacity_generic_in_kilowatt_hour = 5.0
     my_advanced_battery_config_2.custom_pv_inverter_power_generic_in_watt = 2.5

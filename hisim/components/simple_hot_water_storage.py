@@ -58,7 +58,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
     @classmethod
     def get_default_simplehotwaterstorage_config(
         cls,
-    ) -> Any:
+    ) -> "SimpleHotWaterStorageConfig":
         """Get a default simplehotwaterstorage config."""
         volume_heating_water_storage_in_liter: float = 500
         config = SimpleHotWaterStorageConfig(
@@ -74,9 +74,11 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
             maintenance_cost_as_percentage_of_investment=0.0,  # Todo: set correct value
         )
         return config
-    
+
     @classmethod
-    def get_scaled_hot_water_storage(cls, heating_load_of_building_in_watt: float):
+    def get_scaled_hot_water_storage(
+        cls, heating_load_of_building_in_watt: float
+    ) -> "SimpleHotWaterStorageConfig":
         """Gets a default storage with scaling according to heating load of the building."""
 
         set_thermal_output_power_in_watt = heating_load_of_building_in_watt
@@ -84,7 +86,9 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         # https://www.baunetzwissen.de/heizung/fachwissen/speicher/dimensionierung-von-pufferspeichern-161296
         # approx. 60l per kW power of heating system
         # here we say power heating system should correspond to heating load of building (see also https://www.sciencedirect.com/science/article/pii/S2352152X2201533X?via%3Dihub)
-        volume_heating_water_storage_in_liter: float = set_thermal_output_power_in_watt * 1e-3 * 60
+        volume_heating_water_storage_in_liter: float = (
+            set_thermal_output_power_in_watt * 1e-3 * 60
+        )
         config = SimpleHotWaterStorageConfig(
             name="SimpleHotWaterStorage",
             volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,

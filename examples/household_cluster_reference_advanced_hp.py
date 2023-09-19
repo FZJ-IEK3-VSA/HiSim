@@ -4,9 +4,9 @@
 
 from typing import Optional, Any
 import re
+import os
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-import os
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
@@ -20,7 +20,7 @@ from hisim.components import (
     controller_l1_heatpump,
     electricity_meter,
 )
-from hisim.components.configuration import HouseholdWarmWaterDemandConfig
+# from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.component import ConfigBase
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
@@ -96,7 +96,9 @@ def household_cluster_reference_advanced_hp(
     config_filename = my_sim.my_module_config_path
 
     my_config: BuildingPVWeatherConfig
-    if isinstance(config_filename, str) and os.path.exists(config_filename.rstrip("\r")):
+    if isinstance(config_filename, str) and os.path.exists(
+        config_filename.rstrip("\r")
+    ):
         with open(
             config_filename.rstrip("\r"), encoding="unicode_escape"
         ) as system_config_file:
@@ -161,7 +163,6 @@ def household_cluster_reference_advanced_hp(
     )  # t_in #TODO: get real heating ref temps according to location
     flow_temperature_in_celsius = 21  # t_out_val
 
-
     # =================================================================================================================================
     # Build Basic Components
 
@@ -190,10 +191,10 @@ def household_cluster_reference_advanced_hp(
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
-    
+
     # Now get building information to scale energy systems
     my_building_information = my_building.return_building_information()
-    
+
     # Build Occupancy
     my_occupancy_config = (
         loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
@@ -211,7 +212,7 @@ def household_cluster_reference_advanced_hp(
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
     )
-    
+
     # =================================================================================================================================
     # Build Energy System Components
 
@@ -222,19 +223,24 @@ def household_cluster_reference_advanced_hp(
             mode=hp_controller_mode,
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_pump_in_celsius,
             set_cooling_threshold_outside_temperature_in_celsius=set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius,
-            offset_conditions_heating_cooling_off=offset_conditions_heating_cooling_off),
+            offset_conditions_heating_cooling_off=offset_conditions_heating_cooling_off,
+        ),
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Scaled Heat Pump
-    my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
-        config=advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(heating_load_of_building_in_watt=my_building_information.building_heating_load_in_watt),
-        my_simulation_parameters=my_simulation_parameters,
+    my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
+        heating_load_of_building_in_watt=my_building_information.building_heating_load_in_watt
     )
-    
-    my_heat_pump.group_id = group_id
-    my_heat_pump.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
-    my_heat_pump.flow_temperature_in_celsius = flow_temperature_in_celsius
+    my_heat_pump_config.group_id = group_id
+    my_heat_pump_config.heating_reference_temperature_in_celsius = (
+        heating_reference_temperature_in_celsius
+    )
+    my_heat_pump_config.flow_temperature_in_celsius = flow_temperature_in_celsius
+
+    my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
+        config=my_heat_pump_config, my_simulation_parameters=my_simulation_parameters,
+    )
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
@@ -246,8 +252,8 @@ def household_cluster_reference_advanced_hp(
     )
 
     # Build Scaled Heat Water Storage
-    my_simple_heat_water_storage_config = (
-        simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(heating_load_of_building_in_watt=my_building_information.building_heating_load_in_watt)
+    my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
+        heating_load_of_building_in_watt=my_building_information.building_heating_load_in_watt
     )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
@@ -255,7 +261,7 @@ def household_cluster_reference_advanced_hp(
     )
 
     # Build Scaled DHW Heat Pump
-    
+
     my_dhw_heatpump_controller_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
         name="DHWHeatPumpController"
     )

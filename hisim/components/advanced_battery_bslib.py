@@ -94,13 +94,12 @@ class BatteryConfig(ConfigBase):
     def get_scaled_battery(cls, total_pv_power_in_watt_peak: float) -> "BatteryConfig":
         """Returns scaled configuration of battery according to pv power."""
         custom_battery_capacity_generic_in_kilowatt_hour = total_pv_power_in_watt_peak  # size/capacity of battery should be approx. the same as default pv power
+        c_rate = 0.5  # 0.5C corresponds to 0.5/h for fully charging or discharging
         config = BatteryConfig(
             name="Battery",
             # https://www.energieinstitut.at/die-richtige-groesse-von-batteriespeichern/
             custom_battery_capacity_generic_in_kilowatt_hour=custom_battery_capacity_generic_in_kilowatt_hour,
-            custom_pv_inverter_power_generic_in_watt=10
-            * 0.5
-            * 1e3,  # c-rate is 0.5C (0.5/h) here
+            custom_pv_inverter_power_generic_in_watt=custom_battery_capacity_generic_in_kilowatt_hour * c_rate * 1e3,
             source_weight=1,
             system_id="SG1",
             charge_in_kwh=0,

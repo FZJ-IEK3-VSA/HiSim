@@ -47,7 +47,7 @@ class BuildingPVWeatherConfig(ConfigBase):
     pv_size: float
     pv_azimuth: float
     pv_tilt: float
-    pv_power: float
+    share_of_pv_power: float
     building_code: str
     total_base_area_in_m2: float
     # location: Any
@@ -61,7 +61,7 @@ class BuildingPVWeatherConfig(ConfigBase):
             pv_size=5,
             pv_azimuth=180,
             pv_tilt=30,
-            pv_power=10000,
+            share_of_pv_power=1,
             building_code="DE.N.SFH.05.Gen.ReEx.001.002",
             total_base_area_in_m2=121.2,
             # location=weather.LocationEnum.Aachen,
@@ -152,26 +152,27 @@ def household_cluster_reference_advanced_hp(
     )
     set_heating_threshold_outside_temperature_for_heat_pump_in_celsius = 16.0
     set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = 20.0
+    offset_conditions_heating_cooling_off = 5.0
 
-    # Set Heat Pump
-    model: str = "Generic"
-    group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
-    heating_reference_temperature_in_celsius: float = (
-        -7
-    )  # t_in #TODO: get real heating ref temps according to location
-    set_thermal_output_power_in_watt: float = 8000
-    flow_temperature_in_celsius = 21  # t_out_val
-    cycling_mode = True
-    minimum_running_time_in_seconds = 600
-    minimum_idle_time_in_seconds = 600
-    hp_co2_footprint = set_thermal_output_power_in_watt * 1e-3 * 165.84
-    hp_cost = set_thermal_output_power_in_watt * 1e-3 * 1513.74
-    hp_lifetime = 10
-    hp_maintenance_cost_as_percentage_of_investment = 0.025
-    hp_consumption = 0
+    # # Set Heat Pump
+    # model: str = "Generic"
+    # group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
+    # heating_reference_temperature_in_celsius: float = (
+    #     -7
+    # )  # t_in #TODO: get real heating ref temps according to location
+    # set_thermal_output_power_in_watt: float = 8000
+    # flow_temperature_in_celsius = 21  # t_out_val
+    # cycling_mode = True
+    # minimum_running_time_in_seconds = 600
+    # minimum_idle_time_in_seconds = 600
+    # hp_co2_footprint = set_thermal_output_power_in_watt * 1e-3 * 165.84
+    # hp_cost = set_thermal_output_power_in_watt * 1e-3 * 1513.74
+    # hp_lifetime = 10
+    # hp_maintenance_cost_as_percentage_of_investment = 0.025
+    # hp_consumption = 0
 
     # =================================================================================================================================
-    # Build Components
+    # Build Basic Components
 
     # Build Heat Distribution Controller
     my_heat_distribution_controller_config = (
@@ -198,6 +199,10 @@ def household_cluster_reference_advanced_hp(
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
+    
+    # Now get building information to scale energy systems
+    my_building_information = my_building.return_building_information()
+    
     # Build Occupancy
     my_occupancy_config = (
         loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
@@ -215,6 +220,9 @@ def household_cluster_reference_advanced_hp(
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
     )
+    
+    # =================================================================================================================================
+    # Build Energy System Components
 
     # Build Heat Pump Controller
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
@@ -223,28 +231,13 @@ def household_cluster_reference_advanced_hp(
             mode=hp_controller_mode,
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_pump_in_celsius,
             set_cooling_threshold_outside_temperature_in_celsius=set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius,
-        ),
+            offset_conditions_heating_cooling_off=offset_conditions_heating_cooling_off),
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Pump
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
-        config=advanced_heat_pump_hplib.HeatPumpHplibConfig(
-            name="HeatPump",
-            model=model,
-            group_id=group_id,
-            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-            flow_temperature_in_celsius=flow_temperature_in_celsius,
-            set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
-            cycling_mode=cycling_mode,
-            minimum_running_time_in_seconds=minimum_running_time_in_seconds,
-            minimum_idle_time_in_seconds=minimum_idle_time_in_seconds,
-            co2_footprint=hp_co2_footprint,
-            cost=hp_cost,
-            lifetime=hp_lifetime,
-            maintenance_cost_as_percentage_of_investment=hp_maintenance_cost_as_percentage_of_investment,
-            consumption=hp_consumption,
-        ),
+        config=advanced_heat_pump_hplib.HeatPumpHplibConfig.get,
         my_simulation_parameters=my_simulation_parameters,
     )
 

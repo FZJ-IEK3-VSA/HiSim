@@ -192,7 +192,7 @@ class HouseholdAdvancedHPEvPvConfig:
 def household_4_advanced_hp_ev_pv(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
-    """Example with advanced hp and diesel car and PV.
+    """Example with advanced hp and EV and PV.
 
     This setup function emulates a household with some basic components. Here the residents have their
     electricity and heating needs covered by a the advanced heat pump.

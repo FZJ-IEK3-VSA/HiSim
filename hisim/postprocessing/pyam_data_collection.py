@@ -9,6 +9,7 @@ from collections import defaultdict
 import shutil
 import re
 import pandas as pd
+import ordered_set
 
 
 from hisim import log
@@ -39,7 +40,7 @@ class PyamDataCollector:
 
         log.information(f"Checking results from folder: {result_folder}")
 
-        self.clean_result_directory_from_unfinished_results(result_path=result_folder)
+        # self.clean_result_directory_from_unfinished_results(result_path=result_folder)
 
         list_with_pyam_data_folders = self.get_list_of_all_relevant_pyam_data_folders(
             result_path=result_folder
@@ -80,6 +81,18 @@ class PyamDataCollector:
             == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES
         ):
             parameter_key = "pv_tilt"
+
+        elif (
+            data_processing_mode
+            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_DELTA_T_IN_HP_CONTROLLER
+        ):
+            parameter_key = "delta_T"
+
+        elif (
+            data_processing_mode
+            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_HOT_WATER_STORAGE_SIZES
+        ):
+            parameter_key = "hot_water_storage_size_in_liter"
 
         else:
             raise ValueError(
@@ -153,7 +166,9 @@ class PyamDataCollector:
 
         # choose which path to check
         path_to_check = os.path.join(result_path, "**", "pyam_data")
+
         list_of_paths = list(glob.glob(path_to_check))
+
         # if in these paths no pyam data folder can be found check in subfolders for it
         if len(list_of_paths) == 0:
             path_to_check = os.path.join(result_path, "**", "**", "pyam_data")  # type: ignore
@@ -251,6 +266,35 @@ class PyamDataCollector:
         dataframe["scenario"] = dataframe["scenario"] + f"_{index}"
         return dataframe["scenario"]
 
+    def sort_dataframe_according_to_scenario_values(
+        self, dataframe: pd.DataFrame
+    ) -> pd.DataFrame:
+        """Sort dataframe according to scenario values."""
+
+        # get parameter key values from scenario name
+        values = []
+        for scenario in dataframe["scenario"]:
+            scenario_name_splitted = scenario.split("_")
+            number = float(scenario_name_splitted[-1])
+            values.append(number)
+
+        # order the values
+        ordered_values = list(ordered_set.OrderedSet(sorted(values)))
+
+        # sort the order of the dataframe according to order of parameter key values
+        new_df = pd.DataFrame()
+        for sorted_value in ordered_values:
+
+            for scenario in list(set(dataframe["scenario"])):
+                scenario_name_splitted = scenario.split("_")
+                number = float(scenario_name_splitted[-1])
+
+                if sorted_value == number:
+                    df_1 = dataframe.loc[dataframe["scenario"] == scenario]
+                    new_df = pd.concat([new_df, df_1])
+
+        return new_df
+
     def read_csv_and_generate_pyam_dataframe(
         self,
         dict_of_csv_to_read: Dict[str, list[str]],
@@ -308,6 +352,11 @@ class PyamDataCollector:
             # df_pyam_for_one_simulation_duration = df_pyam_for_one_simulation_duration.convert_unit(
             #     current="W", to="Wh", factor=1 / 3600, inplace=False
             # )
+
+        # sort dataframe
+        appended_dataframe = self.sort_dataframe_according_to_scenario_values(
+            dataframe=appended_dataframe
+        )
 
         filename = self.store_pyam_data_with_the_right_name_and_in_the_right_path(
             pyam_data_folder=self.pyam_data_folder,
@@ -534,3 +583,5 @@ class PyamDataProcessingModeEnum(enum.Enum):
     PROCESS_FOR_DIFFERENT_PV_SIZES = 5
     PROCESS_FOR_DIFFERENT_PV_AZIMUTH_ANGLES = 6
     PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES = 7
+    PROCESS_FOR_DIFFERENT_DELTA_T_IN_HP_CONTROLLER = 8
+    PROCESS_FOR_DIFFERENT_HOT_WATER_STORAGE_SIZES = 9

@@ -84,8 +84,8 @@ class BatteryConfig(ConfigBase):
             * 130.7,  # value from emission_factros_and_costs_devices.csv
             cost=custom_battery_capacity_generic_in_kilowatt_hour
             * 535.81,  # value from emission_factros_and_costs_devices.csv
-            lifetime=10,  # todo set correct values
-            lifetime_in_cycles=5e3,  # todo set correct values
+            lifetime=10,  # estimated value , source: https://pv-held.de/wie-lange-haelt-batteriespeicher-photovoltaik/
+            lifetime_in_cycles=5e3, # estimated value , source: https://pv-held.de/wie-lange-haelt-batteriespeicher-photovoltaik/
             maintenance_cost_as_percentage_of_investment=0.02,  # SOURCE: https://solarenergie.de/stromspeicher/preise
         )
         return config

@@ -97,7 +97,7 @@ class BuildingConfig(cp.ConfigBase):
     ) -> Any:
         """Get a default Building."""
         config = BuildingConfig(
-            name="Building_1",
+            name="Building",
             building_code="DE.N.SFH.05.Gen.ReEx.001.002",
             building_heat_capacity_class="medium",
             initial_internal_temperature_in_celsius=23,
@@ -191,6 +191,9 @@ class Building(dynamic_component.DynamicComponent):
     DiffuseHorizontalIrradiance = "DiffuseHorizontalIrradiance"
     GlobalHorizontalIrradiance = "GlobalHorizontalIrradiance"
     TemperatureOutside = "TemperatureOutside"
+
+    # Inputs -> energy management system
+    BuildingTemperatureModifier = "BuildingTemperatureModifier"
 
     # Outputs
     TemperatureMeanThermalMass = "TemperatureMeanThermalMass"
@@ -423,6 +426,14 @@ class Building(dynamic_component.DynamicComponent):
             True,
         )
 
+        self.building_temperature_modifier_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.BuildingTemperatureModifier,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            mandatory=False,
+        )
+
         # Output channels
         self.thermal_mass_temperature_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -646,6 +657,10 @@ class Building(dynamic_component.DynamicComponent):
             self.temperature_outside_channel
         )
 
+        building_temperature_modifier = stsv.get_input_value(
+            self.building_temperature_modifier_channel
+        )
+
         thermal_power_delivered_in_watt = 0.0
         if self.thermal_power_delivered_channel.source_output is not None:
             thermal_power_delivered_in_watt = (
@@ -694,8 +709,13 @@ class Building(dynamic_component.DynamicComponent):
             thermal_mass_average_bulk_temperature_in_celsius
         )
 
+        # increase set_heating_temperature when connected to EnergyManagementSystem and surplus electricity available
+        set_heating_temperature_modified_in_celsius = (
+            self.set_heating_temperature_in_celsius + building_temperature_modifier
+        )
+
         theoretical_thermal_building_demand_in_watt = self.calc_theoretical_thermal_building_demand_for_building(
-            set_heating_temperature_in_celsius=self.set_heating_temperature_in_celsius,
+            set_heating_temperature_in_celsius=set_heating_temperature_modified_in_celsius,
             set_cooling_temperature_in_celsius=self.set_cooling_temperature_in_celsius,
             previous_thermal_mass_temperature_in_celsius=previous_thermal_mass_temperature_in_celsius,
             outside_temperature_in_celsius=temperature_outside_in_celsius,

@@ -409,7 +409,6 @@ class HeatPumpHplib(Component):
 
         # cycling means periodic turning on and off of the heat pump
         if self.cycling_mode is True:
-
             # Parameter
             time_on_min = self.minimum_running_time_in_seconds  # [s]
             time_off_min = self.minimum_idle_time_in_seconds
@@ -610,6 +609,10 @@ class HeatPumpHplibController(Component):
     WaterTemperatureInputFromHeatWaterStorage = (
         "WaterTemperatureInputFromHeatWaterStorage"
     )
+    SimpleHotWaterStorageTemperatureModifier = (
+        "SimpleHotWaterStorageTemperatureModifier"
+    )
+
     HeatingFlowTemperatureFromHeatDistributionSystem = (
         "HeatingFlowTemperatureFromHeatDistributionSystem"
     )
@@ -652,6 +655,15 @@ class HeatPumpHplibController(Component):
             LoadTypes.TEMPERATURE,
             Units.CELSIUS,
             True,
+        )
+        self.simple_hot_water_storage_temperature_modifier: ComponentInput = (
+            self.add_input(
+                self.component_name,
+                self.SimpleHotWaterStorageTemperatureModifier,
+                LoadTypes.TEMPERATURE,
+                Units.CELSIUS,
+                mandatory=False,
+            )
         )
 
         self.heating_flow_temperature_from_heat_distribution_system_channel: ComponentInput = self.add_input(
@@ -798,6 +810,9 @@ class HeatPumpHplibController(Component):
             daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
                 self.daily_avg_outside_temperature_input_channel
             )
+            storage_temperature_modifier = stsv.get_input_value(
+                self.simple_hot_water_storage_temperature_modifier
+            )
 
             # turning heat pump off when the average daily outside temperature is above a certain threshold (if threshold is set in the config)
             summer_heating_mode = self.summer_heating_condition(
@@ -811,6 +826,7 @@ class HeatPumpHplibController(Component):
                     water_temperature_input_in_celsius=water_temperature_input_from_heat_water_storage_in_celsius,
                     set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
                     summer_heating_mode=summer_heating_mode,
+                    storage_temperature_modifier=storage_temperature_modifier,
                 )
 
             # mode 2 is regulated controller (meaning heating, cooling, off). this is only possible if heating system is floor heating
@@ -827,6 +843,7 @@ class HeatPumpHplibController(Component):
                     set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
                     summer_heating_mode=summer_heating_mode,
                     summer_cooling_mode=summer_cooling_mode,
+                    storage_temperature_modifier=storage_temperature_modifier,
                 )
 
             else:
@@ -851,25 +868,33 @@ class HeatPumpHplibController(Component):
         water_temperature_input_in_celsius: float,
         set_heating_flow_temperature_in_celsius: float,
         summer_heating_mode: str,
+        storage_temperature_modifier: float,
     ) -> None:
         """Set conditions for the heat pump controller mode."""
 
         if self.controller_heatpumpmode == "heating":
             if (
                 water_temperature_input_in_celsius
-                > (set_heating_flow_temperature_in_celsius + 0.5)
+                > (
+                    set_heating_flow_temperature_in_celsius
+                    + 0.5
+                    + storage_temperature_modifier
+                )
                 or summer_heating_mode == "off"
             ):  # + 1:
                 self.controller_heatpumpmode = "off"
                 return
 
         elif self.controller_heatpumpmode == "off":
-
             # heat pump is only turned on if the water temperature is below the flow temperature
             # and if the avg daily outside temperature is cold enough (summer mode on)
             if (
                 water_temperature_input_in_celsius
-                < (set_heating_flow_temperature_in_celsius - 1.0)
+                < (
+                    set_heating_flow_temperature_in_celsius
+                    - 1.0
+                    + storage_temperature_modifier
+                )
                 and summer_heating_mode == "on"
             ):  # - 1:
                 self.controller_heatpumpmode = "heating"
@@ -884,15 +909,17 @@ class HeatPumpHplibController(Component):
         set_heating_flow_temperature_in_celsius: float,
         summer_heating_mode: str,
         summer_cooling_mode: str,
+        storage_temperature_modifier: float,
     ) -> None:
         """Set conditions for the heat pump controller mode according to the flow temperature."""
-
+        # Todo: storage temperature modifier is only working for heating so far. Implement for cooling similar
         heating_set_temperature = set_heating_flow_temperature_in_celsius
         cooling_set_temperature = set_heating_flow_temperature_in_celsius
 
         if self.controller_heatpumpmode == "heating":
             if (
-                water_temperature_input_in_celsius >= heating_set_temperature
+                water_temperature_input_in_celsius
+                >= heating_set_temperature + storage_temperature_modifier
                 or summer_heating_mode == "off"
             ):
                 self.controller_heatpumpmode = "off"
@@ -906,11 +933,11 @@ class HeatPumpHplibController(Component):
                 return
 
         elif self.controller_heatpumpmode == "off":
-
             # heat pump is only turned on if the water temperature is below the flow temperature
             # and if the avg daily outside temperature is cold enough (summer heating mode on)
             if (
-                water_temperature_input_in_celsius < (heating_set_temperature - 1.0)
+                water_temperature_input_in_celsius
+                < (heating_set_temperature - 1.0 + storage_temperature_modifier)
                 and summer_heating_mode == "on"
             ):
                 self.controller_heatpumpmode = "heating"

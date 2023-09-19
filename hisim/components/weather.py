@@ -392,7 +392,7 @@ class WeatherConfig(ConfigBase):
             location_entry.value[3],
         )
         config = WeatherConfig(
-            name="Weather_1",
+            name="Weather",
             location=location_entry.value[0],
             source_path=path,
             data_source=location_entry.value[4],

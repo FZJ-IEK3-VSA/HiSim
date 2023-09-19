@@ -218,7 +218,7 @@ class StorageState:
         # no filtering -> this hides major problems - Noah
         if self.temperature_in_kelvin > 95 + 273.15:
             raise ValueError(
-                "Water was boiling. This points towards a major problem in your model."
+                "Water was boiling. This points towards a major problem in your model. Increasing the storage volume may solve the issue"
             )
         # filter for freezing water
         if self.temperature_in_kelvin < 2 + 273.15:
@@ -513,8 +513,7 @@ class HotWaterStorage(dycp.DynamicComponent):
                 * 1e-3
             )  # 1e-3 conversion J to kJ
         heatconsumption: float = self.calculate_heat_consumption(
-            stsv=stsv,
-            thermal_energy_delivered=thermal_energy_delivered,
+            stsv=stsv, thermal_energy_delivered=thermal_energy_delivered,
         )
         stsv.set_output_value(self.power_from_water_storage_channel, heatconsumption)
 
@@ -541,9 +540,7 @@ class HotWaterStorage(dycp.DynamicComponent):
         )
 
     def calculate_heat_consumption(
-        self,
-        stsv: cp.SingleTimeStepValues,
-        thermal_energy_delivered: float,
+        self, stsv: cp.SingleTimeStepValues, thermal_energy_delivered: float,
     ) -> float:
         """Calculates the heat consumption."""
         if self.use == lt.ComponentType.BOILER:

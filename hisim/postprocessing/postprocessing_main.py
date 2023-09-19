@@ -2,6 +2,7 @@
 # clean
 import os
 import sys
+import copy
 from typing import Any, Optional, List, Dict
 from timeit import default_timer as timer
 import string
@@ -41,6 +42,11 @@ class PostProcessor:
         self.dirname: str
         self.chapter_counter: int = 1
         self.figure_counter: int = 1
+        self.pyam_data_folder: str = ""
+        self.model: str = "HiSim"
+        self.scenario: str = ""
+        self.region: str = ""
+        self.year: int = 2021
 
     def set_dir_results(self, dirname: Optional[str] = None) -> None:
         """Sets the results directory."""
@@ -473,9 +479,7 @@ class PostProcessor:
         simulation_parameters_list = ppdt.simulation_parameters.get_unique_key_as_list()
         lines += simulation_parameters_list
         self.write_new_chapter_with_text_content_to_report(
-            report=report,
-            lines=lines,
-            headline=". Simulation Parameters",
+            report=report, lines=lines, headline=". Simulation Parameters",
         )
 
     def write_components_to_report(
@@ -592,9 +596,7 @@ class PostProcessor:
         for output in ppdt.all_outputs:
             all_output_names.append(output.full_name + " [" + output.unit + "]")
         self.write_new_chapter_with_text_content_to_report(
-            report=report,
-            lines=all_output_names,
-            headline=". All Outputs",
+            report=report, lines=all_output_names, headline=". All Outputs",
         )
 
     def write_network_charts_to_report(
@@ -732,14 +734,17 @@ class PostProcessor:
         """Prepare the results for the scenario evaluation with pyam."""
 
         # create pyam data foler
-        pyam_data_folder = os.path.join(
+        self.pyam_data_folder = os.path.join(
             ppdt.simulation_parameters.result_directory, "pyam_data"
         )
-        if os.path.exists(pyam_data_folder) is False:
-            os.makedirs(pyam_data_folder)
+        if os.path.exists(self.pyam_data_folder) is False:
+            os.makedirs(self.pyam_data_folder)
         else:
-            log.information("This pyam_data path exists already: " + pyam_data_folder)
+            log.information(
+                "This pyam_data path exists already: " + self.pyam_data_folder
+            )
 
+        # --------------------------------------------------------------------------------------------------------------------------------------------------------------
         # make dictionaries with pyam data structure for hourly and yearly data
         simple_dict_hourly_data: Dict = {
             "model": [],
@@ -750,6 +755,9 @@ class PostProcessor:
             "time": [],
             "value": [],
         }
+        simple_dict_daily_data: Dict = copy.deepcopy(simple_dict_hourly_data)
+        simple_dict_monthly_data: Dict = copy.deepcopy(simple_dict_hourly_data)
+
         simple_dict_cumulative_data: Dict = {
             "model": [],
             "scenario": [],
@@ -760,97 +768,131 @@ class PostProcessor:
             "value": [],
         }
         # set pyam model name
-        model = "".join(["HiSim_", ppdt.module_filename])
+        self.model = "".join(["HiSim_", ppdt.module_filename])
 
         # set pyam scenario name
         if SingletonSimRepository().exist_entry(
             key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME
         ):
-            scenario = SingletonSimRepository().get_entry(
+            self.scenario = SingletonSimRepository().get_entry(
                 key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME
             )
         else:
-            scenario = ppdt.setup_function
+            self.scenario = ppdt.setup_function
+
         # set pyam region
-        region = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
+        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.LOCATION):
+            self.region = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.LOCATION
+            )
+        else:
+            self.region = ""
+
         # set pyam year or timeseries
-        year = ppdt.simulation_parameters.year
-        timeseries = ppdt.results_hourly.index
+        self.year = ppdt.simulation_parameters.year
+        timeseries_hourly = ppdt.results_hourly.index
+        log.information(str(timeseries_hourly))
+        timeseries_daily = ppdt.results_daily.index
+        timeseries_monthly = ppdt.results_monthly.index
 
-        # got through all components and read values, variables and units
-        for column in ppdt.results_hourly:
-            for index, timestep in enumerate(timeseries):
-                values = ppdt.results_hourly[column].values
-                column_splitted = str(
-                    "".join(
-                        [
-                            x
-                            for x in column
-                            if x in string.ascii_letters + "'- " + string.digits
-                        ]
-                    )
-                ).split(sep=" ")
+        if (
+            PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
+            in ppdt.post_processing_options
+        ):
+            self.write_kpis_in_pyam_dict(
+                ppdt=ppdt, simple_dict_cumulative_data=simple_dict_cumulative_data
+            )
 
-                variable = "".join(
-                    [
-                        column_splitted[0],
-                        "|",
-                        column_splitted[3],
-                        "|",
-                        column_splitted[2],
-                    ]
-                )
+        # got through all components and read output values, variables and units
+        # for hourly data
+        dataframe_hourly_data = self.iterate_over_results_and_add_values_to_dict(
+            results_df=ppdt.results_hourly,
+            dict_to_check=simple_dict_hourly_data,
+            timeseries=timeseries_hourly,
+        )
+        self.write_filename_and_save_to_csv(
+            dataframe=dataframe_hourly_data,
+            folder=self.pyam_data_folder,
+            module_filename=ppdt.module_filename,
+            simulation_duration=ppdt.simulation_parameters.duration.days,
+            simulation_year=ppdt.simulation_parameters.year,
+            region=self.region,
+            time_resolution_of_data="hourly",
+        )
+        # for daily data
+        dataframe_daily_data = self.iterate_over_results_and_add_values_to_dict(
+            results_df=ppdt.results_daily,
+            dict_to_check=simple_dict_daily_data,
+            timeseries=timeseries_daily,
+        )
+        self.write_filename_and_save_to_csv(
+            dataframe=dataframe_daily_data,
+            folder=self.pyam_data_folder,
+            module_filename=ppdt.module_filename,
+            simulation_duration=ppdt.simulation_parameters.duration.days,
+            simulation_year=ppdt.simulation_parameters.year,
+            region=self.region,
+            time_resolution_of_data="daily",
+        )
+        # for monthly data
+        dataframe_monthly_data = self.iterate_over_results_and_add_values_to_dict(
+            results_df=ppdt.results_monthly,
+            dict_to_check=simple_dict_monthly_data,
+            timeseries=timeseries_monthly,
+        )
+        self.write_filename_and_save_to_csv(
+            dataframe=dataframe_monthly_data,
+            folder=self.pyam_data_folder,
+            module_filename=ppdt.module_filename,
+            simulation_duration=ppdt.simulation_parameters.duration.days,
+            simulation_year=ppdt.simulation_parameters.year,
+            region=self.region,
+            time_resolution_of_data="monthly",
+        )
 
-                unit = column_splitted[5]
-
-                simple_dict_hourly_data["model"].append(model)
-                simple_dict_hourly_data["scenario"].append(scenario)
-                simple_dict_hourly_data["region"].append(region)
-                simple_dict_hourly_data["variable"].append(variable)
-                simple_dict_hourly_data["unit"].append(unit)
-                simple_dict_hourly_data["time"].append(timestep)
-                simple_dict_hourly_data["value"].append(values[index])
-
+        # got through all components and read output values, variables and units for simple_dict_cumulative_data
         for column in ppdt.results_cumulative:
             value = ppdt.results_cumulative[column].values[0]
 
-            column_splitted = str(
-                "".join(
-                    [
-                        x
-                        for x in column
-                        if x in string.ascii_letters + "'- " + string.digits
-                    ]
-                )
-            ).split(sep=" ")
-            variable = "".join(
-                [column_splitted[0], "|", column_splitted[3], "|", column_splitted[2]]
+            (
+                variable_name,
+                unit,
+            ) = self.get_variable_name_and_unit_from_ppdt_results_column(
+                column=str(column)
             )
 
-            unit = column_splitted[5]
-            simple_dict_cumulative_data["model"].append(model)
-            simple_dict_cumulative_data["scenario"].append(scenario)
-            simple_dict_cumulative_data["region"].append(region)
-            simple_dict_cumulative_data["variable"].append(variable)
+            simple_dict_cumulative_data["model"].append(self.model)
+            simple_dict_cumulative_data["scenario"].append(self.scenario)
+            simple_dict_cumulative_data["region"].append(self.region)
+            simple_dict_cumulative_data["variable"].append(variable_name)
             simple_dict_cumulative_data["unit"].append(unit)
-            simple_dict_cumulative_data["year"].append(year)
+            simple_dict_cumulative_data["year"].append(self.year)
             simple_dict_cumulative_data["value"].append(value)
 
         # create dataframe
-        simple_df_hourly_data = pd.DataFrame(simple_dict_hourly_data)
         simple_df_yearly_data = pd.DataFrame(simple_dict_cumulative_data)
+        self.write_filename_and_save_to_csv(
+            dataframe=simple_df_yearly_data,
+            folder=self.pyam_data_folder,
+            module_filename=ppdt.module_filename,
+            time_resolution_of_data="yearly",
+            simulation_duration=ppdt.simulation_parameters.duration.days,
+            simulation_year=ppdt.simulation_parameters.year,
+            region=self.region,
+        )
 
+        # --------------------------------------------------------------------------------------------------------------------------------------------------------------
         # create dictionary with all import pyam information
         data_information_dict = {
-            "model": model,
-            "scenario": scenario,
-            "region": region,
-            "year": year,
+            "model": self.model,
+            "scenario": self.scenario,
+            "region": self.region,
+            "year": self.year,
             "duration in days": ppdt.simulation_parameters.duration.days,
         }
 
         # write json config with all component configs, module config, pyam information dict and simulation parameters
-        json_generator_config = JsonConfigurationGenerator(name=f"{scenario}")
+        json_generator_config = JsonConfigurationGenerator(name=f"{self.scenario}")
         json_generator_config.set_simulation_parameters(
             my_simulation_parameters=ppdt.simulation_parameters
         )
@@ -866,20 +908,111 @@ class PostProcessor:
 
         # save the json config
         json_generator_config.save_to_json(
-            filename=os.path.join(pyam_data_folder, "data_information_for_pyam.json")
+            filename=os.path.join(
+                self.pyam_data_folder, "data_information_for_pyam.json"
+            )
         )
 
-        # write csv files with all hourly and yearly data in the pyam data folder
-        file_name_hourly = os.path.join(
-            pyam_data_folder,
-            f"{ppdt.module_filename}_hourly_results_for_{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}.csv",
+    def write_kpis_in_pyam_dict(
+        self,
+        ppdt: PostProcessingDataTransfer,
+        simple_dict_cumulative_data: Dict[str, Any],
+    ) -> None:
+        """Write kpis in pyam dictionary."""
+
+        kpi_compute_return = compute_kpis(
+            components=ppdt.wrapped_components,
+            results=ppdt.results,
+            all_outputs=ppdt.all_outputs,
+            simulation_parameters=ppdt.simulation_parameters,
         )
-        file_name_yearly = os.path.join(
-            pyam_data_folder,
-            f"{ppdt.module_filename}_yearly_results_for_{ppdt.simulation_parameters.duration.days}_days_in_year_{ppdt.simulation_parameters.year}_in_{region}.csv",
+
+        for i in kpi_compute_return:
+
+            if "---" not in i:
+                variable_name = "".join(x for x in i[0] if x != ":")
+                variable_value = "".join(x for x in i[1] if x in string.digits)
+                variable_unit = i[2]
+
+                simple_dict_cumulative_data["model"].append(self.model)
+                simple_dict_cumulative_data["scenario"].append(self.scenario)
+                simple_dict_cumulative_data["region"].append(self.region)
+                simple_dict_cumulative_data["variable"].append(variable_name)
+                simple_dict_cumulative_data["unit"].append(variable_unit)
+                simple_dict_cumulative_data["year"].append(self.year)
+                simple_dict_cumulative_data["value"].append(variable_value)
+
+    def get_variable_name_and_unit_from_ppdt_results_column(
+        self, column: str
+    ) -> tuple[str, str]:
+        """Get variable name and unit for pyam dictionary."""
+
+        column_splitted = str(
+            "".join(
+                [
+                    x
+                    for x in column
+                    if x
+                    in string.ascii_letters + "'- " + string.digits + "_" + "°" + "/"
+                ]
+            )
+        ).split(sep=" ")
+
+        variable_name = "".join(
+            [column_splitted[0], "|", column_splitted[3], "|", column_splitted[2]]
         )
-        simple_df_hourly_data.to_csv(
-            path_or_buf=file_name_hourly,
-            index=None,
+
+        unit = column_splitted[5]
+
+        return variable_name, unit
+
+    def iterate_over_results_and_add_values_to_dict(
+        self, results_df: pd.DataFrame, dict_to_check: Dict[str, Any], timeseries: Any
+    ) -> pd.DataFrame:
+        """Iterate over results and add values to dict, write to dataframe and save as csv."""
+
+        for column in results_df:
+
+            for index, timestep in enumerate(timeseries):
+                # values = ppdt.results_hourly[column].values
+                values = results_df[column].values
+
+                (
+                    variable_name,
+                    unit,
+                ) = self.get_variable_name_and_unit_from_ppdt_results_column(
+                    column=str(column)
+                )
+
+                dict_to_check["model"].append(self.model)
+                dict_to_check["scenario"].append(self.scenario)
+                dict_to_check["region"].append(self.region)
+                dict_to_check["variable"].append(variable_name)
+                dict_to_check["unit"].append(unit)
+                dict_to_check["time"].append(timestep)
+                dict_to_check["value"].append(values[index])
+
+        dataframe_from_dict = pd.DataFrame(dict_to_check)
+
+        return dataframe_from_dict
+
+    def write_filename_and_save_to_csv(
+        self,
+        dataframe: pd.DataFrame,
+        folder: str,
+        module_filename: str,
+        time_resolution_of_data: str,
+        simulation_duration: int,
+        simulation_year: int,
+        region: str,
+    ) -> None:
+        """Write file to csv."""
+
+        filename = os.path.join(
+            folder,
+            f"{module_filename}_{time_resolution_of_data}_results_for_{simulation_duration}_days_in_year_{simulation_year}_in_{region}.csv",
+        )
+
+        dataframe.to_csv(
+            path_or_buf=filename, index=None,
         )  # type: ignore
-        simple_df_yearly_data.to_csv(path_or_buf=file_name_yearly, index=None)  # type: ignore

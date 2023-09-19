@@ -26,6 +26,7 @@ class PostProcessingDataTransfer:  # noqa: too-few-public-methods
         results_monthly: Any,
         results_hourly: Any,
         results_cumulative: Any,
+        results_daily: Any,
     ) -> None:
         """Initializes the values."""
         # Johanna Ganglbauer: time correction factor is applied in postprocessing to sum over power values and convert them to energy
@@ -42,6 +43,7 @@ class PostProcessingDataTransfer:  # noqa: too-few-public-methods
         self.results_monthly = results_monthly
         self.results_hourly = results_hourly
         self.results_cumulative = results_cumulative
+        self.results_daily = results_daily
         self.post_processing_options = simulation_parameters.post_processing_options
 
         log.information(

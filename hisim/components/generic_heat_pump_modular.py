@@ -17,7 +17,6 @@ from hisim import utils
 from hisim.components import controller_l1_heatpump
 
 from hisim.components.weather import Weather
-from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "edited Johanna Ganglbauer"

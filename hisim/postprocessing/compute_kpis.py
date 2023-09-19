@@ -520,6 +520,8 @@ def compute_kpis(
     #     timeresolution=simulation_parameters.seconds_per_timestep,
     # )
 
+    consumption_from_grid_in_kwh = consumption_sum - self_consumption_sum
+
     # compute cost and co2 for investment/installation:  # Todo: function compute_investment_cost does not include all components, use capex and opex-results instead
     investment_cost, co2_footprint = compute_investment_cost(components=components)
 
@@ -567,13 +569,15 @@ def compute_kpis(
     ) = building_temperature_control(
         results=results, seconds_per_timestep=simulation_parameters.seconds_per_timestep
     )
+    table_headline: List[object] = ["KPI", "Value", "Unit"]
     # initialize table for report
     table: List = []
-    table.append(["KPI", "Value", "Unit"])
+    table.append(table_headline)
     table.append(["Consumption:", f"{consumption_sum:4.0f}", "kWh"])
     table.append(["Production:", f"{production_sum:4.0f}", "kWh"])
     table.append(["Self-consumption:", f"{self_consumption_sum:4.0f}", "kWh"])
     table.append(["Injection:", f"{injection_sum:4.0f}", "kWh"])
+    table.append(["Consumption from grid:", f"{consumption_from_grid_in_kwh:4.0f}", "kWh"])
     table.append(["Battery losses:", f"{battery_losses:4.0f}", "kWh"])
     # table.append(["DHW storage heat loss:", f"{loss_dhw:4.0f}", "kWh"])
     # table.append(["DHW storage heat cycles:", f"{cycles_dhw:4.0f}", "Cycles"])
@@ -686,5 +690,10 @@ def compute_kpis(
     config_file_written = kpi_config.to_json()  # type: ignore
     with open(pathname, "w", encoding="utf-8") as outfile:
         outfile.write(config_file_written)
+
+    # write whole table to csv file
+    pathname_csv = os.path.join(simulation_parameters.result_directory, "kpi_results.csv")
+    kpi_df = pd.DataFrame(table, columns=table_headline)
+    kpi_df.to_csv(pathname_csv, index=False, header=False, encoding="utf8")
 
     return table

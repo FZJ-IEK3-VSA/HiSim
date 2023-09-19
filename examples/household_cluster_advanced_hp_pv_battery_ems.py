@@ -50,7 +50,7 @@ class BuildingPVWeatherConfig(ConfigBase):
     pv_size: float
     pv_azimuth: float
     pv_tilt: float
-    pv_power: float
+    share_of_maximum_pv_power: float
     building_code: str
     total_base_area_in_m2: float
     # location: Any
@@ -64,7 +64,7 @@ class BuildingPVWeatherConfig(ConfigBase):
             pv_size=5,
             pv_azimuth=180,
             pv_tilt=30,
-            pv_power=10000,
+            share_of_maximum_pv_power=1,
             building_code="DE.N.SFH.05.Gen.ReEx.001.002",
             total_base_area_in_m2=121.2,
             # location=weather.LocationEnum.Aachen,
@@ -102,19 +102,19 @@ def household_cluster_advanced_hp_pv_battery_ems(
     config_filename = my_sim.my_module_config_path
 
     my_config: BuildingPVWeatherConfig
-    # if isinstance(config_filename, str) and os.path.exists(config_filename.rstrip("\r")):
-    with open(
-        config_filename.rstrip("\r"), encoding="unicode_escape"
-    ) as system_config_file:
-        my_config = BuildingPVWeatherConfig.from_json(system_config_file.read())  # type: ignore
+    if isinstance(config_filename, str) and os.path.exists(config_filename.rstrip("\r")):
+        with open(
+            config_filename.rstrip("\r"), encoding="unicode_escape"
+        ) as system_config_file:
+            my_config = BuildingPVWeatherConfig.from_json(system_config_file.read())  # type: ignore
 
-    log.information(f"Read system config from {config_filename}")
-    log.information("Config values: " + f"{my_config.to_dict}" + "\n")
-    # else:
-    #     my_config = BuildingPVWeatherConfig.get_default()
-    #     log.information(
-    #         "No module config path from the simulator was given. Use default config."
-    #     )
+        log.information(f"Read system config from {config_filename}")
+        log.information("Config values: " + f"{my_config.to_dict}" + "\n")
+    else:
+        my_config = BuildingPVWeatherConfig.get_default()
+        log.information(
+            "No module config path from the simulator was given. Use default config."
+        )
 
     # Set Simulation Parameters
     year = 2021
@@ -142,7 +142,7 @@ def household_cluster_advanced_hp_pv_battery_ems(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Set Photovoltaic System
-    pv_power = my_config.pv_power
+    share_of_maximum_pv_power = my_config.share_of_maximum_pv_power
     azimuth = my_config.pv_azimuth
     tilt = my_config.pv_tilt
 
@@ -163,26 +163,17 @@ def household_cluster_advanced_hp_pv_battery_ems(
     )
     set_heating_threshold_outside_temperature_for_heat_pump_in_celsius = 16.0
     set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = 22.0
+    offset_conditions_heating_cooling_off = 5.0
 
     # Set Heat Pump
-    model: str = "Generic"
     group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
     heating_reference_temperature_in_celsius: float = (
         -7
     )  # t_in #TODO: get real heating ref temps according to location
-    set_thermal_output_power_in_watt: float = 8000
     flow_temperature_in_celsius = 21  # t_out_val
-    cycling_mode = True
-    minimum_running_time_in_seconds = 600
-    minimum_idle_time_in_seconds = 600
-    hp_co2_footprint = set_thermal_output_power_in_watt * 1e-3 * 165.84
-    hp_cost = set_thermal_output_power_in_watt * 1e-3 * 1513.74
-    hp_lifetime = 10
-    hp_maintenance_cost_as_percentage_of_investment = 0.025
-    hp_consumption = 0
 
     # =================================================================================================================================
-    # Build Components
+    # Build Basic Components
 
     # Build Heat Distribution Controller
     my_heat_distribution_controller_config = (
@@ -209,6 +200,10 @@ def household_cluster_advanced_hp_pv_battery_ems(
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
+    
+    # Now get building information to scale energy systems
+    my_building_information = my_building.return_building_information()
+
     # Build Occupancy
     my_occupancy_config = (
         loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
@@ -227,11 +222,13 @@ def household_cluster_advanced_hp_pv_battery_ems(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
     )
 
-    # Build PV
+    # =================================================================================================================================
+    # Build Energy System Components
+
+    # Build Scaled PV
     my_photovoltaic_system_config = (
-        generic_pv_system.PVSystemConfig.get_default_PV_system()
+        generic_pv_system.PVSystemConfig.get_scaled_PV_system(rooftop_area_in_m2=my_building_information.building_rooftop_area_in_m2,share_of_maximum_pv_power=share_of_maximum_pv_power)
     )
-    my_photovoltaic_system_config.power_in_watt_peak = pv_power
     my_photovoltaic_system_config.azimuth = azimuth
     my_photovoltaic_system_config.tilt = tilt
 
@@ -247,30 +244,19 @@ def household_cluster_advanced_hp_pv_battery_ems(
             mode=hp_controller_mode,
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_pump_in_celsius,
             set_cooling_threshold_outside_temperature_in_celsius=set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius,
-        ),
+            offset_conditions_heating_cooling_off=offset_conditions_heating_cooling_off),
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Heat Pump
+    # Build Scaled Heat Pump
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
-        config=advanced_heat_pump_hplib.HeatPumpHplibConfig(
-            name="HeatPump",
-            model=model,
-            group_id=group_id,
-            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-            flow_temperature_in_celsius=flow_temperature_in_celsius,
-            set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
-            cycling_mode=cycling_mode,
-            minimum_running_time_in_seconds=minimum_running_time_in_seconds,
-            minimum_idle_time_in_seconds=minimum_idle_time_in_seconds,
-            co2_footprint=hp_co2_footprint,
-            cost=hp_cost,
-            lifetime=hp_lifetime,
-            maintenance_cost_as_percentage_of_investment=hp_maintenance_cost_as_percentage_of_investment,
-            consumption=hp_consumption,
-        ),
+        config=advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(heating_load_of_building_in_watt=my_building_information.building_heating_load_in_watt),
         my_simulation_parameters=my_simulation_parameters,
     )
+    
+    my_heat_pump.group_id = group_id
+    my_heat_pump.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
+    my_heat_pump.flow_temperature_in_celsius = flow_temperature_in_celsius
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
@@ -281,9 +267,9 @@ def household_cluster_advanced_hp_pv_battery_ems(
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Heat Water Storage
+    # Build Scaled Heat Water Storage
     my_simple_heat_water_storage_config = (
-        simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
+        simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(heating_load_of_building_in_watt=my_building_information.building_heating_load_in_watt)
     )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
@@ -299,36 +285,44 @@ def household_cluster_advanced_hp_pv_battery_ems(
         config=my_electricity_controller_config,
     )
 
-    # Build Battery
+    # Build Scaled Battery
     my_advanced_battery_config = (
-        advanced_battery_bslib.BatteryConfig.get_default_config()
+        advanced_battery_bslib.BatteryConfig.get_scaled_battery(total_pv_power_in_watt_peak=my_photovoltaic_system_config.power)
     )
     my_advanced_battery = advanced_battery_bslib.Battery(
         my_simulation_parameters=my_simulation_parameters,
         config=my_advanced_battery_config,
     )
 
-    # Build DHW (this is taken from household_3_advanced_hp_diesel-car_pv_battery.py)
-    my_dhw_heatpump_config = (
-        generic_heat_pump_modular.HeatPumpConfig.get_default_config_waterheating()
-    )
-    my_dhw_heatpump_config.power_th = (
-        my_occupancy.max_hot_water_demand
-        * (4180 / 3600)
-        * 0.5
-        * (3600 / my_simulation_parameters.seconds_per_timestep)
-        * (
-            HouseholdWarmWaterDemandConfig.ww_temperature_demand
-            - HouseholdWarmWaterDemandConfig.freshwater_temperature
-        )
-    )
-
+    # Build Scaled DHW Heat Pump
+    
     my_dhw_heatpump_controller_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-        name="DHWHeatpumpController"
+        name="DHWHeatPumpController"
+    )
+    my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_dhw_heatpump_controller_config,
+    )
+    my_dhw_heatpump_config = (
+        generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating()
+    )
+    # my_dhw_heatpump_config.power_th = (
+    #     my_occupancy.max_hot_water_demand
+    #     * (4180 / 3600)
+    #     * 0.5
+    #     * (3600 / my_simulation_parameters.seconds_per_timestep)
+    #     * (
+    #         HouseholdWarmWaterDemandConfig.ww_temperature_demand
+    #         - HouseholdWarmWaterDemandConfig.freshwater_temperature
+    #     )
+    # )
+    my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
+        config=my_dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
     )
 
+    # Build Scaled DHW Storage
     my_dhw_storage_config = (
-        generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
+        generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler_scaled()
     )
     my_dhw_storage_config.compute_default_cycle(
         temperature_difference_in_kelvin=my_dhw_heatpump_controller_config.t_max_heating_in_celsius
@@ -337,15 +331,6 @@ def household_cluster_advanced_hp_pv_battery_ems(
 
     my_domnestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
-    )
-
-    my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_dhw_heatpump_controller_config,
-    )
-
-    my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
-        config=my_dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # Build Electricity Meter

@@ -72,7 +72,7 @@ class HeatPumpHplibConfig(ConfigBase):
     consumption: float
 
     @classmethod
-    def get_default_generic_advanced_hp_lib(cls):
+    def get_default_generic_advanced_hp_lib(cls) -> "HeatPumpHplibConfig":
         """Gets a default HPLib Heat Pump.
 
         see default values for air/water hp on:
@@ -91,6 +91,35 @@ class HeatPumpHplibConfig(ConfigBase):
             minimum_idle_time_in_seconds=600,
             co2_footprint=set_thermal_output_power_in_watt * 1e-3 * 165.84,  # value from emission_factros_and_costs_devices.csv
             cost=set_thermal_output_power_in_watt * 1e-3 * 1513.74,  # value from emission_factros_and_costs_devices.csv
+            lifetime=10,  # value from emission_factros_and_costs_devices.csv
+            maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
+            consumption=0,
+        )
+
+    @classmethod
+    def get_scaled_advanced_hp_lib(
+        cls, heating_load_of_building_in_watt: float
+    ) -> "HeatPumpHplibConfig":
+        """Gets a default heat pump with scaling according to heating load of the building."""
+
+        set_thermal_output_power_in_watt = heating_load_of_building_in_watt
+
+        return HeatPumpHplibConfig(
+            name="AdvancedHeatPumpHPLib",
+            model="Generic",
+            group_id=4,
+            heating_reference_temperature_in_celsius=-7,
+            flow_temperature_in_celsius=52,
+            set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
+            cycling_mode=True,
+            minimum_running_time_in_seconds=600,
+            minimum_idle_time_in_seconds=600,
+            co2_footprint=set_thermal_output_power_in_watt
+            * 1e-3
+            * 165.84,  # value from emission_factros_and_costs_devices.csv
+            cost=set_thermal_output_power_in_watt
+            * 1e-3
+            * 1513.74,  # value from emission_factros_and_costs_devices.csv
             lifetime=10,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
             consumption=0,

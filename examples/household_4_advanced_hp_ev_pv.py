@@ -186,6 +186,12 @@ class HouseholdAdvancedHPEvPvConfig:
         # set charging power from battery and controller to same value, to reduce error in simulation of battery
         household_config.car_battery_config.p_inv_custom = charging_power * 1e3
 
+        if household_config.surplus_control_car:
+            # lower threshold for soc of car battery in clever case. This enables more surplus charging
+            household_config.car_battery_controller_config.battery_set = 0.4
+        else:
+            household_config.car_battery_controller_config.battery_set = 1.0
+
         return household_config
 
 
@@ -395,9 +401,6 @@ def household_4_advanced_hp_ev_pv(
         my_car_battery_controller_config = my_config.car_battery_controller_config
         my_car_battery_controller_config.source_weight = car.config.source_weight
         my_car_battery_controller_config.name = f"L1EVChargeControl_{car_number}"
-        my_car_battery_controller_config.battery_set = (
-            0.4  # lower threshold for soc of car battery in clever case
-        )
 
         my_car_battery_controller = controller_l1_generic_ev_charge.L1Controller(
             my_simulation_parameters=my_simulation_parameters,

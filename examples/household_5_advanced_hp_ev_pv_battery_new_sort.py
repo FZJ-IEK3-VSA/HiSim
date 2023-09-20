@@ -49,7 +49,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class HouseholdAdvancedHpEvPvBatteryConfig:
+class HouseholdAdvancedHpEvPvBatteryScaledConfig:
 
     """Configuration for with advanced heat pump, electric car, PV and battery."""
 
@@ -63,8 +63,8 @@ class HouseholdAdvancedHpEvPvBatteryConfig:
     # simulation_parameters: SimulationParameters
     # total_base_area_in_m2: float
     occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig
-    pv_config: generic_pv_system.PVSystemConfig
     building_config: building.BuildingConfig
+    pv_config: generic_pv_system.PVSystemConfig
     hds_controller_config: heat_distribution_system.HeatDistributionControllerConfig
     hds_config: heat_distribution_system.HeatDistributionConfig
     hp_controller_config: advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config
@@ -96,7 +96,18 @@ class HouseholdAdvancedHpEvPvBatteryConfig:
         heating_reference_temperature_in_celsius: float = -7
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0
 
-        household_config = HouseholdAdvancedHpEvPvBatteryConfig(
+        # Todo: residence-information is calculated manually for now. find a way to get this from building component
+        my_residence_information = building.BuildingInformation(
+            building_conditioned_floor_area_in_m2=121.2,
+            building_rooftop_area_in_m2=168.9,
+            building_heating_load_in_watt=8000,
+            building_number_of_apartments=1.0,
+            building_number_of_storeys=1.0,
+        )
+        # Todo: pv_power is used for battery. Calculated manually for now. find a way to get this from PV config
+        pv_power_in_watt_peak = 15354.0
+
+        household_config = HouseholdAdvancedHpEvPvBatteryScaledConfig(
             building_type="blub",
             number_of_apartments=number_of_apartments,
             # dhw_controlable=False,
@@ -118,8 +129,10 @@ class HouseholdAdvancedHpEvPvBatteryConfig:
                 consumption=0.0,
                 profile_with_washing_machine_and_dishwasher=True,
             ),
-            pv_config=generic_pv_system.PVSystemConfig.get_default_PV_system(),
             building_config=building.BuildingConfig.get_default_german_single_family_home(),
+            pv_config=generic_pv_system.PVSystemConfig.get_scaled_PV_system(
+                rooftop_area_in_m2=my_residence_information.building_rooftop_area_in_m2
+            ),
             hds_controller_config=(
                 heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
             ),
@@ -127,18 +140,22 @@ class HouseholdAdvancedHpEvPvBatteryConfig:
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
             ),
             hp_controller_config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(),
-            hp_config=advanced_heat_pump_hplib.HeatPumpHplibConfig.get_default_generic_advanced_hp_lib(),
+            hp_config=(
+                advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
+                    heating_load_of_building_in_watt=my_residence_information.building_heating_load_in_watt)
+            ),
             simple_hot_water_storage_config=(
-                simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
+                simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
+                    heating_load_of_building_in_watt=my_residence_information.building_heating_load_in_watt)
             ),
             dhw_heatpump_config=(
-                generic_heat_pump_modular.HeatPumpConfig.get_default_config_waterheating()
+                generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating()
             ),
             dhw_heatpump_controller_config=controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
                 name="DHWHeatpumpController"
             ),
             dhw_storage_config=(
-                generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
+                generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler_scaled()
             ),
             car_config=generic_car.CarConfig.get_default_ev_config(),
             car_battery_config=advanced_ev_battery_bslib.CarBatteryConfig.get_default_config(),
@@ -148,7 +165,9 @@ class HouseholdAdvancedHpEvPvBatteryConfig:
                 )
             ),
             electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
-            advanced_battery_config=advanced_battery_bslib.BatteryConfig.get_default_config(),
+            advanced_battery_config=advanced_battery_bslib.BatteryConfig.get_scaled_battery(
+                total_pv_power_in_watt_peak=pv_power_in_watt_peak
+            ),
             electricity_controller_config=(
                 controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
             ),
@@ -158,7 +177,6 @@ class HouseholdAdvancedHpEvPvBatteryConfig:
         household_config.hp_controller_config.mode = (
             2  # use heating and cooling as default
         )
-        household_config.hp_config.set_thermal_output_power_in_watt = 6000  # default value leads to switching on-off very often
         household_config.hp_config.minimum_idle_time_in_seconds = 900  # default value leads to switching on-off very often
         household_config.hp_config.minimum_running_time_in_seconds = 900  # default value leads to switching on-off very often
 
@@ -230,20 +248,20 @@ def household_5_advanced_hp_ev_pv_battery_new_sort(
     if Path(utils.HISIMPATH["utsp_results"]).exists():
         cleanup_old_lpg_requests()
 
-    config_filename = "household_5_advanced_hp_ev_pv_battery_config.json"
+    config_filename = "household_5_advanced_hp_ev_pv_battery_new_sort_config.json"
 
-    my_config: HouseholdAdvancedHpEvPvBatteryConfig
+    my_config: HouseholdAdvancedHpEvPvBatteryScaledConfig
     if Path(config_filename).is_file():
         with open(config_filename, encoding="utf8") as system_config_file:
-            my_config = HouseholdAdvancedHpEvPvBatteryConfig.from_json(system_config_file.read())  # type: ignore
+            my_config = HouseholdAdvancedHpEvPvBatteryScaledConfig.from_json(system_config_file.read())  # type: ignore
         log.information(f"Read system config from {config_filename}")
     else:
-        my_config = HouseholdAdvancedHpEvPvBatteryConfig.get_default()
+        my_config = HouseholdAdvancedHpEvPvBatteryScaledConfig.get_default()
 
         # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
-        # my_config_json = my_config.to_json()
-        # with open(config_filename, "w", encoding="utf8") as system_config_file:
-        #     system_config_file.write(my_config_json)
+        my_config_json = my_config.to_json()
+        with open(config_filename, "w", encoding="utf8") as system_config_file:
+            system_config_file.write(my_config_json)
 
     # =================================================================================================================================
     # Set System Parameters

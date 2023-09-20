@@ -54,7 +54,7 @@ class GenericGasHeaterControllerL1Config(ConfigBase):
     set_temperature_difference_for_full_power: float
 
     @classmethod
-    def get_default_generic_gas_heater_controller_config(cls):
+    def get_default_generic_gas_heater_controller_config(cls) -> "GenericGasHeaterControllerL1Config":
         """Gets a default Generic Heat Pump Controller."""
         return GenericGasHeaterControllerL1Config(
             name="GenericGasHeaterController",
@@ -62,6 +62,20 @@ class GenericGasHeaterControllerL1Config(ConfigBase):
             set_heating_threshold_outside_temperature_in_celsius=16.0,
             minimal_thermal_power_in_watt=1_000,  # [W] # Todo: get information from GasHeater.gasheater_config.minimal_thermal_power_in_watt
             maximal_thermal_power_in_watt=12_000,  # [W] # Todo: get information fromGasHeater.gasheater_config.maximal_thermal_power_in_watt
+            set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
+        )
+    @classmethod
+    def get_scaled_generic_gas_heater_controller_config(
+            cls, heating_load_of_building_in_watt: float
+    ) -> "GenericGasHeaterControllerL1Config":
+        """Gets a default Generic Heat Pump Controller."""
+        maximal_thermal_power_in_watt = heating_load_of_building_in_watt
+        return GenericGasHeaterControllerL1Config(
+            name="GenericGasHeaterController",
+            mode=1,
+            set_heating_threshold_outside_temperature_in_celsius=16.0,
+            minimal_thermal_power_in_watt=1_000,  # [W] # Todo: get information from GasHeater.gasheater_config.minimal_thermal_power_in_watt
+            maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,  # [W]
             set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
         )
 

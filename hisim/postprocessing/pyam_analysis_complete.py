@@ -49,34 +49,37 @@ def main():
 
     folder_from_which_data_will_be_collected = os.path.join(
         cluster_storage_path,
-        # "repositories/HiSim/examples/results/household_cluster_reference_advanced_hp/german_tabula_buildings_20230908_1231/",
-        "repositories/HiSim/examples/results/household_cluster_test_advanced_hp/hplib_configs_20230915_1122",
+        "repositories/HiSim/examples/results/household_cluster_reference_advanced_hp/german_tabula_buildings_20230919_1905"
+        # "repositories/HiSim/examples/results/household_cluster_test_advanced_hp/hplib_configs_20230915_1122",
     )
     # folder_from_which_data_will_be_collected = (
     #     r"C:\Users\k.rieck\Cluster_stuff_copied\examples_results"
     # )
     path_to_default_config = os.path.join(
         cluster_storage_path,
-        "jobs_hisim/cluster-hisim-paper/job_array_for_hisim_mass_simus/default_config_for_hplib_test.json",
+        "jobs_hisim/cluster-hisim-paper/job_array_for_hisim_mass_simus/default_building_pv_config.json",
     )
     # path_to_default_config = r"C:\Users\k.rieck\Cluster_stuff_copied\job_array_for_hisim_mass_simu_one\default_building_pv_config.json"
 
     simulation_duration_to_check = str(365)
 
     data_processing_mode = (
-        pyam_data_collection.PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_DELTA_T_IN_HP_CONTROLLER
+        pyam_data_collection.PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
     )
 
     list_with_variables_to_check = (
-        pyam_data_processing.heating_demand + pyam_data_processing.electricity_data + pyam_data_processing.kpi_data) # + pyam_data_processing.kpi_data)
+        pyam_data_processing.heating_demand
+        + pyam_data_processing.electricity_data
+        + pyam_data_processing.kpi_data
+    )  # + pyam_data_processing.kpi_data)
     # + pyam_data_processing.heating_demand
     # + pyam_data_processing.electricity_data
     # + pyam_data_processing.occuancy_consumption
     # )
 
-    # list_of_scenarios_to_check = pyam_data_processing.building_type
+    list_of_scenarios_to_check = pyam_data_processing.building_type
 
-    list_of_scenarios_to_check = None  # ["001.002"]
+    # list_of_scenarios_to_check = ["DE.N.SFH.05.Gen.ReEx.001.002","DE.N.TH.05.Gen.ReEx.001.002","DE.N.MFH.05.Gen.ReEx.001.002","DE.N.AB.05.Gen.ReEx.001.002"]
 
     # -------------------------------------------------------------------------------------------------------------------------------------
 

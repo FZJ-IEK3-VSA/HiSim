@@ -275,8 +275,11 @@ class PyamDataCollector:
         values = []
         for scenario in dataframe["scenario"]:
             scenario_name_splitted = scenario.split("_")
-            number = float(scenario_name_splitted[-1])
-            values.append(number)
+            try:
+                number = float(scenario_name_splitted[-1])
+                values.append(number)
+            except Exception:
+                return dataframe
 
         # order the values
         ordered_values = list(ordered_set.OrderedSet(sorted(values)))

@@ -129,7 +129,6 @@ class PyAmChartGenerator:
             list_of_scenarios_to_check=list_of_scenarios_to_check,
         )
 
-
         if variables_to_check != [] and variables_to_check is not None:
             self.make_plots_with_specific_kind_of_data(
                 time_resolution_of_data_set=time_resolution_of_data_set,
@@ -202,8 +201,9 @@ class PyAmChartGenerator:
             raise ValueError("Pyam dataframe is empty.")
 
         sub_results_folder = f"simulation_duration_of_{simulation_duration_key}_days"
-        sub_sub_results_folder = f"pyam_results_{time_resolution_of_data_set.value}_{self.datetime_string}"
-
+        sub_sub_results_folder = (
+            f"pyam_results_{time_resolution_of_data_set.value}_{self.datetime_string}"
+        )
 
         self.path_for_plots = os.path.join(
             self.result_folder, sub_results_folder, sub_sub_results_folder
@@ -398,7 +398,9 @@ class PyAmChartGenerator:
         a_x.tick_params(axis="x", labelrotation=45)
         plt.legend(bbox_to_anchor=(1, 1), loc="upper left")
 
-        fig.savefig(os.path.join(self.plot_path_complete, "line_plot.png"), bbox_inches="tight")
+        fig.savefig(
+            os.path.join(self.plot_path_complete, "line_plot.png"), bbox_inches="tight"
+        )
         plt.close()
 
     def make_line_plot_with_filling_for_pyam_dataframe(
@@ -448,14 +450,24 @@ class PyAmChartGenerator:
         y_data = []
         bar_labels = []
 
-        for scenario in filtered_data.scenario:
+        # for scenario in filtered_data.scenario:
 
+        #     filtered_data_per_scenario = filtered_data.loc[
+        #         filtered_data["scenario"] == scenario
+        #     ]
+        #     value = float(filtered_data_per_scenario["value"])
+
+        #     y_data.append(value)
+        #     bar_labels.append(scenario)
+
+        for scenario in list(OrderedSet(list(filtered_data.scenario))):
             filtered_data_per_scenario = filtered_data.loc[
                 filtered_data["scenario"] == scenario
             ]
-            value = float(filtered_data_per_scenario["value"])
 
-            y_data.append(value)
+            mean_value_per_scenario = np.mean(filtered_data_per_scenario.value.values)
+
+            y_data.append(mean_value_per_scenario)
             bar_labels.append(scenario)
 
         x_data = np.arange(0, len(y_data) * 2, step=2)
@@ -499,8 +511,9 @@ class PyAmChartGenerator:
         fig, a_x = plt.subplots(
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
+        scenario_set = list(OrderedSet(filtered_data.scenario))
 
-        sns.boxplot(data=filtered_data, x="scenario", y="value")
+        sns.boxplot(data=filtered_data, x="scenario", y="value")  #
         y_tick_labels, unit, y_tick_locations = self.set_axis_scale(
             a_x, x_or_y="y", unit=filtered_data.unit.values[0]
         )
@@ -520,7 +533,7 @@ class PyAmChartGenerator:
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
         a_x.xaxis.set_tick_params(labelbottom=False)
         a_x.set_xticks([])
-        plt.legend(filtered_data.scenario, bbox_to_anchor=(1, 1), loc="upper left")
+        plt.legend(scenario_set, bbox_to_anchor=(1, 1), loc="upper left")
         fig.savefig(
             os.path.join(self.plot_path_complete, "box_plot.png"), bbox_inches="tight"
         )
@@ -926,7 +939,7 @@ occuancy_consumption = [
 ]
 
 heating_demand = [
-    "HeatPump|Heating|ThermalOutputPower",
+    "AdvancedHeatPumpHPLib|Heating|ThermalOutputPower",
     # "HeatDistributionSystem|Heating|ThermalOutputPower",
     # "Building|Heating|TheoreticalThermalBuildingDemand",
     "Building|Temperature|TemperatureIndoorAir",
@@ -936,8 +949,8 @@ heating_demand = [
 # examples for scenarios to filter
 building_type = [
     "DE.N.SFH",
-    "DE.N.MFH",
     "DE.N.TH",
+    "DE.N.MFH",
     "DE.N.AB",
 ]
 

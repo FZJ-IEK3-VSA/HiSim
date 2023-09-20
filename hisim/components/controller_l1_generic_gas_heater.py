@@ -64,6 +64,7 @@ class GenericGasHeaterControllerL1Config(ConfigBase):
             maximal_thermal_power_in_watt=12_000,  # [W] # Todo: get information fromGasHeater.gasheater_config.maximal_thermal_power_in_watt
             set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
         )
+
     @classmethod
     def get_scaled_generic_gas_heater_controller_config(
             cls, heating_load_of_building_in_watt: float

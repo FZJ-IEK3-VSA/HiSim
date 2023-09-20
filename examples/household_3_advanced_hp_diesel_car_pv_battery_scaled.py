@@ -1,4 +1,4 @@
-"""  Household example with advanced heat pump, electric car, PV and battery. """
+"""  Household example with advanced heat pump, diesel car, PV and Battery. """
 
 # clean
 
@@ -28,8 +28,6 @@ from hisim.components import generic_hot_water_storage_modular
 from hisim.components import electricity_meter
 from hisim.components import generic_pv_system
 from hisim.components import advanced_battery_bslib
-from hisim.components import advanced_ev_battery_bslib
-from hisim.components import controller_l1_generic_ev_charge
 from hisim.components import controller_l2_energy_management_system
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
@@ -49,9 +47,9 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class HouseholdAdvancedHpEvPvBatteryScaledConfig:
+class HouseholdAdvancedHPDieselCarPVBatteryScaledConfig:
 
-    """Configuration for with advanced heat pump, electric car, PV and battery."""
+    """Configuration for with advanced heat pump, diesel car, PV and Battery."""
 
     building_type: str
     number_of_apartments: int
@@ -59,7 +57,6 @@ class HouseholdAdvancedHpEvPvBatteryScaledConfig:
     # heatpump_controlable: bool  # if heatpump is controlled by EMS
     surplus_control: bool  # decision on the consideration of smart control for heat pump and dhw, increase storage temperatures
     surplus_control_building_temperature_modifier: bool  # increase set_room_temperature in case of surplus electricity
-    surplus_control_car: bool  # decision on the consideration of smart control for EV charging
     # simulation_parameters: SimulationParameters
     # total_base_area_in_m2: float
     occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig
@@ -74,24 +71,18 @@ class HouseholdAdvancedHpEvPvBatteryScaledConfig:
     dhw_heatpump_controller_config: controller_l1_heatpump.L1HeatPumpConfig
     dhw_storage_config: generic_hot_water_storage_modular.StorageConfig
     car_config: generic_car.CarConfig
-    car_battery_config: advanced_ev_battery_bslib.CarBatteryConfig
-    car_battery_controller_config: controller_l1_generic_ev_charge.ChargingStationConfig
     electricity_meter_config: electricity_meter.ElectricityMeterConfig
     advanced_battery_config: advanced_battery_bslib.BatteryConfig
     electricity_controller_config: controller_l2_energy_management_system.EMSConfig
 
     @classmethod
     def get_default(cls):
-        """Get default HouseholdAdvancedHpEvPvBatteryConfig."""
+        """Get default HouseholdAdvancedHPDieselCarPVBatteryConfig."""
 
         # set number of apartments (mandatory for dhw storage config)
         number_of_apartments = 1
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments
-        )
-        charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
-        charging_power = float(
-            (charging_station_set.Name or "").split("with ")[1].split(" kW")[0]
         )
         heating_reference_temperature_in_celsius: float = -7
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0
@@ -107,14 +98,13 @@ class HouseholdAdvancedHpEvPvBatteryScaledConfig:
         # Todo: pv_power is used for battery. Calculated manually for now. find a way to get this from PV config
         pv_power_in_watt_peak = 15354.0
 
-        household_config = HouseholdAdvancedHpEvPvBatteryScaledConfig(
+        household_config = HouseholdAdvancedHPDieselCarPVBatteryScaledConfig(
             building_type="blub",
             number_of_apartments=number_of_apartments,
             # dhw_controlable=False,
             # heatpump_controlable=False,
             surplus_control=False,
             surplus_control_building_temperature_modifier=False,
-            surplus_control_car=False,
             # simulation_parameters=SimulationParameters.one_day_only(2022),
             # total_base_area_in_m2=121.2,
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
@@ -124,7 +114,7 @@ class HouseholdAdvancedHpEvPvBatteryScaledConfig:
                 result_path=utils.HISIMPATH["results"],
                 travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
                 transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
-                charging_station_set=charging_station_set,
+                charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
                 name="UTSPConnector",
                 consumption=0.0,
                 profile_with_washing_machine_and_dishwasher=True,
@@ -157,13 +147,7 @@ class HouseholdAdvancedHpEvPvBatteryScaledConfig:
             dhw_storage_config=(
                 generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler_scaled()
             ),
-            car_config=generic_car.CarConfig.get_default_ev_config(),
-            car_battery_config=advanced_ev_battery_bslib.CarBatteryConfig.get_default_config(),
-            car_battery_controller_config=(
-                controller_l1_generic_ev_charge.ChargingStationConfig.get_default_config(
-                    charging_station_set=charging_station_set
-                )
-            ),
+            car_config=generic_car.CarConfig.get_default_diesel_config(),
             electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
             advanced_battery_config=advanced_battery_bslib.BatteryConfig.get_scaled_battery(
                 total_pv_power_in_watt_peak=pv_power_in_watt_peak
@@ -204,16 +188,13 @@ class HouseholdAdvancedHpEvPvBatteryScaledConfig:
         # set dhw storage volume, because default(volume = 230) leads to an error
         household_config.dhw_storage_config.volume = 250
 
-        # set charging power from battery and controller to same value, to reduce error in simulation of battery
-        household_config.car_battery_config.p_inv_custom = charging_power * 1e3
-
         return household_config
 
 
-def household_5_advanced_hp_ev_pv_battery_scaled(
+def household_3_advanced_hp_diesel_car_pv_battery_scaled(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
-    """Example with advanced hp and EV and PV and battery.
+    """Example with advanced hp and diesel car and PV.
 
     This setup function emulates a household with some basic components. Here the residents have their
     electricity and heating needs covered by a the advanced heat pump.
@@ -232,9 +213,9 @@ def household_5_advanced_hp_ev_pv_battery_scaled(
         - Simple Hot Water Storage
 
         - DHW (Heatpump, Heatpumpcontroller, Storage; copied from modular_example)
-        - Car (Electric Vehicle, Electric Vehicle Battery, Electric Vehicle Battery Controller)
+        - Car (Diesel)
         - Battery
-        - EMS (necessary for Battery and Electric Vehicle)
+        - EMS (necessary for Battery)
     """
 
     # cleanup old lpg requests, mandatory to change number of cars
@@ -242,15 +223,15 @@ def household_5_advanced_hp_ev_pv_battery_scaled(
     if Path(utils.HISIMPATH["utsp_results"]).exists():
         cleanup_old_lpg_requests()
 
-    config_filename = "household_5_advanced_hp_ev_pv_battery_scaled_config.json"
+    config_filename = "household_3_advanced_hp_diesel_car_pv_battery_scaled_config.json"
 
-    my_config: HouseholdAdvancedHpEvPvBatteryScaledConfig
+    my_config: HouseholdAdvancedHPDieselCarPVBatteryScaledConfig
     if Path(config_filename).is_file():
         with open(config_filename, encoding="utf8") as system_config_file:
-            my_config = HouseholdAdvancedHpEvPvBatteryScaledConfig.from_json(system_config_file.read())  # type: ignore
+            my_config = HouseholdAdvancedHPDieselCarPVBatteryScaledConfig.from_json(system_config_file.read())  # type: ignore
         log.information(f"Read system config from {config_filename}")
     else:
-        my_config = HouseholdAdvancedHpEvPvBatteryScaledConfig.get_default()
+        my_config = HouseholdAdvancedHPDieselCarPVBatteryScaledConfig.get_default()
 
         # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
         my_config_json = my_config.to_json()
@@ -272,9 +253,6 @@ def household_5_advanced_hp_ev_pv_battery_scaled(
         my_simulation_parameters = SimulationParameters.full_year_all_options(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-    my_simulation_parameters.surplus_control = (
-        my_config.surplus_control_car
-    )  # EV charger is controlled by simulation_parameters
     clever = my_config.surplus_control
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
@@ -376,21 +354,18 @@ def household_5_advanced_hp_ev_pv_battery_scaled(
         config=my_dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
     )
 
-    # Build Electric Vehicle(s)
+    # Build Diesel-Car(s)
     # get names of all available cars
     filepaths = listdir(utils.HISIMPATH["utsp_results"])
     filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
     names = [elem.partition(",")[0].partition(".")[2] for elem in filepaths_location]
 
-    my_car_config = (
-        my_config.car_config
-    )  # Todo: check source weight in case of 2 vehicles
-    my_car_config.name = "ElectricCar"
+    my_car_config = my_config.car_config
+    my_car_config.name = "DieselCar"
 
     # create all cars
     my_cars: List[generic_car.Car] = []
     for car in names:
-        # Todo: check car name in case of 1 vehicle
         my_car_config.name = car
         my_cars.append(
             generic_car.Car(
@@ -399,35 +374,6 @@ def household_5_advanced_hp_ev_pv_battery_scaled(
                 occupancy_config=my_occupancy_config,
             )
         )
-
-    # Build Electric Vehicle Battery
-    my_car_batteries: List[advanced_ev_battery_bslib.CarBattery] = []
-    my_car_battery_controllers: List[controller_l1_generic_ev_charge.L1Controller] = []
-    car_number = 1
-    for car in my_cars:
-        my_car_battery_config = my_config.car_battery_config
-        my_car_battery_config.source_weight = car.config.source_weight
-        my_car_battery_config.name = f"CarBattery_{car_number}"
-        my_car_battery = advanced_ev_battery_bslib.CarBattery(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_car_battery_config,
-        )
-        my_car_batteries.append(my_car_battery)
-
-        my_car_battery_controller_config = my_config.car_battery_controller_config
-        my_car_battery_controller_config.source_weight = car.config.source_weight
-        my_car_battery_controller_config.name = f"L1EVChargeControl_{car_number}"
-        my_car_battery_controller_config.battery_set = (
-            0.4  # lower threshold for soc of car battery in clever case
-        )
-
-        my_car_battery_controller = controller_l1_generic_ev_charge.L1Controller(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_car_battery_controller_config,
-        )
-        my_car_battery_controllers.append(my_car_battery_controller)
-
-        car_number += 1
 
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
@@ -507,59 +453,6 @@ def household_5_advanced_hp_ev_pv_battery_scaled(
     my_domnestic_hot_water_heatpump.connect_only_predefined_connections(
         my_weather, my_domnestic_hot_water_heatpump_controller
     )
-
-    # -----------------------------------------------------------------------------------------------------------------
-    # connect Electric Vehicle
-    # copied and adopted from modular_example
-    for car, car_battery, car_battery_controller in zip(
-        my_cars, my_car_batteries, my_car_battery_controllers
-    ):
-        car_battery_controller.connect_only_predefined_connections(car)
-        car_battery_controller.connect_only_predefined_connections(car_battery)
-        car_battery.connect_only_predefined_connections(car_battery_controller)
-
-        if my_config.surplus_control_car:
-            my_electricity_controller.add_component_input_and_connect(
-                source_component_class=car_battery_controller,
-                source_component_output=car_battery_controller.BatteryChargingPowerToEMS,
-                source_load_type=lt.LoadTypes.ELECTRICITY,
-                source_unit=lt.Units.WATT,
-                source_tags=[
-                    lt.ComponentType.CAR_BATTERY,
-                    lt.InandOutputType.ELECTRICITY_REAL,
-                ],
-                # source_weight=car_battery.source_weight,
-                source_weight=1,
-            )
-
-            electricity_target = my_electricity_controller.add_component_output(
-                source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-                source_tags=[
-                    lt.ComponentType.CAR_BATTERY,
-                    lt.InandOutputType.ELECTRICITY_TARGET,
-                ],
-                # source_weight=car_battery_controller.source_weight,
-                source_weight=1,
-                source_load_type=lt.LoadTypes.ELECTRICITY,
-                source_unit=lt.Units.WATT,
-                output_description="Target Electricity for EV Battery Controller. ",
-            )
-
-            car_battery_controller.connect_dynamic_input(
-                input_fieldname=controller_l1_generic_ev_charge.L1Controller.ElectricityTarget,
-                src_object=electricity_target,
-            )
-        else:
-            my_electricity_controller.add_component_input_and_connect(
-                source_component_class=car_battery_controller,
-                source_component_output=car_battery_controller.BatteryChargingPowerToEMS,
-                source_load_type=lt.LoadTypes.ELECTRICITY,
-                source_unit=lt.Units.WATT,
-                source_tags=[
-                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
-                ],
-                source_weight=999,
-            )
 
     # -----------------------------------------------------------------------------------------------------------------
     # connect EMS
@@ -740,9 +633,5 @@ def household_5_advanced_hp_ev_pv_battery_scaled(
     my_sim.add_component(my_electricity_meter)
     my_sim.add_component(my_advanced_battery)
     my_sim.add_component(my_electricity_controller)
-    for car in my_cars:
-        my_sim.add_component(car)
-    for car_battery in my_car_batteries:
-        my_sim.add_component(car_battery)
-    for car_battery_controller in my_car_battery_controllers:
-        my_sim.add_component(car_battery_controller)
+    for my_car in my_cars:
+        my_sim.add_component(my_car)

@@ -93,7 +93,7 @@ class BatteryConfig(ConfigBase):
     @classmethod
     def get_scaled_battery(cls, total_pv_power_in_watt_peak: float) -> "BatteryConfig":
         """Returns scaled configuration of battery according to pv power."""
-        custom_battery_capacity_generic_in_kilowatt_hour = total_pv_power_in_watt_peak  # size/capacity of battery should be approx. the same as default pv power
+        custom_battery_capacity_generic_in_kilowatt_hour = total_pv_power_in_watt_peak * 1e-3  # size/capacity of battery should be approx. the same as default pv power
         c_rate = 0.5  # 0.5C corresponds to 0.5/h for fully charging or discharging
         config = BatteryConfig(
             name="Battery",

@@ -131,6 +131,7 @@ jobs:
         prospector tests/test_heat_distribution_system.py
         prospector tests/test_house_with_pyam_postprocessingoption.py
         prospector tests/test_electricity_meter.py
+        prospector tests/test_sizing_energy_systems.py
 
 
         

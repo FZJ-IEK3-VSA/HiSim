@@ -78,7 +78,7 @@ class StorageConfig(cp.ConfigBase):
         return HotWaterStorage.get_full_classname()
 
     @classmethod
-    def get_default_config_boiler(cls) -> "StorageConfig":
+    def get_default_config_for_boiler_scaled(cls) -> "StorageConfig":
         """Returns default configuration for boiler."""
         # get default number of households
         if SingletonSimRepository().exist_entry(
@@ -90,7 +90,7 @@ class StorageConfig(cp.ConfigBase):
         else:
             raise KeyError(
                 "Key for number of apartments was not found in the singleton sim repository."
-                + "This might be because the building was not initialized before the loadprofilegenerator_connector."
+                + "This might be because the building was not initialized before the hot water storage modular."
                 + "Please check the order of the initialization of the components in your example."
             )
 

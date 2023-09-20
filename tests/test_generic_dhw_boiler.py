@@ -17,7 +17,7 @@ def test_simple_bucket_boiler_state():
 
     # Boiler default config
     l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw("HP Controller")
-    boiler_config = generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
+    boiler_config = generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler_scaled()
     boiler_config.volume = 200
     heater_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating()
 

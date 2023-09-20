@@ -116,7 +116,7 @@ class ReferenceHouseholdConfig:
                 name="DHWHeatpumpController"
             ),
             dhw_storage_config=(
-                generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
+                generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler_scaled()
             ),
             car_config=generic_car.CarConfig.get_default_diesel_config(),
             electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),

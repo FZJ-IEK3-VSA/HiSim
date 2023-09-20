@@ -136,7 +136,7 @@ class HouseholdAdvancedHPEvPvConfig:
                 name="DHWHeatpumpController"
             ),
             dhw_storage_config=(
-                generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
+                generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler_scaled()
             ),
             car_config=generic_car.CarConfig.get_default_ev_config(),
             car_battery_config=advanced_ev_battery_bslib.CarBatteryConfig.get_default_config(),

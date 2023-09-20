@@ -679,7 +679,7 @@ def configure_heating(
     )
 
     # set power of heating system according to maximal power demand
-    heater_config.power_th = my_building.max_thermal_building_demand_in_watt
+    heater_config.power_th = my_building.my_building_information.max_thermal_building_demand_in_watt
     heater_l1_config.day_of_heating_season_end = heating_season[0]
     heater_l1_config.day_of_heating_season_begin = heating_season[1]
 
@@ -760,7 +760,7 @@ def configure_heating_electric(
             "ElectricHeatingController"
         )
 
-    heatpump_config.power_th = my_building.max_thermal_building_demand_in_watt * heatpump_power
+    heatpump_config.power_th = my_building.my_building_information.max_thermal_building_demand_in_watt * heatpump_power
     heatpump_l1_config.day_of_heating_season_end = heating_season[0]
     heatpump_l1_config.day_of_heating_season_begin = heating_season[1]
     [heatpump_config.source_weight, heatpump_l1_config.source_weight] = [count] * 2
@@ -883,14 +883,14 @@ def configure_heating_with_buffer_electric(
             "BufferElectricHeatingController"
         )
 
-    heatpump_config.power_th = my_building.max_thermal_building_demand_in_watt * heatpump_power
+    heatpump_config.power_th = my_building.my_building_information.max_thermal_building_demand_in_watt * heatpump_power
     heatpump_l1_config.day_of_heating_season_end = heating_season[0] + 1
     heatpump_l1_config.day_of_heating_season_begin = heating_season[1] - 1
     [heatpump_config.source_weight, heatpump_l1_config.source_weight] = [count] * 2
     count += 1
 
     buffer_config = (
-        generic_hot_water_storage_modular.StorageConfig.get_default_config_buffer(power=float(my_building.max_thermal_building_demand_in_watt))
+        generic_hot_water_storage_modular.StorageConfig.get_default_config_buffer(power=float(my_building.my_building_information.max_thermal_building_demand_in_watt))
     )
     buffer_config.compute_default_volume(
         time_in_seconds=heatpump_l1_config.min_idle_time_in_seconds,
@@ -1031,7 +1031,7 @@ def configure_heating_with_buffer(
     }
     heater_config = generic_heat_source.HeatSourceConfig.get_default_config_heating()
     heater_config.fuel = fuel_translator[heating_system_installed]
-    heater_config.power_th = my_building.max_thermal_building_demand_in_watt
+    heater_config.power_th = my_building.my_building_information.max_thermal_building_demand_in_watt
     heater_config.efficiency = get_heating_system_efficiency(
         heating_system_installed=heating_system_installed, water_vs_heating=lt.InandOutputType.HEATING)
     heater_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_buffer(
@@ -1044,7 +1044,7 @@ def configure_heating_with_buffer(
     count += 1
 
     buffer_config = (
-        generic_hot_water_storage_modular.StorageConfig.get_default_config_buffer(power=float(my_building.max_thermal_building_demand_in_watt))
+        generic_hot_water_storage_modular.StorageConfig.get_default_config_buffer(power=float(my_building.my_building_information.max_thermal_building_demand_in_watt))
     )
     buffer_config.compute_default_volume(
         time_in_seconds=heater_l1_config.min_idle_time_in_seconds,

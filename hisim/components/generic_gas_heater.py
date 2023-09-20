@@ -70,9 +70,7 @@ class GenericGasHeaterConfig(ConfigBase):
     consumption: float
 
     @classmethod
-    def get_default_gasheater_config(
-        cls,
-    ) -> Any:
+    def get_default_gasheater_config(cls,) -> Any:
         """Get a default Building."""
         maximal_power_in_watt: float = 12_000  # W
         config = GenericGasHeaterConfig(

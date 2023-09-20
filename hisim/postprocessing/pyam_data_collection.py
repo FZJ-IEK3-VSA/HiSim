@@ -1,14 +1,13 @@
 """Data Collection for Scenario Comparison with Pyam."""
 # clean
 import glob
-import time
 import os
 from typing import Dict, Any, Optional, List
 import json
 import enum
 from collections import defaultdict
 import shutil
-import pyam
+import re
 import pandas as pd
 
 
@@ -20,16 +19,23 @@ class PyamDataCollector:
     """PyamDataCollector class which collects and concatenate the pyam data from the examples/results."""
 
     def __init__(
-        self, data_collection_mode: Any, path_to_default_config: Optional[str] = None
+        self,
+        data_processing_mode: Any,
+        simulation_duration_to_check: str,
+        time_resolution_of_data_set: Any,
+        folder_from_which_data_will_be_collected: str = os.path.join(
+            os.pardir, os.pardir, "examples", "results"
+        ),
+        path_to_default_config: Optional[str] = None,
     ) -> None:
         """Initialize the class."""
-        result_folder = os.path.join(os.pardir, os.pardir, "examples", "results")
+        result_folder = folder_from_which_data_will_be_collected
         self.pyam_data_folder = os.path.join(
             os.pardir, os.pardir, "examples", "results_for_scenario_comparison", "data"
         )
 
         # in each examples/results folder should be one example that was executed with the default config
-        self.path_of_pyam_results_executed_with_default_config: str
+        self.path_of_pyam_results_executed_with_default_config: str = ""
 
         log.information(f"Checking results from folder: {result_folder}")
 
@@ -39,12 +45,56 @@ class PyamDataCollector:
             result_path=result_folder
         )
 
-        if (
-            data_collection_mode
-            == PyamDataCollectionModeEnum.COLLECT_AND_SORT_DATA_ACCORDING_TO_PARAMETER_KEYS
-        ):
+        if data_processing_mode == PyamDataProcessingModeEnum.PROCESS_ALL_DATA:
 
-            log.information(f"Data Collection Mode is {data_collection_mode}")
+            log.information(f"Data Collection Mode is {data_processing_mode}")
+
+            parameter_key = None
+
+        elif (
+            data_processing_mode
+            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_SIZES
+        ):
+            parameter_key = "total_base_area_in_m2"
+
+        elif (
+            data_processing_mode
+            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
+        ):
+            parameter_key = "building_code"
+
+        elif (
+            data_processing_mode
+            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_POWERS
+        ):
+            parameter_key = "pv_power"
+
+        elif (
+            data_processing_mode
+            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_AZIMUTH_ANGLES
+        ):
+            parameter_key = "pv_azimuth"
+
+        elif (
+            data_processing_mode
+            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES
+        ):
+            parameter_key = "pv_tilt"
+
+        else:
+            raise ValueError(
+                "Analysis mode is not part of the PyamDataProcessingModeEnum class."
+            )
+
+        log.information(f"Data Collection Mode is {data_processing_mode}")
+
+        print("parameter key ", parameter_key)
+        print("##################")
+        if parameter_key is None:
+            list_with_parameter_key_values = None
+            path_to_check = list_with_pyam_data_folders
+
+        elif parameter_key is not None and path_to_default_config is not None:
 
             default_config_dict = self.get_default_config(
                 path_to_default_config=path_to_default_config
@@ -58,81 +108,39 @@ class PyamDataCollector:
                 default_config_dict=default_config_dict,
             )
 
-            for key in dict_with_csv_files_for_each_parameter.keys():
-                print("parameter key ", key)
-                print("##################")
-                list_with_pyam_data_paths_for_one_parameter = (
-                    dict_with_csv_files_for_each_parameter[key]
+            if (
+                parameter_key in dict_with_csv_files_for_each_parameter
+                and parameter_key in dict_with_parameter_key_values
+            ):
+                list_with_parameter_key_values = dict_with_parameter_key_values[
+                    parameter_key
+                ]
+                path_to_check = dict_with_csv_files_for_each_parameter[parameter_key]
+
+            else:
+                raise KeyError(
+                    f"The parameter key {parameter_key} was not found in the dictionary dict_with_csv_files_for_each_parameter or dict_with_parameter_key_values."
                 )
 
-                (
-                    all_simulation_durations,
-                    all_hourly_csv_files,
-                    all_yearly_csv_files,
-                ) = self.import_data_from_file(
-                    paths_to_check=list_with_pyam_data_paths_for_one_parameter
-                )
+        all_csv_files = self.import_data_from_file(
+            paths_to_check=path_to_check,
+            analyze_yearly_or_hourly_data=time_resolution_of_data_set,
+        )
 
-                (
-                    dict_of_yearly_csv_data,
-                    dict_of_hourly_csv_data,
-                ) = self.make_dictionaries_with_simulation_duration_keys(
-                    simulation_durations=all_simulation_durations,
-                    hourly_data=all_hourly_csv_files,
-                    yearly_data=all_yearly_csv_files,
-                )
+        dict_of_csv_data = self.make_dictionaries_with_simulation_duration_keys(
+            simulation_duration_to_check=simulation_duration_to_check,
+            all_csv_files=all_csv_files,
+        )
 
-                self.read_csv_and_generate_pyam_dataframe(
-                    dict_of_csv_to_read=dict_of_yearly_csv_data,
-                    kind_of_data=PyamDataTypeEnum.YEARLY,
-                    parameter_key=key,
-                    list_with_parameter_key_values=dict_with_parameter_key_values[key],
-                    rename_scenario=True,
-                )
-                self.read_csv_and_generate_pyam_dataframe(
-                    dict_of_csv_to_read=dict_of_hourly_csv_data,
-                    kind_of_data=PyamDataTypeEnum.HOURLY,
-                    parameter_key=key,
-                    list_with_parameter_key_values=dict_with_parameter_key_values[key],
-                    rename_scenario=True,
-                )
-                print("\n")
+        self.read_csv_and_generate_pyam_dataframe(
+            dict_of_csv_to_read=dict_of_csv_data,
+            time_resolution_of_data_set=time_resolution_of_data_set,
+            rename_scenario=True,
+            parameter_key=parameter_key,
+            list_with_parameter_key_values=list_with_parameter_key_values,
+        )
 
-        elif (
-            data_collection_mode
-            == PyamDataCollectionModeEnum.COLLECT_ALL_DATA_WITHOUT_SORTING
-        ):
-
-            log.information(f"Data Collection Mode is {data_collection_mode}")
-
-            (
-                all_simulation_durations,
-                all_hourly_csv_files,
-                all_yearly_csv_files,
-            ) = self.import_data_from_file(paths_to_check=list_with_pyam_data_folders)
-            (
-                dict_of_yearly_csv_data,
-                dict_of_hourly_csv_data,
-            ) = self.make_dictionaries_with_simulation_duration_keys(
-                simulation_durations=all_simulation_durations,
-                hourly_data=all_hourly_csv_files,
-                yearly_data=all_yearly_csv_files,
-            )
-            self.read_csv_and_generate_pyam_dataframe(
-                dict_of_csv_to_read=dict_of_yearly_csv_data,
-                kind_of_data=PyamDataTypeEnum.YEARLY,
-                rename_scenario=True,
-            )
-            self.read_csv_and_generate_pyam_dataframe(
-                dict_of_csv_to_read=dict_of_hourly_csv_data,
-                kind_of_data=PyamDataTypeEnum.HOURLY,
-                rename_scenario=True,
-            )
-
-        else:
-            raise ValueError(
-                "Analysis mode is not part of the PyamDataCollectionModeEnum class."
-            )
+        print("\n")
 
     def clean_result_directory_from_unfinished_results(
         self, result_path: str
@@ -158,63 +166,46 @@ class PyamDataCollector:
         return list_with_no_duplicates
 
     def import_data_from_file(
-        self, paths_to_check: List[str]
-    ) -> tuple[List, List, List]:
+        self, paths_to_check: List[str], analyze_yearly_or_hourly_data: Any
+    ) -> List:
         """Import data from result files."""
         log.information("Importing pyam_data from csv files.")
 
-        all_yearly_csv_files = []
-        all_hourly_csv_files = []
-        all_simulation_durations = []
+        all_csv_files = []
+
+        if analyze_yearly_or_hourly_data == PyamDataTypeEnum.HOURLY:
+            kind_of_data_set = "hourly"
+        elif analyze_yearly_or_hourly_data == PyamDataTypeEnum.YEARLY:
+            kind_of_data_set = "yearly"
+        elif analyze_yearly_or_hourly_data == PyamDataTypeEnum.DAILY:
+            kind_of_data_set = "daily"
+        elif analyze_yearly_or_hourly_data == PyamDataTypeEnum.MONTHLY:
+            kind_of_data_set = "monthly"
+        else:
+            raise ValueError(
+                "analyze_yearly_or_hourly_data was not found in the pyamdatacollectorenum class."
+            )
 
         for folder in paths_to_check:  # type: ignore
 
             for file in os.listdir(folder):  # type: ignore
-                # get yearly data
-                if "yearly_results" in file and file.endswith(".csv"):
-                    all_yearly_csv_files.append(os.path.join(folder, file))  # type: ignore
+                # get yearly or hourly data
+                if kind_of_data_set in file and file.endswith(".csv"):
+                    all_csv_files.append(os.path.join(folder, file))  # type: ignore
 
-                if "hourly_results" in file and file.endswith(".csv"):
-                    all_hourly_csv_files.append(os.path.join(folder, file))  # type: ignore
-
-                # get simulation durations
-                if ".json" in file:
-                    with open(os.path.join(folder, file), "r", encoding="utf-8") as openfile:  # type: ignore
-                        json_file = json.load(openfile)
-                        simulation_duration = json_file["pyamDataInformation"].get(
-                            "duration in days"
-                        )
-                        all_simulation_durations.append(simulation_duration)
-
-        all_simulation_durations = list(set(all_simulation_durations))
-
-        return all_simulation_durations, all_hourly_csv_files, all_yearly_csv_files
+        return all_csv_files
 
     def make_dictionaries_with_simulation_duration_keys(
-        self,
-        simulation_durations: List[int],
-        hourly_data: List[str],
-        yearly_data: List[str],
-    ) -> tuple[Dict, Dict]:
-        """Make dictionaries containing csv files of hourly and yearly data and sort them according to the simulation duration of the data."""
+        self, simulation_duration_to_check: str, all_csv_files: List[str],
+    ) -> Dict:
+        """Make dictionaries containing csv files of hourly or yearly data and according to the simulation duration of the data."""
 
-        dict_of_yearly_csv_data_for_different_simulation_duration: Dict[str, Any] = {}
-        dict_of_hourly_csv_data_for_different_simulation_duration: Dict[str, Any] = {}
+        dict_of_csv_data: Dict[str, Any] = {}
 
-        # get a list of all simulation durations that exist and use them as key for the data dictionaries
-        for simulation_duration in simulation_durations:
-            dict_of_yearly_csv_data_for_different_simulation_duration[
-                f"{simulation_duration}"
-            ] = []
-            dict_of_hourly_csv_data_for_different_simulation_duration[
-                f"{simulation_duration}"
-            ] = []
+        dict_of_csv_data[f"{simulation_duration_to_check}"] = []
 
-        yearly_data_set = yearly_data
-        hourly_data_set = hourly_data
-
-        # order files according to their simualtion durations
-        for file in yearly_data_set:
+        # open file config and check if they have wanted simulation duration
+        for file in all_csv_files:
 
             parent_folder = os.path.abspath(os.path.join(file, os.pardir))  # type: ignore
             for file1 in os.listdir(parent_folder):
@@ -226,31 +217,18 @@ class PyamDataCollector:
                         simulation_duration = json_file["pyamDataInformation"].get(
                             "duration in days"
                         )
-                        if simulation_duration in simulation_durations:
-                            dict_of_yearly_csv_data_for_different_simulation_duration[
-                                f"{simulation_duration}"
-                            ].append(file)
+                        if int(simulation_duration_to_check) == int(
+                            simulation_duration
+                        ):
+                            dict_of_csv_data[f"{simulation_duration}"].append(file)
 
-        for file in hourly_data_set:
+        # raise error if dict is empty
+        if bool(dict_of_csv_data) is False:
+            raise ValueError(
+                "The dictionary is empty. Maybe no data was collected. Please check your parameters again."
+            )
 
-            parent_folder = os.path.abspath(os.path.join(file, os.pardir))  # type: ignore
-            for file1 in os.listdir(parent_folder):
-                if ".json" in file1:
-                    with open(
-                        os.path.join(parent_folder, file1), "r", encoding="utf-8"
-                    ) as openfile:
-                        json_file = json.load(openfile)
-                        simulation_duration = json_file["pyamDataInformation"].get(
-                            "duration in days"
-                        )
-                        if simulation_duration in simulation_durations:
-                            dict_of_hourly_csv_data_for_different_simulation_duration[
-                                f"{simulation_duration}"
-                            ].append(file)
-        return (
-            dict_of_yearly_csv_data_for_different_simulation_duration,
-            dict_of_hourly_csv_data_for_different_simulation_duration,
-        )
+        return dict_of_csv_data
 
     def rename_scenario_name_of_dataframe_with_parameter_key_and_value(
         self,
@@ -260,7 +238,10 @@ class PyamDataCollector:
         index: int,
     ) -> Any:
         """Rename the scenario of the given dataframe adding parameter key and value."""
-        dataframe["scenario"] = f"{parameter_key}_{list_with_parameter_values[index]}"
+        value = list_with_parameter_values[index]
+        if not isinstance(value, str):
+            value = round(value, 1)
+        dataframe["scenario"] = f"{parameter_key}_{value}"
         return dataframe["scenario"]
 
     def rename_scenario_name_of_dataframe_with_index(
@@ -273,78 +254,86 @@ class PyamDataCollector:
     def read_csv_and_generate_pyam_dataframe(
         self,
         dict_of_csv_to_read: Dict[str, list[str]],
-        kind_of_data: Any,
+        time_resolution_of_data_set: Any,
         rename_scenario: bool = False,
         parameter_key: Optional[str] = None,
         list_with_parameter_key_values: Optional[List[Any]] = None,
     ) -> None:
-        """Read the csv files and generate the pyam dataframe for different simulation durations."""
+        """Read the csv files and generate the pyam dataframe."""
         log.information(
-            f"Read csv files and generate pyam dataframes for {kind_of_data}."
+            f"Read csv files and generate pyam dataframes for {time_resolution_of_data_set}."
         )
-        if bool(dict_of_csv_to_read) is False:
-            raise ValueError("The passed dictionary is empty.")
 
-        for simulation_duration_key, csv_data_list in dict_of_csv_to_read.items():
-            appended_dataframe = pd.DataFrame()
-            index = 0
-            for csv_file in csv_data_list:
+        appended_dataframe = pd.DataFrame()
+        index = 0
+        simulation_duration_key = list(dict_of_csv_to_read.keys())[0]
+        csv_data_list = dict_of_csv_to_read[simulation_duration_key]
 
-                dataframe = pd.read_csv(csv_file)
+        for csv_file in csv_data_list:
 
-                if rename_scenario is True:
-                    if (
-                        parameter_key is not None
-                        and list_with_parameter_key_values is not None
-                    ):
-                        # rename scenario adding paramter key, value pair
-                        dataframe[
-                            "scenario"
-                        ] = self.rename_scenario_name_of_dataframe_with_parameter_key_and_value(
-                            dataframe=dataframe,
-                            parameter_key=parameter_key,
-                            list_with_parameter_values=list_with_parameter_key_values,
-                            index=index,
-                        )
-                    else:
-                        # rename scenario adding an index
-                        dataframe[
-                            "scenario"
-                        ] = self.rename_scenario_name_of_dataframe_with_index(
-                            dataframe=dataframe, index=index
-                        )
+            dataframe = pd.read_csv(csv_file)
 
-                appended_dataframe = pd.concat([appended_dataframe, dataframe])
+            # add hash colum to dataframe so hash does not get lost when scenario is renamed
+            # TODO: make this optional in case hash does not exist in scenario name
+            hash_number = re.findall(r"\-?\d+", dataframe["scenario"][0])[-1]
+            dataframe["hash"] = [hash_number] * len(dataframe["scenario"])
 
-                index = index + 1
+            if rename_scenario is True:
+                if (
+                    parameter_key is not None
+                    and list_with_parameter_key_values is not None
+                ):
+                    # rename scenario adding paramter key, value pair
+                    dataframe[
+                        "scenario"
+                    ] = self.rename_scenario_name_of_dataframe_with_parameter_key_and_value(
+                        dataframe=dataframe,
+                        parameter_key=parameter_key,
+                        list_with_parameter_values=list_with_parameter_key_values,
+                        index=index,
+                    )
+                else:
+                    # rename scenario adding an index
+                    dataframe[
+                        "scenario"
+                    ] = self.rename_scenario_name_of_dataframe_with_index(
+                        dataframe=dataframe, index=index
+                    )
 
-            df_pyam_for_one_simulation_duration = pyam.IamDataFrame(appended_dataframe)
+            appended_dataframe = pd.concat([appended_dataframe, dataframe])
+
+            index = index + 1
+
             # convert unit "Watt" to "Watthour" because it makes plots more readable later, conversion factor is 1/3600s
             # df_pyam_for_one_simulation_duration = df_pyam_for_one_simulation_duration.convert_unit(
             #     current="W", to="Wh", factor=1 / 3600, inplace=False
             # )
 
-            filename = self.store_pyam_data_with_the_right_name_and_in_the_right_path(
-                pyam_data_folder=self.pyam_data_folder,
-                simulation_duration_key=simulation_duration_key,
-                kind_of_data=kind_of_data,
-                parameter_key=parameter_key,
-            )
-            df_pyam_for_one_simulation_duration.to_csv(filename)
+        filename = self.store_pyam_data_with_the_right_name_and_in_the_right_path(
+            pyam_data_folder=self.pyam_data_folder,
+            simulation_duration_key=simulation_duration_key,
+            time_resolution_of_data_set=time_resolution_of_data_set,
+            parameter_key=parameter_key,
+        )
+        appended_dataframe.to_csv(filename)
 
     def store_pyam_data_with_the_right_name_and_in_the_right_path(
         self,
         pyam_data_folder: str,
         simulation_duration_key: str,
-        kind_of_data: Any,
+        time_resolution_of_data_set: Any,
         parameter_key: Optional[str] = None,
     ) -> str:
         """Store csv files in the pyam data folder with the right filename and path."""
 
-        if kind_of_data == PyamDataTypeEnum.HOURLY:
+        if time_resolution_of_data_set == PyamDataTypeEnum.HOURLY:
             kind_of_data_set = "hourly"
-        elif kind_of_data == PyamDataTypeEnum.YEARLY:
+        elif time_resolution_of_data_set == PyamDataTypeEnum.YEARLY:
             kind_of_data_set = "yearly"
+        elif time_resolution_of_data_set == PyamDataTypeEnum.DAILY:
+            kind_of_data_set = "daily"
+        elif time_resolution_of_data_set == PyamDataTypeEnum.MONTHLY:
+            kind_of_data_set = "monthly"
         else:
             raise ValueError(
                 "This kind of data was not found in the pyamdatacollectorenum class."
@@ -407,6 +396,7 @@ class PyamDataCollector:
                 "The module config should contain the keys of the default config, otherwise their values cannot be compared."
             )
         # check if there is a module config which is equal to default config
+
         if all(
             item in my_module_config_dict.items()
             for item in default_config_dict.items()
@@ -453,11 +443,13 @@ class PyamDataCollector:
                 dict_with_parameter_key_values=dict_with_parameter_key_values,
             )
 
-        # add to each item in the dict also the default example
+        # add to each item in the dict also the default example if the default example exists
         for key in dict_with_csv_files_for_each_parameter.keys():
-            dict_with_csv_files_for_each_parameter[key].append(
-                self.path_of_pyam_results_executed_with_default_config
-            )
+
+            if self.path_of_pyam_results_executed_with_default_config != "":
+                dict_with_csv_files_for_each_parameter[key].append(
+                    self.path_of_pyam_results_executed_with_default_config
+                )
             dict_with_parameter_key_values[key].append(default_config_dict[key])
 
         return dict_with_csv_files_for_each_parameter, dict_with_parameter_key_values
@@ -522,30 +514,23 @@ class PyamDataTypeEnum(enum.Enum):
     Here it is defined what kind of data you want to collect.
     """
 
-    HOURLY = "hourly"
+    HOURLY = "hourly"  # hourly not working yet
+    DAILY = "daily"
+    MONTHLY = "monthly"
     YEARLY = "yearly"
 
 
-class PyamDataCollectionModeEnum(enum.Enum):
+class PyamDataProcessingModeEnum(enum.Enum):
 
-    """PyamDataCollectionModeEnum class.
+    """PyamDataProcessingModeEnum class.
 
-    Here it is defined what kind of data collection you want to make.
+    Here it is defined what kind of data processing you want to make.
     """
 
-    COLLECT_AND_SORT_DATA_ACCORDING_TO_PARAMETER_KEYS = 1
-    COLLECT_ALL_DATA_WITHOUT_SORTING = 2
-
-
-def main():
-    """Main function to execute the pyam data collection."""
-    PyamDataCollector(
-        data_collection_mode=PyamDataCollectionModeEnum.COLLECT_AND_SORT_DATA_ACCORDING_TO_PARAMETER_KEYS,
-        path_to_default_config="please insert path to your default module config",
-    )
-
-
-if __name__ == "__main__":
-    start_time = time.time()
-    main()
-    print(f"---{time.time() - start_time} seconds ___")
+    PROCESS_ALL_DATA = 1
+    PROCESS_FOR_DIFFERENT_BUILDING_CODES = 2
+    PROCESS_FOR_DIFFERENT_BUILDING_SIZES = 3
+    PROCESS_FOR_DIFFERENT_PV_POWERS = 4
+    PROCESS_FOR_DIFFERENT_PV_SIZES = 5
+    PROCESS_FOR_DIFFERENT_PV_AZIMUTH_ANGLES = 6
+    PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES = 7

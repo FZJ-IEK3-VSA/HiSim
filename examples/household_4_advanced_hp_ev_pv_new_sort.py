@@ -189,7 +189,7 @@ class HouseholdAdvancedHPEvPvConfig:
         return household_config
 
 
-def household_4_advanced_hp_ev_pv(
+def household_4_advanced_hp_ev_pv_new_sort(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
     """Example with advanced hp and EV and PV.
@@ -501,7 +501,7 @@ def household_4_advanced_hp_ev_pv(
                     lt.InandOutputType.ELECTRICITY_REAL,
                 ],
                 # source_weight=car_battery.source_weight,
-                source_weight=1,
+                source_weight=3,
             )
 
             electricity_target = my_electricity_controller.add_component_output(
@@ -511,7 +511,7 @@ def household_4_advanced_hp_ev_pv(
                     lt.InandOutputType.ELECTRICITY_TARGET,
                 ],
                 # source_weight=car_battery_controller.source_weight,
-                source_weight=1,
+                source_weight=3,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 output_description="Target Electricity for EV Battery Controller. ",
@@ -605,7 +605,7 @@ def household_4_advanced_hp_ev_pv(
                 lt.ComponentType.HEAT_PUMP_BUILDING,
                 lt.InandOutputType.ELECTRICITY_REAL,
             ],
-            source_weight=3,
+            source_weight=1,
         )
 
         my_electricity_controller.add_component_output(
@@ -614,7 +614,7 @@ def household_4_advanced_hp_ev_pv(
                 lt.ComponentType.HEAT_PUMP_BUILDING,
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
-            source_weight=3,
+            source_weight=1,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for Heat Pump. ",

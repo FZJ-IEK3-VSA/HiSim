@@ -178,7 +178,7 @@
         "StrVal": "78dae308-24c4-45cc-8bdf-b001d61f45c2"
       }
     },
-    "battery_set": 0.8,
+    "battery_set": 1.0,
     "lower_threshold_charging_power": 1100.0,
     "co2_footprint": 100,
     "cost": 1000,

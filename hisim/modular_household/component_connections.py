@@ -452,6 +452,8 @@ def configure_water_heating(
         Type of installed WaterHeatingSystem
     count: int
         Integer tracking component hierachy for EMS.
+    number_of_apartments: float
+        from building component
 
     """
     fuel_translator = {
@@ -542,6 +544,8 @@ def configure_water_heating_electric(
         True if control of heating device is smart, False if not.
     count: int
         Integer tracking component hierachy for EMS.
+    number_of_apartments: float
+    from building component
 
     """
     if water_heating_system_installed == lt.HeatingSystems.HEAT_PUMP:

@@ -28,7 +28,6 @@ from hisim.components import (
 from hisim.components.loadprofilegenerator_connector import Occupancy
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 from hisim.simulationparameters import SimulationParameters
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.component import OpexCostDataClass
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
@@ -102,8 +101,11 @@ class StorageConfig(cp.ConfigBase):
             maintenance_cost_as_percentage_of_investment=0.02,  # SOURCE: VDI2067-1
         )
         return config
+
     @classmethod
-    def get_scaled_config_for_boiler_according_to_number_of_apartments(cls, number_of_apartments: float) -> "StorageConfig":
+    def get_scaled_config_for_boiler_according_to_number_of_apartments(
+        cls, number_of_apartments: float
+    ) -> "StorageConfig":
         """Returns default configuration for boiler."""
 
         volume = 230 * max(number_of_apartments, 1)
@@ -525,7 +527,8 @@ class HotWaterStorage(dycp.DynamicComponent):
                 * 1e-3
             )  # 1e-3 conversion J to kJ
         heatconsumption: float = self.calculate_heat_consumption(
-            stsv=stsv, thermal_energy_delivered=thermal_energy_delivered,
+            stsv=stsv,
+            thermal_energy_delivered=thermal_energy_delivered,
         )
         stsv.set_output_value(self.power_from_water_storage_channel, heatconsumption)
 
@@ -552,7 +555,9 @@ class HotWaterStorage(dycp.DynamicComponent):
         )
 
     def calculate_heat_consumption(
-        self, stsv: cp.SingleTimeStepValues, thermal_energy_delivered: float,
+        self,
+        stsv: cp.SingleTimeStepValues,
+        thermal_energy_delivered: float,
     ) -> float:
         """Calculates the heat consumption."""
         if self.use == lt.ComponentType.BOILER:

@@ -1180,12 +1180,11 @@ class Building(dynamic_component.DynamicComponent):
             self.get_thermal_conductance_between_exterior_and_windows_and_door_in_watt_per_kelvin()
         )
         # labeled as H_tr_ms in paper [2] (*** Check header)
-        internal_part_of_transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin = (
-            self.get_thermal_conductance_between_thermal_mass_and_internal_surface_in_watt_per_kelvin(
+        internal_part_of_transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin = self.get_thermal_conductance_between_thermal_mass_and_internal_surface_in_watt_per_kelvin(
             heat_transfer_coeff_thermal_mass_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin=(
                 self.my_building_information.heat_transfer_coeff_thermal_mass_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin
             )
-        ))
+        )
         # external part of transmission heat transfer coeff opaque elements labeled as H_tr_em in paper [2] (*** Check header)
         (
             transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin,
@@ -1967,7 +1966,7 @@ class BuildingInformation:
             self.scaled_rooftop_area_in_m2,
             self.room_height_in_m,
             self.number_of_storeys,
-            self.buildingdata
+            self.buildingdata,
         ) = self.get_physical_param(buildingdata=self.buildingdata)
 
         # Reference properties from TABULA, but not used in the model (scaling factor added in case floor area is different to tabula floor area A_C_ref)
@@ -2025,7 +2024,6 @@ class BuildingInformation:
             heat_transfer_coeff_by_ventilation_in_watt_per_m2_per_kelvin=heat_transfer_coeff_by_ventilation_reference_in_watt_per_m2_per_kelvin,
         )
 
-
     def get_physical_param(
         self, buildingdata: Any
     ) -> Tuple[float, List, List, float, List, float, float, float, Any]:
@@ -2052,13 +2050,13 @@ class BuildingInformation:
             scaled_conditioned_floor_area_in_m2,
             scaled_window_areas_in_m2,
             scaled_rooftop_area_in_m2,
-            buildingdata
+            buildingdata,
         ) = self.scaling_over_conditioned_floor_area(
             conditioned_floor_area_in_m2=conditioned_floor_area_in_m2_reference,
             rooftop_area_in_m2=rooftop_area_in_m2_reference,
             number_of_storeys=number_of_storeys,
             room_height_in_m=room_height_in_m,
-            buildingdata=self.buildingdata
+            buildingdata=self.buildingdata,
         )
 
         return (
@@ -2070,7 +2068,7 @@ class BuildingInformation:
             scaled_rooftop_area_in_m2,
             room_height_in_m,
             number_of_storeys,
-            buildingdata
+            buildingdata,
         )
 
     # =====================================================================================================================================
@@ -2100,7 +2098,10 @@ class BuildingInformation:
         return max_thermal_building_demand_in_watt
 
     def get_number_of_apartments(
-        self, conditioned_floor_area_in_m2: float, scaling_factor: float, buildingdata: Any
+        self,
+        conditioned_floor_area_in_m2: float,
+        scaling_factor: float,
+        buildingdata: Any,
     ) -> float:
         """Get number of apartments.
 
@@ -2127,9 +2128,7 @@ class BuildingInformation:
 
         elif self.buildingconfig.number_of_apartments is None:
 
-            number_of_apartments_origin = float(
-                buildingdata["n_Apartment"].values[0]
-            )
+            number_of_apartments_origin = float(buildingdata["n_Apartment"].values[0])
 
             # if no value given or if the area given in the config is bigger than the tabula ref area
             if number_of_apartments_origin == 0 or scaling_factor != 1:
@@ -2153,7 +2152,7 @@ class BuildingInformation:
         rooftop_area_in_m2: float,
         number_of_storeys: float,
         room_height_in_m: float,
-        buildingdata: Any
+        buildingdata: Any,
     ) -> Tuple[float, List, List, float, List, float, Any]:
         """Calculate scaling factors for the building.
 
@@ -2303,7 +2302,7 @@ class BuildingInformation:
             scaled_conditioned_floor_area_in_m2,
             scaled_window_areas_in_m2,
             scaled_rooftop_area_in_m2,
-            buildingdata
+            buildingdata,
         )
 
     def scale_rooftop_area(

@@ -63,7 +63,9 @@ class HeatStorageControllerConfig(ConfigBase):
     heating_load_of_building_in_watt: float
 
     @classmethod
-    def get_default_heat_storage_controller_config(cls, heating_load_of_building_in_watt: float) -> Any:
+    def get_default_heat_storage_controller_config(
+        cls, heating_load_of_building_in_watt: float
+    ) -> Any:
         config = HeatStorageControllerConfig(
             name="HeatStorageController",
             initial_temperature_building=20,
@@ -434,7 +436,9 @@ class HeatStorageController(cp.Component):
             self.heatstoragecontroller_config.initial_temperature_building
         )
 
-        self.ref_max_thermal_build_demand_in_watt = self.heatstoragecontroller_config.heating_load_of_building_in_watt
+        self.ref_max_thermal_build_demand_in_watt = (
+            self.heatstoragecontroller_config.heating_load_of_building_in_watt
+        )
         # ===================================================================================================================
         # Inputs
         # self.ref_max_thermal_build_demand: ComponentInput = self.add_input(

@@ -423,6 +423,10 @@ def household_5_advanced_hp_ev_pv_battery_new_sort(
         my_car_battery_controller_config = my_config.car_battery_controller_config
         my_car_battery_controller_config.source_weight = car.config.source_weight
         my_car_battery_controller_config.name = f"L1EVChargeControl_{car_number}"
+        if my_config.surplus_control_car:
+            # lower threshold for soc of car battery in clever case. This enables more surplus charging
+            # Todo: this is just to avoid errors in case config from json-file is used
+            my_car_battery_controller_config.battery_set = 0.4
 
         my_car_battery_controller = controller_l1_generic_ev_charge.L1Controller(
             my_simulation_parameters=my_simulation_parameters,

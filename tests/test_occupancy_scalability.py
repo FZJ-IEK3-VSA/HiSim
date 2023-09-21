@@ -91,7 +91,7 @@ def simulation_for_one_time_step(
         + str(my_residence_config.absolute_conditioned_floor_area_in_m2)
     )
 
-    building_number_of_apartments = my_residence.number_of_apartments
+    building_number_of_apartments = my_residence.my_building_information.number_of_apartments
 
     # Set Occupancy
     my_occupancy_config = (

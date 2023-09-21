@@ -1929,7 +1929,7 @@ class BuildingInformation:
         self.effective_mass_area_in_m2: float = 0
         # before labeled as a_t
         self.total_internal_surface_area_in_m2: float = 0
-        self.room_height_in_m2: float = 0
+        self.room_height_in_m: float = 0
         self.scaled_rooftop_area_in_m2: float = 0
         self.number_of_storeys: float = 0
         self.number_of_apartments: float = 0
@@ -2030,7 +2030,7 @@ class BuildingInformation:
             self.scaled_conditioned_floor_area_in_m2,
             self.scaled_window_areas_in_m2,
             self.scaled_rooftop_area_in_m2,
-            self.room_height_in_m2,
+            self.room_height_in_m,
             self.number_of_storeys,
         ) = self.get_physical_param()
 
@@ -2062,7 +2062,7 @@ class BuildingInformation:
             self.buildingdata["A_C_Ref"].values[0]
         )
 
-        room_height_in_m2 = float(self.buildingdata["h_room"].values[0])
+        room_height_in_m = float(self.buildingdata["h_room"].values[0])
 
         rooftop_area_in_m2_reference = float(
             self.buildingdata["A_Roof_1"].values[0]
@@ -2081,7 +2081,8 @@ class BuildingInformation:
         ) = self.scaling_over_conditioned_floor_area(
             conditioned_floor_area_in_m2=conditioned_floor_area_in_m2_reference,
             rooftop_area_in_m2=rooftop_area_in_m2_reference,
-            number_of_storeys=self.number_of_storeys,
+            number_of_storeys=number_of_storeys,
+            room_height_in_m=room_height_in_m,
         )
 
         # Room Capacitance [J/K] (TABULA: Internal heat capacity) Ref: ISO standard 12.3.1.2
@@ -2140,7 +2141,7 @@ class BuildingInformation:
             scaled_conditioned_floor_area_in_m2,
             scaled_window_areas_in_m2,
             scaled_rooftop_area_in_m2,
-            room_height_in_m2,
+            room_height_in_m,
             number_of_storeys,
         )
 
@@ -2227,6 +2228,7 @@ class BuildingInformation:
         conditioned_floor_area_in_m2: float,
         rooftop_area_in_m2: float,
         number_of_storeys: float,
+        room_height_in_m: float
     ) -> Tuple[float, List, List, Any, List, float]:
         """Calculate scaling factors for the building.
 
@@ -2336,10 +2338,12 @@ class BuildingInformation:
 
         # assumption: building is a cuboid with square floor area (area_of_one_wall = wall_length * wall_height, with wall_length = sqrt(floor_area))
         total_wall_area_in_m2_tabula = (
-            4 * math.sqrt(conditioned_floor_area_in_m2) * self.room_height_in_m2
+            4 * math.sqrt(conditioned_floor_area_in_m2) * room_height_in_m
         )
+
+    
         scaled_total_wall_area_in_m2 = (
-            4 * math.sqrt(scaled_conditioned_floor_area_in_m2) * self.room_height_in_m2
+            4 * math.sqrt(scaled_conditioned_floor_area_in_m2) * room_height_in_m
         )
 
         scaled_window_areas_in_m2 = []

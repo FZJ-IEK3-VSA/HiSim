@@ -164,35 +164,35 @@ def simulation_for_one_timestep(
     my_residence_config.absolute_conditioned_floor_area_in_m2 = (
         absolute_conditioned_floor_area_in_m2
     )
-    my_residence = building.Building(
-        config=my_residence_config,
-        my_simulation_parameters=my_simulation_parameters,
-    )
-    my_residence_information = my_residence.return_building_information()
+    # my_residence = building.Building(
+    #     config=my_residence_config,
+    #     my_simulation_parameters=my_simulation_parameters,
+    # )
+    my_residence_information = building.BuildingInformation(config=my_residence_config)
 
     log.information("Building code" + str(my_residence_config.building_code))
-    log.information("Rooftop area " + str(my_residence_information.building_rooftop_area_in_m2))
-    log.information("Floor area " + str(my_residence_information.building_conditioned_floor_area_in_m2))
+    log.information("Rooftop area " + str(my_residence_information.scaled_rooftop_area_in_m2))
+    log.information("Floor area " + str(my_residence_information.scaled_conditioned_floor_area_in_m2))
 
-    log.information("Heating load of building in W " + str(my_residence_information.building_heating_load_in_watt))
-    log.information("Number of apartmens in building " + str(my_residence_information.building_number_of_apartments))
-    log.information("Number of storeys in building " + str(my_residence_information.building_number_of_storeys))
+    log.information("Heating load of building in W " + str(my_residence_information.max_thermal_building_demand_in_watt))
+    log.information("Number of apartmens in building " + str(my_residence_information.number_of_apartments))
+    log.information("Number of storeys in building " + str(my_residence_information.number_of_storeys))
 
     # Set PV
     my_pv_config = generic_pv_system.PVSystemConfig.get_scaled_PV_system(
-        rooftop_area_in_m2=my_residence_information.building_rooftop_area_in_m2
+        rooftop_area_in_m2=my_residence_information.scaled_rooftop_area_in_m2
     )
 
     # Set hplib
     my_hplib_config = (
         advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-            heating_load_of_building_in_watt=my_residence_information.building_heating_load_in_watt)
+            heating_load_of_building_in_watt=my_residence_information.max_thermal_building_demand_in_watt)
     )
 
     # Set Hot Water Storage
     my_simple_hot_water_storage_config = (
         simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-            heating_load_of_building_in_watt=my_residence_information.building_heating_load_in_watt)
+            heating_load_of_building_in_watt=my_residence_information.max_thermal_building_demand_in_watt)
     )
 
     # Set Battery
@@ -223,7 +223,7 @@ def simulation_for_one_timestep(
     water_storage_size_for_dhw_in_liter = my_storage_for_dhw_config.volume
 
     return (
-        my_residence_information.building_number_of_apartments,
+        my_residence_information.number_of_apartments,
         pv_power_in_watt,
         hplib_thermal_power_in_watt,
         simple_hot_water_storage_size_in_liter,

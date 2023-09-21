@@ -117,12 +117,12 @@ def test_building_scalability():
 
     # some variables to test
     opaque_surfaces_without_scaling = (
-        my_residence.scaled_opaque_surfaces_envelope_area_in_m2
+        my_residence.my_building_information.scaled_opaque_surfaces_envelope_area_in_m2
     )
     window_and_door_surfaces_without_scaling = (
-        my_residence.scaled_windows_and_door_envelope_areas_in_m2
+        my_residence.my_building_information.scaled_windows_and_door_envelope_areas_in_m2
     )
-    window_areas_without_scaling = my_residence.scaled_window_areas_in_m2
+    window_areas_without_scaling = my_residence.my_building_information.scaled_window_areas_in_m2
     log.information(str(window_areas_without_scaling))
 
     # check building test with different absolute conditioned floor areas
@@ -149,10 +149,10 @@ def test_building_scalability():
         my_residence.i_simulate(0, stsv, False)
 
         opaque_surfaces_with_scaling = (
-            my_residence.scaled_opaque_surfaces_envelope_area_in_m2
+            my_residence.my_building_information.scaled_opaque_surfaces_envelope_area_in_m2
         )
         window_and_door_surfaces_with_scaling = (
-            my_residence.scaled_windows_and_door_envelope_areas_in_m2
+            my_residence.my_building_information.scaled_windows_and_door_envelope_areas_in_m2
         )
         # scaled_window_area = window_area / total_wall_area * scaled_total_wall_area
         # = window_area / (4 * sqrt(conditioned_floor_area) * room_height) * 4 * sqrt(scaled_conditioned_floor_area) * room_height
@@ -195,7 +195,7 @@ def test_building_scalability():
 
         # test if window areas of building scale with conditioned floor area
         np.testing.assert_allclose(
-            my_residence.scaled_window_areas_in_m2,
+            my_residence.my_building_information.scaled_window_areas_in_m2,
             window_areas_with_scaling,
             rtol=0.01,
         )

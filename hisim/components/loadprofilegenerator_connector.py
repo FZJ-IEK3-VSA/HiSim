@@ -16,7 +16,6 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim import log
 from hisim.simulationparameters import SimulationParameters
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -40,12 +39,21 @@ class OccupancyConfig(cp.ConfigBase):
     profile_name: str
     country_name: str
     profile_with_washing_machine_and_dishwasher: bool
+    number_of_apartments: float
 
     @classmethod
     def get_default_CHS01(cls) -> Any:
         config = OccupancyConfig(
             name="Occupancy_1", profile_name="CHR01 Couple both at Work", country_name="DE",
-            profile_with_washing_machine_and_dishwasher=True,
+            profile_with_washing_machine_and_dishwasher=True, number_of_apartments=1
+        )
+        return config
+    
+    @classmethod
+    def get_scaled_CHS01_according_to_number_of_apartments(cls, number_of_apartments: float) -> Any:
+        config = OccupancyConfig(
+            name="Occupancy_1", profile_name="CHR01 Couple both at Work", country_name="DE",
+            profile_with_washing_machine_and_dishwasher=True, number_of_apartments=number_of_apartments
         )
         return config
 
@@ -154,22 +162,11 @@ class Occupancy(cp.Component):
                 "use loadprofilegenerator_utsp_connector instead."
             )
         self.build()
-
-        if SingletonSimRepository().exist_entry(
-            key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS
-        ):
-            self.real_number_of_apartments_from_building = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS
-            )
-        else:
-            raise KeyError(
-                "Key for number of apartments was not found in the singleton sim repository."
-                + "This might be because the building was not initialized before the loadprofilegenerator_connector."
-                + "Please check the order of the initialization of the components in your example."
-            )
+        
+        real_number_of_apartments_from_building = self.occupancy_config.number_of_apartments
 
         self.scaling_factor_according_to_number_of_apartments = self.get_scaling_factor_according_to_number_of_apartments(
-            real_number_of_apartments=self.real_number_of_apartments_from_building
+            real_number_of_apartments=real_number_of_apartments_from_building
         )
         # Inputs - Not Mandatories
         self.ww_mass_input: cp.ComponentInput = self.add_input(

@@ -72,11 +72,12 @@ class ReferenceHouseholdConfig:
 
         # set number of apartments (mandatory for dhw storage config)
         number_of_apartments = 1
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments
-        )
+
         heating_reference_temperature_in_celsius: float = -7
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0
+        
+        building_config=building.BuildingConfig.get_default_german_single_family_home()
+        my_building_information = building.BuildingInformation(config=building_config)
 
         household_config = ReferenceHouseholdConfig(
             building_type="blub",
@@ -95,12 +96,12 @@ class ReferenceHouseholdConfig:
                 consumption=0.0,
                 profile_with_washing_machine_and_dishwasher=True,
             ),
-            building_config=building.BuildingConfig.get_default_german_single_family_home(),
+            building_config=building_config,
             hds_controller_config=(
                 heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
             ),
             hds_config=(
-                heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
+                heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt)
             ),
             gasheater_controller_config=(
                 controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config.get_default_generic_gas_heater_controller_config()
@@ -116,7 +117,7 @@ class ReferenceHouseholdConfig:
                 name="DHWHeatpumpController"
             ),
             dhw_storage_config=(
-                generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler_scaled()
+                generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_according_to_number_of_apartments()
             ),
             car_config=generic_car.CarConfig.get_default_diesel_config(),
             electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),

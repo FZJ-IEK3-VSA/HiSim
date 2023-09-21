@@ -470,7 +470,7 @@ def configure_water_heating(
     [heater_config.source_weight, heater_l1_config.source_weight] = [count] * 2
     count += 1
     boiler_config = (
-        generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler_scaled()
+        generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_according_to_number_of_apartments()
     )
     boiler_config.compute_default_cycle(temperature_difference_in_kelvin=heater_l1_config.t_max_heating_in_celsius - heater_l1_config.t_min_heating_in_celsius)
 
@@ -519,6 +519,7 @@ def configure_water_heating_electric(
     water_heating_system_installed: lt.HeatingSystems,
     controlable: bool,
     count: int,
+    number_of_apartments: float
 ) -> Tuple[generic_hot_water_storage_modular.HotWaterStorage, int]:
     """Sets Boiler with Heater, L1 Controller and L2 Controller for Water Heating System.
 
@@ -573,7 +574,7 @@ def configure_water_heating_electric(
         * my_occupancy.scaling_factor_according_to_number_of_apartments
     )
     boiler_config = (
-        generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler_scaled()
+        generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_according_to_number_of_apartments(number_of_apartments=number_of_apartments)
     )
     boiler_config.compute_default_cycle(temperature_difference_in_kelvin=heatpump_l1_config.t_max_heating_in_celsius - heatpump_l1_config.t_min_heating_in_celsius)
 

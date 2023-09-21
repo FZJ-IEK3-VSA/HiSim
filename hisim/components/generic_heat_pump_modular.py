@@ -147,24 +147,11 @@ class HeatPumpConfig(cp.ConfigBase):
     
     
     @classmethod
-    def get_scaled_waterheating(cls):
+    def get_scaled_waterheating_according_to_number_of_apartments(cls, number_of_apartments: float):
         """Gets a default heat pump with scaling according to number of apartments."""
-        
-        if SingletonSimRepository().exist_entry(
-            key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS
-        ):
-            real_number_of_apartments_from_building = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS
-            )
-        else:
-            raise KeyError(
-                "Key for number of apartments was not found in the singleton sim repository."
-                + "This might be because the building was not initialized before the heat pump modular."
-                + "Please check the order of the initialization of the components in your example or use the default config of the heat pump modular."
-            )
-        
+
         # scale with number of apartments
-        power_th_in_watt: float = 3000 * real_number_of_apartments_from_building
+        power_th_in_watt: float = 3000 * number_of_apartments
         config = HeatPumpConfig(
             name="DHWHeatPump",
             source_weight=1,

@@ -95,7 +95,7 @@ def simulation_for_one_time_step(
 
     # Set Occupancy
     my_occupancy_config = (
-        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+        loadprofilegenerator_connector.OccupancyConfig.get_scaled_CHS01_according_to_number_of_apartments(number_of_apartments=building_number_of_apartments)
     )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config,

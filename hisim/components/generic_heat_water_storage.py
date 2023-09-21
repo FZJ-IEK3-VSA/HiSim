@@ -5,7 +5,6 @@ from hisim.component import Component, ComponentInput, ComponentOutput, ConfigBa
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from typing import Any, List
@@ -61,13 +60,15 @@ class HeatStorageControllerConfig(ConfigBase):
     name: str
     initial_temperature_building: float
     initial_temperature_heating_storage: float
+    heating_load_of_building_in_watt: float
 
     @classmethod
-    def get_default_heat_storage_controller_config(cls) -> Any:
+    def get_default_heat_storage_controller_config(cls, heating_load_of_building_in_watt: float) -> Any:
         config = HeatStorageControllerConfig(
             name="HeatStorageController",
             initial_temperature_building=20,
             initial_temperature_heating_storage=35,
+            heating_load_of_building_in_watt=heating_load_of_building_in_watt,
         )
         return config
 
@@ -432,17 +433,8 @@ class HeatStorageController(cp.Component):
         self.initial_temperature_building = (
             self.heatstoragecontroller_config.initial_temperature_building
         )
-        if SingletonSimRepository().exist_entry(
-            key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND
-        ):
-            self.ref_max_thermal_build_demand_in_watt = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND
-            )
-        else:
-            raise KeyError(
-                "The key max thermal building demand was not found in the singleton sim repository. This might be because the building was not initialized before generic heat water storager controller."
-                "Please check the order of the initialization in your example."
-            )
+
+        self.ref_max_thermal_build_demand_in_watt = self.heatstoragecontroller_config.heating_load_of_building_in_watt
         # ===================================================================================================================
         # Inputs
         # self.ref_max_thermal_build_demand: ComponentInput = self.add_input(

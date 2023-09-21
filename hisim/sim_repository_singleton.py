@@ -104,20 +104,18 @@ class SingletonDictKeyEnum(enum.Enum):
 
     """Class for setting dictionary keys in the singleton sim repository."""
 
-    NUMBEROFAPARTMENTS = 1
-    SETHEATINGTEMPERATUREFORBUILDING = 2
-    SETCOOLINGTEMPERATUREFORBUILDING = 3
-    WATERMASSFLOWRATEOFHEATINGDISTRIBUTIONSYSTEM = 4
-    WATERMASSFLOWRATEOFHEATGENERATOR = 5
-    MAXTHERMALBUILDINGDEMAND = 6
-    SETHEATINGTEMPERATUREFORWATERSTORAGE = 7
-    SETCOOLINGTEMPERATUREFORWATERSTORAGE = 8
-    HEATINGSYSTEM = 9
-    LOCATION = 10
-    RESULT_SCENARIO_NAME = 11
-    Thermal_transmission_coefficient_glazing = 12
-    Thermal_transmission_Surface_IndoorAir = 13
-    Thermal_transmission_coefficient_opaque_em = 14
-    Thermal_transmission_coefficient_opaque_ms = 15
-    Thermal_transmission_coefficient_ventillation = 16
-    Thermal_capacity_envelope = 17
+    SETHEATINGTEMPERATUREFORBUILDING = 1
+    SETCOOLINGTEMPERATUREFORBUILDING = 2
+    WATERMASSFLOWRATEOFHEATINGDISTRIBUTIONSYSTEM = 3
+    WATERMASSFLOWRATEOFHEATGENERATOR = 4
+    SETHEATINGTEMPERATUREFORWATERSTORAGE = 5
+    SETCOOLINGTEMPERATUREFORWATERSTORAGE = 6
+    HEATINGSYSTEM = 7
+    LOCATION = 8
+    RESULT_SCENARIO_NAME = 9
+    Thermal_transmission_coefficient_glazing = 19
+    Thermal_transmission_Surface_IndoorAir = 11
+    Thermal_transmission_coefficient_opaque_em = 12
+    Thermal_transmission_coefficient_opaque_ms = 13
+    Thermal_transmission_coefficient_ventillation = 14
+    Thermal_capacity_envelope = 15

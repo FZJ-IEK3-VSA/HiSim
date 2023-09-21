@@ -193,12 +193,12 @@ def simulation_for_one_timestep(
 
     # Set DHW Heat Pump Modular
     my_hp_for_dhw_config = (
-        generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating()
+        generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_according_to_number_of_apartments(number_of_apartments=my_residence_information.number_of_apartments)
     )
 
     # Set DHW Storage modular
     my_storage_for_dhw_config = (
-        generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler_scaled()
+        generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_according_to_number_of_apartments(number_of_apartments=my_residence_information.number_of_apartments)
     )
 
     # Energy system sizes

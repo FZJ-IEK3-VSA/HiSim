@@ -50,6 +50,7 @@ class HeatDistributionConfig(cp.ConfigBase):
         return HeatDistribution.get_full_classname()
 
     name: str
+    heating_load_of_building_in_watt: float
     #: CO2 footprint of investment in kg
     co2_footprint: float
     #: cost for investment in Euro
@@ -59,11 +60,13 @@ class HeatDistributionConfig(cp.ConfigBase):
     # maintenance cost as share of investment [0..1]
     maintenance_cost_as_percentage_of_investment: float
 
+
     @classmethod
-    def get_default_heatdistributionsystem_config(cls,) -> Any:
+    def get_default_heatdistributionsystem_config(cls, heating_load_of_building_in_watt: float) -> Any:
         """Get a default heat distribution system config."""
         config = HeatDistributionConfig(
             name="HeatDistributionSystem",
+            heating_load_of_building_in_watt=heating_load_of_building_in_watt,
             co2_footprint=0,  # Todo: check value
             cost=8000,  # SOURCE: https://www.hausjournal.net/heizungsrohre-verlegen-kosten  # Todo: use price per m2 in examples instead
             lifetime=50,  # SOURCE: VDI2067-1
@@ -89,6 +92,7 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
     heating_reference_temperature_in_celsius: float
     set_heating_temperature_for_building_in_celsius: float
     set_cooling_temperature_for_building_in_celsius: float
+    
 
     @classmethod
     def get_default_heat_distribution_controller_config(cls):
@@ -157,19 +161,7 @@ class HeatDistribution(cp.Component):
         self.water_temperature_output_in_celsius: float = 21
         self.delta_temperature_in_celsius: float = 1.0
 
-        if SingletonSimRepository().exist_entry(
-            key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND
-        ):
-            self.max_thermal_building_demand_in_watt = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND
-            )
-
-        else:
-            raise KeyError(
-                "Key for max thermal building demand was not found in the singleton sim repository."
-                + "This might be because the building was not initialized before the heat distribution system."
-                + "Please check the order of the initialization of the components in your example."
-            )
+        self.max_thermal_building_demand_in_watt = self.heat_distribution_system_config.heating_load_of_building_in_watt
 
         if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.HEATINGSYSTEM):
             self.heating_system = SingletonSimRepository().get_entry(

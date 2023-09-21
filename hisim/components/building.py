@@ -2015,9 +2015,6 @@ class BuildingInformation:
             scaling_factor=scaling_factor,
             buildingdata=self.buildingdata,
         )
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=self.number_of_apartments
-        )
 
         # Get heating load of building
         self.max_thermal_building_demand_in_watt = self.calc_max_thermal_building_demand(
@@ -2027,10 +2024,7 @@ class BuildingInformation:
             heat_transfer_coeff_by_transmission_in_watt_per_m2_per_kelvin=heat_transfer_coeff_by_transmission_reference_in_watt_per_m2_per_kelvin,
             heat_transfer_coeff_by_ventilation_in_watt_per_m2_per_kelvin=heat_transfer_coeff_by_ventilation_reference_in_watt_per_m2_per_kelvin,
         )
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND,
-            entry=self.max_thermal_building_demand_in_watt,
-        )
+
 
     def get_physical_param(
         self, buildingdata: Any

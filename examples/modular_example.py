@@ -226,6 +226,7 @@ def modular_household_explicit(
         total_base_area_in_m2=None,
         number_of_apartments=None,
     )
+    my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
@@ -273,6 +274,7 @@ def modular_household_explicit(
         # Build occupancy
         my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
             "Occupancy", occupancy_profile or "", location, not smart_devices_included,
+            number_of_apartments=my_building_information.number_of_apartments
         )
         my_occupancy = loadprofilegenerator_connector.Occupancy(
             config=my_occupancy_config,
@@ -401,6 +403,7 @@ def modular_household_explicit(
             water_heating_system_installed=water_heating_system_installed,
             controlable=clever,
             count=count,
+            number_of_apartments=my_building_information.number_of_apartments
         )
 
     else:

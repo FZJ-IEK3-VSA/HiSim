@@ -9,7 +9,7 @@ from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import advanced_battery_bslib
 from hisim.components import weather
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+
 # from hisim.components import generic_gas_heater
 from hisim.components import controller_l2_energy_management_system as cl2
 from hisim.components import generic_pv_system
@@ -112,10 +112,7 @@ def dynamic_components_demonstration(
     my_occupancy_config = (
         loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
     )
-    # choose 1 to be the default for the number of apartments
-    SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=1
-    )
+
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )

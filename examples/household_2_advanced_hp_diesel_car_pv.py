@@ -29,7 +29,6 @@ from hisim.components import electricity_meter
 from hisim.components import generic_pv_system
 from hisim.components import controller_l2_energy_management_system
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim import utils
 from hisim import loadtypes as lt
 from hisim import log
@@ -79,11 +78,13 @@ class HouseholdAdvancedHPDieselCarPVConfig:
 
         # set number of apartments (mandatory for dhw storage config)
         number_of_apartments = 1
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments
-        )
+
         heating_reference_temperature_in_celsius: float = -7
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0
+        
+        building_config=building.BuildingConfig.get_default_german_single_family_home()
+        my_building_information = building.BuildingInformation(config=building_config)
+
 
         household_config = HouseholdAdvancedHPDieselCarPVConfig(
             building_type="blub",
@@ -107,12 +108,12 @@ class HouseholdAdvancedHPDieselCarPVConfig:
                 profile_with_washing_machine_and_dishwasher=True,
             ),
             pv_config=generic_pv_system.PVSystemConfig.get_default_PV_system(),
-            building_config=building.BuildingConfig.get_default_german_single_family_home(),
+            building_config=building_config,
             hds_controller_config=(
                 heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
             ),
             hds_config=(
-                heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
+                heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt)
             ),
             hp_controller_config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(),
             hp_config=advanced_heat_pump_hplib.HeatPumpHplibConfig.get_default_generic_advanced_hp_lib(),
@@ -126,7 +127,7 @@ class HouseholdAdvancedHPDieselCarPVConfig:
                 name="DHWHeatpumpController"
             ),
             dhw_storage_config=(
-                generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler_scaled()
+                generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler()
             ),
             car_config=generic_car.CarConfig.get_default_diesel_config(),
             electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),

@@ -1180,11 +1180,12 @@ class Building(dynamic_component.DynamicComponent):
             self.get_thermal_conductance_between_exterior_and_windows_and_door_in_watt_per_kelvin()
         )
         # labeled as H_tr_ms in paper [2] (*** Check header)
-        internal_part_of_transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin = self.get_thermal_conductance_between_thermal_mass_and_internal_surface_in_watt_per_kelvin(
+        internal_part_of_transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin = (
+            self.get_thermal_conductance_between_thermal_mass_and_internal_surface_in_watt_per_kelvin(
             heat_transfer_coeff_thermal_mass_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin=(
                 self.my_building_information.heat_transfer_coeff_thermal_mass_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin
             )
-        )
+        ))
         # external part of transmission heat transfer coeff opaque elements labeled as H_tr_em in paper [2] (*** Check header)
         (
             transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin,

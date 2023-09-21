@@ -78,16 +78,6 @@ def household_with_hplib_hws_hds_pv_battery_ems(
     hp_maintenance_cost_as_percentage_of_investment = 0.025
     hp_consumption = 0
 
-    # Set Heat Distribution Controller
-    hds_controller_name = "HeatDistributionSystemController"
-    set_heating_threshold_outside_temperature_for_heat_distribution_system_in_celsius = (
-        None
-    )
-    set_heating_temperature_for_building_in_celsius = 19.0
-    set_cooling_temperature_for_building_in_celsius = 24.0
-    set_cooling_threshold_water_temperature_in_celsius_for_dew_protection = 17.0
-    heating_system = heat_distribution_system.HeatingSystemType.FLOORHEATING
-
     # =================================================================================================================================
     # Build Components
 
@@ -114,17 +104,15 @@ def household_with_hplib_hws_hds_pv_battery_ems(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Heat Distribution Controller
+    my_heat_distribution_controller_config = (
+        heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
+    )
+    my_heat_distribution_controller_config.heating_reference_temperature_in_celsius = (
+        heating_reference_temperature_in_celsius
+    )
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
         my_simulation_parameters=my_simulation_parameters,
-        config=heat_distribution_system.HeatDistributionControllerConfig(
-            name=hds_controller_name,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_distribution_system_in_celsius,
-            set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
-            set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
-            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-            heating_system=heating_system,
-            set_cooling_threshold_water_temperature_in_celsius_for_dew_protection=set_cooling_threshold_water_temperature_in_celsius_for_dew_protection,
-        ),
+        config=my_heat_distribution_controller_config,
     )
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
@@ -216,11 +204,9 @@ def household_with_hplib_hws_hds_pv_battery_ems(
     my_electricity_controller_config = (
         controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
     )
-    my_electricity_controller = (
-        controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_electricity_controller_config,
-        )
+    my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_electricity_controller_config,
     )
 
     # Build Battery
@@ -258,7 +244,7 @@ def household_with_hplib_hws_hds_pv_battery_ems(
     # -----------------------------------------------------------------------------------------------------------------
     # Connect Water Storage
     my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterTemperatureFromHeatDistributionSystem,
+        my_simple_hot_water_storage.WaterTemperatureFromHeatDistribution,
         my_heat_distribution_system.component_name,
         my_heat_distribution_system.WaterTemperatureOutput,
     )
@@ -327,18 +313,13 @@ def household_with_hplib_hws_hds_pv_battery_ems(
         source_weight=2,
     )
 
-    electricity_to_or_from_battery_target = (
-        my_electricity_controller.add_component_output(
-            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-            source_tags=[
-                lt.ComponentType.BATTERY,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_weight=2,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target electricity for Battery Control. ",
-        )
+    electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
+        source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
+        source_weight=2,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        output_description="Target electricity for Battery Control. ",
     )
     # -----------------------------------------------------------------------------------------------------------------
     # Connect Battery

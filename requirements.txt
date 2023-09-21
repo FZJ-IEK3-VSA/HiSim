@@ -21,3 +21,4 @@ html2image
 control
 casadi
 plotly
+ordered_set

@@ -38,7 +38,7 @@ class OccupancyProfiles(str, enum.Enum):
 
     """To parse LPG predefined household strings."""
 
-    CH01 = "CH01"
+    CHR01 = "CHR01 Couple both at Work"
 
 
 class BuildingCodes(str, enum.Enum):
@@ -128,9 +128,11 @@ class Units(str, enum.Enum):
 
     # Volume
     LITER = "L"
+    CUBICMETERS = "m^3"
 
     # Volume per time
     LITER_PER_TIMESTEP = "Liter per timestep"
+    CUBICMETERS_PER_SECOND = "Cubic meters per second"
 
     # Mass
     KG = "kg"
@@ -147,6 +149,7 @@ class Units(str, enum.Enum):
 
     # Time
     SECONDS = "s"
+    HOURS = "h"
     TIMESTEPS = "timesteps"
     YEARS = "years"
 
@@ -181,6 +184,10 @@ class ComponentType(str, enum.Enum):
     BOILER = "Boiler"
     BUFFER = "Buffer"
     HEATERS = [HEAT_PUMP, GAS_HEATER]
+
+    # different heat_pump types
+    HEAT_PUMP_BUILDING = "HeatPumpBuilding"  # Heatpump for heating the house
+    HEAT_PUMP_DHW = "HeatPumpDHW"  # heatpump for heating domnestic hot water
 
 
 @enum.unique

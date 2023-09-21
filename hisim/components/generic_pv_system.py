@@ -16,7 +16,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import log
 from hisim import utils
-from hisim.component import ConfigBase
+from hisim.component import ConfigBase, OpexCostDataClass
 from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
@@ -415,11 +415,16 @@ class PVSystem(cp.Component):
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float]:
+    ) -> OpexCostDataClass:
         # pylint: disable=unused-argument
         """Calculate OPEX costs, consisting of maintenance costs for PV."""
+        opex_cost_data_class = OpexCostDataClass(
+            opex_cost=self.calc_maintenance_cost(),
+            co2_footprint=0,
+            consumption=0,
+        )
 
-        return self.calc_maintenance_cost(), 0
+        return opex_cost_data_class
 
     def get_default_connections_from_weather(self):
         log.information("setting weather default connections")

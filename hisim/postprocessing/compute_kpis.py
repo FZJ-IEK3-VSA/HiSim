@@ -3,7 +3,7 @@
 """Postprocessing option computes overall consumption, production,self-consumption and injection as well as selfconsumption rate and autarky rate."""
 
 import os
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, Any
 from pathlib import Path
 
 import pandas as pd
@@ -17,6 +17,83 @@ from hisim.component_wrapper import ComponentWrapper
 from hisim.components import generic_hot_water_storage_modular
 from hisim import log
 from hisim.postprocessing.investment_cost_co2 import compute_investment_cost
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+
+
+def building_temperature_control(
+    results: pd.DataFrame, seconds_per_timestep: int
+) -> Tuple[Any, Any, float, float, float, float]:
+    """Check the building indoor air temperature.
+
+    Check for all timesteps and count the
+    time when the temperature is outside of the building set temperatures
+    in order to verify if energy system provides enough heating and cooling.
+    """
+
+    time_indices_of_building_being_below_heating_set_temperature = []
+    time_indices_of_building_being_above_cooling_set_temperature = []
+    for column in results.columns:
+
+        if "TemperatureIndoorAir" in column.split(sep=" "):
+
+            if SingletonSimRepository().exist_entry(
+                key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING
+            ) and SingletonSimRepository().exist_entry(
+                key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING
+            ):
+                set_heating_temperature_in_celsius = SingletonSimRepository().get_entry(
+                    key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING
+                )
+                set_cooling_temperature_in_celsius = SingletonSimRepository().get_entry(
+                    key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING
+                )
+
+            else:
+                # take set heating and cooling default temperatures from building component otherwise
+                set_heating_temperature_in_celsius = 19.0
+                set_cooling_temperature_in_celsius = 24.0
+
+            for temperature in results[column].values:
+
+                if temperature < set_heating_temperature_in_celsius:
+                    time_indices_of_building_being_below_heating_set_temperature.append(
+                        results[column].index
+                    )
+
+                elif temperature > set_cooling_temperature_in_celsius:
+                    time_indices_of_building_being_above_cooling_set_temperature.append(
+                        results[column].index
+                    )
+
+            length_time_list_below_heating_set_temperature = len(
+                time_indices_of_building_being_below_heating_set_temperature
+            )
+            length_time_list_above_cooling_set_temperature = len(
+                time_indices_of_building_being_above_cooling_set_temperature
+            )
+            time_in_hours_of_building_being_below_heating_set_temperature = (
+                length_time_list_below_heating_set_temperature
+                * seconds_per_timestep
+                / 3600
+            )
+            time_in_hours_of_building_being_above_cooling_set_temperature = (
+                length_time_list_above_cooling_set_temperature
+                * seconds_per_timestep
+                / 3600
+            )
+
+            # get also max and min indoor air temperature
+            min_temperature_reached_in_celsius = float(min(results[column].values))
+            max_temperature_reached_in_celsius = float(max(results[column].values))
+
+    return (
+        set_heating_temperature_in_celsius,
+        set_cooling_temperature_in_celsius,
+        time_in_hours_of_building_being_below_heating_set_temperature,
+        time_in_hours_of_building_being_above_cooling_set_temperature,
+        min_temperature_reached_in_celsius,
+        max_temperature_reached_in_celsius,
+    )
 
 
 def read_in_fuel_costs() -> pd.DataFrame:
@@ -277,6 +354,10 @@ def compute_cost_of_fuel_type(
             consumption_sum = compute_energy_from_power(
                 power_timeseries=fuel_consumption, timeresolution=timeresolution
             )
+        # convert from Wh to kWh
+        elif fuel in [LoadTypes.GAS, LoadTypes.DISTRICTHEATING]:
+            consumption_sum = sum(fuel_consumption) * 1e-3
+        # stay with liters
         else:
             consumption_sum = sum(fuel_consumption)
     else:
@@ -439,6 +520,8 @@ def compute_kpis(
     #     timeresolution=simulation_parameters.seconds_per_timestep,
     # )
 
+    consumption_from_grid_in_kwh = consumption_sum - self_consumption_sum
+
     # compute cost and co2 for investment/installation:  # Todo: function compute_investment_cost does not include all components, use capex and opex-results instead
     investment_cost, co2_footprint = compute_investment_cost(components=components)
 
@@ -475,13 +558,26 @@ def compute_kpis(
         total_investment_cost_per_simulated_period = 0
         total_device_co2_footprint_per_simulated_period = 0
 
+    # building temp control
+    (
+        set_heating_temperature_in_celsius,
+        set_cooling_temperature_in_celsius,
+        time_in_hours_of_building_being_below_heating_set_temperature,
+        time_in_hours_of_building_being_above_cooling_set_temperature,
+        min_temperature_reached_in_celsius,
+        max_temperature_reached_in_celsius,
+    ) = building_temperature_control(
+        results=results, seconds_per_timestep=simulation_parameters.seconds_per_timestep
+    )
+    table_headline: List[object] = ["KPI", "Value", "Unit"]
     # initialize table for report
     table: List = []
-    table.append(["KPI", "Value", "Unit"])
+    table.append(table_headline)
     table.append(["Consumption:", f"{consumption_sum:4.0f}", "kWh"])
     table.append(["Production:", f"{production_sum:4.0f}", "kWh"])
-    table.append(["Self-Consumption:", f"{self_consumption_sum:4.0f}", "kWh"])
+    table.append(["Self-consumption:", f"{self_consumption_sum:4.0f}", "kWh"])
     table.append(["Injection:", f"{injection_sum:4.0f}", "kWh"])
+    table.append(["Consumption from grid:", f"{consumption_from_grid_in_kwh:4.0f}", "kWh"])
     table.append(["Battery losses:", f"{battery_losses:4.0f}", "kWh"])
     # table.append(["DHW storage heat loss:", f"{loss_dhw:4.0f}", "kWh"])
     # table.append(["DHW storage heat cycles:", f"{cycles_dhw:4.0f}", "Cycles"])
@@ -491,20 +587,20 @@ def compute_kpis(
     # table.append(["Heating energy provided:", f"{use_heating:4.0f}", "kWh"])
     # table.append(["Hydrogen system losses:", f"{h2_system_losses:4.0f}", "kWh"])
     # table.append(["Hydrogen storage content:", f"{0:4.0f}", "kWh"])
-    table.append(["Autarky Rate:", f"{autarky_rate:3.1f}", "%"])
-    table.append(["Self Consumption Rate:", f"{self_consumption_rate:3.1f}", "%"])
+    table.append(["Autarky rate:", f"{autarky_rate:3.1f}", "%"])
+    table.append(["Self-consumption rate:", f"{self_consumption_rate:3.1f}", "%"])
     table.append(["Cost for energy use:", f"{price:3.0f}", "EUR"])
     table.append(["CO2 emitted due energy use:", f"{co2:3.0f}", "kg"])
     table.append(
         [
-            "Annual investment cost for equipment (old version):",
+            "Annual investment costs for equipment (old version):",
             f"{investment_cost:3.0f}",
             "EUR",
         ]
     )
     table.append(
         [
-            "Annual CO2 Footprint for equipment (old versiom):",
+            "Annual CO2 footprint for equipment (old version):",
             f"{co2_footprint:3.0f}",
             "kg",
         ]
@@ -512,28 +608,28 @@ def compute_kpis(
     table.append(["------", "---", "---"])
     table.append(
         [
-            "Investment cost for equipment per simulated period:",
+            "Investment costs for equipment per simulated period:",
             f"{total_investment_cost_per_simulated_period:3.0f}",
             "EUR",
         ]
     )
     table.append(
         [
-            "CO2 Footprint for equipment per simulated period:",
+            "CO2 footprint for equipment per simulated period:",
             f"{total_device_co2_footprint_per_simulated_period:3.0f}",
             "kg",
         ]
     )
     table.append(
         [
-            "System operational Cost for simulated period:",
+            "System operational costs for simulated period:",
             f"{total_operational_cost:3.0f}",
             "EUR",
         ]
     )
     table.append(
         [
-            "System operational Emissions for simulated period:",
+            "System operational emissions for simulated period:",
             f"{total_operational_emisions:3.0f}",
             "kg",
         ]
@@ -547,9 +643,37 @@ def compute_kpis(
     )
     table.append(
         [
-            "Total Emissions for simulated period:",
+            "Total emissions for simulated period:",
             f"{(total_device_co2_footprint_per_simulated_period + total_operational_emisions):3.0f}",
             "kg",
+        ]
+    )
+    table.append(
+        [
+            f"Time of building indoor air temperature being below set temperature {set_heating_temperature_in_celsius} °C:",
+            f"{(time_in_hours_of_building_being_below_heating_set_temperature):3.0f}",
+            "h",
+        ]
+    )
+    table.append(
+        [
+            "Minimum building indoor air temperature reached:",
+            f"{(min_temperature_reached_in_celsius):3.0f}",
+            "°C",
+        ]
+    )
+    table.append(
+        [
+            f"Time of building indoor air temperature being above set temperature {set_cooling_temperature_in_celsius} °C:",
+            f"{(time_in_hours_of_building_being_above_cooling_set_temperature):3.0f}",
+            "h",
+        ]
+    )
+    table.append(
+        [
+            "Maximum building indoor air temperature reached:",
+            f"{(max_temperature_reached_in_celsius):3.0f}",
+            "°C",
         ]
     )
 
@@ -566,5 +690,10 @@ def compute_kpis(
     config_file_written = kpi_config.to_json()  # type: ignore
     with open(pathname, "w", encoding="utf-8") as outfile:
         outfile.write(config_file_written)
+
+    # write whole table to csv file
+    pathname_csv = os.path.join(simulation_parameters.result_directory, "kpi_results.csv")
+    kpi_df = pd.DataFrame(table, columns=table_headline)
+    kpi_df.to_csv(pathname_csv, index=False, header=False, encoding="utf8")
 
     return table

@@ -95,7 +95,7 @@ class BuildingConfig(cp.ConfigBase):
     def get_default_german_single_family_home(cls,) -> Any:
         """Get a default Building."""
         config = BuildingConfig(
-            name="Building_1",
+            name="Building",
             building_code="DE.N.SFH.05.Gen.ReEx.001.002",
             building_heat_capacity_class="medium",
             initial_internal_temperature_in_celsius=23,
@@ -174,6 +174,7 @@ class Building(dynamic_component.DynamicComponent):
 
     # Inputs -> occupancy
     HeatingByResidents = "HeatingByResidents"
+    HeatingByDevices = "HeatingByDevices"
 
     # Inputs -> weather
     Altitude = "Altitude"
@@ -184,6 +185,9 @@ class Building(dynamic_component.DynamicComponent):
     DiffuseHorizontalIrradiance = "DiffuseHorizontalIrradiance"
     GlobalHorizontalIrradiance = "GlobalHorizontalIrradiance"
     TemperatureOutside = "TemperatureOutside"
+
+    # Inputs -> energy management system
+    BuildingTemperatureModifier = "BuildingTemperatureModifier"
 
     # Outputs
     TemperatureMeanThermalMass = "TemperatureMeanThermalMass"
@@ -216,8 +220,8 @@ class Building(dynamic_component.DynamicComponent):
         # =================================================================================================================================
         # Initialization of variables
 
-        self.set_heating_temperature_in_celsius_default: float = 18
-        self.set_cooling_temperature_in_celsius_default: float = 25
+        self.set_heating_temperature_in_celsius_default: float = 19
+        self.set_cooling_temperature_in_celsius_default: float = 24
 
         (self.is_in_cache, self.cache_file_path,) = utils.get_cache_file(
             self.component_name, self.buildingconfig, self.my_simulation_parameters,
@@ -292,6 +296,7 @@ class Building(dynamic_component.DynamicComponent):
         self.equivalent_heat_flux_in_watt: float
         self.next_thermal_mass_temperature_in_celsius: float
         self.internal_heat_gains_through_occupancy_in_watt: float = 0
+        self.internal_heat_gains_through_devices_in_watt: float = 0
 
         # reference taken from TABULA (* Check header) as Q_ht [kWh/m2.a], before q_ht_ref
         self.total_heat_transfer_reference_in_kilowatthour_per_m2_per_year: float = 0
@@ -438,6 +443,22 @@ class Building(dynamic_component.DynamicComponent):
             True,
         )
 
+        self.device_heat_gain_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.HeatingByDevices,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            True,
+        )
+
+        self.building_temperature_modifier_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.BuildingTemperatureModifier,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            mandatory=False,
+        )
+
         # Output channels
         self.thermal_mass_temperature_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -580,6 +601,13 @@ class Building(dynamic_component.DynamicComponent):
                 Occupancy.HeatingByResidents,
             )
         )
+        connections.append(
+            cp.ComponentConnection(
+                Building.HeatingByDevices,
+                occupancy_classname,
+                Occupancy.HeatingByDevices,
+            )
+        )
         return connections
 
     def get_default_connections_from_utsp(self,):
@@ -592,6 +620,13 @@ class Building(dynamic_component.DynamicComponent):
                 Building.HeatingByResidents,
                 utsp_classname,
                 UtspLpgConnector.HeatingByResidents,
+            )
+        )
+        connections.append(
+            cp.ComponentConnection(
+                Building.HeatingByDevices,
+                utsp_classname,
+                UtspLpgConnector.HeatingByDevices,
             )
         )
         return connections
@@ -627,8 +662,16 @@ class Building(dynamic_component.DynamicComponent):
             self.occupancy_heat_gain_channel
         )
 
+        self.internal_heat_gains_through_devices_in_watt = stsv.get_input_value(
+            self.device_heat_gain_channel
+        )
+
         temperature_outside_in_celsius = stsv.get_input_value(
             self.temperature_outside_channel
+        )
+
+        building_temperature_modifier = stsv.get_input_value(
+            self.building_temperature_modifier_channel
         )
 
         thermal_power_delivered_in_watt = 0.0
@@ -669,7 +712,7 @@ class Building(dynamic_component.DynamicComponent):
             indoor_air_temperature_in_celsius,
         ) = self.calc_crank_nicolson(
             thermal_power_delivered_in_watt=thermal_power_delivered_in_watt,
-            internal_heat_gains_in_watt=self.internal_heat_gains_through_occupancy_in_watt,
+            internal_heat_gains_in_watt=self.internal_heat_gains_through_occupancy_in_watt + self.internal_heat_gains_through_devices_in_watt,
             solar_heat_gains_in_watt=solar_heat_gain_through_windows,
             outside_temperature_in_celsius=temperature_outside_in_celsius,
             thermal_mass_temperature_prev_in_celsius=previous_thermal_mass_temperature_in_celsius,
@@ -678,8 +721,13 @@ class Building(dynamic_component.DynamicComponent):
             thermal_mass_average_bulk_temperature_in_celsius
         )
 
+        # increase set_heating_temperature when connected to EnergyManagementSystem and surplus electricity available
+        set_heating_temperature_modified_in_celsius = (
+            self.set_heating_temperature_in_celsius + building_temperature_modifier
+        )
+
         theoretical_thermal_building_demand_in_watt = self.calc_theoretical_thermal_building_demand_for_building(
-            set_heating_temperature_in_celsius=self.set_heating_temperature_in_celsius,
+            set_heating_temperature_in_celsius=set_heating_temperature_modified_in_celsius,
             set_cooling_temperature_in_celsius=self.set_cooling_temperature_in_celsius,
             previous_thermal_mass_temperature_in_celsius=previous_thermal_mass_temperature_in_celsius,
             outside_temperature_in_celsius=temperature_outside_in_celsius,

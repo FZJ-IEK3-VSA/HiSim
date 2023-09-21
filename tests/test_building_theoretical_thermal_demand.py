@@ -169,6 +169,11 @@ def test_house_with_idealized_electric_heater_for_heating_test(
         my_occupancy.HeatingByResidents,
     )
     my_building.connect_input(
+        my_building.HeatingByDevices,
+        my_occupancy.component_name,
+        my_occupancy.HeatingByDevices,
+    )
+    my_building.connect_input(
         my_building.ThermalPowerDelivered,
         my_idealized_electric_heater.component_name,
         my_idealized_electric_heater.ThermalPowerDelivered,
@@ -195,7 +200,7 @@ def test_house_with_idealized_electric_heater_for_heating_test(
     # Test Air Temperature of Building
 
     building_indoor_air_temperatures = my_sim.results_data_frame[
-        "Building_1 - TemperatureIndoorAir [Temperature - °C]"
+        "Building - TemperatureIndoorAir [Temperature - °C]"
     ]
 
     for air_temperature in building_indoor_air_temperatures.values:

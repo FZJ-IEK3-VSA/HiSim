@@ -1,14 +1,14 @@
 """Electricity meter module should replace the sumbuilder. """
 # clean
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List
 
 from dataclasses_json import dataclass_json
 import pandas as pd
 
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim.component import ComponentInput
+from hisim.component import ComponentInput, OpexCostDataClass
 from hisim.dynamic_component import (
     DynamicComponent,
     DynamicConnectionInput,
@@ -233,7 +233,7 @@ class ElectricityMeter(DynamicComponent):
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float]:
+    ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
         for index, output in enumerate(all_outputs):
             if (
@@ -252,15 +252,15 @@ class ElectricityMeter(DynamicComponent):
                     / 3.6e6,
                     1,
                 )
-
+        emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(self.my_simulation_parameters.year)
         co2_per_unit = (
-            EmissionFactorsAndCostsForFuelsConfig.electricity_footprint_in_kg_per_kwh
+            emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh
         )
         euro_per_unit = (
-            EmissionFactorsAndCostsForFuelsConfig.electricity_costs_in_euro_per_kwh
+            emissions_and_cost_factors.electricity_costs_in_euro_per_kwh
         )
         revenue_euro_per_unit = (
-            EmissionFactorsAndCostsForFuelsConfig.electricity_to_grid_revenue_in_euro_per_kwh
+            emissions_and_cost_factors.electricity_to_grid_revenue_in_euro_per_kwh
         )
 
         opex_cost_per_simulated_period_in_euro = (
@@ -270,8 +270,13 @@ class ElectricityMeter(DynamicComponent):
         co2_per_simulated_period_in_kg = (
             self.config.total_energy_from_grid_in_kwh * co2_per_unit
         )
+        opex_cost_data_class = OpexCostDataClass(
+            opex_cost=opex_cost_per_simulated_period_in_euro,
+            co2_footprint=co2_per_simulated_period_in_kg,
+            consumption=0,
+        )
 
-        return opex_cost_per_simulated_period_in_euro, co2_per_simulated_period_in_kg
+        return opex_cost_data_class
 
 
 @dataclass

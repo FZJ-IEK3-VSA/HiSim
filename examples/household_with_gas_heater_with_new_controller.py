@@ -91,6 +91,7 @@ def household_gas_heater_with_new_controller(
         charging_station_set=charging_station_set,
         name="UTSPConnector",
         consumption=0,
+        profile_with_washing_machine_and_dishwasher=True,
     )
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
@@ -112,11 +113,9 @@ def household_gas_heater_with_new_controller(
     my_gasheater_controller_config = (
         controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config.get_default_generic_gas_heater_controller_config()
     )
-    my_gasheater_controller = (
-        controller_l1_generic_gas_heater.GenericGasHeaterControllerL1(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_gasheater_controller_config,
-        )
+    my_gasheater_controller = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_gasheater_controller_config,
     )
 
     # Build Gasheater
@@ -129,11 +128,8 @@ def household_gas_heater_with_new_controller(
     hdscontroller_config = (
         heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
     )
-    my_heat_distribution_controller = (
-        heat_distribution_system.HeatDistributionController(
-            config=hdscontroller_config,
-            my_simulation_parameters=my_simulation_parameters,
-        )
+    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
+        config=hdscontroller_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Distribution System

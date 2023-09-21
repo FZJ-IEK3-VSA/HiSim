@@ -20,8 +20,8 @@
 #     mysim: SimulationParameters = SimulationParameters.full_year(year=2021,
 #                                                                  seconds_per_timestep=60)
 #
-#     # call LPF to copy flexibilty device activation file from LPG to right location if nothing is there
-#     # my_occupancy_profile = "CH01"
+#     # call LPG to copy flexibilty device activation file from LPG to right location if nothing is there
+#     # my_occupancy_profile = "CHR01 Couple both at Work"
 #
 #     # my_occupancy_config=loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
 #     # my_occupancy_config.profile_name=my_occupancy_profile

@@ -15,6 +15,7 @@ from hisim.component import (
     ComponentOutput,
     SingleTimeStepValues,
     ConfigBase,
+    OpexCostDataClass,
 )
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
 from hisim.simulationparameters import SimulationParameters
@@ -83,8 +84,8 @@ class BatteryConfig(ConfigBase):
             * 130.7,  # value from emission_factros_and_costs_devices.csv
             cost=custom_battery_capacity_generic_in_kilowatt_hour
             * 535.81,  # value from emission_factros_and_costs_devices.csv
-            lifetime=10,  # todo set correct values
-            lifetime_in_cycles=5e3,  # todo set correct values
+            lifetime=10,  # estimated value , source: https://pv-held.de/wie-lange-haelt-batteriespeicher-photovoltaik/
+            lifetime_in_cycles=5e3, # estimated value , source: https://pv-held.de/wie-lange-haelt-batteriespeicher-photovoltaik/
             maintenance_cost_as_percentage_of_investment=0.02,  # SOURCE: https://solarenergie.de/stromspeicher/preise
         )
         return config
@@ -241,7 +242,7 @@ class Battery(Component):
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float]:
+    ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of battery aging and maintenance costs.
 
         Battery aging is ROUGHLY approximated by costs for each virtual charging cycle used in simulated period
@@ -287,8 +288,13 @@ class Battery(Component):
         opex_cost_per_simulated_period_in_euro = (
             self.calc_maintenance_cost() + battery_aging_costs_in_euro
         )
+        opex_cost_data_class = OpexCostDataClass(
+            opex_cost=opex_cost_per_simulated_period_in_euro,
+            co2_footprint=0,
+            consumption=0,
+        )
 
-        return opex_cost_per_simulated_period_in_euro, 0
+        return opex_cost_data_class
 
 
 @dataclass

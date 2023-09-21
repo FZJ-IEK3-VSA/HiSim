@@ -1,19 +1,21 @@
 """ Contains various utility functions and utility classes. """
 # clean
+import datetime as dt
 import gc
-import os
-import inspect
 import hashlib
+import inspect
 import json
-
-from timeit import default_timer as timer
-from typing import Any, Dict, Tuple
+import os
 from functools import wraps
+from timeit import default_timer as timer
+from typing import Any, Dict, Tuple, List
 
+import pandas as pd
 import psutil
+import pytz
 
-from hisim.simulationparameters import SimulationParameters
 from hisim import log
+from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Noah Pflugradt, Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021-2022, FZJ-IEK-3 "
@@ -72,38 +74,6 @@ HISIMPATH: Dict[str, Any] = {
     "component_costs": os.path.join(hisim_abs_path, "modular_household", "emission_factors_and_costs_devices.csv"),
     "occupancy_scaling_factors_per_country": os.path.join(hisim_inputs, "loadprofiles", "WHY_reference_data", "scaling_factors_demand.csv"),
     "occupancy": {
-        "CH01": {
-            "number_of_residents": [
-                os.path.join(
-                    hisim_inputs,
-                    "loadprofiles",
-                    "electrical-warmwater-presence-load_1-family",
-                    "data_processed",
-                    "BodilyActivityLevel.High.HH1.json",
-                ),
-                os.path.join(
-                    hisim_inputs,
-                    "loadprofiles",
-                    "electrical-warmwater-presence-load_1-family",
-                    "data_processed",
-                    "BodilyActivityLevel.Low.HH1.json",
-                ),
-            ],
-            "electricity_consumption": os.path.join(
-                hisim_inputs,
-                "loadprofiles",
-                "electrical-warmwater-presence-load_1-family",
-                "data_processed",
-                "SumProfiles.HH1.Electricity.csv",
-            ),
-            "water_consumption": os.path.join(
-                hisim_inputs,
-                "loadprofiles",
-                "electrical-warmwater-presence-load_1-family",
-                "data_processed",
-                "SumProfiles.HH1.Warm Water.csv",
-            ),
-        },
         "CHR01 Couple both at Work": {
             "number_of_residents": [
                 os.path.join(
@@ -127,6 +97,20 @@ HISIMPATH: Dict[str, Any] = {
                 "electrical-warmwater-presence-load_1-family",
                 "data_processed",
                 "SumProfiles.HH1.Electricity.csv",
+            ),
+            "electricity_consumption_without_washing_machine_and_dishwasher": os.path.join(
+                hisim_inputs,
+                "loadprofiles",
+                "electrical-warmwater-presence-load_1-family",
+                "data_processed",
+                "SumProfiles.NoFlex.HH1.Electricity.csv",
+            ),
+            "heating_by_devices": os.path.join(
+                hisim_inputs,
+                "loadprofiles",
+                "electrical-warmwater-presence-load_1-family",
+                "data_processed",
+                "SumProfiles.HH1.Inner Device Heat Gains.csv",
             ),
             "water_consumption": os.path.join(
                 hisim_inputs,
@@ -219,6 +203,71 @@ def load_smart_appliance(name):  # noqa
     with open(HISIMPATH["smart_appliances"], encoding="utf-8") as filestream:
         data = json.load(filestream)
     return data[name]
+
+
+def convert_lpg_timestep_to_utc(data: List[int], year: int, seconds_per_timestep: int) -> List[int]:
+    """Tranform LPG timesteps (list of integers) from local time to UTC."""
+    timeshifts = pytz.timezone("Europe/Berlin")._utc_transition_times  # type: ignore # pylint: disable=W0212
+    timeshifts = [elem for elem in timeshifts if elem.year == year]
+    steps_per_hour = int(3600 / seconds_per_timestep)
+    timeshift1_as_step = int((timeshifts[0] - dt.datetime(year=year, month=1, day=1)).seconds / seconds_per_timestep) - 1
+    timeshift2_as_step = int((timeshifts[1] - dt.datetime(year=year, month=1, day=1)).seconds / seconds_per_timestep) - 1
+
+    data_utc = []
+    for elem in data:
+        if elem < timeshift1_as_step or elem > timeshift2_as_step:
+            data_utc.append(elem - steps_per_hour)
+        else:
+            data_utc.append(elem - 2 * steps_per_hour)
+    return data
+
+
+def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
+    """Transform LPG data from local time (not having explicit time shifts) to UTC. """
+    # convert Time information to pandas datetime and make it to index
+    data.index = pd.DatetimeIndex(pd.to_datetime(data["Time"]))
+    lastdate = data.index[-1]
+
+    # find out time shifts of selected year
+    timeshifts = pytz.timezone("Europe/Berlin")._utc_transition_times  # type: ignore # pylint: disable=W0212
+    timeshifts = [elem for elem in timeshifts if elem.year == year]
+
+    # delete hour in spring if neceary:
+    if lastdate > timeshifts[0]:
+        indices_of_additional_hour_in_spring = data.loc[
+            timeshifts[0] + dt.timedelta(seconds=3600):
+            timeshifts[0] + dt.timedelta(seconds=60 * (60 + 59))
+        ].index
+
+        data.drop(index=indices_of_additional_hour_in_spring, inplace=True)
+
+    # add hour in autumn if necesary
+    if lastdate > timeshifts[1]:
+        additional_hours_in_autumn = data.loc[
+            timeshifts[1] + dt.timedelta(seconds=3600):
+            timeshifts[1] + dt.timedelta(seconds=60 * (60 + 59))
+        ]
+        data = pd.concat([data, additional_hours_in_autumn])
+        data.sort_index(inplace=True)
+
+    # delete hour at beginning
+    data = data[data.index >= dt.datetime(year=year, month=1, day=1, hour=1)]
+
+    # add hour at end
+    last_hour = data[
+        data.index >= dt.datetime(year=year, month=lastdate.month, day=lastdate.day, hour=23)
+    ]
+    data = pd.concat([data, last_hour])
+
+    # make integer index again, paste new timestamp (UTC) and format
+    data.index = pd.Index(list(range(len(data))))
+    data["Time"] = pd.date_range(
+        start=dt.datetime(year=year, month=1, day=1, hour=0),
+        end=dt.datetime(year=year, month=lastdate.month, day=lastdate.day, hour=23, minute=59),
+        freq="T", tz="UTC",
+    )
+    data["Time"] = data["Time"].dt.strftime("%m/%d/%Y %H:%M")
+    return data
 
 
 def get_cache_file(

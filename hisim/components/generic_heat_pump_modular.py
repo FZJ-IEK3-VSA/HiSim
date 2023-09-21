@@ -10,13 +10,13 @@ from dataclasses_json import dataclass_json
 import hisim.loadtypes as lt
 from hisim import component as cp
 from hisim import log
+from hisim.component import OpexCostDataClass
 
 # Owned
 from hisim import utils
 from hisim.components import controller_l1_heatpump
 
 from hisim.components.weather import Weather
-from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "edited Johanna Ganglbauer"
@@ -376,7 +376,7 @@ class ModularHeatPump(cp.Component):
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float]:
+    ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of maintenance costs snd write total energy consumption to component-config.
 
         No electricity costs for components except for Electricity Meter,
@@ -396,4 +396,10 @@ class ModularHeatPump(cp.Component):
                     1,
                 )
 
-        return self.calc_maintenance_cost(), 0.0
+        opex_cost_data_class = OpexCostDataClass(
+            opex_cost=self.calc_maintenance_cost(),
+            co2_footprint=0,
+            consumption=self.config.consumption,
+        )
+
+        return opex_cost_data_class

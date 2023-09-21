@@ -29,11 +29,13 @@ ENV HISIM_IN_DOCKER_CONTAINER true
 
 # Create a folder for the input files
 RUN mkdir /input
-# Create a folder for the result files
-RUN mkdir /results
 
 # Use the examples directory as working directory (required by HiSim)
 WORKDIR /app/examples
 
 # Temporary solution for the custom json interface for the WHY toolkit: always uses modular_household_explicit in modular_household.py
-ENTRYPOINT mv /input/request.json modular_example_config.json && python3 ../hisim/hisim_main.py modular_example modular_household_explicit && cd results/modular_household_explicit* && mv * /results
+# delete any previous result folders (just to be sure)
+ENTRYPOINT rm -rf results/modular_household_explicit* \
+    && mv /input/request.json modular_example_config.json \
+    && python3 ../hisim/hisim_main.py modular_example modular_household_explicit \
+    && mv results/modular_household_explicit* /results

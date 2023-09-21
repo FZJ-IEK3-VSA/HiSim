@@ -16,6 +16,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.components import generic_car
 from hisim.components import advanced_ev_battery_bslib
+from hisim.component import OpexCostDataClass
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -41,6 +42,8 @@ class ChargingStationConfig(cp.ConfigBase):
     charging_station_set: JsonReference
     #: set point for state of charge of battery
     battery_set: float
+    #: lower threshold for charging power (below efficiency goes down)
+    lower_threshold_charging_power: float
     #: CO2 footprint of investment in kg
     co2_footprint: float
     #: cost for investment in Euro
@@ -60,14 +63,19 @@ class ChargingStationConfig(cp.ConfigBase):
         charging_station_set: JsonReference = ChargingStationSets.Charging_At_Home_with_03_7_kW,
     ) -> "ChargingStationConfig":
         """Returns default configuration of charging station and desired SOC Level."""
+        charging_power = float(
+            (charging_station_set.Name or "").split("with ")[1].split(" kW")[0]
+        )
+        lower_threshold_charging_power = charging_power * 1e3 * 0.1  # 10 % of charging power for acceptable efficiencies
         config = ChargingStationConfig(
             name="L1EVChargeControl",
             source_weight=1,
             charging_station_set=charging_station_set,
             battery_set=0.8,
-            co2_footprint=100,  # Todo: check value
+            lower_threshold_charging_power=lower_threshold_charging_power,
+            co2_footprint=100,  # estimated value  # Todo: check value
             cost=1000,  # Todo: check value
-            lifetime=18,  # value similar to car # Todo: check value
+            lifetime=10,  # estimated value  # Todo: check value
             maintenance_cost_as_percentage_of_investment=0.05,  # SOURCE: https://photovoltaik.one/wallbox-kosten (estimated value)
         )
         return config
@@ -101,9 +109,11 @@ class L1Controller(cp.Component):
     CarLocation = "CarLocation"
     StateOfCharge = "StateOfCharge"
     ElectricityTarget = "ElectricityTarget"
+    AcBatteryPower = "AcBatteryPower"
 
     # Outputs
     ToOrFromBattery = "ToOrFromBattery"
+    BatteryChargingPowerToEMS = "BatteryChargingPowerToEMS"
 
     def __init__(
         self,
@@ -144,6 +154,14 @@ class L1Controller(cp.Component):
             mandatory=True,
         )
 
+        self.ac_battery_power_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.AcBatteryPower,
+            lt.LoadTypes.ELECTRICITY,
+            lt.Units.WATT,
+            mandatory=True,
+        )
+
         if self.clever:
             self.electricity_target: cp.ComponentInput = self.add_input(
                 self.component_name,
@@ -159,7 +177,15 @@ class L1Controller(cp.Component):
             field_name=self.ToOrFromBattery,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
-            output_description="Set power for EV charging in Watt.",
+            output_description="Set power for EV charging (and discharging) in Watt.",
+        )
+
+        self.battery_charging_power_to_ems_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.BatteryChargingPowerToEMS,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            output_description="Real Power for EV charging in Watt. Signal send to L2EMSElectricityController",
         )
 
         self.add_default_connections(self.get_default_connections_from_generic_car())
@@ -196,6 +222,13 @@ class L1Controller(cp.Component):
                 advanced_ev_battery_bslib.CarBattery.StateOfCharge,
             )
         )
+        connections.append(
+            cp.ComponentConnection(
+                L1Controller.AcBatteryPower,
+                battery_classname,
+                advanced_ev_battery_bslib.CarBattery.AcBatteryPower,
+            )
+        )
         return connections
 
     def i_save_state(self) -> None:
@@ -225,9 +258,9 @@ class L1Controller(cp.Component):
             return car_consumption * (-1)
         if car_location != self.charging_location:
             return 0
-        if soc < self.battery_set:
+        if soc < self.config.battery_set:
             return self.power
-        if electricity_target > 0:
+        if electricity_target > self.config.lower_threshold_charging_power:
             return min(electricity_target, self.power)
         return 0
 
@@ -254,6 +287,15 @@ class L1Controller(cp.Component):
             self.processed_state = self.state.clone()
         stsv.set_output_value(self.p_set, self.state.power)
 
+        ac_battery_power =  stsv.get_input_value(self.ac_battery_power_channel)
+        if ac_battery_power > 0:
+            # charging of EV
+            stsv.set_output_value(self.battery_charging_power_to_ems_channel, ac_battery_power)
+        else:
+            # no charging of EV
+            stsv.set_output_value(self.battery_charging_power_to_ems_channel, 0)
+
+
     def build(
         self,
         config: ChargingStationConfig,
@@ -262,6 +304,7 @@ class L1Controller(cp.Component):
         """Translates and assigns config parameters to controller class and completes initialization."""
         self.name = config.name
         self.source_weight = config.source_weight
+        self.config = config
         # get charging station location and charging station power out of ChargingStationSet
         if config.charging_station_set.Name is not None:
             charging_station_string = config.charging_station_set.Name.partition("At ")[
@@ -281,7 +324,6 @@ class L1Controller(cp.Component):
             * 1e3
         )
         self.power = power
-        self.battery_set = config.battery_set
         self.clever = my_simulation_parameters.surplus_control
 
     def write_to_report(self) -> List[str]:
@@ -306,12 +348,19 @@ class L1Controller(cp.Component):
         self,
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
-    ) -> Tuple[float, float]:
+    ) -> OpexCostDataClass:
         # pylint: disable=unused-argument
         """Calculate OPEX costs, consisting of maintenance costs snd write total energy consumption to component-config.
 
         No electricity costs for components except for Electricity Meter,
         because part of electricity consumption is feed by PV
-        """
 
-        return self.calc_maintenance_cost(), 0
+        elecricity_consumption is calculated for generic_car already
+        """
+        opex_cost_data_class = OpexCostDataClass(
+            opex_cost=self.calc_maintenance_cost(),
+            co2_footprint=0,
+            consumption=0,
+        )
+
+        return opex_cost_data_class

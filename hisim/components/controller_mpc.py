@@ -1,5 +1,6 @@
 """Model Predictive Controller."""
 
+import datetime
 from typing import List, Optional
 # from typing import Any
 from dataclasses import dataclass
@@ -221,10 +222,21 @@ class MpcController(cp.Component):
         )
 
         self.my_simulation_parameters = my_simulation_parameters
-        self.build(my_simulation_repository)
-        self.statespace()
 
         self.mpcconfig = config
+
+        self.h_tr_w = self.mpcconfig.h_tr_w
+        self.h_tr_ms = self.mpcconfig.h_tr_ms
+        self.h_tr_em = self.mpcconfig.h_tr_em
+        self.h_ve_adj = self.mpcconfig.h_ve_adj
+        self.h_tr_is = self.mpcconfig.h_tr_is
+        self.c_m = self.mpcconfig.c_m
+        self.cop_coef = self.mpcconfig.cop_coef
+        self.eer_coef = self.mpcconfig.eer_coef
+
+        self.build(my_simulation_repository)
+
+        self.statespace()
 
         self.t_m_channel: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -402,15 +414,6 @@ class MpcController(cp.Component):
         self.batt_soc_actual_timestep = self.mpcconfig.batt_soc_actual_timestep
         self.batt_soc_normalized_timestep = self.mpcconfig.batt_soc_normalized_timestep
 
-        self.h_tr_w = self.mpcconfig.h_tr_w
-        self.h_tr_ms = self.mpcconfig.h_tr_ms
-        self.h_tr_em = self.mpcconfig.h_tr_em
-        self.h_ve_adj = self.mpcconfig.h_ve_adj
-        self.h_tr_is = self.mpcconfig.h_tr_is
-        self.c_m = self.mpcconfig.c_m
-        self.cop_coef = self.mpcconfig.cop_coef
-        self.eer_coef = self.mpcconfig.eer_coef
-
     def get_weather_default_connections(self):
         """Get default connections from the weather component."""
         log.information("setting weather default connections")
@@ -475,7 +478,7 @@ class MpcController(cp.Component):
         if (
             self.my_simulation_parameters.predictive
             # self.my_simulation_parameters.predictive
-            and my_simulation_repository is not None
+            # and my_simulation_repository is not None
         ):
 
             """ getting building physical properties for state space model """
@@ -788,9 +791,9 @@ class MpcController(cp.Component):
 
         opti = ca.Opti()
 
-        state_variables_x = opti.variable(1, scaled_horizon + 1)  # state variable: controlled temperature
-        manipulated_variables_u = opti.variable(1, scaled_horizon)  # manipulated variable: thermal power delivered
-        dist = opti.variable(
+        optvar_temperature = opti.variable(1, scaled_horizon + 1)  # state variable: controlled temperature
+        optvar_power_thermal_delivered = opti.variable(1, scaled_horizon)  # manipulated variable: thermal power delivered
+        optvar_disturbances = opti.variable(
             n_disturbances, scaled_horizon
         )
         # disturbances:
@@ -799,18 +802,18 @@ class MpcController(cp.Component):
         # 3. heat flux to the node Ti (indoor air)
         # 4. heat flux to the node s (internal surfaces)
         # 5. heat flux to thermal mass node
-        power_buy = opti.variable(1, scaled_horizon)
+        optvar_power_bought_from_grid = opti.variable(1, scaled_horizon)
 
         if self.flexibility_element in {"PV_only", "PV_and_Battery"}:
-            power_pv = opti.variable(1, scaled_horizon)
-            power_sell = opti.variable(1, scaled_horizon)
-            pv_generation_forecasted = opti.variable(1, scaled_horizon)
+            optvar_power_pv = opti.variable(1, scaled_horizon)
+            optvar_power_sold_to_grid = opti.variable(1, scaled_horizon)
+            optvar_power_pv_generation_forecasted = opti.variable(1, scaled_horizon)
 
         if self.flexibility_element == "PV_and_Battery":
-            soc = opti.variable(1, scaled_horizon + 1)
-            battery_charging_power = opti.variable(1, scaled_horizon)
-            battery_discharging_power = opti.variable(1, scaled_horizon)
-            battery_power_flow = opti.variable(1, scaled_horizon)
+            optvar_battery_soc = opti.variable(1, scaled_horizon + 1)
+            optvar_battery_power_charging = opti.variable(1, scaled_horizon)
+            optvar_battery_power_discharging = opti.variable(1, scaled_horizon)
+            optvar_battery_power_flow = opti.variable(1, scaled_horizon)
             # flow=opti.variable(1,N)
 
         x_init = opti.parameter(1, 1)
@@ -832,22 +835,22 @@ class MpcController(cp.Component):
         # Cost Function
 
         if self.flexibility_element == "basic_buidling_configuration":
-            opti.minimize(sum(ca.horzsplit(p_el * power_buy, 1)))
+            opti.minimize(sum(ca.horzsplit(p_el * optvar_power_bought_from_grid, 1)))
 
         if self.flexibility_element == "PV_only":
             # a weighting factor of 0.5 is added to the revenue to priortize using the pv production instead of selling to the grid
-            opti.minimize(sum(ca.horzsplit((p_el * power_buy - 0.5 * feed_in_tariff * power_sell))))
+            opti.minimize(sum(ca.horzsplit((p_el * optvar_power_bought_from_grid - 0.5 * feed_in_tariff * optvar_power_sold_to_grid))))
 
         if self.flexibility_element == "PV_and_Battery":
-            opti.minimize(sum(ca.horzsplit((p_el * power_buy - 0.5 * feed_in_tariff * power_sell))))
+            opti.minimize(sum(ca.horzsplit((p_el * optvar_power_bought_from_grid - 0.5 * feed_in_tariff * optvar_power_sold_to_grid))))
 
         # Constraints
         for k in range(scaled_horizon):
             opti.subject_to(
-                state_variables_x[:, k + 1]
+                optvar_temperature[:, k + 1]
                 == supporting_points_multiple_shooting_continuity_condition(
-                    state_variables_x[:, k],
-                    manipulated_variables_u[:, k],
+                    optvar_temperature[:, k],
+                    optvar_power_thermal_delivered[:, k],
                     disturbance_forecast[0, k],
                     disturbance_forecast[1, k],
                     disturbance_forecast[2, k],
@@ -857,9 +860,9 @@ class MpcController(cp.Component):
             )
             if self.flexibility_element == "PV_and_Battery":
                 opti.subject_to(
-                    soc[:, k + 1]
-                    == soc[:, k]
-                    + (battery_power_flow[:, k])
+                    optvar_battery_soc[:, k + 1]
+                    == optvar_battery_soc[:, k]
+                    + (optvar_battery_power_flow[:, k])
                     * (
                         self.my_simulation_parameters.seconds_per_timestep
                         * sampling_rate
@@ -867,113 +870,113 @@ class MpcController(cp.Component):
                     )
                 )
 
-        opti.subject_to(opti.bounded(self.min_comfort_temp, state_variables_x, self.max_comfort_temp))
+        opti.subject_to(opti.bounded(self.min_comfort_temp, optvar_temperature, self.max_comfort_temp))
 
         """ a Terminal Constraint is added if Hisim resolution is different than the optimizer resolution:
             e.g, if you run hisim at 60 sec per time step and you would like to reduce the optimization is done by sampling each 20 or 15 min
             This ensures that inital guess at the following optimization is within the constraint"""
 
         if sampling_rate != 1:
-            opti.subject_to(state_variables_x[-1] > self.min_comfort_temp + 0.3)
+            opti.subject_to(optvar_temperature[-1] > self.min_comfort_temp + 0.3)
 
-        opti.subject_to(opti.bounded(0, ca.fabs(manipulated_variables_u), 16000))
+        opti.subject_to(opti.bounded(0, ca.fabs(optvar_power_thermal_delivered), 16000))
 
         if self.flexibility_element == "basic_buidling_configuration":
             opti.subject_to(
-                power_buy
-                == ca.if_else(manipulated_variables_u > 0, ca.fabs(manipulated_variables_u) / cop_values, ca.fabs(manipulated_variables_u) / eer_values)
+                optvar_power_bought_from_grid
+                == ca.if_else(optvar_power_thermal_delivered > 0, ca.fabs(optvar_power_thermal_delivered) / cop_values, ca.fabs(optvar_power_thermal_delivered) / eer_values)
             )
 
         if self.flexibility_element == "PV_only":
 
             """ Energy Balance constraint for Grid , PV  interaction"""
             opti.subject_to(
-                power_buy
+                optvar_power_bought_from_grid
                 == ca.if_else(
-                    manipulated_variables_u > 0,
-                    ca.fabs(manipulated_variables_u) / cop_values - (pv_production - power_sell),
-                    ca.fabs(manipulated_variables_u) / eer_values - (pv_production - power_sell),
+                    optvar_power_thermal_delivered > 0,
+                    ca.fabs(optvar_power_thermal_delivered) / cop_values - (pv_production - optvar_power_sold_to_grid),
+                    ca.fabs(optvar_power_thermal_delivered) / eer_values - (pv_production - optvar_power_sold_to_grid),
                 )
             )
-            opti.subject_to(power_pv == pv_production - power_sell)
+            opti.subject_to(optvar_power_pv == pv_production - optvar_power_sold_to_grid)
 
         if self.flexibility_element == "PV_and_Battery":
 
             """ Battery charging and discharging bounds / making sure that charging and discharging doesn't occur at the same time """
             opti.subject_to(
                 opti.bounded(
-                    self.minimum_storage_capacity, soc, self.maximum_storage_capacity
+                    self.minimum_storage_capacity, optvar_battery_soc, self.maximum_storage_capacity
                 )
             )
             opti.subject_to(
                 opti.bounded(
                     -self.maximum_discharging_power,
-                    battery_power_flow,
+                    optvar_battery_power_flow,
                     self.maximum_charging_power,
                 )
             )
             opti.subject_to(
-                battery_charging_power
+                optvar_battery_power_charging
                 == ca.if_else(
-                    battery_power_flow > 0,
-                    battery_power_flow * self.battery_efficiency,
+                    optvar_battery_power_flow > 0,
+                    optvar_battery_power_flow * self.battery_efficiency,
                     0,
                 )
             )
             opti.subject_to(
-                battery_discharging_power
+                optvar_battery_power_discharging
                 == ca.if_else(
-                    battery_power_flow < 0,
-                    -battery_power_flow
+                    optvar_battery_power_flow < 0,
+                    -optvar_battery_power_flow
                     / (self.battery_efficiency * self.inverter_efficiency),
                     0,
                 )
             )
             opti.subject_to(
-                opti.bounded(0, battery_charging_power, self.maximum_charging_power)
+                opti.bounded(0, optvar_battery_power_charging, self.maximum_charging_power)
             )
 
             """ Energy Balance constraint for Grid , PV , Battery interaction"""
 
             opti.subject_to(
-                power_buy
+                optvar_power_bought_from_grid
                 == ca.if_else(
-                    manipulated_variables_u > 0,
-                    ca.fabs(manipulated_variables_u) / cop_values - power_pv - battery_discharging_power,
-                    ca.fabs(manipulated_variables_u) / eer_values - power_pv - battery_discharging_power,
+                    optvar_power_thermal_delivered > 0,
+                    ca.fabs(optvar_power_thermal_delivered) / cop_values - optvar_power_pv - optvar_battery_power_discharging,
+                    ca.fabs(optvar_power_thermal_delivered) / eer_values - optvar_power_pv - optvar_battery_power_discharging,
                 )
             )
-            opti.subject_to(power_sell == pv_production - battery_charging_power - power_pv)
+            opti.subject_to(optvar_power_sold_to_grid == pv_production - optvar_battery_power_charging - optvar_power_pv)
 
         if self.flexibility_element in {"PV_only", "PV_and_Battery"}:
-            opti.subject_to(opti.bounded(0, power_sell, pv_production))
-            opti.subject_to(power_buy >= 0)
+            opti.subject_to(opti.bounded(0, optvar_power_sold_to_grid, pv_production))
+            opti.subject_to(optvar_power_bought_from_grid >= 0)
             opti.subject_to(
-                power_buy
-                <= ca.if_else(manipulated_variables_u > 0, ca.fabs(manipulated_variables_u) / cop_values, ca.fabs(manipulated_variables_u) / eer_values)
+                optvar_power_bought_from_grid
+                <= ca.if_else(optvar_power_thermal_delivered > 0, ca.fabs(optvar_power_thermal_delivered) / cop_values, ca.fabs(optvar_power_thermal_delivered) / eer_values)
             )
 
         """ Initial conditions """
-        opti.subject_to(state_variables_x[:, 0] == x_init)  # controlled temperature temperature
+        opti.subject_to(optvar_temperature[:, 0] == x_init)  # controlled temperature temperature
         opti.subject_to(
-            dist == disturbance_forecast
+            optvar_disturbances == disturbance_forecast
         )  # building disturbances (solar gains / internal gains / ambient temperature)
 
         if self.flexibility_element in {"PV_only", "PV_and_Battery"}:
             opti.subject_to(
-                pv_generation_forecasted == pv_production
+                optvar_power_pv_generation_forecasted == pv_production
             )  # forecasted PV generation by the generic_pv_component
 
         if self.flexibility_element == "PV_and_Battery":
-            opti.subject_to(soc[:, 0] == soc_init)  # battery state of charge
+            opti.subject_to(optvar_battery_soc[:, 0] == soc_init)  # battery state of charge
 
-        """ choose a concerete solver: The default linear solver used with ipopt is mumps (MUltifrontal Massively Parallel Solver).
-        For a faster solution, the default sover is replced with HSL solver 'ma27' (see 'sol_opts' > 'linear_solver').
+        """ Choose a concerete solver: The default linear solver used with ipopt is mumps (MUltifrontal Massively Parallel Solver).
+        For a faster solution, the default solver is replaced with HSL solver 'ma27' (see 'sol_opts' > 'linear_solver').
         A free version is available for Academic Purposes ONLY. Please follow the steps provided at the end of the script to obtain,
         compile, and interface HSL solver.
 
-        * Remark: when including the battery in the building energy system one optimization time step with { HiSim time_step = 60 sec
-        and sampling rate = 1 }  takes around 57 sec using the ma27 solver. The aforementioned is only for the optimization and not
+        * Remark: When including the battery in the building energy system one optimization time step with { HiSim time_step = 60 sec
+        and sampling rate = 1 } takes around 57 sec using the ma27 solver. The aforementioned is only for the optimization and not
         the entire household.
 
         This's  reduced to 0.5 sec with { HiSim time_step = 60 sec and sampling rate = 15 }
@@ -988,12 +991,17 @@ class MpcController(cp.Component):
 
         sol_opts = {
             "ipopt": {
-                "max_iter": 2000,
-                "print_level": 0,
+                "max_iter": 500,
+                # "max_iter": 2000,
+                "print_level": 5,
+                # "print_level": 0,
                 "sb": "yes",
-                "acceptable_tol": 1e-3,
-                # 'linear_solver':'ma27', # options: 'mumps','ma27'
-                "acceptable_obj_change_tol": 1e-3,
+                # "acceptable_tol": 4.0e+005,
+                # "acceptable_tol": 1e-2,
+                'linear_solver':'mumps', # options: 'mumps','ma27'
+                # 'linear_solver':'ma27',
+                # "acceptable_obj_change_tol": 4.0e+005,
+                # "acceptable_obj_change_tol": 1e-3,
             },
             "print_time": False,
         }
@@ -1012,12 +1020,14 @@ class MpcController(cp.Component):
         if self.flexibility_element == "PV_and_Battery":
             opti.set_value(soc_init, self.state.soc)
 
+        print(f"Starting solve",datetime.datetime.now())
         sol = opti.solve()
+        opti.debug.value
 
         # solution optimize resolution
         # t_m_opt=sol.value(x)
-        p_th_opt = sol.value(manipulated_variables_u)
-        grid_import = sol.value(power_buy)
+        p_th_opt = sol.value(optvar_power_thermal_delivered)
+        grid_import = sol.value(optvar_power_bought_from_grid)
 
         # solution for actual HiSim timestep
         p_th_opt_timstep = np.repeat(p_th_opt, sampling_rate).tolist()
@@ -1046,8 +1056,8 @@ class MpcController(cp.Component):
         if self.flexibility_element in {"PV_only", "PV_and_Battery"}:
 
             # solution optimize resolution
-            pv_consumption = sol.value(power_pv)
-            grid_export = sol.value(power_sell)
+            pv_consumption = sol.value(optvar_power_pv)
+            grid_export = sol.value(optvar_power_sold_to_grid)
 
             # solution for actual HiSim timestep
             pv_consumption_timestep = np.repeat(pv_consumption, sampling_rate).tolist()
@@ -1064,11 +1074,11 @@ class MpcController(cp.Component):
         if self.flexibility_element == "PV_and_Battery":
 
             # solution optimize resolution
-            battery_to_load = sol.value(battery_discharging_power)
-            pv_to_battery = sol.value(battery_charging_power)
-            battery_power_flow = sol.value(battery_power_flow)
-            batt_soc_actual = sol.value(soc)
-            batt_soc_normalized = sol.value(soc) / self.maximum_storage_capacity
+            battery_to_load = sol.value(optvar_battery_power_discharging)
+            pv_to_battery = sol.value(optvar_battery_power_charging)
+            optvar_battery_power_flow = sol.value(optvar_battery_power_flow)
+            batt_soc_actual = sol.value(optvar_battery_soc)
+            batt_soc_normalized = sol.value(optvar_battery_soc) / self.maximum_storage_capacity
             if self.mpc_scheme == "optimization_once_aday_only":
                 self.state.soc = batt_soc_actual[-1]
                 if self.state.soc < 0.2 * self.maximum_storage_capacity:
@@ -1086,7 +1096,7 @@ class MpcController(cp.Component):
                 batt_soc_normalized, sampling_rate
             ).tolist()
             battery_power_flow_timestep = np.repeat(
-                battery_power_flow, sampling_rate
+                optvar_battery_power_flow, sampling_rate
             ).tolist()
 
             # optimizer solution might lead to values like 1.5e-9 ---> these are replaces with zeros

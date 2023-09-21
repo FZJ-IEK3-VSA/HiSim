@@ -1743,7 +1743,7 @@ class Building(dynamic_component.DynamicComponent):
         """
 
         # Updates flows
-        heat_loss_in_watt = self.calc_heat_flow(
+        heat_loss_in_watt,_,_,_ = self.calc_heat_flow(
             internal_heat_gains_in_watt, solar_heat_gains_in_watt,
         )
 

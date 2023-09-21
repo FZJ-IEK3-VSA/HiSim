@@ -413,6 +413,7 @@ def modular_household_explicit(
             my_occupancy=my_occupancy,
             water_heating_system_installed=water_heating_system_installed,
             count=count,
+            number_of_apartments=my_building_information.number_of_apartments
         )
 
     # """HEATING"""

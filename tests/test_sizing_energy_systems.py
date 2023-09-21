@@ -17,7 +17,7 @@ from hisim.components import (
     generic_heat_pump_modular,
     generic_hot_water_storage_modular,
 )
-from hisim.simulationparameters import SimulationParameters
+
 from hisim import log
 from hisim import utils
 
@@ -146,12 +146,6 @@ def simulation_for_one_timestep(
 ) -> Tuple[Any, float, float, float, float, float, float]:
     """Test function for the example house for one timestep."""
 
-    # Set simu params
-    seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.full_year(
-        year=2021, seconds_per_timestep=seconds_per_timestep
-    )
-
     # Set building inputs
     absolute_conditioned_floor_area_in_m2 = (
         121.2 * scaling_factor_for_absolute_conditioned_floor_area
@@ -164,10 +158,7 @@ def simulation_for_one_timestep(
     my_residence_config.absolute_conditioned_floor_area_in_m2 = (
         absolute_conditioned_floor_area_in_m2
     )
-    # my_residence = building.Building(
-    #     config=my_residence_config,
-    #     my_simulation_parameters=my_simulation_parameters,
-    # )
+
     my_residence_information = building.BuildingInformation(config=my_residence_config)
 
     log.information("Building code" + str(my_residence_config.building_code))

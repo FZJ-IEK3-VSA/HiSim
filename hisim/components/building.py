@@ -12,7 +12,7 @@ The module contains the following classes:
        calculations from RC_BuildingSimulator project**. Inputs of the building class are the heating device, occupancy and weather.
        Outputs are for example temperature, stored energy and solar gains through windows.
     6. class Window - taken from the RC simulator project, calculates for example solar gains through windows.
-    7. class BuildingController - calculates real heating demand and how much building is supposed to be heated up.
+    7. class BuildingInformation - gets important building parameters and properties
 
 *EPISCOPE/TABULA project:
      Ths project involves a collection of multiple typologies of residences from 12 European countries, listing among others,

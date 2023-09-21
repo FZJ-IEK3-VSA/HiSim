@@ -68,7 +68,6 @@ def household_with_hplib_hws_hds_pv_battery_ems(
     heating_reference_temperature_in_celsius: float = -7  # t_in
     flow_temperature_in_celsius = 21  # t_out_val
 
-
     # =================================================================================================================================
     # Build Components
 
@@ -101,9 +100,11 @@ def household_with_hplib_hws_hds_pv_battery_ems(
     my_heat_distribution_controller_config.heating_reference_temperature_in_celsius = (
         heating_reference_temperature_in_celsius
     )
-    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_heat_distribution_controller_config,
+    my_heat_distribution_controller = (
+        heat_distribution_system.HeatDistributionController(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_heat_distribution_controller_config,
+        )
     )
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
@@ -115,8 +116,8 @@ def household_with_hplib_hws_hds_pv_battery_ems(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
     # Build Occupancy
-    my_occupancy_config = (
-        loadprofilegenerator_connector.OccupancyConfig.get_scaled_CHS01_according_to_number_of_apartments(number_of_apartments=my_building_information.number_of_apartments)
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_CHS01_according_to_number_of_apartments(
+        number_of_apartments=my_building_information.number_of_apartments
     )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
@@ -132,7 +133,9 @@ def household_with_hplib_hws_hds_pv_battery_ems(
 
     # Build PV
     my_photovoltaic_system_config = (
-        generic_pv_system.PVSystemConfig.get_scaled_PV_system(rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2)
+        generic_pv_system.PVSystemConfig.get_scaled_PV_system(
+            rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
+        )
     )
 
     my_photovoltaic_system = generic_pv_system.PVSystem(
@@ -152,19 +155,23 @@ def household_with_hplib_hws_hds_pv_battery_ems(
     )
 
     # Build Heat Pump
-    my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt)
+    my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+    )
     my_heat_pump_config.group_id = group_id
     my_heat_pump_config.flow_temperature_in_celsius = flow_temperature_in_celsius
-    my_heat_pump_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
-    
+    my_heat_pump_config.heating_reference_temperature_in_celsius = (
+        heating_reference_temperature_in_celsius
+    )
+
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
         config=my_heat_pump_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Distribution System
-    my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt)
+    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config,
@@ -172,8 +179,8 @@ def household_with_hplib_hws_hds_pv_battery_ems(
     )
 
     # Build Heat Water Storage
-    my_simple_heat_water_storage_config = (
-        simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt)
+    my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
     )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
@@ -184,14 +191,18 @@ def household_with_hplib_hws_hds_pv_battery_ems(
     my_electricity_controller_config = (
         controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
     )
-    my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_electricity_controller_config,
+    my_electricity_controller = (
+        controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_electricity_controller_config,
+        )
     )
 
     # Build Battery
     my_advanced_battery_config = (
-        advanced_battery_bslib.BatteryConfig.get_scaled_battery(total_pv_power_in_watt_peak=my_photovoltaic_system_config.power)
+        advanced_battery_bslib.BatteryConfig.get_scaled_battery(
+            total_pv_power_in_watt_peak=my_photovoltaic_system_config.power
+        )
     )
     my_advanced_battery = advanced_battery_bslib.Battery(
         my_simulation_parameters=my_simulation_parameters,
@@ -293,13 +304,18 @@ def household_with_hplib_hws_hds_pv_battery_ems(
         source_weight=2,
     )
 
-    electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
-        source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-        source_weight=2,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        output_description="Target electricity for Battery Control. ",
+    electricity_to_or_from_battery_target = (
+        my_electricity_controller.add_component_output(
+            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+            source_tags=[
+                lt.ComponentType.BATTERY,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_weight=2,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for Battery Control. ",
+        )
     )
     # -----------------------------------------------------------------------------------------------------------------
     # Connect Battery

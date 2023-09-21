@@ -40,7 +40,7 @@ def cleanup_old_result_folders():
 
 
 def cleanup_old_lpg_requests():
-    """ Removes old results of loadprofilegenerator_connector_utsp. """
+    """Removes old results of loadprofilegenerator_connector_utsp."""
     if not os.path.exists(hisim.utils.HISIMPATH["utsp_results"]):
         # no old data exists, nothing to remove
         return
@@ -273,8 +273,11 @@ def modular_household_explicit(
     else:
         # Build occupancy
         my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-            "Occupancy", occupancy_profile or "", location, not smart_devices_included,
-            number_of_apartments=my_building_information.number_of_apartments
+            "Occupancy",
+            occupancy_profile or "",
+            location,
+            not smart_devices_included,
+            number_of_apartments=my_building_information.number_of_apartments,
         )
         my_occupancy = loadprofilegenerator_connector.Occupancy(
             config=my_occupancy_config,
@@ -403,7 +406,7 @@ def modular_household_explicit(
             water_heating_system_installed=water_heating_system_installed,
             controlable=clever,
             count=count,
-            number_of_apartments=my_building_information.number_of_apartments
+            number_of_apartments=my_building_information.number_of_apartments,
         )
 
     else:
@@ -413,7 +416,7 @@ def modular_household_explicit(
             my_occupancy=my_occupancy,
             water_heating_system_installed=water_heating_system_installed,
             count=count,
-            number_of_apartments=my_building_information.number_of_apartments
+            number_of_apartments=my_building_information.number_of_apartments,
         )
 
     # """HEATING"""

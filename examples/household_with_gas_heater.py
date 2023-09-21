@@ -128,7 +128,9 @@ def household_gas_heater(
         my_simulation_parameters=my_simulation_parameters,
     )
     my_heat_water_storage_controller = generic_heat_water_storage.HeatStorageController(
-        config=generic_heat_water_storage.HeatStorageControllerConfig.get_default_heat_storage_controller_config(heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt),
+        config=generic_heat_water_storage.HeatStorageControllerConfig.get_default_heat_storage_controller_config(
+            heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+        ),
         my_simulation_parameters=my_simulation_parameters,
     )
 

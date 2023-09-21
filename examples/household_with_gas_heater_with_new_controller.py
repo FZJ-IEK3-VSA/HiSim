@@ -114,9 +114,11 @@ def household_gas_heater_with_new_controller(
     my_gasheater_controller_config = (
         controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config.get_default_generic_gas_heater_controller_config()
     )
-    my_gasheater_controller = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_gasheater_controller_config,
+    my_gasheater_controller = (
+        controller_l1_generic_gas_heater.GenericGasHeaterControllerL1(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_gasheater_controller_config,
+        )
     )
 
     # Build Gasheater
@@ -129,12 +131,15 @@ def household_gas_heater_with_new_controller(
     hdscontroller_config = (
         heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
     )
-    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        config=hdscontroller_config, my_simulation_parameters=my_simulation_parameters,
+    my_heat_distribution_controller = (
+        heat_distribution_system.HeatDistributionController(
+            config=hdscontroller_config,
+            my_simulation_parameters=my_simulation_parameters,
+        )
     )
 
-    hds_config = (
-        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt)
+    hds_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
     )
 
     my_heat_distribution = heat_distribution_system.HeatDistribution(

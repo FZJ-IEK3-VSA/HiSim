@@ -90,10 +90,11 @@ class HouseholdAdvancedHPEvPvConfig:
         )
         heating_reference_temperature_in_celsius: float = -7
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0
-        
-        building_config=building.BuildingConfig.get_default_german_single_family_home()
-        my_building_information = building.BuildingInformation(config=building_config)
 
+        building_config = (
+            building.BuildingConfig.get_default_german_single_family_home()
+        )
+        my_building_information = building.BuildingInformation(config=building_config)
 
         household_config = HouseholdAdvancedHPEvPvConfig(
             building_type="blub",
@@ -123,7 +124,9 @@ class HouseholdAdvancedHPEvPvConfig:
                 heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
             ),
             hds_config=(
-                heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt)
+                heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+                )
             ),
             hp_controller_config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(),
             hp_config=advanced_heat_pump_hplib.HeatPumpHplibConfig.get_default_generic_advanced_hp_lib(),
@@ -156,9 +159,15 @@ class HouseholdAdvancedHPEvPvConfig:
         household_config.hp_controller_config.mode = (
             2  # use heating and cooling as default
         )
-        household_config.hp_config.set_thermal_output_power_in_watt = 6000  # default value leads to switching on-off very often
-        household_config.hp_config.minimum_idle_time_in_seconds = 900  # default value leads to switching on-off very often
-        household_config.hp_config.minimum_running_time_in_seconds = 900  # default value leads to switching on-off very often
+        household_config.hp_config.set_thermal_output_power_in_watt = (
+            6000  # default value leads to switching on-off very often
+        )
+        household_config.hp_config.minimum_idle_time_in_seconds = (
+            900  # default value leads to switching on-off very often
+        )
+        household_config.hp_config.minimum_running_time_in_seconds = (
+            900  # default value leads to switching on-off very often
+        )
 
         # set same heating threshold
         household_config.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius = (

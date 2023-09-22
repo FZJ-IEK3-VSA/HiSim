@@ -177,13 +177,10 @@ class PyAmChartGenerator:
             file_df["scenario"] = file_df["scenario"].transform(str)
 
             # filter models
-            if (
-                list_of_models_to_check is not None
-                and list_of_models_to_check != []
-            ):
+            if list_of_models_to_check is not None and list_of_models_to_check != []:
                 file_df = self.check_if_model_exists_and_filter_dataframe_for_models(
-                    data_frame=file_df,
-                    list_of_models_to_check=list_of_models_to_check)
+                    data_frame=file_df, list_of_models_to_check=list_of_models_to_check
+                )
 
             # filter scenarios
             if (
@@ -907,9 +904,9 @@ class PyAmChartGenerator:
             concat_df = pd.concat([concat_df, df_filtered_for_specific_scenarios])
 
         return concat_df
-    
+
     def check_if_model_exists_and_filter_dataframe_for_models(
-       self, data_frame: pd.DataFrame, list_of_models_to_check: List[str]
+        self, data_frame: pd.DataFrame, list_of_models_to_check: List[str]
     ) -> pd.DataFrame:
         """Check if model exists and filter dataframe for model."""
 
@@ -921,8 +918,7 @@ class PyAmChartGenerator:
             for model_to_check in list_of_models_to_check:
                 if (
                     model_to_check in given_model
-                    and given_model
-                    not in aggregated_model_dict[model_to_check]
+                    and given_model not in aggregated_model_dict[model_to_check]
                 ):
                     aggregated_model_dict[model_to_check].append(given_model)
         # raise error if dict is empty
@@ -939,12 +935,13 @@ class PyAmChartGenerator:
             df_filtered_for_specific_models = data_frame.loc[
                 data_frame["model"].isin(given_model)
             ]
-            df_filtered_for_specific_models["model"] = [
-                key_model_to_check
-            ] * len(df_filtered_for_specific_models["model"])
+            df_filtered_for_specific_models["model"] = [key_model_to_check] * len(
+                df_filtered_for_specific_models["model"]
+            )
             concat_df = pd.concat([concat_df, df_filtered_for_specific_models])
 
         return concat_df
+
 
 # examples for variables to check (check names of your variables before your evaluation, if they are correct)
 # kpi data has no time series, so only choose when you analyze yearly data

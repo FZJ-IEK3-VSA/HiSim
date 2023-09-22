@@ -194,9 +194,6 @@ def household_cluster_reference_advanced_hp(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
 
-    # Now get building information to scale energy systems
-    my_building_information = my_building.return_building_information()
-
     # Build Occupancy
     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_CHS01_according_to_number_of_apartments(
         number_of_apartments=my_building_information.number_of_apartments
@@ -255,7 +252,7 @@ def household_cluster_reference_advanced_hp(
 
     # Build Scaled Heat Water Storage
     my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-        heating_load_of_building_in_watt=my_building_information.building_heating_load_in_watt
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
     )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,

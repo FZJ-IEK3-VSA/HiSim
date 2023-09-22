@@ -30,14 +30,14 @@ class PyamDataAnalysis:
             time_resolution_of_data_set=time_resolution_of_data_set,
             simulation_duration_to_check=simulation_duration_to_check,
         )
-        pyam_data_processing.PyAmChartGenerator(
-            simulation_duration_to_check=simulation_duration_to_check,
-            time_resolution_of_data_set=time_resolution_of_data_set,
-            data_processing_mode=data_processing_mode,
-            variables_to_check=variables_to_check,
-            list_of_scenarios_to_check=list_of_scenarios_to_check,
-            list_of_models_to_check=list_of_models_to_check,
-        )
+        # pyam_data_processing.PyAmChartGenerator(
+        #     simulation_duration_to_check=simulation_duration_to_check,
+        #     time_resolution_of_data_set=time_resolution_of_data_set,
+        #     data_processing_mode=data_processing_mode,
+        #     variables_to_check=variables_to_check,
+        #     list_of_scenarios_to_check=list_of_scenarios_to_check,
+        #     list_of_models_to_check=list_of_models_to_check,
+        # )
 
 
 def main():
@@ -51,8 +51,9 @@ def main():
 
     folder_from_which_data_will_be_collected = os.path.join(
         cluster_storage_path,
-        "repositories/HiSim/examples/results/household_cluster_reference_advanced_hp/german_tabula_buildings_20230919_1905"
+        # "repositories/HiSim/examples/results/household_cluster_reference_advanced_hp/german_tabula_buildings_20230919_1905"
         # "repositories/HiSim/examples/results/household_cluster_test_advanced_hp/hplib_configs_20230915_1122",
+        "repositories/HiSim/examples/results/",
     )
     # folder_from_which_data_will_be_collected = (
     #     r"C:\Users\k.rieck\Cluster_stuff_copied\examples_results"
@@ -82,10 +83,12 @@ def main():
     list_of_scenarios_to_check = pyam_data_processing.building_type
 
     # list_of_scenarios_to_check = ["DE.N.SFH.05.Gen.ReEx.001.002","DE.N.TH.05.Gen.ReEx.001.002","DE.N.MFH.05.Gen.ReEx.001.002","DE.N.AB.05.Gen.ReEx.001.002"]
-    
-    
+
     # filter models if you run over whole results folder and you do not want to check all of the models
-    list_of_models_to_check = ["HiSim_household_cluster_reference_advanced_hp", "HiSim_household_cluster_advanced_hp_pv_battery_ems"]
+    list_of_models_to_check = [
+        "HiSim_household_cluster_reference_advanced_hp",
+        "HiSim_household_cluster_advanced_hp_pv_battery_ems",
+    ]
 
     # -------------------------------------------------------------------------------------------------------------------------------------
 

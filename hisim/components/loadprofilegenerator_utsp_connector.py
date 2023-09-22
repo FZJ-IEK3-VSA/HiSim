@@ -293,7 +293,9 @@ class UtspLpgConnector(cp.Component):
         resolution = datetime.timedelta(seconds=seconds)
         return str(resolution)
 
-    def get_profiles_from_utsp(self) -> Tuple[Tuple[str, str, str, str, str], List[str]]:
+    def get_profiles_from_utsp(
+        self,
+    ) -> Tuple[Tuple[str, str, str, str, str], List[str]]:
         """Requests the required load profiles from a UTSP server. Returns raw, unparsed result file contents.
 
         :return: a tuple of all result file contents (electricity, warm water, high bodily activity and low bodily activity),
@@ -330,7 +332,8 @@ class UtspLpgConnector(cp.Component):
 
         # Define required result files
         electricity = result_file_filters.LPGFilters.sum_hh1(
-            LoadTypes.Electricity, no_flex=not self.utsp_config.profile_with_washing_machine_and_dishwasher
+            LoadTypes.Electricity,
+            no_flex=not self.utsp_config.profile_with_washing_machine_and_dishwasher,
         )
         warm_water = result_file_filters.LPGFilters.sum_hh1(
             LoadTypes.Warm_Water, no_flex=False
@@ -495,7 +498,9 @@ class UtspLpgConnector(cp.Component):
                 self.my_simulation_parameters.end_date
                 - self.my_simulation_parameters.start_date
             )
-            minutes_per_timestep = int(self.my_simulation_parameters.seconds_per_timestep / 60)
+            minutes_per_timestep = int(
+                self.my_simulation_parameters.seconds_per_timestep / 60
+            )
             steps_desired = int(
                 simulation_time_span.days
                 * 24
@@ -510,9 +515,9 @@ class UtspLpgConnector(cp.Component):
             # compute heat gains and number of persons
             for mode, gain in enumerate(gain_per_person):
                 for timestep in range(steps_desired_in_minutes):
-                    number_of_residents[timestep] += occupancy_profile[mode][
-                        "Values"
-                    ][timestep]
+                    number_of_residents[timestep] += occupancy_profile[mode]["Values"][
+                        timestep
+                    ]
                     heating_by_residents[timestep] = (
                         heating_by_residents[timestep]
                         + gain * occupancy_profile[mode]["Values"][timestep]
@@ -553,14 +558,22 @@ class UtspLpgConnector(cp.Component):
             ).tolist()  # 1 kWh/min == 60W / min
 
             # put everything in a data frame and convert to utc
-            initial_data = pd.DataFrame({
-                "Time": pd.date_range(
-                    start=datetime.datetime(year=self.my_simulation_parameters.year, month=1, day=1),
-                    end=datetime.datetime(year=self.my_simulation_parameters.year, month=1, day=1) +
-                    datetime.timedelta(days=simulation_time_span.days) - datetime.timedelta(seconds=60),
-                    freq="T"
-                    )})
-            
+            initial_data = pd.DataFrame(
+                {
+                    "Time": pd.date_range(
+                        start=datetime.datetime(
+                            year=self.my_simulation_parameters.year, month=1, day=1
+                        ),
+                        end=datetime.datetime(
+                            year=self.my_simulation_parameters.year, month=1, day=1
+                        )
+                        + datetime.timedelta(days=simulation_time_span.days)
+                        - datetime.timedelta(seconds=60),
+                        freq="T",
+                    )
+                }
+            )
+
             initial_data["number_of_residents"] = number_of_residents
             initial_data["heating_by_residents"] = heating_by_residents
             initial_data["electricity_consumption"] = electricity_consumption_list
@@ -568,10 +581,13 @@ class UtspLpgConnector(cp.Component):
             initial_data["inner_device_heat_gains"] = inner_device_heat_gains_list
 
             initial_data = utils.convert_lpg_data_to_utc(
-                data=initial_data, year=self.my_simulation_parameters.year)
-            
+                data=initial_data, year=self.my_simulation_parameters.year
+            )
+
             # extract everything from data frame
-            self.electricity_consumption = initial_data["electricity_consumption"].tolist()
+            self.electricity_consumption = initial_data[
+                "electricity_consumption"
+            ].tolist()
             self.heating_by_residents = initial_data["heating_by_residents"].tolist()
             self.number_of_residents = initial_data["number_of_residents"].tolist()
             self.water_consumption = initial_data["water_consumption"].tolist()
@@ -581,34 +597,40 @@ class UtspLpgConnector(cp.Component):
             if minutes_per_timestep > 1:
                 # power needs averaging, not sum
                 self.electricity_consumption = [
-                    sum(self.electricity_consumption[n: n + minutes_per_timestep]) / minutes_per_timestep
+                    sum(self.electricity_consumption[n : n + minutes_per_timestep])
+                    / minutes_per_timestep
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.heating_by_devices = [
-                    sum(self.heating_by_devices[n: n + minutes_per_timestep]) / minutes_per_timestep
+                    sum(self.heating_by_devices[n : n + minutes_per_timestep])
+                    / minutes_per_timestep
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.water_consumption = [
-                    sum(self.water_consumption[n: n + minutes_per_timestep])
+                    sum(self.water_consumption[n : n + minutes_per_timestep])
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.heating_by_residents = [
-                    sum(self.heating_by_residents[n: n + minutes_per_timestep]) / minutes_per_timestep
+                    sum(self.heating_by_residents[n : n + minutes_per_timestep])
+                    / minutes_per_timestep
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.number_of_residents = [
-                    sum(self.number_of_residents[n: n + minutes_per_timestep]) / minutes_per_timestep
+                    sum(self.number_of_residents[n : n + minutes_per_timestep])
+                    / minutes_per_timestep
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
 
-            # Saves data in cache 
-            database = pd.DataFrame({
-                "number_of_residents": self.number_of_residents,
-                "heating_by_residents": self.heating_by_residents,
-                "electricity_consumption": self.electricity_consumption,
-                "water_consumption": self.water_consumption,
-                "heating_by_devices": self.heating_by_devices,
-                })
+            # Saves data in cache
+            database = pd.DataFrame(
+                {
+                    "number_of_residents": self.number_of_residents,
+                    "heating_by_residents": self.heating_by_residents,
+                    "electricity_consumption": self.electricity_consumption,
+                    "water_consumption": self.water_consumption,
+                    "heating_by_devices": self.heating_by_devices,
+                }
+            )
             # dump the dataframe to str
             cache_file = io.StringIO()
             database.to_csv(cache_file)

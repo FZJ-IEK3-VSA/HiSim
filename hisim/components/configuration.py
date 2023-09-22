@@ -206,7 +206,7 @@ class PhysicsConfig:
     # density H2:       0.08989 kg/m³   (S. 23) -> standard conditions
     hydrogen_density = 0.08989  # [kg/m³]
     hydrogen_specific_volume = 1 / hydrogen_density  # [m^3/kg]
-    hydrogen_specific_fuel_value_per_m_3 = 10.782 * 10 ** 6  # [J/m³]
+    hydrogen_specific_fuel_value_per_m_3 = 10.782 * 10**6  # [J/m³]
     hydrogen_specific_fuel_value_per_kg = (
         hydrogen_specific_fuel_value_per_m_3 / hydrogen_density
     )  # [J/kg]
@@ -216,7 +216,7 @@ class PhysicsConfig:
     # density Methan:       0.71750 kg/m³   (S. 23) -> standard conditions
     natural_gas_density = 0.71750  # [kg/m³]
     natural_gas_specific_volume = 1 / hydrogen_density  # [m^3/kg]
-    natural_gas_specific_fuel_value_per_m_3 = 35.894 * 10 ** 6  # [J/m³]
+    natural_gas_specific_fuel_value_per_m_3 = 35.894 * 10**6  # [J/m³]
     natural_gas_specific_fuel_value_per_kg = (
         natural_gas_specific_fuel_value_per_m_3 / natural_gas_density
     )  # [J/kg]
@@ -226,16 +226,16 @@ class PhysicsConfig:
 @dataclass
 class EmissionFactorsAndCostsForFuelsConfig:
     electricity_costs_in_euro_per_kwh: float  # EUR/kWh
-    electricity_footprint_in_kg_per_kwh: float   # kgCO2eq/kWh
-    electricity_to_grid_revenue_in_euro_per_kwh: float   # EUR/kWh
-    district_heating_costs_in_euro_per_kwh: float   # EUR/kWh
-    district_heating_footprint_in_kg_per_kwh: float   # kgCO2eq/kWh
+    electricity_footprint_in_kg_per_kwh: float  # kgCO2eq/kWh
+    electricity_to_grid_revenue_in_euro_per_kwh: float  # EUR/kWh
+    district_heating_costs_in_euro_per_kwh: float  # EUR/kWh
+    district_heating_footprint_in_kg_per_kwh: float  # kgCO2eq/kWh
     gas_costs_in_euro_per_kwh: float  # EUR/kWh
-    gas_footprint_in_kg_per_kwh: float   # kgCO2eq/kWh
-    oil_costs_in_euro_per_l: float   # EUR/l
-    oil_footprint_in_kg_per_l: float   # kgCO2eq/l
-    diesel_costs_in_euro_per_l: float   # EUR/l
-    diesel_footprint_in_kg_per_l: float   # kgCO2eq/l
+    gas_footprint_in_kg_per_kwh: float  # kgCO2eq/kWh
+    oil_costs_in_euro_per_l: float  # EUR/l
+    oil_footprint_in_kg_per_l: float  # kgCO2eq/l
+    diesel_costs_in_euro_per_l: float  # EUR/l
+    diesel_footprint_in_kg_per_l: float  # kgCO2eq/l
 
     @classmethod
     def get_default(cls) -> "EmissionFactorsAndCostsForFuelsConfig":
@@ -243,17 +243,17 @@ class EmissionFactorsAndCostsForFuelsConfig:
         # Todo: values copied from file emission_factors_and_costs_fuels.csv so far; Use only one location for data!
         # Todo: check Literature for values
         return EmissionFactorsAndCostsForFuelsConfig(
-            electricity_costs_in_euro_per_kwh = 0.2525,  # EUR/kWh
-            electricity_footprint_in_kg_per_kwh = 0.44,  # kgCO2eq/kWh
-            electricity_to_grid_revenue_in_euro_per_kwh = 0.2525,  # EUR/kWh  # Todo: Change Value!!!
-            district_heating_costs_in_euro_per_kwh = 0.0033,  # EUR/kWh
-            district_heating_footprint_in_kg_per_kwh = 0.02,  # kgCO2eq/kWh
-            gas_costs_in_euro_per_kwh = 0.0861,  # EUR/kWh
-            gas_footprint_in_kg_per_kwh = 0.24,  # kgCO2eq/kWh
-            oil_costs_in_euro_per_l = 1.159835766,  # EUR/l
-            oil_footprint_in_kg_per_l = 3.2,  # kgCO2eq/l
-            diesel_costs_in_euro_per_l = 1.617572993,  # EUR/l
-            diesel_footprint_in_kg_per_l = 2.6649,  # kgCO2eq/l
+            electricity_costs_in_euro_per_kwh=0.2525,  # EUR/kWh
+            electricity_footprint_in_kg_per_kwh=0.44,  # kgCO2eq/kWh
+            electricity_to_grid_revenue_in_euro_per_kwh=0.2525,  # EUR/kWh  # Todo: Change Value!!!
+            district_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
+            district_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
+            gas_costs_in_euro_per_kwh=0.0861,  # EUR/kWh
+            gas_footprint_in_kg_per_kwh=0.24,  # kgCO2eq/kWh
+            oil_costs_in_euro_per_l=1.159835766,  # EUR/l
+            oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
+            diesel_costs_in_euro_per_l=1.617572993,  # EUR/l
+            diesel_footprint_in_kg_per_l=2.6649,  # kgCO2eq/l
         )
 
     @classmethod
@@ -269,73 +269,75 @@ class EmissionFactorsAndCostsForFuelsConfig:
         """
         if year == 2018:
             return EmissionFactorsAndCostsForFuelsConfig(
-                electricity_costs_in_euro_per_kwh = 0.27825,  # EUR/kWh  # Source: [1]
-                electricity_footprint_in_kg_per_kwh = 0.473,  # kgCO2eq/kWh  # Source: [5]
-                electricity_to_grid_revenue_in_euro_per_kwh = 0.1205,  # EUR/kWh  # Source: [2]
-                district_heating_costs_in_euro_per_kwh = 0.0033,  # EUR/kWh
-                district_heating_footprint_in_kg_per_kwh = 0.02,  # kgCO2eq/kWh
-                gas_costs_in_euro_per_kwh = 0.0664,  # EUR/kWh  # Source: [4]
-                gas_footprint_in_kg_per_kwh = 0.24,  # kgCO2eq/kWh
-                oil_costs_in_euro_per_l = 1.159835766,  # EUR/l
-                oil_footprint_in_kg_per_l = 3.2,  # kgCO2eq/l
-                diesel_costs_in_euro_per_l = 128.90,  # EUR/l  # Source: [3]
-                diesel_footprint_in_kg_per_l = 2.0,  # kgCO2eq/l
+                electricity_costs_in_euro_per_kwh=0.27825,  # EUR/kWh  # Source: [1]
+                electricity_footprint_in_kg_per_kwh=0.473,  # kgCO2eq/kWh  # Source: [5]
+                electricity_to_grid_revenue_in_euro_per_kwh=0.1205,  # EUR/kWh  # Source: [2]
+                district_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
+                district_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
+                gas_costs_in_euro_per_kwh=0.0664,  # EUR/kWh  # Source: [4]
+                gas_footprint_in_kg_per_kwh=0.24,  # kgCO2eq/kWh
+                oil_costs_in_euro_per_l=1.159835766,  # EUR/l
+                oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
+                diesel_costs_in_euro_per_l=128.90,  # EUR/l  # Source: [3]
+                diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
             )
         if year == 2019:
             return EmissionFactorsAndCostsForFuelsConfig(
-                electricity_costs_in_euro_per_kwh = 0.295,  # EUR/kWh  # Source: [1]
-                electricity_footprint_in_kg_per_kwh = 0.411,  # kgCO2eq/kWh  # Source: [5]
-                electricity_to_grid_revenue_in_euro_per_kwh = 0.1072,  # EUR/kWh  # Source: [2]
-                district_heating_costs_in_euro_per_kwh = 0.0033,  # EUR/kWh
-                district_heating_footprint_in_kg_per_kwh = 0.02,  # kgCO2eq/kWh
-                gas_costs_in_euro_per_kwh = 0.0728,  # EUR/kWh  # Source: [4]
-                gas_footprint_in_kg_per_kwh = 0.24,  # kgCO2eq/kWh
-                oil_costs_in_euro_per_l = 1.159835766,  # EUR/l
-                oil_footprint_in_kg_per_l = 3.2,  # kgCO2eq/l
-                diesel_costs_in_euro_per_l = 1.2670,  # EUR/l  # Source: [3]
-                diesel_footprint_in_kg_per_l = 2.0,  # kgCO2eq/l
+                electricity_costs_in_euro_per_kwh=0.295,  # EUR/kWh  # Source: [1]
+                electricity_footprint_in_kg_per_kwh=0.411,  # kgCO2eq/kWh  # Source: [5]
+                electricity_to_grid_revenue_in_euro_per_kwh=0.1072,  # EUR/kWh  # Source: [2]
+                district_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
+                district_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
+                gas_costs_in_euro_per_kwh=0.0728,  # EUR/kWh  # Source: [4]
+                gas_footprint_in_kg_per_kwh=0.24,  # kgCO2eq/kWh
+                oil_costs_in_euro_per_l=1.159835766,  # EUR/l
+                oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
+                diesel_costs_in_euro_per_l=1.2670,  # EUR/l  # Source: [3]
+                diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
             )
         if year == 2020:
             return EmissionFactorsAndCostsForFuelsConfig(
-                electricity_costs_in_euro_per_kwh = 0.3005,  # EUR/kWh  # Source: [1]
-                electricity_footprint_in_kg_per_kwh = 0.369,  # kgCO2eq/kWh  # Source: [5]
-                electricity_to_grid_revenue_in_euro_per_kwh = 0.0838,  # EUR/kWh  # Source: [2]
-                district_heating_costs_in_euro_per_kwh = 0.0033,  # EUR/kWh
-                district_heating_footprint_in_kg_per_kwh = 0.02,  # kgCO2eq/kWh
-                gas_costs_in_euro_per_kwh = 0.0699,  # EUR/kWh  # Source: [4]
-                gas_footprint_in_kg_per_kwh = 0.24,  # kgCO2eq/kWh
-                oil_costs_in_euro_per_l = 1.159835766,  # EUR/l
-                oil_footprint_in_kg_per_l = 3.2,  # kgCO2eq/l
-                diesel_costs_in_euro_per_l = 1.1240,  # EUR/l  # Source: [3]
-                diesel_footprint_in_kg_per_l = 2.0,  # kgCO2eq/l
+                electricity_costs_in_euro_per_kwh=0.3005,  # EUR/kWh  # Source: [1]
+                electricity_footprint_in_kg_per_kwh=0.369,  # kgCO2eq/kWh  # Source: [5]
+                electricity_to_grid_revenue_in_euro_per_kwh=0.0838,  # EUR/kWh  # Source: [2]
+                district_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
+                district_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
+                gas_costs_in_euro_per_kwh=0.0699,  # EUR/kWh  # Source: [4]
+                gas_footprint_in_kg_per_kwh=0.24,  # kgCO2eq/kWh
+                oil_costs_in_euro_per_l=1.159835766,  # EUR/l
+                oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
+                diesel_costs_in_euro_per_l=1.1240,  # EUR/l  # Source: [3]
+                diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
             )
         if year == 2021:
             return EmissionFactorsAndCostsForFuelsConfig(
-                electricity_costs_in_euro_per_kwh = 0.3005,  # EUR/kWh  # Source: [1]
-                electricity_footprint_in_kg_per_kwh = 0.410,  # kgCO2eq/kWh  # Source: [5]
-                electricity_to_grid_revenue_in_euro_per_kwh = 0.0753,  # EUR/kWh  # Source: [2]
-                district_heating_costs_in_euro_per_kwh = 0.0033,  # EUR/kWh
-                district_heating_footprint_in_kg_per_kwh = 0.02,  # kgCO2eq/kWh
-                gas_costs_in_euro_per_kwh = 0.0745,  # EUR/kWh  # Source: [4]
-                gas_footprint_in_kg_per_kwh = 0.24,  # kgCO2eq/kWh
-                oil_costs_in_euro_per_l = 1.159835766,  # EUR/l
-                oil_footprint_in_kg_per_l = 3.2,  # kgCO2eq/l
-                diesel_costs_in_euro_per_l = 1.399,  # EUR/l  # Source: [3]
-                diesel_footprint_in_kg_per_l = 2.0,  # kgCO2eq/l
+                electricity_costs_in_euro_per_kwh=0.3005,  # EUR/kWh  # Source: [1]
+                electricity_footprint_in_kg_per_kwh=0.410,  # kgCO2eq/kWh  # Source: [5]
+                electricity_to_grid_revenue_in_euro_per_kwh=0.0753,  # EUR/kWh  # Source: [2]
+                district_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
+                district_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
+                gas_costs_in_euro_per_kwh=0.0745,  # EUR/kWh  # Source: [4]
+                gas_footprint_in_kg_per_kwh=0.24,  # kgCO2eq/kWh
+                oil_costs_in_euro_per_l=1.159835766,  # EUR/l
+                oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
+                diesel_costs_in_euro_per_l=1.399,  # EUR/l  # Source: [3]
+                diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
             )
         if year == 2022:
             return EmissionFactorsAndCostsForFuelsConfig(
-                electricity_costs_in_euro_per_kwh = 0.43025,  # EUR/kWh  # Source: [1]
-                electricity_footprint_in_kg_per_kwh = 0.434,  # kgCO2eq/kWh  # Source: [5]
-                electricity_to_grid_revenue_in_euro_per_kwh = 0.0723,  # EUR/kWh  # Source: [2]
-                district_heating_costs_in_euro_per_kwh = 0.0033,  # EUR/kWh
-                district_heating_footprint_in_kg_per_kwh = 0.02,  # kgCO2eq/kWh
-                gas_costs_in_euro_per_kwh = 0.0951,  # EUR/kWh  # Source: [4]
-                gas_footprint_in_kg_per_kwh = 0.24,  # kgCO2eq/kWh
-                oil_costs_in_euro_per_l = 1.159835766,  # EUR/l
-                oil_footprint_in_kg_per_l = 3.2,  # kgCO2eq/l
-                diesel_costs_in_euro_per_l = 1.96,  # EUR/l  # Source: [3]
-                diesel_footprint_in_kg_per_l = 2.0,  # kgCO2eq/l
+                electricity_costs_in_euro_per_kwh=0.43025,  # EUR/kWh  # Source: [1]
+                electricity_footprint_in_kg_per_kwh=0.434,  # kgCO2eq/kWh  # Source: [5]
+                electricity_to_grid_revenue_in_euro_per_kwh=0.0723,  # EUR/kWh  # Source: [2]
+                district_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
+                district_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
+                gas_costs_in_euro_per_kwh=0.0951,  # EUR/kWh  # Source: [4]
+                gas_footprint_in_kg_per_kwh=0.24,  # kgCO2eq/kWh
+                oil_costs_in_euro_per_l=1.159835766,  # EUR/l
+                oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
+                diesel_costs_in_euro_per_l=1.96,  # EUR/l  # Source: [3]
+                diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
             )
 
-        raise KeyError(f"No Emission and cost factors implemented yet for the year {year}.")
+        raise KeyError(
+            f"No Emission and cost factors implemented yet for the year {year}."
+        )

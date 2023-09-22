@@ -265,11 +265,15 @@ def household_air_conditioner_generic(
 
     """ Occupancy Profile """
     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-        profile_name=occupancy_profile, name="Occupancy", country_name=location,
+        profile_name=occupancy_profile,
+        name="Occupancy",
+        country_name=location,
         profile_with_washing_machine_and_dishwasher=False,
+        number_of_apartments=1
     )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
-        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_occupancy_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
     my_sim.add_component(my_occupancy)
 
@@ -278,7 +282,8 @@ def household_air_conditioner_generic(
         location_entry=weather.LocationEnum.Seville
     )
     my_weather = weather.Weather(
-        config=my_weather_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_weather_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
     my_sim.add_component(my_weather)
 

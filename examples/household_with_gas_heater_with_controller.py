@@ -100,9 +100,10 @@ def household_gas_heater(
     )
 
     # Build Building
+    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
+    my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(
-        config=building.BuildingConfig.get_default_german_single_family_home(),
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # Build Gasheater
@@ -117,8 +118,8 @@ def household_gas_heater(
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    hds_config = (
-        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
+    hds_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
     )
 
     # Build Heat Distribution System
@@ -130,8 +131,11 @@ def household_gas_heater(
     hdscontroller_config = (
         heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
     )
-    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        config=hdscontroller_config, my_simulation_parameters=my_simulation_parameters,
+    my_heat_distribution_controller = (
+        heat_distribution_system.HeatDistributionController(
+            config=hdscontroller_config,
+            my_simulation_parameters=my_simulation_parameters,
+        )
     )
 
     # =================================================================================================================================

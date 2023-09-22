@@ -6,6 +6,7 @@ from hisim import log
 from hisim import utils
 import pytest
 
+
 @pytest.mark.examples
 @utils.measure_execution_time
 def test_basic_household_with_default_connections():

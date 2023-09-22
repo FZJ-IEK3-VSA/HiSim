@@ -50,7 +50,7 @@ class GenericElectrolyzerConfig(cp.ConfigBase):
             source_weight=1,
             min_power=p_el * 0.5,
             max_power=p_el,
-            min_hydrogen_production_rate=p_el * (1/4) * 8.989 / 3.6e4,
+            min_hydrogen_production_rate=p_el * (1 / 4) * 8.989 / 3.6e4,
             max_hydrogen_production_rate=p_el * (50 / 24) * 8.989 / 3.6e4,
         )
         return config
@@ -93,7 +93,11 @@ class GenericElectrolyzer(cp.Component):
     HydrogenOutput = "HydrogenOutput"
     ElectricityOutput = "ElectricityOutput"
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: GenericElectrolyzerConfig,):
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: GenericElectrolyzerConfig,
+    ):
 
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
@@ -133,17 +137,25 @@ class GenericElectrolyzer(cp.Component):
             ],
             output_description="Electricity Output",
         )
-        self.add_default_connections(self.get_default_connections_from_L1GenericElectrolyzerController())
+        self.add_default_connections(
+            self.get_default_connections_from_L1GenericElectrolyzerController()
+        )
 
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""
         pass
 
-    def get_default_connections_from_L1GenericElectrolyzerController(self,) -> List[cp.ComponentConnection]:
+    def get_default_connections_from_L1GenericElectrolyzerController(
+        self,
+    ) -> List[cp.ComponentConnection]:
         """Sets default connections of the controller in the Electroylzer."""
-        log.information("setting controller default connections in generic electrolyzer")
+        log.information(
+            "setting controller default connections in generic electrolyzer"
+        )
         connections: List[cp.ComponentConnection] = []
-        controller_classname = controller_l1_electrolyzer.L1GenericElectrolyzerController.get_classname()
+        controller_classname = (
+            controller_l1_electrolyzer.L1GenericElectrolyzerController.get_classname()
+        )
         connections.append(
             cp.ComponentConnection(
                 GenericElectrolyzer.AvailableElectricity,
@@ -185,7 +197,10 @@ class GenericElectrolyzer(cp.Component):
             hydrogen_output_in_kg_per_sec = 0.0
         else:
             hydrogen_output_in_kg_per_sec = self.config.min_hydrogen_production_rate + (
-                (self.config.max_hydrogen_production_rate - self.config.min_hydrogen_production_rate)
+                (
+                    self.config.max_hydrogen_production_rate
+                    - self.config.min_hydrogen_production_rate
+                )
                 * (self.state.electricity - self.config.min_power)
                 / (self.config.max_power - self.config.min_power)
             )

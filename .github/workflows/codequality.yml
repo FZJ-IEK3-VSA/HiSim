@@ -81,7 +81,6 @@ jobs:
         prospector hisim/components/generic_gas_heater.py
         prospector hisim/components/generic_gas_heater_with_controller.py
         prospector hisim/components/generic_heat_pump.py
-        prospector hisim/components/generic_heat_pump_for_house_with_hds.py
         prospector hisim/components/generic_hot_water_storage_modular.py
         prospector hisim/components/heat_distribution_system.py
         prospector hisim/components/idealized_electric_heater.py

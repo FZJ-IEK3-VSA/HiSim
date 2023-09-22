@@ -30,6 +30,7 @@ __status__ = "development"
 @dataclass
 class CHPConfig(cp.ConfigBase):
     """Defininition of configuration of combined heat and power plant (CHP)."""
+
     #: name of the CHP
     name: str
     #: priority of the component in hierachy: the higher the number the lower the priority
@@ -46,14 +47,24 @@ class CHPConfig(cp.ConfigBase):
     @staticmethod
     def get_default_config_chp(thermal_power: float) -> "CHPConfig":
         config = CHPConfig(
-            name="CHP", source_weight=1, use=lt.LoadTypes.GAS, p_el=(0.33 / 0.5) * thermal_power, p_th=thermal_power, p_fuel=(1 / 0.5) * thermal_power
+            name="CHP",
+            source_weight=1,
+            use=lt.LoadTypes.GAS,
+            p_el=(0.33 / 0.5) * thermal_power,
+            p_th=thermal_power,
+            p_fuel=(1 / 0.5) * thermal_power,
         )
         return config
 
     @staticmethod
     def get_default_config_fuelcell(thermal_power: float) -> "CHPConfig":
         config = CHPConfig(
-            name="CHP", source_weight=1, use=lt.LoadTypes.HYDROGEN, p_el=(0.48 / 0.43) * thermal_power, p_th=thermal_power, p_fuel=(1 / 0.43) * thermal_power
+            name="CHP",
+            source_weight=1,
+            use=lt.LoadTypes.HYDROGEN,
+            p_el=(0.48 / 0.43) * thermal_power,
+            p_th=thermal_power,
+            p_fuel=(1 / 0.43) * thermal_power,
         )
         return config
 
@@ -98,7 +109,9 @@ class SimpleCHP(cp.Component):
         if self.config.use == lt.LoadTypes.HYDROGEN:
             self.p_fuel = config.p_fuel / (3.6e3 * 3.939e4)  # converted to kg / s
         else:
-            self.p_fuel = config.p_fuel * my_simulation_parameters.seconds_per_timestep / 3.6e3  # converted to Wh
+            self.p_fuel = (
+                config.p_fuel * my_simulation_parameters.seconds_per_timestep / 3.6e3
+            )  # converted to Wh
 
         self.state = GenericCHPState(state=0)
         self.previous_state = self.state.clone()
@@ -127,7 +140,7 @@ class SimpleCHP(cp.Component):
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT,
             postprocessing_flag=[lt.InandOutputType.THERMAL_PRODUCTION],
-            output_description="Thermal Power output from CHP to building or buffer in Watt."
+            output_description="Thermal Power output from CHP to building or buffer in Watt.",
         )
         self.thermal_power_output_dhw_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -135,7 +148,7 @@ class SimpleCHP(cp.Component):
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT,
             postprocessing_flag=[lt.InandOutputType.THERMAL_PRODUCTION],
-            output_description="Thermal Power output from CHP to drain hot water storage in Watt."
+            output_description="Thermal Power output from CHP to drain hot water storage in Watt.",
         )
         self.electricity_output_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -146,7 +159,7 @@ class SimpleCHP(cp.Component):
                 lt.InandOutputType.ELECTRICITY_PRODUCTION,
                 lt.ComponentType.FUEL_CELL,
             ],
-            output_description="Electrical Power output of CHP in Watt."
+            output_description="Electrical Power output of CHP in Watt.",
         )
         if self.config.use == lt.LoadTypes.HYDROGEN:
             self.fuel_consumption_channel: cp.ComponentOutput = self.add_output(
@@ -154,9 +167,7 @@ class SimpleCHP(cp.Component):
                 field_name=self.FuelDelivered,
                 load_type=lt.LoadTypes.HYDROGEN,
                 unit=lt.Units.KG_PER_SEC,
-                postprocessing_flag=[
-                    lt.LoadTypes.HYDROGEN
-                ],
+                postprocessing_flag=[lt.LoadTypes.HYDROGEN],
                 output_description="Hydrogen consumption of CHP in kg / s.",
             )
         elif self.config.use == lt.LoadTypes.GAS:
@@ -167,7 +178,7 @@ class SimpleCHP(cp.Component):
                 unit=lt.Units.WATT_HOUR,
                 postprocessing_flag=[
                     lt.InandOutputType.FUEL_CONSUMPTION,
-                    lt.LoadTypes.GAS
+                    lt.LoadTypes.GAS,
                 ],
                 output_description="Gas consumption of CHP in Wh.",
             )
@@ -195,16 +206,28 @@ class SimpleCHP(cp.Component):
 
         # Outputs
         if mode == 0:
-            stsv.set_output_value(self.thermal_power_output_dhw_channel, self.state.state * self.config.p_th)
+            stsv.set_output_value(
+                self.thermal_power_output_dhw_channel,
+                self.state.state * self.config.p_th,
+            )
             stsv.set_output_value(self.thermal_power_output_building_channel, 0)
         elif mode == 1:
             stsv.set_output_value(self.thermal_power_output_dhw_channel, 0)
-            stsv.set_output_value(self.thermal_power_output_building_channel, self.state.state * self.config.p_th)
+            stsv.set_output_value(
+                self.thermal_power_output_building_channel,
+                self.state.state * self.config.p_th,
+            )
 
-        stsv.set_output_value(self.electricity_output_channel, self.state.state * self.config.p_el)
-        stsv.set_output_value(self.fuel_consumption_channel, self.state.state * self.p_fuel)
+        stsv.set_output_value(
+            self.electricity_output_channel, self.state.state * self.config.p_el
+        )
+        stsv.set_output_value(
+            self.fuel_consumption_channel, self.state.state * self.p_fuel
+        )
 
-    def get_default_connections_from_chp_controller(self,) -> List[cp.ComponentConnection]:
+    def get_default_connections_from_chp_controller(
+        self,
+    ) -> List[cp.ComponentConnection]:
         """Sets default connections of the controller in the Fuel Cell / CHP."""
         log.information("setting l1 default connections in generic CHP")
         connections: List[cp.ComponentConnection] = []

@@ -7,6 +7,7 @@ import re
 import os
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
@@ -20,7 +21,6 @@ from hisim.components import (
     controller_l1_heatpump,
     electricity_meter,
 )
-# from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.component import ConfigBase
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
@@ -173,9 +173,11 @@ def household_cluster_reference_advanced_hp(
     my_heat_distribution_controller_config.heating_reference_temperature_in_celsius = (
         heating_reference_temperature_in_celsius
     )
-    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_heat_distribution_controller_config,
+    my_heat_distribution_controller = (
+        heat_distribution_system.HeatDistributionController(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_heat_distribution_controller_config,
+        )
     )
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
@@ -187,7 +189,7 @@ def household_cluster_reference_advanced_hp(
     my_building_config.absolute_conditioned_floor_area_in_m2 = (
         absolute_conditioned_floor_area_in_m2
     )
-
+    my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
@@ -196,10 +198,9 @@ def household_cluster_reference_advanced_hp(
     my_building_information = my_building.return_building_information()
 
     # Build Occupancy
-    my_occupancy_config = (
-        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_CHS01_according_to_number_of_apartments(
+        number_of_apartments=my_building_information.number_of_apartments
     )
-
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
@@ -228,23 +229,24 @@ def household_cluster_reference_advanced_hp(
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Scaled Heat Pump
+    # Build Heat Pump
     my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=my_building_information.building_heating_load_in_watt
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
     )
     my_heat_pump_config.group_id = group_id
+    my_heat_pump_config.flow_temperature_in_celsius = flow_temperature_in_celsius
     my_heat_pump_config.heating_reference_temperature_in_celsius = (
         heating_reference_temperature_in_celsius
     )
-    my_heat_pump_config.flow_temperature_in_celsius = flow_temperature_in_celsius
 
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
-        config=my_heat_pump_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_pump_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Distribution System
-    my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
+    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config,
@@ -260,35 +262,17 @@ def household_cluster_reference_advanced_hp(
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Scaled DHW Heat Pump
+    # Build DHW (this is taken from household_3_advanced_hp_diesel-car_pv_battery.py)
+    my_dhw_heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
+        number_of_apartments=my_building_information.number_of_apartments
+    )
 
     my_dhw_heatpump_controller_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-        name="DHWHeatPumpController"
-    )
-    my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_dhw_heatpump_controller_config,
-    )
-    my_dhw_heatpump_config = (
-        generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating()
-    )
-    # my_dhw_heatpump_config.power_th = (
-    #     my_occupancy.max_hot_water_demand
-    #     * (4180 / 3600)
-    #     * 0.5
-    #     * (3600 / my_simulation_parameters.seconds_per_timestep)
-    #     * (
-    #         HouseholdWarmWaterDemandConfig.ww_temperature_demand
-    #         - HouseholdWarmWaterDemandConfig.freshwater_temperature
-    #     )
-    # )
-    my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
-        config=my_dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
+        name="DHWHeatpumpController"
     )
 
-    # Build Scaled DHW Storage
-    my_dhw_storage_config = (
-        generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler_scaled()
+    my_dhw_storage_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
+        number_of_apartments=my_building_information.number_of_apartments
     )
     my_dhw_storage_config.compute_default_cycle(
         temperature_difference_in_kelvin=my_dhw_heatpump_controller_config.t_max_heating_in_celsius
@@ -297,6 +281,17 @@ def household_cluster_reference_advanced_hp(
 
     my_domnestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
+    )
+
+    my_domnestic_hot_water_heatpump_controller = (
+        controller_l1_heatpump.L1HeatPumpController(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_dhw_heatpump_controller_config,
+        )
+    )
+
+    my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
+        config=my_dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # Build Electricity Meter

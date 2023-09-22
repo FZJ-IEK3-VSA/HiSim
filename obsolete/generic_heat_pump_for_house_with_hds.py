@@ -50,9 +50,10 @@ class GenericHeatPumpConfigNew(cp.ConfigBase):
     heat_pump_name: str
     min_operation_time_in_seconds: int
     min_idle_time_in_seconds: int
+    heating_load_of_building_in_watt: float
 
     @classmethod
-    def get_default_generic_heat_pump_config(cls):
+    def get_default_generic_heat_pump_config(cls, heating_load_of_building_in_watt: float):
         """Gets a default Generic Heat Pump."""
         return GenericHeatPumpConfigNew(
             name="HeatPump",
@@ -60,6 +61,7 @@ class GenericHeatPumpConfigNew(cp.ConfigBase):
             manufacturer="Viessmann Werke GmbH & Co KG",
             min_operation_time_in_seconds=60 * 60,
             min_idle_time_in_seconds=15 * 60,
+            heating_load_of_building_in_watt=heating_load_of_building_in_watt
         )
 
 
@@ -226,19 +228,8 @@ class GenericHeatPumpNew(cp.Component):
 
         self.state_from_heat_pump_controller: float = 0
 
-        if SingletonSimRepository().exist_entry(
-            key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND
-        ):
-            self.max_thermal_building_demand_in_watt = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND
-            )
-        else:
-            raise KeyError(
-                "Keys for max thermal building demand was not found in the singleton sim repository."
-                + "This might be because the heat pump was not initialized before the building."
-                + "Please check the order of the initialization of the components in your example."
-            )
 
+        self.max_thermal_building_demand_in_watt = self.heatpump_config.heating_load_of_building_in_watt
         self.heatpump_water_mass_flow_rate_in_kg_per_second = self.calc_heat_pump_water_mass_flow_rate(
             max_thermal_building_demand_in_watt=self.max_thermal_building_demand_in_watt
         )

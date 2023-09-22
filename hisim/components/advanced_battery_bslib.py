@@ -85,11 +85,11 @@ class BatteryConfig(ConfigBase):
             cost=custom_battery_capacity_generic_in_kilowatt_hour
             * 535.81,  # value from emission_factros_and_costs_devices.csv
             lifetime=10,  # estimated value , source: https://pv-held.de/wie-lange-haelt-batteriespeicher-photovoltaik/
-            lifetime_in_cycles=5e3, # estimated value , source: https://pv-held.de/wie-lange-haelt-batteriespeicher-photovoltaik/
+            lifetime_in_cycles=5e3,  # estimated value , source: https://pv-held.de/wie-lange-haelt-batteriespeicher-photovoltaik/
             maintenance_cost_as_percentage_of_investment=0.02,  # SOURCE: https://solarenergie.de/stromspeicher/preise
         )
         return config
-    
+
     @classmethod
     def get_scaled_battery(cls, total_pv_power_in_watt_peak: float) -> "BatteryConfig":
         """Returns scaled configuration of battery according to pv power."""
@@ -99,7 +99,9 @@ class BatteryConfig(ConfigBase):
             name="Battery",
             # https://www.energieinstitut.at/die-richtige-groesse-von-batteriespeichern/
             custom_battery_capacity_generic_in_kilowatt_hour=custom_battery_capacity_generic_in_kilowatt_hour,
-            custom_pv_inverter_power_generic_in_watt=custom_battery_capacity_generic_in_kilowatt_hour * c_rate * 1e3,
+            custom_pv_inverter_power_generic_in_watt=custom_battery_capacity_generic_in_kilowatt_hour
+            * c_rate
+            * 1e3,
             source_weight=1,
             system_id="SG1",
             charge_in_kwh=0,
@@ -112,7 +114,7 @@ class BatteryConfig(ConfigBase):
             lifetime_in_cycles=5e3,  # todo set correct values
             maintenance_cost_as_percentage_of_investment=0.02,  # SOURCE: https://solarenergie.de/stromspeicher/preise
         )
-        
+
         return config
 
 

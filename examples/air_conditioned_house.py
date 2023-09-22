@@ -269,6 +269,7 @@ def household_air_conditioner_generic(
         name="Occupancy",
         country_name=location,
         profile_with_washing_machine_and_dishwasher=False,
+        number_of_apartments=1
     )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config,

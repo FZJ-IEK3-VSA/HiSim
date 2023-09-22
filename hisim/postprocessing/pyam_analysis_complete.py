@@ -19,7 +19,6 @@ class PyamDataAnalysis:
         data_processing_mode: Any,
         variables_to_check: List[str],
         list_of_scenarios_to_check: Optional[List[str]] = None,
-        list_of_models_to_check: Optional[List[str]] = None,
     ) -> None:
         """Initialize the class."""
 
@@ -36,7 +35,6 @@ class PyamDataAnalysis:
         #     data_processing_mode=data_processing_mode,
         #     variables_to_check=variables_to_check,
         #     list_of_scenarios_to_check=list_of_scenarios_to_check,
-        #     list_of_models_to_check=list_of_models_to_check,
         # )
 
 
@@ -84,11 +82,6 @@ def main():
 
     # list_of_scenarios_to_check = ["DE.N.SFH.05.Gen.ReEx.001.002","DE.N.TH.05.Gen.ReEx.001.002","DE.N.MFH.05.Gen.ReEx.001.002","DE.N.AB.05.Gen.ReEx.001.002"]
 
-    # filter models if you run over whole results folder and you do not want to check all of the models
-    list_of_models_to_check = [
-        "HiSim_household_cluster_reference_advanced_hp",
-        "HiSim_household_cluster_advanced_hp_pv_battery_ems",
-    ]
 
     # -------------------------------------------------------------------------------------------------------------------------------------
 
@@ -100,7 +93,6 @@ def main():
         data_processing_mode=data_processing_mode,
         variables_to_check=list_with_variables_to_check,
         list_of_scenarios_to_check=list_of_scenarios_to_check,
-        list_of_models_to_check=list_of_models_to_check,
     )
 
 

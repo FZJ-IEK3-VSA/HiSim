@@ -129,7 +129,7 @@ def household_with_hds(
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
+        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(heating_load_of_building_in_watt=my_building.my_building_information.max_thermal_building_demand_in_watt)
     )
 
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(

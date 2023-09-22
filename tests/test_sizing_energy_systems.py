@@ -162,12 +162,26 @@ def simulation_for_one_timestep(
     my_residence_information = building.BuildingInformation(config=my_residence_config)
 
     log.information("Building code" + str(my_residence_config.building_code))
-    log.information("Rooftop area " + str(my_residence_information.scaled_rooftop_area_in_m2))
-    log.information("Floor area " + str(my_residence_information.scaled_conditioned_floor_area_in_m2))
+    log.information(
+        "Rooftop area " + str(my_residence_information.scaled_rooftop_area_in_m2)
+    )
+    log.information(
+        "Floor area "
+        + str(my_residence_information.scaled_conditioned_floor_area_in_m2)
+    )
 
-    log.information("Heating load of building in W " + str(my_residence_information.max_thermal_building_demand_in_watt))
-    log.information("Number of apartmens in building " + str(my_residence_information.number_of_apartments))
-    log.information("Number of storeys in building " + str(my_residence_information.number_of_storeys))
+    log.information(
+        "Heating load of building in W "
+        + str(my_residence_information.max_thermal_building_demand_in_watt)
+    )
+    log.information(
+        "Number of apartmens in building "
+        + str(my_residence_information.number_of_apartments)
+    )
+    log.information(
+        "Number of storeys in building "
+        + str(my_residence_information.number_of_storeys)
+    )
 
     # Set PV
     my_pv_config = generic_pv_system.PVSystemConfig.get_scaled_PV_system(
@@ -175,15 +189,13 @@ def simulation_for_one_timestep(
     )
 
     # Set hplib
-    my_hplib_config = (
-        advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-            heating_load_of_building_in_watt=my_residence_information.max_thermal_building_demand_in_watt)
+    my_hplib_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
+        heating_load_of_building_in_watt=my_residence_information.max_thermal_building_demand_in_watt
     )
 
     # Set Hot Water Storage
-    my_simple_hot_water_storage_config = (
-        simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-            heating_load_of_building_in_watt=my_residence_information.max_thermal_building_demand_in_watt)
+    my_simple_hot_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
+        heating_load_of_building_in_watt=my_residence_information.max_thermal_building_demand_in_watt
     )
 
     # Set Battery
@@ -192,13 +204,13 @@ def simulation_for_one_timestep(
     )
 
     # Set DHW Heat Pump Modular
-    my_hp_for_dhw_config = (
-        generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_according_to_number_of_apartments(number_of_apartments=my_residence_information.number_of_apartments)
+    my_hp_for_dhw_config = generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
+        my_residence_information.number_of_apartments
     )
 
     # Set DHW Storage modular
-    my_storage_for_dhw_config = (
-        generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_according_to_number_of_apartments(number_of_apartments=my_residence_information.number_of_apartments)
+    my_storage_for_dhw_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
+        my_residence_information.number_of_apartments
     )
 
     # Energy system sizes

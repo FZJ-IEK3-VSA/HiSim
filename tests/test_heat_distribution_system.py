@@ -119,15 +119,13 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
     )
 
     # Build Heat Distribution System
-    my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig(
-            name=hds_name,
-            co2_footprint=0,
-            cost=8000,
-            lifetime=50,
-            maintenance_cost_as_percentage_of_investment=0.01,
-            heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
-        )
+    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig(
+        name=hds_name,
+        co2_footprint=0,
+        cost=8000,
+        lifetime=50,
+        maintenance_cost_as_percentage_of_investment=0.01,
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
     )
 
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(

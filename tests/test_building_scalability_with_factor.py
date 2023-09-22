@@ -122,7 +122,9 @@ def test_building_scalability():
     window_and_door_surfaces_without_scaling = (
         my_residence.my_building_information.scaled_windows_and_door_envelope_areas_in_m2
     )
-    window_areas_without_scaling = my_residence.my_building_information.scaled_window_areas_in_m2
+    window_areas_without_scaling = (
+        my_residence.my_building_information.scaled_window_areas_in_m2
+    )
     log.information(str(window_areas_without_scaling))
 
     # check building test with different absolute conditioned floor areas

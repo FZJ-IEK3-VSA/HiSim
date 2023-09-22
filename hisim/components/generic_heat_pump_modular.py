@@ -158,7 +158,7 @@ class HeatPumpConfig(cp.ConfigBase):
         return config
 
     @classmethod
-    def get_scaled_waterheating_according_to_number_of_apartments(
+    def get_scaled_waterheating_to_number_of_apartments(
         cls, number_of_apartments: float
     ) -> "HeatPumpConfig":
         """Gets a default heat pump with scaling according to number of apartments."""

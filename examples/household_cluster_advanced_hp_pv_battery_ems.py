@@ -299,7 +299,7 @@ def household_cluster_advanced_hp_pv_battery_ems(
     )
 
     # Build DHW (this is taken from household_3_advanced_hp_diesel-car_pv_battery.py)
-    my_dhw_heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_according_to_number_of_apartments(
+    my_dhw_heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
         number_of_apartments=my_building_information.number_of_apartments
     )
 
@@ -307,7 +307,7 @@ def household_cluster_advanced_hp_pv_battery_ems(
         name="DHWHeatpumpController"
     )
 
-    my_dhw_storage_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_according_to_number_of_apartments(
+    my_dhw_storage_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
         number_of_apartments=my_building_information.number_of_apartments
     )
     my_dhw_storage_config.compute_default_cycle(

@@ -103,7 +103,7 @@ class StorageConfig(cp.ConfigBase):
         return config
 
     @classmethod
-    def get_scaled_config_for_boiler_according_to_number_of_apartments(
+    def get_scaled_config_for_boiler_to_number_of_apartments(
         cls, number_of_apartments: float
     ) -> "StorageConfig":
         """Returns default configuration for boiler."""

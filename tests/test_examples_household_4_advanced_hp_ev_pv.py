@@ -14,7 +14,7 @@ from hisim.postprocessingoptions import PostProcessingOptions
 @pytest.mark.examples
 @utils.measure_execution_time
 def test_basic_household():
-    """ Single day. """
+    """Single day."""
 
     config_filename = "household_4_advanced_hp_ev_pv_config.json"
     if Path(config_filename).is_file():

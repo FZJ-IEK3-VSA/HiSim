@@ -13,7 +13,7 @@ from hisim import utils
 @pytest.mark.examples
 @utils.measure_execution_time
 def test_basic_household_network_chart():
-    """ Makes only the network charts. """
+    """Makes only the network charts."""
     path = "../examples/basic_household.py"
     func = "basic_household_explicit"
     mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)

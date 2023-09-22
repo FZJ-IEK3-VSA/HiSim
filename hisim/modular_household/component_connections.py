@@ -545,7 +545,7 @@ def configure_water_heating_electric(
     count: int
         Integer tracking component hierachy for EMS.
     number_of_apartments: float
-    from building component
+        from building component
 
     """
     if water_heating_system_installed == lt.HeatingSystems.HEAT_PUMP:

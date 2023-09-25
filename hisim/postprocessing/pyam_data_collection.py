@@ -116,7 +116,7 @@ class PyamDataCollector:
             (
                 dict_with_csv_files_for_each_parameter,
                 dict_with_parameter_key_values,
-                list_with_module_config_dicts,
+                dict_with_module_config_dicts,
             ) = self.go_through_all_pyam_data_folders_and_collect_file_paths_according_to_parameters(
                 list_with_pyam_data_folders=list_with_pyam_data_folders,
                 default_config_dict=default_config_dict,
@@ -131,7 +131,7 @@ class PyamDataCollector:
                 ]
                 path_to_check = dict_with_csv_files_for_each_parameter[parameter_key]
 
-                list_with_module_config_dicts = list_with_module_config_dicts[
+                list_with_module_config_dicts = dict_with_module_config_dicts[
                     parameter_key
                 ]
 
@@ -341,12 +341,12 @@ class PyamDataCollector:
             dataframe["hash"] = [hash_number] * len(dataframe["scenario"])
 
             # write all values that were in module config dict in the dataframe, so that you can use these values later for sorting and searching
-
-            module_config_dict = list_with_module_config_dicts[index]
-            for module_config_key, module_config_value in module_config_dict.items():
-                dataframe[module_config_key] = [module_config_value] * len(
-                    dataframe["scenario"]
-                )
+            if list_with_module_config_dicts is not None:
+                module_config_dict = list_with_module_config_dicts[index]
+                for module_config_key, module_config_value in module_config_dict.items():
+                    dataframe[module_config_key] = [module_config_value] * len(
+                        dataframe["scenario"]
+                    )
 
             if rename_scenario is True:
                 if (
@@ -374,10 +374,6 @@ class PyamDataCollector:
 
             index = index + 1
 
-            # convert unit "Watt" to "Watthour" because it makes plots more readable later, conversion factor is 1/3600s
-            # df_pyam_for_one_simulation_duration = df_pyam_for_one_simulation_duration.convert_unit(
-            #     current="W", to="Wh", factor=1 / 3600, inplace=False
-            # )
 
         # sort dataframe
         appended_dataframe = self.sort_dataframe_according_to_scenario_values(
@@ -456,7 +452,7 @@ class PyamDataCollector:
         dict_with_csv_files_for_each_parameter: Dict[str, List[str]],
         dict_with_parameter_key_values: Dict[str, Any],
         dict_with_module_config_dicts: Dict[str, Any],
-    ) -> tuple[Dict, Dict]:
+    ) -> tuple[Dict, Dict, Dict]:
         """Read json config in pyam_data folder and compare with default config."""
 
         for file in os.listdir(path_to_pyam_data_folder):

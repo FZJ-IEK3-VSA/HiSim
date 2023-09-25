@@ -6,6 +6,7 @@ import datetime
 import os
 from typing import Dict, Any, Tuple, Optional, List
 import string
+import copy
 import numpy as np
 import pyam
 import pandas as pd
@@ -145,7 +146,6 @@ class PyAmChartGenerator:
         self,
         folder_path: str,
         time_resolution_of_data_set: Any,
-        list_of_models_to_check: Optional[List[str]],
         list_of_scenarios_to_check: Optional[List[str]],
     ) -> pd.DataFrame:
         """Get csv data and create pyam dataframes."""
@@ -174,7 +174,6 @@ class PyAmChartGenerator:
 
             # if scenario values are no strings, transform them
             file_df["scenario"] = file_df["scenario"].transform(str)
-
 
             # filter scenarios
             if (
@@ -273,6 +272,45 @@ class PyAmChartGenerator:
                 self.make_bar_plot_for_pandas_dataframe(
                     filtered_data=filtered_data, title=self.path_addition,
                 )
+
+                if (
+                    variable_to_check
+                    == "ElectricityMeter|Electricity|ElectricityToOrFromGrid"
+                ):
+
+                    filtered_data = self.calculate_relative_electricity_demand(
+                        dataframe=filtered_data
+                    )
+                    scenario_set = []
+
+                    for scenario in filtered_data.scenario.values:
+
+                        share_of_pv_power = filtered_data.loc[
+                            filtered_data.scenario == scenario
+                        ].share_of_maximum_pv_power.values[-1]
+                        scenario_for_boxplot = (
+                            f"{scenario}_pv_share_{share_of_pv_power}"
+                        )
+                        scenario_set.append(scenario_for_boxplot)
+                    scenario_set = list(OrderedSet(scenario_set))
+
+                    self.path_addition = filtered_data.variable.values[0]
+                    self.plot_path_complete = os.path.join(
+                        self.path_for_plots, self.path_addition
+                    )
+                    if os.path.exists(self.plot_path_complete) is False:
+                        os.makedirs(self.plot_path_complete)
+
+                    self.make_box_plot_for_pandas_dataframe(
+                        filtered_data=filtered_data,
+                        title=self.path_addition,
+                        scenario_set=scenario_set,
+                    )
+                    self.make_bar_plot_for_pandas_dataframe(
+                        filtered_data=filtered_data,
+                        title=self.path_addition,
+                        alternative_bar_labels=scenario_set,
+                    )
 
                 # except Exception:
                 #     log.information(f"{variable_to_check} could not be plotted.")
@@ -440,7 +478,10 @@ class PyAmChartGenerator:
         plt.close()
 
     def make_bar_plot_for_pandas_dataframe(
-        self, filtered_data: pd.DataFrame, title: str,
+        self,
+        filtered_data: pd.DataFrame,
+        title: str,
+        alternative_bar_labels: Optional[List[str]] = None,
     ) -> None:
         """Make bar plot."""
         log.information("Make bar plot.")
@@ -471,6 +512,10 @@ class PyAmChartGenerator:
 
             y_data.append(mean_value_per_scenario)
             bar_labels.append(scenario)
+
+        # choose bar labels
+        if alternative_bar_labels is not None:
+            bar_labels = alternative_bar_labels
 
         x_data = np.arange(0, len(y_data) * 2, step=2)
 
@@ -505,7 +550,7 @@ class PyAmChartGenerator:
         plt.close()
 
     def make_box_plot_for_pandas_dataframe(
-        self, filtered_data: pd.DataFrame, title: str,
+        self, filtered_data: pd.DataFrame, title: str, scenario_set: Optional[List[str]] = None
     ) -> None:
         """Make box plot."""
         log.information("Make box plot.")
@@ -513,7 +558,8 @@ class PyAmChartGenerator:
         fig, a_x = plt.subplots(
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
-        scenario_set = list(OrderedSet(filtered_data.scenario))
+        if scenario_set is None:
+            scenario_set = list(OrderedSet(filtered_data.scenario))
 
         sns.boxplot(data=filtered_data, x="scenario", y="value")  #
         y_tick_labels, unit, y_tick_locations = self.set_axis_scale(
@@ -896,9 +942,98 @@ class PyAmChartGenerator:
                 key_scenario_to_check
             ] * len(df_filtered_for_specific_scenarios["scenario"])
             concat_df = pd.concat([concat_df, df_filtered_for_specific_scenarios])
+            concat_df["old_scenario"] = data_frame["scenario"]
 
         return concat_df
 
+    def calculate_relative_electricity_demand(
+        self, dataframe: pd.DataFrame
+    ) -> pd.DataFrame:
+        """Calculate relative electricity demand."""
+
+        # look for ElectricityMeter|Electricity|ElectrcityToOrFromGrid output
+        print(dataframe)
+        if (
+            "ElectricityMeter|Electricity|ElectricityToOrFromGrid"
+            not in dataframe.variable.values
+        ):
+            raise ValueError(
+                "ElectricityMeter|Electricity|ElectricityToOrFromGrid was not found in variables."
+            )
+
+        # filter again just to be shure
+        filtered_data = dataframe.loc[
+            dataframe.variable == "ElectricityMeter|Electricity|ElectricityToOrFromGrid"
+        ]
+
+        if "share_of_maximum_pv_power" not in filtered_data.columns:
+            raise ValueError(
+                "share_of_maximum_pv_power was not found in dataframe columns"
+            )
+
+        # go through all scenarios
+        list_with_relative_electricity_demands = []
+        for scenario in filtered_data.old_scenario.values:
+            # data for this scenario
+            df_for_one_scenario = filtered_data.loc[
+                filtered_data.old_scenario == scenario
+            ]
+
+            # get reference value (when share of pv power is zero)
+            for (
+                share_of_maximum_pv_power
+            ) in df_for_one_scenario.share_of_maximum_pv_power.values:
+                if share_of_maximum_pv_power == 0:
+
+                    df_for_one_scenario_for_zero_pv_share = df_for_one_scenario.loc[
+                        df_for_one_scenario.share_of_maximum_pv_power
+                        == share_of_maximum_pv_power
+                    ]
+                    # df_demand_values = df_for_one_scenario_for_zero_pv_share.loc[df_for_one_scenario_for_zero_pv_share.value < 0]
+                    reference_value_for_electricity_demand = np.mean(
+                        df_for_one_scenario_for_zero_pv_share.value.values
+                    )
+                    value_for_electricity_demand = 0
+
+                elif share_of_maximum_pv_power != 0:
+
+                    df_for_one_scenario_for_nonzero_pv_share = df_for_one_scenario.loc[
+                        df_for_one_scenario.share_of_maximum_pv_power
+                        == share_of_maximum_pv_power
+                    ]
+                    # df_demand_values = df_for_one_scenario_for_nonzero_pv_share.loc[df_for_one_scenario_for_nonzero_pv_share.value < 0]
+                    value_for_electricity_demand = np.mean(
+                        df_for_one_scenario_for_nonzero_pv_share.value.values
+                    )
+
+                # calculate reference electricity demand for each scenario and share of pv power
+                relative_electricity_demand = (
+                    1
+                    - (
+                        (
+                            reference_value_for_electricity_demand
+                            - value_for_electricity_demand
+                        )
+                        / reference_value_for_electricity_demand
+                    )
+                ) * 100
+            list_with_relative_electricity_demands.append(
+                relative_electricity_demand
+            )
+
+        # write everything in df with new column and return df
+        new_df_only_with_relative_electricity_demand = copy.deepcopy(filtered_data)
+        new_df_only_with_relative_electricity_demand["variable"] = [
+            "Relative Electricity Demand"
+        ] * len(filtered_data.variable.values)
+        new_df_only_with_relative_electricity_demand["unit"] = ["%"] * len(
+            filtered_data.variable.values
+        )
+        new_df_only_with_relative_electricity_demand[
+            "value"
+        ] = list_with_relative_electricity_demands
+
+        return new_df_only_with_relative_electricity_demand
 
 
 # examples for variables to check (check names of your variables before your evaluation, if they are correct)

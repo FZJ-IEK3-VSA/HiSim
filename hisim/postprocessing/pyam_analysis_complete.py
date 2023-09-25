@@ -29,13 +29,13 @@ class PyamDataAnalysis:
             time_resolution_of_data_set=time_resolution_of_data_set,
             simulation_duration_to_check=simulation_duration_to_check,
         )
-        # pyam_data_processing.PyAmChartGenerator(
-        #     simulation_duration_to_check=simulation_duration_to_check,
-        #     time_resolution_of_data_set=time_resolution_of_data_set,
-        #     data_processing_mode=data_processing_mode,
-        #     variables_to_check=variables_to_check,
-        #     list_of_scenarios_to_check=list_of_scenarios_to_check,
-        # )
+        pyam_data_processing.PyAmChartGenerator(
+            simulation_duration_to_check=simulation_duration_to_check,
+            time_resolution_of_data_set=time_resolution_of_data_set,
+            data_processing_mode=data_processing_mode,
+            variables_to_check=variables_to_check,
+            list_of_scenarios_to_check=list_of_scenarios_to_check,
+        )
 
 
 def main():
@@ -68,11 +68,10 @@ def main():
         pyam_data_collection.PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
     )
 
-    list_with_variables_to_check = (
-        pyam_data_processing.heating_demand
-        + pyam_data_processing.electricity_data
-        + pyam_data_processing.kpi_data
-    )  # + pyam_data_processing.kpi_data)
+    list_with_variables_to_check = pyam_data_processing.electricity_data  # (
+    # pyam_data_processing.heating_demand
+    # + pyam_data_processing.electricity_data
+    # + pyam_data_processing.kpi_data)
     # + pyam_data_processing.heating_demand
     # + pyam_data_processing.electricity_data
     # + pyam_data_processing.occuancy_consumption
@@ -81,7 +80,6 @@ def main():
     list_of_scenarios_to_check = pyam_data_processing.building_type
 
     # list_of_scenarios_to_check = ["DE.N.SFH.05.Gen.ReEx.001.002","DE.N.TH.05.Gen.ReEx.001.002","DE.N.MFH.05.Gen.ReEx.001.002","DE.N.AB.05.Gen.ReEx.001.002"]
-
 
     # -------------------------------------------------------------------------------------------------------------------------------------
 

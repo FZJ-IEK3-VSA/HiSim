@@ -94,6 +94,12 @@ class PyamDataCollector:
         ):
             parameter_key = "hot_water_storage_size_in_liter"
 
+        elif (
+            data_processing_mode
+            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_SHARE_OF_MAXIMUM_PV
+        ):
+            parameter_key = "share_of_maximum_pv_power"
+
         else:
             raise ValueError(
                 "Analysis mode is not part of the PyamDataProcessingModeEnum class."
@@ -103,45 +109,31 @@ class PyamDataCollector:
 
         print("parameter key ", parameter_key)
         print("##################")
-        if parameter_key is None:
-            list_with_parameter_key_values = None
-            path_to_check = list_with_pyam_data_folders
 
-        elif parameter_key is not None and path_to_default_config is not None:
+        if path_to_default_config is None:
+            list_with_parameter_key_values = None
+            list_with_csv_files = list_with_pyam_data_folders
+            list_with_module_config_dicts = None
+
+        else:
+            # path to default config is given (which means there should be also a module config dict in the json file in the pyam folder which has read the config)
 
             default_config_dict = self.get_default_config(
                 path_to_default_config=path_to_default_config
             )
 
             (
-                dict_with_csv_files_for_each_parameter,
-                dict_with_parameter_key_values,
-                dict_with_module_config_dicts,
+                list_with_csv_files,
+                list_with_parameter_key_values,
+                list_with_module_config_dicts,
             ) = self.go_through_all_pyam_data_folders_and_collect_file_paths_according_to_parameters(
                 list_with_pyam_data_folders=list_with_pyam_data_folders,
                 default_config_dict=default_config_dict,
+                parameter_key=parameter_key,
             )
 
-            if (
-                parameter_key in dict_with_csv_files_for_each_parameter
-                and parameter_key in dict_with_parameter_key_values
-            ):
-                list_with_parameter_key_values = dict_with_parameter_key_values[
-                    parameter_key
-                ]
-                path_to_check = dict_with_csv_files_for_each_parameter[parameter_key]
-
-                list_with_module_config_dicts = dict_with_module_config_dicts[
-                    parameter_key
-                ]
-
-            else:
-                raise KeyError(
-                    f"The parameter key {parameter_key} was not found in the dictionary dict_with_csv_files_for_each_parameter or dict_with_parameter_key_values."
-                )
-
         all_csv_files = self.import_data_from_file(
-            paths_to_check=path_to_check,
+            paths_to_check=list_with_csv_files,
             analyze_yearly_or_hourly_data=time_resolution_of_data_set,
         )
 
@@ -343,7 +335,10 @@ class PyamDataCollector:
             # write all values that were in module config dict in the dataframe, so that you can use these values later for sorting and searching
             if list_with_module_config_dicts is not None:
                 module_config_dict = list_with_module_config_dicts[index]
-                for module_config_key, module_config_value in module_config_dict.items():
+                for (
+                    module_config_key,
+                    module_config_value,
+                ) in module_config_dict.items():
                     dataframe[module_config_key] = [module_config_value] * len(
                         dataframe["scenario"]
                     )
@@ -373,7 +368,6 @@ class PyamDataCollector:
             appended_dataframe = pd.concat([appended_dataframe, dataframe])
 
             index = index + 1
-
 
         # sort dataframe
         appended_dataframe = self.sort_dataframe_according_to_scenario_values(
@@ -449,10 +443,11 @@ class PyamDataCollector:
         self,
         default_config_dict: Dict[str, Any],
         path_to_pyam_data_folder: str,
-        dict_with_csv_files_for_each_parameter: Dict[str, List[str]],
-        dict_with_parameter_key_values: Dict[str, Any],
-        dict_with_module_config_dicts: Dict[str, Any],
-    ) -> tuple[Dict, Dict, Dict]:
+        list_with_csv_files: List[Any],
+        list_with_parameter_key_values: List[Any],
+        list_with_module_configs: List[Any],
+        parameter_key: str,
+    ) -> tuple[List[Any], List[Any], List[Any]]:
         """Read json config in pyam_data folder and compare with default config."""
 
         for file in os.listdir(path_to_pyam_data_folder):
@@ -480,69 +475,104 @@ class PyamDataCollector:
         # for each parameter different than the default config parameter, get the respective path to the folder
         # and also create a dict with the parameter, value pairs
 
-        for default_key, default_value in default_config_dict.items():
+        if my_module_config_dict[parameter_key] != default_config_dict[parameter_key]:
 
-            if my_module_config_dict[default_key] != default_value:
+            list_with_csv_files.append(path_to_pyam_data_folder)
+            list_with_parameter_key_values.append(my_module_config_dict[parameter_key])
 
-                dict_with_csv_files_for_each_parameter[default_key] += [
-                    path_to_pyam_data_folder
-                ]
-                dict_with_parameter_key_values[default_key] += [
-                    my_module_config_dict[default_key]
-                ]
+            list_with_module_configs.append(my_module_config_dict)
 
-                dict_with_module_config_dicts[default_key] += [my_module_config_dict]
+        # add to each item in the dict also the default example if the default example exists
+
+        if self.path_of_pyam_results_executed_with_default_config != "":
+            list_with_csv_files.append(
+                self.path_of_pyam_results_executed_with_default_config
+            )
+            list_with_parameter_key_values.append(default_config_dict[parameter_key])
+
+            list_with_module_configs.append(default_config_dict)
 
         return (
-            dict_with_csv_files_for_each_parameter,
-            dict_with_parameter_key_values,
-            dict_with_module_config_dicts,
+            list_with_csv_files,
+            list_with_parameter_key_values,
+            list_with_module_configs,
+        )
+
+    def read_module_config_if_exist_and_write_in_dataframe(
+        self,
+        default_config_dict: Dict[str, Any],
+        path_to_pyam_data_folder: str,
+        list_with_module_configs: List[Any],
+        list_with_csv_files: List[Any],
+    ):
+        """Read module config if possible and write to dataframe."""
+
+        for file in os.listdir(path_to_pyam_data_folder):
+
+            if ".json" in file:
+                with open(os.path.join(path_to_pyam_data_folder, file), "r", encoding="utf-8") as openfile:  # type: ignore
+                    config_dict = json.load(openfile)
+                    my_module_config_dict = config_dict["myModuleConfig"]
+
+        # check if module config and default config have any keys in common
+        if len(set(default_config_dict).intersection(my_module_config_dict)) == 0:
+            raise KeyError(
+                f"The module config of the folder {path_to_pyam_data_folder} should contain the keys of the default config, otherwise their values cannot be compared."
+            )
+
+        list_with_module_configs.append(my_module_config_dict)
+        list_with_csv_files.append(path_to_pyam_data_folder)
+
+        return (
+            list_with_module_configs,
+            list_with_csv_files,
         )
 
     def go_through_all_pyam_data_folders_and_collect_file_paths_according_to_parameters(
         self,
         list_with_pyam_data_folders: List[str],
         default_config_dict: Dict[str, Any],
-    ) -> tuple[Dict, Dict, Dict]:
+        parameter_key: Optional[str],
+    ) -> tuple[List[Any], List[Any], List[Any]]:
         """Order result files according to different parameters."""
 
-        dict_with_csv_files_for_each_parameter: Dict = defaultdict(list)
-        dict_with_parameter_key_values: Dict = defaultdict(list)
-        dict_with_module_config_dicts: Dict = defaultdict(list)
+        list_with_module_configs: List = []
+        list_with_csv_files: List = []
+        list_with_parameter_key_values = []
+
         for folder in list_with_pyam_data_folders:  # type: ignore
-            try:
+
+            if parameter_key is None:
                 (
-                    dict_with_csv_files_for_each_parameter,
-                    dict_with_parameter_key_values,
-                    dict_with_module_config_dicts,
+                    list_with_module_configs,
+                    list_with_csv_files,
+                ) = self.read_module_config_if_exist_and_write_in_dataframe(
+                    default_config_dict=default_config_dict,
+                    path_to_pyam_data_folder=folder,
+                    list_with_module_configs=list_with_module_configs,
+                    list_with_csv_files=list_with_csv_files,
+                )
+                list_with_parameter_key_values = None
+
+            else:
+
+                (
+                    list_with_csv_files,
+                    list_with_parameter_key_values,
+                    list_with_module_configs,
                 ) = self.read_pyam_data_json_config_and_compare_to_default_config(
                     default_config_dict=default_config_dict,
                     path_to_pyam_data_folder=folder,
-                    dict_with_csv_files_for_each_parameter=dict_with_csv_files_for_each_parameter,
-                    dict_with_parameter_key_values=dict_with_parameter_key_values,
-                    dict_with_module_config_dicts=dict_with_module_config_dicts,
+                    list_with_csv_files=list_with_csv_files,
+                    list_with_parameter_key_values=list_with_parameter_key_values,
+                    list_with_module_configs=list_with_module_configs,
+                    parameter_key=parameter_key,
                 )
-            except Exception:
-                log.information(
-                    f"The module_config of this folder {folder} and the default config do not have the same keys. This data will not be collected."
-                )
-                pass
-
-        # add to each item in the dict also the default example if the default example exists
-        for key in dict_with_csv_files_for_each_parameter.keys():
-
-            if self.path_of_pyam_results_executed_with_default_config != "":
-                dict_with_csv_files_for_each_parameter[key].append(
-                    self.path_of_pyam_results_executed_with_default_config
-                )
-                dict_with_parameter_key_values[key].append(default_config_dict[key])
-
-                dict_with_module_config_dicts[key].append(default_config_dict)
 
         return (
-            dict_with_csv_files_for_each_parameter,
-            dict_with_parameter_key_values,
-            dict_with_module_config_dicts,
+            list_with_csv_files,
+            list_with_parameter_key_values,
+            list_with_module_configs,
         )
 
     def check_for_duplicates_in_dict(
@@ -630,3 +660,4 @@ class PyamDataProcessingModeEnum(enum.Enum):
     PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES = 7
     PROCESS_FOR_DIFFERENT_DELTA_T_IN_HP_CONTROLLER = 8
     PROCESS_FOR_DIFFERENT_HOT_WATER_STORAGE_SIZES = 9
+    PROCESS_FOR_DIFFERENT_SHARE_OF_MAXIMUM_PV = 10

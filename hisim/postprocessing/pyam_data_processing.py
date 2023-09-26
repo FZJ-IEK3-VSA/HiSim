@@ -100,6 +100,13 @@ class PyAmChartGenerator:
             data_path_strip = "data_with_different_hot_water_storage_size_in_liters"
             result_path_strip = "results_different_hot_water_storage_size_in_liters"
 
+        elif (
+            data_processing_mode
+            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_SHARE_OF_MAXIMUM_PV
+        ):
+            data_path_strip = "data_with_different_share_of_maximum_pv_powers"
+            result_path_strip = "results_different_share_of_maximum_pv_powers"
+
         else:
             raise ValueError("PyamDataProcessingMode not known.")
 
@@ -180,6 +187,7 @@ class PyAmChartGenerator:
                 list_of_scenarios_to_check is not None
                 and list_of_scenarios_to_check != []
             ):
+
                 file_df = self.check_if_scenario_exists_and_filter_dataframe_for_scenarios(
                     data_frame=file_df,
                     list_of_scenarios_to_check=list_of_scenarios_to_check,
@@ -550,7 +558,10 @@ class PyAmChartGenerator:
         plt.close()
 
     def make_box_plot_for_pandas_dataframe(
-        self, filtered_data: pd.DataFrame, title: str, scenario_set: Optional[List[str]] = None
+        self,
+        filtered_data: pd.DataFrame,
+        title: str,
+        scenario_set: Optional[List[str]] = None,
     ) -> None:
         """Make box plot."""
         log.information("Make box plot.")
@@ -1017,9 +1028,7 @@ class PyAmChartGenerator:
                         / reference_value_for_electricity_demand
                     )
                 ) * 100
-            list_with_relative_electricity_demands.append(
-                relative_electricity_demand
-            )
+            list_with_relative_electricity_demands.append(relative_electricity_demand)
 
         # write everything in df with new column and return df
         new_df_only_with_relative_electricity_demand = copy.deepcopy(filtered_data)

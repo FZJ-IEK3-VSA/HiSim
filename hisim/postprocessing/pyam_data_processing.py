@@ -15,6 +15,7 @@ import plotly
 from html2image import Html2Image
 from ordered_set import OrderedSet
 import seaborn as sns
+from dataclasses import dataclass
 from hisim.postprocessing.pyam_data_collection import (
     PyamDataTypeEnum,
     PyamDataProcessingModeEnum,
@@ -33,7 +34,8 @@ class PyAmChartGenerator:
         data_processing_mode: Any,
         time_resolution_of_data_set: Any,
         variables_to_check: Optional[List[str]] = None,
-        list_of_scenarios_to_check: Optional[List[str]] = None,
+        # list_of_scenarios_to_check: Optional[List[str]] = None,
+        dict_of_scenarios_to_check: Optional[Dict[str, List[str]]] = None,
     ) -> None:
         """Initialize the class."""
 
@@ -131,11 +133,14 @@ class PyAmChartGenerator:
         self.hisim_chartbase.figsize = (10, 8)
 
         # read data, sort data according to scenarios if wanted, and create pandas dataframe
-        pandas_dataframe = self.get_dataframe_and_create_pandas_dataframe_for_all_data(
+        (pandas_dataframe,key_for_scenario_one, key_for_current_scenario) = self.get_dataframe_and_create_pandas_dataframe_for_all_data(
             folder_path=self.folder_path,
             time_resolution_of_data_set=time_resolution_of_data_set,
-            list_of_scenarios_to_check=list_of_scenarios_to_check,
+            #list_of_scenarios_to_check=list_of_scenarios_to_check,
+            dict_of_scenarios_to_check=dict_of_scenarios_to_check
         )
+        
+        # print(f"{result_path_strip}_{key_for_scenario_one}_{key_for_current_scenario}")
 
         if variables_to_check != [] and variables_to_check is not None:
             self.make_plots_with_specific_kind_of_data(
@@ -153,7 +158,8 @@ class PyAmChartGenerator:
         self,
         folder_path: str,
         time_resolution_of_data_set: Any,
-        list_of_scenarios_to_check: Optional[List[str]],
+        # list_of_scenarios_to_check: Optional[List[str]],
+        dict_of_scenarios_to_check: Optional[Dict[str, List[str]]],
     ) -> pd.DataFrame:
         """Get csv data and create pyam dataframes."""
 
@@ -181,19 +187,31 @@ class PyAmChartGenerator:
 
             # if scenario values are no strings, transform them
             file_df["scenario"] = file_df["scenario"].transform(str)
+            key_for_scenario_one = ""
+            key_for_current_scenario = ""
 
             # filter scenarios
+            # if (
+            #     list_of_scenarios_to_check is not None
+            #     and list_of_scenarios_to_check != []
+            # ):
+
+            #     file_df = self.check_if_scenario_exists_and_filter_dataframe_for_scenarios(
+            #         data_frame=file_df,
+            #         list_of_scenarios_to_check=list_of_scenarios_to_check,
+            #     )
             if (
-                list_of_scenarios_to_check is not None
-                and list_of_scenarios_to_check != []
+                dict_of_scenarios_to_check is not None
+                and dict_of_scenarios_to_check != {}
             ):
 
-                file_df = self.check_if_scenario_exists_and_filter_dataframe_for_scenarios(
+                (file_df, key_for_scenario_one, key_for_current_scenario) = self.check_if_scenario_exists_and_filter_dataframe_for_scenarios_dict(
                     data_frame=file_df,
-                    list_of_scenarios_to_check=list_of_scenarios_to_check,
+                    #list_of_scenarios_to_check=list_of_scenarios_to_check,
+                    dict_of_scenarios_to_check=dict_of_scenarios_to_check
                 )
 
-            return file_df
+            return file_df, key_for_scenario_one, key_for_current_scenario
 
     def make_plots_with_specific_kind_of_data(
         self,
@@ -919,43 +937,115 @@ class PyAmChartGenerator:
             statistical_data.to_excel(excel_writer=writer, sheet_name="statistics")
 
     def check_if_scenario_exists_and_filter_dataframe_for_scenarios(
-        self, data_frame: pd.DataFrame, list_of_scenarios_to_check: List[str]
+        self, data_frame: pd.DataFrame, dict_of_scenarios_to_check: Dict[str,List[str]], #list_of_scenarios_to_check: List[str]
     ) -> pd.DataFrame:
         """Check if scenario exists and filter dataframe for scenario."""
+        for scenario_to_check_key, list_of_scenarios_to_check in dict_of_scenarios_to_check.items():
+            aggregated_scenario_dict: Dict = {key: [] for key in list_of_scenarios_to_check}
+
+            for given_scenario in data_frame["scenario"]:
+                # string comparison
+
+                for scenario_to_check in list_of_scenarios_to_check:
+                    if (
+                        scenario_to_check in given_scenario
+                        and given_scenario
+                        not in aggregated_scenario_dict[scenario_to_check]
+                    ):
+                        aggregated_scenario_dict[scenario_to_check].append(given_scenario)
+            # raise error if dict is empty
+            for key_scenario_to_check, given_scenario in aggregated_scenario_dict.items():
+                if given_scenario == []:
+                    raise ValueError(
+                        f"Scenarios containing {key_scenario_to_check} were not found in the pyam dataframe."
+                    )
+
+            concat_df = pd.DataFrame()
+            # only take rows from dataframe which are in selected scenarios
+            for key_scenario_to_check, given_scenario in aggregated_scenario_dict.items():
+
+                df_filtered_for_specific_scenarios = data_frame.loc[
+                    data_frame["scenario"].isin(given_scenario)
+                ]
+                df_filtered_for_specific_scenarios["scenario"] = [
+                    key_scenario_to_check
+                ] * len(df_filtered_for_specific_scenarios["scenario"])
+                concat_df = pd.concat([concat_df, df_filtered_for_specific_scenarios])
+                concat_df["scenario_0"] = data_frame["scenario"]
+
+        return concat_df
+    
+    def check_if_scenario_exists_and_filter_dataframe_for_scenarios_dict(
+        self, data_frame: pd.DataFrame, dict_of_scenarios_to_check: Dict[str,List[str]], #list_of_scenarios_to_check: List[str]
+    ) -> pd.DataFrame:
+        """Check if scenario exists and filter dataframe for scenario."""
+        
+        concat_df = copy.deepcopy(data_frame)
+        filter_level_index = 0
+        for scenario_to_check_key, list_of_scenarios_to_check in dict_of_scenarios_to_check.items():
+            
+            concat_df = self.check_for_one_scenario(dataframe=concat_df, list_of_scenarios_to_check=list_of_scenarios_to_check,column_name_to_check=scenario_to_check_key, filter_level_index=filter_level_index)
+
+            filter_level_index = filter_level_index + 1
+        
+
+        # rename scenario with all scenario filter levels
+        for index in concat_df.index:
+            # if even more filter levels need to add condition!
+            if filter_level_index == 2:
+                current_scenario_value = concat_df["scenario"][index]
+                scenario_value_one = concat_df["scenario_1"][index]
+                # scenario zero is original scenario that will be overwritten
+                key_for_scenario_one = list(dict_of_scenarios_to_check.keys())[0]
+                key_for_current_scenario = list(dict_of_scenarios_to_check.keys())[1]
+                concat_df["scenario"][index] = f"{scenario_value_one}_{current_scenario_value}"
+            
+        return concat_df, key_for_scenario_one, key_for_current_scenario
+    
+    def check_for_one_scenario(self, dataframe: pd.DataFrame, list_of_scenarios_to_check: List, column_name_to_check: str, filter_level_index: int):
 
         aggregated_scenario_dict: Dict = {key: [] for key in list_of_scenarios_to_check}
-
-        for given_scenario in data_frame["scenario"]:
-            # string comparison
-
-            for scenario_to_check in list_of_scenarios_to_check:
-                if (
-                    scenario_to_check in given_scenario
-                    and given_scenario
+        for scenario_to_check in list_of_scenarios_to_check:
+            for value in dataframe[column_name_to_check].values:
+                if (isinstance(scenario_to_check, str) and
+                    scenario_to_check in value
+                    and value
                     not in aggregated_scenario_dict[scenario_to_check]
                 ):
-                    aggregated_scenario_dict[scenario_to_check].append(given_scenario)
-        # raise error if dict is empty
-        for key_scenario_to_check, given_scenario in aggregated_scenario_dict.items():
-            if given_scenario == []:
-                raise ValueError(
-                    f"Scenarios containing {key_scenario_to_check} were not found in the pyam dataframe."
-                )
+                    aggregated_scenario_dict[scenario_to_check].append(value)
+                elif (isinstance(scenario_to_check, (float,int)) and scenario_to_check == value and value not in aggregated_scenario_dict[scenario_to_check]):
 
+                    aggregated_scenario_dict[scenario_to_check].append(value)
+                    
+                    
         concat_df = pd.DataFrame()
+        new_df = copy.deepcopy(dataframe)
         # only take rows from dataframe which are in selected scenarios
-        for key_scenario_to_check, given_scenario in aggregated_scenario_dict.items():
+        for key_scenario_to_check, given_list_of_values in aggregated_scenario_dict.items():
+            print("key aggreagted dict ", key_scenario_to_check)
+            
 
-            df_filtered_for_specific_scenarios = data_frame.loc[
-                data_frame["scenario"].isin(given_scenario)
+
+            print("column name ", column_name_to_check)
+            
+            
+            df_filtered_for_specific_scenarios = new_df.loc[
+                new_df[column_name_to_check].isin(given_list_of_values)
             ]
+            
             df_filtered_for_specific_scenarios["scenario"] = [
                 key_scenario_to_check
             ] * len(df_filtered_for_specific_scenarios["scenario"])
-            concat_df = pd.concat([concat_df, df_filtered_for_specific_scenarios])
-            concat_df["old_scenario"] = data_frame["scenario"]
+            
 
+            concat_df = pd.concat([concat_df, df_filtered_for_specific_scenarios])
+            concat_df[f"scenario_{filter_level_index}"] = new_df["scenario"]
+            
+            #
+            
         return concat_df
+        
+        
 
     def calculate_relative_electricity_demand(
         self, dataframe: pd.DataFrame
@@ -963,7 +1053,6 @@ class PyAmChartGenerator:
         """Calculate relative electricity demand."""
 
         # look for ElectricityMeter|Electricity|ElectrcityToOrFromGrid output
-        print(dataframe)
         if (
             "ElectricityMeter|Electricity|ElectricityToOrFromGrid"
             not in dataframe.variable.values
@@ -984,10 +1073,10 @@ class PyAmChartGenerator:
 
         # go through all scenarios
         list_with_relative_electricity_demands = []
-        for scenario in filtered_data.old_scenario.values:
+        for scenario in filtered_data.scenario_0.values:
             # data for this scenario
             df_for_one_scenario = filtered_data.loc[
-                filtered_data.old_scenario == scenario
+                filtered_data.scenario_0 == scenario
             ]
 
             # get reference value (when share of pv power is zero)
@@ -1045,79 +1134,161 @@ class PyAmChartGenerator:
         return new_df_only_with_relative_electricity_demand
 
 
-# examples for variables to check (check names of your variables before your evaluation, if they are correct)
-# kpi data has no time series, so only choose when you analyze yearly data
-kpi_data = [
-    "Consumption",
-    # "Production",
-    # "Self-consumption",
-    # "Injection",
-    # "Self-consumption rate",
-    # "Cost for energy use",
-    # "CO2 emitted due energy use",
-    # "Battery losses",
-    # "Autarky rate",
-    # "Annual investment cost for equipment (old version)",
-    # "Annual CO2 Footprint for equipment (old version)",
-    # "Investment cost for equipment per simulated period",
-    # "CO2 footprint for equipment per simulated period",
-    # "System operational Cost for simulated period",
-    # "System operational Emissions for simulated period",
-    "Total costs for simulated period",
-    "Total emissions for simulated period",
-    "Temperature deviation of building indoor air temperature being below set temperature 19 °C",
-    "Minimum building indoor air temperature reached",
-    "Temperature deviation of building indoor air temperature being above set temperature 24 °C",
-    "Maximum building indoor air temperature reached",
-    "Number of heat pump cycles",
-]
 
-electricity_data = [
-    # "L2EMSElectricityController|Electricity|ElectricityToOrFromGrid",
-    # "PVSystem_w0|Electricity|ElectricityOutput", # check if pv was used or not
-    "ElectricityMeter|Electricity|ElectricityToOrFromGrid",
-    "ElectricityMeter|Electricity|ElectricityConsumption",
-    # "ElectricityMeter|Electricity|ElectricityProduction"
-]
+class FilterClass:
+    
+    """"Class for setting filters on the data for processing."""
+    
+    def __init__(self):
+    
+        path_to_default_config: Optional[str] = None
+        scenarios_to_check: Optional[List] = None
+        models_to_check: Optional[List] = None
+        
+        (self.kpi_data, self.electricity_data, self.occuancy_consumption, self.heating_demand) = self.get_variables_to_check()
+        (self.building_type, self.building_refurbishment_state, self.building_age, self.pv_share) = self.get_scenarios_to_check()
+        
+    def get_variables_to_check(self):
+        
+        # examples for variables to check (check names of your variables before your evaluation, if they are correct)
+        # kpi data has no time series, so only choose when you analyze yearly data
+        kpi_data = [
+            "Consumption",
+            # "Production",
+            # "Self-consumption",
+            # "Injection",
+            # "Self-consumption rate",
+            # "Cost for energy use",
+            # "CO2 emitted due energy use",
+            # "Battery losses",
+            # "Autarky rate",
+            # "Annual investment cost for equipment (old version)",
+            # "Annual CO2 Footprint for equipment (old version)",
+            # "Investment cost for equipment per simulated period",
+            # "CO2 footprint for equipment per simulated period",
+            # "System operational Cost for simulated period",
+            # "System operational Emissions for simulated period",
+            "Total costs for simulated period",
+            "Total emissions for simulated period",
+            "Temperature deviation of building indoor air temperature being below set temperature 19 °C",
+            "Minimum building indoor air temperature reached",
+            "Temperature deviation of building indoor air temperature being above set temperature 24 °C",
+            "Maximum building indoor air temperature reached",
+            "Number of heat pump cycles",
+        ]
 
-occuancy_consumption = [
-    "Occupancy|Electricity|ElectricityOutput",
-    "Occupancy|WarmWater|WaterConsumption",
-]
+        electricity_data = [
+            # "L2EMSElectricityController|Electricity|ElectricityToOrFromGrid",
+            # "PVSystem_w0|Electricity|ElectricityOutput", # check if pv was used or not
+            "ElectricityMeter|Electricity|ElectricityToOrFromGrid",
+            "ElectricityMeter|Electricity|ElectricityConsumption",
+            # "ElectricityMeter|Electricity|ElectricityProduction"
+        ]
 
-heating_demand = [
-    "AdvancedHeatPumpHPLib|Heating|ThermalOutputPower",
-    # "HeatDistributionSystem|Heating|ThermalOutputPower",
-    # "Building|Heating|TheoreticalThermalBuildingDemand",
-    "Building|Temperature|TemperatureIndoorAir",
-]
+        occuancy_consumption = [
+            "Occupancy|Electricity|ElectricityOutput",
+            "Occupancy|WarmWater|WaterConsumption",
+        ]
 
+        heating_demand = [
+            "AdvancedHeatPumpHPLib|Heating|ThermalOutputPower",
+            # "HeatDistributionSystem|Heating|ThermalOutputPower",
+            # "Building|Heating|TheoreticalThermalBuildingDemand",
+            "Building|Temperature|TemperatureIndoorAir",
+        ]
+        
+        return kpi_data, electricity_data, occuancy_consumption, heating_demand
+    
+    def get_scenarios_to_check(self):
 
-# examples for scenarios to filter
-building_type = [
-    "DE.N.SFH",
-    "DE.N.TH",
-    "DE.N.MFH",
-    "DE.N.AB",
-]
+        building_type, building_refurbishment_state, building_age = self.get_building_properties_to_check()
+        
+        pv_share = self.get_pv_properties_to_check()
+        
+        return building_type, building_refurbishment_state, building_age, pv_share
+        
+        
+    
+    def get_building_properties_to_check(self):
+        
+        # examples for scenarios to filter
+        building_type = [
+            "DE.N.SFH",
+            "DE.N.TH",
+            "DE.N.MFH",
+            "DE.N.AB",
+        ]
 
-building_refurbishment_state = [
-    "001.001",
-    "001.002",
-    "001.003",
-]
+        building_refurbishment_state = [
+            "001.001",
+            "001.002",
+            "001.003",
+        ]
 
-building_age = [
-    "01.Gen",
-    "02.Gen",
-    "03.Gen",
-    "04.Gen",
-    "05.Gen",
-    "06.Gen",
-    "07.Gen",
-    "08.Gen",
-    "09.Gen",
-    "10.Gen",
-    "11.Gen",
-    "12.Gen",
-]
+        building_age = [
+            "01.Gen",
+            "02.Gen",
+            "03.Gen",
+            "04.Gen",
+            "05.Gen",
+            "06.Gen",
+            "07.Gen",
+            "08.Gen",
+            "09.Gen",
+            "10.Gen",
+            "11.Gen",
+            "12.Gen",
+        ]
+        
+        return building_type, building_refurbishment_state, building_age
+    
+    
+    def get_pv_properties_to_check(self):
+        
+        # examples for scenarios to filter
+        pv_share = [0,0.25,0.5,1]
+
+        return pv_share
+        
+        
+        
+    # def get_default_config_key_values_to_check(self, path_to_default_config: str):
+        
+    #     # read default config
+    #     if path_to_default_config is not None and ".json" in path_to_default_config:
+    #         with open(path_to_default_config, "r", encoding="utf-8") as openfile:  # type: ignore
+    #             default_config_dict = json.load(openfile)
+
+    #     else:
+    #         raise ValueError("The default config is not in .json format or path could not be found.")
+
+    #     if "building_code" in default_config_dict.keys()
+
+    #     # examples for scenarios to filter
+    #     building_type = [
+    #         "DE.N.SFH",
+    #         "DE.N.TH",
+    #         "DE.N.MFH",
+    #         "DE.N.AB",
+    #     ]
+
+    #     building_refurbishment_state = [
+    #         "001.001",
+    #         "001.002",
+    #         "001.003",
+    #     ]
+
+    #     building_age = [
+    #         "01.Gen",
+    #         "02.Gen",
+    #         "03.Gen",
+    #         "04.Gen",
+    #         "05.Gen",
+    #         "06.Gen",
+    #         "07.Gen",
+    #         "08.Gen",
+    #         "09.Gen",
+    #         "10.Gen",
+    #         "11.Gen",
+    #         "12.Gen",
+    #     ]

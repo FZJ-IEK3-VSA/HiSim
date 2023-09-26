@@ -301,17 +301,6 @@ def household_3_advanced_hp_diesel_car_pv_battery(
 
     # Build DHW
     my_dhw_heatpump_config = my_config.dhw_heatpump_config
-    my_dhw_heatpump_config.power_th = (
-        my_occupancy.max_hot_water_demand
-        * (4180 / 3600)
-        * 0.5
-        * (3600 / my_simulation_parameters.seconds_per_timestep)
-        * (
-            HouseholdWarmWaterDemandConfig.ww_temperature_demand
-            - HouseholdWarmWaterDemandConfig.freshwater_temperature
-        )
-    )
-
     my_dhw_heatpump_controller_config = my_config.dhw_heatpump_controller_config
 
     my_dhw_storage_config = my_config.dhw_storage_config

@@ -919,7 +919,7 @@ class HeatPumpHplibController(Component):
         if self.controller_heatpumpmode == "heating":
             if (
                 water_temperature_input_in_celsius
-                >= heating_set_temperature + storage_temperature_modifier
+                >= heating_set_temperature + 5.0 + storage_temperature_modifier
                 or summer_heating_mode == "off"
             ):
                 self.controller_heatpumpmode = "off"
@@ -937,7 +937,7 @@ class HeatPumpHplibController(Component):
             # and if the avg daily outside temperature is cold enough (summer heating mode on)
             if (
                 water_temperature_input_in_celsius
-                < (heating_set_temperature - 1.0 + storage_temperature_modifier)
+                < (heating_set_temperature - 5.0 + storage_temperature_modifier)
                 and summer_heating_mode == "on"
             ):
                 self.controller_heatpumpmode = "heating"

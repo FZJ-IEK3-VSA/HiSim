@@ -161,6 +161,7 @@ def household_cluster_advanced_hp_pv_battery_ems(
     )
     set_heating_threshold_outside_temperature_for_heat_pump_in_celsius = 16.0
     set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = 22.0
+    temperature_offset_for_state_conditions_in_celsius = 5.0
 
     # Set Heat Pump
     group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
@@ -239,7 +240,7 @@ def household_cluster_advanced_hp_pv_battery_ems(
             mode=hp_controller_mode,
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_pump_in_celsius,
             set_cooling_threshold_outside_temperature_in_celsius=set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius,
-        ),
+            temperature_offset_for_state_conditions_in_celsius=temperature_offset_for_state_conditions_in_celsius),
         my_simulation_parameters=my_simulation_parameters,
     )
 

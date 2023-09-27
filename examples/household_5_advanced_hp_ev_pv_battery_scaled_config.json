@@ -3,7 +3,7 @@
   "number_of_apartments": 1,
   "surplus_control": false,
   "surplus_control_building_temperature_modifier": false,
-  "surplus_control_car": false,
+  "surplus_control_car": true,
   "occupancy_config": {
     "name": "UTSPConnector",
     "url": "http://134.94.131.167:443/api/v1/profilerequest",
@@ -178,7 +178,7 @@
         "StrVal": "78dae308-24c4-45cc-8bdf-b001d61f45c2"
       }
     },
-    "battery_set": 1.0,
+    "battery_set": 0.4,
     "lower_threshold_charging_power": 1100.0,
     "co2_footprint": 100,
     "cost": 1000,

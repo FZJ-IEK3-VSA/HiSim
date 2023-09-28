@@ -2,7 +2,7 @@
 
 # Generic/Built-in
 import json
-from typing import Any, Tuple
+from typing import Any, Tuple, List
 from os import path, makedirs
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -16,6 +16,8 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim import log
 from hisim.simulationparameters import SimulationParameters
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.component import OpexCostDataClass
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -38,30 +40,14 @@ class OccupancyConfig(cp.ConfigBase):
     name: str
     profile_name: str
     country_name: str
+    consumption: float
     profile_with_washing_machine_and_dishwasher: bool
-    number_of_apartments: float
 
     @classmethod
     def get_default_CHS01(cls) -> Any:
         config = OccupancyConfig(
-            name="Occupancy_1",
-            profile_name="CHR01 Couple both at Work",
-            country_name="DE",
+            name="Occupancy_1", profile_name="CHR01 Couple both at Work", country_name="DE", consumption=0,
             profile_with_washing_machine_and_dishwasher=True,
-            number_of_apartments=1,
-        )
-        return config
-
-    @classmethod
-    def get_scaled_CHS01_according_to_number_of_apartments(
-        cls, number_of_apartments: float
-    ) -> Any:
-        config = OccupancyConfig(
-            name="Occupancy_1",
-            profile_name="CHR01 Couple both at Work",
-            country_name="DE",
-            profile_with_washing_machine_and_dishwasher=True,
-            number_of_apartments=number_of_apartments,
         )
         return config
 
@@ -166,19 +152,26 @@ class Occupancy(cp.Component):
 
         if self.my_simulation_parameters.year != 2021:
             raise Exception(
-                "LPG data is only available for 2021, if other years are needed, "
-                + "use loadprofilegenerator_utsp_connector instead."
+                "LPG data is only available for 2021, if other years are needed, "+
+                "use loadprofilegenerator_utsp_connector instead."
             )
         self.build()
 
-        real_number_of_apartments_from_building = (
-            self.occupancy_config.number_of_apartments
-        )
-
-        self.scaling_factor_according_to_number_of_apartments = (
-            self.get_scaling_factor_according_to_number_of_apartments(
-                real_number_of_apartments=real_number_of_apartments_from_building
+        if SingletonSimRepository().exist_entry(
+            key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS
+        ):
+            self.real_number_of_apartments_from_building = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS
             )
+        else:
+            raise KeyError(
+                "Key for number of apartments was not found in the singleton sim repository."
+                + "This might be because the building was not initialized before the loadprofilegenerator_connector."
+                + "Please check the order of the initialization of the components in your example."
+            )
+
+        self.scaling_factor_according_to_number_of_apartments = self.get_scaling_factor_according_to_number_of_apartments(
+            real_number_of_apartments=self.real_number_of_apartments_from_building
         )
         # Inputs - Not Mandatories
         self.ww_mass_input: cp.ComponentInput = self.add_input(
@@ -248,11 +241,14 @@ class Occupancy(cp.Component):
             output_description=f"here a description for {self.WaterConsumption} will follow.",
         )
 
+        self.total_energy = 0.0
+        self.total_energy_previous = self.total_energy
+
     def i_save_state(self) -> None:
-        pass
+        self.total_energy_previous = self.total_energy
 
     def i_restore_state(self) -> None:
-        pass
+        self.total_energy = self.total_energy_previous
 
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""
@@ -338,6 +334,7 @@ class Occupancy(cp.Component):
             self.electricity_consumption[timestep]
             * self.scaling_factor_according_to_number_of_apartments,
         )
+        
         stsv.set_output_value(
             self.water_consumptionC,
             self.water_consumption[timestep]
@@ -427,9 +424,7 @@ class Occupancy(cp.Component):
                 self.my_simulation_parameters.end_date
                 - self.my_simulation_parameters.start_date
             )
-            minutes_per_timestep = int(
-                self.my_simulation_parameters.seconds_per_timestep / 60
-            )
+            minutes_per_timestep = int(self.my_simulation_parameters.seconds_per_timestep / 60)
             steps_desired = int(
                 simulation_time_span.days
                 * 24
@@ -444,22 +439,18 @@ class Occupancy(cp.Component):
             # compute heat gains and number of persons
             for mode, gain in enumerate(gain_per_person):
                 for timestep in range(steps_desired_in_minutes):
-                    number_of_residents[timestep] += occupancy_profile[mode]["Values"][
-                        timestep
-                    ]
+                    number_of_residents[timestep] += occupancy_profile[mode][
+                        "Values"
+                    ][timestep]
                     heating_by_residents[timestep] = (
                         heating_by_residents[timestep]
                         + gain * occupancy_profile[mode]["Values"][timestep]
                     )
 
             if self.occupancy_config.profile_with_washing_machine_and_dishwasher:
-                profile_path = utils.HISIMPATH["occupancy"][self.profile_name][
-                    "electricity_consumption"
-                ]
+                profile_path = utils.HISIMPATH["occupancy"][self.profile_name]["electricity_consumption"]
             else:
-                profile_path = utils.HISIMPATH["occupancy"][self.profile_name][
-                    "electricity_consumption_without_washing_machine_and_dishwasher"
-                ]
+                profile_path = utils.HISIMPATH["occupancy"][self.profile_name]["electricity_consumption_without_washing_machine_and_dishwasher"]
 
             # load electricity consumption and water consumption
             pre_electricity_consumption = pd.read_csv(
@@ -470,22 +461,19 @@ class Occupancy(cp.Component):
                 usecols=["Sum [kWh]"],
             ).loc[: (steps_desired_in_minutes - 1)]
             electricity_consumption = pd.to_numeric(
-                pre_electricity_consumption.loc[:, "Sum [kWh]"]
-                * 1000
-                * 60
-                * scaling_electricity_consumption
-            ).tolist()  # 1 kWh/min == 60 000 W / min
-
+                pre_electricity_consumption.loc[:, "Sum [kWh]"] * 1000 * 60 * scaling_electricity_consumption
+                ).tolist() # 1 kWh/min == 60 000 W / min
+            
             pre_water_consumption = pd.read_csv(
                 utils.HISIMPATH["occupancy"][self.profile_name]["water_consumption"],
                 sep=";",
                 decimal=".",
                 encoding="utf-8",
                 usecols=["Sum [L]"],
-            ).loc[: (steps_desired_in_minutes - 1)]
+            ).loc[:(steps_desired_in_minutes - 1)]
             water_consumption = pd.to_numeric(
                 pre_water_consumption.loc[:, "Sum [L]"] * scaling_water_consumption
-            ).tolist()
+                ).tolist()
 
             pre_heating_by_devices = pd.read_csv(
                 utils.HISIMPATH["occupancy"][self.profile_name]["heating_by_devices"],
@@ -493,40 +481,31 @@ class Occupancy(cp.Component):
                 decimal=".",
                 encoding="utf-8",
                 usecols=["Time", "Sum [kWh]"],
-            ).loc[: (steps_desired_in_minutes - 1)]
+            ).loc[:(steps_desired_in_minutes - 1)]
             heating_by_devices = pd.to_numeric(
                 pre_heating_by_devices.loc[:, "Sum [kWh]"] * 1000 * 60
             ).tolist()  # 1 kWh/min == 60W / min
 
             # convert heat gains and number of persons to data frame and evaluate
-            initial_data = pd.DataFrame(
-                {
-                    "Time": pd.date_range(
-                        start=dt.datetime(
-                            year=self.my_simulation_parameters.year, month=1, day=1
-                        ),
-                        end=dt.datetime(
-                            year=self.my_simulation_parameters.year, month=1, day=1
-                        )
-                        + dt.timedelta(days=simulation_time_span.days)
-                        - dt.timedelta(seconds=60),
-                        freq="T",
+            initial_data = pd.DataFrame({
+                "Time": pd.date_range(
+                    start=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1),
+                    end=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1) +
+                    dt.timedelta(days=simulation_time_span.days) - dt.timedelta(seconds=60),
+                    freq="T"
                     ),
-                    "number_of_residents": number_of_residents,
-                    "heating_by_residents": heating_by_residents,
-                    "electricity_consumption": electricity_consumption,
-                    "water_consumption": water_consumption,
-                    "heating_by_devices": heating_by_devices,
-                }
-            )
+                "number_of_residents": number_of_residents,
+                "heating_by_residents": heating_by_residents,
+                "electricity_consumption": electricity_consumption,
+                "water_consumption": water_consumption,
+                "heating_by_devices": heating_by_devices,
+                })
             initial_data = utils.convert_lpg_data_to_utc(
                 data=initial_data, year=self.my_simulation_parameters.year
-            )
+                )
 
             # extract everything from data frame
-            self.electricity_consumption = initial_data[
-                "electricity_consumption"
-            ].tolist()
+            self.electricity_consumption = initial_data["electricity_consumption"].tolist()
             self.heating_by_residents = initial_data["heating_by_residents"].tolist()
             self.number_of_residents = initial_data["number_of_residents"].tolist()
             self.water_consumption = initial_data["water_consumption"].tolist()
@@ -536,40 +515,34 @@ class Occupancy(cp.Component):
             if minutes_per_timestep > 1:
                 # power needs averaging, not sum
                 self.electricity_consumption = [
-                    sum(self.electricity_consumption[n : n + minutes_per_timestep])
-                    / minutes_per_timestep
+                    sum(self.electricity_consumption[n: n + minutes_per_timestep]) / minutes_per_timestep
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.heating_by_devices = [
-                    sum(self.heating_by_devices[n : n + minutes_per_timestep])
-                    / minutes_per_timestep
+                    sum(self.heating_by_devices[n: n + minutes_per_timestep]) / minutes_per_timestep
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.water_consumption = [
-                    sum(self.water_consumption[n : n + minutes_per_timestep])
+                    sum(self.water_consumption[n: n + minutes_per_timestep])
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.heating_by_residents = [
-                    sum(self.heating_by_residents[n : n + minutes_per_timestep])
-                    / minutes_per_timestep
+                    sum(self.heating_by_residents[n: n + minutes_per_timestep]) / minutes_per_timestep
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.number_of_residents = [
-                    sum(self.number_of_residents[n : n + minutes_per_timestep])
-                    / minutes_per_timestep
+                    sum(self.number_of_residents[n: n + minutes_per_timestep]) / minutes_per_timestep
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
 
             # Saves data in cache
-            database = pd.DataFrame(
-                {
-                    "number_of_residents": self.number_of_residents,
-                    "heating_by_residents": self.heating_by_residents,
-                    "electricity_consumption": self.electricity_consumption,
-                    "water_consumption": self.water_consumption,
-                    "heating_by_devices": self.heating_by_devices,
-                }
-            )
+            database = pd.DataFrame({
+                "number_of_residents": self.number_of_residents,
+                "heating_by_residents": self.heating_by_residents,
+                "electricity_consumption": self.electricity_consumption,
+                "water_consumption": self.water_consumption,
+                "heating_by_devices": self.heating_by_devices,
+                })
 
             database.to_csv(cache_filepath)
             del database  # utils.save_cache("Occupancy", parameters, database)
@@ -594,3 +567,33 @@ class Occupancy(cp.Component):
             scaling_factor = 1.0
 
         return scaling_factor
+    def get_cost_opex(
+            self,
+            all_outputs: List,
+            postprocessing_results: pd.DataFrame,
+        ) -> OpexCostDataClass:
+            """Calculate OPEX costs, snd write total energy consumption to component-config.
+
+            No electricity costs for components except for Electricity Meter,
+            because part of electricity consumption is feed by PV
+            """
+            for index, output in enumerate(all_outputs):
+                print(output.component_name, output.load_type)
+                if (
+                    output.component_name == "Occupancy"
+                    and output.load_type == lt.LoadTypes.ELECTRICITY
+                ):
+                    self.occupancy_config.consumption = round(
+                        sum(postprocessing_results.iloc[:, index])
+                        * self.my_simulation_parameters.seconds_per_timestep
+                        / 3.6e6,
+                        1,
+                    )
+
+            opex_cost_data_class = OpexCostDataClass(
+                opex_cost=0,
+                co2_footprint=0,
+                consumption=self.occupancy_config.consumption,
+            )
+
+            return opex_cost_data_class

@@ -214,7 +214,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         )
 
         self.flexible_electricity_channel: cp.ComponentOutput = self.add_output(
-        self.flexible_electricity_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.FlexibleElectricity,
             load_type=lt.LoadTypes.ELECTRICITY,
@@ -375,9 +374,15 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     self.simple_hot_water_storage_temperature_modifier, 0
                 )
                 stsv.set_output_value(output=output, value=deltademand)
+        elif component_type == lt.ComponentType.ELECTROLYZER:
+            if deltademand > 0:
+                stsv.set_output_value(output=output, value=deltademand)
+                deltademand = deltademand + previous_signal
+            else:
+                stsv.set_output_value(output=output, value=0)
 
         elif component_type in [
-            lt.ComponentType.ELECTROLYZER,
+            #lt.ComponentType.ELECTROLYZER,
             lt.ComponentType.SMART_DEVICE,
             lt.ComponentType.CAR_BATTERY,
         ]:

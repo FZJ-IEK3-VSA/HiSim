@@ -58,9 +58,38 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
     @classmethod
     def get_default_simplehotwaterstorage_config(
         cls,
-    ) -> Any:
+    ) -> "SimpleHotWaterStorageConfig":
         """Get a default simplehotwaterstorage config."""
         volume_heating_water_storage_in_liter: float = 500
+        config = SimpleHotWaterStorageConfig(
+            name="SimpleHotWaterStorage",
+            volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
+            # https://www.energieverbraucher.de/de/heizungsspeicher__2102/#:~:text=Ein%20Speicher%20k%C3%BChlt%20t%C3%A4glich%20etwa,heutigen%20Energiepreisen%20t%C3%A4glich%2020%20Cent.
+            temperature_loss_in_celsius_per_hour=0.125,  # is the same as 3°C/day (see link)
+            heat_exchanger_is_present=True,  # until now stratified mode is causing problems, so heat exchanger mode is recommended
+            co2_footprint=100,  # Todo: check value
+            cost=volume_heating_water_storage_in_liter
+            * 14.51,  # value from emission_factros_and_costs_devices.csv
+            lifetime=100,  # value from emission_factros_and_costs_devices.csv
+            maintenance_cost_as_percentage_of_investment=0.0,  # Todo: set correct value
+        )
+        return config
+
+    @classmethod
+    def get_scaled_hot_water_storage(
+        cls, heating_load_of_building_in_watt: float
+    ) -> "SimpleHotWaterStorageConfig":
+        """Gets a default storage with scaling according to heating load of the building."""
+
+        set_thermal_output_power_in_watt = heating_load_of_building_in_watt
+
+        # https://www.baunetzwissen.de/heizung/fachwissen/speicher/dimensionierung-von-pufferspeichern-161296
+        # approx. 60l per kW power of heating system
+        # here we say power heating system should correspond to heating load of building
+        # (see also https://www.sciencedirect.com/science/article/pii/S2352152X2201533X?via%3Dihub)
+        volume_heating_water_storage_in_liter: float = (
+            set_thermal_output_power_in_watt * 1e-3 * 60
+        )
         config = SimpleHotWaterStorageConfig(
             name="SimpleHotWaterStorage",
             volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,

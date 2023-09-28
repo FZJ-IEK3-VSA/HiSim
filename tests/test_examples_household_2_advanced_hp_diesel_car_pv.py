@@ -14,14 +14,14 @@ from hisim.postprocessingoptions import PostProcessingOptions
 @pytest.mark.examples
 @utils.measure_execution_time
 def test_basic_household():
-    """ Single day. """
+    """Single day."""
 
-    config_filename = "household_advanced_hp_diesel_car_pv_config.json"
+    config_filename = "household_2_advanced_hp_diesel_car_pv_config.json"
     if Path(config_filename).is_file():
         os.remove(config_filename)
 
     path = "../examples/household_2_advanced_hp_diesel_car_pv.py"
-    func = "household_advanced_hp_diesel_car_pv"
+    func = "household_2_advanced_hp_diesel_car_pv"
     mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
     mysimpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
     hisim_main.main(path, func, mysimpar)

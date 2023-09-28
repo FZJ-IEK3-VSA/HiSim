@@ -50,6 +50,7 @@ class HeatDistributionConfig(cp.ConfigBase):
         return HeatDistribution.get_full_classname()
 
     name: str
+    heating_load_of_building_in_watt: float
     #: CO2 footprint of investment in kg
     co2_footprint: float
     #: cost for investment in Euro
@@ -61,11 +62,12 @@ class HeatDistributionConfig(cp.ConfigBase):
 
     @classmethod
     def get_default_heatdistributionsystem_config(
-        cls,
+        cls, heating_load_of_building_in_watt: float
     ) -> Any:
         """Get a default heat distribution system config."""
         config = HeatDistributionConfig(
             name="HeatDistributionSystem",
+            heating_load_of_building_in_watt=heating_load_of_building_in_watt,
             co2_footprint=0,  # Todo: check value
             cost=8000,  # SOURCE: https://www.hausjournal.net/heizungsrohre-verlegen-kosten  # Todo: use price per m2 in examples instead
             lifetime=50,  # SOURCE: VDI2067-1
@@ -159,21 +161,9 @@ class HeatDistribution(cp.Component):
         self.water_temperature_output_in_celsius: float = 21
         self.delta_temperature_in_celsius: float = 1.0
 
-        if SingletonSimRepository().exist_entry(
-            key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND
-        ):
-            self.max_thermal_building_demand_in_watt = (
-                SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.MAXTHERMALBUILDINGDEMAND
-                )
-            )
-
-        else:
-            raise KeyError(
-                "Key for max thermal building demand was not found in the singleton sim repository."
-                + "This might be because the building was not initialized before the heat distribution system."
-                + "Please check the order of the initialization of the components in your example."
-            )
+        self.max_thermal_building_demand_in_watt = (
+            self.heat_distribution_system_config.heating_load_of_building_in_watt
+        )
 
         if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.HEATINGSYSTEM):
             self.heating_system = SingletonSimRepository().get_entry(
@@ -378,7 +368,6 @@ class HeatDistribution(cp.Component):
 
         # if state_controller == 1:
         if state_controller in (1, -1):
-
             (
                 self.water_temperature_output_in_celsius,
                 self.thermal_power_delivered_in_watt,
@@ -390,7 +379,6 @@ class HeatDistribution(cp.Component):
             )
 
         elif state_controller == 0:
-
             self.thermal_power_delivered_in_watt = 0.0
 
             self.water_temperature_output_in_celsius = (
@@ -548,6 +536,8 @@ class HeatDistributionController(cp.Component):
     WaterTemperatureInputFromHeatWaterStorage = (
         "WaterTemperatureInputFromHeatWaterStorage"
     )
+    # Inputs -> energy management system
+    BuildingTemperatureModifier = "BuildingTemperatureModifier"
 
     # Outputs
     State = "State"
@@ -569,6 +559,7 @@ class HeatDistributionController(cp.Component):
             my_config=config,
         )
         self.state_controller: int = 0
+        self.building_temperature_modifier: float = 0
 
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING,
@@ -620,6 +611,13 @@ class HeatDistributionController(cp.Component):
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             True,
+        )
+        self.building_temperature_modifier_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.BuildingTemperatureModifier,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            mandatory=False,
         )
         # Outputs
         self.state_channel: cp.ComponentOutput = self.add_output(
@@ -750,6 +748,9 @@ class HeatDistributionController(cp.Component):
             daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
                 self.daily_avg_outside_temperature_input_channel
             )
+            self.building_temperature_modifier = stsv.get_input_value(
+                self.building_temperature_modifier_channel
+            )
 
             list_of_heating_distribution_system_flow_and_return_temperatures = self.calc_heat_distribution_flow_and_return_temperatures(
                 daily_avg_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius
@@ -780,14 +781,12 @@ class HeatDistributionController(cp.Component):
                     self.state_controller = 0
 
             elif self.controller_heat_distribution_mode == "cooling":
-
                 self.state_controller = -1
 
             elif self.controller_heat_distribution_mode == "off":
                 self.state_controller = 0
 
             else:
-
                 raise ValueError(
                     "unknown hds controller mode or summer mode or dew point protection mode."
                 )
@@ -805,7 +804,6 @@ class HeatDistributionController(cp.Component):
         """Set conditions for the valve in heat distribution."""
 
         if self.controller_heat_distribution_mode in ("cooling", "heating"):
-
             # no heat exchange with building if theres no demand
             if theoretical_thermal_building_demand_in_watt == 0:
                 self.controller_heat_distribution_mode = "off"
@@ -904,6 +902,19 @@ class HeatDistributionController(cp.Component):
         list with heating flow and heating return temperature
 
         """
+        # increase set_heating_temperature when connected to EnergyManagementSystem and surplus electricity available.
+        # only used for heating case
+        set_room_temperature_for_building_modified_in_celsius = (
+            self.set_room_temperature_for_building_in_celsius
+            + self.building_temperature_modifier
+        )
+        min_flow_temperature_modified_in_celsius = (
+            self.min_flow_temperature_in_celsius + self.building_temperature_modifier
+        )
+        min_return_temperature_modified_in_celsius = (
+            self.min_return_temperature_in_celsius + self.building_temperature_modifier
+        )
+
         # cooling case, daily avg temperature is higher than set indoor temperature.
         # flow and return temperatures can not be lower than set indoor temperature (because number would be complex)
         if (
@@ -923,16 +934,16 @@ class HeatDistributionController(cp.Component):
         else:
             # heating case, daily avg outside temperature is lower than indoor temperature
             flow_temperature_in_celsius = float(
-                self.min_flow_temperature_in_celsius
+                min_flow_temperature_modified_in_celsius
                 + (
                     (1 / self.factor_of_oversizing_of_heat_distribution_system)
                     * (
                         (
-                            self.set_room_temperature_for_building_in_celsius
+                            set_room_temperature_for_building_modified_in_celsius
                             - daily_avg_outside_temperature_in_celsius
                         )
                         / (
-                            self.set_room_temperature_for_building_in_celsius
+                            set_room_temperature_for_building_modified_in_celsius
                             - self.heating_reference_temperature_in_celsius
                         )
                     )
@@ -940,20 +951,20 @@ class HeatDistributionController(cp.Component):
                 ** (1 / self.exponent_factor_of_heating_distribution_system)
                 * (
                     self.max_flow_temperature_in_celsius
-                    - self.min_flow_temperature_in_celsius
+                    - min_flow_temperature_modified_in_celsius
                 )
             )
             return_temperature_in_celsius = float(
-                self.min_return_temperature_in_celsius
+                min_return_temperature_modified_in_celsius
                 + (
                     (1 / self.factor_of_oversizing_of_heat_distribution_system)
                     * (
                         (
-                            self.set_room_temperature_for_building_in_celsius
+                            set_room_temperature_for_building_modified_in_celsius
                             - daily_avg_outside_temperature_in_celsius
                         )
                         / (
-                            self.set_room_temperature_for_building_in_celsius
+                            set_room_temperature_for_building_modified_in_celsius
                             - self.heating_reference_temperature_in_celsius
                         )
                     )
@@ -961,7 +972,7 @@ class HeatDistributionController(cp.Component):
                 ** (1 / self.exponent_factor_of_heating_distribution_system)
                 * (
                     self.max_return_temperature_in_celsius
-                    - self.min_return_temperature_in_celsius
+                    - min_return_temperature_modified_in_celsius
                 )
             )
 

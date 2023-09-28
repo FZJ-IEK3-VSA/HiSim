@@ -37,6 +37,12 @@ jobs:
         prospector examples/basic_household_only_heating.py
         prospector examples/default_connections.py
         prospector examples/dynamic_components.py
+        prospector examples/household_1_advanced_hp_diesel_car.py
+        prospector examples/household_2_advanced_hp_diesel_car_pv.py
+        prospector examples/household_3_advanced_hp_diesel_car_pv_battery.py
+        prospector examples/household_4_advanced_hp_ev_pv.py
+        prospector examples/household_5_advanced_hp_ev_pv_battery.py
+        prospector examples/household_reference_gas_heater_diesel_car.py
         prospector examples/household_with_gas_heater.py
         prospector examples/household_with_gas_heater_with_controller.py
         prospector examples/household_with_heatpump_and_pv.py
@@ -60,6 +66,7 @@ jobs:
         prospector hisim/utils.py
         prospector hisim/components/building.py
         prospector hisim/components/controller_l1_building_heating.py
+        prospector hisim/components/controller_l1_generic_gas_heater.py
         prospector hisim/components/controller_l1_generic_runtime.py
         prospector hisim/components/controller_l1_heatpump.py
         prospector hisim/components/controller_l2_energy_management_system.py
@@ -72,7 +79,6 @@ jobs:
         prospector hisim/components/generic_gas_heater.py
         prospector hisim/components/generic_gas_heater_with_controller.py
         prospector hisim/components/generic_heat_pump.py
-        prospector hisim/components/generic_heat_pump_for_house_with_hds.py
         prospector hisim/components/generic_hot_water_storage_modular.py
         prospector hisim/components/heat_distribution_system.py
         prospector hisim/components/idealized_electric_heater.py
@@ -87,6 +93,7 @@ jobs:
         prospector hisim/postprocessing/chart_singleday.py
         prospector hisim/postprocessing/compute_kpis.py
         prospector hisim/postprocessing/generate_csv_for_housing_database.py
+        prospector hisim/postprocessing/opex_and_capex_cost_calculation.py
         prospector hisim/postprocessing/postprocessing_datatransfer.py
         prospector hisim/postprocessing/postprocessing_main.py
         prospector hisim/postprocessing/reportgenerator.py
@@ -105,6 +112,12 @@ jobs:
         prospector tests/test_examples_basic_household.py
         prospector tests/test_examples_basic_household_network_chart.py
         prospector tests/test_examples_basic_household_with_all_resultfiles.py
+        prospector tests/test_examples_household_1_advanced_hp_diesel_car.py
+        prospector tests/test_examples_household_2_advanced_hp_diesel_car_pv.py
+        prospector tests/test_examples_household_3_advanced_hp_diesel_car_pv_battery.py
+        prospector tests/test_examples_household_4_advanced_hp_ev_pv.py
+        prospector tests/test_examples_household_5_advanced_hp_ev_pv_battery.py
+        prospector tests/test_examples_household_reference_gas_heater_diesel_car.py
         prospector tests/test_examples_household_with_heatpump_and_pv.py
         prospector tests/test_example_component.py
         prospector tests/test_example_storage.py
@@ -117,6 +130,7 @@ jobs:
         prospector tests/test_heat_distribution_system.py
         prospector tests/test_house_with_pyam_postprocessingoption.py
         prospector tests/test_electricity_meter.py
+        prospector tests/test_sizing_energy_systems.py
 
 
         

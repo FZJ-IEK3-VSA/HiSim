@@ -7,11 +7,12 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import utils
 import pytest
 
+
 @pytest.mark.base
 @utils.measure_execution_time
 def test_dynamic_components_example():
     path = "../examples/dynamic_components.py"
     func = "dynamic_components_demonstration"
     mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    hisim_main.main(path, func,mysimpar )
+    hisim_main.main(path, func, mysimpar)
     log.information(os.getcwd())

@@ -360,9 +360,9 @@ class MPC_Controller(cp.Component):
         return connections
 
     def i_prepare_simulation(self) -> None:
-        """ Prepares the simulation."""
+        """Prepares the simulation."""
         if self.my_simulation_parameters.system_config.predictive:
-            """ getting forecasted disturbance (weather)"""
+            """getting forecasted disturbance (weather)"""
             self.temp_forecast = self.simulation_repository.get_entry(
                 Weather.Weather_TemperatureOutside_yearly_forecast
             )[: self.my_simulation_parameters.timesteps]
@@ -411,7 +411,7 @@ class MPC_Controller(cp.Component):
             and my_simulation_repository is not None
         ):
 
-            """ getting building physical properties for state space model """
+            """getting building physical properties for state space model"""
             self.h_tr_w = my_simulation_repository.get_entry(
                 Building.Thermal_transmission_coefficient_glazing
             )
@@ -440,13 +440,13 @@ class MPC_Controller(cp.Component):
             )
 
     def statespace(self):
-        """ State Space Model of the 5R1C network, Used as a prediction model to the building behavior in the MPC."""
+        """State Space Model of the 5R1C network, Used as a prediction model to the building behavior in the MPC."""
         seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
         X = ((self.h_tr_w + self.h_tr_ms) * (self.h_ve_adj + self.h_tr_is)) + (
             self.h_ve_adj * self.h_tr_is
         )
         A11 = (
-            ((self.h_tr_ms ** 2) * (self.h_tr_is + self.h_ve_adj) / X)
+            ((self.h_tr_ms**2) * (self.h_tr_is + self.h_ve_adj) / X)
             - self.h_tr_ms
             - self.h_tr_em
         ) / (
@@ -769,7 +769,7 @@ class MPC_Controller(cp.Component):
 
         if self.flexibility_element == "PV_only":
 
-            """ Energy Balance constraint for Grid , PV  interaction"""
+            """Energy Balance constraint for Grid , PV  interaction"""
             opti.subject_to(
                 Pbuy
                 == ca.if_else(
@@ -782,7 +782,7 @@ class MPC_Controller(cp.Component):
 
         if self.flexibility_element == "PV_and_Battery":
 
-            """ Battery charging and discharging bounds / making sure that charging and discharging doesn't occur at the same time """
+            """Battery charging and discharging bounds / making sure that charging and discharging doesn't occur at the same time"""
             opti.subject_to(
                 opti.bounded(
                     self.minimum_storage_capacity, soc, self.maximum_storage_capacity

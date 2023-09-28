@@ -9,6 +9,7 @@ from hisim.components import generic_pv_system
 from hisim.components import building
 from hisim.components import controller_pid
 from hisim.components import air_conditioner
+
 # from hisim.components import controller_mpc #mpc
 # from hisim.components import generic_battery #mpc
 # from hisim.components import generic_price_signal #mpc
@@ -24,7 +25,9 @@ __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
 
 
-def household_with_air_conditioner_and_controller_mpc(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None):
+def household_with_air_conditioner_and_controller_mpc(
+    my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None
+):
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.get_default_values_full_year()
 
@@ -33,7 +36,9 @@ def household_with_air_conditioner_and_controller_mpc(my_sim: Simulator, my_simu
     household_air_conditioner_generic(my_sim, "MPC", my_simulation_parameters)
 
 
-def household_with_air_conditioner_and_controller_pid(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None):
+def household_with_air_conditioner_and_controller_pid(
+    my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None
+):
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.get_default_values_full_year()
 
@@ -42,7 +47,9 @@ def household_with_air_conditioner_and_controller_pid(my_sim: Simulator, my_simu
     household_air_conditioner_generic(my_sim, "PID", my_simulation_parameters)
 
 
-def household_with_air_conditioner_and_controller_onoff(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None):
+def household_with_air_conditioner_and_controller_onoff(
+    my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None
+):
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.get_default_values_full_year()
 
@@ -51,7 +58,11 @@ def household_with_air_conditioner_and_controller_onoff(my_sim: Simulator, my_si
     household_air_conditioner_generic(my_sim, "on_off", my_simulation_parameters)
 
 
-def household_air_conditioner_generic(my_sim: Simulator, control: str,  my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
+def household_air_conditioner_generic(
+    my_sim: Simulator,
+    control: str,
+    my_simulation_parameters: Optional[SimulationParameters] = None,
+) -> None:
     """Household Model.
 
     This setup function emulates an air conditioned house. Here the residents have their electricity covered by a photovoltaic system,
@@ -155,7 +166,6 @@ def household_air_conditioner_generic(my_sim: Simulator, control: str,  my_simul
     pv_maintenance_cost_as_percentage_of_investment = 0.01
     pv_lifetime = 25
 
-
     # Set occupancy
     occupancy_profile = "CH01"
 
@@ -193,7 +203,7 @@ def household_air_conditioner_generic(my_sim: Simulator, control: str,  my_simul
     # batt_soc = 0.5 *5000
 
     # Set simulation parameters
-    seconds_per_timestep = 60 #mpc#pid#onoff
+    seconds_per_timestep = 60  # mpc#pid#onoff
     # if control == "MPC":
     # seconds_per_timestep = 60*20    # multiply seconds_per_timestep with factor (e.g. 20) to run MPC with bigger sampling time
     # else:
@@ -211,8 +221,8 @@ def household_air_conditioner_generic(my_sim: Simulator, control: str,  my_simul
         my_simulation_parameters.result_directory = os.path.join(
             "ac_results_5",
             "Full Year Simulation for " + location + " Control Type is " + control,
-        )  #pid
-        #mpc#pid#onoff
+        )  # pid
+        # mpc#pid#onoff
         # if control == "MPC":
         # my_simulation_parameters.result_directory = os.path.join(
         #    "ac_results", location+" Full year "
@@ -223,13 +233,13 @@ def household_air_conditioner_generic(my_sim: Simulator, control: str,  my_simul
         # else:
         # my_simulation_parameters.result_directory = os.path.join("ac_results_5", "Full Year Simulation for " + location + " Control Type is "+ control)
 
-    #mpc
+    # mpc
     # if control == "MPC":
     # my_simulation_parameters.reset_system_config(
-    #   predictive=True, prediction_horizon=24 * 3600, 
-    #   pv_included=True, pv_peak_power=4e3, 
+    #   predictive=True, prediction_horizon=24 * 3600,
+    #   pv_included=True, pv_peak_power=4e3,
     #   smart_devices_included=True,
-    #   battery_included=True, 
+    #   battery_included=True,
     #   battery_capacity=5e3
     # )
 
@@ -255,11 +265,15 @@ def household_air_conditioner_generic(my_sim: Simulator, control: str,  my_simul
 
     """ Occupancy Profile """
     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-        profile_name=occupancy_profile, name="Occupancy", country_name=location,
+        profile_name=occupancy_profile,
+        name="Occupancy",
+        country_name=location,
         profile_with_washing_machine_and_dishwasher=False,
+        number_of_apartments=1
     )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
-        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_occupancy_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
     my_sim.add_component(my_occupancy)
 
@@ -268,7 +282,8 @@ def household_air_conditioner_generic(my_sim: Simulator, control: str,  my_simul
         location_entry=weather.LocationEnum.Seville
     )
     my_weather = weather.Weather(
-        config=my_weather_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_weather_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
     my_sim.add_component(my_weather)
 
@@ -302,7 +317,7 @@ def household_air_conditioner_generic(my_sim: Simulator, control: str,  my_simul
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
     my_sim.add_component(my_building)
 
-    """Price signal""" #mpc
+    """Price signal"""  # mpc
     # my_price_signal = generic_price_signal.PriceSignal(
     #   config=generic_price_signal.PriceSignalConfig(
     #       name = "PriceSignal",
@@ -344,7 +359,7 @@ def household_air_conditioner_generic(my_sim: Simulator, control: str,  my_simul
     )
     my_sim.add_component(my_air_conditioner)
 
-    """Generic Battery """ #mpc
+    """Generic Battery """  # mpc
     # if control == "MPC":
     # my_battery_config = generic_battery.GenericBatteryConfig(
     #   manufacturer=batt_manufacturer,
@@ -359,7 +374,7 @@ def household_air_conditioner_generic(my_sim: Simulator, control: str,  my_simul
     # )
     # my_sim.add_component(my_battery)
 
-    """Model Predictive Controller""" #mpc
+    """Model Predictive Controller"""  # mpc
     # if control == "MPC":
     # my_mpc_controller_config = controller_mpc.MpcControllerConfig(
     #   mpc_scheme=mpc_scheme,
@@ -426,7 +441,7 @@ def household_air_conditioner_generic(my_sim: Simulator, control: str,  my_simul
     # my_mpc_controller.component_name,
     # my_mpc_controller.Battery2Load)
 
-    """PID controller""" #pid
+    """PID controller"""  # pid
     if control == "PID":
         my_pid_controller_config = (
             controller_pid.PIDControllerConfig.get_default_config()
@@ -463,7 +478,7 @@ def household_air_conditioner_generic(my_sim: Simulator, control: str,  my_simul
         )
         my_sim.add_component(pid_controller)
 
-    """Air conditioner on-off controller""" #onoff
+    """Air conditioner on-off controller"""  # onoff
     # if control=="on_off":
     # my_air_conditioner_controller_config = air_conditioner.AirConditionerControllerConfig(
     #   t_air_heating=t_air_heating,

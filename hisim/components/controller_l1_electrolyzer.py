@@ -20,6 +20,7 @@ from hisim.simulationparameters import SimulationParameters
 @dataclass
 class L1ElectrolyzerConfig(cp.ConfigBase):
     """Electrolyzer Controller Config."""
+
     #: name of the device
     name: str
     #: priority of the device in hierachy: the higher the number the lower the priority
@@ -47,10 +48,15 @@ class L1ElectrolyzerConfig(cp.ConfigBase):
         return config
 
 
-class L1ElectrolyzerControllerState():
+class L1ElectrolyzerControllerState:
     """This data class saves the state of the electrolyzer controller."""
 
-    def __init__(self, state: int = 0, activation_time_step: int = 0, deactivation_time_step: int = 0):
+    def __init__(
+        self,
+        state: int = 0,
+        activation_time_step: int = 0,
+        deactivation_time_step: int = 0,
+    ):
         self.state: int = state
         self.activation_time_step: int = activation_time_step
         self.deactivation_time_step: int = deactivation_time_step
@@ -59,8 +65,8 @@ class L1ElectrolyzerControllerState():
         return L1ElectrolyzerControllerState(
             state=self.state,
             activation_time_step=self.activation_time_step,
-            deactivation_time_step=self.deactivation_time_step
-            )
+            deactivation_time_step=self.deactivation_time_step,
+        )
 
     def activate(self, timestep: int) -> None:
         """Activates the heat pump and remembers the time step."""
@@ -97,18 +103,24 @@ class L1GenericElectrolyzerController(cp.Component):
     # Similar components to connect to:
     # 1. Building
     @utils.measure_execution_time
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: L1ElectrolyzerConfig,) -> None:
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: L1ElectrolyzerConfig,
+    ) -> None:
 
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
-            my_config=config,)
+            my_config=config,
+        )
         self.minimum_runtime_in_timesteps = int(
             config.min_operation_time_in_seconds
             / self.my_simulation_parameters.seconds_per_timestep
         )
         self.minimum_resting_time_in_timesteps = int(
-            config.min_idle_time_in_seconds / self.my_simulation_parameters.seconds_per_timestep
+            config.min_idle_time_in_seconds
+            / self.my_simulation_parameters.seconds_per_timestep
         )
 
         self.state = L1ElectrolyzerControllerState()
@@ -136,16 +148,20 @@ class L1GenericElectrolyzerController(cp.Component):
             self.AvailableElectricity,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
-            output_description="Available Electricity for Electrolyzer from Electrolyzer Controller."
+            output_description="Available Electricity for Electrolyzer from Electrolyzer Controller.",
         )
 
         self.add_default_connections(self.get_default_connections_from_h2_storage())
 
     def get_default_connections_from_h2_storage(self):
         """Sets default connections for the hydrogen storage in the electrolyzer controller."""
-        log.information("setting hydrogen storage default connections in Electrolyzer Controller")
+        log.information(
+            "setting hydrogen storage default connections in Electrolyzer Controller"
+        )
         connections = []
-        h2_storage_classname = generic_hydrogen_storage.GenericHydrogenStorage.get_classname()
+        h2_storage_classname = (
+            generic_hydrogen_storage.GenericHydrogenStorage.get_classname()
+        )
         connections.append(
             cp.ComponentConnection(
                 L1GenericElectrolyzerController.HydrogenSOC,
@@ -168,7 +184,9 @@ class L1GenericElectrolyzerController(cp.Component):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
+    def i_simulate(
+        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
+    ) -> None:
 
         if force_convergence:
             electricity_target = stsv.get_input_value(self.electricity_target_channel)
@@ -180,11 +198,19 @@ class L1GenericElectrolyzerController(cp.Component):
             self.processed_state = self.state.clone()
 
         # minimum power of electrolyzer fulfilled when running
-        if self.state.state == 1 and electricity_target < self.config.P_min_electrolyzer:
+        if (
+            self.state.state == 1
+            and electricity_target < self.config.P_min_electrolyzer
+        ):
             electricity_target = self.config.P_min_electrolyzer
-        stsv.set_output_value(self.available_electicity_output_channel, self.state.state * electricity_target)
+        stsv.set_output_value(
+            self.available_electicity_output_channel,
+            self.state.state * electricity_target,
+        )
 
-    def calculate_state(self, timestep: int, electricity_target: float, h2_soc: float) -> None:
+    def calculate_state(
+        self, timestep: int, electricity_target: float, h2_soc: float
+    ) -> None:
         # return device on if minimum operation time is not fulfilled and device was on in previous state
         if (
             self.state.state == 1
@@ -203,7 +229,9 @@ class L1GenericElectrolyzerController(cp.Component):
             return
 
         # available electricity too low or hydrogen storage too full
-        if (electricity_target < self.config.P_min_electrolyzer) or (h2_soc > self.config.h2_soc_threshold):
+        if (electricity_target < self.config.P_min_electrolyzer) or (
+            h2_soc > self.config.h2_soc_threshold
+        ):
             self.state.deactivate(timestep)
             return
 

@@ -17,16 +17,25 @@ from hisim.components import generic_electrolyzer, controller_l1_electrolyzer
 def test_chp_system():
 
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
+    my_simulation_parameters = SimulationParameters.one_day_only(
+        2017, seconds_per_timestep
+    )
 
-    my_electrolyzer_config = generic_electrolyzer.GenericElectrolyzerConfig.get_default_config(p_el=2400)
+    my_electrolyzer_config = (
+        generic_electrolyzer.GenericElectrolyzerConfig.get_default_config(p_el=2400)
+    )
     my_electrolyzer = generic_electrolyzer.GenericElectrolyzer(
         config=my_electrolyzer_config, my_simulation_parameters=my_simulation_parameters
+    )
+    my_electrolyzer_controller_config = (
+        controller_l1_electrolyzer.L1ElectrolyzerConfig.get_default_config()
+    )
+    my_electrolyzer_controller = (
+        controller_l1_electrolyzer.L1GenericElectrolyzerController(
+            config=my_electrolyzer_controller_config,
+            my_simulation_parameters=my_simulation_parameters,
         )
-    my_electrolyzer_controller_config = controller_l1_electrolyzer.L1ElectrolyzerConfig.get_default_config()
-    my_electrolyzer_controller = controller_l1_electrolyzer.L1GenericElectrolyzerController(
-        config=my_electrolyzer_controller_config, my_simulation_parameters=my_simulation_parameters
-        )
+    )
 
     # Set Fake Inputs
     electricity_target = cp.ComponentOutput(
@@ -34,29 +43,43 @@ def test_chp_system():
         "ElectricityTarget",
         lt.LoadTypes.ELECTRICITY,
         lt.Units.WATT,
-        )
+    )
     hydrogensoc = cp.ComponentOutput(
-        "FakeH2SOC",
-        'HydrogenSOC',
-        lt.LoadTypes.HYDROGEN,
-        lt.Units.PERCENT)
+        "FakeH2SOC", "HydrogenSOC", lt.LoadTypes.HYDROGEN, lt.Units.PERCENT
+    )
 
-    number_of_outputs = fft.get_number_of_outputs([my_electrolyzer, my_electrolyzer_controller, electricity_target, hydrogensoc])
+    number_of_outputs = fft.get_number_of_outputs(
+        [my_electrolyzer, my_electrolyzer_controller, electricity_target, hydrogensoc]
+    )
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
-    my_electrolyzer_controller.electricity_target_channel.source_output = electricity_target
+    my_electrolyzer_controller.electricity_target_channel.source_output = (
+        electricity_target
+    )
     my_electrolyzer_controller.hydrogen_soc_channel.source_output = hydrogensoc
-    my_electrolyzer.electricity_target_channel.source_output = my_electrolyzer_controller.available_electicity_output_channel
+    my_electrolyzer.electricity_target_channel.source_output = (
+        my_electrolyzer_controller.available_electicity_output_channel
+    )
 
     # Add Global Index and set values for fake Inputs
-    fft.add_global_index_of_components([my_electrolyzer, my_electrolyzer_controller, electricity_target, hydrogensoc])
+    fft.add_global_index_of_components(
+        [my_electrolyzer, my_electrolyzer_controller, electricity_target, hydrogensoc]
+    )
 
     # test if electrolyzer runs when capacity  in hydrogen storage and electricty available
     stsv.values[electricity_target.global_index] = 1.8e3
     stsv.values[hydrogensoc.global_index] = 50
 
-    for t in range(int((my_electrolyzer_controller_config.min_idle_time_in_seconds / seconds_per_timestep) + 2)):
-        my_electrolyzer_controller.i_simulate(t, stsv,  False)
+    for t in range(
+        int(
+            (
+                my_electrolyzer_controller_config.min_idle_time_in_seconds
+                / seconds_per_timestep
+            )
+            + 2
+        )
+    ):
+        my_electrolyzer_controller.i_simulate(t, stsv, False)
         my_electrolyzer.i_simulate(t, stsv, False)
 
     assert stsv.values[my_electrolyzer.electricity_output_channel.global_index] == 1.8e3
@@ -66,8 +89,18 @@ def test_chp_system():
     stsv.values[electricity_target.global_index] = 1.8e3
     stsv.values[hydrogensoc.global_index] = 99
 
-    for tt in range(t, t + int((my_electrolyzer_controller_config.min_operation_time_in_seconds / seconds_per_timestep) + 2)):
-        my_electrolyzer_controller.i_simulate(tt, stsv,  False)
+    for tt in range(
+        t,
+        t
+        + int(
+            (
+                my_electrolyzer_controller_config.min_operation_time_in_seconds
+                / seconds_per_timestep
+            )
+            + 2
+        ),
+    ):
+        my_electrolyzer_controller.i_simulate(tt, stsv, False)
         my_electrolyzer.i_simulate(tt, stsv, False)
 
     assert stsv.values[my_electrolyzer.electricity_output_channel.global_index] == 0
@@ -77,15 +110,35 @@ def test_chp_system():
     stsv.values[electricity_target.global_index] = 1.8e3
     stsv.values[hydrogensoc.global_index] = 50
 
-    for ttt in range(tt, tt + int((my_electrolyzer_controller_config.min_idle_time_in_seconds / seconds_per_timestep) + 2)):
+    for ttt in range(
+        tt,
+        tt
+        + int(
+            (
+                my_electrolyzer_controller_config.min_idle_time_in_seconds
+                / seconds_per_timestep
+            )
+            + 2
+        ),
+    ):
         my_electrolyzer_controller.i_simulate(ttt, stsv, False)
         my_electrolyzer.i_simulate(ttt, stsv, False)
 
     stsv.values[electricity_target.global_index] = 0
     stsv.values[hydrogensoc.global_index] = 50
 
-    for it in range(ttt, ttt + int((my_electrolyzer_controller_config.min_operation_time_in_seconds / seconds_per_timestep) + 2)):
-        my_electrolyzer_controller.i_simulate(it, stsv,  False)
+    for it in range(
+        ttt,
+        ttt
+        + int(
+            (
+                my_electrolyzer_controller_config.min_operation_time_in_seconds
+                / seconds_per_timestep
+            )
+            + 2
+        ),
+    ):
+        my_electrolyzer_controller.i_simulate(it, stsv, False)
         my_electrolyzer.i_simulate(it, stsv, False)
 
     assert stsv.values[my_electrolyzer.electricity_output_channel.global_index] == 0

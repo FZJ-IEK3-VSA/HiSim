@@ -28,7 +28,6 @@ from hisim.components import controller_l1_heatpump
 from hisim.components import generic_hot_water_storage_modular
 from hisim.components import electricity_meter
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim import utils
 from hisim import loadtypes as lt
 from hisim import log
@@ -43,7 +42,6 @@ __maintainer__ = "Markus Blasberg"
 __status__ = "development"
 
 
-# Todo: adopt Config-Class according to needs
 @dataclass_json
 @dataclass
 class ReferenceHouseholdConfig:
@@ -56,7 +54,7 @@ class ReferenceHouseholdConfig:
     # total_base_area_in_m2: float
     occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig
     building_config: building.BuildingConfig
-    hdscontroller_config: heat_distribution_system.HeatDistributionControllerConfig
+    hds_controller_config: heat_distribution_system.HeatDistributionControllerConfig
     hds_config: heat_distribution_system.HeatDistributionConfig
     gasheater_controller_config: controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config
     gasheater_config: generic_gas_heater.GenericGasHeaterConfig
@@ -73,11 +71,16 @@ class ReferenceHouseholdConfig:
 
         # set number of apartments (mandatory for dhw storage config)
         number_of_apartments = 1
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments
-        )
 
-        return ReferenceHouseholdConfig(
+        heating_reference_temperature_in_celsius: float = -7
+        set_heating_threshold_outside_temperature_in_celsius: float = 16.0
+
+        building_config = (
+            building.BuildingConfig.get_default_german_single_family_home()
+        )
+        my_building_information = building.BuildingInformation(config=building_config)
+
+        household_config = ReferenceHouseholdConfig(
             building_type="blub",
             number_of_apartments=number_of_apartments,
             # simulation_parameters=SimulationParameters.one_day_only(2022),
@@ -94,12 +97,14 @@ class ReferenceHouseholdConfig:
                 consumption=0.0,
                 profile_with_washing_machine_and_dishwasher=True,
             ),
-            building_config=building.BuildingConfig.get_default_german_single_family_home(),
-            hdscontroller_config=(
+            building_config=building_config,
+            hds_controller_config=(
                 heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
             ),
             hds_config=(
-                heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
+                heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+                )
             ),
             gasheater_controller_config=(
                 controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config.get_default_generic_gas_heater_controller_config()
@@ -115,11 +120,32 @@ class ReferenceHouseholdConfig:
                 name="DHWHeatpumpController"
             ),
             dhw_storage_config=(
-                generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
+                generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler()
             ),
             car_config=generic_car.CarConfig.get_default_diesel_config(),
             electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
         )
+
+        # set same heating threshold
+        household_config.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
+            set_heating_threshold_outside_temperature_in_celsius
+        )
+        household_config.gasheater_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
+            set_heating_threshold_outside_temperature_in_celsius
+        )
+
+        # set same heating reference temperature
+        household_config.hds_controller_config.heating_reference_temperature_in_celsius = (
+            heating_reference_temperature_in_celsius
+        )
+        household_config.building_config.heating_reference_temperature_in_celsius = (
+            heating_reference_temperature_in_celsius
+        )
+
+        # set dhw storage volume, because default(volume = 230) leads to an error
+        household_config.dhw_storage_config.volume = 250
+
+        return household_config
 
 
 def household_reference_gas_heater_diesel_car(
@@ -151,7 +177,7 @@ def household_reference_gas_heater_diesel_car(
     if Path(utils.HISIMPATH["utsp_results"]).exists():
         cleanup_old_lpg_requests()
 
-    config_filename = "reference_household_config.json"
+    config_filename = "household_reference_gas_heater_diesel_car.json"
 
     my_config: ReferenceHouseholdConfig
     if Path(config_filename).is_file():
@@ -183,6 +209,14 @@ def household_reference_gas_heater_diesel_car(
         )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
+    # Build heat Distribution System Controller
+    my_heat_distribution_controller = (
+        heat_distribution_system.HeatDistributionController(
+            config=my_config.hds_controller_config,
+            my_simulation_parameters=my_simulation_parameters,
+        )
+    )
+
     # Build Occupancy
     my_occupancy_config = my_config.occupancy_config
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
@@ -213,14 +247,6 @@ def household_reference_gas_heater_diesel_car(
     my_gasheater = generic_gas_heater.GasHeater(
         config=my_config.gasheater_config,
         my_simulation_parameters=my_simulation_parameters,
-    )
-
-    # Build heat Distribution System Controller
-    my_heat_distribution_controller = (
-        heat_distribution_system.HeatDistributionController(
-            config=my_config.hdscontroller_config,
-            my_simulation_parameters=my_simulation_parameters,
-        )
     )
 
     # Build Heat Distribution System

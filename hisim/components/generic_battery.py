@@ -108,7 +108,9 @@ class BatteryControllerConfig(cp.ConfigBase):
     @classmethod
     def get_default_config(cls):
         """Gets a default config."""
-        return BatteryControllerConfig(name="Battery Controller",)
+        return BatteryControllerConfig(
+            name="Battery Controller",
+        )
 
 
 class GenericBattery(cp.Component):

@@ -392,7 +392,7 @@ class WeatherConfig(ConfigBase):
             location_entry.value[3],
         )
         config = WeatherConfig(
-            name="Weather_1",
+            name="Weather",
             location=location_entry.value[0],
             source_path=path,
             data_source=location_entry.value[4],
@@ -924,7 +924,7 @@ class Weather(Component):
         start_index = 0
         for index in range(0, total_number_of_timesteps_temperature_list):
             daily_average_temperature = float(
-                np.mean(temperaturelist[start_index: start_index + timestep_24h])
+                np.mean(temperaturelist[start_index : start_index + timestep_24h])
             )
             if index == start_index + timestep_24h:
                 start_index = index
@@ -1051,12 +1051,20 @@ def read_nsrdb_15min_data(filepath: str, year: int) -> pd.DataFrame:
     data.index = pd.date_range(
         f"{year}-01-01 00:00:00", periods=24 * 4 * 365, freq="900S", tz="UTC"
     )
-    data = data.rename(columns={"Temperature": "T", "Wind Speed": "Wspd",})
+    data = data.rename(
+        columns={
+            "Temperature": "T",
+            "Wind Speed": "Wspd",
+        }
+    )
     return data
 
 
 def calculate_direct_normal_radiation(
-    direct_horizontal_irradation: pd.Series, lon: float, lat: float, zenith_tol: float = 87.0
+    direct_horizontal_irradation: pd.Series,
+    lon: float,
+    lat: float,
+    zenith_tol: float = 87.0,
 ) -> pd.Series:
     """Calculates the direct NORMAL irradiance from the direct horizontal irradiance with the help of the PV lib.
 

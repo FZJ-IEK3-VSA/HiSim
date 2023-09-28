@@ -39,7 +39,7 @@ class AirConditionerConfig(ConfigBase):
     min_operation_time: int
     min_idle_time: int
     control: str
-    #my_simulation_repository: Optional[cp.SimRepository] = None
+    # my_simulation_repository: Optional[cp.SimRepository] = None
 
     @classmethod
     def get_default_air_conditioner_config(cls) -> Any:
@@ -50,7 +50,7 @@ class AirConditionerConfig(ConfigBase):
             min_operation_time=60 * 60,
             min_idle_time=15 * 60,
             control="on_off",
-            #my_simulation_repository=None,
+            # my_simulation_repository=None,
         )
         return config
 
@@ -71,9 +71,9 @@ class AirConditionerControllerConfig(ConfigBase):
     @classmethod
     def get_default_air_conditioner_controller_config(cls) -> Any:
         config = AirConditionerControllerConfig(
-            name="AirConditioner", 
-            t_air_heating=18.0, 
-            t_air_cooling=26.0, 
+            name="AirConditioner",
+            t_air_heating=18.0,
+            t_air_cooling=26.0,
             offset=0.0,
         )
         return config
@@ -165,7 +165,7 @@ class AirConditioner(cp.Component):
             model_name=self.air_conditioner_config.model_name,
             min_operation_time=self.air_conditioner_config.min_operation_time,
             min_idle_time=self.air_conditioner_config.min_idle_time,
-            #my_simulation_repository=self.air_conditioner_config.my_simulation_repository,
+            # my_simulation_repository=self.air_conditioner_config.my_simulation_repository,
         )
         self.t_outC: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -318,7 +318,7 @@ class AirConditioner(cp.Component):
         model_name,
         min_operation_time,
         min_idle_time,
-        #my_simulation_repository,
+        # my_simulation_repository,
     ):
         """Build function: The function retrieves air conditioner from databasesets sets important constants and parameters for the calculations."""
         # Simulation parameters
@@ -388,12 +388,8 @@ class AirConditioner(cp.Component):
 
         # Retrieves air conditioner from database - END
 
-        SingletonSimRepository().set_entry(
-            self.cop_coef_heating, self.cop_coef
-        )
-        SingletonSimRepository().set_entry(
-            self.eer_coef_cooling, self.eer_coef
-        )
+        SingletonSimRepository().set_entry(self.cop_coef_heating, self.cop_coef)
+        SingletonSimRepository().set_entry(self.eer_coef_cooling, self.eer_coef)
         # self.simulation_repository.set_entry(self.cop_coef_heating, self.cop_coef)
         # self.simulation_repository.set_entry(self.eer_coef_cooling, self.eer_coef)
 

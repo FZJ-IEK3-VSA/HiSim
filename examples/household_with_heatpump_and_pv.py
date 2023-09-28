@@ -144,7 +144,7 @@ def household_pv_hp(
         transportation_device_set=transportation_device_set,
         charging_station_set=charging_station_set,
         consumption=0,
-        profile_with_washing_machine_and_dishwasher=True
+        profile_with_washing_machine_and_dishwasher=True,
     )
 
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
@@ -161,7 +161,7 @@ def household_pv_hp(
     my_photovoltaic_system_config = (
         generic_pv_system.PVSystemConfig.get_default_PV_system()
     )
-    my_photovoltaic_system_config.power = power
+    my_photovoltaic_system_config.power_in_watt_peak = power
     my_photovoltaic_system_config.azimuth = azimuth
     my_photovoltaic_system_config.tilt = tilt
     my_photovoltaic_system = generic_pv_system.PVSystem(

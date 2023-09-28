@@ -205,11 +205,13 @@ class ElectricityMeter(DynamicComponent):
             self.electricity_to_or_from_grid, electricity_to_or_from_grid
         )
         stsv.set_output_value(
-            self.electricity_consumption_channel, consumption_uncontrolled_in_watt,
+            self.electricity_consumption_channel,
+            consumption_uncontrolled_in_watt,
         )
 
         stsv.set_output_value(
-            self.electricity_production_channel, production_in_watt,
+            self.electricity_production_channel,
+            production_in_watt,
         )
 
         stsv.set_output_value(
@@ -252,15 +254,15 @@ class ElectricityMeter(DynamicComponent):
                     / 3.6e6,
                     1,
                 )
-
-        co2_per_unit = (
-            EmissionFactorsAndCostsForFuelsConfig.electricity_footprint_in_kg_per_kwh
+        emissions_and_cost_factors = (
+            EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
+                self.my_simulation_parameters.year
+            )
         )
-        euro_per_unit = (
-            EmissionFactorsAndCostsForFuelsConfig.electricity_costs_in_euro_per_kwh
-        )
+        co2_per_unit = emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh
+        euro_per_unit = emissions_and_cost_factors.electricity_costs_in_euro_per_kwh
         revenue_euro_per_unit = (
-            EmissionFactorsAndCostsForFuelsConfig.electricity_to_grid_revenue_in_euro_per_kwh
+            emissions_and_cost_factors.electricity_to_grid_revenue_in_euro_per_kwh
         )
 
         opex_cost_per_simulated_period_in_euro = (
@@ -287,7 +289,9 @@ class ElectricityMeterState:
     cumulative_production_in_watt_hour: float
     cumulative_consumption_in_watt_hour: float
 
-    def self_copy(self,):
+    def self_copy(
+        self,
+    ):
         """Copy the ElectricityMeterState."""
         return ElectricityMeterState(
             self.cumulative_production_in_watt_hour,

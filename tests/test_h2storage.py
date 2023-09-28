@@ -17,17 +17,28 @@ from hisim.components import generic_hydrogen_storage
 def test_chp_system():
 
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
-    
-    my_h2_storage_config = generic_hydrogen_storage.GenericHydrogenStorageConfig.get_default_config()
+    my_simulation_parameters = SimulationParameters.one_day_only(
+        2017, seconds_per_timestep
+    )
+
+    my_h2_storage_config = (
+        generic_hydrogen_storage.GenericHydrogenStorageConfig.get_default_config()
+    )
     my_h2_storage = generic_hydrogen_storage.GenericHydrogenStorage(
         config=my_h2_storage_config, my_simulation_parameters=my_simulation_parameters
-        )
-    
+    )
+
     # Set Fake Inputs
-    h2_input = cp.ComponentOutput("FakeHydrogenInput", "HydrogenInput", lt.LoadTypes.HYDROGEN, lt.Units.KG_PER_SEC)
-    h2_output = cp.ComponentOutput("FakeHydrogenOutput", "HydrogenOutput", lt.LoadTypes.HYDROGEN, lt.Units.KG_PER_SEC)
-    
+    h2_input = cp.ComponentOutput(
+        "FakeHydrogenInput", "HydrogenInput", lt.LoadTypes.HYDROGEN, lt.Units.KG_PER_SEC
+    )
+    h2_output = cp.ComponentOutput(
+        "FakeHydrogenOutput",
+        "HydrogenOutput",
+        lt.LoadTypes.HYDROGEN,
+        lt.Units.KG_PER_SEC,
+    )
+
     number_of_outputs = fft.get_number_of_outputs([my_h2_storage, h2_input, h2_output])
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
@@ -40,17 +51,18 @@ def test_chp_system():
     # test if storage is charged
     stsv.values[h2_input.global_index] = 1e-4  # kg/s
     stsv.values[h2_output.global_index] = 0
-    
-    my_h2_storage.i_simulate(0, stsv,  False)
 
-    assert stsv.values[my_h2_storage.hydrogen_soc.global_index] == 1e-2 * seconds_per_timestep / my_h2_storage_config.max_capacity
-    
+    my_h2_storage.i_simulate(0, stsv, False)
+
+    assert (
+        stsv.values[my_h2_storage.hydrogen_soc.global_index]
+        == 1e-2 * seconds_per_timestep / my_h2_storage_config.max_capacity
+    )
+
     # test if storage is discharged
     stsv.values[h2_input.global_index] = 0  # kg/s
     stsv.values[h2_output.global_index] = 1e-4
-    
-    my_h2_storage.i_simulate(1, stsv,  False)
-    
+
+    my_h2_storage.i_simulate(1, stsv, False)
+
     assert stsv.values[my_h2_storage.hydrogen_soc.global_index] == 0
-    
-    

@@ -62,21 +62,12 @@ def household_with_hplib_hws_hds_pv_battery_ems(
     )
     set_heating_threshold_outside_temperature_for_heat_pump_in_celsius = 16.0
     set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = 22.0
+    temperature_offset_for_state_conditions_in_celsius = 5.0
 
     # Set Heat Pump
-    model: str = "Generic"
     group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
     heating_reference_temperature_in_celsius: float = -7  # t_in
-    set_thermal_output_power_in_watt: float = 8000
     flow_temperature_in_celsius = 21  # t_out_val
-    cycling_mode = True
-    minimum_running_time_in_seconds = 600
-    minimum_idle_time_in_seconds = 600
-    hp_co2_footprint = set_thermal_output_power_in_watt * 1e-3 * 165.84
-    hp_cost = set_thermal_output_power_in_watt * 1e-3 * 1513.74
-    hp_lifetime = 10
-    hp_maintenance_cost_as_percentage_of_investment = 0.025
-    hp_consumption = 0
 
     # =================================================================================================================================
     # Build Components
@@ -121,15 +112,14 @@ def household_with_hplib_hws_hds_pv_battery_ems(
     my_building_config.heating_reference_temperature_in_celsius = (
         heating_reference_temperature_in_celsius
     )
-
+    my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
     # Build Occupancy
-    my_occupancy_config = (
-        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_CHS01_according_to_number_of_apartments(
+        number_of_apartments=my_building_information.number_of_apartments
     )
-
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
@@ -144,7 +134,9 @@ def household_with_hplib_hws_hds_pv_battery_ems(
 
     # Build PV
     my_photovoltaic_system_config = (
-        generic_pv_system.PVSystemConfig.get_default_PV_system()
+        generic_pv_system.PVSystemConfig.get_scaled_PV_system(
+            rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
+        )
     )
 
     my_photovoltaic_system = generic_pv_system.PVSystem(
@@ -159,34 +151,29 @@ def household_with_hplib_hws_hds_pv_battery_ems(
             mode=hp_controller_mode,
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_pump_in_celsius,
             set_cooling_threshold_outside_temperature_in_celsius=set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius,
+            temperature_offset_for_state_conditions_in_celsius=temperature_offset_for_state_conditions_in_celsius,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Pump
+    my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+    )
+    my_heat_pump_config.group_id = group_id
+    my_heat_pump_config.flow_temperature_in_celsius = flow_temperature_in_celsius
+    my_heat_pump_config.heating_reference_temperature_in_celsius = (
+        heating_reference_temperature_in_celsius
+    )
+
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
-        config=advanced_heat_pump_hplib.HeatPumpHplibConfig(
-            name="HeatPumpHPLib",
-            model=model,
-            group_id=group_id,
-            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-            flow_temperature_in_celsius=flow_temperature_in_celsius,
-            set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
-            cycling_mode=cycling_mode,
-            minimum_running_time_in_seconds=minimum_running_time_in_seconds,
-            minimum_idle_time_in_seconds=minimum_idle_time_in_seconds,
-            co2_footprint=hp_co2_footprint,
-            cost=hp_cost,
-            lifetime=hp_lifetime,
-            maintenance_cost_as_percentage_of_investment=hp_maintenance_cost_as_percentage_of_investment,
-            consumption=hp_consumption,
-        ),
+        config=my_heat_pump_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Distribution System
-    my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
+    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config,
@@ -194,8 +181,8 @@ def household_with_hplib_hws_hds_pv_battery_ems(
     )
 
     # Build Heat Water Storage
-    my_simple_heat_water_storage_config = (
-        simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
+    my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
     )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
@@ -215,7 +202,9 @@ def household_with_hplib_hws_hds_pv_battery_ems(
 
     # Build Battery
     my_advanced_battery_config = (
-        advanced_battery_bslib.BatteryConfig.get_default_config()
+        advanced_battery_bslib.BatteryConfig.get_scaled_battery(
+            total_pv_power_in_watt_peak=my_photovoltaic_system_config.power
+        )
     )
     my_advanced_battery = advanced_battery_bslib.Battery(
         my_simulation_parameters=my_simulation_parameters,
@@ -248,7 +237,7 @@ def household_with_hplib_hws_hds_pv_battery_ems(
     # -----------------------------------------------------------------------------------------------------------------
     # Connect Water Storage
     my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterTemperatureFromHeatDistributionSystem,
+        my_simple_hot_water_storage.WaterTemperatureFromHeatDistribution,
         my_heat_distribution_system.component_name,
         my_heat_distribution_system.WaterTemperatureOutput,
     )

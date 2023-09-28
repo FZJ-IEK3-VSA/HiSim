@@ -520,6 +520,8 @@ def compute_kpis(
     #     timeresolution=simulation_parameters.seconds_per_timestep,
     # )
 
+    consumption_from_grid_in_kwh = consumption_sum - self_consumption_sum
+
     # compute cost and co2 for investment/installation:  # Todo: function compute_investment_cost does not include all components, use capex and opex-results instead
     investment_cost, co2_footprint = compute_investment_cost(components=components)
 
@@ -567,13 +569,15 @@ def compute_kpis(
     ) = building_temperature_control(
         results=results, seconds_per_timestep=simulation_parameters.seconds_per_timestep
     )
+    table_headline: List[object] = ["KPI", "Value", "Unit"]
     # initialize table for report
     table: List = []
-    table.append(["KPI", "Value", "Unit"])
+    table.append(table_headline)
     table.append(["Consumption:", f"{consumption_sum:4.0f}", "kWh"])
     table.append(["Production:", f"{production_sum:4.0f}", "kWh"])
-    table.append(["Self-Consumption:", f"{self_consumption_sum:4.0f}", "kWh"])
+    table.append(["Self-consumption:", f"{self_consumption_sum:4.0f}", "kWh"])
     table.append(["Injection:", f"{injection_sum:4.0f}", "kWh"])
+    table.append(["Consumption from grid:", f"{consumption_from_grid_in_kwh:4.0f}", "kWh"])
     table.append(["Battery losses:", f"{battery_losses:4.0f}", "kWh"])
     # table.append(["DHW storage heat loss:", f"{loss_dhw:4.0f}", "kWh"])
     # table.append(["DHW storage heat cycles:", f"{cycles_dhw:4.0f}", "Cycles"])
@@ -583,20 +587,20 @@ def compute_kpis(
     # table.append(["Heating energy provided:", f"{use_heating:4.0f}", "kWh"])
     # table.append(["Hydrogen system losses:", f"{h2_system_losses:4.0f}", "kWh"])
     # table.append(["Hydrogen storage content:", f"{0:4.0f}", "kWh"])
-    table.append(["Autarky Rate:", f"{autarky_rate:3.1f}", "%"])
-    table.append(["Self Consumption Rate:", f"{self_consumption_rate:3.1f}", "%"])
+    table.append(["Autarky rate:", f"{autarky_rate:3.1f}", "%"])
+    table.append(["Self-consumption rate:", f"{self_consumption_rate:3.1f}", "%"])
     table.append(["Cost for energy use:", f"{price:3.0f}", "EUR"])
     table.append(["CO2 emitted due energy use:", f"{co2:3.0f}", "kg"])
     table.append(
         [
-            "Annual investment cost for equipment (old version):",
+            "Annual investment costs for equipment (old version):",
             f"{investment_cost:3.0f}",
             "EUR",
         ]
     )
     table.append(
         [
-            "Annual CO2 Footprint for equipment (old versiom):",
+            "Annual CO2 footprint for equipment (old version):",
             f"{co2_footprint:3.0f}",
             "kg",
         ]
@@ -604,28 +608,28 @@ def compute_kpis(
     table.append(["------", "---", "---"])
     table.append(
         [
-            "Investment cost for equipment per simulated period:",
+            "Investment costs for equipment per simulated period:",
             f"{total_investment_cost_per_simulated_period:3.0f}",
             "EUR",
         ]
     )
     table.append(
         [
-            "CO2 Footprint for equipment per simulated period:",
+            "CO2 footprint for equipment per simulated period:",
             f"{total_device_co2_footprint_per_simulated_period:3.0f}",
             "kg",
         ]
     )
     table.append(
         [
-            "System operational Cost for simulated period:",
+            "System operational costs for simulated period:",
             f"{total_operational_cost:3.0f}",
             "EUR",
         ]
     )
     table.append(
         [
-            "System operational Emissions for simulated period:",
+            "System operational emissions for simulated period:",
             f"{total_operational_emisions:3.0f}",
             "kg",
         ]
@@ -639,7 +643,7 @@ def compute_kpis(
     )
     table.append(
         [
-            "Total Emissions for simulated period:",
+            "Total emissions for simulated period:",
             f"{(total_device_co2_footprint_per_simulated_period + total_operational_emisions):3.0f}",
             "kg",
         ]
@@ -686,5 +690,10 @@ def compute_kpis(
     config_file_written = kpi_config.to_json()  # type: ignore
     with open(pathname, "w", encoding="utf-8") as outfile:
         outfile.write(config_file_written)
+
+    # write whole table to csv file
+    pathname_csv = os.path.join(simulation_parameters.result_directory, "kpi_results.csv")
+    kpi_df = pd.DataFrame(table, columns=table_headline)
+    kpi_df.to_csv(pathname_csv, index=False, header=False, encoding="utf8")
 
     return table

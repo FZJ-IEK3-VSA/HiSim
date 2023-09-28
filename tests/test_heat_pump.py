@@ -1,7 +1,8 @@
 import pytest
 from hisim import component as cp
-#import components as cps
-#import components
+
+# import components as cps
+# import components
 from hisim.components import generic_heat_pump
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
@@ -11,7 +12,9 @@ from hisim.simulationparameters import SimulationParameters
 def test_heat_pump():
 
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(2017,seconds_per_timestep)
+    my_simulation_parameters = SimulationParameters.one_day_only(
+        2017, seconds_per_timestep
+    )
     # Heat Pump
     manufacturer = "Viessmann Werke GmbH & Co KG"
     heat_pump_name = "Vitocal 300-A AWO-AC 301.B07"
@@ -28,32 +31,41 @@ def test_heat_pump():
     number_of_outputs = 8
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
-    #===================================================================================================================
+    # ===================================================================================================================
     # Set Heat Pump
-    my_heat_pump = generic_heat_pump.GenericHeatPump(config=generic_heat_pump.GenericHeatPumpConfig(manufacturer=manufacturer,
-                                                     name="GenericHeatPump",
-                                                     heat_pump_name=heat_pump_name,
-                                                     min_operation_time=minimum_idle_time,
-                                                     min_idle_time=minimum_operation_time), my_simulation_parameters=my_simulation_parameters)
+    my_heat_pump = generic_heat_pump.GenericHeatPump(
+        config=generic_heat_pump.GenericHeatPumpConfig(
+            manufacturer=manufacturer,
+            name="GenericHeatPump",
+            heat_pump_name=heat_pump_name,
+            min_operation_time=minimum_idle_time,
+            min_idle_time=minimum_operation_time,
+        ),
+        my_simulation_parameters=my_simulation_parameters,
+    )
 
     # Set Heat Pump Controller
-    my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(config=generic_heat_pump.GenericHeatPumpControllerConfig(
-                                                               name="GenericHeatPumpController",
-                                                               temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
-                                                               temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
-                                                               offset=offset,
-                                                               mode=hp_mode),
-                                                           my_simulation_parameters=my_simulation_parameters)
+    my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
+        config=generic_heat_pump.GenericHeatPumpControllerConfig(
+            name="GenericHeatPumpController",
+            temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
+            temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
+            offset=offset,
+            mode=hp_mode,
+        ),
+        my_simulation_parameters=my_simulation_parameters,
+    )
 
-    t_air_outdoorC = cp.ComponentOutput("FakeTemperatureOutside",
-                                        "TemperatureAir",
-                                        lt.LoadTypes.TEMPERATURE,
-                                        lt.Units.WATT)
+    t_air_outdoorC = cp.ComponentOutput(
+        "FakeTemperatureOutside",
+        "TemperatureAir",
+        lt.LoadTypes.TEMPERATURE,
+        lt.Units.WATT,
+    )
 
-    t_mC = cp.ComponentOutput("FakeHouse",
-                              "TemperatureMean",
-                              lt.LoadTypes.TEMPERATURE,
-                              lt.Units.WATT)
+    t_mC = cp.ComponentOutput(
+        "FakeHouse", "TemperatureMean", lt.LoadTypes.TEMPERATURE, lt.Units.WATT
+    )
 
     my_heat_pump_controller.temperature_mean_channel.source_output = t_mC
 
@@ -75,7 +87,7 @@ def test_heat_pump():
     j = 60
     # Simulate
     my_heat_pump_controller.i_restore_state()
-    my_heat_pump_controller.i_simulate(j, stsv,  False)
+    my_heat_pump_controller.i_simulate(j, stsv, False)
 
     my_heat_pump.i_restore_state()
     my_heat_pump.i_simulate(j, stsv, False)

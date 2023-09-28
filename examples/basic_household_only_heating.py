@@ -62,8 +62,7 @@ def basic_household_only_heating(
         config=building.BuildingConfig.get_default_german_single_family_home(),
         my_simulation_parameters=my_simulation_parameters,
     )
-    # my_building_controller = building.BuildingController(config=building.BuildingController.get_default_config(),
-    #                                                      my_simulation_parameters=my_simulation_parameters)
+    my_building_information = my_building.my_building_information
 
     # Build occupancy
     my_occupancy = loadprofilegenerator_connector.Occupancy(
@@ -90,7 +89,9 @@ def basic_household_only_heating(
     )
 
     my_storage_controller = generic_heat_water_storage.HeatStorageController(
-        config=generic_heat_water_storage.HeatStorageControllerConfig.get_default_heat_storage_controller_config(),
+        config=generic_heat_water_storage.HeatStorageControllerConfig.get_default_heat_storage_controller_config(
+            heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+        ),
         my_simulation_parameters=my_simulation_parameters,
     )
 

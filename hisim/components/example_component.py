@@ -1,6 +1,4 @@
 # Generic/Built-in
-import copy
-import numpy as np
 from typing import List, Optional
 # Owned
 from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput
@@ -143,16 +141,6 @@ class Dummy(Component):
             current_stored_energy = previous_stored_energy + thermal_delivered_energy
             self.temperature = current_stored_energy / self.capacity - 273.15
             temperature = self.temperature
-
-        #thermal_delivered_energy = 0
-        #temperature = self.initial_temperature
-        #current_stored_energy = ( self.initial_temperature + 273.15) * self.capacity
-        #    else:
-        #thermal_delivered_energy = stsv.get_input_value(self.thermal_energy_deliveredC)
-        #previous_stored_energy = (self.previous_temperature + 273.15) * self.capacity
-        #current_stored_energy = previous_stored_energy + thermal_delivered_energy
-        #self.temperature = current_stored_energy / self.capacity - 273.15
-        #temperature = self.temperature
 
         stsv.set_output_value(self.stored_energyC, current_stored_energy)
         stsv.set_output_value(self.t_mC, temperature)

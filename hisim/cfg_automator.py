@@ -9,7 +9,6 @@ from pkgutil import iter_modules
 from pathlib import Path as gg
 from importlib import import_module
 from typing import Any, Dict
-import logging
 
 import hisim.component as component
 import hisim.simulator as sim
@@ -18,7 +17,6 @@ import hisim.log
 from hisim.utils import HISIMPATH
 import hisim.simulator
 from os.path import dirname, basename, isfile, join
-import glob
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -28,11 +26,6 @@ __version__ = "0.1"
 __maintainer__ = "Vitor Hugo Bellotto Zago"
 __email__ = "vitor.zago@rwth-aachen.de"
 __status__ = "development"
-
-# logging.basicConfig(level=#logging.INFO)
-
-# IMPORT ALL COMPONENT CLASSES DYNAMICALLY
-# DIRTY CODE. GIVE ME BETTER SUGGESTIONS
 
 # iterate through the modules in the current package
 package_dir = os.path.join(gg(__file__).resolve().parent, "components")
@@ -281,8 +274,6 @@ class ConfigurationGenerator:
             self._components[
                 user_components_name.__module__
             ] = user_components_name.__doc__
-            # self._components[user_components_name] = self.preloaded_components[user_components_name]
-            # logging.info("Component {} has been added to configuration JSON file.".format(user_components_name))
 
     def add_grouping(self, grouping_components: ComponentsGrouping):
         """
@@ -308,7 +299,6 @@ class ConfigurationGenerator:
         self._groupings[
             grouping_components.component_name
         ] = grouping_components.configuration
-        # logging.info("Component Grouping {} has been created.".format(grouping_components.component_name))
 
     def add_connection(self, connection_components):
         """
@@ -332,7 +322,6 @@ class ConfigurationGenerator:
             connection_components.second_component,
         )
         self._connections[connection_name] = connection_components.configuration
-        # logging.info("{} and {} have been connected ")
 
     def add_paramater_range(self, parameter_range):
         self._parameters_range_studies.update(parameter_range)
@@ -363,14 +352,12 @@ class ConfigurationGenerator:
 
     def run(self):
         pass
-        # hisim.main("cfg_automator", "basic_household_implicit")
 
     def run_parameter_studies(self):
         for (
             component_class,
             parameter_name_and_range,
         ) in self._parameters_range_studies.items():
-            # logging.info("Performing parameter study of component {}".format(component))
             parameters_range_studies_entry = copy.deepcopy(
                 self._parameters_range_studies
             )
@@ -400,8 +387,6 @@ class SetupFunction:
         self._components = []
         self._connections = []
         self._groupings = []
-        # self.electricity_grids : List[ElectricityGrid] = []
-        # self.electricity_grid_consumption : List[ElectricityGrid] = []
         self.component_class_children = []
         self.component_file_children = []
         self.component_module_list = []
@@ -575,8 +560,6 @@ class SetupFunction:
                     parameter_name
                 ] = my_sim.SimulationParameters
         try:
-
-            # self.cfg["Components"][comp].__delitem__("my_simulation_parameters")
             config_class = component_class_config_to_add.from_dict(
                 self.cfg["Components"][full_instance_path]
             )
@@ -656,35 +639,6 @@ class SetupFunction:
     def add_configuration(self, my_sim: sim.Simulator):
         # my_sim.add_configuration(self.cfg_raw)
         pass
-
-    """
-    def add_to_electricity_grid(self, my_sim, next_component, electricity_grid_label=None):
-        n_consumption_components = len(self.electricity_grids)
-        if electricity_grid_label is None:
-            electricity_grid_label = "Load{}".format(n_consumption_components)
-        if n_consumption_components == 0:
-            list_components = [next_component]
-        else:
-            list_components = [self.electricity_grids[-1], "Sum", next_component]
-        self.electricity_grids.append(ElectricityGrid(name=electricity_grid_label, grid=list_components))
-        #self.electricity_grids.append(self.electricity_grids[-1]+next_component)
-        my_sim.add_component(self.electricity_grids[-1])
-        #if hasattr(next_component, "type"):
-        #    if next_component.type == "Consumer":
-        #        self.add_to_electricity_grid_consumption(my_sim, next_component)
-
-    def add_to_electricity_grid_consumption(self, my_sim, next_component, electricity_grid_label = None):
-        n_consumption_components = len(self.electricity_grid_consumption)
-        if electricity_grid_label is None:
-            electricity_grid_label = "Consumption{}".format(n_consumption_components)
-        if n_consumption_components == 0:
-            list_components = [next_component]
-        else:
-            list_components = [self.electricity_grid_consumption[-1], "Sum", next_component]
-        self.electricity_grid_consumption.append(ElectricityGrid(name=electricity_grid_label, grid=list_components))
-        my_sim.add_component(self.electricity_grid_consumption[-1])
-    """
-
 
 def basic_household_implicit(my_sim: sim.Simulator):
     my_setup_function = SetupFunction()

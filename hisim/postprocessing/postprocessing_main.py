@@ -2,32 +2,19 @@ import os
 import pandas as pd
 import numpy as np
 import sys
-import inspect
 import subprocess
-#import tkinter as tk
 import tkinter.filedialog as filedialog
-from enum import Enum
-
-#currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-#parentdir = os.path.dirname(currentdir)
-#sys.path.insert(0, parentdir)
 
 # Owned
 import hisim.log as log
 from hisim import utils
 from hisim.utils import PostProcessingOptions
 from hisim import loadtypes as lt
-import pickle
-#from . import charts
-#from . import report
 import hisim.postprocessing.charts as charts
 from hisim.postprocessing.chart_singleday import ChartSingleDay
 import hisim.postprocessing.report as report
-from hisim import component
 from hisim.simulationparameters import SimulationParameters
 import warnings
-
-#import cfg_automator
 
 class PostProcessingDataTransfer:
     def __init__(self,
@@ -81,52 +68,10 @@ class PostProcessor:
         self.report = report.Report(setup_function=self.ppdt.setup_function, dirpath=self.ppdt.directory_path)
         #self.cal_pos_sim()
 
-#    def open_latest_pickle(self):
- #       sim_pickle, dirpath, dirname = self.get_lastest_pickle()
-  #      self.dirname = dirname
-   #     #utils.del_file_type(dirname, ".png")
-    #    self.get_pickle_attributes(sim_pickle)
-
     def set_dir_results(self, dirname=None):
         if dirname is None:
             dirname = filedialog.askdirectory(initialdir=utils.HISIMPATH["results"])
         self.dirname = dirname
-
-    #def open_pickle(self, dirname):
-#        sim_pickle, dirpath = utils.open_pickle(dirname)
-#        utils.del_file_type(dirname, ".png")
-#        self.get_pickle_attributes(sim_pickle)
-
- #   def get_lastest_pickle(self):
-  #      stored_results_list = os.listdir(self.resultsdir)
-   #     execution_dates = []
-    #    for index, result_dir in enumerate(stored_results_list):
-     #       temp = result_dir.split("_")
-      #      execution_dates.append("{}_{}".format(temp[-2], temp[-1]))
-
-       # dir_index = execution_dates.index(max(execution_dates))
-        #latest_dir = stored_results_list[dir_index]
-        #latest_dir_path = os.path.join(self.resultsdir, latest_dir)
-        #for file in os.listdir(latest_dir_path):
-         #   if file.endswith(".pkl"):
-          #      pickle_file = file
-           #     break
-
-        #filepath = os.path.join(latest_dir_path, pickle_file)
-        #with open(filepath, 'rb') as input:
-#            extracted_pickle = pickle.load(input)
- #       return extracted_pickle, latest_dir_path, latest_dir
-
-    # def get_pickle_attributes(self, sim_pickle):
-    #     ppdt: PostProcessingDataTransfer = sim_pickle
-    #     self.dirpath = ppdt.directory_path
-    #     #self.dirpath = sim_pickle["directory_path"]
-
-    #     self.report.executation_time = ppdt.execution_time #  sim_pickle["execution_time"]
-    #     self.time_correction_factor = ppdt.time_correction_factor # sim_pickle["time_correction_factor"]
-    #     self.all_outputs = ppdt.all_outputs#  sim_pickle["all_outputs"]
-    #     self.results_m = ppdt.results_m # sim_pickle["results_m"]
-    #     self.WrappedComponents = ppdt.wrapped_components # sim_pickle["wrapped_components"]
 
     @utils.measure_execution_time
     def plot_sankeys(self):
@@ -155,12 +100,8 @@ class PostProcessor:
     @utils.measure_execution_time
     def run(self):
         # Define the directory name
-        ##
         warnings.filterwarnings("ignore")
-#        if self.dirname is None:
- #           self.open_latest_pickle()
-  #      else:
-   #         self.open_pickle(self.dirname)
+
 
         days={"month":0,
               "day":0}
@@ -244,7 +185,6 @@ class PostProcessor:
                                    day=0,
                                    month=0)
                 my_days.plot()
-                #my_days.close()
 
         # Open file explorer
         if PostProcessingOptions.Open_Directory in self.ppdt.postProcessingOptions:
@@ -270,7 +210,6 @@ class PostProcessor:
         self.report.close()
         
     def compute_KPIs( self ):
-        #self.ppdt.results.to_csv(os.path.join(self.ppdt.directory_path,"{}.csv".format('df')))
         consumption_sum=0
         production_sum=0
         battery_discharge=0
@@ -324,74 +263,7 @@ class PostProcessor:
         results_kpi['eigenverbrauch']=[eigenverbrauch]
 
         results_kpi.to_csv(os.path.join(self.ppdt.directory_path,"{}.csv".format('results_kpi')),index=False)
-        #self.write_to_report( lines )
 
-    #
-    # def cal_pos_sim(self):
-    #     self.write_components_to_report()
-    #
-    #     total_electricity_consumed = None
-    #     total_electricity_not_covered = None
-    #     heat_pump_heating = None
-    #     heat_pump_cooling = 0.0
-    #     building_area = None
-    #     solar_gain_through_windows = None
-    #     internal_gains = None
-    #
-    #     for index, entry in enumerate(self.ppdt.wrapped_components):
-    #         if entry.MyComponent.ComponentName == "Building":
-    #             building_area = entry.MyComponent.A_f
-    #
-    #     for index, entry in enumerate(self.ppdt.all_outputs):
-    #         if entry.ObjectName == "ElectricityGrid_Consumed":
-    #             total_electricity_consumed = sum(entry.Results)* self.ppdt.time_correction_factor
-    #         if entry.ObjectName == "ElectricityGrid_NotConveredConsumed":
-    #             total_electricity_not_covered = sum(entry.Results)* self.ppdt.time_correction_factor
-    #         if entry.ObjectName == "HeatPump" and entry.FieldName == "Heating":
-    #             heat_pump_heating = sum(entry.Results)* self.ppdt.time_correction_factor
-    #         if entry.ObjectName == "HeatPump" and entry.FieldName == "Cooling":
-    #             heat_pump_cooling = abs(sum(entry.Results))* self.ppdt.time_correction_factor
-    #         if entry.ObjectName == "HeatPump" and entry.FieldName == "ElectricityOutput":
-    #             heat_pump_electricity_output = abs(sum(entry.Results)) * self.ppdt.time_correction_factor
-    #         if entry.ObjectName == "HeatPump" and entry.FieldName == "NumberOfCycles":
-    #             heat_pump_number_of_cycles = abs(entry.Results[-1])
-    #         if entry.ObjectName == "Building" and entry.FieldName == "SolarGainThroughWindows":
-    #             solar_gain_through_windows = abs(sum(entry.Results))* self.ppdt.time_correction_factor
-    #         if entry.ObjectName == "Occupancy" and entry.FieldName == "HeatingByResidents":
-    #             internal_gains = abs(sum(entry.Results)*self.ppdt.time_correction_factor)
-    #
-    #     # Writes self-consumption and autarky
-    #     if total_electricity_consumed is not None:
-    #         if total_electricity_not_covered is not None:
-    #             autarky = ( ( total_electricity_consumed - total_electricity_not_covered ) / total_electricity_consumed ) * 100
-    #             text = ["Consumed: {:.0f} kWh".format(total_electricity_consumed * 1E-3)]
-    #             self.write_to_report(text)
-    #             text = ["Not Covered: {:.0f} kWh".format(total_electricity_not_covered * 1E-3)]
-    #             self.write_to_report(text)
-    #             text = ["Autarky: {:.3}%".format(autarky)]
-    #             self.write_to_report(text)
-    #
-    #     # Writes performance of heat pump
-    #     if heat_pump_heating is not None:
-    #         self.write_to_report(["HeatPump - Absolute Heating Demand [kWh]: {:.0f}".format(1E-3*heat_pump_heating)])
-    #         self.write_to_report(["HeatPump - Absolute Cooling Demand [kWh]: {:.0f}".format(1E-3*heat_pump_cooling)])
-    #         self.write_to_report(["HeatPump - Electricity Output [kWh]: {:.0f}".format(1E-3*heat_pump_electricity_output)])
-    #         self.write_to_report(["HeatPump - Number Of Cycles: {}".format(heat_pump_number_of_cycles)])
-    #         self.write_to_report(["HeatPump - Overall Coefficient of Performance: {:.2f}".format( (heat_pump_heating+heat_pump_cooling)/heat_pump_electricity_output )])
-    #         if building_area is not None:
-    #             self.write_to_report(["HeatPump - Relative Heating Demand [kWh/m2]: {:.0f} ".format(1E-3*heat_pump_heating/building_area)])
-    #
-    #     # Writes building solar gains
-    #     if solar_gain_through_windows is not None:
-    #         self.write_to_report(["Absolute Solar Gains [kWh]: {:.0f}".format(1E-3*solar_gain_through_windows)])
-    #         if building_area is not None:
-    #             self.write_to_report(["Relative Solar Gains [Wh/m2]: {:.0f} ".format(1E-3*solar_gain_through_windows/building_area)])
-    #
-    #     # Writes building internal gains
-    #     if internal_gains is not None:
-    #         self.write_to_report(["Absolute Internal Gains [kWh]: {:.0f}".format(1E-3*internal_gains)])
-    #         if building_area is not None:
-    #             self.write_to_report(["Relative Internal Gains [kWh/m2]: {:.0f} ".format(1E-3*internal_gains/building_area)])
 
     def write_components_to_report(self):
         """

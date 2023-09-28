@@ -75,10 +75,6 @@ class ChartSingleDay(Chart):
     def close(self):
         plt.xticks(fontsize=18)
         plt.yticks(fontsize=18)
-        #if hasattr(self,"line2"):
-        #    lines = self.line1 + self.line2
-        #    labs = [l.get_label() for l in lines]
-        #    self.ax.legend(lines, labs, loc=0)
         self.ax.xaxis.set_major_formatter(DateFormatter("%H:%M"))
         self.ax.set_ylabel("{} [{}]".format(self.property,self.ylabel),fontsize=18)
         if hasattr(self,"line2"):
@@ -95,17 +91,13 @@ class ChartSingleDay(Chart):
         self.fig, self.ax = plt.subplots(figsize=(13, 9))
         plt.xticks(fontsize=18)
         plt.yticks(fontsize=18)
-        #plt.plot(self.data.index[firstindex:lastindex], self.data[firstindex:lastindex], color="green", linewidth=5.0)
         if abs(max(self.data)) > 1.5E3:
             self.data = self.data * 1E-3
             self.ylabel = "k{}".format(self.ylabel)
         self.line1 = plt.plot(self.data.index, self.data, color="green", linewidth=5.0, label=self.property)
         plt.grid(True)
-        #plt.xticks(fontsize=18)
-        #plt.yticks(fontsize=18)
         self.ax.set_ylabel(self.ylabel)
         plt.xlabel("Time [hours]", fontsize=18)  # fontsize=18)
-        #plt.title("{}".format(self.plot_title), fontsize=20)
         self.ax.xaxis.set_major_formatter(DateFormatter("%H:%M"))
         if close:
             self.close()

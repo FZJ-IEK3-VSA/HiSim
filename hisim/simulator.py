@@ -1,5 +1,4 @@
 import os
-import logging
 import numpy as np
 import datetime
 
@@ -8,8 +7,6 @@ from typing import List, Dict, Any
 from typing import Tuple
 import pandas as pd
 import warnings
-
-
 import time
 
 # Owned
@@ -19,9 +16,6 @@ from hisim import log
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim import utils
-#import utils
-
-
 
 class ComponentWrapper:
     def __init__(self, component: cp.Component, is_cachable: bool):

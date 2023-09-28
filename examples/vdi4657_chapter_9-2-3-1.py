@@ -1,5 +1,4 @@
 import os
-import pandas as pd
 from typing import Optional
 import hisim.simulator as sim
 import hisim.loadtypes as loadtypes
@@ -18,7 +17,7 @@ __credits__ = ["Noah Pflugradt, Tjarko Tjaden"]
 __license__ = "MIT"
 __version__ = "0.1"
 __maintainer__ = "Tjarko Tjaden"
-__email__ = "tjarko.tjaden@hs-emden-leer.de"
+__email__ = "t.tjaden@fz-juelich.de"
 __status__ = "development"
 
 def simulation_settings(my_sim: sim.Simulator,

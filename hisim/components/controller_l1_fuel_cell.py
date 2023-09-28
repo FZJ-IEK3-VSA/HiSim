@@ -1,5 +1,3 @@
-""" Controller for the generic electrolyzer. """
-
 import os
 from typing import List, Any
 import json
@@ -21,7 +19,7 @@ __authors__ = "Franz Oldopp"
 __copyright__ = "Copyright 2023, IEK-3"
 __credits__ = ["Franz Oldopp"]
 __license__ = "MIT"
-__version__ = "0.5"
+__version__ = "0.1"
 __maintainer__ = "Franz Oldopp"
 __email__ = "f.oldopp@fz-juelich.de"
 __status__ = "development"
@@ -29,61 +27,63 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class ElectrolyzerControllerConfig(ConfigBase):
+class FuelCellControllerConfig(ConfigBase):
 
-    """Configutation of the Simple Electrolyzer Controller."""
+    """Configutation of the Fuel Cell Controller."""
 
     @classmethod
     def get_main_classname(cls):
         """Returns the full class name of the base class."""
-        return ElectrolyzerController.get_full_classname()
+        return FuelCellController.get_full_classname()
 
     name: str
-    nom_load: float
-    min_load: float
-    max_load: float
+    nom_output: float
+    min_output: float
+    max_output: float
     standby_load: float
     warm_start_time: float
     cold_start_time: float
+    # standby_load: float
+    # control_strategy_deactivation: str <-- 'standby' or 'off'
 
     @classmethod
-    def get_default_electrolyzer_controller_config(
+    def get_default_fuel_cell_controller_config(
         cls,
     ) -> Any:
         """Get a default electrolyzer controller config."""
-        config = ElectrolyzerControllerConfig(
-            name="DefaultElectrolyzerController",
-            nom_load=100.0,
-            min_load=10.0,
-            max_load=110.0,
-            standby_load=5.0,
+        config = FuelCellControllerConfig(
+            name="Default fuel cell controller",
+            nom_output=100.0,
+            min_output=10.0,
+            max_output=110.0,
+            standby_load=10.0,
             warm_start_time=70.0,
             cold_start_time=1800.0,
         )
         return config
 
     @staticmethod
-    def read_config(electrolyzer_name):
-        """Opens the according JSON-file, based on the electrolyzer_name."""
+    def read_config(fuel_cell_name):
+        """Opens the according JSON-file, based on the fuel_cell_name."""
 
         config_file = os.path.join(
-            utils.HISIMPATH["inputs"], "electrolyzer_manufacturer_config.json"
+            utils.HISIMPATH["inputs"], "fuel_cell_manufacturer_config.json"
         )
         with open(config_file, "r") as json_file:
             data = json.load(json_file)
-            return data.get("Electrolyzer variants", {}).get(electrolyzer_name, {})
+            return data.get("Fuel Cell variants", {}).get(fuel_cell_name, {})
 
     @classmethod
-    def control_electrolyzer(cls, electrolyzer_name):
+    def control_fuel_cell(cls, fuel_cell_name):
         """Initializes the config variables based on the JSON-file."""
 
-        config_json = cls.read_config(electrolyzer_name)
+        config_json = cls.read_config(fuel_cell_name)
 
-        config = ElectrolyzerControllerConfig(
-            name="L1ElectrolyzerController",  # config_json.get("name", "")
-            nom_load=config_json.get("nom_load", 0.0),
-            min_load=config_json.get("min_load", 0.0),
-            max_load=config_json.get("max_load", 0.0),
+        config = FuelCellControllerConfig(
+            name="Fuel Cell Controller",  # config_json.get("name", "")
+            nom_output=config_json.get("nom_output", 0.0),
+            min_output=config_json.get("min_output", 0.0),
+            max_output=config_json.get("max_output", 0.0),
             standby_load=config_json.get("standby_load", 0.0),
             warm_start_time=config_json.get("warm_start_time", 0.0),
             cold_start_time=config_json.get("cold_start_time", 0.0),
@@ -91,28 +91,28 @@ class ElectrolyzerControllerConfig(ConfigBase):
         return config
 
 
-class ElectrolyzerController(Component):
+class FuelCellController(Component):
     # Inputs
-    ProvidedLoad = "ProvidedLoad"
+    DemandProfile = "DemandProfile"
 
     # Outputs
-    DistributedLoad = "DistributedLoad"
+    CurrentMode = "CurrentMode"
+    PowerTarger = "PowerTarger"
     ShutdownCount = "ShutdownCount"
     StandbyCount = "StandbyCount"
-    CurrentMode = "CurrentMode"
-    CurtailedLoad = "CurtailedLoad"
+    PowerNotProvided = "PowerNotProvided"
     OffCount = "OffCount"
 
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: ElectrolyzerControllerConfig,
+        config: FuelCellControllerConfig,
     ) -> None:
         self.controllerconfig = config
 
-        self.nom_load = config.nom_load
-        self.min_load = config.min_load
-        self.max_load = config.max_load
+        self.nom_output = config.nom_output
+        self.min_output = config.min_output
+        self.max_output = config.max_output
         self.standby_load = config.standby_load
         self.warm_start_time = config.warm_start_time
         self.cold_start_time = config.cold_start_time
@@ -127,123 +127,133 @@ class ElectrolyzerController(Component):
         # Input channels
 
         # Getting the load input
-        self.load_input: ComponentInput = self.add_input(
+        self.demand_profile: ComponentInput = self.add_input(
             self.component_name,
-            ElectrolyzerController.ProvidedLoad,
+            FuelCellController.DemandProfile,
             lt.LoadTypes.ELECTRICITY,
-            lt.Units.KILOWATT,
+            lt.Units.KILOWATT,  # KILOWATT
             True,
         )
 
         # =================================================================================================================================
         # Output channels
 
-        self.standby_count_total: ComponentOutput = self.add_output(
+        self.power_target: ComponentOutput = self.add_output(
             self.component_name,
-            ElectrolyzerController.StandbyCount,
+            FuelCellController.PowerTarger,
+            lt.LoadTypes.ELECTRICITY,
+            lt.Units.KILOWATT,
+            output_description="Power to be generated",
+        )
+
+        self.current_mode_fuel_cell: ComponentOutput = self.add_output(
+            self.component_name,
+            FuelCellController.CurrentMode,
+            lt.LoadTypes.ANY,
+            lt.Units.ANY,
+            output_description="current mode of fuel cell",
+        )
+
+        self.shut_down_count: ComponentOutput = self.add_output(
+            self.component_name,
+            FuelCellController.ShutdownCount,
             lt.LoadTypes.ON_OFF,
-            lt.Units.ANY,
-            output_description="standby count",
+            lt.Units.BINARY,
+            output_description="Counts the shut down cycles",
         )
 
-        self.distributed_load: ComponentOutput = self.add_output(
+        self.standby: ComponentOutput = self.add_output(
             self.component_name,
-            ElectrolyzerController.DistributedLoad,
+            FuelCellController.StandbyCount,
+            lt.LoadTypes.ON_OFF,
+            lt.Units.BINARY,
+            output_description="Counts the standby cycles",
+        )
+
+        self.power_not_provided: ComponentOutput = self.add_output(
+            self.component_name,
+            FuelCellController.PowerNotProvided,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KILOWATT,
-            output_description="Load to electrolyzer",
-        )
-
-        self.current_mode_electrolyzer: ComponentOutput = self.add_output(
-            self.component_name,
-            ElectrolyzerController.CurrentMode,
-            lt.LoadTypes.ACTIVATION,
-            lt.Units.ANY,
-            output_description="current mode of electrolyzer",
-        )
-
-        self.curtailed_load: ComponentOutput = self.add_output(
-            self.component_name,
-            ElectrolyzerController.CurtailedLoad,
-            lt.LoadTypes.ELECTRICITY,
-            lt.Units.KILOWATT,
-            output_description="amount of curtailed load due to min and max load tresholds",
+            output_description="Sums up the power which can not be provided from the system",
         )
 
         self.total_off_count: ComponentOutput = self.add_output(
             self.component_name,
-            ElectrolyzerController.OffCount,
+            FuelCellController.OffCount,
             lt.LoadTypes.ON_OFF,
             lt.Units.ANY,
             output_description="Total count of switching off",
         )
+
         # =================================================================================================================================
         # Initialize variables
 
         self.standby_count = 0.0
         self.current_state = "OFF"  #  standby
-        self.curtailed_load_count = 0.0
+        self.power_not_provided_count = 0.0
         self.off_count = 0.0
         self.activation_runtime = 0.0
 
         self.standby_count_previous = self.standby_count
         self.current_state_previous = self.current_state
-        self.curtailed_load_count_previous = self.curtailed_load_count
+        self.power_not_provided_count_previous = self.power_not_provided_count
         self.off_count_previous = self.off_count
         self.activation_runtime_previous = self.activation_runtime
 
-    def load_check(self, current_load, min_load, max_load, standby_load):
-        if current_load > max_load:
-            current_load_to_system = max_load
-            self.curtailed_load_count += current_load - max_load
+    def load_check(self, current_demand, min_output, max_output, standby_load):
+        if current_demand > max_output:
+            current_demand_to_system = max_output
+            self.power_not_provided_count += current_demand - max_output
             state = "ON"
 
-        elif min_load <= current_load <= max_load:
-            current_load_to_system = current_load
-            self.curtailed_load_count += 0.0
+        elif min_output <= current_demand <= max_output:
+            current_demand_to_system = current_demand
+            self.power_not_provided_count += 0.0
             state = "ON"
 
-        elif standby_load <= current_load < min_load:
-            current_load_to_system = standby_load
-            self.curtailed_load_count += current_load - standby_load
+        elif standby_load <= current_demand < min_output:
+            current_demand_to_system = standby_load
+            self.power_not_provided_count += current_demand - standby_load
             state = "STANDBY"
 
         else:
-            current_load_to_system = 0.0
-            self.curtailed_load_count += current_load
+            current_demand_to_system = 0.0
+            self.power_not_provided_count += current_demand
             state = "OFF"
 
-        return current_load_to_system, state, self.curtailed_load_count
+        return current_demand_to_system, state, self.power_not_provided_count
 
     def state_check(self, target_state, cold_start_time_to_min, warm_start_time_to_min):
+        import pdb
+
         if target_state == "OFF":
             # System switches OFF
             if self.current_state == "ON":
-                self.current_state = "SwitchingOFF"
+                self.current_state = "Switching OFF"
                 self.off_count += 1
             else:
                 self.current_state = "OFF"
 
         elif target_state == "STANDBY":
             # System switches STANDY
-            if self.current_state == "OFF" or self.current_state == "StartingfromOFF":
+            if self.current_state == "OFF" or self.current_state == "Starting from OFF":
                 self.current_state = "OFF"
-                self.off_count += 1
             if self.current_state == "ON":
-                self.current_state = "SwitchingSTANDBY"
+                self.current_state = "Switching STANDBY"
                 self.standby_count += 1
             else:
                 self.current_state = "STANDBY"
 
         else:
             # Test start
-            if self.current_state in ["StartingfromOFF", "StartingfromSTANDBY"]:
+            if self.current_state in ["Starting from OFF", "Starting from STANDBY"]:
                 # pdb.set_trace()
                 if (
                     self.activation_runtime
                     <= self.my_simulation_parameters.seconds_per_timestep
                 ):
-                    self.current_state = "Startingtomin"
+                    self.current_state = "Starting to min"
                     # pdb.set_trace()
                 else:
                     self.activation_runtime -= (
@@ -256,10 +266,10 @@ class ElectrolyzerController(Component):
 
             # Test end
             elif self.current_state == "OFF":
-                self.current_state = "StartingfromOFF"
+                self.current_state = "Starting from OFF"
                 self.activation_runtime = cold_start_time_to_min
             elif self.current_state == "STANDBY":
-                self.current_state = "StartingfromSTANDBY"
+                self.current_state = "Starting from STANDBY"
                 self.activation_runtime = warm_start_time_to_min
             else:
                 if (
@@ -288,7 +298,7 @@ class ElectrolyzerController(Component):
         """Saves the state."""
         self.standby_count_previous = self.standby_count
         self.current_state_previous = self.current_state
-        self.curtailed_load_count_previous = self.curtailed_load_count
+        self.power_not_provided_count_previous = self.power_not_provided_count
         self.off_count_previous = self.off_count
         self.activation_runtime_previous = self.activation_runtime
 
@@ -296,7 +306,7 @@ class ElectrolyzerController(Component):
         """Restores the state."""
         self.standby_count = self.standby_count_previous
         self.current_state = self.current_state_previous
-        self.curtailed_load_count = self.curtailed_load_count_previous
+        self.power_not_provided_count = self.power_not_provided_count_previous
         self.off_count = self.off_count_previous
         self.activation_runtime = self.activation_runtime_previous
 
@@ -305,20 +315,26 @@ class ElectrolyzerController(Component):
     ) -> None:
         if force_convergence:
             return
+
+        current_demand = stsv.get_input_value(self.demand_profile)
         """
-        self.nom_load = config.nom_load
-        self.min_load = config.min_load
-        self.max_load = config.max_load
+        self.nom_output = config.nom_output
+        self.min_output = config.min_output
+        self.max_output = config.max_output
         self.warm_start_time = config.warm_start_time
         self.cold_start_time = config.cold_start_time
         """
-        warm_start_time_to_min = self.warm_start_time * (self.min_load / self.nom_load)
-        cold_start_time_to_min = self.cold_start_time * (self.min_load / self.nom_load)
+        warm_start_time_to_min = self.warm_start_time * (
+            self.min_output / self.nom_output
+        )
+        cold_start_time_to_min = self.cold_start_time * (
+            self.min_output / self.nom_output
+        )
 
         (current_load_to_system, state, self.curtailed_load_count) = self.load_check(
-            (stsv.get_input_value(self.load_input)),
-            self.min_load,
-            self.max_load,
+            (abs(stsv.get_input_value(self.demand_profile))),
+            self.min_output,
+            self.max_output,
             self.standby_load,
         )  # change standby time
         # pdb.set_trace()
@@ -326,46 +342,33 @@ class ElectrolyzerController(Component):
             state, cold_start_time_to_min, warm_start_time_to_min
         )
 
-        if self.current_state in ["OFF", "StartingfromOFF", "SwitchingOFF"]:
-            stsv.set_output_value(self.distributed_load, 0.0)
-            stsv.set_output_value(self.current_mode_electrolyzer, -1)
+        # pdb.set_trace
+        # print("self.current_state: ", self.current_state)
+        if self.current_state in ["OFF", "Starting from OFF", "Switching OFF"]:
+            stsv.set_output_value(self.power_target, 0.0)
+            stsv.set_output_value(self.current_mode_fuel_cell, -1)
         elif self.current_state in [
             "STANDBY",
-            "StartingfromSTANDBY",
-            "SwitchingSTANDBY",
+            "Starting from STANDBY",
+            "Switching STANDBY",
         ]:
-            stsv.set_output_value(self.distributed_load, (self.nom_load * 0.05))
-            stsv.set_output_value(self.current_mode_electrolyzer, 0)
-        elif self.current_state == "Startingtomin":
+            stsv.set_output_value(self.power_target, self.standby_load)
+            stsv.set_output_value(self.current_mode_fuel_cell, 0)
+        elif self.current_state == "Starting to min":
             # pdb.set_trace()
-            stsv.set_output_value(self.distributed_load, self.min_load)
-            stsv.set_output_value(self.current_mode_electrolyzer, 1)
+            stsv.set_output_value(self.power_target, self.min_output)
+            stsv.set_output_value(self.current_mode_fuel_cell, 1)
 
         else:
-            stsv.set_output_value(self.distributed_load, current_load_to_system)
-            stsv.set_output_value(self.current_mode_electrolyzer, 1)
+            stsv.set_output_value(self.power_target, current_load_to_system)
+            stsv.set_output_value(self.current_mode_fuel_cell, 1)
 
-        stsv.set_output_value(self.curtailed_load, self.curtailed_load_count)
+        stsv.set_output_value(self.power_not_provided, self.power_not_provided_count)
         stsv.set_output_value(self.total_off_count, self.off_count)
-        stsv.set_output_value(self.standby_count_total, self.standby_count)
+        stsv.set_output_value(self.standby, self.standby_count)
 
     def write_to_report(self) -> List[str]:
         """Writes a report."""
         lines = []
-        for config_string in self.controllerconfig.get_string_dict():
-            lines.append(config_string)
-        lines.append("Component Name" + str(self.component_name))
-        lines.append(
-            "Total curtailed load: " + str(self.curtailed_load_count) + " [kW]"
-        )
-        lines.append(
-            "Number of times the system was switched off: "
-            + str(self.off_count)
-            + " [#]"
-        )
-        lines.append(
-            "Number of times the system was switched to standby mode: "
-            + str(self.standby_count)
-            + " [#]"
-        )
+        lines.append("Controller: " + self.component_name)
         return lines

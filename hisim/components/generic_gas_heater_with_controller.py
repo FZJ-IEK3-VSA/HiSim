@@ -43,7 +43,9 @@ class GenericGasHeaterWithControllerConfig(cp.ConfigBase):
     maximal_thermal_power_in_watt: float
 
     @classmethod
-    def get_default_gasheater_config(cls,) -> Any:
+    def get_default_gasheater_config(
+        cls,
+    ) -> Any:
         """Get a default gasheater config."""
         config = GenericGasHeaterWithControllerConfig(
             name="Gasheater",
@@ -71,7 +73,9 @@ class GenericGasHeaterControllerConfig(cp.ConfigBase):
     mode: int
 
     @classmethod
-    def get_default_controller_config(cls,) -> Any:
+    def get_default_controller_config(
+        cls,
+    ) -> Any:
         """Get a default gasheater config."""
         config = GenericGasHeaterControllerConfig(
             name="GasheaterController",
@@ -203,7 +207,10 @@ class GasHeaterWithController(cp.Component):
         )
 
         self.gas_power_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.GasPower, lt.LoadTypes.HEATING, lt.Units.WATT,
+            self.component_name,
+            self.GasPower,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
         )
 
         self.max_mass_flow_channel: cp.ComponentOutput = self.add_output(
@@ -264,8 +271,8 @@ class GasHeaterWithController(cp.Component):
         """Simulate the gas heater."""
 
         # Get inputs --------------------------------------------------------------------------------------------------------
-        self.cooled_water_temperature_return_to_water_boiler_in_celsius = stsv.get_input_value(
-            self.cooled_water_temperature_boiler_input_channel
+        self.cooled_water_temperature_return_to_water_boiler_in_celsius = (
+            stsv.get_input_value(self.cooled_water_temperature_boiler_input_channel)
         )
         self.state_gas_controller = stsv.get_input_value(self.state_channel)
         self.initial_temperature_building_in_celsius = stsv.get_input_value(
@@ -491,7 +498,8 @@ class GasHeaterController(cp.Component):
         stsv.set_output_value(self.state_channel, self.state_controller)
 
     def conditions_for_opening_or_shutting_gas_valve(
-        self, water_boiler_temperature: float,
+        self,
+        water_boiler_temperature: float,
     ) -> None:
         """Set conditions for the gas valve in gas heater."""
         maxium_water_boiler_set_temperature = (

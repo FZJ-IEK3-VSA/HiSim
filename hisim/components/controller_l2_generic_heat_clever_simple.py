@@ -162,7 +162,10 @@ class L2HeatSmartController(cp.Component):
 
         # Component Outputs
         self.l2_DeviceSignalC: cp.ComponentOutput = self.add_output(
-            self.component_name, self.l2_DeviceSignal, LoadTypes.ON_OFF, Units.BINARY,
+            self.component_name,
+            self.l2_DeviceSignal,
+            LoadTypes.ON_OFF,
+            Units.BINARY,
             output_description="L2 Device Signal from Heating Controller",
         )
 

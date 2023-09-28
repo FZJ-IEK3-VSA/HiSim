@@ -229,14 +229,12 @@ def test_house(
     # test and compare with relative error of 10%
     np.testing.assert_allclose(
         cumulative_production_kpi_in_kilowatt_hour,
-        simulation_results_electricity_meter_cumulative_production_in_watt_hour
-        * 1e-3,
+        simulation_results_electricity_meter_cumulative_production_in_watt_hour * 1e-3,
         rtol=0.1,
     )
 
     np.testing.assert_allclose(
         cumulative_consumption_kpi_in_kilowatt_hour,
-        simulation_results_electricity_meter_cumulative_consumption_in_watt_hour
-        * 1e-3,
+        simulation_results_electricity_meter_cumulative_consumption_in_watt_hour * 1e-3,
         rtol=0.1,
     )

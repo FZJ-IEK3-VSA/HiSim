@@ -221,7 +221,7 @@ class PVSystemConfig(ConfigBase):
     lifetime: float
 
     @classmethod
-    def get_default_PV_system(cls):
+    def get_default_PV_system(cls) -> "PVSystemConfig":
         """Gets a default PV system."""
         power = 10e3  # W
         return PVSystemConfig(
@@ -236,11 +236,81 @@ class PVSystemConfig(ConfigBase):
             tilt=30,
             source_weight=0,
             location="Aachen",
-            co2_footprint=power * 1e-3 * 330.51,  # value from emission_factros_and_costs_devices.csv
-            cost=power * 1e-3 * 794.41,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=power
+            * 1e-3
+            * 330.51,  # value from emission_factros_and_costs_devices.csv
+            cost=power
+            * 1e-3
+            * 794.41,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
             lifetime=25,  # value from emission_factros_and_costs_devices.csv
         )
+
+    @classmethod
+    def get_scaled_PV_system(
+        cls,
+        rooftop_area_in_m2: float,
+        share_of_maximum_pv_power: float = 1.0,
+        module_name: str = "Hanwha_HSL60P6_PA_4_250T__2013_",
+        load_module_data: bool = False,
+    ) -> "PVSystemConfig":
+        """Gets a default PV system with scaling according to rooftop area."""
+        total_pv_power_in_watt = cls.size_pv_system(
+            rooftop_area_in_m2=rooftop_area_in_m2,
+            share_of_maximum_pv_power=share_of_maximum_pv_power,
+            module_name=module_name,
+        )
+        return PVSystemConfig(
+            time=2019,
+            power=total_pv_power_in_watt,
+            load_module_data=load_module_data,
+            module_name=module_name,
+            integrate_inverter=True,
+            inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
+            name="PVSystem",
+            azimuth=180,
+            tilt=30,
+            source_weight=0,
+            location="Aachen",
+            co2_footprint=total_pv_power_in_watt
+            * 1e-3
+            * 330.51,  # value from emission_factros_and_costs_devices.csv
+            cost=total_pv_power_in_watt
+            * 1e-3
+            * 794.41,  # value from emission_factros_and_costs_devices.csv
+            maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
+            lifetime=25,  # value from emission_factros_and_costs_devices.csv
+        )
+
+    @classmethod
+    def size_pv_system(
+        cls,
+        rooftop_area_in_m2: float,
+        share_of_maximum_pv_power: float = 1.0,
+        module_name: str = "Hanwha_HSL60P6_PA_4_250T__2013_",
+    ) -> float:
+        """Size the pv system according to the rooftop type and the share of the maximum pv power that should be used."""
+
+        # get area and power of module
+        if module_name == "Hanwha_HSL60P6_PA_4_250T__2013_":
+            module_area_in_m2 = 1.65
+            module_power_in_watt = 250
+
+        else:
+            raise ValueError(
+                "Module name not given in this function. Please check or add your module information."
+            )
+
+        # scale rooftop area with limiting factor due to shading and obstacles like chimneys etc.
+        # see p.18 in following paper https://www.mdpi.com/1996-1073/15/15/5536 (Stanleys work)
+        limiting_factor_for_rooftop = 0.6
+        effective_rooftop_area_in_m2 = rooftop_area_in_m2 * limiting_factor_for_rooftop
+
+        total_pv_power_in_watt = (
+            effective_rooftop_area_in_m2 / module_area_in_m2 * module_power_in_watt
+        ) * share_of_maximum_pv_power
+
+        return total_pv_power_in_watt
 
 
 class PVSystem(cp.Component):
@@ -398,8 +468,12 @@ class PVSystem(cp.Component):
             tilt=30,
             load_module_data=False,
             source_weight=source_weight,
-            co2_footprint=power * 1e-3 * 130.7,  # value from emission_factros_and_costs_devices.csv
-            cost=power * 1e-3 * 535.81,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=power
+            * 1e-3
+            * 130.7,  # value from emission_factros_and_costs_devices.csv
+            cost=power
+            * 1e-3
+            * 535.81,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
             lifetime=25,  # value from emission_factros_and_costs_devices.csv
         )
@@ -684,11 +758,13 @@ class PVSystem(cp.Component):
                 self.data_length = self.my_simulation_parameters.timesteps
 
         self.modules = pd.read_csv(
-            os.path.join(utils.HISIMPATH["photovoltaic"]["modules"]), index_col=0,
+            os.path.join(utils.HISIMPATH["photovoltaic"]["modules"]),
+            index_col=0,
         )
 
         self.inverters = pd.read_csv(
-            os.path.join(utils.HISIMPATH["photovoltaic"]["inverters"]), index_col=0,
+            os.path.join(utils.HISIMPATH["photovoltaic"]["inverters"]),
+            index_col=0,
         )
 
         self.temp_model = pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["sapm"][
@@ -824,7 +900,11 @@ class PVSystem(cp.Component):
             aoi=aoi,
         )
         # calculate pv performance
-        sapm_out = pvlib.pvsystem.sapm(sapm_irr, module=self.module, temp_cell=pvtemps,)
+        sapm_out = pvlib.pvsystem.sapm(
+            sapm_irr,
+            module=self.module,
+            temp_cell=pvtemps,
+        )
         # calculate peak load of single module [W]
         peak_load = self.module.loc["Impo"] * self.module.loc["Vmpo"]
         ac_power = pd.DataFrame()

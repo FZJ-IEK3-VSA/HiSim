@@ -44,7 +44,7 @@ def test_advanced_battery_bslib():
         cost=cost,
         lifetime=lifetime,
         lifetime_in_cycles=lifetime_in_cycles,
-        maintenance_cost_as_percentage_of_investment=maintenance_cost_as_percentage_of_investment
+        maintenance_cost_as_percentage_of_investment=maintenance_cost_as_percentage_of_investment,
     )
     my_advanced_battery = advanced_battery_bslib.Battery(
         config=my_advanced_battery_config,

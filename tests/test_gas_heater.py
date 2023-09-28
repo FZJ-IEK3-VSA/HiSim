@@ -11,7 +11,7 @@ from hisim import utils
 @pytest.mark.examples
 @utils.measure_execution_time
 def test_household_with_gas_heater():
-    """ Single day. """
+    """Single day."""
     path = "../examples/household_with_gas_heater.py"
     func = "household_gas_heater"
     mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)

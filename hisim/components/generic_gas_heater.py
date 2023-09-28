@@ -70,7 +70,9 @@ class GenericGasHeaterConfig(ConfigBase):
     consumption: float
 
     @classmethod
-    def get_default_gasheater_config(cls,) -> Any:
+    def get_default_gasheater_config(
+        cls,
+    ) -> Any:
         """Get a default Building."""
         maximal_power_in_watt: float = 12_000  # W
         config = GenericGasHeaterConfig(
@@ -319,8 +321,11 @@ class GasHeater(Component):
                 self.config.consumption = round(
                     sum(postprocessing_results.iloc[:, index]), 1
                 )
-        emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
-            self.my_simulation_parameters.year)
+        emissions_and_cost_factors = (
+            EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
+                self.my_simulation_parameters.year
+            )
+        )
         co2_per_unit = emissions_and_cost_factors.gas_footprint_in_kg_per_kwh
         euro_per_unit = emissions_and_cost_factors.gas_costs_in_euro_per_kwh
 

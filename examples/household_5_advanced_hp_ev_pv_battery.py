@@ -32,7 +32,6 @@ from hisim.components import advanced_ev_battery_bslib
 from hisim.components import controller_l1_generic_ev_charge
 from hisim.components import controller_l2_energy_management_system
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim import utils
 from hisim import loadtypes as lt
 from hisim import log
@@ -86,15 +85,18 @@ class HouseholdAdvancedHpEvPvBatteryConfig:
 
         # set number of apartments (mandatory for dhw storage config)
         number_of_apartments = 1
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments
-        )
+
         charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
         charging_power = float(
             (charging_station_set.Name or "").split("with ")[1].split(" kW")[0]
         )
         heating_reference_temperature_in_celsius: float = -7
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0
+
+        building_config = (
+            building.BuildingConfig.get_default_german_single_family_home()
+        )
+        my_building_information = building.BuildingInformation(config=building_config)
 
         household_config = HouseholdAdvancedHpEvPvBatteryConfig(
             building_type="blub",
@@ -119,12 +121,14 @@ class HouseholdAdvancedHpEvPvBatteryConfig:
                 profile_with_washing_machine_and_dishwasher=True,
             ),
             pv_config=generic_pv_system.PVSystemConfig.get_default_PV_system(),
-            building_config=building.BuildingConfig.get_default_german_single_family_home(),
+            building_config=building_config,
             hds_controller_config=(
                 heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
             ),
             hds_config=(
-                heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
+                heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+                )
             ),
             hp_controller_config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(),
             hp_config=advanced_heat_pump_hplib.HeatPumpHplibConfig.get_default_generic_advanced_hp_lib(),
@@ -138,7 +142,7 @@ class HouseholdAdvancedHpEvPvBatteryConfig:
                 name="DHWHeatpumpController"
             ),
             dhw_storage_config=(
-                generic_hot_water_storage_modular.StorageConfig.get_default_config_boiler()
+                generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler()
             ),
             car_config=generic_car.CarConfig.get_default_ev_config(),
             car_battery_config=advanced_ev_battery_bslib.CarBatteryConfig.get_default_config(),
@@ -158,9 +162,15 @@ class HouseholdAdvancedHpEvPvBatteryConfig:
         household_config.hp_controller_config.mode = (
             2  # use heating and cooling as default
         )
-        household_config.hp_config.set_thermal_output_power_in_watt = 6000  # default value leads to switching on-off very often
-        household_config.hp_config.minimum_idle_time_in_seconds = 900  # default value leads to switching on-off very often
-        household_config.hp_config.minimum_running_time_in_seconds = 900  # default value leads to switching on-off very often
+        household_config.hp_config.set_thermal_output_power_in_watt = (
+            6000  # default value leads to switching on-off very often
+        )
+        household_config.hp_config.minimum_idle_time_in_seconds = (
+            900  # default value leads to switching on-off very often
+        )
+        household_config.hp_config.minimum_running_time_in_seconds = (
+            900  # default value leads to switching on-off very often
+        )
 
         # set same heating threshold
         household_config.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius = (

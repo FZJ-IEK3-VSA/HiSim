@@ -149,7 +149,7 @@ def basic_household_with_default_connections(
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.ElectricityInput,
         my_electricity_meter.component_name,
-        my_electricity_meter.ElectricityToOrFromGrid,
+        my_electricity_meter.ElectricityAvailable,
     )
     my_sim.add_component(my_heat_pump_controller)
 

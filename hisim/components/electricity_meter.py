@@ -234,6 +234,11 @@ class ElectricityMeter(DynamicComponent):
                 difference_between_production_and_consumption_in_watt_hour
             )
             electricity_from_grid_in_watt_hour = 0.0
+        
+        # difference between production and consumption is zero
+        else:
+            electricity_to_grid_in_watt_hour = 0.0
+            electricity_from_grid_in_watt_hour = 0.0
 
 
         # set outputs

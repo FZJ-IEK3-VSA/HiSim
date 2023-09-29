@@ -858,11 +858,11 @@ kpi_data = [
 electricity_data = [
     # "L2EMSElectricityController|Electricity|ElectricityToOrFromGrid",
     # "PVSystem_w0|Electricity|ElectricityOutput", # check if pv was used or not
-    "ElectricityMeter|Electricity|ElectricityToOrFromGrid",
+    "ElectricityMeter|Electricity|ElectricityToGrid",
+    "ElectricityMeter|Electricity|ElectricityFromGrid",
+    "ElectricityMeter|Electricity|ElectricityAvailable",
     "ElectricityMeter|Electricity|ElectricityConsumption",
     "ElectricityMeter|Electricity|ElectricityProduction"
-    "ElectricityMeter|Electricity|CumulativeConsumption",
-    "ElectricityMeter|Electricity|CumulativeProduction",
 ]
 
 occuancy_consumption = [

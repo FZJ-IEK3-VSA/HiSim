@@ -577,7 +577,9 @@ def compute_kpis(
     table.append(["Production:", f"{production_sum:4.0f}", "kWh"])
     table.append(["Self-consumption:", f"{self_consumption_sum:4.0f}", "kWh"])
     table.append(["Injection:", f"{injection_sum:4.0f}", "kWh"])
-    table.append(["Consumption from grid:", f"{consumption_from_grid_in_kwh:4.0f}", "kWh"])
+    table.append(
+        ["Consumption from grid:", f"{consumption_from_grid_in_kwh:4.0f}", "kWh"]
+    )
     table.append(["Battery losses:", f"{battery_losses:4.0f}", "kWh"])
     # table.append(["DHW storage heat loss:", f"{loss_dhw:4.0f}", "kWh"])
     # table.append(["DHW storage heat cycles:", f"{cycles_dhw:4.0f}", "Cycles"])
@@ -692,7 +694,9 @@ def compute_kpis(
         outfile.write(config_file_written)
 
     # write whole table to csv file
-    pathname_csv = os.path.join(simulation_parameters.result_directory, "kpi_results.csv")
+    pathname_csv = os.path.join(
+        simulation_parameters.result_directory, "kpi_results.csv"
+    )
     kpi_df = pd.DataFrame(table, columns=table_headline)
     kpi_df.to_csv(pathname_csv, index=False, header=False, encoding="utf8")
 

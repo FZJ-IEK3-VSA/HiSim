@@ -77,7 +77,7 @@ def main():
     #list_of_scenarios_to_check = filterclass.building_type
 
     
-    dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share,"building_code": ["DE.N.SFH"]}
+    dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share,"building_code": ["DE.N.SFH.05.Gen.ReEx.001.002"]}
     
     print(dict_with_scenarios_to_check)
 

@@ -365,6 +365,7 @@ class PyamDataCollector:
                         dataframe=dataframe, index=index
                     )
 
+
             appended_dataframe = pd.concat([appended_dataframe, dataframe])
 
             index = index + 1

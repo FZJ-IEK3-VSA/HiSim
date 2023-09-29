@@ -92,7 +92,7 @@ class ElectricityMeter(DynamicComponent):
             object_name=self.component_name,
             field_name=self.ElectricityAvailable,
             load_type=lt.LoadTypes.ELECTRICITY,
-            unit=lt.Units.WATT_HOUR,
+            unit=lt.Units.WATT,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityAvailable} will follow.",
         )
@@ -197,11 +197,19 @@ class ElectricityMeter(DynamicComponent):
                 for elem in self.consumption_uncontrolled_inputs
             ]
         )
+        # Production of Electricity positve sign
+        # Consumption of Electricity negative sign
+        difference_between_production_and_consumption_in_watt = (
+            production_in_watt - consumption_uncontrolled_in_watt
+        )
 
         # transform watt to watthour
         production_in_watt_hour = production_in_watt * self.seconds_per_timestep / 3600
         consumption_uncontrolled_in_watt_hour = (
             consumption_uncontrolled_in_watt * self.seconds_per_timestep / 3600
+        )
+        difference_between_production_and_consumption_in_watt_hour = (
+            production_in_watt_hour - consumption_uncontrolled_in_watt_hour
         )
 
         # calculate cumulative production and consumption
@@ -211,12 +219,6 @@ class ElectricityMeter(DynamicComponent):
         cumulative_consumption_in_watt_hour = (
             self.state.cumulative_consumption_in_watt_hour
             + consumption_uncontrolled_in_watt_hour
-        )
-
-        # Production of Electricity positve sign
-        # Consumption of Electricity negative sign
-        difference_between_production_and_consumption_in_watt_hour = (
-            production_in_watt_hour - consumption_uncontrolled_in_watt_hour
         )
 
         # consumption is bigger than production -> electricity from grid is needed
@@ -233,8 +235,10 @@ class ElectricityMeter(DynamicComponent):
             )
             electricity_from_grid_in_watt_hour = 0.0
 
+
+        # set outputs
         stsv.set_output_value(
-            self.electricity_available, difference_between_production_and_consumption_in_watt_hour
+            self.electricity_available, difference_between_production_and_consumption_in_watt
         )
         stsv.set_output_value(
             self.electricity_to_grid, electricity_to_grid_in_watt_hour

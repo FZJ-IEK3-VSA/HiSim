@@ -51,7 +51,8 @@ class ElectricityMeter(DynamicComponent):
     """
 
     # Outputs
-    ElectricityToOrFromGrid = "ElectricityToOrFromGrid"
+    ElectricityToGrid = "ElectricityToGrid"
+    ElectricityFromGrid = "ElectricityFromGrid"
     ElectricityConsumption = "ElectricityConsumption"
     ElectricityProduction = "ElectricityProduction"
     CumulativeConsumption = "CumulativeConsumption"
@@ -86,20 +87,28 @@ class ElectricityMeter(DynamicComponent):
         self.previous_state = self.state.self_copy()
 
         # Outputs
-        self.electricity_to_or_from_grid: cp.ComponentOutput = self.add_output(
+        self.electricity_to_grid: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.ElectricityToOrFromGrid,
+            field_name=self.ElectricityToGrid,
             load_type=lt.LoadTypes.ELECTRICITY,
-            unit=lt.Units.WATT,
+            unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
-            output_description=f"here a description for {self.ElectricityToOrFromGrid} will follow.",
+            output_description=f"here a description for {self.ElectricityToGrid} will follow.",
+        )
+        self.electricity_from_grid: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricityFromGrid,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT_HOUR,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.ElectricityFromGrid} will follow.",
         )
 
         self.electricity_consumption_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ElectricityConsumption,
             load_type=lt.LoadTypes.ELECTRICITY,
-            unit=lt.Units.WATT,
+            unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityConsumption} will follow.",
         )
@@ -108,7 +117,7 @@ class ElectricityMeter(DynamicComponent):
             object_name=self.component_name,
             field_name=self.ElectricityProduction,
             load_type=lt.LoadTypes.ELECTRICITY,
-            unit=lt.Units.WATT,
+            unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityProduction} will follow.",
         )
@@ -197,21 +206,36 @@ class ElectricityMeter(DynamicComponent):
 
         # Production of Electricity positve sign
         # Consumption of Electricity negative sign
-        electricity_to_or_from_grid = (
-            production_in_watt - consumption_uncontrolled_in_watt
+        difference_between_production_and_consumption_in_watt_hour = (
+            production_in_watt_hour - consumption_uncontrolled_in_watt_hour
+        )
+
+        # consumption is bigger than production -> electricity from grid is needed
+        # change sign so that value becomes positive
+        if difference_between_production_and_consumption_in_watt_hour < 0:
+            electricity_from_grid_in_watt_hour = (
+                -difference_between_production_and_consumption_in_watt_hour
+            )
+            electricity_to_grid_in_watt_hour = 0.0
+        # production is bigger -> electricity can be fed into grid
+        elif difference_between_production_and_consumption_in_watt_hour > 0:
+            electricity_to_grid_in_watt_hour = (
+                difference_between_production_and_consumption_in_watt_hour
+            )
+            electricity_from_grid_in_watt_hour = 0.0
+
+        stsv.set_output_value(
+            self.electricity_to_grid, electricity_to_grid_in_watt_hour
+        )
+        stsv.set_output_value(
+            self.electricity_from_grid, electricity_from_grid_in_watt_hour
+        )
+        stsv.set_output_value(
+            self.electricity_consumption_channel, consumption_uncontrolled_in_watt_hour,
         )
 
         stsv.set_output_value(
-            self.electricity_to_or_from_grid, electricity_to_or_from_grid
-        )
-        stsv.set_output_value(
-            self.electricity_consumption_channel,
-            consumption_uncontrolled_in_watt,
-        )
-
-        stsv.set_output_value(
-            self.electricity_production_channel,
-            production_in_watt,
+            self.electricity_production_channel, production_in_watt_hour,
         )
 
         stsv.set_output_value(
@@ -232,32 +256,22 @@ class ElectricityMeter(DynamicComponent):
         )
 
     def get_cost_opex(
-        self,
-        all_outputs: List,
-        postprocessing_results: pd.DataFrame,
+        self, all_outputs: List, postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
         for index, output in enumerate(all_outputs):
-            if (
-                output.component_name == self.config.name
-                and output.field_name == self.ElectricityToOrFromGrid
-            ):  # Todo: check component name from examples: find another way of using the correct outputs
-                self.config.total_energy_to_grid_in_kwh = round(
-                    postprocessing_results.iloc[:, index].clip(lower=0).sum()
-                    * self.my_simulation_parameters.seconds_per_timestep
-                    / 3.6e6,
-                    1,
-                )
-                self.config.total_energy_from_grid_in_kwh = -round(
-                    postprocessing_results.iloc[:, index].clip(upper=0).sum()
-                    * self.my_simulation_parameters.seconds_per_timestep
-                    / 3.6e6,
-                    1,
-                )
-        emissions_and_cost_factors = (
-            EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
-                self.my_simulation_parameters.year
-            )
+            if output.component_name == self.config.name:
+                if output.field_name == self.ElectricityToGrid:
+                    # Todo: check component name from examples: find another way of using the correct outputs
+                    self.config.total_energy_to_grid_in_kwh = round(
+                        postprocessing_results.iloc[:, index].sum() * 1e-3, 1,
+                    )
+                elif output.field_name == self.ElectricityFromGrid:
+                    self.config.total_energy_from_grid_in_kwh = round(
+                        postprocessing_results.iloc[:, index].sum() * 1e-3, 1,
+                    )
+        emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
+            self.my_simulation_parameters.year
         )
         co2_per_unit = emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh
         euro_per_unit = emissions_and_cost_factors.electricity_costs_in_euro_per_kwh
@@ -289,9 +303,7 @@ class ElectricityMeterState:
     cumulative_production_in_watt_hour: float
     cumulative_consumption_in_watt_hour: float
 
-    def self_copy(
-        self,
-    ):
+    def self_copy(self,):
         """Copy the ElectricityMeterState."""
         return ElectricityMeterState(
             self.cumulative_production_in_watt_hour,

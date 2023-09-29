@@ -51,6 +51,7 @@ class ElectricityMeter(DynamicComponent):
     """
 
     # Outputs
+    ElectricityAvailable = "ElectricityAvailable"
     ElectricityToGrid = "ElectricityToGrid"
     ElectricityFromGrid = "ElectricityFromGrid"
     ElectricityConsumption = "ElectricityConsumption"
@@ -87,6 +88,14 @@ class ElectricityMeter(DynamicComponent):
         self.previous_state = self.state.self_copy()
 
         # Outputs
+        self.electricity_available: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricityAvailable,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT_HOUR,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.ElectricityAvailable} will follow.",
+        )
         self.electricity_to_grid: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ElectricityToGrid,
@@ -224,6 +233,9 @@ class ElectricityMeter(DynamicComponent):
             )
             electricity_from_grid_in_watt_hour = 0.0
 
+        stsv.set_output_value(
+            self.electricity_available, difference_between_production_and_consumption_in_watt_hour
+        )
         stsv.set_output_value(
             self.electricity_to_grid, electricity_to_grid_in_watt_hour
         )

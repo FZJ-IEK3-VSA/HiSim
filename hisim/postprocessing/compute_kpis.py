@@ -30,8 +30,8 @@ def building_temperature_control(
     in order to verify if energy system provides enough heating and cooling.
     """
 
-    time_indices_of_building_being_below_heating_set_temperature = []
-    time_indices_of_building_being_above_cooling_set_temperature = []
+    temperature_difference_of_building_being_below_heating_set_temperature = 0
+    temperature_difference_of_building_being_below_cooling_set_temperature = 0
     for column in results.columns:
 
         if "TemperatureIndoorAir" in column.split(sep=" "):
@@ -56,28 +56,34 @@ def building_temperature_control(
             for temperature in results[column].values:
 
                 if temperature < set_heating_temperature_in_celsius:
-                    time_indices_of_building_being_below_heating_set_temperature.append(
-                        results[column].index
+
+                    temperature_difference_heating = (
+                        set_heating_temperature_in_celsius - temperature
+                    )
+
+                    temperature_difference_of_building_being_below_heating_set_temperature = (
+                        temperature_difference_of_building_being_below_heating_set_temperature
+                        + temperature_difference_heating
                     )
 
                 elif temperature > set_cooling_temperature_in_celsius:
-                    time_indices_of_building_being_above_cooling_set_temperature.append(
-                        results[column].index
+
+                    temperature_difference_cooling = (
+                        temperature - set_cooling_temperature_in_celsius
+                    )
+                    temperature_difference_of_building_being_below_cooling_set_temperature = (
+                        temperature_difference_of_building_being_below_cooling_set_temperature
+                        + temperature_difference_cooling
                     )
 
-            length_time_list_below_heating_set_temperature = len(
-                time_indices_of_building_being_below_heating_set_temperature
-            )
-            length_time_list_above_cooling_set_temperature = len(
-                time_indices_of_building_being_above_cooling_set_temperature
-            )
-            time_in_hours_of_building_being_below_heating_set_temperature = (
-                length_time_list_below_heating_set_temperature
+            temperature_hours_of_building_being_below_heating_set_temperature = (
+                temperature_difference_of_building_being_below_heating_set_temperature
                 * seconds_per_timestep
                 / 3600
             )
-            time_in_hours_of_building_being_above_cooling_set_temperature = (
-                length_time_list_above_cooling_set_temperature
+
+            temperature_hours_of_building_being_above_cooling_set_temperature = (
+                temperature_difference_of_building_being_below_cooling_set_temperature
                 * seconds_per_timestep
                 / 3600
             )
@@ -89,11 +95,31 @@ def building_temperature_control(
     return (
         set_heating_temperature_in_celsius,
         set_cooling_temperature_in_celsius,
-        time_in_hours_of_building_being_below_heating_set_temperature,
-        time_in_hours_of_building_being_above_cooling_set_temperature,
+        temperature_hours_of_building_being_below_heating_set_temperature,
+        temperature_hours_of_building_being_above_cooling_set_temperature,
         min_temperature_reached_in_celsius,
         max_temperature_reached_in_celsius,
     )
+
+
+def get_heatpump_cycles(results: pd.DataFrame,) -> float:
+    """Get the number of cycles of the heat pump for the simulated period."""
+    number_of_cycles = 0
+    for column in results.columns:
+
+        if "TimeOff" in column.split(sep=" "):
+
+            for index, off_time in enumerate(results[column].values):
+
+                try:
+                    if off_time != 0 and results[column].values[index + 1] == 0:
+
+                        number_of_cycles = number_of_cycles + 1
+
+                except Exception:
+                    pass
+
+    return number_of_cycles
 
 
 def read_in_fuel_costs() -> pd.DataFrame:
@@ -520,8 +546,6 @@ def compute_kpis(
     #     timeresolution=simulation_parameters.seconds_per_timestep,
     # )
 
-    consumption_from_grid_in_kwh = consumption_sum - self_consumption_sum
-
     # compute cost and co2 for investment/installation:  # Todo: function compute_investment_cost does not include all components, use capex and opex-results instead
     investment_cost, co2_footprint = compute_investment_cost(components=components)
 
@@ -562,22 +586,25 @@ def compute_kpis(
     (
         set_heating_temperature_in_celsius,
         set_cooling_temperature_in_celsius,
-        time_in_hours_of_building_being_below_heating_set_temperature,
-        time_in_hours_of_building_being_above_cooling_set_temperature,
+        temperature_hours_of_building_being_below_heating_set_temperature,
+        temperature_in_hours_of_building_being_above_cooling_set_temperature,
         min_temperature_reached_in_celsius,
         max_temperature_reached_in_celsius,
     ) = building_temperature_control(
         results=results, seconds_per_timestep=simulation_parameters.seconds_per_timestep
     )
-    table_headline: List[object] = ["KPI", "Value", "Unit"]
+
+    # get cycle numbers of heatpump
+
+    number_of_cycles = get_heatpump_cycles(results=results)
+
     # initialize table for report
     table: List = []
-    table.append(table_headline)
+    table.append(["KPI", "Value", "Unit"])
     table.append(["Consumption:", f"{consumption_sum:4.0f}", "kWh"])
     table.append(["Production:", f"{production_sum:4.0f}", "kWh"])
     table.append(["Self-consumption:", f"{self_consumption_sum:4.0f}", "kWh"])
     table.append(["Injection:", f"{injection_sum:4.0f}", "kWh"])
-    table.append(["Consumption from grid:", f"{consumption_from_grid_in_kwh:4.0f}", "kWh"])
     table.append(["Battery losses:", f"{battery_losses:4.0f}", "kWh"])
     # table.append(["DHW storage heat loss:", f"{loss_dhw:4.0f}", "kWh"])
     # table.append(["DHW storage heat cycles:", f"{cycles_dhw:4.0f}", "Cycles"])
@@ -650,9 +677,9 @@ def compute_kpis(
     )
     table.append(
         [
-            f"Time of building indoor air temperature being below set temperature {set_heating_temperature_in_celsius} °C:",
-            f"{(time_in_hours_of_building_being_below_heating_set_temperature):3.0f}",
-            "h",
+            f"Temperature deviation of building indoor air temperature being below set temperature {set_heating_temperature_in_celsius} °C:",
+            f"{(temperature_hours_of_building_being_below_heating_set_temperature):3.0f}",
+            "°C*h",
         ]
     )
     table.append(
@@ -664,9 +691,9 @@ def compute_kpis(
     )
     table.append(
         [
-            f"Time of building indoor air temperature being above set temperature {set_cooling_temperature_in_celsius} °C:",
-            f"{(time_in_hours_of_building_being_above_cooling_set_temperature):3.0f}",
-            "h",
+            f"Temperature deviation of building indoor air temperature being above set temperature {set_cooling_temperature_in_celsius} °C:",
+            f"{(temperature_in_hours_of_building_being_above_cooling_set_temperature):3.0f}",
+            "°C*h",
         ]
     )
     table.append(
@@ -676,6 +703,8 @@ def compute_kpis(
             "°C",
         ]
     )
+
+    table.append(["Number of heat pump cycles:", f"{number_of_cycles:3.0f}", "-"])
 
     # initialize json interface to pass kpi's to building_sizer
     kpi_config = KPIConfig(
@@ -690,10 +719,5 @@ def compute_kpis(
     config_file_written = kpi_config.to_json()  # type: ignore
     with open(pathname, "w", encoding="utf-8") as outfile:
         outfile.write(config_file_written)
-
-    # write whole table to csv file
-    pathname_csv = os.path.join(simulation_parameters.result_directory, "kpi_results.csv")
-    kpi_df = pd.DataFrame(table, columns=table_headline)
-    kpi_df.to_csv(pathname_csv, index=False, header=False, encoding="utf8")
 
     return table

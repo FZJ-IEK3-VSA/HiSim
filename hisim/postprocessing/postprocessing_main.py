@@ -6,6 +6,7 @@ import copy
 from typing import Any, Optional, List, Dict
 from timeit import default_timer as timer
 import string
+
 import pandas as pd
 
 from hisim.components import building
@@ -30,6 +31,7 @@ from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataT
 from hisim.postprocessing.report_image_entries import ReportImageEntry, SystemChartEntry
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.json_generator import JsonConfigurationGenerator
+from hisim.postprocessing.webtool_kpi_entries import WebtoolKpiEntries
 
 
 class PostProcessor:
@@ -295,6 +297,15 @@ class PostProcessor:
         ):
             log.information("Opening the explorer.")
             self.open_dir_in_file_explorer(ppdt)
+
+        # Prepare webtool results
+        if (
+            PostProcessingOptions.MAKE_RESULT_JSON_WITH_KPI_FOR_WEBTOOL
+            in ppdt.post_processing_options
+        ):
+            log.information("Make kpi json file for webtool.")
+            self.write_kpis_for_webtool_to_json_file(ppdt)
+
         log.information("Finished main post processing function.")
 
     def make_network_charts(
@@ -1016,3 +1027,134 @@ class PostProcessor:
         dataframe.to_csv(
             path_or_buf=filename, index=None,
         )  # type: ignore
+
+    def write_kpis_for_webtool_to_json_file(
+        self, ppdt: PostProcessingDataTransfer
+    ) -> None:
+        """Collect important KPIs and write into json for webtool."""
+
+        # check if important options were set
+        if all(
+            option in ppdt.post_processing_options
+            for option in [
+                PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT,
+                PostProcessingOptions.COMPUTE_CAPEX,
+                PostProcessingOptions.COMPUTE_OPEX,
+            ]
+        ):
+            # calculate KPIs
+            kpi_compute_return = compute_kpis(
+                components=ppdt.wrapped_components,
+                results=ppdt.results,
+                all_outputs=ppdt.all_outputs,
+                simulation_parameters=ppdt.simulation_parameters,
+            )
+            dict_with_important_kpi = self.get_dict_from_kpi_lists(
+                value_list=kpi_compute_return
+            )
+
+            # caculate capex
+            capex_compute_return = capex_calculation(
+                components=ppdt.wrapped_components,
+                simulation_parameters=ppdt.simulation_parameters,
+            )
+
+            dict_with_important_capex = self.get_dict_from_opex_capex_lists(
+                value_list=capex_compute_return
+            )
+
+            # caculate opex
+            opex_compute_return = opex_calculation(
+                components=ppdt.wrapped_components,
+                all_outputs=ppdt.all_outputs,
+                postprocessing_results=ppdt.results,
+                simulation_parameters=ppdt.simulation_parameters,
+            )
+
+            dict_with_important_opex = self.get_dict_from_opex_capex_lists(
+                value_list=opex_compute_return
+            )
+
+            # initialize webtool kpi entries dataclass
+            webtool_kpi_dataclass = WebtoolKpiEntries(
+                kpi_dict=dict_with_important_kpi,
+                capex_dict=dict_with_important_capex,
+                opex_dict=dict_with_important_opex,
+            )
+
+            # save dict as json file in results folder
+            json_file = webtool_kpi_dataclass.to_json(indent=4)
+            with open(
+                os.path.join(
+                    ppdt.simulation_parameters.result_directory, "webtool_kpis.json"
+                ),
+                "w",
+                encoding="utf-8",
+            ) as file:
+                file.write(json_file)
+
+        else:
+            raise ValueError(
+                "Some PostProcessingOptions are not set."
+                "Please check if PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT, PostProcessingOptions.COMPUTE_CAPEX,"
+                "PostProcessingOptions.COMPUTE_OPEX are set in your example."
+            )
+
+    def get_dict_from_kpi_lists(self, value_list: List[str]) -> Dict[str, Any]:
+        """Get dict with values for webtool from kpis lists."""
+
+        dict_with_values = {}
+
+        for kpi_value_unit in value_list:
+            if "---" not in kpi_value_unit:
+
+                variable_name = "".join(x for x in kpi_value_unit[0] if x != ":")
+                variable_value = "".join(
+                    x for x in kpi_value_unit[1] if x in string.digits
+                )
+                variable_unit = kpi_value_unit[2]
+
+                dict_with_values.update(
+                    {f"{variable_name} [{variable_unit}] ": variable_value}
+                )
+
+        return dict_with_values
+
+    def get_dict_from_opex_capex_lists(self, value_list: List[str]) -> Dict[str, Any]:
+        """Get dict with values for webtool from opex capex lists."""
+
+        dict_with_cost_values = {}
+        dict_with_emission_values = {}
+        dict_with_lifetime_values = {}
+
+        total_dict = {}
+
+        name_one = value_list[0]
+
+        for value_unit in value_list:
+            if "---" not in value_unit:
+
+                variable_name = "".join(x for x in value_unit[0] if x != ":")
+                variable_value_investment = value_unit[1]
+                variable_value_emissions = value_unit[2]
+                variable_value_lifetime = value_unit[3]
+
+                dict_with_cost_values.update(
+                    {f"{variable_name} [{name_one[1]}] ": variable_value_investment}
+                )
+                dict_with_emission_values.update(
+                    {f"{variable_name} [{name_one[2]}] ": variable_value_emissions}
+                )
+                dict_with_lifetime_values.update(
+                    {f"{variable_name} [{name_one[3]}] ": variable_value_lifetime}
+                )
+
+                total_dict.update(
+                    {
+                        "column 1": dict_with_cost_values,
+                        "column 2": dict_with_emission_values,
+                        "column 3": dict_with_lifetime_values,
+                    }
+                )
+
+        return total_dict

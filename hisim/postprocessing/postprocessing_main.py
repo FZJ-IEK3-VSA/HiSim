@@ -1049,16 +1049,41 @@ class PostProcessor:
                 all_outputs=ppdt.all_outputs,
                 simulation_parameters=ppdt.simulation_parameters,
             )
+            dict_with_important_kpi = self.get_dict_from_kpi_lists(
+                value_list=kpi_compute_return
+            )
 
-            dict_with_important_kpi = self.get_important_kpis(
-                kpi_dict=kpi_compute_return
+            # caculate capex
+            capex_compute_return = capex_calculation(
+                components=ppdt.wrapped_components,
+                simulation_parameters=ppdt.simulation_parameters,
+            )
+
+            dict_with_important_capex = self.get_dict_from_opex_capex_lists(
+                value_list=capex_compute_return
+            )
+
+            # caculate opex
+            opex_compute_return = opex_calculation(
+                components=ppdt.wrapped_components,
+                all_outputs=ppdt.all_outputs,
+                postprocessing_results=ppdt.results,
+                simulation_parameters=ppdt.simulation_parameters,
+            )
+
+            dict_with_important_opex = self.get_dict_from_opex_capex_lists(
+                value_list=opex_compute_return
             )
 
             # initialize webtool kpi entries dataclass
-            webtool_kpi_dataclass = WebtoolKpiEntries(kpi_dict=dict_with_important_kpi)
+            webtool_kpi_dataclass = WebtoolKpiEntries(
+                kpi_dict=dict_with_important_kpi,
+                capex_dict=dict_with_important_capex,
+                opex_dict=dict_with_important_opex,
+            )
 
             # save dict as json file in results folder
-            json_file = webtool_kpi_dataclass.to_json()
+            json_file = webtool_kpi_dataclass.to_json(indent=4)
             with open(
                 os.path.join(
                     ppdt.simulation_parameters.result_directory, "webtool_kpis.json"
@@ -1075,47 +1100,61 @@ class PostProcessor:
                 "PostProcessingOptions.COMPUTE_OPEX are set in your example."
             )
 
-    def get_important_kpis(self, kpi_dict: List[str]) -> Dict[str, Any]:
-        """Filter only important KPIs for webtool."""
+    def get_dict_from_kpi_lists(self, value_list: List[str]) -> Dict[str, Any]:
+        """Get dict with values for webtool from kpis lists."""
 
-        dict_with_important_kpi = {}
+        dict_with_values = {}
 
-        list_with_important_kpis = [
-            "Consumption",
-            "Production",
-            "Self-consumption",
-            # "Injection",
-            "Self-consumption rate",
-            # "Cost for energy use",
-            # "CO2 emitted due energy use",
-            # "Battery losses",
-            "Autarky rate",
-            # "Annual investment cost for equipment (old version)",
-            # "Annual CO2 Footprint for equipment (old version)",
-            "Investment cost for equipment per simulated period",
-            "CO2 footprint for equipment per simulated period",
-            "System operational Cost for simulated period",
-            "System operational Emissions for simulated period",
-            "Total costs for simulated period",
-            "Total emissions for simulated period",
-            "Time of building indoor air temperature being below set temperature 19 °C",
-            "Minimum building indoor air temperature reached",
-            "Time of building indoor air temperature being above set temperature 24 °C",
-            "Maximum building indoor air temperature reached",
-        ]
-
-        for kpi_value_unit in kpi_dict:
+        for kpi_value_unit in value_list:
             if "---" not in kpi_value_unit:
+
                 variable_name = "".join(x for x in kpi_value_unit[0] if x != ":")
                 variable_value = "".join(
                     x for x in kpi_value_unit[1] if x in string.digits
                 )
                 variable_unit = kpi_value_unit[2]
 
-                if variable_name in list_with_important_kpis:
+                dict_with_values.update(
+                    {f"{variable_name} [{variable_unit}] ": variable_value}
+                )
 
-                    dict_with_important_kpi.update(
-                        {f"{variable_name} [{variable_unit}]": variable_value}
-                    )
+        return dict_with_values
 
-        return dict_with_important_kpi
+    def get_dict_from_opex_capex_lists(self, value_list: List[str]) -> Dict[str, Any]:
+        """Get dict with values for webtool from opex capex lists."""
+
+        dict_with_cost_values = {}
+        dict_with_emission_values = {}
+        dict_with_lifetime_values = {}
+
+        total_dict = {}
+
+        name_one = value_list[0]
+
+        for value_unit in value_list:
+            if "---" not in value_unit:
+
+                variable_name = "".join(x for x in value_unit[0] if x != ":")
+                variable_value_investment = value_unit[1]
+                variable_value_emissions = value_unit[2]
+                variable_value_lifetime = value_unit[3]
+
+                dict_with_cost_values.update(
+                    {f"{variable_name} [{name_one[1]}] ": variable_value_investment}
+                )
+                dict_with_emission_values.update(
+                    {f"{variable_name} [{name_one[2]}] ": variable_value_emissions}
+                )
+                dict_with_lifetime_values.update(
+                    {f"{variable_name} [{name_one[3]}] ": variable_value_lifetime}
+                )
+
+                total_dict.update(
+                    {
+                        "column 1": dict_with_cost_values,
+                        "column 2": dict_with_emission_values,
+                        "column 3": dict_with_lifetime_values,
+                    }
+                )
+
+        return total_dict

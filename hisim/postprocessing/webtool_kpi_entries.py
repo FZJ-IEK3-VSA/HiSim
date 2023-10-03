@@ -11,8 +11,7 @@ class WebtoolKpiEntries(JSONWizard):
     """Class for storing important kpis for hisim webtool."""
 
     kpi_dict: Dict[str, Any] = field(default_factory=dict)
-    
-    opex_dict: Dict[str, Any] = field(default_factory=dict)
-    
-    capex_dict: Dict[str, Any] = field(default_factory=dict)
 
+    opex_dict: Dict[str, Any] = field(default_factory=dict)
+
+    capex_dict: Dict[str, Any] = field(default_factory=dict)

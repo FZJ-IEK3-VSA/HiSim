@@ -375,7 +375,8 @@ class UtspLpgConnector(cp.Component):
 
         # Prepare the time series request
         request = datastructures.TimeSeriesRequest(
-            simulation_config.to_json(), "LPG", required_result_files=result_files  # type: ignore
+            simulation_config.to_json(), "LPG", required_result_files=result_files,
+            guid="trybefore98",  # type: ignore
         )
 
         log.information("Requesting LPG profiles from the UTSP.")

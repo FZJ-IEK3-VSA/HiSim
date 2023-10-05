@@ -30,9 +30,15 @@ def first_example(
 
     # Set the simulation parameters for the simulation
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
+        my_simulation_parameters = SimulationParameters.full_year(
             year=2021, seconds_per_timestep=60
         )
+    my_simulation_parameters.post_processing_options.append(
+            postprocessingoptions.PostProcessingOptions.PLOT_CARPET
+        )   
+
+
+    # testmy_sim = copy.deepcopy(my_sim)
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Create first RandomNumbers object and adds to simulator
@@ -96,7 +102,7 @@ def second_example(
 
     # Set the simulation parameters for the simulation
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
+        my_simulation_parameters = SimulationParameters.full_year(
             year=2021, seconds_per_timestep=60
         )  # use a full year for testing
     my_sim.set_simulation_parameters(my_simulation_parameters)

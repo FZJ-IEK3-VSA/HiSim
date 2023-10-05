@@ -113,6 +113,9 @@ class CSVLoader(cp.Component):
     def i_restore_state(self) -> None:
         pass
 
+    def i_prepare_simulation(self) -> None:
+        return super().i_prepare_simulation()
+
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:

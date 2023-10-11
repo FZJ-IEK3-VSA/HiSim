@@ -71,7 +71,7 @@ def make_and_execute_system_setup(
         setup_config.building_type = parameters.building_type
         # Heat Pump
         if parameters.heat_pump_power != None:
-            setup_config.dhw_heatpump_config: HeatPumpConfig = (
+            setup_config.dhw_heatpump_config = (  # type: ignore
                 HeatPumpConfig.get_default_config_waterheating()
             )
             setup_config.dhw_heatpump_config.power_th = 12.3

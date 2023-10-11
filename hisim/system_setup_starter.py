@@ -7,9 +7,7 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from typing import Optional, Union
 import json
-from marshmallow.exceptions import ValidationError
 from hisim import log
-from pprint import pprint
 from hisim.simulator import SimulationParameters
 from hisim.hisim_main import main
 import os

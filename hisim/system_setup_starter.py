@@ -24,8 +24,8 @@ class CostParameters:
 @dataclass_json
 @dataclass
 class SystemSetupParameters:
-    system_setup_file: str
-    system_setup_function: str
+    path_to_module: str
+    function_in_module: str
     cost_parameters: CostParameters
     building_type: str
     number_of_people: int
@@ -50,7 +50,7 @@ def make_and_execute_system_setup(
     )
 
     # Set system setup configuration depending on the selected setup_file
-    if parameters.system_setup_file == "household_1_advanced_hp_diesel_car":
+    if "household_1_advanced_hp_diesel_car" in parameters.path_to_module:
         from examples.household_1_advanced_hp_diesel_car import (
             HouseholdAdvancedHPDieselCarConfig,
         )
@@ -75,13 +75,12 @@ def make_and_execute_system_setup(
             setup_config.dhw_heatpump_config.power_th = 12.3
     else:
         raise ValueError(
-            f"""The setup file {parameters.system_setup_file} is not supported 
+            f"""The setup file {parameters.path_to_module} is not supported 
             by the System Setup Starter. Please select a different setup file."""
         )
 
     # Run simulation
-    path = f"examples/{parameters.system_setup_file}.py"
-    func = parameters.system_setup_function
+    func = parameters.function_in_module
     mysimpar = SimulationParameters.one_day_only(
         year=2021,
         seconds_per_timestep=60,
@@ -96,7 +95,7 @@ def make_and_execute_system_setup(
         PostProcessingOptions.MAKE_RESULT_JSON_WITH_KPI_FOR_WEBTOOL
     )
 
-    main(path, func, mysimpar)
+    main(parameters.path_to_module, func, mysimpar)
     log.information(os.getcwd())
 
 

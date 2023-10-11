@@ -3,8 +3,8 @@ import shutil
 from hisim.system_setup_starter import make_and_execute_system_setup
 
 config_json = {
-    "system_setup_file": "household_1_advanced_hp_diesel_car",
-    "system_setup_function": "household_1_advanced_hp_diesel_car",
+    "path_to_module": "../examples/household_1_advanced_hp_diesel_car.py",
+    "function_in_module": "household_1_advanced_hp_diesel_car",
     "cost_parameters": {"electricity_price": 0.2, "gas_price": 0.1},
     "building_type": "some_building",
     "number_of_people": 4,
@@ -14,7 +14,7 @@ config_json = {
 
 def test_system_setup_starter():
     # Run simulation from config_json
-    result_directory = "tests/test_system_setup_starter/result"
+    result_directory = "test_system_setup_starter/result"
     make_and_execute_system_setup(
         parameters_json=config_json, result_directory=result_directory
     )

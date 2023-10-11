@@ -47,7 +47,7 @@ def make_and_execute_system_setup(
         )
 
     # Read parameters from json
-    parameters: SystemSetupParameters = SystemSetupParameters.schema().load(
+    parameters: SystemSetupParameters = SystemSetupParameters.schema().load(  # type: ignore
         parameters_json, many=False
     )
 

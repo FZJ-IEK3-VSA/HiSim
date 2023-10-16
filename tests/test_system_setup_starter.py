@@ -1,10 +1,14 @@
 import os
 import shutil
-from hisim.system_setup_starter import make_and_execute_system_setup
+from hisim.system_setup_starter import make_system_setup
+from hisim.hisim_main import main
+from pathlib import Path
 
-config_json = {
-    "path_to_module": "../examples/household_1_advanced_hp_diesel_car.py",
+parameters_json = {
+    "path_to_module": "examples/household_1_advanced_hp_diesel_car.py",
     "function_in_module": "household_1_advanced_hp_diesel_car",
+    "config_class_name": "HouseholdAdvancedHPDieselCarConfig",
+    "simple_parameters": False,
     "cost_parameters": {"electricity_price": 0.2, "gas_price": 0.1},
     "building_type": "some_building",
     "number_of_people": 4,
@@ -14,12 +18,30 @@ config_json = {
 
 def test_system_setup_starter():
     # Run simulation from config_json
-    result_directory = "test_system_setup_starter/result"
-    make_and_execute_system_setup(
-        parameters_json=config_json, result_directory=result_directory
+    result_directory = Path("test_system_setup_starter/result")
+    shutil.rmtree(result_directory)
+    result_directory.mkdir(parents=True)
+
+    (
+        path_to_module,
+        function_in_module,
+        simulation_parameters,
+        module_config_path,
+    ) = make_system_setup(
+        parameters_json=parameters_json,
+        result_directory=result_directory,
+        simplified=True,
     )
+
+    main(
+        path_to_module,
+        function_in_module,
+        simulation_parameters,
+        module_config_path,
+    )
+
     # Check results
-    assert os.path.isfile(result_directory + "/finished.flag")
-    assert os.path.isfile(result_directory + "/webtool_kpis.json")
+    assert os.path.isfile(str(result_directory) + "/finished.flag")
+    assert os.path.isfile(str(result_directory) + "/webtool_kpis.json")
     # Remove result directory
     shutil.rmtree(result_directory)

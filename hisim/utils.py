@@ -6,7 +6,7 @@ import hashlib
 import inspect
 import json
 import os
-from functools import wraps 
+from functools import wraps
 from functools import reduce as freduce
 from timeit import default_timer as timer
 from typing import Any, Dict, Tuple, List
@@ -422,3 +422,9 @@ def rgetattr(obj, attr, *args):
         return getattr(obj, attr, *args)
 
     return freduce(_getattr, [obj] + attr.split("."))
+
+
+def rhasattr(obj, attr):
+    """Recursive hasattr for multi level attributes like `obj.attribute.subattribute`"""
+    pre, _, post = attr.rpartition(".")
+    return hasattr(rgetattr(obj, pre) if pre else obj, post)

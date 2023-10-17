@@ -1,13 +1,19 @@
 """
-Read setup parameters from a JSON file and build a system setup for a specific example that is
-defined in the JSON file. The setup is simulated and result files are stored in `/results`.
+Build and simulate a system setup for a specific example that is defined in a JSON file.
+Result files are stored in `/results`.
+See `tests/test_system_setup_starter.py` for an example.
 
-Run `hisim/hisim_from_json.py <json-file>` to start a simulation or run `hisim/hisim_from_json.py`
-to read the JSON from `input/request.json`.
+Run `hisim/system_setup_starter.py <json-file>` to start a simulation.
+Required fields in the JSON file are: `path_to_module`, `function_in_module`, `config_class_name`
+and `simulation_parameters`.
+SimulationParameters from the examples is not used. Instead the parameters from the JSON are set.
+
+Optional field: `system_setup_config`.
+The values from `system_setup_config` replace single values of the example's configuration object.
 """
 
 import importlib
-from typing import Any, Union, Tuple
+from typing import Any, Union, Tuple, Optional
 import json
 from hisim import log
 from hisim.simulator import SimulationParameters
@@ -41,8 +47,7 @@ def set_values(setup_config, parameter_dict, nested=[]):
 
 def make_system_setup(
     parameters_json: Union[dict, list],
-    result_directory: str = "result",
-) -> Tuple[str, str, SimulationParameters, str]:
+) -> Tuple[str, str, Optional[SimulationParameters], str]:
     """
     Read setup parameters from JSON and build a system setup for a specific example.
     The setup is simulated and result files are stored in `result_directory`.
@@ -52,15 +57,18 @@ def make_system_setup(
             "System Setup Starter can only handle one setup at a time for now."
         )
 
-    module_config_path = str(Path(result_directory).joinpath("module_config.json"))
-    simulation_parameters_path = str(
-        Path(result_directory).joinpath("simulation_parameters.json")
-    )
+    result_directory = "results"
+
     path_to_module = parameters_json.pop("path_to_module")
     setup_module_name = path_to_module.replace(".py", "").replace("/", ".")
     config_class_name = parameters_json.pop("config_class_name")
     function_in_module = parameters_json.pop("function_in_module")
-    simulation_parameters_dict = parameters_json.pop("simulation_parameters", {})
+    simulation_parameters_dict = parameters_json.pop("simulation_parameters")
+    module_config_path = str(Path(result_directory).joinpath("module_config.json"))
+    simulation_parameters_path = str(
+        Path(result_directory).joinpath("simulation_parameters.json")
+    )
+
     setup_config_dict = parameters_json.pop("system_setup_config")
     if parameters_json:
         raise AttributeError("There are unused attributes in parameters JSON.")
@@ -77,23 +85,20 @@ def make_system_setup(
         out_file.write(setup_config.to_json())  # ignore: type
 
     # Set custom simulation parameters
-    if simulation_parameters_dict:
-        simulation_parameters = SimulationParameters(
-            start_date=datetime.datetime.fromisoformat(
-                simulation_parameters_dict.pop("start_date")
-            ),
-            end_date=datetime.datetime.fromisoformat(
-                simulation_parameters_dict.pop("end_date")
-            ),
-            seconds_per_timestep=simulation_parameters_dict.pop("seconds_per_timestep"),
-            result_directory=simulation_parameters_dict.pop("result_directory"),
-        )
-        set_values(simulation_parameters, simulation_parameters_dict)
+    simulation_parameters = SimulationParameters(
+        start_date=datetime.datetime.fromisoformat(
+            simulation_parameters_dict.pop("start_date")
+        ),
+        end_date=datetime.datetime.fromisoformat(
+            simulation_parameters_dict.pop("end_date")
+        ),
+        seconds_per_timestep=simulation_parameters_dict.pop("seconds_per_timestep"),
+        result_directory=result_directory,
+    )
+    set_values(simulation_parameters, simulation_parameters_dict)
 
-        with open(simulation_parameters_path, "w", encoding="utf8") as out_file:
-            out_file.write(simulation_parameters.to_json())  # ignore: type
-    else:
-        simulation_parameters = None
+    with open(simulation_parameters_path, "w", encoding="utf8") as out_file:
+        out_file.write(simulation_parameters.to_json())  # ignore: type
 
     with open(module_config_path, "w", encoding="utf8") as out_file:
         out_file.write(setup_config.to_json())  # ignore: type

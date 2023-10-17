@@ -26,6 +26,7 @@ from hisim.modular_household.interface_configs.modular_household_config import (
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
 
+from hisim.modular_household.interface_configs.modular_household_config import ModularHouseholdConfig
 
 def cleanup_old_result_folders():
     """Removes old result folders of previous modular_household_explicit simulations."""

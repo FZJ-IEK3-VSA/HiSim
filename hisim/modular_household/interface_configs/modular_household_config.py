@@ -14,6 +14,16 @@ class ModularHouseholdConfig:
     #: configuration of the framework of the household (climate, house type, mobility behaviour, heating system, etc. )
     archetype_config_: Optional[archetype_config.ArcheTypeConfig] = None
 
+    @classmethod
+    def get_default(cls):
+        """Get default ModularHouseholdConfig."""
+        system_config_ = system_config.SystemConfig()
+        archetype_config_ = archetype_config.ArcheTypeConfig()
+        household_config = ModularHouseholdConfig(
+            system_config_=system_config_, archetype_config_=archetype_config_
+        )
+        return household_config
+
 
 def write_config(config: ModularHouseholdConfig) -> None:
     with open("modular_example_config.json", "w", encoding="utf-8") as f:
@@ -21,7 +31,7 @@ def write_config(config: ModularHouseholdConfig) -> None:
 
 
 def read_in_configs(pathname: str) -> ModularHouseholdConfig:
-    """Reads in ModularHouseholdConfig file and loads default if file cannot be found. """
+    """Reads in ModularHouseholdConfig file and loads default if file cannot be found."""
     try:
         with open(pathname, encoding="utf8") as config_file:
             household_config: ModularHouseholdConfig = ModularHouseholdConfig.from_json(config_file.read())  # type: ignore

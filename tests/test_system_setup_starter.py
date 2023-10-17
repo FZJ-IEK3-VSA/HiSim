@@ -3,6 +3,7 @@ import shutil
 from hisim.system_setup_starter import make_system_setup
 from hisim.hisim_main import main
 from pathlib import Path
+import pytest
 
 parameters_json = {
     "path_to_module": "../examples/household_1_advanced_hp_diesel_car.py",
@@ -24,6 +25,7 @@ parameters_json = {
 }
 
 
+@pytest.mark.base
 def test_system_setup_starter():
     # Run simulation from config_json
     result_directory = "results"

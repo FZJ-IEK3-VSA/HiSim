@@ -7,48 +7,25 @@ to read the JSON from `input/request.json`.
 """
 
 import importlib
-from dataclasses import dataclass
-from dataclasses_json import dataclass_json
-from typing import Optional, Union
+from typing import Union
 import json
 from hisim import log
 from hisim.simulator import SimulationParameters
 from hisim.hisim_main import main
 from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.utils import rgetattr, rsetattr
 from pathlib import Path
 
 
-@dataclass_json
-@dataclass
-class CostParameters:
-    electricity_price: float
-    gas_price: float
-
-
-@dataclass_json
-@dataclass
-class SystemSetupParameters:
-    path_to_module: str
-    function_in_module: str
-    config_class_name: str
-    simple_parameters: bool
-    cost_parameters: CostParameters
-    building_type: str
-    number_of_people: int
-    heat_pump_power: Optional[float] = None
-
-
-def read_parameters_json(parameters_json_path):
+def read_parameters_json(parameters_json_path) -> Union[dict, list]:
     with open(parameters_json_path, "r") as c:
         parameters_json: Union[dict, list] = json.load(c)
-    simple_parameters = True
-    return parameters_json, simple_parameters
+    return parameters_json
 
 
 def make_system_setup(
     parameters_json: Union[dict, list],
     result_directory: str = "result",
-    simplified: bool = True,
 ) -> None:
     """
     Read setup parameters from JSON and build a system setup for a specific example.
@@ -61,73 +38,35 @@ def make_system_setup(
 
     result_directory: Path = Path(result_directory)
     module_config_path = result_directory.joinpath("module_config.json")
-    path_to_module = parameters_json.get("path_to_module")
+    path_to_module = parameters_json.pop("path_to_module")
     setup_module_name = path_to_module.replace(".py", "").replace("/", ".")
-    config_class_name = parameters_json.get("config_class_name")
-    function_in_module = parameters_json.get("function_in_module")
+    config_class_name = parameters_json.pop("config_class_name")
+    function_in_module = parameters_json.pop("function_in_module")
 
     # Import modules for the specified system setup
-    # this_module = importlib.import_module("examples.household_1_advanced_hp_diesel_car")
-    # this_class = getattr(this_module, "HouseholdAdvancedHPDieselCarConfig")
     setup_module = importlib.import_module(setup_module_name)
     config_class = getattr(setup_module, config_class_name)
 
     setup_config: config_class = config_class.get_default()
 
-    if simplified:
-        # Set parameters manually.
-        parameters: SystemSetupParameters = SystemSetupParameters.schema().load(  # type: ignore
-            parameters_json, many=False
-        )
-        if (
-            setup_module_name == "examples.household_1_advanced_hp_diesel_car"
-            and config_class_name == "HouseholdAdvancedHPDieselCarConfig"
-        ):
-            setup_config.building_type = parameters.building_type
-            _ = parameters.cost_parameters.electricity_price
-            _ = parameters.cost_parameters.gas_price
-            _ = parameters.number_of_people
-            _ = parameters.heat_pump_power
-
-        else:
-            raise NotImplementedError(
-                "System Setup Starter can only handle `examples.household_1_advanced_hp_diesel_car` now."
-            )
-
-    else:
-        # Created with utils.create_config_json_template
-        with open(
-            "examples/household_1_advanced_hp_diesel_car_household_1_advanced_hp_diesel_car_configurable.json",
-            "r",
-        ) as o:
-            template_json = json.load(o)
-
-        def check_values(parameter_dict, template_dict):
-            for key, value in parameter_dict.items():
-                if isinstance(value, dict):
-                    check_values(value, template_dict[key])
+    def set_values(setup_config, parameter_dict, nested=[]):
+        for key, value in parameter_dict.items():
+            if isinstance(value, dict):
+                set_values(setup_config, value, nested + [key])
+            else:
+                attribute = ".".join(nested + [key])
+                if rgetattr(setup_config, attribute, False):
+                    rsetattr(setup_config, attribute, value)
                 else:
-                    if template_dict[key]:
-                        pass
-                    else:
-                        print(key)
-                        print(value)
-                        raise ValueError("Parameter cannot be set with JSON.")
+                    raise AttributeError(
+                        f"Attribute `{attribute}` from JSON cannot be found in `{setup_config.__class__.__name__}`."
+                    )
 
-        check_values(parameters_json, template_json)
-
-        def set_values(setup_config, parameter_dict, nested=[]):
-            for key, value in parameter_dict.items():
-                if isinstance(value, dict):
-                    set_values(setup_config, value, nested + [key])
-                else:
-                    setattr(setup_config, ".".join(nested + [key]), value)
-
-        set_values(setup_config, parameters_json)
+    set_values(setup_config, parameters_json)
 
     # Save to file
-    with open(module_config_path, "w", encoding="utf8") as out_file:
-        json.dump(setup_config.to_json(), out_file)
+    with open(module_config_path, "w") as out_file:
+        out_file.write(setup_config.to_json())
 
     # Set simulation parameters
     simulation_parameters = set_simulation_parameters(result_directory)
@@ -179,14 +118,14 @@ if __name__ == "__main__":
 
     log.information(f"Reading parameters from {parameters_json_path}.")
 
-    parameters_json, simplified = read_parameters_json(parameters_json_path)
+    parameters_json = read_parameters_json(parameters_json_path)
 
     (
         path_to_module,
         function_in_module,
         simulation_parameters,
         module_config_path,
-    ) = make_system_setup(parameters_json=parameters_json, simplified=simplified)
+    ) = make_system_setup(parameters_json=parameters_json)
 
     main(
         path_to_module,

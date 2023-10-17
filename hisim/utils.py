@@ -6,7 +6,8 @@ import hashlib
 import inspect
 import json
 import os
-from functools import wraps
+from functools import wraps 
+from functools import reduce as freduce
 from timeit import default_timer as timer
 from typing import Any, Dict, Tuple, List
 
@@ -407,6 +408,17 @@ def deprecated(message):
 
     return deprecated_decorator
 
+
+def rsetattr(obj, attr, val):
+    pre, _, post = attr.rpartition(".")
+    return setattr(rgetattr(obj, pre) if pre else obj, post, val)
+
+
+def rgetattr(obj, attr, *args):
+    def _getattr(obj, attr):
+        return getattr(obj, attr, *args)
+
+    return freduce(_getattr, [obj] + attr.split("."))
 
 def create_config_json_template(
     system_setup_config, path_to_module, function_in_module

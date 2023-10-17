@@ -410,43 +410,15 @@ def deprecated(message):
 
 
 def rsetattr(obj, attr, val):
+    """Recursive setattr for multi level attributes like `obj.attribute.subattribute`"""
     pre, _, post = attr.rpartition(".")
     return setattr(rgetattr(obj, pre) if pre else obj, post, val)
 
 
 def rgetattr(obj, attr, *args):
+    """Recursive getattr for multi level attributes like `obj.attribute.subattribute`"""
+
     def _getattr(obj, attr):
         return getattr(obj, attr, *args)
 
     return freduce(_getattr, [obj] + attr.split("."))
-
-def create_config_json_template(
-    system_setup_config, path_to_module, function_in_module
-):
-    from pathlib import Path
-
-    default_values = system_setup_config.get_default().to_dict()
-
-    def remove_values(this_dict):
-        for key, value in this_dict.items():
-            if isinstance(value, dict):
-                remove_values(value)
-            else:
-                this_dict[key] = False
-
-    remove_values(default_values)
-    default_values["path_to_module"] = path_to_module
-    default_values["function_in_module"] = function_in_module
-    default_values["config_class_name"] = system_setup_config.__class__.__name__
-    default_values["simple_parameters"] = False
-
-    path_to_module = Path(path_to_module)
-    output_file = path_to_module.parent.joinpath(
-        f"{path_to_module.stem}_{function_in_module}_configurable.json"
-    )
-
-    if not output_file.is_file():
-        with open(output_file, "w") as o:
-            json.dump(default_values, o)
-    else:
-        raise FileExistsError("Will not overwrite existing file with template.")

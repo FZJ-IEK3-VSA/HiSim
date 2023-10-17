@@ -65,7 +65,7 @@ def make_system_setup(
     set_values(setup_config, parameters_json)
 
     # Save to file
-    with open(module_config_path, "w") as out_file:
+    with open(module_config_path, "w", encoding="utf8") as out_file:
         out_file.write(setup_config.to_json())
 
     # Set simulation parameters

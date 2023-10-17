@@ -7,7 +7,7 @@ to read the JSON from `input/request.json`.
 """
 
 import importlib
-from typing import Union
+from typing import Any, Union, Tuple
 import json
 from hisim import log
 from hisim.simulator import SimulationParameters
@@ -17,7 +17,7 @@ from hisim.utils import rgetattr, rsetattr
 from pathlib import Path
 
 
-def read_parameters_json(parameters_json_path) -> Union[dict, list]:
+def read_parameters_json(parameters_json_path: str) -> Union[dict, list]:
     with open(parameters_json_path, "r") as c:
         parameters_json: Union[dict, list] = json.load(c)
     return parameters_json
@@ -26,7 +26,7 @@ def read_parameters_json(parameters_json_path) -> Union[dict, list]:
 def make_system_setup(
     parameters_json: Union[dict, list],
     result_directory: str = "result",
-) -> None:
+) -> Tuple[str, str, SimulationParameters, str]:
     """
     Read setup parameters from JSON and build a system setup for a specific example.
     The setup is simulated and result files are stored in `result_directory`.
@@ -36,8 +36,7 @@ def make_system_setup(
             "System Setup Starter can only handle one setup at a time for now."
         )
 
-    result_directory: Path = Path(result_directory)
-    module_config_path = result_directory.joinpath("module_config.json")
+    module_config_path = str(Path(result_directory).joinpath("module_config.json"))
     path_to_module = parameters_json.pop("path_to_module")
     setup_module_name = path_to_module.replace(".py", "").replace("/", ".")
     config_class_name = parameters_json.pop("config_class_name")
@@ -47,7 +46,7 @@ def make_system_setup(
     setup_module = importlib.import_module(setup_module_name)
     config_class = getattr(setup_module, config_class_name)
 
-    setup_config: config_class = config_class.get_default()
+    setup_config: Any = config_class.get_default()
 
     def set_values(setup_config, parameter_dict, nested=[]):
         for key, value in parameter_dict.items():
@@ -66,25 +65,27 @@ def make_system_setup(
 
     # Save to file
     with open(module_config_path, "w", encoding="utf8") as out_file:
-        out_file.write(setup_config.to_json())
+        out_file.write(setup_config.to_json())  # ignore: type
 
     # Set simulation parameters
-    simulation_parameters = set_simulation_parameters(result_directory)
+    simulation_parameters: SimulationParameters = set_simulation_parameters(
+        result_directory
+    )
 
     return (
-        str(path_to_module),
+        path_to_module,
         function_in_module,
         simulation_parameters,
-        str(module_config_path),
+        module_config_path,
     )
 
 
-def set_simulation_parameters(result_directory):
-    simulation_parameters = SimulationParameters.one_day_only(
+def set_simulation_parameters(result_directory: str) -> SimulationParameters:
+    simulation_parameters: SimulationParameters = SimulationParameters.one_day_only(
         year=2021,
         seconds_per_timestep=60,
     )
-    simulation_parameters.result_directory = str(result_directory)
+    simulation_parameters.result_directory = result_directory
     simulation_parameters.post_processing_options.append(
         PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
     )
@@ -104,8 +105,8 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) == 1:
-        parameters_json_path = Path("input/request.json")
-        if not parameters_json_path.is_file():
+        parameters_json_path = "input/request.json"
+        if not Path(parameters_json_path).is_file():
             log.information(
                 "Please specify an input JSON file or place it in `input/request.json`."
             )

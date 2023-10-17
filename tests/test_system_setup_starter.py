@@ -24,6 +24,46 @@ parameters_json = {
     },
 }
 
+# parameters_json_modular_example = {
+#     "path_to_module": "examples/modular_example.py",
+#     "function_in_module": "modular_household_explicit",
+#     "config_class_name": "ModularHouseholdConfig",
+#     "system_setup_config": {
+#         "system_config_": {
+#             "pv_included": False,
+#             "pv_peak_power": 10000.0,
+#             "smart_devices_included": False,
+#             "buffer_included": False,
+#             "buffer_volume": 1.0,
+#             "battery_included": False,
+#             "battery_capacity": 10.0,
+#             "heatpump_included": False,
+#             "heatpump_power": 1.0,
+#             "chp_included": False,
+#             "chp_power": 12,
+#             "h2_storage_size": 100,
+#             "electrolyzer_power": 5000.0,
+#             "ev_included": True,
+#             "charging_station": {
+#                 "Name": "Charging At Home with 03.7 kW",
+#                 "Guid": {"StrVal": "38e3a15d-d6f5-4f51-a16a-da287d14608f"},
+#             },
+#         },
+#         "archetype_config_": {
+#             "occupancy_profile_utsp": None,
+#             "occupancy_profile": "AVG",
+#             "building_code": "ES.ME.TH.03.Gen.ReEx.001.003",
+#             "absolute_conditioned_floor_area": None,
+#             "water_heating_system_installed": "DistrictHeating",
+#             "heating_system_installed": "DistrictHeating",
+#             "mobility_set": None,
+#             "mobility_distance": None,
+#             "url": "http://134.94.131.167:443/api/v1/profilerequest",
+#             "api_key": "limited_OXT60O84N9ITLO1CM9CJ1V393QFKOKCN",
+#         },
+#     },
+# }
+
 
 def test_system_setup_starter():
     # Run simulation from config_json

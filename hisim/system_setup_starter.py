@@ -60,7 +60,7 @@ def make_system_setup(
     result_directory = "results"
 
     path_to_module = parameters_json.pop("path_to_module")
-    setup_module_name = path_to_module.replace(".py", "").replace("/", ".")
+    setup_module_name = "examples." + path_to_module.split("/")[-1].replace(".py", "")
     config_class_name = parameters_json.pop("config_class_name")
     function_in_module = parameters_json.pop("function_in_module")
     simulation_parameters_dict = parameters_json.pop("simulation_parameters")

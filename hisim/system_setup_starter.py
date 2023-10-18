@@ -86,10 +86,6 @@ def make_system_setup(
     setup_config: Any = config_class.get_default()
     set_values(setup_config, setup_config_dict)
 
-    # Save to file
-    with open(module_config_path, "w", encoding="utf8") as out_file:
-        out_file.write(setup_config.to_json())  # ignore: type
-
     # Set custom simulation parameters
     simulation_parameters = SimulationParameters(
         start_date=datetime.datetime.fromisoformat(

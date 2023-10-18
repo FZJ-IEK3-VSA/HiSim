@@ -7,6 +7,7 @@ import inspect
 import json
 import os
 from functools import wraps
+from functools import reduce as freduce
 from timeit import default_timer as timer
 from typing import Any, Dict, Tuple, List
 
@@ -406,3 +407,24 @@ def deprecated(message):
         return deprecated_func
 
     return deprecated_decorator
+
+
+def rsetattr(obj, attr, val):
+    """Recursive setattr for multi level attributes like `obj.attribute.subattribute`."""
+    pre, _, post = attr.rpartition(".")
+    return setattr(rgetattr(obj, pre) if pre else obj, post, val)
+
+
+def rgetattr(obj, attr, *args):
+    """Recursive getattr for multi level attributes like `obj.attribute.subattribute`."""
+
+    def _getattr(obj, attr):
+        return getattr(obj, attr, *args)
+
+    return freduce(_getattr, [obj] + attr.split("."))
+
+
+def rhasattr(obj, attr):
+    """Recursive hasattr for multi level attributes like `obj.attribute.subattribute`."""
+    pre, _, post = attr.rpartition(".")
+    return hasattr(rgetattr(obj, pre) if pre else obj, post)

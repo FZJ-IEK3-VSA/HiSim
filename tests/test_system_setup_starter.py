@@ -33,7 +33,6 @@ parameters_json = {
 @pytest.mark.base
 def test_system_setup_starter():
     """Run a simulation from JSON."""
-    # Run simulation from config_json
     result_directory = "results"
     if Path(result_directory).is_dir():
         shutil.rmtree(result_directory)

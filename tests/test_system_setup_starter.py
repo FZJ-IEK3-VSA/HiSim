@@ -11,7 +11,7 @@ from hisim.system_setup_starter import make_system_setup
 from hisim.hisim_main import main
 
 parameters_json = {
-    "path_to_module": "examples/household_1_advanced_hp_diesel_car.py",
+    "path_to_module": "../examples/household_1_advanced_hp_diesel_car.py",
     "function_in_module": "household_1_advanced_hp_diesel_car",
     "config_class_name": "HouseholdAdvancedHPDieselCarConfig",
     "simulation_parameters": {

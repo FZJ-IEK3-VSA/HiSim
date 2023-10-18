@@ -24,6 +24,13 @@ from hisim.hisim_main import main
 from hisim.utils import rsetattr, rhasattr
 from hisim.simulator import SimulationParameters
 
+# Examples need to use `create_configuration()` and their config class needs to implement
+# `get_default()` to run with the system setup starter.
+SUPPORTED_MODULES = [
+    "examples.modular_example",
+    "examples.household_1_advanced_hp_diesel_car",
+]
+
 
 def read_parameters_json(parameters_json_path: str) -> Union[dict, list]:
     """Read the parameter JSON string from file."""
@@ -68,6 +75,10 @@ def make_system_setup(
     Path(result_directory).mkdir(parents=True, exist_ok=True)
     path_to_module = _parameters_json.pop("path_to_module")
     setup_module_name = "examples." + path_to_module.split("/")[-1].replace(".py", "")
+    if setup_module_name not in SUPPORTED_MODULES:
+        raise NotImplementedError(
+            f"System setup starter can only be used with one of {', '.join(SUPPORTED_MODULES)}"
+        )
     config_class_name = _parameters_json.pop("config_class_name")
     function_in_module = _parameters_json.pop("function_in_module")
     simulation_parameters_dict = _parameters_json.pop("simulation_parameters")

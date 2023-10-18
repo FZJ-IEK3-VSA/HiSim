@@ -60,13 +60,15 @@ def test_system_setup_starter():
         created_module_config = json.load(f)
     assert (
         created_module_config["hp_config"]["set_thermal_output_power_in_watt"]
-        == parameters_json["system_setup_config"]["hp_config"][
+        == parameters_json["system_setup_config"]["hp_config"][  # type: ignore
             "set_thermal_output_power_in_watt"
         ]
     )
     assert (
-        simulation_parameters.seconds_per_timestep
-        == parameters_json["simulation_parameters"]["seconds_per_timestep"]
+        simulation_parameters.seconds_per_timestep  # type: ignore
+        == parameters_json["simulation_parameters"][
+            "seconds_per_timestep"
+        ]  # type: ignore
     )
     # Remove result directory
     time.sleep(1)

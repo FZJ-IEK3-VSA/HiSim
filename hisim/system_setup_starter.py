@@ -47,6 +47,7 @@ def set_values(setup_config, parameter_dict, nested=[]):
 
 def make_system_setup(
     parameters_json: Union[dict, list],
+    result_path: str
 ) -> Tuple[str, str, Optional[SimulationParameters], str]:
     """
     Read setup parameters from JSON and build a system setup for a specific example.
@@ -57,7 +58,7 @@ def make_system_setup(
             "System Setup Starter can only handle one setup at a time for now."
         )
 
-    result_directory = "results"
+    result_directory = result_path
 
     path_to_module = parameters_json.pop("path_to_module")
     setup_module_name = "examples." + path_to_module.split("/")[-1].replace(".py", "")
@@ -116,6 +117,7 @@ if __name__ == "__main__":
 
     if len(sys.argv) == 1:
         parameters_json_path = "input/request.json"
+        result_path = "results"
         if not Path(parameters_json_path).is_file():
             log.information(
                 "Please specify an input JSON file or place it in `input/request.json`."
@@ -123,6 +125,10 @@ if __name__ == "__main__":
             sys.exit(1)
     elif len(sys.argv) == 2:
         parameters_json_path = sys.argv[1]
+        result_path = "results"
+    elif len(sys.argv) == 3:
+        parameters_json_path = sys.argv[1]
+        result_path = sys.argv[2]
     else:
         log.information("HiSim from JSON received too many arguments.")
         sys.exit(1)
@@ -136,7 +142,7 @@ if __name__ == "__main__":
         function_in_module,
         simulation_parameters,
         module_config_path,
-    ) = make_system_setup(parameters_json=parameters_json)
+    ) = make_system_setup(parameters_json=parameters_json, result_path=result_path)
 
     main(
         path_to_module,

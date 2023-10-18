@@ -430,7 +430,7 @@ def rhasattr(obj, attr):
     return hasattr(rgetattr(obj, pre) if pre else obj, post)
 
 
-def create_configuration(my_sim: Any, config_class: Any):
+def create_configuration(my_sim: Any, config_class: Any) -> Any:
     """Create configuration object from JSON or from defaults."""
     if my_sim.my_module_config_path:
         with open(

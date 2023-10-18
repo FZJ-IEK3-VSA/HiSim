@@ -29,7 +29,6 @@ from hisim.components import electricity_meter
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim import utils
 from hisim import loadtypes as lt
-from hisim import log
 from examples.modular_example import cleanup_old_lpg_requests
 
 __authors__ = "Markus Blasberg"

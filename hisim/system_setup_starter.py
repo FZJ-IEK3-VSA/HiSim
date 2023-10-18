@@ -59,6 +59,7 @@ def make_system_setup(
         )
 
     result_directory = result_path
+    Path(result_path).mkdir(parents=True, exists_ok=True)
 
     path_to_module = parameters_json.pop("path_to_module")
     setup_module_name = "examples." + path_to_module.split("/")[-1].replace(".py", "")

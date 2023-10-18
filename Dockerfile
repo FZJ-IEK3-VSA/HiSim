@@ -28,4 +28,4 @@ ENV HISIM_IN_DOCKER_CONTAINER true
 # Create a folder for the input files
 RUN mkdir /input
 
-ENTRYPOINT python3 hisim/system_setup_starter.py /input/request.json 
+ENTRYPOINT python3 hisim/system_setup_starter.py /input/request.json /results

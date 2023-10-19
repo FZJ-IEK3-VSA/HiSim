@@ -93,7 +93,7 @@ def modular_household_explicit(
     seconds_per_timestep = 60 * 15
 
     # read the modular household config file
-    household_config = read_in_configs("modular_example_config.json")
+    household_config = read_in_configs(my_sim.my_module_config_path)
     assert household_config.archetype_config_ is not None
     assert household_config.system_config_ is not None
     arche_type_config_ = household_config.archetype_config_

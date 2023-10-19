@@ -821,7 +821,7 @@ class Weather(Component):
             ],
         )
         lastday = pd.Series(
-            pd_database[-1],
+            pd_database.iloc[-1],
             index=[
                 pd.to_datetime(
                     datetime.datetime(year, 12, 31, 22, 59), utc=True
@@ -945,7 +945,7 @@ def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Any:
     if source_enum == WeatherDataSourceEnum.NSRDB_15min:
         with open(filepath, encoding="utf-8") as csvfile:
             spamreader = csv.reader(csvfile)
-            for (i, row) in enumerate(spamreader):
+            for i, row in enumerate(spamreader):
                 if i == 1:
                     location_name = row[1]
                     lat = float(row[5])

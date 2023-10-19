@@ -5,7 +5,6 @@ import os
 from typing import Dict, Any, Optional, List, Tuple
 import json
 import enum
-from collections import defaultdict
 import shutil
 import re
 import pandas as pd
@@ -344,7 +343,8 @@ class PyamDataCollector:
             if rename_scenario is True:
                 if (
                     parameter_key is not None
-                    and list_with_parameter_key_values is not None and list_with_parameter_key_values != []
+                    and list_with_parameter_key_values is not None
+                    and list_with_parameter_key_values != []
                 ):
                     # rename scenario adding paramter key, value pair
                     dataframe[
@@ -362,7 +362,6 @@ class PyamDataCollector:
                     ] = self.rename_scenario_name_of_dataframe_with_index(
                         dataframe=dataframe, index=index
                     )
-
 
             appended_dataframe = pd.concat([appended_dataframe, dataframe])
 

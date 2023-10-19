@@ -23,19 +23,19 @@ class PyamDataAnalysis:
     ) -> None:
         """Initialize the class."""
 
-        pyam_data_collection.PyamDataCollector(
-            data_processing_mode=data_processing_mode,
-            folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
-            path_to_default_config=path_to_default_config,
-            time_resolution_of_data_set=time_resolution_of_data_set,
-            simulation_duration_to_check=simulation_duration_to_check,
-        )
+        # pyam_data_collection.PyamDataCollector(
+        #     data_processing_mode=data_processing_mode,
+        #     folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
+        #     path_to_default_config=path_to_default_config,
+        #     time_resolution_of_data_set=time_resolution_of_data_set,
+        #     simulation_duration_to_check=simulation_duration_to_check,
+        # )
         pyam_data_processing.PyAmChartGenerator(
             simulation_duration_to_check=simulation_duration_to_check,
             time_resolution_of_data_set=time_resolution_of_data_set,
             data_processing_mode=data_processing_mode,
             variables_to_check=variables_to_check,
-            #list_of_scenarios_to_check=list_of_scenarios_to_check,
+            # list_of_scenarios_to_check=list_of_scenarios_to_check,
             dict_of_scenarios_to_check=dict_with_scenarios_to_check,
         )
 
@@ -69,16 +69,24 @@ def main():
     data_processing_mode = (
         pyam_data_collection.PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
     )
-    
+
     filterclass = pyam_data_processing.FilterClass()
-    list_with_variables_to_check = filterclass.heating_demand + filterclass.electricity_data
+    list_with_variables_to_check = (
+        filterclass.heating_demand + filterclass.electricity_data
+    )
 
-
-    #list_of_scenarios_to_check = filterclass.building_type
+    # list_of_scenarios_to_check = filterclass.building_type
 
     # TODO: filter several scenario parameters (eg pv and building code together) not working yet, need to be fixed
     # dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share,"building_code": ["DE.N.SFH.05.Gen.ReEx.001.002"]}
-    dict_with_scenarios_to_check = {"building_code": ["DE.N.SFH.05.Gen.ReEx.001.002","DE.N.TH.05.Gen.ReEx.001.002","DE.N.MFH.05.Gen.ReEx.001.002","DE.N.AB.05.Gen.ReEx.001.002"]}
+    dict_with_scenarios_to_check = {
+        "building_code": [
+            "DE.N.SFH.05.Gen.ReEx.001.002",
+            "DE.N.TH.05.Gen.ReEx.001.002",
+            "DE.N.MFH.05.Gen.ReEx.001.002",
+            "DE.N.AB.05.Gen.ReEx.001.002",
+        ]
+    }
 
     # list_of_scenarios_to_check = ["DE.N.SFH.05.Gen.ReEx.001.002","DE.N.TH.05.Gen.ReEx.001.002","DE.N.MFH.05.Gen.ReEx.001.002","DE.N.AB.05.Gen.ReEx.001.002"]
 
@@ -91,8 +99,8 @@ def main():
         simulation_duration_to_check=simulation_duration_to_check,
         data_processing_mode=data_processing_mode,
         variables_to_check=list_with_variables_to_check,
-        #list_of_scenarios_to_check=list_of_scenarios_to_check,
-        dict_with_scenarios_to_check=dict_with_scenarios_to_check
+        # list_of_scenarios_to_check=list_of_scenarios_to_check,
+        dict_with_scenarios_to_check=dict_with_scenarios_to_check,
     )
 
 

@@ -986,7 +986,7 @@ class MPC_Controller(cp.Component):
         # calculated and can be used later if the control structure is modified to casacaded PID-
         t_m_opt_timestep = []
         t_m_init = self.state.t_m
-        Ad = np.linalg.inv(I - self.A)
+        Ad = np.linalg.inv(I - self.A) # type: ignore
         Bd = Ad * self.B
         for i in range(int(self.prediction_horizon)):
             t_m_next = (

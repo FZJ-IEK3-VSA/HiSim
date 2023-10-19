@@ -671,19 +671,19 @@ class MpcController(cp.Component):
         # slicing yearly forecast to extract data points for the prediction horizon (24 hours)
         # number of data points extracted equals= self.prediction_horizon = 3600 * 24 h / seconds_per_timestep
         self.temperature_forecast_24h_1min = self.temp_forecast[
-            start_horizon : start_horizon + self.prediction_horizon
+            start_horizon: start_horizon + self.prediction_horizon
         ]
         self.phi_m_forecast_24h_1min = self.phi_m_forecast[
-            start_horizon : start_horizon + self.prediction_horizon
+            start_horizon: start_horizon + self.prediction_horizon
         ]
         self.phi_ia_forecast_24h_1min = self.phi_ia_forecast[
-            start_horizon : start_horizon + self.prediction_horizon
+            start_horizon: start_horizon + self.prediction_horizon
         ]
         self.phi_st_forecast_24h_1min = self.phi_st_forecast[
-            start_horizon : start_horizon + self.prediction_horizon
+            start_horizon: start_horizon + self.prediction_horizon
         ]
         self.pv_forecast_24h_1min = self.pv_forecast_yearly[
-            start_horizon : start_horizon + self.prediction_horizon
+            start_horizon: start_horizon + self.prediction_horizon
         ]
         self.price_purchase_forecast_24h_1min = SingletonSimRepository().get_entry(
             key=SingletonDictKeyEnum.Price_Purchase_Forecast_24h
@@ -718,7 +718,7 @@ class MpcController(cp.Component):
         )
 
     @utils.measure_execution_time
-    def optimize( # noqa: C901
+    def optimize(  # noqa: C901
         self,
         temperature_forecast_24h,
         phi_ia_forecast_24h,
@@ -770,8 +770,8 @@ class MpcController(cp.Component):
         cop_sampled = cop_timestep[0::sampling_rate]
         eer_sampled = eer_timestep[0::sampling_rate]
 
-        cop_sampled = np.reshape(np.array(cop_sampled), (1, len(cop_sampled)))
-        eer_sampled = np.reshape(np.array(eer_sampled), (1, len(eer_sampled)))
+        cop_sampled_array = np.reshape(np.array(cop_sampled), (1, len(cop_sampled)))
+        eer_sampled_array = np.reshape(np.array(eer_sampled), (1, len(eer_sampled)))
 
         # Numerical values of pv forecast (casadi fromat)
         pv_forecast_24h = np.reshape(
@@ -1098,8 +1098,8 @@ class MpcController(cp.Component):
 
         opti.set_value(x_init, self.state.t_m)
         opti.set_value(disturbance_forecast, disturbance_values)
-        opti.set_value(cop_values, cop_sampled)
-        opti.set_value(eer_values, eer_sampled)
+        opti.set_value(cop_values, cop_sampled_array)
+        opti.set_value(eer_values, eer_sampled_array)
 
         if self.flexibility_element in {"PV_only", "PV_and_Battery"}:
             opti.set_value(pv_production, pv_forecast_24h)
@@ -1285,7 +1285,7 @@ class MpcController(cp.Component):
 
         return optimal_cost
 
-    def i_simulate( # noqa: C901
+    def i_simulate(  # noqa: C901
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
         """Start simulation of the MPC here."""

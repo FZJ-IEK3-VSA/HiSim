@@ -475,7 +475,7 @@ class AirConditioner(cp.Component):
         lines.append(f"Control: {self.control}")
         return self.air_conditioner_config.get_string_dict() + lines
 
-    def i_simulate( # noqa: C901
+    def i_simulate(  # noqa: C901
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
         """Core simulation function."""

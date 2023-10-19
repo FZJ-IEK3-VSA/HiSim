@@ -171,9 +171,6 @@ def household_air_conditioner_generic(
     pv_maintenance_cost_as_percentage_of_investment = 0.01
     pv_lifetime = 25
 
-    # Set occupancy
-    occupancy_profile = "CH01"
-
     # Set building
     building_code = "CY.N.SFH.03.Gen.ReEx.001.003"
     building_class = "medium"
@@ -252,11 +249,11 @@ def household_air_conditioner_generic(
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters,
     )
+  
+    my_building_information = my_building.my_building_information
 
     """ Occupancy Profile """
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-        profile_name=occupancy_profile, name="Occupancy", country_name=location,
-    )
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_CHS01_according_to_number_of_apartments(number_of_apartments=my_building_information.number_of_apartments)
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config,
         my_simulation_parameters=my_simulation_parameters,

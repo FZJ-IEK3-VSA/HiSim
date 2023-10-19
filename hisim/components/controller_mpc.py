@@ -474,12 +474,10 @@ class MpcController(cp.Component):
                 f"self.inverter_efficiency {format(self.inverter_efficiency)}"
             )
 
-    def build(self, my_simulation_repository):
+    def build(self):
         """Build function: The function sets important constants and parameters for the calculations."""
         if (
             self.my_simulation_parameters.predictive
-            # self.my_simulation_parameters.predictive
-            # and my_simulation_repository is not None
         ):
 
             """ getting building physical properties for state space model """
@@ -1021,9 +1019,9 @@ class MpcController(cp.Component):
         if self.flexibility_element == "PV_and_Battery":
             opti.set_value(soc_init, self.state.soc)
 
-        print(f"Starting solve",datetime.datetime.now())
+        print("Starting solve",datetime.datetime.now())
         sol = opti.solve()
-        opti.debug.value
+        # opti.debug.value
 
         # solution optimize resolution
         # t_m_opt=sol.value(x)

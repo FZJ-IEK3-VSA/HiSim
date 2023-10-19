@@ -234,7 +234,7 @@ class MpcController(cp.Component):
         self.cop_coef = self.mpcconfig.cop_coef
         self.eer_coef = self.mpcconfig.eer_coef
 
-        self.build(my_simulation_repository)
+        self.build()
 
         self.statespace()
 

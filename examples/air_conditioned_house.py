@@ -1,5 +1,6 @@
 """Air-conditioned household."""
 from typing import Optional
+
 # import numpy as np
 # import os
 from hisim.simulator import SimulationParameters
@@ -13,6 +14,7 @@ from hisim.components import air_conditioner
 from hisim.components import controller_mpc  # mpc
 from hisim.components import generic_battery  # mpc
 from hisim.components import generic_price_signal  # mpc
+
 # from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "Marwa Alfouly, Sebastian Dickler"
@@ -247,13 +249,16 @@ def household_air_conditioner_generic(
         number_of_apartments=number_of_apartments,
     )
     my_building = building.Building(
-        config=my_building_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_building_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
-  
+
     my_building_information = my_building.my_building_information
 
     """ Occupancy Profile """
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_CHS01_according_to_number_of_apartments(number_of_apartments=my_building_information.number_of_apartments)
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_CHS01_according_to_number_of_apartments(
+        number_of_apartments=my_building_information.number_of_apartments
+    )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -351,7 +356,8 @@ def household_air_conditioner_generic(
             base=False,
         )
         my_battery = generic_battery.GenericBattery(
-            config=my_battery_config, my_simulation_parameters=my_simulation_parameters,
+            config=my_battery_config,
+            my_simulation_parameters=my_simulation_parameters,
         )
         my_sim.add_component(my_battery)
 
@@ -397,14 +403,14 @@ def household_air_conditioner_generic(
             battery_control_state=[],
             batt_soc_actual_timestep=[],
             batt_soc_normalized_timestep=[],
-            h_tr_w = 0.0,
-            h_tr_ms = 0.0,
-            h_tr_em = 0.0,
-            h_ve_adj = 0.0,
-            h_tr_is = 0.0,
-            c_m = 0.0,
-            cop_coef = [0] * 2,
-            eer_coef = [0] * 2,
+            h_tr_w=0.0,
+            h_tr_ms=0.0,
+            h_tr_em=0.0,
+            h_ve_adj=0.0,
+            h_tr_is=0.0,
+            c_m=0.0,
+            cop_coef=[0] * 2,
+            eer_coef=[0] * 2,
         )
         my_mpc_controller = controller_mpc.MpcController(
             config=my_mpc_controller_config,

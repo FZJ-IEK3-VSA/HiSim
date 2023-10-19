@@ -1,5 +1,6 @@
 # Generic/Built-in
 import copy
+from typing import Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -9,6 +10,7 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim.components.generic_ev_charger import SimpleStorageState
 from hisim.simulationparameters import SimulationParameters
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -124,12 +126,12 @@ class GenericBattery(cp.Component):
     ElectricityOutput = "ElectricityOutput"
 
     # simulation repository
-    MaximumBatteryCapacity = "MaximumBatteryCapacity"
-    MinimumBatteryCapacity = "MinimumBatteryCapacity"
-    MaximalChargingPower = "MaximalChargingPower"
-    MaximalDischargingPower = "MaximalDischargingPower"
-    BatteryEfficiency = "BatteryEfficiency"
-    InverterEfficiency = "InverterEfficiency"
+    # MaximumBatteryCapacity = "MaximumBatteryCapacity"
+    # MinimumBatteryCapacity = "MinimumBatteryCapacity"
+    # MaximalChargingPower = "MaximalChargingPower"
+    # MaximalDischargingPower = "MaximalDischargingPower"
+    # BatteryEfficiency = "BatteryEfficiency"
+    # InverterEfficiency = "InverterEfficiency"
 
     def __init__(
         self,
@@ -161,7 +163,11 @@ class GenericBattery(cp.Component):
         )
 
         self.state_of_chargeC: cp.ComponentOutput = self.add_output(
-            self.component_name, self.StateOfCharge, lt.LoadTypes.ANY, lt.Units.ANY
+            self.component_name,
+            self.StateOfCharge,
+            lt.LoadTypes.ANY,
+            lt.Units.ANY,
+            output_description=f"here a description for {self.StateOfCharge} will follow.",
         )
 
         self.stored_energyC: cp.ComponentOutput = self.add_output(
@@ -169,6 +175,7 @@ class GenericBattery(cp.Component):
             self.StoredEnergy,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT_HOUR,
+            output_description=f"here a description for {self.StoredEnergy} will follow.",
         )
 
         self.electricity_outputC: cp.ComponentOutput = self.add_output(
@@ -176,6 +183,7 @@ class GenericBattery(cp.Component):
             self.ElectricityOutput,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
+            output_description=f"here a description for {self.ElectricityOutput} will follow.",
         )
 
     def build(self, manufacturer, model, base):
@@ -229,27 +237,31 @@ class GenericBattery(cp.Component):
 
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""
-        if self.my_simulation_parameters.system_config.predictive:
+        if self.my_simulation_parameters.predictive: #self.my_simulation_parameters.system_config.predictive:
             # send battery specification to the mpc controller for planning the cost optimal operation
-            self.simulation_repository.set_entry(
-                self.MaximumBatteryCapacity, self.max_stored_energy
+            SingletonSimRepository().set_entry(
+                key=SingletonDictKeyEnum.MaximumBatteryCapacity,
+                entry=self.max_stored_energy
             )
-            self.simulation_repository.set_entry(
-                self.MinimumBatteryCapacity, self.min_stored_energy
+            SingletonSimRepository().set_entry(
+                key=SingletonDictKeyEnum.MinimumBatteryCapacity,
+                entry=self.min_stored_energy
             )
-            self.simulation_repository.set_entry(
-                self.MaximalChargingPower,
-                self.max_var_stored_energy / self.time_correction_factor,
+            SingletonSimRepository().set_entry(
+                key=SingletonDictKeyEnum.MaximalChargingPower,
+                entry=self.max_var_stored_energy / self.time_correction_factor,
             )
-            self.simulation_repository.set_entry(
-                self.MaximalDischargingPower,
-                -self.min_var_stored_energy / self.time_correction_factor,
+            SingletonSimRepository().set_entry(
+                key=SingletonDictKeyEnum.MaximalDischargingPower,
+                entry=-self.min_var_stored_energy / self.time_correction_factor,
             )
-            self.simulation_repository.set_entry(
-                self.BatteryEfficiency, self.efficiency
+            SingletonSimRepository().set_entry(
+                key=SingletonDictKeyEnum.BatteryEfficiency,
+                entry=self.efficiency
             )
-            self.simulation_repository.set_entry(
-                self.InverterEfficiency, self.efficiency_inverter
+            SingletonSimRepository().set_entry(
+                key=SingletonDictKeyEnum.InverterEfficiency,
+                entry=self.efficiency_inverter
             )
 
     def i_restore_state(self) -> None:

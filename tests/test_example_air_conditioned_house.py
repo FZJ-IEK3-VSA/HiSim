@@ -1,0 +1,35 @@
+"""Test for smart residential cooling."""
+
+import os
+
+from hisim import hisim_main
+from hisim.simulationparameters import SimulationParameters
+from hisim import log
+from hisim import utils
+
+
+@utils.measure_execution_time
+def test_household_with_air_conditioner_and_controller_mpc():
+    """The test should check if a normal simulation works with the smart cooling implementation."""
+
+    path = "../examples/air_conditioned_house.py"
+    func = "house_aircon_mpc"
+
+    mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
+
+    mysimpar.predictive = True
+    mysimpar.predictive_control = True
+    mysimpar.prediction_horizon = 24 * 3600
+    mysimpar.mpc_battery_capacity = 5e3
+    mysimpar.pv_included = True
+    mysimpar.pv_peak_power = 4e3
+    mysimpar.smart_devices_included = True
+    mysimpar.battery_included = True
+
+    hisim_main.main(path, func, mysimpar)
+
+    log.information(os.getcwd())
+
+
+if __name__ == "__main__":
+    test_household_with_air_conditioner_and_controller_mpc()

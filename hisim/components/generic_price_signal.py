@@ -12,6 +12,7 @@ from hisim import component as cp
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
 from hisim import loadtypes as lt
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -130,6 +131,8 @@ class PriceSignal(cp.Component):
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
         """Outputs price signal of time step."""
+        priceinjectionforecast = [0.1]
+        pricepurchaseforecast = [0.5]
         if (
             self.my_simulation_parameters.predictive_control
             and self.my_simulation_parameters.prediction_horizon
@@ -174,11 +177,13 @@ class PriceSignal(cp.Component):
             priceinjectionforecast = [0.1]
             pricepurchaseforecast = [0.5]
 
-        self.simulation_repository.set_entry(
-            self.Price_Injection_Forecast_24h, priceinjectionforecast
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.Price_Injection_Forecast_24h,
+            entry=priceinjectionforecast
         )
-        self.simulation_repository.set_entry(
-            self.Price_Purchase_Forecast_24h, pricepurchaseforecast
+        SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.Price_Purchase_Forecast_24h,
+            entry=pricepurchaseforecast
         )
         stsv.set_output_value(self.PricePurchaseC, pricepurchaseforecast[0])
         stsv.set_output_value(self.PriceInjectionC, priceinjectionforecast[0])

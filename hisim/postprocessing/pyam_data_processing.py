@@ -1221,15 +1221,15 @@ class FilterClass:
             "Number of heat pump cycles",
         ]
 
-electricity_data = [
-    # "L2EMSElectricityController|Electricity|ElectricityToOrFromGrid",
-    # "PVSystem_w0|Electricity|ElectricityOutput", # check if pv was used or not
-    "ElectricityMeter|Electricity|ElectricityToGrid",
-    "ElectricityMeter|Electricity|ElectricityFromGrid",
-    "ElectricityMeter|Electricity|ElectricityAvailable",
-    "ElectricityMeter|Electricity|ElectricityConsumption",
-    "ElectricityMeter|Electricity|ElectricityProduction"
-]
+        electricity_data = [
+            # "L2EMSElectricityController|Electricity|ElectricityToOrFromGrid",
+            # "PVSystem_w0|Electricity|ElectricityOutput", # check if pv was used or not
+            "ElectricityMeter|Electricity|ElectricityToGrid",
+            "ElectricityMeter|Electricity|ElectricityFromGrid",
+            "ElectricityMeter|Electricity|ElectricityAvailable",
+            "ElectricityMeter|Electricity|ElectricityConsumption",
+            "ElectricityMeter|Electricity|ElectricityProduction"
+        ]
 
         occuancy_consumption = [
             "Occupancy|Electricity|ElectricityOutput",

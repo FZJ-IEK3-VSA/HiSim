@@ -154,13 +154,13 @@ class GenericElectrolyzer(cp.Component):
         )
         connections: List[cp.ComponentConnection] = []
         controller_classname = (
-            controller_l1_electrolyzer.L1GenericElectrolyzerController.get_classname()
+            controller_l1_electrolyzer.ElectrolyzerController.get_classname()
         )
         connections.append(
             cp.ComponentConnection(
                 GenericElectrolyzer.AvailableElectricity,
                 controller_classname,
-                controller_l1_electrolyzer.L1GenericElectrolyzerController.AvailableElectricity,
+                controller_l1_electrolyzer.ElectrolyzerController.DistributedLoad,
             )
         )
         return connections

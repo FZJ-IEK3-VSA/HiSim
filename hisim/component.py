@@ -135,10 +135,10 @@ class SingleTimeStepValues:
 
     def set_output_value(self, output: ComponentOutput, value: float) -> None:
         """ Sets a single output value in the single time step values array. """
-        if isinstance(value,float) or isinstance(value,int):
+        if isinstance(value,float):
             self.values[output.global_index] = value
         else:
-            raise ValueError("kein float/int")
+            raise ValueError("output value is no float.")
 
     def is_close_enough_to_previous(self, previous_values: "SingleTimeStepValues") -> bool:
         """ Checks if the values are sufficiently similar to another array. """

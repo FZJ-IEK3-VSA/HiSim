@@ -1,0 +1,81 @@
+{
+    "Fuel Cell variants": {
+        "Company - Fuel Cell": {
+            "type": "PEM",
+            "name": "Company - Fuel Cell",
+            "nom_output": 1000,
+            "min_output": 200,
+            "max_output": 1000,
+            "fuel_consumption_rate": 60.0,
+            "nom_h2_flow_rate": 60.0,
+            "faraday_eff": 0.9,
+            "i_cell_nom": 0.52,
+            "warm_start_time": 30.0,
+            "cold_start_time": 3000,
+            "ramp_up_rate": 0.05,
+            "ramp_down_rate": 0.2
+        },
+        "PemGen - CHP-FCPS-600": {
+            "type": "PEM",
+            "name": "PemGen - CHP-FCPS-600",
+            "nom_output": 600.0,
+            "min_output": 53.0,
+            "max_output": 600.0,
+            "fuel_consumption_rate": 0.059,
+            "nom_h2_flow_rate": 393.86,
+            "faraday_eff": 0.9,
+            "i_cell_nom": 0.51,
+            "warm_start_time": 30.0,
+            "cold_start_time": 3000,
+            "ramp_up_rate": 0.05,
+            "ramp_down_rate": 0.2
+        },
+        "EFOY - Hydrogen Fuel Cell 2.5": {
+            "type": "PEM",
+            "name": "EFOY - Hydrogen Fuel Cell 2.5",
+            "nom_output": 2.5,
+            "min_output": 0.25,
+            "max_output": 2.5,
+            "fuel_consumption_rate": 0.208,
+            "nom_h2_flow_rate": 1.641,
+            "faraday_eff": 0.9,
+            "i_cell_nom": 0.5,
+            "warm_start_time": 30.0,
+            "cold_start_time": 120.0,
+            "ramp_up_rate": 0.05,
+            "ramp_down_rate": 0.2  
+        },
+        "InhouseEngineeringGmbHBHKWinhouse500+": {
+            "type": "PEM",
+            "name": "InhouseEngineeringGmbHBHKWinhouse500+",
+            "nom_output": 5.0,
+            "min_output": 2.4,
+            "max_output": 5.669,
+            "standby_load": 0.05,
+            "fuel_consumption_rate": 0.0,
+            "nom_h2_flow_rate": 0.269,
+            "faraday_eff": 0.98,
+            "i_cell_nom": 0.7,
+            "warm_start_time": 30.0,
+            "cold_start_time": 1200.0,
+            "ramp_up_rate": 0.083,
+            "ramp_down_rate": 0.083  
+        },
+        "NedstackFCS10XXL": {
+            "type": "PEM",
+            "name": "NedstackFCS10XXL",
+            "nom_output": 10.3,
+            "min_output": 0.0,
+            "max_output": 8.81,
+            "standby_load": 0.0,
+            "fuel_consumption_rate": 0.0,
+            "nom_h2_flow_rate": 0.647,
+            "faraday_eff": 0.98,
+            "i_cell_nom": 0.7,
+            "warm_start_time": 30.0,
+            "cold_start_time": 1200.0,
+            "ramp_up_rate": 0.1,
+            "ramp_down_rate": 0.2  
+        }
+    }
+}

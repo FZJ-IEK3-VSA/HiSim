@@ -34,17 +34,12 @@ class TransformerConfig(ConfigBase):
     # my_simulation_parameters: SimulationParameters
     name: str
     efficiency: float
-    loadtype: lt.LoadTypes
-    unit: lt.Units
 
     @classmethod
     def get_default_transformer(cls):
         """Gets a default Transformer."""
         return TransformerConfig(
-            name="Example Transformer default",
-            efficiency=1.0,
-            loadtype=lt.LoadTypes.ANY,
-            unit=lt.Units.ANY,
+            name="Generic Transformer and rectifier Unit", efficiency=0.95
         )
 
 
@@ -97,6 +92,7 @@ class Transformer(Component):
             Transformer.TransformerOutput,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KILOWATT,
+            postprocessing_flag=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
             output_description="Output 1",
         )
 

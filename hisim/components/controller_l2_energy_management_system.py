@@ -87,9 +87,9 @@ class EMSState:
     def clone(self) -> "EMSState":
         """Copy EMSState efficiently."""
         return EMSState(
-            production=self.production,
-            consumption_uncontrolled=self.consumption_uncontrolled,
-            consumption_ems_controlled=self.consumption_ems_controlled,
+            production = self.production,
+            consumption_uncontrolled = self.consumption_uncontrolled,
+            consumption_ems_controlled = self.consumption_ems_controlled,
         )
 
 
@@ -294,6 +294,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.consumption_ems_controlled_inputs = self.get_dynamic_inputs(
             tags=[lt.InandOutputType.ELECTRICITY_REAL]
         )
+        print([elem.field_name for elem in self.consumption_ems_controlled_inputs])
 
     def write_to_report(self):
         """Writes relevant information to report."""
@@ -373,9 +374,15 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     self.simple_hot_water_storage_temperature_modifier, 0
                 )
                 stsv.set_output_value(output=output, value=deltademand)
+        elif component_type == lt.ComponentType.ELECTROLYZER:
+            if deltademand > 0:
+                stsv.set_output_value(output=output, value=deltademand)
+                deltademand = deltademand + previous_signal
+            else:
+                stsv.set_output_value(output=output, value=0)
 
         elif component_type in [
-            lt.ComponentType.ELECTROLYZER,
+            #lt.ComponentType.ELECTROLYZER,
             lt.ComponentType.SMART_DEVICE,
             lt.ComponentType.CAR_BATTERY,
         ]:
@@ -386,6 +393,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 stsv.set_output_value(output=output, value=deltademand)
 
         return deltademand
+        return deltademand
+
 
     def optimize_own_consumption_iterative(
         self,
@@ -404,7 +413,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 component_type=component_type,
                 input_channel=single_input,
                 output=output,
-            )
+                )
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool

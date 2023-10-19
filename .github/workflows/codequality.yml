@@ -49,6 +49,10 @@ jobs:
         prospector examples/simple_examples.py
         prospector examples/household_with_advanced_hp_hws_hds_pv.py
         prospector examples/household_with_advanced_hp_hws_hds_pv_battery_ems.py
+        prospector examples/decentralized_energy_netw_pv_bat_h2system_hp_PEM.py
+        prospector examples/decentralized_energy_netw_pv_bat_h2system_hp_rSOC.py
+        prospector examples/ptx_transf_bat_ec_gird.py
+        prospector examples/ptx_transf_bat_ec_no_gird.py
         prospector hisim/component.py
         prospector hisim/component_wrapper.py
         prospector hisim/dynamic_component.py
@@ -86,6 +90,16 @@ jobs:
         prospector hisim/components/sumbuilder.py
         prospector hisim/components/advanced_heat_pump_hplib.py
         prospector hisim/components/electricity_meter.py
+        prospector hisim/components/controller_l1_electrolyzer.py
+        prospector hisim/components/controller_l1_fuel_cell.py
+        prospector hisim/components/controller_l1_rSOC.py
+        prospector hisim/components/controller_l2_ptx_energy_management_system.py
+        prospector hisim/components/controller_l2_rSOC_battery_system.py
+        prospector hisim/components/controller_l2_xtp_fuel_cell_ems.py
+        prospector hisim/components/generic_eletrolyzer_h2.py
+        prospector hisim/components/generic_fuel_cell.py
+        prospector hisim/components/generic_rSOC.py
+        prospector hisim/components/transformer_rectifier.py
         prospector hisim/modular_household/component_connections.py
         prospector hisim/modular_household/interface_configs/system_config.py
         prospector hisim/postprocessing/chartbase.py
@@ -131,6 +145,9 @@ jobs:
         prospector tests/test_house_with_pyam_postprocessingoption.py
         prospector tests/test_electricity_meter.py
         prospector tests/test_sizing_energy_systems.py
+        prospector tests/test_generic_electrolyzer_h2.py
+        prospector tests/test_generic_fuel_cell.py
+        prospector tests/test_generic_rSOC.py
 
 
         

@@ -14,23 +14,24 @@ def test_electrolyzer():
         2021, seconds_per_timestep
     )
 
-    name: str = "Test-lyzer"
-    electrolyzer_type: str = "Alkaline"
-    nom_load: float = 800.0  # [kW]
-    max_load: float = 1000.0  # [kW]
-    nom_h2_flow_rate: float = 186.9  # [m^3/h]
-    faraday_eff: float = 0.85
-    i_cell_nom: float = 0.3  # [A/cm^2]
-    ramp_up_rate: float = 0.1  # [%/s]
-    ramp_down_rate: float = 0.2  # [%/s]
+    name: str = "HTecME450"
+    type: str = "PEM"
+    nom_load: float = 987.0  # [kW]
+    max_load: float = 1028.225  # [kW]
+    nom_h2_flow_rate: float = 18.875  # [kg/h]
+    faraday_eff: float = 0.999
+    i_cell_nom: float = 2.0  # [A/cm^2]
+    ramp_up_rate: float = 0.03  # [%/s]
+    ramp_down_rate: float = 0.25  # [%/s]
 
     timestep = 1
+    force_convergence = False
 
     # ===================================================================================================================
     # Setup Electrolyzer
     my_electrolyzer_config = generic_eletrolyzer_h2.ElectrolyzerConfig(
         name=name,
-        electrolyzer_type=electrolyzer_type,
+        type=type,
         nom_load=nom_load,
         max_load=max_load,
         nom_h2_flow_rate=nom_h2_flow_rate,
@@ -81,8 +82,7 @@ def test_electrolyzer():
 
     else:
         assert (
-            stsv.values[my_electrolyzer.hydrogen_flow_rate.global_index]
-            == 0.19202051613447368
+            stsv.values[my_electrolyzer.hydrogen_flow_rate.global_index] == 0.621840650119573
         )
 
     # python -m pytest ../tests/test_generic_electrolyzer_h2.py

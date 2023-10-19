@@ -210,7 +210,6 @@ class MpcController(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        my_simulation_repository: Optional[cp.SimRepository],
         config: MpcControllerConfig,
     ) -> None:
         """Constructs all the neccessary attributes."""

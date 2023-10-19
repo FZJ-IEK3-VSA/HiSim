@@ -409,7 +409,6 @@ def household_air_conditioner_generic(
         my_mpc_controller = controller_mpc.MpcController(
             config=my_mpc_controller_config,
             my_simulation_parameters=my_simulation_parameters,
-            my_simulation_repository=my_sim.simulation_repository,
         )
         my_mpc_controller.connect_input(
             my_mpc_controller.TemperatureMean,

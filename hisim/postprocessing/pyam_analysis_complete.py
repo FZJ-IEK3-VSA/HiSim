@@ -23,13 +23,13 @@ class PyamDataAnalysis:
     ) -> None:
         """Initialize the class."""
 
-        # pyam_data_collection.PyamDataCollector(
-        #     data_processing_mode=data_processing_mode,
-        #     folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
-        #     path_to_default_config=path_to_default_config,
-        #     time_resolution_of_data_set=time_resolution_of_data_set,
-        #     simulation_duration_to_check=simulation_duration_to_check,
-        # )
+        pyam_data_collection.PyamDataCollector(
+            data_processing_mode=data_processing_mode,
+            folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
+            path_to_default_config=path_to_default_config,
+            time_resolution_of_data_set=time_resolution_of_data_set,
+            simulation_duration_to_check=simulation_duration_to_check,
+        )
         pyam_data_processing.PyAmChartGenerator(
             simulation_duration_to_check=simulation_duration_to_check,
             time_resolution_of_data_set=time_resolution_of_data_set,

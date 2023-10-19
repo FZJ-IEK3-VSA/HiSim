@@ -213,19 +213,13 @@ class PyAmChartGenerator:
 
         # make rel electricity calculation before sorting and renaming
 
-        if (
-            "ElectricityMeter|Electricity|ElectricityToOrFromGrid"
-            in variables_to_check
-        ):
+        if "ElectricityMeter|Electricity|ElectricityToOrFromGrid" in variables_to_check:
 
             file_df = self.calculate_relative_electricity_demand(dataframe=file_df)
             # file_df = file_df.reset_index()
             variables_to_check.append("Relative Electricity Demand")
 
-        if (
-            dict_of_scenarios_to_check is not None
-            and dict_of_scenarios_to_check != {}
-        ):
+        if dict_of_scenarios_to_check is not None and dict_of_scenarios_to_check != {}:
 
             (
                 file_df,
@@ -243,7 +237,6 @@ class PyAmChartGenerator:
             key_for_current_scenario,
             variables_to_check,
         )
-
 
     def make_plots_with_specific_kind_of_data(
         self,
@@ -1048,7 +1041,6 @@ class PyAmChartGenerator:
             )
 
             filter_level_index = filter_level_index + 1
-            print("filter level index", filter_level_index)
 
         # rename scenario with all scenario filter levels
         for index in concat_df.index:
@@ -1075,7 +1067,6 @@ class PyAmChartGenerator:
         column_name_to_check: str,
         filter_level_index: int,
     ) -> pd.DataFrame:
-
         """Check for one scenario."""
 
         aggregated_scenario_dict: Dict = {key: [] for key in list_of_scenarios_to_check}
@@ -1250,13 +1241,10 @@ class PyAmChartGenerator:
 
 class FilterClass:
 
-    """"Class for setting filters on the data for processing."""
+    """Class for setting filters on the data for processing."""
 
     def __init__(self):
-
-        path_to_default_config: Optional[str] = None
-        scenarios_to_check: Optional[List] = None
-        models_to_check: Optional[List] = None
+        """Initialize the class."""
 
         (
             self.kpi_data,
@@ -1272,6 +1260,7 @@ class FilterClass:
         ) = self.get_scenarios_to_check()
 
     def get_variables_to_check(self):
+        """Get specific variables to check for the scenario evaluation."""
 
         # examples for variables to check (check names of your variables before your evaluation, if they are correct)
         # kpi data has no time series, so only choose when you analyze yearly data
@@ -1325,6 +1314,7 @@ class FilterClass:
         return kpi_data, electricity_data, occuancy_consumption, heating_demand
 
     def get_scenarios_to_check(self):
+        """Get scenarios to check for scenario evaluation."""
 
         (
             building_type,
@@ -1337,6 +1327,7 @@ class FilterClass:
         return building_type, building_refurbishment_state, building_age, pv_share
 
     def get_building_properties_to_check(self):
+        """Get building properties."""
 
         # examples for scenarios to filter
         building_type = [
@@ -1370,49 +1361,9 @@ class FilterClass:
         return building_type, building_refurbishment_state, building_age
 
     def get_pv_properties_to_check(self):
+        """Get pv properties."""
 
         # examples for scenarios to filter
         pv_share = [0, 0.25, 0.5, 1]
 
         return pv_share
-
-    # def get_default_config_key_values_to_check(self, path_to_default_config: str):
-
-    #     # read default config
-    #     if path_to_default_config is not None and ".json" in path_to_default_config:
-    #         with open(path_to_default_config, "r", encoding="utf-8") as openfile:  # type: ignore
-    #             default_config_dict = json.load(openfile)
-
-    #     else:
-    #         raise ValueError("The default config is not in .json format or path could not be found.")
-
-    #     if "building_code" in default_config_dict.keys()
-
-    #     # examples for scenarios to filter
-    #     building_type = [
-    #         "DE.N.SFH",
-    #         "DE.N.TH",
-    #         "DE.N.MFH",
-    #         "DE.N.AB",
-    #     ]
-
-    #     building_refurbishment_state = [
-    #         "001.001",
-    #         "001.002",
-    #         "001.003",
-    #     ]
-
-    #     building_age = [
-    #         "01.Gen",
-    #         "02.Gen",
-    #         "03.Gen",
-    #         "04.Gen",
-    #         "05.Gen",
-    #         "06.Gen",
-    #         "07.Gen",
-    #         "08.Gen",
-    #         "09.Gen",
-    #         "10.Gen",
-    #         "11.Gen",
-    #         "12.Gen",
-    #     ]

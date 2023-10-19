@@ -182,11 +182,10 @@ def household_cluster_advanced_hp_pv_battery_ems(
     my_heat_distribution_controller_config.heating_reference_temperature_in_celsius = (
         heating_reference_temperature_in_celsius
     )
-    my_heat_distribution_controller = (
-        heat_distribution_system.HeatDistributionController(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_heat_distribution_controller_config,
-        ))
+    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_distribution_controller_config,
+    )
 
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
@@ -207,8 +206,8 @@ def household_cluster_advanced_hp_pv_battery_ems(
 
     # Build Occupancy
     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_CHS01_according_to_number_of_apartments(
-        number_of_apartments=my_building_information.number_of_apartments)
-
+        number_of_apartments=my_building_information.number_of_apartments
+    )
 
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
@@ -224,10 +223,8 @@ def household_cluster_advanced_hp_pv_battery_ems(
     )
 
     # Build PV
-    my_photovoltaic_system_config = (
-        generic_pv_system.PVSystemConfig.get_scaled_PV_system(
-            rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
-        )
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_PV_system(
+        rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
     )
     my_photovoltaic_system_config.azimuth = azimuth
     my_photovoltaic_system_config.tilt = tilt
@@ -260,8 +257,7 @@ def household_cluster_advanced_hp_pv_battery_ems(
     )
 
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
-        config=my_heat_pump_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_pump_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Distribution System
@@ -286,18 +282,14 @@ def household_cluster_advanced_hp_pv_battery_ems(
     my_electricity_controller_config = (
         controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
     )
-    my_electricity_controller = (
-        controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_electricity_controller_config,
-        )
+    my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_electricity_controller_config,
     )
 
     # Build Battery
-    my_advanced_battery_config = (
-        advanced_battery_bslib.BatteryConfig.get_scaled_battery(
-            total_pv_power_in_watt_peak=my_photovoltaic_system_config.power
-        )
+    my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
+        total_pv_power_in_watt_peak=my_photovoltaic_system_config.power
     )
     my_advanced_battery = advanced_battery_bslib.Battery(
         my_simulation_parameters=my_simulation_parameters,
@@ -325,11 +317,9 @@ def household_cluster_advanced_hp_pv_battery_ems(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 
-    my_domnestic_hot_water_heatpump_controller = (
-        controller_l1_heatpump.L1HeatPumpController(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_dhw_heatpump_controller_config,
-        )
+    my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_dhw_heatpump_controller_config,
     )
 
     my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
@@ -462,18 +452,13 @@ def household_cluster_advanced_hp_pv_battery_ems(
         source_weight=2,
     )
 
-    electricity_to_or_from_battery_target = (
-        my_electricity_controller.add_component_output(
-            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-            source_tags=[
-                lt.ComponentType.BATTERY,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_weight=2,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target electricity for Battery Control. ",
-        )
+    electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
+        source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET,],
+        source_weight=2,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        output_description="Target electricity for Battery Control. ",
     )
 
     # -----------------------------------------------------------------------------------------------------------------

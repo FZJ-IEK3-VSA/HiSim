@@ -147,6 +147,8 @@ class PyAmChartGenerator:
                 dict_of_scenarios_to_check=dict_of_scenarios_to_check,
                 variables_to_check=variables_to_check,
             )
+            log.information("key for scneario one " + key_for_scenario_one)
+            log.information("key for current scenario " + key_for_current_scenario)
 
             try:
 
@@ -970,9 +972,8 @@ class PyAmChartGenerator:
     ) -> pd.DataFrame:
         """Check if scenario exists and filter dataframe for scenario."""
         for (
-            scenario_to_check_key,
             list_of_scenarios_to_check,
-        ) in dict_of_scenarios_to_check.items():
+        ) in dict_of_scenarios_to_check.values():
             aggregated_scenario_dict: Dict = {
                 key: [] for key in list_of_scenarios_to_check
             }
@@ -1041,7 +1042,8 @@ class PyAmChartGenerator:
             )
 
             filter_level_index = filter_level_index + 1
-
+        key_for_scenario_one = ""
+        key_for_current_scenario = ""
         # rename scenario with all scenario filter levels
         for index in concat_df.index:
             # if even more filter levels need to add condition!

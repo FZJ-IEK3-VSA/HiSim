@@ -1,4 +1,6 @@
 """Air-conditioned household."""
+
+# clean
 from typing import Optional
 
 # import numpy as np

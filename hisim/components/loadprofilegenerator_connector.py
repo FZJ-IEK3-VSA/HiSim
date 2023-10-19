@@ -16,6 +16,7 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim import log
 from hisim.simulationparameters import SimulationParameters
+from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"

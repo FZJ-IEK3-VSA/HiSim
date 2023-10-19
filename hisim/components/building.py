@@ -845,7 +845,6 @@ class Building(dynamic_component.DynamicComponent):
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.Thermal_transmission_coefficient_ventillation,
             entry=self.thermal_conductance_by_ventilation_in_watt_per_kelvin,
-            entry=self.thermal_conductance_by_ventilation_in_watt_per_kelvin,
         )
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.Thermal_capacity_envelope,

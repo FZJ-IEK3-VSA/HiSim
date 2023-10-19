@@ -101,8 +101,8 @@ class MpcControllerConfig(ConfigBase):
     h_ve_adj: float
     h_tr_is: float
     c_m: float
-    cop_coef: float
-    eer_coef: float
+    cop_coef: List
+    eer_coef: List
 
     @classmethod
     def get_default_config(cls):
@@ -356,10 +356,11 @@ class MpcController(cp.Component):
 
         self.add_default_connections(self.get_weather_default_connections())
 
-        self.prediction_horizon = int(
-            self.my_simulation_parameters.prediction_horizon
-            / self.my_simulation_parameters.seconds_per_timestep
-        )
+        if self.my_simulation_parameters.prediction_horizon is not None:
+            self.prediction_horizon = int(
+                self.my_simulation_parameters.prediction_horizon
+                / self.my_simulation_parameters.seconds_per_timestep
+            )
         self.state: MPCcontrollerState = MPCcontrollerState(
             t_m=self.mpcconfig.initial_temeperature,
             soc=self.mpcconfig.initial_state_of_charge,

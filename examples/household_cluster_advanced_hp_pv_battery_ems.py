@@ -454,7 +454,7 @@ def household_cluster_advanced_hp_pv_battery_ems(
 
     electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
         source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET,],
+        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
         source_weight=2,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,

@@ -1,13 +1,19 @@
 """Model Predictive Controller."""
 
+# clean
+
 import datetime
-from typing import List, Optional
+from typing import List
+
 # from typing import Any
 from dataclasses import dataclass
+
 # from statistics import mean
 import numpy as np
+
 # from numpy.linalg import inv
 from dataclasses_json import dataclass_json
+
 # from scipy.ndimage import interpolation
 import casadi as ca
 
@@ -17,8 +23,8 @@ from hisim import component as cp
 from hisim.component import ConfigBase
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
-from hisim.components.building import Building, BuildingConfig
 from hisim.components.weather import Weather
+
 # from hisim.components.generic_battery import GenericBattery
 # from hisim.components.loadprofilegenerator_connector import Occupancy
 # from hisim.components.generic_price_signal import PriceSignal
@@ -152,14 +158,14 @@ class MpcControllerConfig(ConfigBase):
             battery_control_state=[],
             batt_soc_actual_timestep=[],
             batt_soc_normalized_timestep=[],
-            h_tr_w = 0.0,
-            h_tr_ms = 0.0,
-            h_tr_em = 0.0,
-            h_ve_adj = 0.0,
-            h_tr_is = 0.0,
-            c_m = 0.0,
-            cop_coef = [0] * 2,
-            eer_coef = [0] * 2,
+            h_tr_w=0.0,
+            h_tr_ms=0.0,
+            h_tr_em=0.0,
+            h_ve_adj=0.0,
+            h_tr_is=0.0,
+            c_m=0.0,
+            cop_coef=[0] * 2,
+            eer_coef=[0] * 2,
         )
 
 
@@ -475,11 +481,9 @@ class MpcController(cp.Component):
 
     def build(self):
         """Build function: The function sets important constants and parameters for the calculations."""
-        if (
-            self.my_simulation_parameters.predictive
-        ):
+        if self.my_simulation_parameters.predictive:
 
-            """ getting building physical properties for state space model """
+            """getting building physical properties for state space model"""
             self.h_tr_w = SingletonSimRepository().get_entry(
                 key=SingletonDictKeyEnum.Thermal_transmission_coefficient_glazing
             )
@@ -528,17 +532,21 @@ class MpcController(cp.Component):
             )
 
     def statespace(self):
-        """ State Space Model of the 5R1C network, Used as a prediction model to the building behavior in the MPC."""
+        """State Space Model of the 5R1C network, Used as a prediction model to the building behavior in the MPC."""
 
         seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
 
-        state_space_matrix_coefficient_x = ((self.h_tr_w + self.h_tr_ms) * (self.h_ve_adj + self.h_tr_is)) + (
-            self.h_ve_adj * self.h_tr_is
-        )
+        state_space_matrix_coefficient_x = (
+            (self.h_tr_w + self.h_tr_ms) * (self.h_ve_adj + self.h_tr_is)
+        ) + (self.h_ve_adj * self.h_tr_is)
 
         # Entries for system matrix
         a11 = (
-            ((self.h_tr_ms ** 2) * (self.h_tr_is + self.h_ve_adj) / state_space_matrix_coefficient_x)
+            (
+                (self.h_tr_ms**2)
+                * (self.h_tr_is + self.h_ve_adj)
+                / state_space_matrix_coefficient_x
+            )
             - self.h_tr_ms
             - self.h_tr_em
         ) / (
@@ -546,16 +554,25 @@ class MpcController(cp.Component):
         )  # ((self.c_m_ref * self.A_f) * 3600)
 
         # Entries for input matrix
-        b11 = (self.h_tr_ms * self.h_tr_is) / ((self.c_m / seconds_per_timestep) * state_space_matrix_coefficient_x)
+        b11 = (self.h_tr_ms * self.h_tr_is) / (
+            (self.c_m / seconds_per_timestep) * state_space_matrix_coefficient_x
+        )
 
         b_d11 = (
-            (self.h_tr_ms * self.h_tr_w * (self.h_tr_is + self.h_ve_adj) / state_space_matrix_coefficient_x)
+            (
+                self.h_tr_ms
+                * self.h_tr_w
+                * (self.h_tr_is + self.h_ve_adj)
+                / state_space_matrix_coefficient_x
+            )
             + self.h_tr_em
         ) / (self.c_m / seconds_per_timestep)
         b_d12 = (self.h_tr_ms * self.h_tr_is * self.h_ve_adj) / (
             (self.c_m / seconds_per_timestep) * state_space_matrix_coefficient_x
         )
-        b_d13 = (self.h_tr_ms * self.h_tr_is) / ((self.c_m / seconds_per_timestep) * state_space_matrix_coefficient_x)
+        b_d13 = (self.h_tr_ms * self.h_tr_is) / (
+            (self.c_m / seconds_per_timestep) * state_space_matrix_coefficient_x
+        )
         b_d14 = (self.h_tr_ms * (self.h_tr_is + self.h_ve_adj)) / (
             (self.c_m / seconds_per_timestep) * state_space_matrix_coefficient_x
         )
@@ -563,18 +580,30 @@ class MpcController(cp.Component):
 
         # Entries for output matrix
         c11 = (self.h_tr_ms * self.h_tr_is) / state_space_matrix_coefficient_x
-        c21 = (self.h_tr_ms * (self.h_tr_is + self.h_ve_adj)) / state_space_matrix_coefficient_x
+        c21 = (
+            self.h_tr_ms * (self.h_tr_is + self.h_ve_adj)
+        ) / state_space_matrix_coefficient_x
 
         # Entries for feedthrough matrix
-        d11 = (self.h_tr_ms + self.h_tr_w + self.h_tr_is) / state_space_matrix_coefficient_x
+        d11 = (
+            self.h_tr_ms + self.h_tr_w + self.h_tr_is
+        ) / state_space_matrix_coefficient_x
         d21 = self.h_tr_is / state_space_matrix_coefficient_x
 
         d_d11 = (self.h_tr_w * self.h_tr_is) / state_space_matrix_coefficient_x
-        d_d12 = (self.h_tr_ms + self.h_tr_is + self.h_tr_w) * self.h_ve_adj / state_space_matrix_coefficient_x
-        d_d13 = (self.h_tr_ms + self.h_tr_is + self.h_tr_w) / state_space_matrix_coefficient_x
+        d_d12 = (
+            (self.h_tr_ms + self.h_tr_is + self.h_tr_w)
+            * self.h_ve_adj
+            / state_space_matrix_coefficient_x
+        )
+        d_d13 = (
+            self.h_tr_ms + self.h_tr_is + self.h_tr_w
+        ) / state_space_matrix_coefficient_x
         d_d14 = self.h_tr_is / state_space_matrix_coefficient_x
         d_d15 = 0
-        d_d21 = (self.h_tr_w * (self.h_tr_is + self.h_ve_adj)) / state_space_matrix_coefficient_x
+        d_d21 = (
+            self.h_tr_w * (self.h_tr_is + self.h_ve_adj)
+        ) / state_space_matrix_coefficient_x
         d_d22 = (self.h_tr_is * self.h_ve_adj) / state_space_matrix_coefficient_x
         d_d23 = self.h_tr_is / state_space_matrix_coefficient_x
         d_d24 = (self.h_tr_is + self.h_ve_adj) / state_space_matrix_coefficient_x
@@ -582,8 +611,12 @@ class MpcController(cp.Component):
 
         # Build arrays for state space representation
         state_space_system_matrix_a = np.array([[a11]])  # system matrix
-        state_space_input_matrix_b_d = np.array([[b_d11, b_d12, b_d13, b_d14, b_d15]])  # input matrix discrete
-        state_space_input_matrix_b = np.array([[b11, b_d11, b_d12, b_d13, b_d14, b_d15]])  # input matrix
+        state_space_input_matrix_b_d = np.array(
+            [[b_d11, b_d12, b_d13, b_d14, b_d15]]
+        )  # input matrix discrete
+        state_space_input_matrix_b = np.array(
+            [[b11, b_d11, b_d12, b_d13, b_d14, b_d15]]
+        )  # input matrix
         state_space_output_matrix_c = np.array([[c11], [c21]])  # output matrix
         state_space_feedthrough_matrix_d_d = np.array(
             [[d_d11, d_d12, d_d13, d_d14, d_d15], [d_d21, d_d22, d_d23, d_d24, d_d25]]
@@ -611,7 +644,7 @@ class MpcController(cp.Component):
             b_d12,
             b_d13,
             b_d14,
-            b_d15
+            b_d15,
         )
 
     def i_save_state(self):
@@ -629,9 +662,7 @@ class MpcController(cp.Component):
     def write_to_report(self):
         """Writes a report."""
         lines = []
-        lines.append(
-            f"Name: {format('Model Predictive Controller')}"
-        )
+        lines.append(f"Name: {format('Model Predictive Controller')}")
         lines.append("tbd")
         return lines
 
@@ -640,19 +671,19 @@ class MpcController(cp.Component):
         # slicing yearly forecast to extract data points for the prediction horizon (24 hours)
         # number of data points extracted equals= self.prediction_horizon = 3600 * 24 h / seconds_per_timestep
         self.temperature_forecast_24h_1min = self.temp_forecast[
-            start_horizon: start_horizon + self.prediction_horizon
+            start_horizon : start_horizon + self.prediction_horizon
         ]
         self.phi_m_forecast_24h_1min = self.phi_m_forecast[
-            start_horizon: start_horizon + self.prediction_horizon
+            start_horizon : start_horizon + self.prediction_horizon
         ]
         self.phi_ia_forecast_24h_1min = self.phi_ia_forecast[
-            start_horizon: start_horizon + self.prediction_horizon
+            start_horizon : start_horizon + self.prediction_horizon
         ]
         self.phi_st_forecast_24h_1min = self.phi_st_forecast[
-            start_horizon: start_horizon + self.prediction_horizon
+            start_horizon : start_horizon + self.prediction_horizon
         ]
         self.pv_forecast_24h_1min = self.pv_forecast_yearly[
-            start_horizon: start_horizon + self.prediction_horizon
+            start_horizon : start_horizon + self.prediction_horizon
         ]
         self.price_purchase_forecast_24h_1min = SingletonSimRepository().get_entry(
             key=SingletonDictKeyEnum.Price_Purchase_Forecast_24h
@@ -687,7 +718,7 @@ class MpcController(cp.Component):
         )
 
     @utils.measure_execution_time
-    def optimize(
+    def optimize( # noqa: C901
         self,
         temperature_forecast_24h,
         phi_ia_forecast_24h,
@@ -703,9 +734,15 @@ class MpcController(cp.Component):
         # scaled_horizon = scaled_horizon  # scaled prediction horizon
 
         # Discretization of the state space model:
-        identity_matrix = np.identity(self.state_space_system_matrix_a.shape[0])  # this is an identity matrix
+        identity_matrix = np.identity(
+            self.state_space_system_matrix_a.shape[0]
+        )  # this is an identity matrix
         matrix_a_d = np.array(np.exp(self.state_space_system_matrix_a * sampling_rate))
-        matrix_b_d = np.linalg.inv(self.state_space_system_matrix_a) * (matrix_a_d - identity_matrix) * self.state_space_system_matrix_b
+        matrix_b_d = (
+            np.linalg.inv(self.state_space_system_matrix_a)
+            * (matrix_a_d - identity_matrix)
+            * self.state_space_system_matrix_b
+        )
 
         # numerical values of the disturbances
         disturbance_values = ca.horzcat(
@@ -746,7 +783,8 @@ class MpcController(cp.Component):
         )
 
         feed_in_tariff = np.reshape(
-            np.array(price_injection_forecast_24h), (1, len(price_injection_forecast_24h))
+            np.array(price_injection_forecast_24h),
+            (1, len(price_injection_forecast_24h)),
         )
 
         # symbolic defenition of system variables:
@@ -789,11 +827,13 @@ class MpcController(cp.Component):
 
         opti = ca.Opti()
 
-        optvar_temperature = opti.variable(1, scaled_horizon + 1)  # state variable: controlled temperature
-        optvar_power_thermal_delivered = opti.variable(1, scaled_horizon)  # manipulated variable: thermal power delivered
-        optvar_disturbances = opti.variable(
-            n_disturbances, scaled_horizon
-        )
+        optvar_temperature = opti.variable(
+            1, scaled_horizon + 1
+        )  # state variable: controlled temperature
+        optvar_power_thermal_delivered = opti.variable(
+            1, scaled_horizon
+        )  # manipulated variable: thermal power delivered
+        optvar_disturbances = opti.variable(n_disturbances, scaled_horizon)
         # disturbances:
         # 1. ambient temperature
         # 2. supply temperature = ambient temperature
@@ -837,10 +877,28 @@ class MpcController(cp.Component):
 
         if self.flexibility_element == "PV_only":
             # a weighting factor of 0.5 is added to the revenue to priortize using the pv production instead of selling to the grid
-            opti.minimize(sum(ca.horzsplit((p_el * optvar_power_bought_from_grid - 0.5 * feed_in_tariff * optvar_power_sold_to_grid))))
+            opti.minimize(
+                sum(
+                    ca.horzsplit(
+                        (
+                            p_el * optvar_power_bought_from_grid
+                            - 0.5 * feed_in_tariff * optvar_power_sold_to_grid
+                        )
+                    )
+                )
+            )
 
         if self.flexibility_element == "PV_and_Battery":
-            opti.minimize(sum(ca.horzsplit((p_el * optvar_power_bought_from_grid - 0.5 * feed_in_tariff * optvar_power_sold_to_grid))))
+            opti.minimize(
+                sum(
+                    ca.horzsplit(
+                        (
+                            p_el * optvar_power_bought_from_grid
+                            - 0.5 * feed_in_tariff * optvar_power_sold_to_grid
+                        )
+                    )
+                )
+            )
 
         # Constraints
         for k in range(scaled_horizon):
@@ -868,7 +926,11 @@ class MpcController(cp.Component):
                     )
                 )
 
-        opti.subject_to(opti.bounded(self.min_comfort_temp, optvar_temperature, self.max_comfort_temp))
+        opti.subject_to(
+            opti.bounded(
+                self.min_comfort_temp, optvar_temperature, self.max_comfort_temp
+            )
+        )
 
         """ a Terminal Constraint is added if Hisim resolution is different than the optimizer resolution:
             e.g, if you run hisim at 60 sec per time step and you would like to reduce the optimization is done by sampling each 20 or 15 min
@@ -882,7 +944,11 @@ class MpcController(cp.Component):
         if self.flexibility_element == "basic_buidling_configuration":
             opti.subject_to(
                 optvar_power_bought_from_grid
-                == ca.if_else(optvar_power_thermal_delivered > 0, ca.fabs(optvar_power_thermal_delivered) / cop_values, ca.fabs(optvar_power_thermal_delivered) / eer_values)
+                == ca.if_else(
+                    optvar_power_thermal_delivered > 0,
+                    ca.fabs(optvar_power_thermal_delivered) / cop_values,
+                    ca.fabs(optvar_power_thermal_delivered) / eer_values,
+                )
             )
 
         if self.flexibility_element == "PV_only":
@@ -892,18 +958,24 @@ class MpcController(cp.Component):
                 optvar_power_bought_from_grid
                 == ca.if_else(
                     optvar_power_thermal_delivered > 0,
-                    ca.fabs(optvar_power_thermal_delivered) / cop_values - (pv_production - optvar_power_sold_to_grid),
-                    ca.fabs(optvar_power_thermal_delivered) / eer_values - (pv_production - optvar_power_sold_to_grid),
+                    ca.fabs(optvar_power_thermal_delivered) / cop_values
+                    - (pv_production - optvar_power_sold_to_grid),
+                    ca.fabs(optvar_power_thermal_delivered) / eer_values
+                    - (pv_production - optvar_power_sold_to_grid),
                 )
             )
-            opti.subject_to(optvar_power_pv == pv_production - optvar_power_sold_to_grid)
+            opti.subject_to(
+                optvar_power_pv == pv_production - optvar_power_sold_to_grid
+            )
 
         if self.flexibility_element == "PV_and_Battery":
 
             """Battery charging and discharging bounds / making sure that charging and discharging doesn't occur at the same time"""
             opti.subject_to(
                 opti.bounded(
-                    self.minimum_storage_capacity, optvar_battery_soc, self.maximum_storage_capacity
+                    self.minimum_storage_capacity,
+                    optvar_battery_soc,
+                    self.maximum_storage_capacity,
                 )
             )
             opti.subject_to(
@@ -931,7 +1003,9 @@ class MpcController(cp.Component):
                 )
             )
             opti.subject_to(
-                opti.bounded(0, optvar_battery_power_charging, self.maximum_charging_power)
+                opti.bounded(
+                    0, optvar_battery_power_charging, self.maximum_charging_power
+                )
             )
 
             """ Energy Balance constraint for Grid , PV , Battery interaction"""
@@ -940,22 +1014,35 @@ class MpcController(cp.Component):
                 optvar_power_bought_from_grid
                 == ca.if_else(
                     optvar_power_thermal_delivered > 0,
-                    ca.fabs(optvar_power_thermal_delivered) / cop_values - optvar_power_pv - optvar_battery_power_discharging,
-                    ca.fabs(optvar_power_thermal_delivered) / eer_values - optvar_power_pv - optvar_battery_power_discharging,
+                    ca.fabs(optvar_power_thermal_delivered) / cop_values
+                    - optvar_power_pv
+                    - optvar_battery_power_discharging,
+                    ca.fabs(optvar_power_thermal_delivered) / eer_values
+                    - optvar_power_pv
+                    - optvar_battery_power_discharging,
                 )
             )
-            opti.subject_to(optvar_power_sold_to_grid == pv_production - optvar_battery_power_charging - optvar_power_pv)
+            opti.subject_to(
+                optvar_power_sold_to_grid
+                == pv_production - optvar_battery_power_charging - optvar_power_pv
+            )
 
         if self.flexibility_element in {"PV_only", "PV_and_Battery"}:
             opti.subject_to(opti.bounded(0, optvar_power_sold_to_grid, pv_production))
             opti.subject_to(optvar_power_bought_from_grid >= 0)
             opti.subject_to(
                 optvar_power_bought_from_grid
-                <= ca.if_else(optvar_power_thermal_delivered > 0, ca.fabs(optvar_power_thermal_delivered) / cop_values, ca.fabs(optvar_power_thermal_delivered) / eer_values)
+                <= ca.if_else(
+                    optvar_power_thermal_delivered > 0,
+                    ca.fabs(optvar_power_thermal_delivered) / cop_values,
+                    ca.fabs(optvar_power_thermal_delivered) / eer_values,
+                )
             )
 
         """ Initial conditions """
-        opti.subject_to(optvar_temperature[:, 0] == x_init)  # controlled temperature temperature
+        opti.subject_to(
+            optvar_temperature[:, 0] == x_init
+        )  # controlled temperature temperature
         opti.subject_to(
             optvar_disturbances == disturbance_forecast
         )  # building disturbances (solar gains / internal gains / ambient temperature)
@@ -966,7 +1053,9 @@ class MpcController(cp.Component):
             )  # forecasted PV generation by the generic_pv_component
 
         if self.flexibility_element == "PV_and_Battery":
-            opti.subject_to(optvar_battery_soc[:, 0] == soc_init)  # battery state of charge
+            opti.subject_to(
+                optvar_battery_soc[:, 0] == soc_init
+            )  # battery state of charge
 
         """ Choose a concerete solver: The default linear solver used with ipopt is mumps (MUltifrontal Massively Parallel Solver).
         For a faster solution, the default solver is replaced with HSL solver 'ma27' (see 'sol_opts' > 'linear_solver').
@@ -996,7 +1085,7 @@ class MpcController(cp.Component):
                 "sb": "yes",
                 # "acceptable_tol": 4.0e+005,
                 # "acceptable_tol": 1e-2,
-                'linear_solver':'mumps', # options: 'mumps','ma27'
+                "linear_solver": "mumps",  # options: 'mumps','ma27'
                 # 'linear_solver':'ma27',
                 # "acceptable_obj_change_tol": 4.0e+005,
                 # "acceptable_obj_change_tol": 1e-3,
@@ -1018,7 +1107,7 @@ class MpcController(cp.Component):
         if self.flexibility_element == "PV_and_Battery":
             opti.set_value(soc_init, self.state.soc)
 
-        print("Starting solve",datetime.datetime.now())
+        print("Starting solve", datetime.datetime.now())
         sol = opti.solve()
         # opti.debug.value
 
@@ -1076,7 +1165,9 @@ class MpcController(cp.Component):
             pv_to_battery = sol.value(optvar_battery_power_charging)
             optvar_battery_power_flow = sol.value(optvar_battery_power_flow)
             batt_soc_actual = sol.value(optvar_battery_soc)
-            batt_soc_normalized = sol.value(optvar_battery_soc) / self.maximum_storage_capacity
+            batt_soc_normalized = (
+                sol.value(optvar_battery_soc) / self.maximum_storage_capacity
+            )
             if self.mpc_scheme == "optimization_once_aday_only":
                 self.state.soc = batt_soc_actual[-1]
                 if self.state.soc < 0.2 * self.maximum_storage_capacity:
@@ -1194,7 +1285,7 @@ class MpcController(cp.Component):
 
         return optimal_cost
 
-    def i_simulate(
+    def i_simulate( # noqa: C901
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
         """Start simulation of the MPC here."""
@@ -1387,7 +1478,8 @@ class MpcController(cp.Component):
 
         if self.flexibility_element in {"PV_only", "PV_and_Battery"}:
             stsv.set_output_value(
-                self.pv_consumption_channel, self.pv2load[applied_optimal_solution_index]
+                self.pv_consumption_channel,
+                self.pv2load[applied_optimal_solution_index],
             )
             stsv.set_output_value(
                 self.grid_import_channel,

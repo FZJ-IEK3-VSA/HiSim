@@ -1,8 +1,11 @@
 """Air Conditioner Component."""
 
+# clean
+
 from dataclasses import dataclass
 from typing import Any
 from dataclasses_json import dataclass_json
+
 # from typing import Optional
 import numpy as np
 from hisim import log
@@ -82,7 +85,10 @@ class AirConditionerControllerConfig(ConfigBase):
     def get_default_air_conditioner_controller_config(cls) -> Any:
         """Get default configuration of air-conditioner controller."""
         config = AirConditionerControllerConfig(
-            name="AirConditioner", t_air_heating=18.0, t_air_cooling=26.0, offset=0.0,
+            name="AirConditioner",
+            t_air_heating=18.0,
+            t_air_cooling=26.0,
+            offset=0.0,
         )
         return config
 
@@ -202,7 +208,11 @@ class AirConditioner(cp.Component):
             True,
         )
         self.state_channel: cp.ComponentInput = self.add_input(
-            self.component_name, self.State, LoadTypes.ANY, Units.ANY, False,
+            self.component_name,
+            self.State,
+            LoadTypes.ANY,
+            Units.ANY,
+            False,
         )
         self.feed_forward_signal_channel: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -465,7 +475,7 @@ class AirConditioner(cp.Component):
         lines.append(f"Control: {self.control}")
         return self.air_conditioner_config.get_string_dict() + lines
 
-    def i_simulate(
+    def i_simulate( # noqa: C901
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
         """Core simulation function."""
@@ -505,13 +515,9 @@ class AirConditioner(cp.Component):
                 self.state.state = 0
             # check signal from l2 and turn on or off if it is necesary
             else:
-                if on_off_state == 0 and (
-                    self.state0.state in (1, -1)
-                ):
+                if on_off_state == 0 and (self.state0.state in (1, -1)):
                     self.state.deactivation(timestep)
-                elif (
-                    on_off_state in (1, -1)
-                ) and self.state0.state == 0:
+                elif (on_off_state in (1, -1)) and self.state0.state == 0:
                     self.state.activation(timestep)
 
             if self.state.state == 1 and on_off_state == 1:

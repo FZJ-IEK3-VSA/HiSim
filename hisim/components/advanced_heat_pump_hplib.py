@@ -89,13 +89,16 @@ class HeatPumpHplibConfig(ConfigBase):
             cycling_mode=True,
             minimum_running_time_in_seconds=600,
             minimum_idle_time_in_seconds=600,
-            co2_footprint=set_thermal_output_power_in_watt * 1e-3 * 165.84,  # value from emission_factros_and_costs_devices.csv
-            cost=set_thermal_output_power_in_watt * 1e-3 * 1513.74,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=set_thermal_output_power_in_watt
+            * 1e-3
+            * 165.84,  # value from emission_factros_and_costs_devices.csv
+            cost=set_thermal_output_power_in_watt
+            * 1e-3
+            * 1513.74,  # value from emission_factros_and_costs_devices.csv
             lifetime=10,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
             consumption=0,
         )
-
 
     @classmethod
     def get_scaled_advanced_hp_lib(
@@ -152,7 +155,6 @@ class HeatPumpHplib(Component):
     MassFlowOutput = "MassFlowOutput"  # kg/s
     TimeOn = "TimeOn"  # s
     TimeOff = "TimeOff"  # s
-
 
     def __init__(
         self,
@@ -477,8 +479,6 @@ class HeatPumpHplib(Component):
         else:
             raise ValueError("Unknown mode for Advanced HPLib On_Off.")
 
-            
-        
         # write values for output time series
         stsv.set_output_value(self.p_th, p_th)
         stsv.set_output_value(self.p_el, p_el)
@@ -488,7 +488,6 @@ class HeatPumpHplib(Component):
         stsv.set_output_value(self.m_dot, m_dot)
         stsv.set_output_value(self.time_on, time_on_heating)
         stsv.set_output_value(self.time_off, time_off)
-
 
         # write values to state
         self.state.time_on = time_on_heating
@@ -502,9 +501,7 @@ class HeatPumpHplib(Component):
         return config.cost, config.co2_footprint, config.lifetime
 
     def get_cost_opex(
-        self,
-        all_outputs: List,
-        postprocessing_results: pd.DataFrame,
+        self, all_outputs: List, postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of maintenance costs.
 
@@ -611,7 +608,7 @@ class HeatPumpHplibController(Component):
     )
 
     DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
-    
+
     SimpleHotWaterStorageTemperatureModifier = (
         "SimpleHotWaterStorageTemperatureModifier"
     )
@@ -671,7 +668,7 @@ class HeatPumpHplibController(Component):
                 True,
             )
         )
-        
+
         self.simple_hot_water_storage_temperature_modifier_channel: ComponentInput = (
             self.add_input(
                 self.component_name,
@@ -746,9 +743,7 @@ class HeatPumpHplibController(Component):
         return connections
 
     def build(
-        self,
-        mode: float,
-        temperature_offset_for_state_conditions_in_celsius: float,
+        self, mode: float, temperature_offset_for_state_conditions_in_celsius: float,
     ) -> None:
         """Build function.
 
@@ -805,7 +800,7 @@ class HeatPumpHplibController(Component):
             daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
                 self.daily_avg_outside_temperature_input_channel
             )
-            
+
             storage_temperature_modifier = stsv.get_input_value(
                 self.simple_hot_water_storage_temperature_modifier_channel
             )

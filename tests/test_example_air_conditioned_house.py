@@ -15,7 +15,7 @@ def test_household_with_air_conditioner_and_controller_mpc():
     path = "../examples/air_conditioned_house.py"
     func = "house_aircon_mpc"
 
-    mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
+    mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
 
     mysimpar.predictive = True
     mysimpar.predictive_control = True

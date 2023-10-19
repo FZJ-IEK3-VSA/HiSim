@@ -1,12 +1,14 @@
 """Test for smart residential cooling."""
 
-import os
+# clean
 
+import os
+import pytest
 from hisim import hisim_main
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim import utils
-import pytest
+
 
 @pytest.mark.examples
 @utils.measure_execution_time

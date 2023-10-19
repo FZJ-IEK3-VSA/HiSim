@@ -23,6 +23,7 @@ from hisim.postprocessing.pyam_data_collection import (
 from hisim.postprocessing.chartbase import ChartFontsAndSize
 from hisim import log
 
+# TODO: debugging needed
 
 class PyAmChartGenerator:
 
@@ -141,13 +142,16 @@ class PyAmChartGenerator:
                 variables_to_check=variables_to_check
             )
 
-            
-            self.make_plots_with_specific_kind_of_data(
-                time_resolution_of_data_set=time_resolution_of_data_set,
-                pyam_dataframe=pandas_dataframe,
-                simulation_duration_key=simulation_duration_to_check,
-                variables_to_check=variables_to_check,
-            )
+            try:
+                
+                self.make_plots_with_specific_kind_of_data(
+                    time_resolution_of_data_set=time_resolution_of_data_set,
+                    pyam_dataframe=pandas_dataframe,
+                    simulation_duration_key=simulation_duration_to_check,
+                    variables_to_check=variables_to_check,
+                )
+            except Exception:
+                log.information("Something went wrong while plotting.")
         else:
             log.information(
                 "Variable list for data is not given and will not be plotted or anaylzed."
@@ -159,8 +163,8 @@ class PyAmChartGenerator:
         time_resolution_of_data_set: Any,
         # list_of_scenarios_to_check: Optional[List[str]],
         dict_of_scenarios_to_check: Optional[Dict[str, List[str]]],
-        variables_to_check:Any,
-    ) -> pd.DataFrame:
+        variables_to_check:List[str],
+    ) -> Tuple[pd.DataFrame, str, str, List[str]]:
         """Get csv data and create pyam dataframes."""
 
         if time_resolution_of_data_set == PyamDataTypeEnum.HOURLY:
@@ -276,8 +280,6 @@ class PyAmChartGenerator:
             filtered_data = self.filter_pandas_dataframe(
                 dataframe=pyam_dataframe, variable_to_check=variable_to_check
             )
-            
-            print("filtered data", filtered_data.value)
 
             # determine whether you want to compare one variable for different scenarios or different variables for one scenario
             # comparion_mode = self.decide_for_scenario_or_variable_comparison(
@@ -988,7 +990,7 @@ class PyAmChartGenerator:
     
     def check_if_scenario_exists_and_filter_dataframe_for_scenarios_dict(
         self, data_frame: pd.DataFrame, dict_of_scenarios_to_check: Dict[str,List[str]], #list_of_scenarios_to_check: List[str]
-    ) -> pd.DataFrame:
+    ) -> Tuple[pd.DataFrame, str, str]:
         """Check if scenario exists and filter dataframe for scenario."""
         
         concat_df = data_frame # copy.deepcopy(data_frame)
@@ -998,6 +1000,7 @@ class PyAmChartGenerator:
             concat_df = self.check_for_one_scenario(dataframe=concat_df, list_of_scenarios_to_check=list_of_scenarios_to_check,column_name_to_check=scenario_to_check_key, filter_level_index=filter_level_index)
 
             filter_level_index = filter_level_index + 1
+            print("filter level index", filter_level_index)
         
 
         # rename scenario with all scenario filter levels
@@ -1011,10 +1014,14 @@ class PyAmChartGenerator:
                 key_for_current_scenario = list(dict_of_scenarios_to_check.keys())[1]
                 # concat_df.iloc[index, concat_df.columns.get_loc("scenario")] = f"{scenario_value_one}_{current_scenario_value}"
                 concat_df.loc[index, "scenario"] = f"{scenario_value_one}_{current_scenario_value}"
-            
+            elif filter_level_index == 1:
+                key_for_scenario_one= list(dict_of_scenarios_to_check.keys())[0]
+                key_for_current_scenario = ""
         return concat_df, key_for_scenario_one, key_for_current_scenario
     
-    def check_for_one_scenario(self, dataframe: pd.DataFrame, list_of_scenarios_to_check: List, column_name_to_check: str, filter_level_index: int):
+    def check_for_one_scenario(self, dataframe: pd.DataFrame, list_of_scenarios_to_check: List, column_name_to_check: str, filter_level_index: int) -> pd.DataFrame:
+        
+        """Check for one scenario."""
 
         aggregated_scenario_dict: Dict = {key: [] for key in list_of_scenarios_to_check}
         for scenario_to_check in list_of_scenarios_to_check:
@@ -1224,11 +1231,11 @@ class FilterClass:
         electricity_data = [
             # "L2EMSElectricityController|Electricity|ElectricityToOrFromGrid",
             # "PVSystem_w0|Electricity|ElectricityOutput", # check if pv was used or not
-            "ElectricityMeter|Electricity|ElectricityToGrid",
+            # "ElectricityMeter|Electricity|ElectricityToGrid",
             "ElectricityMeter|Electricity|ElectricityFromGrid",
-            "ElectricityMeter|Electricity|ElectricityAvailable",
-            "ElectricityMeter|Electricity|ElectricityConsumption",
-            "ElectricityMeter|Electricity|ElectricityProduction"
+            # "ElectricityMeter|Electricity|ElectricityAvailable",
+            # "ElectricityMeter|Electricity|ElectricityConsumption",
+            # "ElectricityMeter|Electricity|ElectricityProduction"
         ]
 
         occuancy_consumption = [

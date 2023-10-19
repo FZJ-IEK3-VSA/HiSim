@@ -96,34 +96,6 @@ class HeatPumpHplibConfig(ConfigBase):
             consumption=0,
         )
 
-    @classmethod
-    def get_scaled_advanced_hp_lib(
-        cls, heating_load_of_building_in_watt: float
-    ) -> "HeatPumpHplibConfig":
-        """Gets a default heat pump with scaling according to heating load of the building."""
-
-        set_thermal_output_power_in_watt = heating_load_of_building_in_watt
-
-        return HeatPumpHplibConfig(
-            name="AdvancedHeatPumpHPLib",
-            model="Generic",
-            group_id=4,
-            heating_reference_temperature_in_celsius=-7,
-            flow_temperature_in_celsius=52,
-            set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
-            cycling_mode=True,
-            minimum_running_time_in_seconds=600,
-            minimum_idle_time_in_seconds=600,
-            co2_footprint=set_thermal_output_power_in_watt
-            * 1e-3
-            * 165.84,  # value from emission_factros_and_costs_devices.csv
-            cost=set_thermal_output_power_in_watt
-            * 1e-3
-            * 1513.74,  # value from emission_factros_and_costs_devices.csv
-            lifetime=10,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
-            consumption=0,
-        )
 
     @classmethod
     def get_scaled_advanced_hp_lib(
@@ -639,6 +611,10 @@ class HeatPumpHplibController(Component):
     )
 
     DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
+    
+    SimpleHotWaterStorageTemperatureModifier = (
+        "SimpleHotWaterStorageTemperatureModifier"
+    )
 
     # Outputs
     State = "State"
@@ -693,6 +669,16 @@ class HeatPumpHplibController(Component):
                 LoadTypes.TEMPERATURE,
                 Units.CELSIUS,
                 True,
+            )
+        )
+        
+        self.simple_hot_water_storage_temperature_modifier_channel: ComponentInput = (
+            self.add_input(
+                self.component_name,
+                self.SimpleHotWaterStorageTemperatureModifier,
+                LoadTypes.TEMPERATURE,
+                Units.CELSIUS,
+                mandatory=False,
             )
         )
 
@@ -818,6 +804,10 @@ class HeatPumpHplibController(Component):
 
             daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
                 self.daily_avg_outside_temperature_input_channel
+            )
+            
+            storage_temperature_modifier = stsv.get_input_value(
+                self.simple_hot_water_storage_temperature_modifier_channel
             )
 
             # turning heat pump off when the average daily outside temperature is above a certain threshold (if threshold is set in the config)

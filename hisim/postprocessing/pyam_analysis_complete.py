@@ -23,13 +23,13 @@ class PyamDataAnalysis:
     ) -> None:
         """Initialize the class."""
 
-        # pyam_data_collection.PyamDataCollector(
-        #     data_processing_mode=data_processing_mode,
-        #     folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
-        #     path_to_default_config=path_to_default_config,
-        #     time_resolution_of_data_set=time_resolution_of_data_set,
-        #     simulation_duration_to_check=simulation_duration_to_check,
-        # )
+        pyam_data_collection.PyamDataCollector(
+            data_processing_mode=data_processing_mode,
+            folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
+            path_to_default_config=path_to_default_config,
+            time_resolution_of_data_set=time_resolution_of_data_set,
+            simulation_duration_to_check=simulation_duration_to_check,
+        )
         pyam_data_processing.PyAmChartGenerator(
             simulation_duration_to_check=simulation_duration_to_check,
             time_resolution_of_data_set=time_resolution_of_data_set,
@@ -45,7 +45,7 @@ def main():
 
     # Inputs for pyam analysis
     # -------------------------------------------------------------------------------------------------------------------------------------
-    time_resolution_of_data_set = pyam_data_collection.PyamDataTypeEnum.YEARLY
+    time_resolution_of_data_set = pyam_data_collection.PyamDataTypeEnum.MONTHLY
 
     cluster_storage_path = "/fast/home/k-rieck/"
 
@@ -67,7 +67,7 @@ def main():
     simulation_duration_to_check = str(365)
 
     data_processing_mode = (
-        pyam_data_collection.PyamDataProcessingModeEnum.PROCESS_ALL_DATA
+        pyam_data_collection.PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
     )
     
     filterclass = pyam_data_processing.FilterClass()
@@ -76,10 +76,9 @@ def main():
 
     #list_of_scenarios_to_check = filterclass.building_type
 
-    
-    dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share,"building_code": ["DE.N.SFH.05.Gen.ReEx.001.002"]}
-    
-    print(dict_with_scenarios_to_check)
+    # TODO: filter several scenario parameters (eg pv and building code together) not working yet, need to be fixed
+    # dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share,"building_code": ["DE.N.SFH.05.Gen.ReEx.001.002"]}
+    dict_with_scenarios_to_check = {"building_code": ["DE.N.SFH.05.Gen.ReEx.001.002","DE.N.TH.05.Gen.ReEx.001.002","DE.N.MFH.05.Gen.ReEx.001.002","DE.N.AB.05.Gen.ReEx.001.002"]}
 
     # list_of_scenarios_to_check = ["DE.N.SFH.05.Gen.ReEx.001.002","DE.N.TH.05.Gen.ReEx.001.002","DE.N.MFH.05.Gen.ReEx.001.002","DE.N.AB.05.Gen.ReEx.001.002"]
 

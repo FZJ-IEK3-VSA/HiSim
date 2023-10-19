@@ -2,7 +2,7 @@
 # clean
 import glob
 import os
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 import json
 import enum
 from collections import defaultdict
@@ -47,8 +47,6 @@ class PyamDataCollector:
         )
 
         if data_processing_mode == PyamDataProcessingModeEnum.PROCESS_ALL_DATA:
-
-            log.information(f"Data Collection Mode is {data_processing_mode}")
 
             parameter_key = None
 
@@ -346,7 +344,7 @@ class PyamDataCollector:
             if rename_scenario is True:
                 if (
                     parameter_key is not None
-                    and list_with_parameter_key_values is not None
+                    and list_with_parameter_key_values is not None and list_with_parameter_key_values != []
                 ):
                     # rename scenario adding paramter key, value pair
                     dataframe[
@@ -505,7 +503,7 @@ class PyamDataCollector:
         path_to_pyam_data_folder: str,
         list_with_module_configs: List[Any],
         list_with_csv_files: List[Any],
-    ):
+    ) -> Tuple[List, List]:
         """Read module config if possible and write to dataframe."""
 
         for file in os.listdir(path_to_pyam_data_folder):
@@ -539,7 +537,7 @@ class PyamDataCollector:
 
         list_with_module_configs: List = []
         list_with_csv_files: List = []
-        list_with_parameter_key_values = []
+        list_with_parameter_key_values: List = []
 
         for folder in list_with_pyam_data_folders:  # type: ignore
 
@@ -553,7 +551,7 @@ class PyamDataCollector:
                     list_with_module_configs=list_with_module_configs,
                     list_with_csv_files=list_with_csv_files,
                 )
-                list_with_parameter_key_values = None
+                list_with_parameter_key_values = []
 
             else:
 

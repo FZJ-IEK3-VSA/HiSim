@@ -65,6 +65,7 @@ jobs:
         prospector hisim/simulator.py
         prospector hisim/sim_repository.py
         prospector hisim/utils.py
+        prospector hisim/system_setup_starter.py
         prospector hisim/components/building.py
         prospector hisim/components/controller_l1_building_heating.py
         prospector hisim/components/controller_l1_generic_gas_heater.py

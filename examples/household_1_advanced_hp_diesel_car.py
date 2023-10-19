@@ -29,7 +29,6 @@ from hisim.components import electricity_meter
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim import utils
 from hisim import loadtypes as lt
-from hisim import log
 from examples.modular_example import cleanup_old_lpg_requests
 
 __authors__ = "Markus Blasberg"
@@ -165,7 +164,8 @@ class HouseholdAdvancedHPDieselCarConfig:
 
 
 def household_1_advanced_hp_diesel_car(
-    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
+    my_sim: Any,
+    my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
     """Example with advanced hp and diesel car.
 
@@ -193,20 +193,12 @@ def household_1_advanced_hp_diesel_car(
     if Path(utils.HISIMPATH["utsp_results"]).exists():
         cleanup_old_lpg_requests()
 
-    config_filename = "household_1_advanced_hp_diesel_car_config.json"
+    my_config = utils.create_configuration(my_sim, HouseholdAdvancedHPDieselCarConfig)
 
-    my_config: HouseholdAdvancedHPDieselCarConfig
-    if Path(config_filename).is_file():
-        with open(config_filename, encoding="utf8") as system_config_file:
-            my_config = HouseholdAdvancedHPDieselCarConfig.from_json(system_config_file.read())  # type: ignore
-        log.information(f"Read system config from {config_filename}")
-    else:
-        my_config = HouseholdAdvancedHPDieselCarConfig.get_default()
-
-        # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
-        # my_config_json = my_config.to_json()
-        # with open(config_filename, "w", encoding="utf8") as system_config_file:
-        #     system_config_file.write(my_config_json)
+    # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
+    # my_config_json = my_config.to_json()
+    # with open(config_filename, "w", encoding="utf8") as system_config_file:
+    #     system_config_file.write(my_config_json)
 
     # =================================================================================================================================
     # Set System Parameters

@@ -21,8 +21,6 @@ COPY hisim hisim
 
 # Copy the examples folder containing the modular_household file
 COPY examples examples 
-# Remove any previous simulation results
-RUN rm -f -r examples/results
 
 # Set an environment variable flag so HiSim can check whether it runs in a container or not
 ENV HISIM_IN_DOCKER_CONTAINER true
@@ -30,12 +28,4 @@ ENV HISIM_IN_DOCKER_CONTAINER true
 # Create a folder for the input files
 RUN mkdir /input
 
-# Use the examples directory as working directory (required by HiSim)
-WORKDIR /app/examples
-
-# Temporary solution for the custom json interface for the WHY toolkit: always uses modular_household_explicit in modular_household.py
-# delete any previous result folders (just to be sure)
-ENTRYPOINT rm -rf results/modular_household_explicit* \
-    && mv /input/request.json modular_example_config.json \
-    && python3 ../hisim/hisim_main.py modular_example modular_household_explicit \
-    && mv results/modular_household_explicit* /results
+ENTRYPOINT python3 hisim/system_setup_starter.py /input/request.json /results

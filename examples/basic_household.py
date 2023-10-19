@@ -171,7 +171,7 @@ def basic_household_explicit(
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.ElectricityInput,
         my_electricity_meter.component_name,
-        my_electricity_meter.ElectricityToOrFromGrid,
+        my_electricity_meter.ElectricityAvailable,
     )
     my_heat_pump.connect_only_predefined_connections(
         my_weather, my_heat_pump_controller

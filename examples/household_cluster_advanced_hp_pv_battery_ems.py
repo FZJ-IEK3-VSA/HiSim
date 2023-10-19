@@ -163,7 +163,7 @@ def household_cluster_advanced_hp_pv_battery_ems(
     )
     set_heating_threshold_outside_temperature_for_heat_pump_in_celsius = 16.0
     set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = 22.0
-    offset_conditions_heating_cooling_off = 5.0
+    temperature_offset_for_state_conditions_in_celsius = 5.0
 
     # Set Heat Pump
     group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
@@ -186,8 +186,8 @@ def household_cluster_advanced_hp_pv_battery_ems(
         heat_distribution_system.HeatDistributionController(
             my_simulation_parameters=my_simulation_parameters,
             config=my_heat_distribution_controller_config,
-        )
-    )
+        ))
+
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
     my_building_config.heating_reference_temperature_in_celsius = (
@@ -200,14 +200,15 @@ def household_cluster_advanced_hp_pv_battery_ems(
     )
 
     my_building_information = building.BuildingInformation(config=my_building_config)
+
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # Build Occupancy
     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_CHS01_according_to_number_of_apartments(
-        number_of_apartments=my_building_information.number_of_apartments
-    )
+        number_of_apartments=my_building_information.number_of_apartments)
+
 
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
@@ -243,7 +244,7 @@ def household_cluster_advanced_hp_pv_battery_ems(
             mode=hp_controller_mode,
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_pump_in_celsius,
             set_cooling_threshold_outside_temperature_in_celsius=set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius,
-            offset_conditions_heating_cooling_off=offset_conditions_heating_cooling_off,
+            temperature_offset_for_state_conditions_in_celsius=temperature_offset_for_state_conditions_in_celsius,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )

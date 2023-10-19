@@ -154,7 +154,7 @@ def household_cluster_reference_advanced_hp(
     )
     set_heating_threshold_outside_temperature_for_heat_pump_in_celsius = 16.0
     set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = 20.0
-    offset_conditions_heating_cooling_off = 5.0
+    temperature_offset_for_state_conditions_in_celsius = 5.0
 
     # Set Heat Pump
     group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
@@ -221,7 +221,7 @@ def household_cluster_reference_advanced_hp(
             mode=hp_controller_mode,
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_pump_in_celsius,
             set_cooling_threshold_outside_temperature_in_celsius=set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius,
-            offset_conditions_heating_cooling_off=offset_conditions_heating_cooling_off,
+            temperature_offset_for_state_conditions_in_celsius=temperature_offset_for_state_conditions_in_celsius,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )
@@ -250,9 +250,10 @@ def household_cluster_reference_advanced_hp(
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Scaled Heat Water Storage
-    my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+    # Build Heat Water Storage
+    my_simple_heat_water_storage_config = (
+        simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
+            heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt)
     )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,

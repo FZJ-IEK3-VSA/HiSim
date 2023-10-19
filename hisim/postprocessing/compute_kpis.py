@@ -328,10 +328,10 @@ def search_electricity_prices_in_results(
 ) -> Tuple["pd.Series[float]", "pd.Series[float]"]:
     """Extracts electricity price consumption and electricity price production from results."""
     electricity_price_consumption = pd.Series(
-        dtype=pd.Float64Dtype
+        dtype=pd.Float64Dtype()
     )  # type: pd.Series[float]
     electricity_price_injection = pd.Series(
-        dtype=pd.Float64Dtype
+        dtype=pd.Float64Dtype()
     )  # type: pd.Series[float]
     for index, output in enumerate(all_outputs):
         if output.postprocessing_flag is not None:
@@ -367,7 +367,7 @@ def compute_cost_of_fuel_type(
     fuel: LoadTypes,
 ) -> Tuple[float, float]:
     """Computes the cost of the fuel type."""
-    fuel_consumption = pd.Series(dtype=pd.Float64Dtype)  # type: pd.Series[float]
+    fuel_consumption = pd.Series(dtype=pd.Float64Dtype())  # type: pd.Series[float]
     for index, output in enumerate(all_outputs):
         if output.postprocessing_flag is not None:
             if InandOutputType.FUEL_CONSUMPTION in output.postprocessing_flag:

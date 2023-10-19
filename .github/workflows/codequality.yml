@@ -49,6 +49,7 @@ jobs:
         prospector examples/simple_examples.py
         prospector examples/household_with_advanced_hp_hws_hds_pv.py
         prospector examples/household_with_advanced_hp_hws_hds_pv_battery_ems.py
+        prospector examples/air_conditioned_house.py
         prospector hisim/component.py
         prospector hisim/component_wrapper.py
         prospector hisim/dynamic_component.py
@@ -86,6 +87,7 @@ jobs:
         prospector hisim/components/sumbuilder.py
         prospector hisim/components/advanced_heat_pump_hplib.py
         prospector hisim/components/electricity_meter.py
+        prospector hisim/components/controller_mpc.py
         prospector hisim/modular_household/component_connections.py
         prospector hisim/modular_household/interface_configs/system_config.py
         prospector hisim/postprocessing/chartbase.py
@@ -131,6 +133,7 @@ jobs:
         prospector tests/test_house_with_pyam_postprocessingoption.py
         prospector tests/test_electricity_meter.py
         prospector tests/test_sizing_energy_systems.py
+        prospector tests/test_example_air_conditioned_house.py
 
 
         

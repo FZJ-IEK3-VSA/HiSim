@@ -486,6 +486,9 @@ class PVSystem(cp.Component):
             * 535.81,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
             lifetime=25,  # value from emission_factros_and_costs_devices.csv
+            prediction_horizon=None,
+            predictive=False,
+            predictive_control=False,
         )
         return config
 

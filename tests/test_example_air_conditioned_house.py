@@ -20,9 +20,6 @@ def test_household_with_air_conditioner_and_controller_mpc():
 
     mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
 
-    mysimpar.predictive = True
-    mysimpar.predictive_control = True
-    mysimpar.prediction_horizon = 24 * 3600
     mysimpar.mpc_battery_capacity = 5e3
     mysimpar.pv_included = True
     mysimpar.pv_peak_power = 4e3

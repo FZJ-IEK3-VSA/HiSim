@@ -4,9 +4,9 @@
 
 from typing import Optional, Any
 import re
+import os
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
@@ -49,7 +49,7 @@ class BuildingPVWeatherConfig(ConfigBase):
     pv_size: float
     pv_azimuth: float
     pv_tilt: float
-    pv_power: float
+    share_of_maximum_pv_power: float
     building_code: str
     total_base_area_in_m2: float
     # location: Any
@@ -63,7 +63,7 @@ class BuildingPVWeatherConfig(ConfigBase):
             pv_size=5,
             pv_azimuth=180,
             pv_tilt=30,
-            pv_power=10000,
+            share_of_maximum_pv_power=1,
             building_code="DE.N.SFH.05.Gen.ReEx.001.002",
             total_base_area_in_m2=121.2,
             # location=weather.LocationEnum.Aachen,
@@ -101,19 +101,21 @@ def household_cluster_advanced_hp_pv_battery_ems(
     config_filename = my_sim.my_module_config_path
 
     my_config: BuildingPVWeatherConfig
-    # if isinstance(config_filename, str) and os.path.exists(config_filename.rstrip("\r")):
-    with open(
-        config_filename.rstrip("\r"), encoding="unicode_escape"
-    ) as system_config_file:
-        my_config = BuildingPVWeatherConfig.from_json(system_config_file.read())  # type: ignore
+    if isinstance(config_filename, str) and os.path.exists(
+        config_filename.rstrip("\r")
+    ):
+        with open(
+            config_filename.rstrip("\r"), encoding="unicode_escape"
+        ) as system_config_file:
+            my_config = BuildingPVWeatherConfig.from_json(system_config_file.read())  # type: ignore
 
-    log.information(f"Read system config from {config_filename}")
-    log.information("Config values: " + f"{my_config.to_dict}" + "\n")
-    # else:
-    #     my_config = BuildingPVWeatherConfig.get_default()
-    #     log.information(
-    #         "No module config path from the simulator was given. Use default config."
-    #     )
+        log.information(f"Read system config from {config_filename}")
+        log.information("Config values: " + f"{my_config.to_dict}" + "\n")
+    else:
+        my_config = BuildingPVWeatherConfig.get_default()
+        log.information(
+            "No module config path from the simulator was given. Use default config."
+        )
 
     # Set Simulation Parameters
     year = 2021
@@ -171,7 +173,7 @@ def household_cluster_advanced_hp_pv_battery_ems(
     flow_temperature_in_celsius = 21  # t_out_val
 
     # =================================================================================================================================
-    # Build Components
+    # Build Basic Components
 
     # Build Heat Distribution Controller
     my_heat_distribution_controller_config = (
@@ -180,12 +182,11 @@ def household_cluster_advanced_hp_pv_battery_ems(
     my_heat_distribution_controller_config.heating_reference_temperature_in_celsius = (
         heating_reference_temperature_in_celsius
     )
-    my_heat_distribution_controller = (
-        heat_distribution_system.HeatDistributionController(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_heat_distribution_controller_config,
-        )
+    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_distribution_controller_config,
     )
+
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
     my_building_config.heating_reference_temperature_in_celsius = (
@@ -198,9 +199,11 @@ def household_cluster_advanced_hp_pv_battery_ems(
     )
 
     my_building_information = building.BuildingInformation(config=my_building_config)
+
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
+
     # Build Occupancy
     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_CHS01_according_to_number_of_apartments(
         number_of_apartments=my_building_information.number_of_apartments
@@ -220,10 +223,8 @@ def household_cluster_advanced_hp_pv_battery_ems(
     )
 
     # Build PV
-    my_photovoltaic_system_config = (
-        generic_pv_system.PVSystemConfig.get_scaled_PV_system(
-            rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
-        )
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_PV_system(
+        rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
     )
     my_photovoltaic_system_config.azimuth = azimuth
     my_photovoltaic_system_config.tilt = tilt
@@ -240,7 +241,8 @@ def household_cluster_advanced_hp_pv_battery_ems(
             mode=hp_controller_mode,
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_pump_in_celsius,
             set_cooling_threshold_outside_temperature_in_celsius=set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius,
-            temperature_offset_for_state_conditions_in_celsius=temperature_offset_for_state_conditions_in_celsius),
+            temperature_offset_for_state_conditions_in_celsius=temperature_offset_for_state_conditions_in_celsius,
+        ),
         my_simulation_parameters=my_simulation_parameters,
     )
 
@@ -255,8 +257,7 @@ def household_cluster_advanced_hp_pv_battery_ems(
     )
 
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
-        config=my_heat_pump_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_pump_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Distribution System
@@ -281,18 +282,14 @@ def household_cluster_advanced_hp_pv_battery_ems(
     my_electricity_controller_config = (
         controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
     )
-    my_electricity_controller = (
-        controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_electricity_controller_config,
-        )
+    my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_electricity_controller_config,
     )
 
     # Build Battery
-    my_advanced_battery_config = (
-        advanced_battery_bslib.BatteryConfig.get_scaled_battery(
-            total_pv_power_in_watt_peak=my_photovoltaic_system_config.power
-        )
+    my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
+        total_pv_power_in_watt_peak=my_photovoltaic_system_config.power
     )
     my_advanced_battery = advanced_battery_bslib.Battery(
         my_simulation_parameters=my_simulation_parameters,
@@ -320,11 +317,9 @@ def household_cluster_advanced_hp_pv_battery_ems(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 
-    my_domnestic_hot_water_heatpump_controller = (
-        controller_l1_heatpump.L1HeatPumpController(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_dhw_heatpump_controller_config,
-        )
+    my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_dhw_heatpump_controller_config,
     )
 
     my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
@@ -457,18 +452,13 @@ def household_cluster_advanced_hp_pv_battery_ems(
         source_weight=2,
     )
 
-    electricity_to_or_from_battery_target = (
-        my_electricity_controller.add_component_output(
-            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-            source_tags=[
-                lt.ComponentType.BATTERY,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_weight=2,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target electricity for Battery Control. ",
-        )
+    electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
+        source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
+        source_weight=2,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        output_description="Target electricity for Battery Control. ",
     )
 
     # -----------------------------------------------------------------------------------------------------------------

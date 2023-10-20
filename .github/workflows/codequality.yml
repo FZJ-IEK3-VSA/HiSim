@@ -49,6 +49,8 @@ jobs:
         prospector examples/simple_examples.py
         prospector examples/household_with_advanced_hp_hws_hds_pv.py
         prospector examples/household_with_advanced_hp_hws_hds_pv_battery_ems.py
+        prospector examples/household_cluster_advanced_hp_pv_battery_ems.py
+        prospector examples/household_cluster_reference_advanced_hp.py
         prospector hisim/component.py
         prospector hisim/component_wrapper.py
         prospector hisim/dynamic_component.py

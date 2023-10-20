@@ -621,8 +621,8 @@ class MPC_Controller(cp.Component):
         cop_sampled = cop_timestep[0::sampling_rate]
         eer_sampled = eer_timestep[0::sampling_rate]
 
-        cop_sampled = np.reshape(np.array(cop_sampled), (1, len(cop_sampled)))
-        eer_sampled = np.reshape(np.array(eer_sampled), (1, len(eer_sampled)))
+        cop_sampled_array = np.reshape(np.array(cop_sampled), (1, len(cop_sampled)))
+        eer_sampled_array = np.reshape(np.array(eer_sampled), (1, len(eer_sampled)))
 
         # Numerical values of pv forecast (casadi fromat)
         pv_forecast_24h = np.reshape(
@@ -880,8 +880,8 @@ class MPC_Controller(cp.Component):
 
         opti.set_value(x_init, self.state.t_m)
         opti.set_value(disturbance_forecast, D_val)
-        opti.set_value(cop_values, cop_sampled)
-        opti.set_value(eer_values, eer_sampled)
+        opti.set_value(cop_values, cop_sampled_array)
+        opti.set_value(eer_values, eer_sampled_array)
 
         if self.flexibility_element in {"PV_only", "PV_and_Battery"}:
             opti.set_value(pv_production, pv_forecast_24h)
@@ -986,7 +986,7 @@ class MPC_Controller(cp.Component):
         # calculated and can be used later if the control structure is modified to casacaded PID-
         t_m_opt_timestep = []
         t_m_init = self.state.t_m
-        Ad = np.linalg.inv(I - self.A)
+        Ad = np.linalg.inv(I - self.A) # type: ignore
         Bd = Ad * self.B
         for i in range(int(self.prediction_horizon)):
             t_m_next = (

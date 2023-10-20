@@ -25,9 +25,9 @@ class SimulationParameters(JSONWizard):
     result_directory: str
     skip_finished_results: bool
     surplus_control: bool
-    predictive: bool
-    predictive_control: bool
-    prediction_horizon: Optional[int]
+    # predictive: bool
+    # predictive_control: bool
+    # prediction_horizon: Optional[int]
 
     def __init__(
         self,
@@ -39,9 +39,7 @@ class SimulationParameters(JSONWizard):
         logging_level: int = log.LogPrio.INFORMATION,
         skip_finished_results: bool = False,
         surplus_control: bool = True,
-        predictive: bool = False,
-        predictive_control: bool = False,
-        prediction_horizon: Optional[int] = 0,
+
     ):
         """Initializes the class."""
         self.start_date: datetime.datetime = start_date
@@ -58,9 +56,6 @@ class SimulationParameters(JSONWizard):
         self.result_directory: str = result_directory
         self.skip_finished_results: bool = skip_finished_results
         self.surplus_control = surplus_control
-        self.predictive = predictive
-        self.predictive_control = predictive_control
-        self.prediction_horizon = prediction_horizon
 
         self.figure_format = FigureFormat.PNG
 

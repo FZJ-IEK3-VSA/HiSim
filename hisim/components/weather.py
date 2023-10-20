@@ -375,6 +375,7 @@ class WeatherConfig(ConfigBase):
     location: str
     source_path: str
     data_source: WeatherDataSourceEnum
+    predictive_control: bool
 
     @classmethod
     def get_main_classname(cls):
@@ -396,6 +397,7 @@ class WeatherConfig(ConfigBase):
             location=location_entry.value[0],
             source_path=path,
             data_source=location_entry.value[4],
+            predictive_control=False,
         )
         return config
 
@@ -584,7 +586,7 @@ class Weather(Component):
         )
 
         # set the temperature forecast
-        if self.my_simulation_parameters.predictive_control:
+        if self.weather_config.predictive_control:
             timesteps_24h = (
                 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
             )
@@ -773,7 +775,7 @@ class Weather(Component):
             database.to_csv(cache_filepath)
 
         # write one year forecast to simulation repository for PV processing -> if PV forecasts are needed
-        if self.my_simulation_parameters.predictive_control:
+        if self.weather_config.predictive_control:
             SingletonSimRepository().set_entry(
                 key=SingletonDictKeyEnum.Weather_TemperatureOutside_yearly_forecast,
                 entry=self.temperature_list

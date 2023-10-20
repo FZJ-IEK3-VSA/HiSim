@@ -41,6 +41,8 @@ class OccupancyConfig(cp.ConfigBase):
     country_name: str
     profile_with_washing_machine_and_dishwasher: bool
     number_of_apartments: float
+    predictive: bool
+    predictive_control: bool
 
     @classmethod
     def get_default_CHS01(cls) -> Any:
@@ -50,6 +52,8 @@ class OccupancyConfig(cp.ConfigBase):
             country_name="DE",
             profile_with_washing_machine_and_dishwasher=True,
             number_of_apartments=1,
+            predictive=False,
+            predictive_control=False,
         )
         return config
 
@@ -63,6 +67,8 @@ class OccupancyConfig(cp.ConfigBase):
             country_name="DE",
             profile_with_washing_machine_and_dishwasher=True,
             number_of_apartments=number_of_apartments,
+            predictive=False,
+            predictive_control=False,
         )
         return config
 
@@ -345,7 +351,7 @@ class Occupancy(cp.Component):
             * self.scaling_factor_according_to_number_of_apartments,
         )
 
-        if self.my_simulation_parameters.predictive_control:
+        if self.occupancy_config.predictive_control:
             last_forecast_timestep = int(
                 timestep
                 + 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
@@ -360,7 +366,7 @@ class Occupancy(cp.Component):
                 self.Electricity_Demand_Forecast_24h, demandforecast
             )
 
-        if self.my_simulation_parameters.predictive_control:
+        if self.occupancy_config.predictive_control:
             last_forecast_timestep = int(
                 timestep
                 + 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
@@ -575,7 +581,7 @@ class Occupancy(cp.Component):
             database.to_csv(cache_filepath)
             del database  # utils.save_cache("Occupancy", parameters, database)
 
-        if self.my_simulation_parameters.predictive:
+        if self.occupancy_config.predictive:
             SingletonSimRepository().set_entry(
                 key=SingletonDictKeyEnum.heating_by_residents_yearly_forecast,
                 entry=self.heating_by_residents

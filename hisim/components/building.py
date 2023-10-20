@@ -90,6 +90,7 @@ class BuildingConfig(cp.ConfigBase):
     absolute_conditioned_floor_area_in_m2: Optional[float]
     total_base_area_in_m2: Optional[float]
     number_of_apartments: Optional[float]
+    predictive: bool
 
     @classmethod
     def get_default_german_single_family_home(
@@ -105,6 +106,7 @@ class BuildingConfig(cp.ConfigBase):
             absolute_conditioned_floor_area_in_m2=121.2,
             total_base_area_in_m2=None,
             number_of_apartments=None,
+            predictive=False
         )
         return config
 
@@ -706,7 +708,7 @@ class Building(dynamic_component.DynamicComponent):
         self,
     ) -> None:
         """Prepare the simulation."""
-        if self.my_simulation_parameters.predictive:
+        if self.buildingconfig.predictive:
 
             # get weather forecast to compute forecasted solar gains
             # ambient_temperature_forecast = SingletonSimRepository().get_entry(
@@ -823,7 +825,6 @@ class Building(dynamic_component.DynamicComponent):
         # Get set temperatures for heating and cooling
         self.get_set_temperatures_for_heating_and_cooling()
 
-        # if self.my_simulation_parameters.system_config.predictive:
         # send building parameters 5r1c to PID controller and to the MPC controller to generate an equivalent state space model
         # state space represntation is used for tuning of the pid and as a prediction model in the model predictive controller
         SingletonSimRepository().set_entry(

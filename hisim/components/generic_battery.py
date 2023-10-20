@@ -81,6 +81,7 @@ class GenericBatteryConfig(cp.ConfigBase):
     model: str
     soc: float
     base: bool
+    predictive: bool
 
     @classmethod
     def get_default_config(cls):
@@ -91,6 +92,7 @@ class GenericBatteryConfig(cp.ConfigBase):
             model="sonnenBatterie 10 - 11,5 kWh",
             soc=10 / 15,
             base=False,
+            predictive=False,
         )
 
 
@@ -237,7 +239,7 @@ class GenericBattery(cp.Component):
 
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""
-        if self.my_simulation_parameters.predictive: #self.my_simulation_parameters.system_config.predictive:
+        if self.config.predictive:
             # send battery specification to the mpc controller for planning the cost optimal operation
             SingletonSimRepository().set_entry(
                 key=SingletonDictKeyEnum.MaximumBatteryCapacity,

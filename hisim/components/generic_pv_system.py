@@ -4,7 +4,7 @@ import math
 import os
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any, List, Tuple
+from typing import Any, List, Tuple, Optional
 
 import numpy as np
 import pandas as pd
@@ -220,6 +220,9 @@ class PVSystemConfig(ConfigBase):
     maintenance_cost_as_percentage_of_investment: float
     #: lifetime in years
     lifetime: float
+    predictive: bool
+    predictive_control: bool
+    prediction_horizon: Optional[int]
 
     @classmethod
     def get_default_PV_system(cls) -> "PVSystemConfig":
@@ -245,6 +248,9 @@ class PVSystemConfig(ConfigBase):
             * 794.41,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
             lifetime=25,  # value from emission_factros_and_costs_devices.csv
+            predictive=False,
+            predictive_control=False,
+            prediction_horizon=None,
         )
 
     @classmethod
@@ -623,12 +629,12 @@ class PVSystem(cp.Component):
                 database.to_csv(self.cache_filepath, sep=",", decimal=".", index=False)
 
         if (
-            self.my_simulation_parameters.predictive_control
-            and self.my_simulation_parameters.prediction_horizon
+            self.pvconfig.predictive_control
+            and self.pvconfig.prediction_horizon is not None
         ):
             last_forecast_timestep = int(
                 timestep
-                + self.my_simulation_parameters.prediction_horizon
+                + self.pvconfig.prediction_horizon
                 / self.my_simulation_parameters.seconds_per_timestep
             )
             if last_forecast_timestep > len(self.output):
@@ -703,7 +709,7 @@ class PVSystem(cp.Component):
             self.ac_power_factor = math.ceil((self.pvconfig.power * 1e3) / 250)
 
             # when predictive control is activated, the PV simulation is run beforhand to make forecasting easier
-            if self.my_simulation_parameters.predictive_control:
+            if self.pvconfig.predictive_control:
                 # get yearly weather data from dictionary
                 dni_extra = SingletonSimRepository().get_entry(
                     key=SingletonDictKeyEnum.Weather_DirectNormalIrradianceExtra_yearly_forecast
@@ -758,7 +764,7 @@ class PVSystem(cp.Component):
                 self.data = [0] * self.my_simulation_parameters.timesteps
                 self.data_length = self.my_simulation_parameters.timesteps
 
-        if self.my_simulation_parameters.predictive:        
+        if self.pvconfig.predictive:        
             pv_forecast_yearly=[self.output[t] * self.pvconfig.power for t in range(self.my_simulation_parameters.timesteps)]
             SingletonSimRepository().set_entry(
                 key=SingletonDictKeyEnum.pv_forecast_yearly,

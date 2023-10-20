@@ -3,7 +3,7 @@
 # clean
 
 import datetime
-from typing import List
+from typing import List, Optional
 
 # from typing import Any
 from dataclasses import dataclass
@@ -109,6 +109,8 @@ class MpcControllerConfig(ConfigBase):
     c_m: float
     cop_coef: List
     eer_coef: List
+    predictive: bool
+    prediction_horizon: Optional[int]
 
     @classmethod
     def get_default_config(cls):
@@ -166,6 +168,8 @@ class MpcControllerConfig(ConfigBase):
             c_m=0.0,
             cop_coef=[0] * 2,
             eer_coef=[0] * 2,
+            predictive=True,
+            prediction_horizon=0,
         )
 
 
@@ -361,9 +365,9 @@ class MpcController(cp.Component):
 
         self.add_default_connections(self.get_weather_default_connections())
 
-        if self.my_simulation_parameters.prediction_horizon is not None:
+        if self.mpcconfig.prediction_horizon is not None:
             self.prediction_horizon = int(
-                self.my_simulation_parameters.prediction_horizon
+                self.mpcconfig.prediction_horizon
                 / self.my_simulation_parameters.seconds_per_timestep
             )
         self.state: MPCcontrollerState = MPCcontrollerState(
@@ -436,7 +440,7 @@ class MpcController(cp.Component):
 
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""
-        if self.my_simulation_parameters.predictive:
+        if self.mpcconfig.predictive:
             """Get forecasted disturbance (weather)"""
             self.temp_forecast = SingletonSimRepository().get_entry(
                 key=SingletonDictKeyEnum.Weather_TemperatureOutside_yearly_forecast
@@ -481,7 +485,7 @@ class MpcController(cp.Component):
 
     def build(self):
         """Build function: The function sets important constants and parameters for the calculations."""
-        if self.my_simulation_parameters.predictive:
+        if self.mpcconfig.predictive:
 
             """getting building physical properties for state space model"""
             self.h_tr_w = SingletonSimRepository().get_entry(
@@ -1290,7 +1294,7 @@ class MpcController(cp.Component):
     ) -> None:
         """Start simulation of the MPC here."""
         # t_m_old = stsv.get_input_value(self.t_m_channel)
-        if self.my_simulation_parameters.predictive:
+        if self.mpcconfig.predictive:
             if (
                 self.mpc_scheme == "optimization_once_aday_only"
                 and timestep % self.prediction_horizon == 0

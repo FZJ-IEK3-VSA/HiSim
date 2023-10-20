@@ -1,4 +1,4 @@
-"""Controller of a simple electrolyzer
+"""Controller of the generic_electrolyzer
 
 The controller looks at the available surplus electricity and passes the signal to the electrolyzer accordingly.
 In addition the controller takes care of minimum operation and indle times and the available capacity in the hydrogen storage."""
@@ -18,7 +18,7 @@ from hisim.simulationparameters import SimulationParameters
 
 @dataclass_json
 @dataclass
-class L1ElectrolyzerConfig(cp.ConfigBase):
+class L1ElectrolyzerControllerConfig(cp.ConfigBase):
     """Electrolyzer Controller Config."""
 
     #: name of the device
@@ -35,9 +35,9 @@ class L1ElectrolyzerConfig(cp.ConfigBase):
     h2_soc_threshold: float
 
     @staticmethod
-    def get_default_config() -> "L1ElectrolyzerConfig":
+    def get_default_config() -> "L1ElectrolyzerControllerConfig":
         """Returns the default configuration of an electrolyzer controller."""
-        config = L1ElectrolyzerConfig(
+        config = L1ElectrolyzerControllerConfig(
             name="L1 Electrolyzer Controller",
             source_weight=1,
             min_operation_time_in_seconds=14400,
@@ -106,7 +106,7 @@ class L1GenericElectrolyzerController(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: L1ElectrolyzerConfig,
+        config: L1ElectrolyzerControllerConfig,
     ) -> None:
 
         super().__init__(

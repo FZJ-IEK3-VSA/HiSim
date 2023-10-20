@@ -540,28 +540,6 @@ def modular_household_explicit(
             count=count,
         )
 
-    # """CHP + H2 STORAGE + ELECTROLYSIS"""
-    if chp_included and not buffer_included and clever:
-        production, count = component_connections.configure_chp(
-            my_sim=my_sim,
-            my_simulation_parameters=my_simulation_parameters,
-            my_building=my_building,
-            my_electricity_controller=my_electricity_controller,
-            chp_power=chp_power,
-            production=production,
-            count=count,
-        )
-    if chp_included and buffer_included and clever:
-        production, count = component_connections.configure_chp_with_buffer(
-            my_sim=my_sim,
-            my_simulation_parameters=my_simulation_parameters,
-            my_buffer=my_buffer,
-            my_boiler=my_boiler,
-            chp_power=chp_power,
-            production=production,
-            count=count,
-        )
-
     if needs_ems(
         battery_included,
         chp_included,

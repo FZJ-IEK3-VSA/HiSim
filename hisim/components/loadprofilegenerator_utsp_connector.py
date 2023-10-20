@@ -49,6 +49,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     charging_station_set: JsonReference
     consumption: float
     profile_with_washing_machine_and_dishwasher: bool
+    predictive_control: bool
 
     @classmethod
     def get_main_classname(cls):
@@ -70,6 +71,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
             charging_station_set=ChargingStationSets.Charging_At_Home_with_03_7_kW,
             consumption=0,
             profile_with_washing_machine_and_dishwasher=True,
+            predictive_control=False
         )
         return config
 
@@ -269,7 +271,7 @@ class UtspLpgConnector(cp.Component):
             self.water_consumption_c, self.water_consumption[timestep]
         )
 
-        if self.my_simulation_parameters.predictive_control:
+        if self.config.predictive_control:
             last_forecast_timestep = int(
                 timestep
                 + 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep

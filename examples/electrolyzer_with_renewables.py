@@ -26,7 +26,6 @@ from hisim.components.controller_l1_generic_electrolyzer import (
     ElectrolyzerControllerConfig,
 )
 
-from hisim.postprocessingoptions import PostProcessingOptions
 
 __authors__ = "Franz Oldopp"
 __copyright__ = "Copyright 2023, FZJ-IEK-3"

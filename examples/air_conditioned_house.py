@@ -156,6 +156,11 @@ def household_air_conditioner_generic(
     min_comfort_temp = 21.0
     max_comfort_temp = 24.0
 
+    # Set prediction
+    predictive = True
+    predictive_control = True
+    prediction_horizon = 24 * 3600
+
     # Set weather
     location = "Seville"
 
@@ -249,6 +254,7 @@ def household_air_conditioner_generic(
         absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
         total_base_area_in_m2=total_base_area_in_m2,
         number_of_apartments=number_of_apartments,
+        predictive=predictive,
     )
     my_building = building.Building(
         config=my_building_config,
@@ -259,8 +265,11 @@ def household_air_conditioner_generic(
 
     """ Occupancy Profile """
     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_CHS01_according_to_number_of_apartments(
-        number_of_apartments=my_building_information.number_of_apartments
+        number_of_apartments=my_building_information.number_of_apartments,
     )
+    my_occupancy_config.predictive_control = predictive_control
+    my_occupancy_config.predictive = predictive
+
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -271,6 +280,8 @@ def household_air_conditioner_generic(
     my_weather_config = weather.WeatherConfig.get_default(
         location_entry=weather.LocationEnum.Seville
     )
+    my_weather_config.predictive_control = predictive_control
+
     my_weather = weather.Weather(
         config=my_weather_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -294,6 +305,9 @@ def household_air_conditioner_generic(
         cost=pv_cost,
         maintenance_cost_as_percentage_of_investment=pv_maintenance_cost_as_percentage_of_investment,
         lifetime=pv_lifetime,
+        predictive=predictive,
+        prediction_horizon=prediction_horizon,
+        predictive_control=predictive_control,
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
@@ -356,6 +370,7 @@ def household_air_conditioner_generic(
             soc=batt_soc,
             name="Generic Battery",
             base=False,
+            predictive=predictive,
         )
         my_battery = generic_battery.GenericBattery(
             config=my_battery_config,
@@ -413,7 +428,10 @@ def household_air_conditioner_generic(
             c_m=0.0,
             cop_coef=[0] * 2,
             eer_coef=[0] * 2,
+            predictive=predictive,
+            prediction_horizon=prediction_horizon,
         )
+
         my_mpc_controller = controller_mpc.MpcController(
             config=my_mpc_controller_config,
             my_simulation_parameters=my_simulation_parameters,

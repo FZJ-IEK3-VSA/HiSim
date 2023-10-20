@@ -33,23 +33,7 @@ jobs:
       working-directory: ./
       run: |
         prospector setup.py
-        prospector examples/basic_household.py
-        prospector examples/basic_household_only_heating.py
-        prospector examples/default_connections.py
-        prospector examples/dynamic_components.py
-        prospector examples/household_1_advanced_hp_diesel_car.py
-        prospector examples/household_2_advanced_hp_diesel_car_pv.py
-        prospector examples/household_3_advanced_hp_diesel_car_pv_battery.py
-        prospector examples/household_4_advanced_hp_ev_pv.py
-        prospector examples/household_5_advanced_hp_ev_pv_battery.py
-        prospector examples/household_reference_gas_heater_diesel_car.py
-        prospector examples/household_with_gas_heater.py
-        prospector examples/household_with_gas_heater_with_controller.py
-        prospector examples/household_with_heatpump_and_pv.py
-        prospector examples/simple_examples.py
-        prospector examples/household_with_advanced_hp_hws_hds_pv.py
-        prospector examples/household_with_advanced_hp_hws_hds_pv_battery_ems.py
-        prospector examples/air_conditioned_house.py
+        prospector examples/
         prospector hisim/component.py
         prospector hisim/component_wrapper.py
         prospector hisim/dynamic_component.py

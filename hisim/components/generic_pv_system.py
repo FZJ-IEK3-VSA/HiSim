@@ -287,6 +287,9 @@ class PVSystemConfig(ConfigBase):
             * 794.41,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
             lifetime=25,  # value from emission_factros_and_costs_devices.csv
+            predictive=False,
+            predictive_control=False,
+            prediction_horizon=None,
         )
 
     @classmethod

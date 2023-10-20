@@ -25,9 +25,6 @@ class SimulationParameters(JSONWizard):
     result_directory: str
     skip_finished_results: bool
     surplus_control: bool
-    # predictive: bool
-    # predictive_control: bool
-    # prediction_horizon: Optional[int]
 
     def __init__(
         self,

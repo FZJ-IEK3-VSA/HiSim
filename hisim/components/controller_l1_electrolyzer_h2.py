@@ -1,4 +1,4 @@
-""" Controller for the generic electrolyzer. """
+""" Controller for the generic_electrolyzer_h2 component. """
 
 import os
 from typing import List, Any

@@ -265,7 +265,7 @@ def modular_household_explicit(
                 charging_station_set=charging_station,
                 consumption=0,
                 profile_with_washing_machine_and_dishwasher=not smart_devices_included,
-                predictive_control=False
+                predictive_control=False,
             )
         )
 
@@ -282,7 +282,7 @@ def modular_household_explicit(
             not smart_devices_included,
             number_of_apartments=my_building_information.number_of_apartments,
             predictive=False,
-            predictive_control=False
+            predictive_control=False,
         )
         my_occupancy = loadprofilegenerator_connector.Occupancy(
             config=my_occupancy_config,

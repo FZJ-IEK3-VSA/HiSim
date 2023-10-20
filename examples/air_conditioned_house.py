@@ -330,6 +330,8 @@ def household_air_conditioner_generic(
         fixed_price=[],
         static_tou_price=[],
         price_injection=0.0,
+        prediction_horizon=prediction_horizon,
+        predictive_control=predictive_control,
     )
     my_price_signal = generic_price_signal.PriceSignal(
         config=my_price_signal_config,

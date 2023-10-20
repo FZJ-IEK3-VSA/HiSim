@@ -5,7 +5,7 @@ import pandas as pd
 import os
 
 # Owned
-from typing import List, Any
+from typing import List, Any, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hisim import component as cp
@@ -41,6 +41,8 @@ class PriceSignalConfig(cp.ConfigBase):
     fixed_price: list
     static_tou_price: list
     price_injection: float
+    predictive_control: bool
+    prediction_horizon: Optional[int]
 
     @classmethod
     def get_default_price_signal_config(cls) -> Any:
@@ -54,6 +56,8 @@ class PriceSignalConfig(cp.ConfigBase):
             fixed_price=[],
             static_tou_price=[],
             price_injection=0.0,
+            predictive_control=False,
+            prediction_horizon=None,
         )
         return config
 
@@ -134,15 +138,15 @@ class PriceSignal(cp.Component):
         priceinjectionforecast = [0.1]
         pricepurchaseforecast = [0.5]
         if (
-            self.my_simulation_parameters.predictive_control
-            and self.my_simulation_parameters.prediction_horizon
+            self.config.predictive_control
+            and self.config.prediction_horizon
         ):
             priceinjectionforecast = [0.1] * int(
-                self.my_simulation_parameters.prediction_horizon
+                self.config.prediction_horizon
                 / self.my_simulation_parameters.seconds_per_timestep
             )
             pricepurchaseforecast = [0.5] * int(
-                self.my_simulation_parameters.prediction_horizon
+                self.config.prediction_horizon
                 / self.my_simulation_parameters.seconds_per_timestep
             )
         elif (
@@ -150,7 +154,7 @@ class PriceSignal(cp.Component):
             == "Prices at second half of 2021"
         ):
             priceinjectionforecast = [self.price_signal_config.price_injection] * int(
-                self.my_simulation_parameters.system_config.prediction_horizon
+                self.config.prediction_horizon
                 / self.my_simulation_parameters.seconds_per_timestep
             )
         elif self.price_signal_config.pricing_scheme == "dynamic":
@@ -159,11 +163,11 @@ class PriceSignal(cp.Component):
             pricepurchaseforecast = self.price_signal_config.fixed_price
         elif self.price_signal_config.price_signal_type == "dummy":
             priceinjectionforecast = [10] * int(
-                self.my_simulation_parameters.system_config.prediction_horizon
+                self.config.prediction_horizon
                 / self.my_simulation_parameters.seconds_per_timestep
             )
             pricepurchaseforecast = [50] * int(
-                self.my_simulation_parameters.system_config.prediction_horizon
+                self.config.prediction_horizon
                 / self.my_simulation_parameters.seconds_per_timestep
             )
             # pricepurchaseforecast = [ ]

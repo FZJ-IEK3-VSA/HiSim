@@ -68,7 +68,8 @@ def get_heating_reference_temperature_and_season_from_location(
         hisim.utils.HISIMPATH["housing_reference_temperatures"]
     )
     # converting_data.index = converting_data["Location"]
-    converting_data.set_index("Location")
+    converting_data.set_index(inplace=True, keys="Location")
+
     return (
         float(converting_data.loc[location]["HeatingReferenceTemperature"]),
         [

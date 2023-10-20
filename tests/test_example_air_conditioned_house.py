@@ -10,7 +10,7 @@ from hisim import log
 from hisim import utils
 
 
-@pytest.mark.examples
+@pytest.mark.mpc
 @utils.measure_execution_time
 def test_household_with_air_conditioner_and_controller_mpc():
     """The test should check if a normal simulation works with the smart cooling implementation."""

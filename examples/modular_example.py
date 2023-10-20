@@ -265,6 +265,7 @@ def modular_household_explicit(
                 charging_station_set=charging_station,
                 consumption=0,
                 profile_with_washing_machine_and_dishwasher=not smart_devices_included,
+                predictive_control=False
             )
         )
 

@@ -315,25 +315,19 @@ class HeatPumpHplib(Component):
             self.get_default_connections_from_simple_hot_water_storage()
         )
 
-    def get_default_connections_from_heat_pump_controller(
-        self,
-    ):
+    def get_default_connections_from_heat_pump_controller(self,):
         """Get default connections."""
         log.information("setting heat pump controller default connections")
         connections = []
         hpc_classname = HeatPumpHplibController.get_classname()
         connections.append(
             ComponentConnection(
-                HeatPumpHplib.OnOffSwitch,
-                hpc_classname,
-                HeatPumpHplibController.State,
+                HeatPumpHplib.OnOffSwitch, hpc_classname, HeatPumpHplibController.State,
             )
         )
         return connections
 
-    def get_default_connections_from_weather(
-        self,
-    ):
+    def get_default_connections_from_weather(self,):
         """Get default connections."""
         log.information("setting weather default connections")
         connections = []
@@ -355,9 +349,7 @@ class HeatPumpHplib(Component):
         )
         return connections
 
-    def get_default_connections_from_simple_hot_water_storage(
-        self,
-    ):
+    def get_default_connections_from_simple_hot_water_storage(self,):
         """Get simple hot water storage default connections."""
         log.information("setting simple hot water storage default connections")
         connections = []
@@ -409,6 +401,7 @@ class HeatPumpHplib(Component):
 
         # cycling means periodic turning on and off of the heat pump
         if self.cycling_mode is True:
+
             # Parameter
             time_on_min = self.minimum_running_time_in_seconds  # [s]
             time_off_min = self.minimum_idle_time_in_seconds
@@ -466,6 +459,7 @@ class HeatPumpHplib(Component):
                 time_on_cooling + self.my_simulation_parameters.seconds_per_timestep
             )
             time_on_heating = 0
+            time_on_heating = 0
             time_off = 0
         elif on_off == 0:
             # Calulate outputs for off mode
@@ -507,9 +501,7 @@ class HeatPumpHplib(Component):
         return config.cost, config.co2_footprint, config.lifetime
 
     def get_cost_opex(
-        self,
-        all_outputs: List,
-        postprocessing_results: pd.DataFrame,
+        self, all_outputs: List, postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of maintenance costs.
 
@@ -546,9 +538,7 @@ class HeatPumpState:
     time_on_cooling: int = 0
     on_off_previous: float = 0
 
-    def self_copy(
-        self,
-    ):
+    def self_copy(self,):
         """Copy the Heat Pump State."""
         return HeatPumpState(
             self.time_on, self.time_off, self.time_on_cooling, self.on_off_previous
@@ -613,15 +603,15 @@ class HeatPumpHplibController(Component):
     WaterTemperatureInputFromHeatWaterStorage = (
         "WaterTemperatureInputFromHeatWaterStorage"
     )
-    SimpleHotWaterStorageTemperatureModifier = (
-        "SimpleHotWaterStorageTemperatureModifier"
-    )
-
     HeatingFlowTemperatureFromHeatDistributionSystem = (
         "HeatingFlowTemperatureFromHeatDistributionSystem"
     )
 
     DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
+
+    SimpleHotWaterStorageTemperatureModifier = (
+        "SimpleHotWaterStorageTemperatureModifier"
+    )
 
     # Outputs
     State = "State"
@@ -661,15 +651,6 @@ class HeatPumpHplibController(Component):
             Units.CELSIUS,
             True,
         )
-        self.simple_hot_water_storage_temperature_modifier: ComponentInput = (
-            self.add_input(
-                self.component_name,
-                self.SimpleHotWaterStorageTemperatureModifier,
-                LoadTypes.TEMPERATURE,
-                Units.CELSIUS,
-                mandatory=False,
-            )
-        )
 
         self.heating_flow_temperature_from_heat_distribution_system_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -685,6 +666,16 @@ class HeatPumpHplibController(Component):
                 LoadTypes.TEMPERATURE,
                 Units.CELSIUS,
                 True,
+            )
+        )
+
+        self.simple_hot_water_storage_temperature_modifier_channel: ComponentInput = (
+            self.add_input(
+                self.component_name,
+                self.SimpleHotWaterStorageTemperatureModifier,
+                LoadTypes.TEMPERATURE,
+                Units.CELSIUS,
+                mandatory=False,
             )
         )
 
@@ -707,9 +698,7 @@ class HeatPumpHplibController(Component):
             self.get_default_connections_from_simple_hot_water_storage()
         )
 
-    def get_default_connections_from_heat_distribution_controller(
-        self,
-    ):
+    def get_default_connections_from_heat_distribution_controller(self,):
         """Get default connections."""
         log.information("setting heat distribution controller default connections")
         connections = []
@@ -725,9 +714,7 @@ class HeatPumpHplibController(Component):
         )
         return connections
 
-    def get_default_connections_from_weather(
-        self,
-    ):
+    def get_default_connections_from_weather(self,):
         """Get default connections."""
         log.information("setting weather default connections")
         connections = []
@@ -741,9 +728,7 @@ class HeatPumpHplibController(Component):
         )
         return connections
 
-    def get_default_connections_from_simple_hot_water_storage(
-        self,
-    ):
+    def get_default_connections_from_simple_hot_water_storage(self,):
         """Get simple hot water storage default connections."""
         log.information("setting simple hot water storage default connections")
         connections = []
@@ -758,9 +743,7 @@ class HeatPumpHplibController(Component):
         return connections
 
     def build(
-        self,
-        mode: float,
-        temperature_offset_for_state_conditions_in_celsius: float,
+        self, mode: float, temperature_offset_for_state_conditions_in_celsius: float,
     ) -> None:
         """Build function.
 
@@ -806,21 +789,20 @@ class HeatPumpHplibController(Component):
         else:
             # Retrieves inputs
 
-            water_temperature_input_from_heat_water_storage_in_celsius = (
-                stsv.get_input_value(self.water_temperature_input_channel)
+            water_temperature_input_from_heat_water_storage_in_celsius = stsv.get_input_value(
+                self.water_temperature_input_channel
             )
 
-            heating_flow_temperature_from_heat_distribution_system = (
-                stsv.get_input_value(
-                    self.heating_flow_temperature_from_heat_distribution_system_channel
-                )
+            heating_flow_temperature_from_heat_distribution_system = stsv.get_input_value(
+                self.heating_flow_temperature_from_heat_distribution_system_channel
             )
 
             daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
                 self.daily_avg_outside_temperature_input_channel
             )
+
             storage_temperature_modifier = stsv.get_input_value(
-                self.simple_hot_water_storage_temperature_modifier
+                self.simple_hot_water_storage_temperature_modifier_channel
             )
 
             # turning heat pump off when the average daily outside temperature is above a certain threshold (if threshold is set in the config)
@@ -899,6 +881,7 @@ class HeatPumpHplibController(Component):
                 return
 
         elif self.controller_heatpumpmode == "off":
+
             # heat pump is only turned on if the water temperature is below the flow temperature
             # and if the avg daily outside temperature is cold enough (summer mode on)
             if (
@@ -927,14 +910,13 @@ class HeatPumpHplibController(Component):
         temperature_offset_for_state_conditions_in_celsius: float,
     ) -> None:
         """Set conditions for the heat pump controller mode according to the flow temperature."""
-        # Todo: storage temperature modifier is only working for heating so far. Implement for cooling similar
+
         heating_set_temperature = set_heating_flow_temperature_in_celsius
         cooling_set_temperature = set_heating_flow_temperature_in_celsius
 
         if self.controller_heatpumpmode == "heating":
             if (
-                water_temperature_input_in_celsius
-                >= heating_set_temperature + storage_temperature_modifier
+                water_temperature_input_in_celsius >= heating_set_temperature
                 or summer_heating_mode == "off"
             ):
                 self.controller_heatpumpmode = "off"
@@ -948,6 +930,7 @@ class HeatPumpHplibController(Component):
                 return
 
         elif self.controller_heatpumpmode == "off":
+
             # heat pump is only turned on if the water temperature is below the flow temperature
             # and if the avg daily outside temperature is cold enough (summer heating mode on)
             if (

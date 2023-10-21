@@ -53,6 +53,8 @@ jobs:
         prospector examples/decentralized_energy_netw_pv_bat_h2system_hp_rSOC.py
         prospector examples/ptx_transf_bat_ec_gird.py
         prospector examples/ptx_transf_bat_ec_no_gird.py
+        prospector examples/household_cluster_advanced_hp_pv_battery_ems.py
+        prospector examples/household_cluster_reference_advanced_hp.py
         prospector hisim/component.py
         prospector hisim/component_wrapper.py
         prospector hisim/dynamic_component.py

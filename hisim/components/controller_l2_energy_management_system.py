@@ -393,7 +393,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 stsv.set_output_value(output=output, value=deltademand)
 
         return deltademand
-        return deltademand
+
 
 
     def optimize_own_consumption_iterative(

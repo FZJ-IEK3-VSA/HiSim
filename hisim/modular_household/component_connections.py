@@ -1349,7 +1349,7 @@ def configure_electrolyzer_and_h2_storage(
 
     # run time controller of electrolyzer
     my_electrolyzer_controller = (
-        controller_l1_electrolyzer.ElectrolyzerController(
+        controller_l1_electrolyzer.L1GenericElectrolyzerController(
             my_simulation_parameters=my_simulation_parameters,
             config=electrolyzer_controller_config,
         )
@@ -1382,7 +1382,7 @@ def configure_electrolyzer_and_h2_storage(
         output_description="Target electricity for electrolyzer. ",
     )
     my_electrolyzer_controller.connect_dynamic_input(
-        input_fieldname=controller_l1_electrolyzer.ElectrolyzerController.ProvidedLoad,
+        input_fieldname=controller_l1_electrolyzer.L1GenericElectrolyzerController.ProvidedLoad,
         src_object=electricity_to_electrolyzer_target,
     )
 

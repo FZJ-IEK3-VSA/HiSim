@@ -27,7 +27,7 @@ from hisim.components.controller_l1_fuel_cell import (
 )
 from hisim.components.generic_fuel_cell import FuelCell, FuelCellConfig
 
-from hisim.components.controller_l1_electrolyzer import (
+from hisim.components.controller_l1_electrolyzer_h2 import (
     ElectrolyzerController,
     ElectrolyzerControllerConfig,
 )

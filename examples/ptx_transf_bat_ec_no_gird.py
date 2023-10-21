@@ -26,7 +26,7 @@ from hisim.components.controller_l2_ptx_energy_management_system import (
     PTXController,
     PTXControllerConfig,
 )
-from hisim.components.controller_l1_electrolyzer import (
+from hisim.components.controller_l1_electrolyzer_h2 import (
     ElectrolyzerController,
     ElectrolyzerControllerConfig,
 )

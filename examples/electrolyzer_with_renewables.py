@@ -21,12 +21,10 @@ from hisim.components.csvloader import CSVLoader, CSVLoaderConfig
 from hisim.components.transformer_rectifier import Transformer, TransformerConfig
 
 # import controller
-from hisim.components.controller_l1_generic_electrolyzer import (
+from hisim.components.controller_l1_electrolyzer_h2 import (
     ElectrolyzerController,
     ElectrolyzerControllerConfig,
 )
-
-from hisim.postprocessingoptions import PostProcessingOptions
 
 __authors__ = "Franz Oldopp"
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
@@ -99,7 +97,6 @@ def electrolyzer_example(
         sep=sep,  # Separator used in the CSV file (e.g., "," or ";")
         decimal=decimal,  # Decimal indicator used in the CSV file (e.g., "." or ",")
         multiplier=multiplier,  # Multiplier factor for amplification (if needed)
-        output_description="CSV loader power generation",
     )
 
     # Create new CSV loader object
@@ -111,7 +108,7 @@ def electrolyzer_example(
     my_transformer = Transformer(
         my_simulation_parameters=my_simulation_parameters,
         config=TransformerConfig(
-            name=name, efficiency=efficiency, loadtype=loadtype, unit=unit
+            name=name, efficiency=efficiency,
         ),
     )
 

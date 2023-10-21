@@ -1,371 +1,243 @@
-""" Controller for the generic electrolyzer. """
+"""Controller of the generic_electrolyzer
 
-import os
-from typing import List, Any
-import json
+The controller looks at the available surplus electricity and passes the signal to the electrolyzer accordingly.
+In addition the controller takes care of minimum operation and indle times and the available capacity in the hydrogen storage."""
+
 from dataclasses import dataclass
-from dataclasses_json import dataclass_json
-from hisim.component import (
-    ConfigBase,
-    Component,
-    ComponentInput,
-    ComponentOutput,
-    SingleTimeStepValues,
-)
+from typing import List
 
-from hisim import loadtypes as lt
 from hisim import utils
-from hisim.simulationparameters import SimulationParameters
+from dataclasses_json import dataclass_json
 
-__authors__ = "Franz Oldopp"
-__copyright__ = "Copyright 2023, IEK-3"
-__credits__ = ["Franz Oldopp"]
-__license__ = "MIT"
-__version__ = "0.5"
-__maintainer__ = "Franz Oldopp"
-__email__ = "f.oldopp@fz-juelich.de"
-__status__ = "development"
+from hisim import component as cp
+from hisim import loadtypes as lt
+from hisim import log
+from hisim.components import generic_hydrogen_storage
+from hisim.simulationparameters import SimulationParameters
 
 
 @dataclass_json
 @dataclass
-class ElectrolyzerControllerConfig(ConfigBase):
+class L1ElectrolyzerControllerConfig(cp.ConfigBase):
+    """Electrolyzer Controller Config."""
 
-    """Configutation of the Simple Electrolyzer Controller."""
-
-    @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return ElectrolyzerController.get_full_classname()
-
+    #: name of the device
     name: str
-    nom_load: float
-    min_load: float
-    max_load: float
-    standby_load: float
-    warm_start_time: float
-    cold_start_time: float
-
-    @classmethod
-    def get_default_electrolyzer_controller_config(
-        cls,
-    ) -> Any:
-        """Get a default electrolyzer controller config."""
-        config = ElectrolyzerControllerConfig(
-            name="DefaultElectrolyzerController",
-            nom_load=100.0,
-            min_load=10.0,
-            max_load=110.0,
-            standby_load=5.0,
-            warm_start_time=70.0,
-            cold_start_time=1800.0,
-        )
-        return config
+    #: priority of the device in hierachy: the higher the number the lower the priority
+    source_weight: int
+    # minimal operation time of heat source
+    min_operation_time_in_seconds: int
+    # minimal resting time of heat source
+    min_idle_time_in_seconds: int
+    #: minimal electrical power of the electrolyzer
+    P_min_electrolyzer: float
+    #: maximal allowed content of hydrogen storage for turning the electrolyzer on
+    h2_soc_threshold: float
 
     @staticmethod
-    def read_config(electrolyzer_name):
-        """Opens the according JSON-file, based on the electrolyzer_name."""
-
-        config_file = os.path.join(
-            utils.HISIMPATH["inputs"], "electrolyzer_manufacturer_config.json"
-        )
-        with open(config_file, "r") as json_file:
-            data = json.load(json_file)
-            return data.get("Electrolyzer variants", {}).get(electrolyzer_name, {})
-
-    @classmethod
-    def control_electrolyzer(cls, electrolyzer_name):
-        """Initializes the config variables based on the JSON-file."""
-
-        config_json = cls.read_config(electrolyzer_name)
-
-        config = ElectrolyzerControllerConfig(
-            name="L1ElectrolyzerController",  # config_json.get("name", "")
-            nom_load=config_json.get("nom_load", 0.0),
-            min_load=config_json.get("min_load", 0.0),
-            max_load=config_json.get("max_load", 0.0),
-            standby_load=config_json.get("standby_load", 0.0),
-            warm_start_time=config_json.get("warm_start_time", 0.0),
-            cold_start_time=config_json.get("cold_start_time", 0.0),
+    def get_default_config() -> "L1ElectrolyzerControllerConfig":
+        """Returns the default configuration of an electrolyzer controller."""
+        config = L1ElectrolyzerControllerConfig(
+            name="L1 Electrolyzer Controller",
+            source_weight=1,
+            min_operation_time_in_seconds=14400,
+            min_idle_time_in_seconds=7200,
+            P_min_electrolyzer=1200,
+            h2_soc_threshold=96,
         )
         return config
 
 
-class ElectrolyzerController(Component):
-    # Inputs
-    ProvidedLoad = "ProvidedLoad"
-
-    # Outputs
-    DistributedLoad = "DistributedLoad"
-    ShutdownCount = "ShutdownCount"
-    StandbyCount = "StandbyCount"
-    CurrentMode = "CurrentMode"
-    CurtailedLoad = "CurtailedLoad"
-    OffCount = "OffCount"
+class L1ElectrolyzerControllerState:
+    """This data class saves the state of the electrolyzer controller."""
 
     def __init__(
         self,
-        my_simulation_parameters: SimulationParameters,
-        config: ElectrolyzerControllerConfig,
-    ) -> None:
-        self.controllerconfig = config
+        state: int = 0,
+        activation_time_step: int = 0,
+        deactivation_time_step: int = 0,
+    ):
+        self.state: int = state
+        self.activation_time_step: int = activation_time_step
+        self.deactivation_time_step: int = deactivation_time_step
 
-        self.nom_load = config.nom_load
-        self.min_load = config.min_load
-        self.max_load = config.max_load
-        self.standby_load = config.standby_load
-        self.warm_start_time = config.warm_start_time
-        self.cold_start_time = config.cold_start_time
+    def clone(self) -> "L1ElectrolyzerControllerState":
+        return L1ElectrolyzerControllerState(
+            state=self.state,
+            activation_time_step=self.activation_time_step,
+            deactivation_time_step=self.deactivation_time_step,
+        )
+
+    def activate(self, timestep: int) -> None:
+        """Activates the heat pump and remembers the time step."""
+        if self.state == 0:
+            self.activation_time_step = timestep
+        self.state = 1
+
+    def deactivate(self, timestep: int) -> None:
+        """Deactivates the heat pump and remembers the time step."""
+        if self.state == 1:
+            self.deactivation_time_step = timestep
+        self.state = 0
+
+
+class L1GenericElectrolyzerController(cp.Component):
+    """Controller of the Electrolyzer.
+
+    It takes the available surplus electricity of the energy management system and passes it to the electrolyzer.
+    If either the available surplus is too low, or the availabel capacity of the hydrogen storage is below the indicated threshold,
+    the electricity surplus signal is modified accordingly.
+
+    Components to connect to:
+    (1) energy management system (controller_l2_energy_management_system)
+    (2) hydrogen storage (generic_h2storage)
+    """
+
+    # Inputs
+    ElectricityTarget = "ElectricityTarget"
+    HydrogenSOC = "HydrogenSOC"
+
+    # Outputs
+    AvailableElectricity = "AvailableElectricity"
+
+    # Similar components to connect to:
+    # 1. Building
+    @utils.measure_execution_time
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: L1ElectrolyzerControllerConfig,
+    ) -> None:
 
         super().__init__(
-            name=self.controllerconfig.name,
+            name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
         )
+        self.minimum_runtime_in_timesteps = int(
+            config.min_operation_time_in_seconds
+            / self.my_simulation_parameters.seconds_per_timestep
+        )
+        self.minimum_resting_time_in_timesteps = int(
+            config.min_idle_time_in_seconds
+            / self.my_simulation_parameters.seconds_per_timestep
+        )
 
-        # =================================================================================================================================
-        # Input channels
+        self.state = L1ElectrolyzerControllerState()
+        self.previous_state = L1ElectrolyzerControllerState()
+        self.processed_state = L1ElectrolyzerControllerState()
 
-        # Getting the load input
-        self.load_input: ComponentInput = self.add_input(
+        # add inputs
+        self.electricity_target_channel: cp.ComponentInput = self.add_input(
             self.component_name,
-            ElectrolyzerController.ProvidedLoad,
+            self.ElectricityTarget,
             lt.LoadTypes.ELECTRICITY,
-            lt.Units.KILOWATT,
-            True,
+            lt.Units.WATT,
+            mandatory=True,
         )
-
-        # =================================================================================================================================
-        # Output channels
-
-        self.standby_count_total: ComponentOutput = self.add_output(
+        self.hydrogen_soc_channel: cp.ComponentInput = self.add_input(
             self.component_name,
-            ElectrolyzerController.StandbyCount,
-            lt.LoadTypes.ON_OFF,
-            lt.Units.ANY,
-            output_description="standby count",
+            self.HydrogenSOC,
+            lt.LoadTypes.HYDROGEN,
+            lt.Units.PERCENT,
+            mandatory=True,
         )
-
-        self.distributed_load: ComponentOutput = self.add_output(
+        # add outputs
+        self.available_electicity_output_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
-            ElectrolyzerController.DistributedLoad,
+            self.AvailableElectricity,
             lt.LoadTypes.ELECTRICITY,
-            lt.Units.KILOWATT,
-            output_description="Load to electrolyzer",
+            lt.Units.WATT,
+            output_description="Available Electricity for Electrolyzer from Electrolyzer Controller.",
         )
 
-        self.current_mode_electrolyzer: ComponentOutput = self.add_output(
-            self.component_name,
-            ElectrolyzerController.CurrentMode,
-            lt.LoadTypes.ACTIVATION,
-            lt.Units.ANY,
-            output_description="current mode of electrolyzer",
+        self.add_default_connections(self.get_default_connections_from_h2_storage())
+
+    def get_default_connections_from_h2_storage(self):
+        """Sets default connections for the hydrogen storage in the electrolyzer controller."""
+        log.information(
+            "setting hydrogen storage default connections in Electrolyzer Controller"
         )
-
-        self.curtailed_load: ComponentOutput = self.add_output(
-            self.component_name,
-            ElectrolyzerController.CurtailedLoad,
-            lt.LoadTypes.ELECTRICITY,
-            lt.Units.KILOWATT,
-            output_description="amount of curtailed load due to min and max load tresholds",
+        connections = []
+        h2_storage_classname = (
+            generic_hydrogen_storage.GenericHydrogenStorage.get_classname()
         )
-
-        self.total_off_count: ComponentOutput = self.add_output(
-            self.component_name,
-            ElectrolyzerController.OffCount,
-            lt.LoadTypes.ON_OFF,
-            lt.Units.ANY,
-            output_description="Total count of switching off",
+        connections.append(
+            cp.ComponentConnection(
+                L1GenericElectrolyzerController.HydrogenSOC,
+                h2_storage_classname,
+                generic_hydrogen_storage.GenericHydrogenStorage.HydrogenSOC,
+            )
         )
-        # =================================================================================================================================
-        # Initialize variables
-
-        self.standby_count = 0.0
-        self.current_state = "OFF"  #  standby
-        self.curtailed_load_count = 0.0
-        self.off_count = 0.0
-        self.activation_runtime = 0.0
-
-        self.standby_count_previous = self.standby_count
-        self.current_state_previous = self.current_state
-        self.curtailed_load_count_previous = self.curtailed_load_count
-        self.off_count_previous = self.off_count
-        self.activation_runtime_previous = self.activation_runtime
-
-    def load_check(self, current_load, min_load, max_load, standby_load):
-        if current_load > max_load:
-            current_load_to_system = max_load
-            self.curtailed_load_count += current_load - max_load
-            state = "ON"
-
-        elif min_load <= current_load <= max_load:
-            current_load_to_system = current_load
-            self.curtailed_load_count += 0.0
-            state = "ON"
-
-        elif standby_load <= current_load < min_load:
-            current_load_to_system = standby_load
-            self.curtailed_load_count += current_load - standby_load
-            state = "STANDBY"
-
-        else:
-            current_load_to_system = 0.0
-            self.curtailed_load_count += current_load
-            state = "OFF"
-
-        return current_load_to_system, state, self.curtailed_load_count
-
-    def state_check(self, target_state, cold_start_time_to_min, warm_start_time_to_min):
-        if target_state == "OFF":
-            # System switches OFF
-            if self.current_state == "ON":
-                self.current_state = "SwitchingOFF"
-                self.off_count += 1
-            else:
-                self.current_state = "OFF"
-
-        elif target_state == "STANDBY":
-            # System switches STANDY
-            if self.current_state == "OFF" or self.current_state == "StartingfromOFF":
-                self.current_state = "OFF"
-                self.off_count += 1
-            if self.current_state == "ON":
-                self.current_state = "SwitchingSTANDBY"
-                self.standby_count += 1
-            else:
-                self.current_state = "STANDBY"
-
-        else:
-            # Test start
-            if self.current_state in ["StartingfromOFF", "StartingfromSTANDBY"]:
-                # pdb.set_trace()
-                if (
-                    self.activation_runtime
-                    <= self.my_simulation_parameters.seconds_per_timestep
-                ):
-                    self.current_state = "Startingtomin"
-                    # pdb.set_trace()
-                else:
-                    self.activation_runtime -= (
-                        self.my_simulation_parameters.seconds_per_timestep
-                    )
-                    # pdb.set_trace()
-                    # self.current_state = self.current_state
-                    # starting to min auch unten aufnehmen um so min_load zu verteilen. "Starting to min" kann verwendet werden,
-                    # da wenn wir wir durch die else: bedingungen da wieder raus kommen (theoretisch ;))
-
-            # Test end
-            elif self.current_state == "OFF":
-                self.current_state = "StartingfromOFF"
-                self.activation_runtime = cold_start_time_to_min
-            elif self.current_state == "STANDBY":
-                self.current_state = "StartingfromSTANDBY"
-                self.activation_runtime = warm_start_time_to_min
-            else:
-                if (
-                    self.activation_runtime
-                    > self.my_simulation_parameters.seconds_per_timestep
-                ):
-                    self.activation_runtime -= (
-                        self.my_simulation_parameters.seconds_per_timestep
-                    )
-                    # self.current_state = self.current_state
-                # elif self.activation_runtime <= self.my_simulation_parameters.seconds_per_timestep:
-                #    self.activation_runtime -= self.my_simulation_parameters.seconds_per_timestep
-                #    self.current_state = self.current_state
-                # elif self.activation_runtime <= 0.0:
-                else:
-                    self.activation_runtime = 0.0
-                    self.current_state = "ON"
-
-        return self.current_state, self.activation_runtime
+        return connections
 
     def i_prepare_simulation(self) -> None:
-        """Prepare the simulation."""
+        """Prepares the simulation."""
         pass
 
     def i_save_state(self) -> None:
-        """Saves the state."""
-        self.standby_count_previous = self.standby_count
-        self.current_state_previous = self.current_state
-        self.curtailed_load_count_previous = self.curtailed_load_count
-        self.off_count_previous = self.off_count
-        self.activation_runtime_previous = self.activation_runtime
+        self.previous_state = self.state.clone()
 
     def i_restore_state(self) -> None:
-        """Restores the state."""
-        self.standby_count = self.standby_count_previous
-        self.current_state = self.current_state_previous
-        self.curtailed_load_count = self.curtailed_load_count_previous
-        self.off_count = self.off_count_previous
-        self.activation_runtime = self.activation_runtime_previous
+        self.state = self.previous_state.clone()
+
+    def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        pass
 
     def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
+        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
-        if force_convergence:
-            return
-        """
-        self.nom_load = config.nom_load
-        self.min_load = config.min_load
-        self.max_load = config.max_load
-        self.warm_start_time = config.warm_start_time
-        self.cold_start_time = config.cold_start_time
-        """
-        warm_start_time_to_min = self.warm_start_time * (self.min_load / self.nom_load)
-        cold_start_time_to_min = self.cold_start_time * (self.min_load / self.nom_load)
 
-        (current_load_to_system, state, self.curtailed_load_count) = self.load_check(
-            (stsv.get_input_value(self.load_input)),
-            self.min_load,
-            self.max_load,
-            self.standby_load,
-        )  # change standby time
-        # pdb.set_trace()
-        (self.current_state, self.activation_runtime) = self.state_check(
-            state, cold_start_time_to_min, warm_start_time_to_min
+        if force_convergence:
+            electricity_target = stsv.get_input_value(self.electricity_target_channel)
+            self.state = self.processed_state
+        else:
+            electricity_target = stsv.get_input_value(self.electricity_target_channel)
+            h2_soc = stsv.get_input_value(self.hydrogen_soc_channel)
+            self.calculate_state(timestep, electricity_target, h2_soc)
+            self.processed_state = self.state.clone()
+
+        # minimum power of electrolyzer fulfilled when running
+        if (
+            self.state.state == 1
+            and electricity_target < self.config.P_min_electrolyzer
+        ):
+            electricity_target = self.config.P_min_electrolyzer
+        stsv.set_output_value(
+            self.available_electicity_output_channel,
+            self.state.state * electricity_target,
         )
 
-        if self.current_state in ["OFF", "StartingfromOFF", "SwitchingOFF"]:
-            stsv.set_output_value(self.distributed_load, 0.0)
-            stsv.set_output_value(self.current_mode_electrolyzer, -1)
-        elif self.current_state in [
-            "STANDBY",
-            "StartingfromSTANDBY",
-            "SwitchingSTANDBY",
-        ]:
-            stsv.set_output_value(self.distributed_load, (self.nom_load * 0.05))
-            stsv.set_output_value(self.current_mode_electrolyzer, 0)
-        elif self.current_state == "Startingtomin":
-            # pdb.set_trace()
-            stsv.set_output_value(self.distributed_load, self.min_load)
-            stsv.set_output_value(self.current_mode_electrolyzer, 1)
+    def calculate_state(
+        self, timestep: int, electricity_target: float, h2_soc: float
+    ) -> None:
+        # return device on if minimum operation time is not fulfilled and device was on in previous state
+        if (
+            self.state.state == 1
+            and self.state.activation_time_step + self.minimum_runtime_in_timesteps
+            >= timestep
+        ):
+            # mandatory on, minimum runtime not reached
+            return
+        if (
+            self.state.state == 0
+            and self.state.deactivation_time_step
+            + self.minimum_resting_time_in_timesteps
+            >= timestep
+        ):
+            # mandatory off, minimum resting time not reached
+            return
 
-        else:
-            stsv.set_output_value(self.distributed_load, current_load_to_system)
-            stsv.set_output_value(self.current_mode_electrolyzer, 1)
+        # available electricity too low or hydrogen storage too full
+        if (electricity_target < self.config.P_min_electrolyzer) or (
+            h2_soc > self.config.h2_soc_threshold
+        ):
+            self.state.deactivate(timestep)
+            return
 
-        stsv.set_output_value(self.curtailed_load, self.curtailed_load_count)
-        stsv.set_output_value(self.total_off_count, self.off_count)
-        stsv.set_output_value(self.standby_count_total, self.standby_count)
+        # turns on if electricity is high enough and there is still space in storage
+        self.state.activate(timestep)
 
     def write_to_report(self) -> List[str]:
-        """Writes a report."""
-        lines = []
-        for config_string in self.controllerconfig.get_string_dict():
-            lines.append(config_string)
-        lines.append("Component Name" + str(self.component_name))
-        lines.append(
-            "Total curtailed load: " + str(self.curtailed_load_count) + " [kW]"
-        )
-        lines.append(
-            "Number of times the system was switched off: "
-            + str(self.off_count)
-            + " [#]"
-        )
-        lines.append(
-            "Number of times the system was switched to standby mode: "
-            + str(self.standby_count)
-            + " [#]"
-        )
-        return lines
+        """Writes the information of the current component to the report."""
+        return self.config.get_string_dict()

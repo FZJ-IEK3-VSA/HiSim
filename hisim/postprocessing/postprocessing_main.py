@@ -71,6 +71,9 @@ class PostProcessor:
                 PostProcessingOptions.EXPORT_TO_CSV,
                 PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT,
                 PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE,
+                PostProcessingOptions.COMPUTE_OPEX,
+                PostProcessingOptions.COMPUTE_CAPEX,
+                PostProcessingOptions.MAKE_RESULT_JSON_WITH_KPI_FOR_WEBTOOL,
             }
             # Of all specified options, select those that are allowed
             valid_options = list(
@@ -490,7 +493,9 @@ class PostProcessor:
         simulation_parameters_list = ppdt.simulation_parameters.get_unique_key_as_list()
         lines += simulation_parameters_list
         self.write_new_chapter_with_text_content_to_report(
-            report=report, lines=lines, headline=". Simulation Parameters",
+            report=report,
+            lines=lines,
+            headline=". Simulation Parameters",
         )
 
     def write_components_to_report(
@@ -607,7 +612,9 @@ class PostProcessor:
         for output in ppdt.all_outputs:
             all_output_names.append(output.full_name + " [" + output.unit + "]")
         self.write_new_chapter_with_text_content_to_report(
-            report=report, lines=all_output_names, headline=". All Outputs",
+            report=report,
+            lines=all_output_names,
+            headline=". All Outputs",
         )
 
     def write_network_charts_to_report(
@@ -939,7 +946,6 @@ class PostProcessor:
         )
 
         for i in kpi_compute_return:
-
             if "---" not in i:
                 variable_name = "".join(x for x in i[0] if x != ":")
                 variable_value = "".join(x for x in i[1] if x in string.digits)
@@ -983,7 +989,6 @@ class PostProcessor:
         """Iterate over results and add values to dict, write to dataframe and save as csv."""
 
         for column in results_df:
-
             for index, timestep in enumerate(timeseries):
                 # values = ppdt.results_hourly[column].values
                 values = results_df[column].values
@@ -1025,7 +1030,8 @@ class PostProcessor:
         )
 
         dataframe.to_csv(
-            path_or_buf=filename, index=None,
+            path_or_buf=filename,
+            index=None,
         )  # type: ignore
 
     def write_kpis_for_webtool_to_json_file(
@@ -1107,7 +1113,6 @@ class PostProcessor:
 
         for kpi_value_unit in value_list:
             if "---" not in kpi_value_unit:
-
                 variable_name = "".join(x for x in kpi_value_unit[0] if x != ":")
                 variable_value = "".join(
                     x for x in kpi_value_unit[1] if x in string.digits
@@ -1133,7 +1138,6 @@ class PostProcessor:
 
         for value_unit in value_list:
             if "---" not in value_unit:
-
                 variable_name = "".join(x for x in value_unit[0] if x != ":")
                 variable_value_investment = value_unit[1]
                 variable_value_emissions = value_unit[2]

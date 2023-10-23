@@ -96,6 +96,7 @@ class ReferenceHouseholdConfig:
                 name="UTSPConnector",
                 consumption=0.0,
                 profile_with_washing_machine_and_dishwasher=True,
+                predictive_control=False,
             ),
             building_config=building_config,
             hds_controller_config=(

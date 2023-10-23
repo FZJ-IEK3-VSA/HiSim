@@ -287,7 +287,7 @@ class Simulator:
             elapsed = datetime.datetime.now() - lastmessage
 
             # For simulation longer than 5 seconds
-            if elapsed.total_seconds() > 5:
+            if elapsed.total_seconds() > 5 and step != 0:
                 lastmessage = self.show_progress(
                     starttime,
                     step,

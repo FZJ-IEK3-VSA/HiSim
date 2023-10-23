@@ -155,6 +155,9 @@ def test_house_with_pyam(
         cost=pv_cost,
         maintenance_cost_as_percentage_of_investment=pv_maintenance_cost_as_percentage_of_investment,
         lifetime=pv_lifetime,
+        prediction_horizon=None,
+        predictive=False,
+        predictive_control=False
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,

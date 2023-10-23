@@ -1,5 +1,5 @@
-"""
-Build and simulate a system setup for a specific example that is defined in a JSON file.
+"""Build and simulate a system setup for a specific example that is defined in a JSON file.
+
 Result files are stored in `/results`.
 See `tests/test_system_setup_starter.py` for an example.
 
@@ -11,6 +11,8 @@ SimulationParameters from the examples is not used. Instead the parameters from 
 Optional field: `system_setup_config`.
 The values from `system_setup_config` replace single values of the example's configuration object.
 """
+
+# clean
 
 import json
 import importlib
@@ -34,8 +36,8 @@ SUPPORTED_MODULES = [
 
 def read_parameters_json(parameters_json_path: str) -> Union[dict, list]:
     """Read the parameter JSON string from file."""
-    with open(parameters_json_path, "r", encoding="utf8") as c:
-        parameters_json: Union[dict, list] = json.load(c)
+    with open(parameters_json_path, "r", encoding="utf8") as file:
+        parameters_json: Union[dict, list] = json.load(file)
     return parameters_json
 
 
@@ -62,8 +64,8 @@ def set_values(setup_config, parameter_dict, nested=None):
 def make_system_setup(
     parameters_json: Union[dict, list], result_directory: str
 ) -> Tuple[str, str, Optional[SimulationParameters], str]:
-    """
-    Read setup parameters from JSON and build a system setup for a specific example.
+    """Read setup parameters from JSON and build a system setup for a specific example.
+
     The setup is simulated and result files are stored in `result_directory`.
     """
     if isinstance(parameters_json, list):

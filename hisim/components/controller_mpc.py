@@ -776,6 +776,8 @@ class MpcController(cp.Component):
 
         cop_sampled_array = np.reshape(np.array(cop_sampled), (1, len(cop_sampled)))
         eer_sampled_array = np.reshape(np.array(eer_sampled), (1, len(eer_sampled)))
+        cop_sampled_array = np.reshape(np.array(cop_sampled), (1, len(cop_sampled)))
+        eer_sampled_array = np.reshape(np.array(eer_sampled), (1, len(eer_sampled)))
 
         # Numerical values of pv forecast (casadi fromat)
         pv_forecast_24h = np.reshape(

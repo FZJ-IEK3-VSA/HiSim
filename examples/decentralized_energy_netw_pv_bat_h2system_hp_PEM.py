@@ -212,7 +212,7 @@ def decentralized_energy_netw_pv_h2sys_hp(  # first with bat
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig(
         time=time,
         location="Aachen",
-        power_in_watt_peak=power,
+        power=power,
         load_module_data=load_module_data,
         module_name=module_name,
         integrate_inverter=integrate_inverter,
@@ -225,6 +225,9 @@ def decentralized_energy_netw_pv_h2sys_hp(  # first with bat
         cost=pv_cost,
         maintenance_cost_as_percentage_of_investment=pv_maintenance_cost_as_percentage_of_investment,
         lifetime=pv_lifetime,
+        predictive=False,
+        predictive_control=False,
+        prediction_horizon=None,
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         my_simulation_parameters=my_simulation_parameters,
@@ -249,6 +252,7 @@ def decentralized_energy_netw_pv_h2sys_hp(  # first with bat
             absolute_conditioned_floor_area_in_m2=121.2,
             total_base_area_in_m2=None,
             number_of_apartments=number_of_apartments,
+            predictive=False,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )

@@ -12,7 +12,7 @@ from hisim.component import (
     ComponentOutput,
     SingleTimeStepValues,
 )
-from hisim.components.example_electrolyzer_transformer import ExampleTransformerConfig
+from hisim.components.example_transformer import ExampleTransformerConfig
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters

@@ -160,7 +160,7 @@ class GenericElectrolyzer(cp.Component):
             cp.ComponentConnection(
                 GenericElectrolyzer.AvailableElectricity,
                 controller_classname,
-                controller_l1_electrolyzer.L1GenericElectrolyzerController.DistributedLoad,
+                controller_l1_electrolyzer.L1GenericElectrolyzerController.AvailableElectricity,
             )
         )
         return connections

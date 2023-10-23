@@ -97,7 +97,7 @@ def ptx_trans_bat_ec_no_grid_pv_final(
         PostProcessingOptions.PLOT_CARPET
     )
     my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.PLOT_BAR_CHARTS
+        PostProcessingOptions.PLOT_MONTHLY_BAR_CHARTS
     )
     my_simulation_parameters.post_processing_options.append(
         PostProcessingOptions.MAKE_NETWORK_CHARTS

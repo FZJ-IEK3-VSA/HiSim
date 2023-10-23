@@ -35,6 +35,7 @@ def test_electrolyzer_controller():
             max_load=max_load,
             warm_start_time=warm_start_time,
             cold_start_time=cold_start_time,
+            standby_load=5.0
         )
     )
     my_controller = controller_l1_electrolyzer_h2.ElectrolyzerController(

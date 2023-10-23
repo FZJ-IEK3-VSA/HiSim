@@ -109,6 +109,7 @@ class HouseholdAdvancedHPDieselCarPVBatteryConfig:
                 name="UTSPConnector",
                 consumption=0.0,
                 profile_with_washing_machine_and_dishwasher=True,
+                predictive_control=False,
             ),
             pv_config=generic_pv_system.PVSystemConfig.get_default_PV_system(),
             building_config=building_config,

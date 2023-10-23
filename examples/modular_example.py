@@ -1,9 +1,9 @@
 """Example sets up a modular household according to json input file."""
 
-import json
+# clean
+
 import os
 import shutil
-from os import path
 from typing import Any, List, Optional, Tuple
 
 import pandas as pd
@@ -26,7 +26,6 @@ from hisim.modular_household.interface_configs.modular_household_config import (
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
 
-from hisim.modular_household.interface_configs.modular_household_config import ModularHouseholdConfig
 
 def cleanup_old_result_folders():
     """Removes old result folders of previous modular_household_explicit simulations."""
@@ -68,7 +67,9 @@ def get_heating_reference_temperature_and_season_from_location(
     converting_data = pd.read_csv(
         hisim.utils.HISIMPATH["housing_reference_temperatures"]
     )
-    converting_data.index = converting_data["Location"]
+    # converting_data.index = converting_data["Location"]
+    converting_data.set_index(inplace=True, keys="Location")
+
     return (
         float(converting_data.loc[location]["HeatingReferenceTemperature"]),
         [
@@ -226,6 +227,7 @@ def modular_household_explicit(
         absolute_conditioned_floor_area_in_m2=floor_area,
         total_base_area_in_m2=None,
         number_of_apartments=None,
+        predictive=False,
     )
     my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(
@@ -264,6 +266,7 @@ def modular_household_explicit(
                 charging_station_set=charging_station,
                 consumption=0,
                 profile_with_washing_machine_and_dishwasher=not smart_devices_included,
+                predictive_control=False,
             )
         )
 
@@ -275,10 +278,12 @@ def modular_household_explicit(
         # Build occupancy
         my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
             "Occupancy",
-            occupancy_profile or "",
+            occupancy_profile.Name or "",
             location,
             not smart_devices_included,
             number_of_apartments=my_building_information.number_of_apartments,
+            predictive=False,
+            predictive_control=False,
         )
         my_occupancy = loadprofilegenerator_connector.Occupancy(
             config=my_occupancy_config,
@@ -560,7 +565,7 @@ def modular_household_explicit(
         my_sim.add_component(my_electricity_controller)
 
 
-def needs_ems(
+def needs_ems(  # pylint: disable=R0911
     battery_included,
     chp_included,
     hydrogen_setup_included,

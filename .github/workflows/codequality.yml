@@ -33,24 +33,7 @@ jobs:
       working-directory: ./
       run: |
         prospector setup.py
-        prospector examples/basic_household.py
-        prospector examples/basic_household_only_heating.py
-        prospector examples/default_connections.py
-        prospector examples/dynamic_components.py
-        prospector examples/household_1_advanced_hp_diesel_car.py
-        prospector examples/household_2_advanced_hp_diesel_car_pv.py
-        prospector examples/household_3_advanced_hp_diesel_car_pv_battery.py
-        prospector examples/household_4_advanced_hp_ev_pv.py
-        prospector examples/household_5_advanced_hp_ev_pv_battery.py
-        prospector examples/household_reference_gas_heater_diesel_car.py
-        prospector examples/household_with_gas_heater.py
-        prospector examples/household_with_gas_heater_with_controller.py
-        prospector examples/household_with_heatpump_and_pv.py
-        prospector examples/simple_examples.py
-        prospector examples/household_with_advanced_hp_hws_hds_pv.py
-        prospector examples/household_with_advanced_hp_hws_hds_pv_battery_ems.py
-        prospector examples/household_cluster_advanced_hp_pv_battery_ems.py
-        prospector examples/household_cluster_reference_advanced_hp.py
+        prospector examples/
         prospector hisim/component.py
         prospector hisim/component_wrapper.py
         prospector hisim/dynamic_component.py
@@ -66,6 +49,7 @@ jobs:
         prospector hisim/simulator.py
         prospector hisim/sim_repository.py
         prospector hisim/utils.py
+        prospector hisim/system_setup_starter.py
         prospector hisim/components/building.py
         prospector hisim/components/controller_l1_building_heating.py
         prospector hisim/components/controller_l1_generic_gas_heater.py
@@ -88,6 +72,7 @@ jobs:
         prospector hisim/components/sumbuilder.py
         prospector hisim/components/advanced_heat_pump_hplib.py
         prospector hisim/components/electricity_meter.py
+        prospector hisim/components/controller_mpc.py
         prospector hisim/modular_household/component_connections.py
         prospector hisim/modular_household/interface_configs/system_config.py
         prospector hisim/postprocessing/chartbase.py
@@ -133,6 +118,7 @@ jobs:
         prospector tests/test_house_with_pyam_postprocessingoption.py
         prospector tests/test_electricity_meter.py
         prospector tests/test_sizing_energy_systems.py
+        prospector tests/test_example_air_conditioned_house.py
 
 
         

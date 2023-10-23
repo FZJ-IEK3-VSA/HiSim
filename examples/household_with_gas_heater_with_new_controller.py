@@ -92,6 +92,7 @@ def household_gas_heater_with_new_controller(
         name="UTSPConnector",
         consumption=0,
         profile_with_washing_machine_and_dishwasher=True,
+        predictive_control=False,
     )
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters

@@ -145,6 +145,7 @@ def household_pv_hp(
         charging_station_set=charging_station_set,
         consumption=0,
         profile_with_washing_machine_and_dishwasher=True,
+        predictive_control=False,
     )
 
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(

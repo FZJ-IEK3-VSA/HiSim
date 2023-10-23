@@ -40,6 +40,8 @@ def test_heat_pump():
             heat_pump_name=heat_pump_name,
             min_operation_time=minimum_idle_time,
             min_idle_time=minimum_operation_time,
+            maintenance_cost_as_percentage_of_investment=0.0,
+            consumption=0.0
         ),
         my_simulation_parameters=my_simulation_parameters,
     )

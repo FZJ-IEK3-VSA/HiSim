@@ -133,3 +133,4 @@ class CSVLoader(cp.Component):
     def write_to_report(self):
         """Writes a report."""
         return self.csvconfig.get_string_dict()
+

@@ -31,7 +31,6 @@ def test_electrolyzer():
     ramp_down_rate_sofc: float = 0.001538
 
     timestep = 1
-    force_convergence = False
 
     # ===================================================================================================================
     # Setup Electrolyzer

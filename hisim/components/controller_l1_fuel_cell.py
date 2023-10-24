@@ -116,6 +116,7 @@ class FuelCellController(Component):
         self.standby_load = config.standby_load
         self.warm_start_time = config.warm_start_time
         self.cold_start_time = config.cold_start_time
+        self.curtailed_load_count = 0
 
         super().__init__(
             name=self.controllerconfig.name,
@@ -204,25 +205,25 @@ class FuelCellController(Component):
     def load_check(self, current_demand, min_output, max_output, standby_load):
         if current_demand > max_output:
             current_demand_to_system = max_output
-            power_not_provided_count += current_demand - max_output
+            self.power_not_provided_count += current_demand - max_output
             state = "ON"
 
         elif min_output <= current_demand <= max_output:
             current_demand_to_system = current_demand
-            power_not_provided_count += 0.0
+            self.power_not_provided_count += 0.0
             state = "ON"
 
         elif standby_load <= current_demand < min_output:
             current_demand_to_system = standby_load
-            power_not_provided_count += current_demand - standby_load
+            self.power_not_provided_count += current_demand - standby_load
             state = "STANDBY"
 
         else:
             current_demand_to_system = 0.0
-            power_not_provided_count += current_demand
+            self.power_not_provided_count += current_demand
             state = "OFF"
 
-        return current_demand_to_system, state, power_not_provided_count
+        return current_demand_to_system, state, self.power_not_provided_count
 
     def state_check(self, target_state, cold_start_time_to_min, warm_start_time_to_min):
 
@@ -330,7 +331,7 @@ class FuelCellController(Component):
             self.min_output / self.nom_output
         )
 
-        (current_load_to_system, state, self.power_not_provided_count) = self.load_check(
+        (current_load_to_system, state, self.curtailed_load_count) = self.load_check(
             (abs(stsv.get_input_value(self.demand_profile))),
             self.min_output,
             self.max_output,

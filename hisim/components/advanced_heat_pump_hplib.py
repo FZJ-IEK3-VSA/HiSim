@@ -910,13 +910,13 @@ class HeatPumpHplibController(Component):
         temperature_offset_for_state_conditions_in_celsius: float,
     ) -> None:
         """Set conditions for the heat pump controller mode according to the flow temperature."""
-
+        # Todo: storage temperature modifier is only working for heating so far. Implement for cooling similar
         heating_set_temperature = set_heating_flow_temperature_in_celsius
         cooling_set_temperature = set_heating_flow_temperature_in_celsius
 
         if self.controller_heatpumpmode == "heating":
             if (
-                water_temperature_input_in_celsius >= heating_set_temperature
+                water_temperature_input_in_celsius >= heating_set_temperature + storage_temperature_modifier # Todo: Check if storage_temperature_modifier is neccessary here
                 or summer_heating_mode == "off"
             ):
                 self.controller_heatpumpmode = "off"

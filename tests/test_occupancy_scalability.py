@@ -30,7 +30,9 @@ def test_occupancy_scalability():
         scaling_factor_for_absolute_conditioned_floor_area=1
     )
     log.information(
-        str(original_occupancy_outputs) + " " + str(scaling_factor_apartments_for_area_factor_one)
+        str(original_occupancy_outputs)
+        + " "
+        + str(scaling_factor_apartments_for_area_factor_one)
     )
     # calculate occupancy outputs and respective scaling factor when
     # the abs. cond. floor area is scaled with factor=3
@@ -41,11 +43,14 @@ def test_occupancy_scalability():
         scaling_factor_for_absolute_conditioned_floor_area=3
     )
     log.information(
-        str(scaled_occupancy_outputs) + " " + str(scaling_factor_apartments_for_area_factor_three)
+        str(scaled_occupancy_outputs)
+        + " "
+        + str(scaling_factor_apartments_for_area_factor_three)
     )
     # now compare the two results and test if occupancy outputs are upscaled correctly
     assert scaled_occupancy_outputs == [
-        output * scaling_factor_apartments_for_area_factor_three for output in original_occupancy_outputs
+        output * scaling_factor_apartments_for_area_factor_three
+        for output in original_occupancy_outputs
     ]
 
 
@@ -91,11 +96,13 @@ def simulation_for_one_time_step(
         + str(my_residence_config.absolute_conditioned_floor_area_in_m2)
     )
 
-    building_number_of_apartments = my_residence.number_of_apartments
+    building_number_of_apartments = (
+        my_residence.my_building_information.number_of_apartments
+    )
 
     # Set Occupancy
-    my_occupancy_config = (
-        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_CHS01_according_to_number_of_apartments(
+        number_of_apartments=building_number_of_apartments
     )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config,
@@ -151,9 +158,7 @@ def simulation_for_one_time_step(
     my_residence.i_simulate(1, stsv, False)
     my_occupancy.i_simulate(1, stsv, False)
 
-    scaling_factor_number_of_apartments = (
-        building_number_of_apartments
-    )
+    scaling_factor_number_of_apartments = building_number_of_apartments
 
     occupancy_outputs = stsv.values[-4:]
 

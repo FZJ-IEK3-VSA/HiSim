@@ -162,7 +162,10 @@ class L2HeatSmartController(cp.Component):
 
         # Component Outputs
         self.l2_DeviceSignalC: cp.ComponentOutput = self.add_output(
-            self.component_name, self.l2_DeviceSignal, LoadTypes.ON_OFF, Units.BINARY,
+            self.component_name,
+            self.l2_DeviceSignal,
+            LoadTypes.ON_OFF,
+            Units.BINARY,
             output_description="L2 Device Signal from Heating Controller",
         )
 
@@ -369,10 +372,6 @@ class L2HeatSmartController(cp.Component):
             return
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         T_control = stsv.get_input_value(self.ReferenceTemperatureC)
-        # if self.my_simulation_parameters.predictive_control == True:
-        #     RunTimeSignal = stsv.get_input_value( self.l1_RunTimeSignalC )
-        # else:
-        #     RunTimeSignal = 0
 
         # get l3 recommendation if available
         electricity_target = stsv.get_input_value(self.ElectricityTargetC)

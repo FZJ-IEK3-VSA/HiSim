@@ -31,7 +31,6 @@ from hisim.components import advanced_ev_battery_bslib
 from hisim.components import controller_l1_generic_ev_charge
 from hisim.components import controller_l2_energy_management_system
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim import utils
 from hisim import loadtypes as lt
 from hisim import log
@@ -84,15 +83,18 @@ class HouseholdAdvancedHPEvPvConfig:
 
         # set number of apartments (mandatory for dhw storage config)
         number_of_apartments = 1
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments
-        )
+
         charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
         charging_power = float(
             (charging_station_set.Name or "").split("with ")[1].split(" kW")[0]
         )
         heating_reference_temperature_in_celsius: float = -7
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0
+
+        building_config = (
+            building.BuildingConfig.get_default_german_single_family_home()
+        )
+        my_building_information = building.BuildingInformation(config=building_config)
 
         household_config = HouseholdAdvancedHPEvPvConfig(
             building_type="blub",
@@ -115,14 +117,17 @@ class HouseholdAdvancedHPEvPvConfig:
                 name="UTSPConnector",
                 consumption=0.0,
                 profile_with_washing_machine_and_dishwasher=True,
+                predictive_control=False,
             ),
             pv_config=generic_pv_system.PVSystemConfig.get_default_PV_system(),
-            building_config=building.BuildingConfig.get_default_german_single_family_home(),
+            building_config=building_config,
             hds_controller_config=(
                 heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
             ),
             hds_config=(
-                heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
+                heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+                )
             ),
             hp_controller_config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(),
             hp_config=advanced_heat_pump_hplib.HeatPumpHplibConfig.get_default_generic_advanced_hp_lib(),
@@ -136,7 +141,7 @@ class HouseholdAdvancedHPEvPvConfig:
                 name="DHWHeatpumpController"
             ),
             dhw_storage_config=(
-                generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler_scaled()
+                generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler()
             ),
             car_config=generic_car.CarConfig.get_default_ev_config(),
             car_battery_config=advanced_ev_battery_bslib.CarBatteryConfig.get_default_config(),
@@ -155,9 +160,15 @@ class HouseholdAdvancedHPEvPvConfig:
         household_config.hp_controller_config.mode = (
             2  # use heating and cooling as default
         )
-        household_config.hp_config.set_thermal_output_power_in_watt = 6000  # default value leads to switching on-off very often
-        household_config.hp_config.minimum_idle_time_in_seconds = 900  # default value leads to switching on-off very often
-        household_config.hp_config.minimum_running_time_in_seconds = 900  # default value leads to switching on-off very often
+        household_config.hp_config.set_thermal_output_power_in_watt = (
+            6000  # default value leads to switching on-off very often
+        )
+        household_config.hp_config.minimum_idle_time_in_seconds = (
+            900  # default value leads to switching on-off very often
+        )
+        household_config.hp_config.minimum_running_time_in_seconds = (
+            900  # default value leads to switching on-off very often
+        )
 
         # set same heating threshold
         household_config.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
@@ -185,12 +196,6 @@ class HouseholdAdvancedHPEvPvConfig:
 
         # set charging power from battery and controller to same value, to reduce error in simulation of battery
         household_config.car_battery_config.p_inv_custom = charging_power * 1e3
-
-        if household_config.surplus_control_car:
-            # lower threshold for soc of car battery in clever case. This enables more surplus charging
-            household_config.car_battery_controller_config.battery_set = 0.4
-        else:
-            household_config.car_battery_controller_config.battery_set = 1.0
 
         return household_config
 
@@ -325,6 +330,17 @@ def household_4_advanced_hp_ev_pv(
 
     # Build DHW
     my_dhw_heatpump_config = my_config.dhw_heatpump_config
+    my_dhw_heatpump_config.power_th = (
+        my_occupancy.max_hot_water_demand
+        * (4180 / 3600)
+        * 0.5
+        * (3600 / my_simulation_parameters.seconds_per_timestep)
+        * (
+            HouseholdWarmWaterDemandConfig.ww_temperature_demand
+            - HouseholdWarmWaterDemandConfig.freshwater_temperature
+        )
+    )
+
     my_dhw_heatpump_controller_config = my_config.dhw_heatpump_controller_config
 
     my_dhw_storage_config = my_config.dhw_storage_config
@@ -390,10 +406,9 @@ def household_4_advanced_hp_ev_pv(
         my_car_battery_controller_config = my_config.car_battery_controller_config
         my_car_battery_controller_config.source_weight = car.config.source_weight
         my_car_battery_controller_config.name = f"L1EVChargeControl_{car_number}"
-        if my_config.surplus_control_car:
-            # lower threshold for soc of car battery in clever case. This enables more surplus charging
-            # Todo: this is just to avoid errors in case config from json-file is used
-            my_car_battery_controller_config.battery_set = 0.4
+        my_car_battery_controller_config.battery_set = (
+            0.4  # lower threshold for soc of car battery in clever case
+        )
 
         my_car_battery_controller = controller_l1_generic_ev_charge.L1Controller(
             my_simulation_parameters=my_simulation_parameters,

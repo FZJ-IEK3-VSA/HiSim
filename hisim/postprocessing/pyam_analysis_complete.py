@@ -2,7 +2,7 @@
 # clean
 import time
 import os
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Dict
 from hisim.postprocessing import pyam_data_collection, pyam_data_processing
 
 
@@ -18,7 +18,8 @@ class PyamDataAnalysis:
         time_resolution_of_data_set: Any,
         data_processing_mode: Any,
         variables_to_check: List[str],
-        list_of_scenarios_to_check: Optional[List[str]] = None,
+        # list_of_scenarios_to_check: Optional[List[str]] = None,
+        dict_with_scenarios_to_check: Optional[Dict[str, List[str]]] = None,
     ) -> None:
         """Initialize the class."""
 
@@ -34,7 +35,8 @@ class PyamDataAnalysis:
             time_resolution_of_data_set=time_resolution_of_data_set,
             data_processing_mode=data_processing_mode,
             variables_to_check=variables_to_check,
-            list_of_scenarios_to_check=list_of_scenarios_to_check,
+            # list_of_scenarios_to_check=list_of_scenarios_to_check,
+            dict_of_scenarios_to_check=dict_with_scenarios_to_check,
         )
 
 
@@ -45,12 +47,13 @@ def main():
     # -------------------------------------------------------------------------------------------------------------------------------------
     time_resolution_of_data_set = pyam_data_collection.PyamDataTypeEnum.MONTHLY
 
-    cluster_storage_path = "/storage_cluster/internal/home/k-rieck/"
+    cluster_storage_path = "/fast/home/k-rieck/"
 
     folder_from_which_data_will_be_collected = os.path.join(
         cluster_storage_path,
-        # "repositories/HiSim/examples/results/household_cluster_reference_advanced_hp/german_tabula_buildings_20230908_1231/",
-        "repositories/HiSim/examples/results/pyam_testing/german_tabula_buildings_20230908_1231/",
+        # "repositories/HiSim/examples/results/household_cluster_reference_advanced_hp/german_tabula_buildings_20230919_1905"
+        # "repositories/HiSim/examples/results/household_cluster_test_advanced_hp/hplib_configs_20230915_1122",
+        "repositories/HiSim/examples/results/comparison_ref_and_pv_case",
     )
     # folder_from_which_data_will_be_collected = (
     #     r"C:\Users\k.rieck\Cluster_stuff_copied\examples_results"
@@ -67,18 +70,25 @@ def main():
         pyam_data_collection.PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
     )
 
+    filterclass = pyam_data_processing.FilterClass()
     list_with_variables_to_check = (
-        pyam_data_processing.occuancy_consumption + pyam_data_processing.heating_demand
-    )  # (
-    # pyam_data_processing.kpi_data
-    # + pyam_data_processing.heating_demand
-    # + pyam_data_processing.electricity_data
-    # + pyam_data_processing.occuancy_consumption
-    # )
+        filterclass.heating_demand + filterclass.electricity_data
+    )
 
-    # list_of_scenarios_to_check = pyam_data_processing.building_type
+    # list_of_scenarios_to_check = filterclass.building_type
 
-    list_of_scenarios_to_check = None  # ["001.002"]
+    # TODO: filter several scenario parameters (eg pv and building code together) not working yet, need to be fixed
+    # dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share,"building_code": ["DE.N.SFH.05.Gen.ReEx.001.002"]}
+    dict_with_scenarios_to_check = {
+        "building_code": [
+            "DE.N.SFH.05.Gen.ReEx.001.002",
+            "DE.N.TH.05.Gen.ReEx.001.002",
+            "DE.N.MFH.05.Gen.ReEx.001.002",
+            "DE.N.AB.05.Gen.ReEx.001.002",
+        ]
+    }
+
+    # list_of_scenarios_to_check = ["DE.N.SFH.05.Gen.ReEx.001.002","DE.N.TH.05.Gen.ReEx.001.002","DE.N.MFH.05.Gen.ReEx.001.002","DE.N.AB.05.Gen.ReEx.001.002"]
 
     # -------------------------------------------------------------------------------------------------------------------------------------
 
@@ -89,7 +99,8 @@ def main():
         simulation_duration_to_check=simulation_duration_to_check,
         data_processing_mode=data_processing_mode,
         variables_to_check=list_with_variables_to_check,
-        list_of_scenarios_to_check=list_of_scenarios_to_check,
+        # list_of_scenarios_to_check=list_of_scenarios_to_check,
+        dict_with_scenarios_to_check=dict_with_scenarios_to_check,
     )
 
 

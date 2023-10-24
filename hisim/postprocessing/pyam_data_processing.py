@@ -6,6 +6,7 @@ import datetime
 import os
 from typing import Dict, Any, Tuple, Optional, List
 import string
+import copy
 import numpy as np
 import pyam
 import pandas as pd
@@ -13,12 +14,16 @@ import matplotlib.pyplot as plt
 import plotly
 from html2image import Html2Image
 from ordered_set import OrderedSet
+import seaborn as sns
+
 from hisim.postprocessing.pyam_data_collection import (
     PyamDataTypeEnum,
     PyamDataProcessingModeEnum,
 )
 from hisim.postprocessing.chartbase import ChartFontsAndSize
 from hisim import log
+
+# TODO: debugging needed
 
 
 class PyAmChartGenerator:
@@ -31,7 +36,8 @@ class PyAmChartGenerator:
         data_processing_mode: Any,
         time_resolution_of_data_set: Any,
         variables_to_check: Optional[List[str]] = None,
-        list_of_scenarios_to_check: Optional[List[str]] = None,
+        # list_of_scenarios_to_check: Optional[List[str]] = None,
+        dict_of_scenarios_to_check: Optional[Dict[str, List[str]]] = None,
     ) -> None:
         """Initialize the class."""
 
@@ -84,6 +90,27 @@ class PyAmChartGenerator:
             data_path_strip = "data_with_different_pv_tilts"
             result_path_strip = "results_different_pv_tilts"
 
+        elif (
+            data_processing_mode
+            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_DELTA_T_IN_HP_CONTROLLER
+        ):
+            data_path_strip = "data_with_different_delta_Ts"
+            result_path_strip = "results_different_delta_Ts"
+
+        elif (
+            data_processing_mode
+            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_HOT_WATER_STORAGE_SIZES
+        ):
+            data_path_strip = "data_with_different_hot_water_storage_size_in_liters"
+            result_path_strip = "results_different_hot_water_storage_size_in_liters"
+
+        elif (
+            data_processing_mode
+            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_SHARE_OF_MAXIMUM_PV
+        ):
+            data_path_strip = "data_with_different_share_of_maximum_pv_powers"
+            result_path_strip = "results_different_share_of_maximum_pv_powers"
+
         else:
             raise ValueError("PyamDataProcessingMode not known.")
 
@@ -107,31 +134,45 @@ class PyAmChartGenerator:
         self.hisim_chartbase = ChartFontsAndSize()
         self.hisim_chartbase.figsize = (10, 8)
 
-        # read data, sort data according to scenarios if wanted, and create pyam dataframe
-        pyam_dataframe = self.get_dataframe_and_create_pyam_dataframe_for_all_data(
-            folder_path=self.folder_path,
-            time_resolution_of_data_set=time_resolution_of_data_set,
-            list_of_scenarios_to_check=list_of_scenarios_to_check,
-        )
-
         if variables_to_check != [] and variables_to_check is not None:
-            self.make_plots_with_specific_kind_of_data(
+            # read data, sort data according to scenarios if wanted, and create pandas dataframe
+            (
+                pandas_dataframe,
+                key_for_scenario_one,
+                key_for_current_scenario,
+                variables_to_check,
+            ) = self.get_dataframe_and_create_pandas_dataframe_for_all_data(
+                folder_path=self.folder_path,
                 time_resolution_of_data_set=time_resolution_of_data_set,
-                pyam_dataframe=pyam_dataframe,
-                simulation_duration_key=simulation_duration_to_check,
+                dict_of_scenarios_to_check=dict_of_scenarios_to_check,
                 variables_to_check=variables_to_check,
             )
+            log.information("key for scneario one " + key_for_scenario_one)
+            log.information("key for current scenario " + key_for_current_scenario)
+
+            try:
+
+                self.make_plots_with_specific_kind_of_data(
+                    time_resolution_of_data_set=time_resolution_of_data_set,
+                    pyam_dataframe=pandas_dataframe,
+                    simulation_duration_key=simulation_duration_to_check,
+                    variables_to_check=variables_to_check,
+                )
+            except Exception:
+                log.information("Something went wrong while plotting.")
         else:
             log.information(
                 "Variable list for data is not given and will not be plotted or anaylzed."
             )
 
-    def get_dataframe_and_create_pyam_dataframe_for_all_data(
+    def get_dataframe_and_create_pandas_dataframe_for_all_data(
         self,
         folder_path: str,
         time_resolution_of_data_set: Any,
-        list_of_scenarios_to_check: Optional[List[str]],
-    ) -> pyam.IamDataFrame:
+        # list_of_scenarios_to_check: Optional[List[str]],
+        dict_of_scenarios_to_check: Optional[Dict[str, List[str]]],
+        variables_to_check: List[str],
+    ) -> Tuple[pd.DataFrame, str, str, List[str]]:
         """Get csv data and create pyam dataframes."""
 
         if time_resolution_of_data_set == PyamDataTypeEnum.HOURLY:
@@ -156,28 +197,53 @@ class PyAmChartGenerator:
 
             file_df = pd.read_csv(filepath_or_buffer=file)
 
-            # if scenario values are no strings, transform them
-            file_df["scenario"] = file_df["scenario"].transform(str)
+        # if scenario values are no strings, transform them
+        file_df["scenario"] = file_df["scenario"].transform(str)
+        key_for_scenario_one = ""
+        key_for_current_scenario = ""
 
-            # filter scenarios
-            if (
-                list_of_scenarios_to_check is not None
-                and list_of_scenarios_to_check != []
-            ):
-                file_df = self.check_if_scenario_exists_and_filter_dataframe_for_scenarios(
-                    data_frame=file_df,
-                    list_of_scenarios_to_check=list_of_scenarios_to_check,
-                )
+        # filter scenarios
+        # if (
+        #     list_of_scenarios_to_check is not None
+        #     and list_of_scenarios_to_check != []
+        # ):
 
-            # create pyam dataframe
-            pyam_dataframe = pyam.IamDataFrame(file_df)
+        #     file_df = self.check_if_scenario_exists_and_filter_dataframe_for_scenarios(
+        #         data_frame=file_df,
+        #         list_of_scenarios_to_check=list_of_scenarios_to_check,
+        #     )
 
-            return pyam_dataframe
+        # make rel electricity calculation before sorting and renaming
+
+        if "ElectricityMeter|Electricity|ElectricityToOrFromGrid" in variables_to_check:
+
+            file_df = self.calculate_relative_electricity_demand(dataframe=file_df)
+            # file_df = file_df.reset_index()
+            variables_to_check.append("Relative Electricity Demand")
+
+        if dict_of_scenarios_to_check is not None and dict_of_scenarios_to_check != {}:
+
+            (
+                file_df,
+                key_for_scenario_one,
+                key_for_current_scenario,
+            ) = self.check_if_scenario_exists_and_filter_dataframe_for_scenarios_dict(
+                data_frame=file_df,
+                # list_of_scenarios_to_check=list_of_scenarios_to_check,
+                dict_of_scenarios_to_check=dict_of_scenarios_to_check,
+            )
+
+        return (
+            file_df,
+            key_for_scenario_one,
+            key_for_current_scenario,
+            variables_to_check,
+        )
 
     def make_plots_with_specific_kind_of_data(
         self,
         time_resolution_of_data_set: Any,
-        pyam_dataframe: pyam.IamDataFrame,
+        pyam_dataframe: pd.DataFrame,
         simulation_duration_key: str,
         variables_to_check: List[str],
     ) -> None:
@@ -189,7 +255,9 @@ class PyAmChartGenerator:
             raise ValueError("Pyam dataframe is empty.")
 
         sub_results_folder = f"simulation_duration_of_{simulation_duration_key}_days"
-        sub_sub_results_folder = f"pyam_results_{self.datetime_string}"
+        sub_sub_results_folder = (
+            f"pyam_results_{time_resolution_of_data_set.value}_{self.datetime_string}"
+        )
 
         self.path_for_plots = os.path.join(
             self.result_folder, sub_results_folder, sub_sub_results_folder
@@ -213,21 +281,24 @@ class PyAmChartGenerator:
             if os.path.exists(self.plot_path_complete) is False:
                 os.makedirs(self.plot_path_complete)
 
-            # filter data according to variable
-            filtered_data = self.filter_pyam_dataframe(
-                pyam_dataframe=pyam_dataframe,
-                filter_model=None,
-                filter_scenario=None,
-                filter_region=None,
-                filter_variables=variable_to_check,
-                filter_unit=None,
-                filter_year=None,
+            # # filter data according to variable
+            # filtered_data = self.filter_pyam_dataframe(
+            #     pyam_dataframe=pyam_dataframe,
+            #     filter_model=None,
+            #     filter_scenario=None,
+            #     filter_region=None,
+            #     filter_variables=variable_to_check,
+            #     filter_unit=None,
+            #     filter_year=None,
+            # )
+            filtered_data = self.filter_pandas_dataframe(
+                dataframe=pyam_dataframe, variable_to_check=variable_to_check
             )
 
             # determine whether you want to compare one variable for different scenarios or different variables for one scenario
-            comparion_mode = self.decide_for_scenario_or_variable_comparison(
-                filtered_data=filtered_data
-            )
+            # comparion_mode = self.decide_for_scenario_or_variable_comparison(
+            #     filtered_data=filtered_data
+            # )
 
             if time_resolution_of_data_set == PyamDataTypeEnum.YEARLY:
                 kind_of_data_set = "yearly"
@@ -241,20 +312,61 @@ class PyAmChartGenerator:
                     kind_of_data_set=kind_of_data_set,
                 )
 
-                self.make_box_plot_for_pyam_dataframe(
+                # try:
+                self.make_box_plot_for_pandas_dataframe(
                     filtered_data=filtered_data, title=self.path_addition,
                 )
-                self.make_pie_plot_for_pyam_dataframe(
-                    filtered_data=filtered_data,
-                    comparison_mode=comparion_mode,
-                    title=self.path_addition,
-                )
-
-                # self.make_bar_plot_for_pyam_dataframe(
+                # self.make_pie_plot_for_pyam_dataframe(
                 #     filtered_data=filtered_data,
                 #     comparison_mode=comparion_mode,
                 #     title=self.path_addition,
                 # )
+
+                self.make_bar_plot_for_pandas_dataframe(
+                    filtered_data=filtered_data, title=self.path_addition,
+                )
+
+                # if (
+                #     variable_to_check
+                #     == "ElectricityMeter|Electricity|ElectricityToOrFromGrid"
+                # ):
+
+                #     filtered_data = self.calculate_relative_electricity_demand(
+                #         dataframe=filtered_data
+                #     )
+                #     scenario_set = []
+
+                #     for scenario in filtered_data.scenario.values:
+
+                #         share_of_pv_power = filtered_data.loc[
+                #             filtered_data.scenario == scenario
+                #         ].share_of_maximum_pv_power.values[-1]
+                #         scenario_for_boxplot = (
+                #             f"{scenario}_pv_share_{share_of_pv_power}"
+                #         )
+                #         scenario_set.append(scenario_for_boxplot)
+                #     scenario_set = list(OrderedSet(scenario_set))
+
+                #     self.path_addition = filtered_data.variable.values[0]
+                #     self.plot_path_complete = os.path.join(
+                #         self.path_for_plots, self.path_addition
+                #     )
+                #     if os.path.exists(self.plot_path_complete) is False:
+                #         os.makedirs(self.plot_path_complete)
+
+                #     self.make_box_plot_for_pandas_dataframe(
+                #         filtered_data=filtered_data,
+                #         title=self.path_addition,
+                #         scenario_set=scenario_set,
+                #     )
+                #     self.make_bar_plot_for_pandas_dataframe(
+                #         filtered_data=filtered_data,
+                #         title=self.path_addition,
+                #         alternative_bar_labels=scenario_set,
+                #     )
+
+                # except Exception:
+                #     log.information(f"{variable_to_check} could not be plotted.")
 
                 # self.make_scatter_plot_for_pyam_dataframe(
                 #     pyam_dataframe=pyam_dataframe,
@@ -295,11 +407,12 @@ class PyAmChartGenerator:
                     kind_of_data_set=kind_of_data_set,
                 )
 
-                self.make_line_plot_for_pyam_dataframe(
-                    filtered_data=filtered_data,
-                    title=self.path_addition,
-                    line_plot_marker_size=line_plot_marker_size,
-                )
+                try:
+                    self.make_line_plot_for_pandas_dataframe(
+                        filtered_data=filtered_data,
+                        title=self.path_addition,
+                        line_plot_marker_size=line_plot_marker_size,
+                    )
 
                 # so far only working when scenarios_to_check are set
                 # self.make_line_plot_with_filling_for_pyam_dataframe(
@@ -308,13 +421,16 @@ class PyAmChartGenerator:
                 #     title=self.path_addition,
                 # )
 
+                except Exception:
+                    log.information(f"{variable_to_check} could not be plotted.")
+
             else:
                 raise ValueError(
                     "This kind of data was not found in the pyamdatacollectorenum class."
                 )
 
-    def make_line_plot_for_pyam_dataframe(
-        self, filtered_data: pyam.IamDataFrame, title: str, line_plot_marker_size: int
+    def make_line_plot_for_pandas_dataframe(
+        self, filtered_data: pd.DataFrame, title: str, line_plot_marker_size: int
     ) -> None:
         """Make line plot."""
         log.information("Make line plot with data.")
@@ -322,16 +438,15 @@ class PyAmChartGenerator:
         fig, a_x = plt.subplots(
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
-        x_data = list(OrderedSet(list(filtered_data.data["time"])))
+        x_data = list(OrderedSet(list(filtered_data.time)))
 
-        # filtered_data.plot.line(
-        #     ax=a_x, color=comparison_mode, title=title,
-        # )
+        year = filtered_data.time.values[0].split("-")[0]
 
-        # alternative manual way to make line plots
-        for scenario in filtered_data.scenario:
-            filtered_data_per_scenario = filtered_data.data.loc[
-                filtered_data.data["scenario"] == scenario
+        x_data_transformed = np.asarray(x_data, dtype="datetime64[D]")
+
+        for scenario in list(OrderedSet(list(filtered_data.scenario))):
+            filtered_data_per_scenario = filtered_data.loc[
+                filtered_data["scenario"] == scenario
             ]
             mean_values_aggregated_according_to_scenarios = []
             for time_value in x_data:
@@ -349,28 +464,36 @@ class PyAmChartGenerator:
             y_data = mean_values_aggregated_according_to_scenarios
 
             plt.plot(
-                x_data, y_data, "-o", markersize=line_plot_marker_size, label=scenario
+                x_data_transformed,
+                y_data,
+                "-o",
+                markersize=line_plot_marker_size,
+                label=scenario,
             )
 
         y_tick_labels, unit, y_tick_locations = self.set_axis_scale(
-            a_x, x_or_y="y", unit=filtered_data.unit[0]
+            a_x, x_or_y="y", unit=filtered_data.unit.values[0]
         )
         plt.yticks(
             ticks=y_tick_locations,
             labels=y_tick_labels,
             fontsize=self.hisim_chartbase.fontsize_ticks,
         )
+
         plt.ylabel(
             ylabel=f"{unit}", fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
-            xlabel="Time", fontsize=self.hisim_chartbase.fontsize_label,
+            xlabel=year, fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
-        plt.legend(fontsize=ChartFontsAndSize.fontsize_legend)
+        a_x.tick_params(axis="x", labelrotation=45)
+        plt.legend(bbox_to_anchor=(1, 1), loc="upper left")
 
-        fig.savefig(os.path.join(self.plot_path_complete, "line_plot.png"))
+        fig.savefig(
+            os.path.join(self.plot_path_complete, "line_plot.png"), bbox_inches="tight"
+        )
         plt.close()
 
     def make_line_plot_with_filling_for_pyam_dataframe(
@@ -407,8 +530,11 @@ class PyAmChartGenerator:
         fig.savefig(os.path.join(self.plot_path_complete, "line_plot_with_filling.png"))
         plt.close()
 
-    def make_bar_plot_for_pyam_dataframe(
-        self, filtered_data: pyam.IamDataFrame, comparison_mode: str, title: str,
+    def make_bar_plot_for_pandas_dataframe(
+        self,
+        filtered_data: pd.DataFrame,
+        title: str,
+        alternative_bar_labels: Optional[List[str]] = None,
     ) -> None:
         """Make bar plot."""
         log.information("Make bar plot.")
@@ -416,10 +542,42 @@ class PyAmChartGenerator:
         fig, a_x = plt.subplots(
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
-        filtered_data.plot.bar(ax=a_x, stacked=True, bars=comparison_mode)
+
+        y_data = []
+        bar_labels = []
+
+        # for scenario in filtered_data.scenario:
+
+        #     filtered_data_per_scenario = filtered_data.loc[
+        #         filtered_data["scenario"] == scenario
+        #     ]
+        #     value = float(filtered_data_per_scenario["value"])
+
+        #     y_data.append(value)
+        #     bar_labels.append(scenario)
+
+        for scenario in list(OrderedSet(list(filtered_data.scenario))):
+            filtered_data_per_scenario = filtered_data.loc[
+                filtered_data["scenario"] == scenario
+            ]
+
+            mean_value_per_scenario = np.mean(filtered_data_per_scenario.value.values)
+
+            y_data.append(mean_value_per_scenario)
+            bar_labels.append(scenario)
+
+        # choose bar labels
+        if alternative_bar_labels is not None:
+            bar_labels = alternative_bar_labels
+
+        x_data = np.arange(0, len(y_data) * 2, step=2)
+
+        cmap = plt.get_cmap("viridis")
+        colors = [cmap(i) for i in np.linspace(0, 1, len(x_data))]
+        a_x.bar(x_data, y_data, label=bar_labels, color=colors)
 
         y_tick_labels, unit, y_tick_locations = self.set_axis_scale(
-            a_x, x_or_y="y", unit=filtered_data.unit[0]
+            a_x, x_or_y="y", unit=filtered_data.unit.values[0],
         )
         plt.yticks(
             ticks=y_tick_locations,
@@ -430,20 +588,25 @@ class PyAmChartGenerator:
             ylabel=f"{unit}", fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
-            xlabel=filtered_data.time_col.capitalize(),
+            xlabel=filtered_data.year.values[0],
             fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
 
-        plt.legend(loc=1)
+        plt.legend(bbox_to_anchor=(1, 1), loc="upper left")
+
+        a_x.xaxis.set_tick_params(labelbottom=False)
+        a_x.set_xticks([])
         plt.tight_layout()
-        a_x.tick_params(axis="x", rotation=45)
         fig.savefig(os.path.join(self.plot_path_complete, "bar_plot.png"))
         plt.close()
 
-    def make_box_plot_for_pyam_dataframe(
-        self, filtered_data: pyam.IamDataFrame, title: str,
+    def make_box_plot_for_pandas_dataframe(
+        self,
+        filtered_data: pd.DataFrame,
+        title: str,
+        scenario_set: Optional[List[str]] = None,
     ) -> None:
         """Make box plot."""
         log.information("Make box plot.")
@@ -451,13 +614,12 @@ class PyAmChartGenerator:
         fig, a_x = plt.subplots(
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
+        if scenario_set is None:
+            scenario_set = list(OrderedSet(filtered_data.scenario))
 
-        filtered_data.plot.box(
-            ax=a_x, by="scenario", x="year", title=title, legend=True,
-        )
-
+        sns.boxplot(data=filtered_data, x="scenario", y="value")  #
         y_tick_labels, unit, y_tick_locations = self.set_axis_scale(
-            a_x, x_or_y="y", unit=filtered_data.unit[0]
+            a_x, x_or_y="y", unit=filtered_data.unit.values[0]
         )
         plt.yticks(
             ticks=y_tick_locations,
@@ -468,14 +630,17 @@ class PyAmChartGenerator:
             ylabel=f"{unit}", fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
-            xlabel=filtered_data.time_col.capitalize(),
+            xlabel=filtered_data.year.values[0],
             fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
-        plt.tight_layout()
-        plt.legend(loc=1)
-        fig.savefig(os.path.join(self.plot_path_complete, "box_plot.png"))
+        a_x.xaxis.set_tick_params(labelbottom=False)
+        a_x.set_xticks([])
+        plt.legend(scenario_set, bbox_to_anchor=(1, 1), loc="upper left")
+        fig.savefig(
+            os.path.join(self.plot_path_complete, "box_plot.png"), bbox_inches="tight"
+        )
         plt.close()
 
     def make_pie_plot_for_pyam_dataframe(
@@ -760,6 +925,13 @@ class PyAmChartGenerator:
 
         return filtered_data
 
+    def filter_pandas_dataframe(
+        self, dataframe: pd.DataFrame, variable_to_check: str
+    ) -> pd.DataFrame:
+        """Filter pandas dataframe according to variable."""
+
+        return dataframe.loc[dataframe["variable"] == variable_to_check]
+
     def decide_for_scenario_or_variable_comparison(
         self, filtered_data: pyam.IamDataFrame
     ) -> str:
@@ -777,7 +949,7 @@ class PyAmChartGenerator:
         return comparison_mode
 
     def get_statistics_of_data_and_write_to_excel(
-        self, filtered_data: pyam.IamDataFrame, path_to_save: str, kind_of_data_set: str
+        self, filtered_data: pd.DataFrame, path_to_save: str, kind_of_data_set: str,
     ) -> None:
         """Use pandas describe method to get statistical values of certain data."""
         # create a excel writer object
@@ -785,124 +957,415 @@ class PyAmChartGenerator:
             path=os.path.join(path_to_save, f"{kind_of_data_set}_statistics.xlsx"),
             mode="w",
         ) as writer:
-            filtered_data.data.to_excel(excel_writer=writer, sheet_name="filtered data")
-            statistical_data = filtered_data.data.describe()
+
+            filtered_data.to_excel(excel_writer=writer, sheet_name="filtered data")
+            statistical_data = filtered_data.describe()
 
             statistical_data.to_excel(excel_writer=writer, sheet_name="statistics")
 
     def check_if_scenario_exists_and_filter_dataframe_for_scenarios(
-        self, data_frame: pd.DataFrame, list_of_scenarios_to_check: List[str]
+        self,
+        data_frame: pd.DataFrame,
+        dict_of_scenarios_to_check: Dict[
+            str, List[str]
+        ],  # list_of_scenarios_to_check: List[str]
     ) -> pd.DataFrame:
         """Check if scenario exists and filter dataframe for scenario."""
+        for (
+            list_of_scenarios_to_check,
+        ) in dict_of_scenarios_to_check.values():
+            aggregated_scenario_dict: Dict = {
+                key: [] for key in list_of_scenarios_to_check
+            }
 
-        aggregated_scenario_dict: Dict = {key: [] for key in list_of_scenarios_to_check}
+            for given_scenario in data_frame["scenario"]:
+                # string comparison
 
-        for given_scenario in data_frame["scenario"]:
-            # string comparison
+                for scenario_to_check in list_of_scenarios_to_check:
+                    if (
+                        scenario_to_check in given_scenario
+                        and given_scenario
+                        not in aggregated_scenario_dict[scenario_to_check]
+                    ):
+                        aggregated_scenario_dict[scenario_to_check].append(
+                            given_scenario
+                        )
+            # raise error if dict is empty
+            for (
+                key_scenario_to_check,
+                given_scenario,
+            ) in aggregated_scenario_dict.items():
+                if given_scenario == []:
+                    raise ValueError(
+                        f"Scenarios containing {key_scenario_to_check} were not found in the pyam dataframe."
+                    )
 
-            for scenario_to_check in list_of_scenarios_to_check:
-                if (
-                    scenario_to_check in given_scenario
-                    and given_scenario
-                    not in aggregated_scenario_dict[scenario_to_check]
-                ):
-                    aggregated_scenario_dict[scenario_to_check].append(given_scenario)
-        # raise error if dict is empty
-        for key_scenario_to_check, given_scenario in aggregated_scenario_dict.items():
-            if given_scenario == []:
-                raise ValueError(
-                    f"Scenarios containing {key_scenario_to_check} were not found in the pyam dataframe."
-                )
+            concat_df = pd.DataFrame()
+            # only take rows from dataframe which are in selected scenarios
+            for (
+                key_scenario_to_check,
+                given_scenario,
+            ) in aggregated_scenario_dict.items():
 
-        concat_df = pd.DataFrame()
-        # only take rows from dataframe which are in selected scenarios
-        for key_scenario_to_check, given_scenario in aggregated_scenario_dict.items():
-
-            df_filtered_for_specific_scenarios = data_frame.loc[
-                data_frame["scenario"].isin(given_scenario)
-            ]
-            df_filtered_for_specific_scenarios["scenario"] = [
-                key_scenario_to_check
-            ] * len(df_filtered_for_specific_scenarios["scenario"])
-            concat_df = pd.concat([concat_df, df_filtered_for_specific_scenarios])
+                df_filtered_for_specific_scenarios = data_frame.loc[
+                    data_frame["scenario"].isin(given_scenario)
+                ]
+                df_filtered_for_specific_scenarios["scenario"] = [
+                    key_scenario_to_check
+                ] * len(df_filtered_for_specific_scenarios["scenario"])
+                concat_df = pd.concat([concat_df, df_filtered_for_specific_scenarios])
+                concat_df["scenario_0"] = data_frame["scenario"]
 
         return concat_df
 
+    def check_if_scenario_exists_and_filter_dataframe_for_scenarios_dict(
+        self,
+        data_frame: pd.DataFrame,
+        dict_of_scenarios_to_check: Dict[
+            str, List[str]
+        ],  # list_of_scenarios_to_check: List[str]
+    ) -> Tuple[pd.DataFrame, str, str]:
+        """Check if scenario exists and filter dataframe for scenario."""
 
-# examples for variables to check (check names of your variables before your evaluation, if they are correct)
-# kpi data has no time series, so only choose when you analyze yearly data
-kpi_data = [
-    "Consumption",
-    "Production",
-    "Self-consumption",
-    # "Injection",
-    "Self-consumption rate",
-    # "Cost for energy use",
-    # "CO2 emitted due energy use",
-    # "Battery losses",
-    "Autarky rate",
-    # "Annual investment cost for equipment (old version)",
-    # "Annual CO2 Footprint for equipment (old version)",
-    # "Investment cost for equipment per simulated period",
-    # "CO2 footprint for equipment per simulated period",
-    # "System operational Cost for simulated period",
-    # "System operational Emissions for simulated period",
-    "Total costs for simulated period",
-    "Total emissions for simulated period",
-    "Time of building indoor air temperature being below set temperature 19 °C",
-    "Minimum building indoor air temperature reached",
-    "Time of building indoor air temperature being above set temperature 24 °C",
-    "Maximum building indoor air temperature reached",
-]
+        concat_df = data_frame  # copy.deepcopy(data_frame)
+        filter_level_index = 0
+        for (
+            scenario_to_check_key,
+            list_of_scenarios_to_check,
+        ) in dict_of_scenarios_to_check.items():
 
-electricity_data = [
-    # "L2EMSElectricityController|Electricity|ElectricityToOrFromGrid",
-    # "PVSystem_w0|Electricity|ElectricityOutput", # check if pv was used or not
-    "ElectricityMeter|Electricity|ElectricityToOrFromGrid",
-    "ElectricityMeter|Electricity|ElectricityConsumption",
-    "ElectricityMeter|Electricity|ElectricityProduction"
-    "ElectricityMeter|Electricity|CumulativeConsumption",
-    "ElectricityMeter|Electricity|CumulativeProduction",
-]
+            concat_df = self.check_for_one_scenario(
+                dataframe=concat_df,
+                list_of_scenarios_to_check=list_of_scenarios_to_check,
+                column_name_to_check=scenario_to_check_key,
+                filter_level_index=filter_level_index,
+            )
 
-occuancy_consumption = [
-    "Occupancy|Electricity|ElectricityOutput",
-    "Occupancy|WarmWater|WaterConsumption",
-]
+            filter_level_index = filter_level_index + 1
+        key_for_scenario_one = ""
+        key_for_current_scenario = ""
+        # rename scenario with all scenario filter levels
+        for index in concat_df.index:
+            # if even more filter levels need to add condition!
+            if filter_level_index == 2:
+                current_scenario_value = concat_df["scenario"][index]
+                scenario_value_one = concat_df["scenario_1"][index]
+                # scenario zero is original scenario that will be overwritten
+                key_for_scenario_one = list(dict_of_scenarios_to_check.keys())[0]
+                key_for_current_scenario = list(dict_of_scenarios_to_check.keys())[1]
+                # concat_df.iloc[index, concat_df.columns.get_loc("scenario")] = f"{scenario_value_one}_{current_scenario_value}"
+                concat_df.loc[
+                    index, "scenario"
+                ] = f"{scenario_value_one}_{current_scenario_value}"
+            elif filter_level_index == 1:
+                key_for_scenario_one = list(dict_of_scenarios_to_check.keys())[0]
+                key_for_current_scenario = ""
+        return concat_df, key_for_scenario_one, key_for_current_scenario
 
-heating_demand = [
-    "HeatPump|Heating|ThermalOutputPower",
-    # "HeatDistributionSystem|Heating|ThermalOutputPower",
-    # "Building|Heating|TheoreticalThermalBuildingDemand",
-    "Building|Temperature|TemperatureIndoorAir",
-]
+    def check_for_one_scenario(
+        self,
+        dataframe: pd.DataFrame,
+        list_of_scenarios_to_check: List,
+        column_name_to_check: str,
+        filter_level_index: int,
+    ) -> pd.DataFrame:
+        """Check for one scenario."""
+
+        aggregated_scenario_dict: Dict = {key: [] for key in list_of_scenarios_to_check}
+        for scenario_to_check in list_of_scenarios_to_check:
+            for value in dataframe[column_name_to_check].values:
+                if (
+                    isinstance(scenario_to_check, str)
+                    and scenario_to_check in value
+                    and value not in aggregated_scenario_dict[scenario_to_check]
+                ):
+                    aggregated_scenario_dict[scenario_to_check].append(value)
+                elif (
+                    isinstance(scenario_to_check, (float, int))
+                    and scenario_to_check == value
+                    and value not in aggregated_scenario_dict[scenario_to_check]
+                ):
+
+                    aggregated_scenario_dict[scenario_to_check].append(value)
+
+        concat_df = pd.DataFrame()
+        # new_df = copy.deepcopy(dataframe)
+        # only take rows from dataframe which are in selected scenarios
+        for (
+            key_scenario_to_check,
+            given_list_of_values,
+        ) in aggregated_scenario_dict.items():
+
+            df_filtered_for_specific_scenarios = dataframe.loc[
+                dataframe[column_name_to_check].isin(given_list_of_values)
+            ]
+
+            # df_filtered_for_specific_scenarios.loc[df_filtered_for_specific_scenarios["scenario"]] = [
+            #     key_scenario_to_check
+            # ] * len(df_filtered_for_specific_scenarios["scenario"])
+            df_filtered_for_specific_scenarios.loc[
+                :, "scenario"
+            ] = key_scenario_to_check
+
+            concat_df = pd.concat(
+                [concat_df, df_filtered_for_specific_scenarios], ignore_index=True
+            )
+            concat_df[f"scenario_{filter_level_index}"] = dataframe.loc[:, "scenario"]
+
+            del df_filtered_for_specific_scenarios
+
+        return concat_df
+
+    def calculate_relative_electricity_demand(
+        self, dataframe: pd.DataFrame
+    ) -> pd.DataFrame:
+        """Calculate relative electricity demand."""
+
+        # look for ElectricityMeter|Electricity|ElectrcityToOrFromGrid output
+        if (
+            "ElectricityMeter|Electricity|ElectricityToOrFromGrid"
+            not in dataframe.variable.values
+        ):
+            raise ValueError(
+                "ElectricityMeter|Electricity|ElectricityToOrFromGrid was not found in variables."
+            )
+
+        # filter again just to be shure
+        filtered_data = dataframe.loc[
+            dataframe.variable == "ElectricityMeter|Electricity|ElectricityToOrFromGrid"
+        ]
+
+        if "share_of_maximum_pv_power" not in filtered_data.columns:
+            raise ValueError(
+                "share_of_maximum_pv_power was not found in dataframe columns"
+            )
+        # sort df accrofing to share of pv
+        filtered_data = filtered_data.sort_values("share_of_maximum_pv_power")
+
+        # # iterate over all new scenarios
+        # for scenario in filtered_data.scenario.values:
+
+        # iterate over all building codes
+        for building_code in filtered_data.building_code.values:
+            # data for this building code
+
+            df_for_one_building_code = filtered_data.loc[
+                filtered_data.building_code == building_code
+            ]
+
+            # get reference value (when share of pv power is zero)
+            for (
+                share_of_maximum_pv_power
+            ) in df_for_one_building_code.share_of_maximum_pv_power.values:
+
+                if share_of_maximum_pv_power == 0.0:
+
+                    df_for_one_scenario_and_for_one_share = df_for_one_building_code.loc[
+                        df_for_one_building_code.share_of_maximum_pv_power
+                        == share_of_maximum_pv_power
+                    ]
+
+                    # df_demand_values = df_for_one_scenario_for_zero_pv_share.loc[df_for_one_scenario_for_zero_pv_share.value < 0]
+                    # reference_value_for_electricity_demand = np.mean(
+                    #     df_for_one_scenario_for_zero_pv_share.value.values
+                    # )
+                    reference_value_for_electricity_demand = (
+                        df_for_one_scenario_and_for_one_share.value.values
+                    )
+                    value_for_electricity_demand = 0
+
+                    # new_df_only_with_relative_electricity_demand = copy.deepcopy(df_for_one_scenario_and_for_one_share)
+                    # new_df_only_with_relative_electricity_demand["variable"] = ["Relative Electricity Demand"]
+                    # new_df_only_with_relative_electricity_demand["unit"] = ["%"]
+                    # new_df_only_with_relative_electricity_demand["value"] = 1
+
+                elif share_of_maximum_pv_power != 0.0:
+
+                    df_for_one_scenario_and_for_one_share = df_for_one_building_code.loc[
+                        df_for_one_building_code.share_of_maximum_pv_power
+                        == share_of_maximum_pv_power
+                    ]
+
+                    # df_demand_values = df_for_one_scenario_for_nonzero_pv_share.loc[df_for_one_scenario_for_nonzero_pv_share.value < 0]
+                    value_for_electricity_demand = (
+                        df_for_one_scenario_and_for_one_share.value.values
+                    )
+
+                # calculate reference electricity demand for each scenario and share of pv power
+                relative_electricity_demand = (
+                    1
+                    - (
+                        (
+                            reference_value_for_electricity_demand
+                            - value_for_electricity_demand
+                        )
+                        / reference_value_for_electricity_demand
+                    )
+                ) * 100
+
+                # make little df with new variable and value
+
+                new_df_only_with_relative_electricity_demand = copy.deepcopy(
+                    df_for_one_scenario_and_for_one_share
+                )
+                #
+                new_df_only_with_relative_electricity_demand.loc[
+                    :, "variable"
+                ] = "Relative Electricity Demand"
+                new_df_only_with_relative_electricity_demand.loc[:, "unit"] = "%"
+                new_df_only_with_relative_electricity_demand.loc[
+                    :, "value"
+                ] = relative_electricity_demand
+
+                del df_for_one_scenario_and_for_one_share
+
+                dataframe = pd.concat(
+                    [dataframe, new_df_only_with_relative_electricity_demand]
+                )
+
+                del dataframe["Unnamed: 0"]
+                del new_df_only_with_relative_electricity_demand
+
+        # write everything in df with new column and return df
+        # new_df_only_with_relative_electricity_demand = copy.deepcopy(filtered_data)
+        # new_df_only_with_relative_electricity_demand["variable"] = [
+        #     "Relative Electricity Demand"
+        # ] * len(filtered_data.variable.values)
+        # new_df_only_with_relative_electricity_demand["unit"] = ["%"] * len(
+        #     filtered_data.variable.values
+        # )
+        # new_df_only_with_relative_electricity_demand[
+        #     "value"
+        # ] = list_with_relative_electricity_demands
+
+        return dataframe
 
 
-# examples for scenarios to filter
-building_type = [
-    "DE.N.SFH",
-    "DE.N.MFH",
-    "DE.N.TH",
-    "DE.N.AB",
-]
+class FilterClass:
 
-building_refurbishment_state = [
-    "001.001",
-    "001.002",
-    "001.003",
-]
+    """Class for setting filters on the data for processing."""
 
-building_age = [
-    "01.Gen",
-    "02.Gen",
-    "03.Gen",
-    "04.Gen",
-    "05.Gen",
-    "06.Gen",
-    "07.Gen",
-    "08.Gen",
-    "09.Gen",
-    "10.Gen",
-    "11.Gen",
-    "12.Gen",
-]
+    def __init__(self):
+        """Initialize the class."""
+
+        (
+            self.kpi_data,
+            self.electricity_data,
+            self.occuancy_consumption,
+            self.heating_demand,
+        ) = self.get_variables_to_check()
+        (
+            self.building_type,
+            self.building_refurbishment_state,
+            self.building_age,
+            self.pv_share,
+        ) = self.get_scenarios_to_check()
+
+    def get_variables_to_check(self):
+        """Get specific variables to check for the scenario evaluation."""
+
+        # examples for variables to check (check names of your variables before your evaluation, if they are correct)
+        # kpi data has no time series, so only choose when you analyze yearly data
+        kpi_data = [
+            "Consumption",
+            # "Production",
+            # "Self-consumption",
+            # "Injection",
+            # "Self-consumption rate",
+            # "Cost for energy use",
+            # "CO2 emitted due energy use",
+            # "Battery losses",
+            # "Autarky rate",
+            # "Annual investment cost for equipment (old version)",
+            # "Annual CO2 Footprint for equipment (old version)",
+            # "Investment cost for equipment per simulated period",
+            # "CO2 footprint for equipment per simulated period",
+            # "System operational Cost for simulated period",
+            # "System operational Emissions for simulated period",
+            "Total costs for simulated period",
+            "Total emissions for simulated period",
+            "Temperature deviation of building indoor air temperature being below set temperature 19 °C",
+            "Minimum building indoor air temperature reached",
+            "Temperature deviation of building indoor air temperature being above set temperature 24 °C",
+            "Maximum building indoor air temperature reached",
+            "Number of heat pump cycles",
+        ]
+
+        electricity_data = [
+            # "L2EMSElectricityController|Electricity|ElectricityToOrFromGrid",
+            # "PVSystem_w0|Electricity|ElectricityOutput", # check if pv was used or not
+            # "ElectricityMeter|Electricity|ElectricityToGrid",
+            "ElectricityMeter|Electricity|ElectricityFromGrid",
+            # "ElectricityMeter|Electricity|ElectricityAvailable",
+            # "ElectricityMeter|Electricity|ElectricityConsumption",
+            # "ElectricityMeter|Electricity|ElectricityProduction"
+        ]
+
+        occuancy_consumption = [
+            "Occupancy|Electricity|ElectricityOutput",
+            "Occupancy|WarmWater|WaterConsumption",
+        ]
+
+        heating_demand = [
+            "AdvancedHeatPumpHPLib|Heating|ThermalOutputPower",
+            # "HeatDistributionSystem|Heating|ThermalOutputPower",
+            # "Building|Heating|TheoreticalThermalBuildingDemand",
+            "Building|Temperature|TemperatureIndoorAir",
+        ]
+
+        return kpi_data, electricity_data, occuancy_consumption, heating_demand
+
+    def get_scenarios_to_check(self):
+        """Get scenarios to check for scenario evaluation."""
+
+        (
+            building_type,
+            building_refurbishment_state,
+            building_age,
+        ) = self.get_building_properties_to_check()
+
+        pv_share = self.get_pv_properties_to_check()
+
+        return building_type, building_refurbishment_state, building_age, pv_share
+
+    def get_building_properties_to_check(self):
+        """Get building properties."""
+
+        # examples for scenarios to filter
+        building_type = [
+            "DE.N.SFH",
+            "DE.N.TH",
+            "DE.N.MFH",
+            "DE.N.AB",
+        ]
+
+        building_refurbishment_state = [
+            "001.001",
+            "001.002",
+            "001.003",
+        ]
+
+        building_age = [
+            "01.Gen",
+            "02.Gen",
+            "03.Gen",
+            "04.Gen",
+            "05.Gen",
+            "06.Gen",
+            "07.Gen",
+            "08.Gen",
+            "09.Gen",
+            "10.Gen",
+            "11.Gen",
+            "12.Gen",
+        ]
+
+        return building_type, building_refurbishment_state, building_age
+
+    def get_pv_properties_to_check(self):
+        """Get pv properties."""
+
+        # examples for scenarios to filter
+        pv_share = [0, 0.25, 0.5, 1]
+
+        return pv_share

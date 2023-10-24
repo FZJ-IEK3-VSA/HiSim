@@ -7,6 +7,7 @@ import inspect
 import json
 import os
 from functools import wraps
+from functools import reduce as freduce
 from timeit import default_timer as timer
 from typing import Any, Dict, Tuple, List
 
@@ -191,6 +192,10 @@ HISIMPATH: Dict[str, Any] = {
         hisim_abs_path, "inputs", "advanced_battery", "Siemens_Junelight.npy"
     ),
     "modular_household": os.path.join(hisim_abs_path, "modular_household"),
+    "price_signal": {
+        "PricePurchase": os.path.join(hisim_inputs, "price_signal", "PricePurchase.csv"),
+        "FeedInTarrif": os.path.join(hisim_inputs, "price_signal", "FeedInTarrif.csv")
+    }
 }
 
 
@@ -406,3 +411,38 @@ def deprecated(message):
         return deprecated_func
 
     return deprecated_decorator
+
+
+def rsetattr(obj, attr, val):
+    """Recursive setattr for multi level attributes like `obj.attribute.subattribute`."""
+    pre, _, post = attr.rpartition(".")
+    return setattr(rgetattr(obj, pre) if pre else obj, post, val)
+
+
+def rgetattr(obj, attr, *args):
+    """Recursive getattr for multi level attributes like `obj.attribute.subattribute`."""
+
+    def _getattr(obj, attr):
+        return getattr(obj, attr, *args)
+
+    return freduce(_getattr, [obj] + attr.split("."))
+
+
+def rhasattr(obj, attr):
+    """Recursive hasattr for multi level attributes like `obj.attribute.subattribute`."""
+    pre, _, post = attr.rpartition(".")
+    return hasattr(rgetattr(obj, pre) if pre else obj, post)
+
+
+def create_configuration(my_sim: Any, config_class: Any) -> Any:
+    """Create configuration object from JSON or from defaults."""
+    if my_sim.my_module_config_path:
+        with open(
+            my_sim.my_module_config_path, "r", encoding="utf8"
+        ) as system_config_file:
+            my_config = config_class.from_json(system_config_file.read())  # type: ignore
+        log.information(f"Read system config from {my_sim.my_module_config_path}.")
+    else:
+        my_config = config_class.get_default()
+        log.information(f"Read default config from {config_class.__name__}.")
+    return my_config

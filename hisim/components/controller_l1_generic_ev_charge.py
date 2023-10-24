@@ -66,7 +66,9 @@ class ChargingStationConfig(cp.ConfigBase):
         charging_power = float(
             (charging_station_set.Name or "").split("with ")[1].split(" kW")[0]
         )
-        lower_threshold_charging_power = charging_power * 1e3 * 0.1  # 10 % of charging power for acceptable efficiencies
+        lower_threshold_charging_power = (
+            charging_power * 1e3 * 0.1
+        )  # 10 % of charging power for acceptable efficiencies
         config = ChargingStationConfig(
             name="L1EVChargeControl",
             source_weight=1,
@@ -287,14 +289,15 @@ class L1Controller(cp.Component):
             self.processed_state = self.state.clone()
         stsv.set_output_value(self.p_set, self.state.power)
 
-        ac_battery_power =  stsv.get_input_value(self.ac_battery_power_channel)
+        ac_battery_power = stsv.get_input_value(self.ac_battery_power_channel)
         if ac_battery_power > 0:
             # charging of EV
-            stsv.set_output_value(self.battery_charging_power_to_ems_channel, ac_battery_power)
+            stsv.set_output_value(
+                self.battery_charging_power_to_ems_channel, ac_battery_power
+            )
         else:
             # no charging of EV
             stsv.set_output_value(self.battery_charging_power_to_ems_channel, 0)
-
 
     def build(
         self,

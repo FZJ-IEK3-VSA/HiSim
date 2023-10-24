@@ -89,6 +89,7 @@ def basic_household_explicit(
     my_photovoltaic_system_config = (
         generic_pv_system.PVSystemConfig.get_default_PV_system()
     )
+
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -170,7 +171,7 @@ def basic_household_explicit(
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.ElectricityInput,
         my_electricity_meter.component_name,
-        my_electricity_meter.ElectricityToOrFromGrid,
+        my_electricity_meter.ElectricityAvailable,
     )
     my_heat_pump.connect_only_predefined_connections(
         my_weather, my_heat_pump_controller

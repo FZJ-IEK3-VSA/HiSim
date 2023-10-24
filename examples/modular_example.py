@@ -1,9 +1,9 @@
 """Example sets up a modular household according to json input file."""
 
-import json
+# clean
+
 import os
 import shutil
-from os import path
 from typing import Any, List, Optional, Tuple
 
 import pandas as pd
@@ -40,7 +40,7 @@ def cleanup_old_result_folders():
 
 
 def cleanup_old_lpg_requests():
-    """ Removes old results of loadprofilegenerator_connector_utsp. """
+    """Removes old results of loadprofilegenerator_connector_utsp."""
     if not os.path.exists(hisim.utils.HISIMPATH["utsp_results"]):
         # no old data exists, nothing to remove
         return
@@ -67,7 +67,9 @@ def get_heating_reference_temperature_and_season_from_location(
     converting_data = pd.read_csv(
         hisim.utils.HISIMPATH["housing_reference_temperatures"]
     )
-    converting_data.index = converting_data["Location"]
+    # converting_data.index = converting_data["Location"]
+    converting_data.set_index(inplace=True, keys="Location")
+
     return (
         float(converting_data.loc[location]["HeatingReferenceTemperature"]),
         [
@@ -92,7 +94,7 @@ def modular_household_explicit(
     seconds_per_timestep = 60 * 15
 
     # read the modular household config file
-    household_config = read_in_configs("modular_example_config.json")
+    household_config = read_in_configs(my_sim.my_module_config_path)
     assert household_config.archetype_config_ is not None
     assert household_config.system_config_ is not None
     arche_type_config_ = household_config.archetype_config_
@@ -225,7 +227,9 @@ def modular_household_explicit(
         absolute_conditioned_floor_area_in_m2=floor_area,
         total_base_area_in_m2=None,
         number_of_apartments=None,
+        predictive=False,
     )
+    my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
@@ -262,6 +266,7 @@ def modular_household_explicit(
                 charging_station_set=charging_station,
                 consumption=0,
                 profile_with_washing_machine_and_dishwasher=not smart_devices_included,
+                predictive_control=False,
             )
         )
 
@@ -272,7 +277,13 @@ def modular_household_explicit(
     else:
         # Build occupancy
         my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-            "Occupancy", occupancy_profile or "", location, not smart_devices_included,
+            "Occupancy",
+            occupancy_profile.Name or "",
+            location,
+            not smart_devices_included,
+            number_of_apartments=my_building_information.number_of_apartments,
+            predictive=False,
+            predictive_control=False,
         )
         my_occupancy = loadprofilegenerator_connector.Occupancy(
             config=my_occupancy_config,
@@ -401,6 +412,7 @@ def modular_household_explicit(
             water_heating_system_installed=water_heating_system_installed,
             controlable=clever,
             count=count,
+            number_of_apartments=my_building_information.number_of_apartments,
         )
 
     else:
@@ -410,6 +422,7 @@ def modular_household_explicit(
             my_occupancy=my_occupancy,
             water_heating_system_installed=water_heating_system_installed,
             count=count,
+            number_of_apartments=my_building_information.number_of_apartments,
         )
 
     # """HEATING"""
@@ -552,7 +565,7 @@ def modular_household_explicit(
         my_sim.add_component(my_electricity_controller)
 
 
-def needs_ems(
+def needs_ems(  # pylint: disable=R0911
     battery_included,
     chp_included,
     hydrogen_setup_included,

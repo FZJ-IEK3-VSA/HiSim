@@ -9,7 +9,7 @@ def maincall() -> None:
     """For calling the Hisim main."""
     # change call here as needed
     # hsm.main("..\\examples\\modular_example.py", "modular_household_explicit")
-    hsm.main("..\\examples\\household_with_advanced_hp_hws_hds_pv.py", "household_with_hds_and_advanced_hp")
+    hsm.main("..\\examples\\air_conditioned_house.py", "household_with_air_conditioner_and_controller_pid")
 
 
 if __name__ == "__main__":

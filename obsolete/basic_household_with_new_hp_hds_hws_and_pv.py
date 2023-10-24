@@ -8,12 +8,13 @@ from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
 from hisim.components import generic_pv_system
 from hisim.components import building
-from hisim.components import generic_heat_pump_for_house_with_hds
+
 from hisim.components import electricity_meter
 from hisim.components import simple_hot_water_storage
 from hisim.components import heat_distribution_system
 from hisim import postprocessingoptions
 from hisim import loadtypes
+import generic_heat_pump_for_house_with_hds
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -117,7 +118,7 @@ def household_with_hds(
 
     # Build Heat Pump
     my_heat_pump = generic_heat_pump_for_house_with_hds.GenericHeatPumpNew(
-        config=generic_heat_pump_for_house_with_hds.GenericHeatPumpConfigNew.get_default_generic_heat_pump_config(),
+        config=generic_heat_pump_for_house_with_hds.GenericHeatPumpConfigNew.get_default_generic_heat_pump_config(heating_load_of_building_in_watt=my_building.my_building_information.max_thermal_building_demand_in_watt),
         my_simulation_parameters=my_simulation_parameters,
     )
     # Build Heat Distribution Controller
@@ -128,7 +129,7 @@ def household_with_hds(
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
+        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(heating_load_of_building_in_watt=my_building.my_building_information.max_thermal_building_demand_in_watt)
     )
 
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(

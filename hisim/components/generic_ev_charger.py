@@ -88,7 +88,10 @@ class VehicleConfig(cp.ConfigBase):
     def get_default_config(cls):
         """Gets a default config."""
         return VehicleConfig(
-            name="ElectricVehicle", manufacturer="Renault", model="Zoe v3", soc=0.8,
+            name="ElectricVehicle",
+            manufacturer="Renault",
+            model="Zoe v3",
+            soc=0.8,
         )
 
 

@@ -45,8 +45,12 @@ class GenericHydrogenStorageConfig(cp.ConfigBase):
     loss_factor_per_day: float
 
     @staticmethod
-    def get_default_config(capacity: float = 200, max_charging_rate: float = 2/3600, max_discharging_rate: float = 2/3600,
-                           source_weight: int = 1, ) -> Any:
+    def get_default_config(
+        capacity: float = 200,
+        max_charging_rate: float = 2 / 3600,
+        max_discharging_rate: float = 2 / 3600,
+        source_weight: int = 1,
+    ) -> Any:
         """Returns default configuration for hydrogen storage"""
         config = GenericHydrogenStorageConfig(
             name="HydrogenStorage",
@@ -178,7 +182,9 @@ class GenericHydrogenStorage(cp.Component):
         # limitation of charging rate
         delta_not_stored: float = 0
         if charging_rate > self.config.max_charging_rate:
-            delta_not_stored = delta_not_stored + charging_rate - self.config.max_charging_rate
+            delta_not_stored = (
+                delta_not_stored + charging_rate - self.config.max_charging_rate
+            )
             charging_rate = self.config.max_charging_rate
 
         # limitation of storage size

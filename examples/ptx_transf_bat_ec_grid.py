@@ -18,8 +18,6 @@ from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDict
 from hisim.components.csvloader import CSVLoader, CSVLoaderConfig
 from hisim.components.transformer_rectifier import Transformer, TransformerConfig
 
-# import battery
-from hisim.components.advanced_battery_bslib import Battery, BatteryConfig
 
 # import controller
 from hisim.components.controller_l2_ptx_energy_management_system import (
@@ -48,6 +46,7 @@ __status__ = "development"
 def ptx_trans_bat_ec_no_grid_pv_final(
     my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]
 ) -> None:
+    """Setup function."""
     log.information("Starting basic electrolyzer example")
     # =================================================================================================================================
     # Set System Parameters

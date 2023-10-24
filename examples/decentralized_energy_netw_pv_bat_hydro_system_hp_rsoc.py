@@ -32,8 +32,6 @@ from hisim.postprocessingoptions import PostProcessingOptions
 def decentralized_energy_netw_pv_h2sys_hp_bat(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:
-    log.information("Starting basic household_pv_rsoc_hp_grid example")
-
     """Dynamic Components Demonstration.
 
     In this example a generic controller is added. The generic controller
@@ -41,11 +39,13 @@ def decentralized_energy_netw_pv_h2sys_hp_bat(
     Here two fuel_cell/chp_systems and two batteries
     are added.
     """
+    log.information("Starting basic household_pv_rsoc_hp_grid example")
+
     year = 2021
     seconds_per_timestep = 60
 
     # Set rSOC and operation mode
-    rSOC_name = "rSOC1040kW"
+    rsoc_name = "rSOC1040kW"
     operation_mode_rsoc = "StandbyLoad"
     """
     Operation modes:
@@ -130,20 +130,20 @@ def decentralized_energy_netw_pv_h2sys_hp_bat(
     my_rsoc_controller_l2 = rSOCBatteryController(
         my_simulation_parameters=my_simulation_parameters,
         config=rSOCBatteryControllerConfig.confic_rSOC(
-            rSOC_name=rSOC_name,
+            rSOC_name=rsoc_name,
             operation_mode=operation_mode_rsoc,
         ),
     )
     my_rsoc_controller_l1 = rSOCController(
         my_simulation_parameters=my_simulation_parameters,
         config=rSOCControllerConfig.config_rSOC(
-            rSOC_name=rSOC_name,
+            rSOC_name=rsoc_name,
         ),
     )
     my_rsoc = rSOC(
         my_simulation_parameters=my_simulation_parameters,
         config=rSOCConfig.config_rSOC(
-            rSOC_name=rSOC_name,
+            rSOC_name=rsoc_name,
         ),
     )
     # buffer bat test end

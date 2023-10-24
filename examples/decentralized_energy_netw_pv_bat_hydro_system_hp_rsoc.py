@@ -18,9 +18,9 @@ from hisim.components import generic_pv_system
 from hisim.components.building import Building, BuildingConfig
 from hisim.components import generic_heat_pump
 
-from hisim.components.controller_l2_rSOC_battery_system import (
-    rSOCBatteryController,
-    rSOCBatteryControllerConfig,
+from hisim.components.controller_l2_rsoc_battery_system import (
+    RsocBatteryController,
+    RsocBatteryControllerConfig
 )
 from hisim.components.controller_l1_rsoc import RsocController, RsocControllerConfig
 from hisim.components.generic_rsoc import Rsoc, RsocConfig
@@ -127,9 +127,9 @@ def decentralized_energy_netw_pv_h2sys_hp_bat(
     )
 
     # buffer bat test start
-    my_rsoc_controller_l2 = rSOCBatteryController(
+    my_rsoc_controller_l2 = RsocBatteryController(
         my_simulation_parameters=my_simulation_parameters,
-        config=rSOCBatteryControllerConfig.confic_rsoc_name(
+        config=RsocBatteryControllerConfig.confic_rsoc_name(
             rsoc_name=rsoc_name,
             operation_mode=operation_mode_rsoc,
         ),

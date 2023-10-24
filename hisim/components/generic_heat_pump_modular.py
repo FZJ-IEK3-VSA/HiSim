@@ -156,42 +156,6 @@ class HeatPumpConfig(cp.ConfigBase):
             consumption=0,
         )
         return config
-    
-    
-    @classmethod
-    def get_scaled_waterheating(cls):
-        """Gets a default heat pump with scaling according to number of apartments."""
-        
-        if SingletonSimRepository().exist_entry(
-            key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS
-        ):
-            real_number_of_apartments_from_building = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS
-            )
-        else:
-            raise KeyError(
-                "Key for number of apartments was not found in the singleton sim repository."
-                + "This might be because the building was not initialized before the heat pump modular."
-                + "Please check the order of the initialization of the components in your example or use the default config of the heat pump modular."
-            )
-        
-        # scale with number of apartments
-        power_th_in_watt: float = 3000 * real_number_of_apartments_from_building
-        config = HeatPumpConfig(
-            name="DHWHeatPump",
-            source_weight=1,
-            manufacturer="Viessmann Werke GmbH & Co KG",
-            device_name="Vitocal 300-A AWO-AC 301.B07",
-            power_th=power_th_in_watt,
-            water_vs_heating=lt.InandOutputType.WATER_HEATING,
-            device_category=lt.HeatingSystems.HEAT_PUMP,
-            co2_footprint=power_th_in_watt * 1e-3 * 165.84,  # value from emission_factros_and_costs_devices.csv
-            cost=power_th_in_watt * 1e-3 * 1513.74,  # value from emission_factros_and_costs_devices.csv
-            lifetime=10,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
-            consumption=0,
-        )
-        return config
 
     @classmethod
     def get_scaled_waterheating_to_number_of_apartments(

@@ -1,7 +1,6 @@
 """ rSOC controller. """
-
+# clean
 import os
-from typing import List, Any
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -12,7 +11,6 @@ from hisim.component import (
     ComponentOutput,
     SingleTimeStepValues,
 )
-from hisim.components.example_transformer import ExampleTransformerConfig
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
@@ -33,14 +31,14 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class rSOCControllerConfig(ConfigBase):
+class RsocControllerConfig(ConfigBase):
 
     """Config of the rSOC Controller."""
 
     @classmethod
     def get_main_classname(cls):
         """Returns the full class name of the base class."""
-        return rSOCController.get_full_classname()
+        return RsocController.get_full_classname()
 
     name: str
 
@@ -59,22 +57,22 @@ class rSOCControllerConfig(ConfigBase):
     switching_time_from_sofc_to_soec: float
 
     @staticmethod
-    def read_config(rSOC_name):
+    def read_config(rsoc_name):
         """Opens the according JSON-file, based on the rSOC_name."""
 
         config_file = os.path.join(
             utils.HISIMPATH["inputs"], "rSOC_manufacturer_config.json"
         )
-        with open(config_file, "r") as json_file:
+        with open(config_file, "r", encoding="utf-8") as json_file:
             data = json.load(json_file)
-            return data.get("rSOC variants", {}).get(rSOC_name, {})
+            return data.get("rSOC variants", {}).get(rsoc_name, {})
 
     @classmethod
-    def config_rSOC(cls, rSOC_name):
+    def config_rsoc(cls, rsoc_name):
         """Initializes the config variables based on the JSON-file."""
 
-        config_json = cls.read_config(rSOC_name)
-        config = rSOCControllerConfig(
+        config_json = cls.read_config(rsoc_name)
+        config = RsocControllerConfig(
             name="rSCO l1 Controller",
             nom_load_soec=config_json.get("nom_load_soec", 0.0),
             min_load_soec=config_json.get("min_load_soec", 0.0),
@@ -96,7 +94,10 @@ class rSOCControllerConfig(ConfigBase):
         return config
 
 
-class rSOCController(Component):
+class RsocController(Component):
+
+    """rSOC Controller class."""
+
     # Inputs
     ProvidedPower = "ProvidedPower"
     PowerDemand = "PowerDemand"
@@ -116,8 +117,9 @@ class rSOCController(Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: rSOCControllerConfig,
+        config: RsocControllerConfig,
     ) -> None:
+        """Initialize class."""
         self.rsoccontrollerconfig = config
 
         self.name = config.name
@@ -136,6 +138,10 @@ class rSOCController(Component):
         self.cold_start_time_sofc = config.cold_start_time_sofc
         self.switching_time_from_sofc_to_soec = config.switching_time_from_sofc_to_soec
 
+        self.cold_start_time = self.cold_start_time_soec
+        self.warm_start_time = self.warm_start_time_soec
+        self.standby_load = 100.0
+
         super().__init__(
             name=self.rsoccontrollerconfig.name,
             my_simulation_parameters=my_simulation_parameters,
@@ -148,7 +154,7 @@ class rSOCController(Component):
         # Getting the load input
         self.provided_power: ComponentInput = self.add_input(
             self.component_name,
-            rSOCController.ProvidedPower,
+            RsocController.ProvidedPower,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KILOWATT,
             True,
@@ -156,7 +162,7 @@ class rSOCController(Component):
         # Getting the demand input
         self.power_demand: ComponentInput = self.add_input(
             self.component_name,
-            rSOCController.PowerDemand,
+            RsocController.PowerDemand,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KILOWATT,
             False,
@@ -167,7 +173,7 @@ class rSOCController(Component):
 
         self.state_rsoc: ComponentOutput = self.add_output(
             self.component_name,
-            rSOCController.StateToRSOC,
+            RsocController.StateToRSOC,
             lt.LoadTypes.ACTIVATION,
             lt.Units.ANY,
             output_description="State to the RSOC",
@@ -175,7 +181,7 @@ class rSOCController(Component):
 
         self.current_delta: ComponentOutput = self.add_output(
             self.component_name,
-            rSOCController.PowerVsDemand,
+            RsocController.PowerVsDemand,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KILOWATT,
             output_description="Current delta between provided power and power demand",
@@ -183,35 +189,35 @@ class rSOCController(Component):
 
         self.curtailed_load: ComponentOutput = self.add_output(
             self.component_name,
-            rSOCController.CurtailedLoad,
+            RsocController.CurtailedLoad,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KILOWATT,
             output_description="Curtailed load",
         )
         self.curtailed_power: ComponentOutput = self.add_output(
             self.component_name,
-            rSOCController.CurtailedPower,
+            RsocController.CurtailedPower,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KILOWATT,
             output_description="Curtailed power",
         )
         self.total_switch_count: ComponentOutput = self.add_output(
             self.component_name,
-            rSOCController.SwitchCount,
+            RsocController.SwitchCount,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             output_description="Total count of time spend switching between operation modes",
         )
         self.total_off_count: ComponentOutput = self.add_output(
             self.component_name,
-            rSOCController.TotalOffCount,
+            RsocController.TotalOffCount,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             output_description="Total count of off cycles",
         )
         self.total_standby_count: ComponentOutput = self.add_output(
             self.component_name,
-            rSOCController.TotalStandbyCount,
+            RsocController.TotalStandbyCount,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             output_description="Total count of standby cycles",
@@ -221,7 +227,7 @@ class rSOCController(Component):
         # Initialize variables
 
         self.standby_count = 0.0
-        self.current_state = "OFF"  #  standby
+        self.current_state = "OFF"  # standby
         self.warm_count = 0.0
         self.cold_count = 0.0
         self.initial_state = 0
@@ -233,7 +239,7 @@ class rSOCController(Component):
         self.activation_runtime = 0.0
         self.elapsed_time = 0.0
         self.switch_start_time = 0.0
-        self.rSOC_state = "SOFC"
+        self.rsoc_state = "SOFC"
         self.total_switch_time_count = 0.0
 
         self.standby_count_previous = self.standby_count
@@ -248,7 +254,7 @@ class rSOCController(Component):
         self.off_count_previous = self.off_count
         self.activation_runtime_previous = self.activation_runtime
         self.elapsed_time_previous = self.elapsed_time
-        self.rSOC_state_previous = self.rSOC_state
+        self.rsoc_state_previous = self.rsoc_state
         self.total_switch_time_count_previous = self.total_switch_time_count
 
     def i_prepare_simulation(self) -> None:
@@ -269,7 +275,7 @@ class rSOCController(Component):
         self.off_count_previous = self.off_count
         self.activation_runtime_previous = self.activation_runtime
         self.elapsed_time_previous = self.elapsed_time
-        self.rSOC_state_previous = self.rSOC_state
+        self.rsoc_state_previous = self.rsoc_state
         self.total_switch_time_count_previous = self.total_switch_time_count
 
     def i_restore_state(self) -> None:
@@ -286,12 +292,13 @@ class rSOCController(Component):
         self.off_count = self.off_count_previous
         self.activation_runtime = self.activation_runtime_previous
         self.elapsed_time = self.elapsed_time_previous
-        self.rSOC_state = self.rSOC_state_previous
+        self.rsoc_state = self.rsoc_state_previous
         self.total_switch_time_count = self.total_switch_time_count_previous
 
     def i_simulate(
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Simulate the component."""
         if force_convergence:
             return
         """
@@ -301,7 +308,7 @@ class rSOCController(Component):
         self.warm_start_time_soec = config.warm_start_time_soec
         self.cold_start_time_soec = config.cold_start_time_soec
         self.switching_time_from_soec_to_sofc = config.switching_time_from_soec_to_sofc
-        
+
         self.nom_power_sofc = config.nom_power_sofc
         self.min_power_sofc = config.min_power_sofc
         self.max_power_sofc = config.max_power_sofc
@@ -347,7 +354,7 @@ class rSOCController(Component):
             else:
                 self.activation_runtime = 0.0
                 self.current_state = "ON"
-        elif power == -self.min_load_soec or power == self.min_power_sofc:
+        elif power in (-self.min_load_soec, self.min_power_sofc):
             if self.current_state == "ON":
                 self.current_state = "STANDBY"
             else:
@@ -375,12 +382,12 @@ class rSOCController(Component):
         """
 
         if power < 0.0 and self.current_state == "ON":
-            if self.rSOC_state == "SOEC":
+            if self.rsoc_state == "SOEC":
                 power_to_rsco = power
                 state_to_rsoc = 1
-            elif self.rSOC_state == "SOFC" or self.rSOC_state == "Switching to SOFC":
+            elif self.rsoc_state in ("SOFC", "Switching to SOFC"):
                 self.elapsed_time = self.switching_time_from_sofc_to_soec
-                self.rSOC_state = "Switching to SOEC"
+                self.rsoc_state = "Switching to SOEC"
                 power_to_rsco = 0.0
                 state_to_rsoc = 0
                 self.total_switch_time_count += self.switching_time_from_sofc_to_soec
@@ -390,7 +397,7 @@ class rSOCController(Component):
                     <= self.my_simulation_parameters.seconds_per_timestep
                 ):
                     self.elapsed_time = 0.0
-                    self.rSOC_state = "SOEC"
+                    self.rsoc_state = "SOEC"
                     power_to_rsco = 0.0
                     state_to_rsoc = 0
                 else:
@@ -401,12 +408,12 @@ class rSOCController(Component):
                     state_to_rsoc = 0
 
         elif power > 0.0 and self.current_state == "ON":
-            if self.rSOC_state == "SOFC":
+            if self.rsoc_state == "SOFC":
                 power_to_rsco = power
                 state_to_rsoc = 1
-            elif self.rSOC_state == "SOEC" or self.rSOC_state == "Switching to SOEC":
+            elif self.rsoc_state in ("SOEC", "Switching to SOEC"):
                 self.elapsed_time = self.switching_time_from_soec_to_sofc
-                self.rSOC_state = "Switching to SOFC"
+                self.rsoc_state = "Switching to SOFC"
                 power_to_rsco = 0.0
                 state_to_rsoc = 0
                 self.total_switch_time_count += self.switching_time_from_soec_to_sofc
@@ -416,7 +423,7 @@ class rSOCController(Component):
                     <= self.my_simulation_parameters.seconds_per_timestep
                 ):
                     self.elapsed_time = 0.0
-                    self.rSOC_state = "SOFC"
+                    self.rsoc_state = "SOFC"
                     power_to_rsco = 0.0
                     state_to_rsoc = 0
                 else:

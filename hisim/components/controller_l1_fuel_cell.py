@@ -69,7 +69,7 @@ class FuelCellControllerConfig(ConfigBase):
         config_file = os.path.join(
             utils.HISIMPATH["inputs"], "fuel_cell_manufacturer_config.json"
         )
-        with open(config_file, "r") as json_file:
+        with open(config_file, "r", encoding="utf-8") as json_file:
             data = json.load(json_file)
             return data.get("Fuel Cell variants", {}).get(fuel_cell_name, {})
 
@@ -204,28 +204,27 @@ class FuelCellController(Component):
     def load_check(self, current_demand, min_output, max_output, standby_load):
         if current_demand > max_output:
             current_demand_to_system = max_output
-            self.power_not_provided_count += current_demand - max_output
+            power_not_provided_count += current_demand - max_output
             state = "ON"
 
         elif min_output <= current_demand <= max_output:
             current_demand_to_system = current_demand
-            self.power_not_provided_count += 0.0
+            power_not_provided_count += 0.0
             state = "ON"
 
         elif standby_load <= current_demand < min_output:
             current_demand_to_system = standby_load
-            self.power_not_provided_count += current_demand - standby_load
+            power_not_provided_count += current_demand - standby_load
             state = "STANDBY"
 
         else:
             current_demand_to_system = 0.0
-            self.power_not_provided_count += current_demand
+            power_not_provided_count += current_demand
             state = "OFF"
 
-        return current_demand_to_system, state, self.power_not_provided_count
+        return current_demand_to_system, state, power_not_provided_count
 
     def state_check(self, target_state, cold_start_time_to_min, warm_start_time_to_min):
-        import pdb
 
         if target_state == "OFF":
             # System switches OFF
@@ -237,7 +236,7 @@ class FuelCellController(Component):
 
         elif target_state == "STANDBY":
             # System switches STANDY
-            if self.current_state == "OFF" or self.current_state == "Starting from OFF":
+            if self.current_state in ("OFF", "StartingfromOFF"):
                 self.current_state = "OFF"
             if self.current_state == "ON":
                 self.current_state = "Switching STANDBY"
@@ -316,7 +315,7 @@ class FuelCellController(Component):
         if force_convergence:
             return
 
-        current_demand = stsv.get_input_value(self.demand_profile)
+        # current_demand = stsv.get_input_value(self.demand_profile)
         """
         self.nom_output = config.nom_output
         self.min_output = config.min_output
@@ -331,7 +330,7 @@ class FuelCellController(Component):
             self.min_output / self.nom_output
         )
 
-        (current_load_to_system, state, self.curtailed_load_count) = self.load_check(
+        (current_load_to_system, state, self.power_not_provided_count) = self.load_check(
             (abs(stsv.get_input_value(self.demand_profile))),
             self.min_output,
             self.max_output,

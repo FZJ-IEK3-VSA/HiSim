@@ -69,7 +69,7 @@ class ElectrolyzerControllerConfig(ConfigBase):
         config_file = os.path.join(
             utils.HISIMPATH["inputs"], "electrolyzer_manufacturer_config.json"
         )
-        with open(config_file, "r") as json_file:
+        with open(config_file, "r", encoding="utf-8") as json_file:
             data = json.load(json_file)
             return data.get("Electrolyzer variants", {}).get(electrolyzer_name, {})
 
@@ -226,7 +226,7 @@ class ElectrolyzerController(Component):
 
         elif target_state == "STANDBY":
             # System switches STANDY
-            if self.current_state == "OFF" or self.current_state == "StartingfromOFF":
+            if self.current_state in ("OFF", "StartingfromOFF"):
                 self.current_state = "OFF"
                 self.off_count += 1
             if self.current_state == "ON":

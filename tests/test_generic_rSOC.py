@@ -1,5 +1,5 @@
 from hisim import component as cp
-from hisim.components import generic_rSOC
+from hisim.components import generic_rsoc
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
@@ -34,7 +34,7 @@ def test_electrolyzer():
 
     # ===================================================================================================================
     # Setup Electrolyzer
-    my_rsoc_config = generic_rSOC.rSOCConfig(
+    my_rsoc_config = generic_rsoc.RsocConfig(
         name = name,
         nom_load_soec = nom_load_soec,
         min_load_soec = min_load_soec,
@@ -49,7 +49,7 @@ def test_electrolyzer():
         ramp_up_rate_sofc = ramp_up_rate_sofc,
         ramp_down_rate_sofc = ramp_down_rate_sofc,
     )
-    my_rsoc = generic_rSOC.rSOC(
+    my_rsoc = generic_rsoc.Rsoc(
         config=my_rsoc_config, my_simulation_parameters=my_simulation_parameters
     )
 

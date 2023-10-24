@@ -1,4 +1,4 @@
-""" L2 Controller for PtX Buffer Battery operation. """
+"""L2 Controller for PtX Buffer Battery operation."""
 # clean
 import os
 from typing import List

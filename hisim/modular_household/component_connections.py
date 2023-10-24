@@ -1382,7 +1382,7 @@ def configure_electrolyzer_and_h2_storage(
         output_description="Target electricity for electrolyzer. ",
     )
     my_electrolyzer_controller.connect_dynamic_input(
-        input_fieldname=controller_l1_electrolyzer.L1GenericElectrolyzerController.AvailableElectricity,
+        input_fieldname=controller_l1_electrolyzer.L1GenericElectrolyzerController.ElectricityTarget,
         src_object=electricity_to_electrolyzer_target,
     )
 

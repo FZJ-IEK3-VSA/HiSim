@@ -1,7 +1,7 @@
 """ L2 Controller for PtX Buffer Battery operation. """
-
+# clean
 import os
-from typing import List, Any
+from typing import List
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -16,7 +16,6 @@ from hisim.component import (
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "Franz Oldopp"
 __copyright__ = "Copyright 2023, IEK-3"
@@ -48,18 +47,17 @@ class XTPControllerConfig(ConfigBase):
 
     @staticmethod
     def read_config(fuel_cell_name):
+        """Read config."""
         config_file = os.path.join(
             utils.HISIMPATH["inputs"], "fuel_cell_manufacturer_config.json"
         )
-        with open(config_file, "r") as json_file:
+        with open(config_file, "r", encoding="utf-8") as json_file:
             data = json.load(json_file)
             return data.get("Fuel Cell variants", {}).get(fuel_cell_name, {})
 
     @classmethod
     def control_fuel_cell(cls, fuel_cell_name, operation_mode):
-        """
-        Sets the according parameters for the chosen fuel cell.
-        """
+        """Sets the according parameters for the chosen fuel cell."""
         config_json = cls.read_config(fuel_cell_name)
 
         config = XTPControllerConfig(
@@ -90,6 +88,7 @@ class XTPController(Component):
         my_simulation_parameters: SimulationParameters,
         config: XTPControllerConfig,
     ) -> None:
+        """Initialize the class."""
         self.xtpcontrollerconfig = config
 
         self.nom_output = config.nom_output
@@ -153,6 +152,7 @@ class XTPController(Component):
         self.standby_time_count_previous = self.standby_time_count
 
     def system_operation(self, operation_mode, demand_load):
+        """System operation."""
         if operation_mode == "StandbyLoad":
             if self.min_output <= demand_load <= self.max_output:
                 demand_to_system = demand_load
@@ -218,6 +218,7 @@ class XTPController(Component):
     def i_simulate(
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Simulate the component."""
         if force_convergence:
             return
 
@@ -225,7 +226,6 @@ class XTPController(Component):
             stsv.get_input_value(self.demand_input) / 1000
         )  # WATT input to KILOWATT
 
-        soc = stsv.get_input_value(self.soc)
         """ Only for household testing
         if self.system_state == "OFF" and soc < 0.2:
             power_from_battery = demand_load
@@ -240,7 +240,6 @@ class XTPController(Component):
                 self.operation_mode, demand_load
             )
             self.system_state = "ON"
-        
         """
         (demand_to_system, power_from_battery) = self.system_operation(
             self.operation_mode, demand_load

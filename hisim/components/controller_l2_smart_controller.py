@@ -73,7 +73,9 @@ class SmartController(Component):
                     temperature_air_cooling_in_celsius=25,
                     offset=0,
                     mode=1,
-                )
+                    maintenance_cost_as_percentage_of_investment=0.0,
+                    consumption=0.0)
+
                 self.wrapped_controllers.append(
                     GenericHeatPumpController(
                         my_simulation_parameters=self.my_simulation_parameters,

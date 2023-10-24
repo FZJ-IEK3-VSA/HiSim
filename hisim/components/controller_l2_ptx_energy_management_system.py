@@ -1,7 +1,7 @@
 """ L2 Controller for PtX Buffer Battery operation. """
-
+# clean
 import os
-from typing import List, Any
+from typing import List
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -16,7 +16,6 @@ from hisim.component import (
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "Franz Oldopp"
 __copyright__ = "Copyright 2023, IEK-3"
@@ -48,17 +47,18 @@ class PTXControllerConfig(ConfigBase):
 
     @staticmethod
     def read_config(electrolyzer_name):
+        """Read config."""
         config_file = os.path.join(
             utils.HISIMPATH["inputs"], "electrolyzer_manufacturer_config.json"
         )
-        with open(config_file, "r") as json_file:
+        with open(config_file, "r", encoding="utf-8") as json_file:
             data = json.load(json_file)
             return data.get("Electrolyzer variants", {}).get(electrolyzer_name, {})
 
     @classmethod
     def control_electrolyzer(cls, electrolyzer_name, operation_mode):
-        """
-        Sets the according parameters for the chosen electrolyzer.
+        """Sets the according parameters for the chosen electrolyzer.
+
         The operations mode can be used to select how the electrolyser is operated:
         Nominal Load: Operated with a constant nominal load.
         Minimum Load: Operated within the part load range.
@@ -95,6 +95,7 @@ class PTXController(Component):
         my_simulation_parameters: SimulationParameters,
         config: PTXControllerConfig,
     ) -> None:
+        """Initialize the class."""
         self.ptxcontrollerconfig = config
 
         self.nom_load = config.nom_load
@@ -167,6 +168,7 @@ class PTXController(Component):
         self.total_energy_to_battery_previous = self.total_energy_to_battery
 
     def system_operation(self, operation_mode, res_load):
+        """System operation."""
         if operation_mode == "NominalLoad":
             load_to_system = self.nom_load
             power_to_battery = (
@@ -252,12 +254,12 @@ class PTXController(Component):
     def i_simulate(
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Simulate the component."""
         if force_convergence:
             return
 
         res_load = stsv.get_input_value(self.load_input)
 
-        soc = stsv.get_input_value(self.soc)
         """ Only for household testing
         if self.system_state == "OFF" and soc < 0.2:
             power_to_battery = res_load
@@ -272,7 +274,7 @@ class PTXController(Component):
                 self.operation_mode, res_load
             )
             self.system_state = "ON"
-        
+
         """
         (load_to_system, power_to_battery) = self.system_operation(
             self.operation_mode, res_load
@@ -291,15 +293,11 @@ class PTXController(Component):
         self.total_energy_to_battery += power_to_battery * (
             self.my_simulation_parameters.seconds_per_timestep / 3600
         )
-        total_energy_to_battery_pyam = power_to_battery * (
-            self.my_simulation_parameters.seconds_per_timestep / 3600
-        )
 
         stsv.set_output_value(self.load_to_battery, power_to_battery)
         stsv.set_output_value(self.load_to_system, load_to_system)
         stsv.set_output_value(self.energy_to_battery, self.total_energy_to_battery)
 
-    #
     def write_to_report(self) -> List[str]:
         """Writes a report."""
         return self.ptxcontrollerconfig.get_string_dict()

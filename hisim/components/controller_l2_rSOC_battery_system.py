@@ -1,7 +1,7 @@
 """ L2 Controller for PtX Buffer Battery operation. """
-
+# clean
 import os
-from typing import List, Any
+from typing import List
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -16,7 +16,6 @@ from hisim.component import (
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "Franz Oldopp"
 __copyright__ = "Copyright 2023, IEK-3"
@@ -30,14 +29,14 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class rSOCBatteryControllerConfig(ConfigBase):
+class RsocBatteryControllerConfig(ConfigBase):
 
-    """Configutation of the rSOC and Battery  Controller."""
+    """Configutation of the rSOC and Battery Controller."""
 
     @classmethod
     def get_main_classname(cls):
         """Returns the full class name of the base class."""
-        return rSOCBatteryController.get_full_classname()
+        return RsocBatteryController.get_full_classname()
 
     name: str
     nom_load_soec: float
@@ -52,21 +51,22 @@ class rSOCBatteryControllerConfig(ConfigBase):
     operation_mode: float
 
     @staticmethod
-    def read_config(rSOC_name):
+    def read_config(rsoc_name):
         """Opens the according JSON-file, based on the rSOC_name."""
 
         config_file = os.path.join(
             utils.HISIMPATH["inputs"], "rSOC_manufacturer_config.json"
         )
-        with open(config_file, "r") as json_file:
+        with open(config_file, "r", encoding="utf-8") as json_file:
             data = json.load(json_file)
-            return data.get("rSOC variants", {}).get(rSOC_name, {})
+            return data.get("rSOC variants", {}).get(rsoc_name, {})
 
     @classmethod
-    def confic_rSOC(cls, rSOC_name, operation_mode):
-        config_json = cls.read_config(rSOC_name)
+    def confic_rsoc(cls, rsoc_name, operation_mode):
+        """Configure rsoc."""
+        config_json = cls.read_config(rsoc_name)
 
-        config = rSOCBatteryControllerConfig(
+        config = RsocBatteryControllerConfig(
             name="rSOC and Battery Controller",  # config_json.get("name", "")
             nom_load_soec=config_json.get("nom_load_soec", 0.0),
             min_load_soec=config_json.get("min_load_soec", 0.0),
@@ -81,7 +81,7 @@ class rSOCBatteryControllerConfig(ConfigBase):
         return config
 
 
-class rSOCBatteryController(Component):
+class RsocBatteryController(Component):
 
     """rSOC and Battery  Controller."""
 
@@ -98,8 +98,9 @@ class rSOCBatteryController(Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: rSOCBatteryControllerConfig,
+        config: RsocBatteryControllerConfig,
     ) -> None:
+        """Initialize the class."""
         self.ptxcontrollerconfig = config
 
         self.nom_load_soec = config.nom_load_soec
@@ -123,7 +124,7 @@ class rSOCBatteryController(Component):
 
         self.load_input: ComponentInput = self.add_input(
             self.component_name,
-            rSOCBatteryController.RESLoad,
+            RsocBatteryController.RESLoad,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
             True,
@@ -131,7 +132,7 @@ class rSOCBatteryController(Component):
 
         self.demand_input: ComponentInput = self.add_input(
             self.component_name,
-            rSOCBatteryController.Demand,
+            RsocBatteryController.Demand,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
             True,
@@ -139,7 +140,7 @@ class rSOCBatteryController(Component):
 
         self.soc: ComponentInput = self.add_input(
             self.component_name,
-            rSOCBatteryController.StateOfCharge,
+            RsocBatteryController.StateOfCharge,
             lt.LoadTypes.ANY,
             lt.Units.PERCENT,
             False,
@@ -150,7 +151,7 @@ class rSOCBatteryController(Component):
 
         self.load_to_battery: ComponentOutput = self.add_output(
             self.component_name,
-            rSOCBatteryController.PowerToBattery,
+            RsocBatteryController.PowerToBattery,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
             output_description="Charges or discharges the battery",
@@ -158,14 +159,14 @@ class rSOCBatteryController(Component):
 
         self.load_to_system: ComponentOutput = self.add_output(
             self.component_name,
-            rSOCBatteryController.PowerToSystem,
+            RsocBatteryController.PowerToSystem,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KILOWATT,
             output_description="distributes RES load to the system",
         )
         self.power: ComponentOutput = self.add_output(
             self.component_name,
-            rSOCBatteryController.Power,
+            RsocBatteryController.Power,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KILOWATT,
             output_description="power delta between drovided and demand.",
@@ -186,18 +187,17 @@ class rSOCBatteryController(Component):
         nom_power,
         min_power,
         max_power,
-        standby_power,
     ):
+        """System operation."""
+
         if operation_mode == "NominalLoad":
             load_to_system = nom_power
             power_to_battery = (
                 power_delta - nom_power
             )  # postive battery charge, negative battery discharges
-            import pdb
 
             # pdb.set_trace()
         elif operation_mode == "MinimumLoad":
-            import pdb
 
             # pdb.set_trace()
             if min_power <= power_delta <= max_power:
@@ -248,12 +248,11 @@ class rSOCBatteryController(Component):
     def i_simulate(
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Simulate the component."""
         if force_convergence:
             return
 
         # first a power deman evaluation
-        import pdb
-
         if timestep < 10:
             print(self.min_load_soec)
             print(self.min_power_sofc)
@@ -272,7 +271,6 @@ class rSOCBatteryController(Component):
                 self.nom_load_soec,
                 self.min_load_soec,
                 self.max_load_soec,
-                self.standby_load_soec,
             )
             load_to_system = -load_to_system
         elif power_delta > 0.0:
@@ -284,7 +282,6 @@ class rSOCBatteryController(Component):
                 self.nom_power_sofc,
                 self.min_power_sofc,
                 self.max_power_sofc,
-                self.standby_load_sofc,
             )
         else:
             # pdb.set_trace()
@@ -296,7 +293,7 @@ class rSOCBatteryController(Component):
         (load_to_system, power_to_battery) = self.system_operation(
                 self.operation_mode, res_load
             )
-        
+
         if self.system_state == "OFF":
             if 0.30 < stsv.get_input_value(self.soc):
                 print(stsv.get_input_value(self.soc))

@@ -1,11 +1,9 @@
 """rSOC."""
-
+# clean
 import os
-from typing import List
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from scipy.interpolate import interp1d
 import numpy as np
 
 # Import modules from HiSim
@@ -31,13 +29,14 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class rSOCConfig(cp.ConfigBase):
+class RsocConfig(cp.ConfigBase):
+
     """Configuration of the rSOC."""
 
     @classmethod
     def get_main_classname(cls):
         """Returns the full class name of the base class."""
-        return rSOC.get_full_classname()
+        return Rsoc.get_full_classname()
 
     name: str
     # SOEC
@@ -56,7 +55,7 @@ class rSOCConfig(cp.ConfigBase):
     ramp_down_rate_sofc: float  # [%/s]
 
     @staticmethod
-    def read_config(rSOC_name):
+    def read_config(rsoc_name):
         """Opens the according JSON-file, based on the rSOC_name."""
 
         config_file = os.path.join(
@@ -64,15 +63,15 @@ class rSOCConfig(cp.ConfigBase):
         )
         with open(config_file, "r", encoding="utf-8") as json_file:
             data = json.load(json_file)
-            return data.get("rSOC variants", {}).get(rSOC_name, {})
+            return data.get("rSOC variants", {}).get(rsoc_name, {})
 
     @classmethod
-    def config_rSOC(cls, rSOC_name):
+    def config_rsoc(cls, rsoc_name):
         """Initializes the config variables based on the JSON-file."""
 
-        config_json = cls.read_config(rSOC_name)
-        config = rSOCConfig(
-            name=rSOC_name,  # config_json.get("name", "")
+        config_json = cls.read_config(rsoc_name)
+        config = RsocConfig(
+            name=rsoc_name,  # config_json.get("name", "")
             nom_load_soec=config_json.get("nom_load_soec", 0.0),
             min_load_soec=config_json.get("min_load_soec", 0.0),
             max_load_soec=config_json.get("max_load_soec", 0.0),
@@ -89,11 +88,9 @@ class rSOCConfig(cp.ConfigBase):
         return config
 
 
-class rSOC(cp.Component):
+class Rsoc(cp.Component):
 
-    """
-    docstring
-    """
+    """Rsoc component class."""
 
     # Inputs
     PowerInput = "PowerInput"
@@ -148,7 +145,7 @@ class rSOC(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: rSOCConfig,
+        config: RsocConfig,
     ):
         """Constructs all the neccessary attributes."""
         self.rsocconfig = config
@@ -178,7 +175,7 @@ class rSOC(cp.Component):
         # Input channels
         self.power_input: ComponentInput = self.add_input(
             self.rsocconfig.name,
-            rSOC.PowerInput,
+            Rsoc.PowerInput,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KILOWATT,
             True,
@@ -187,7 +184,7 @@ class rSOC(cp.Component):
         # get the state from the controller
         self.input_state_rsoc: ComponentInput = self.add_input(
             self.rsocconfig.name,
-            rSOC.RSOCInputState,
+            Rsoc.RSOCInputState,
             lt.LoadTypes.ACTIVATION,
             lt.Units.ANY,
             True,
@@ -198,7 +195,7 @@ class rSOC(cp.Component):
 
         self.soec_current_efficiency_state: ComponentOutput = self.add_output(
             self.rsocconfig.name,
-            rSOC.SOECCurrentEfficiency,
+            Rsoc.SOECCurrentEfficiency,
             lt.LoadTypes.ANY,
             lt.Units.PERCENT,
             output_description="Current efficiency based on the efficiency curve",
@@ -207,7 +204,7 @@ class rSOC(cp.Component):
         # current hydrogen output
         self.soec_hydrogen_flow_rate: ComponentOutput = self.add_output(
             self.rsocconfig.name,
-            rSOC.SOECCurrentHydrogenFlowRate,
+            Rsoc.SOECCurrentHydrogenFlowRate,
             lt.LoadTypes.HYDROGEN,
             lt.Units.KG_PER_SEC,
             output_description="Current hydrogen flow rate",
@@ -216,7 +213,7 @@ class rSOC(cp.Component):
         # current hydrogen consumption
         self.sofc_hydrogen_flow_rate: ComponentOutput = self.add_output(
             self.rsocconfig.name,
-            rSOC.SOFCCurrentHydrogenFlowRate,
+            Rsoc.SOFCCurrentHydrogenFlowRate,
             lt.LoadTypes.HYDROGEN,
             lt.Units.KG_PER_SEC,
             output_description="Current hydrogen flow rate",
@@ -224,7 +221,7 @@ class rSOC(cp.Component):
 
         self.sofc_current_efficiency_state: ComponentOutput = self.add_output(
             self.rsocconfig.name,
-            rSOC.SOFCCurrentEfficiency,
+            Rsoc.SOFCCurrentEfficiency,
             lt.LoadTypes.ANY,
             lt.Units.PERCENT,
             output_description="Current efficiency based on the efficiency curve",
@@ -233,7 +230,7 @@ class rSOC(cp.Component):
         # Total hydrogen production
         self.total_h2_produced: ComponentOutput = self.add_output(
             self.rsocconfig.name,
-            rSOC.SOECTotalHydrogenProduced,
+            Rsoc.SOECTotalHydrogenProduced,
             lt.LoadTypes.HYDROGEN,
             lt.Units.KG,
             output_description="Total hydrogen produced",
@@ -241,7 +238,7 @@ class rSOC(cp.Component):
         # Total oxygen production
         self.total_o2_produced: ComponentOutput = self.add_output(
             self.rsocconfig.name,
-            rSOC.SOECTotalOxygenProduced,
+            Rsoc.SOECTotalOxygenProduced,
             lt.LoadTypes.OXYGEN,
             lt.Units.KG,
             output_description="Total oxygen produced",
@@ -249,7 +246,7 @@ class rSOC(cp.Component):
         # Total water consumed
         self.total_h20_consumed: ComponentOutput = self.add_output(
             self.rsocconfig.name,
-            rSOC.SOECTotalWaterDemand,
+            Rsoc.SOECTotalWaterDemand,
             lt.LoadTypes.WATER,
             lt.Units.KG,
             output_description="Total water consumed",
@@ -257,7 +254,7 @@ class rSOC(cp.Component):
         # Total hydrogen consumed
         self.total_h2_consumed: ComponentOutput = self.add_output(
             self.rsocconfig.name,
-            rSOC.SOFCTotalHydrogenConsumed,
+            Rsoc.SOFCTotalHydrogenConsumed,
             lt.LoadTypes.HYDROGEN,
             lt.Units.KG,
             output_description="Total hydrogen consumed",
@@ -265,7 +262,7 @@ class rSOC(cp.Component):
         # Total oxygen consumed
         self.total_o2_consumed: ComponentOutput = self.add_output(
             self.rsocconfig.name,
-            rSOC.SOFCTotalOxygenConsumed,
+            Rsoc.SOFCTotalOxygenConsumed,
             lt.LoadTypes.OXYGEN,
             lt.Units.KG,
             output_description="Total oxygen consumed",
@@ -273,7 +270,7 @@ class rSOC(cp.Component):
         # Total oxygen consumed
         self.total_h20_produced: ComponentOutput = self.add_output(
             self.rsocconfig.name,
-            rSOC.SOFCTotalWaterProduced,
+            Rsoc.SOFCTotalWaterProduced,
             lt.LoadTypes.WATER,
             lt.Units.KG,
             output_description="Total water produced",
@@ -281,28 +278,28 @@ class rSOC(cp.Component):
         # Total operating time
         self.total_operating_time_rsco: ComponentOutput = self.add_output(
             self.rsocconfig.name,
-            rSOC.RSOCOperatingTime,
+            Rsoc.RSOCOperatingTime,
             lt.LoadTypes.TIME,
             lt.Units.HOURS,
             output_description="Total operating time",
         )
         self.current_load_soec: ComponentOutput = self.add_output(
             self.rsocconfig.name,
-            rSOC.SOECCurrentLoad,
+            Rsoc.SOECCurrentLoad,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
             output_description="Current load consumed by SOEC",
         )
         self.total_energy_consumed: ComponentOutput = self.add_output(
             self.rsocconfig.name,
-            rSOC.TotalEnergyConsumed,
+            Rsoc.TotalEnergyConsumed,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KWH,
             output_description="Total load used for hydrogen production",
         )
         self.current_output_sofc: ComponentOutput = self.add_output(
             self.rsocconfig.name,
-            rSOC.SOFCCurrentOutput,
+            Rsoc.SOFCCurrentOutput,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
             postprocessing_flag=[
@@ -314,7 +311,7 @@ class rSOC(cp.Component):
 
         self.total_energy_produced: ComponentOutput = self.add_output(
             self.rsocconfig.name,
-            rSOC.TotalEnergyProduced,
+            Rsoc.TotalEnergyProduced,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KWH,
             output_description="Total energy produced for demand",
@@ -390,14 +387,12 @@ class rSOC(cp.Component):
         self.total_operating_time_previous = self.total_operating_time
 
     def soec_efficiency(self, name, current_load, min_load, max_load):
-        """
-        Efficiency curve data is provided corresponding to the used rSOC system.
-        """
+        """Efficiency curve data is provided corresponding to the used rSOC system."""
         # Load data from the JSON file
         data_file = os.path.join(
             utils.HISIMPATH["inputs"], "rSOC_efficiency_curve_data.json"
         )
-        with open(data_file, "r") as file:
+        with open(data_file, "r", encoding="utf-8") as file:
             data = json.load(file)
 
         # Check if the provided technology is valid
@@ -423,14 +418,12 @@ class rSOC(cp.Component):
         return current_sys_eff_soec
 
     def sofc_efficiency(self, name, current_demand, min_power, max_power):
-        """
-        Efficiency curve data is provided corresponding to the used rSOC system.
-        """
+        """Efficiency curve data is provided corresponding to the used rSOC system."""
         # Load data from the JSON file
         data_file = os.path.join(
             utils.HISIMPATH["inputs"], "rSOC_efficiency_curve_data.json"
         )
-        with open(data_file, "r") as file:
+        with open(data_file, "r", encoding="utf-8") as file:
             data = json.load(file)
 
         # Check if the provided technology is valid
@@ -456,50 +449,40 @@ class rSOC(cp.Component):
         return current_sys_eff_sofc
 
     def h2_production_rate(self, current_sys_eff_soec, current_load):
-        """
-        Based on the calculated efficiency the current h2 production rate is calculated.
-        """
-        LHV_h2 = 33.33  # [kWh/kg]
+        """Based on the calculated efficiency the current h2 production rate is calculated."""
+        lhv_h2 = 33.33  # [kWh/kg]
 
         h2_production_rate = (current_sys_eff_soec * current_load) / (
-            LHV_h2 * 3600
+            lhv_h2 * 3600
         )  # [kg/s]
         return h2_production_rate
 
     def h2_consumption_rate(self, current_sys_eff_sofc, current_demand):
-        """
-        Based on the calculated efficiency the current h2 consumption rate is calculated.
-        """
-        LHV_h2 = 33.33  # [kWh/kg]
+        """Based on the calculated efficiency the current h2 consumption rate is calculated."""
+        lhv_h2 = 33.33  # [kWh/kg]
         if current_sys_eff_sofc > 0.0 and current_demand >= self.min_power_sofc:
             h2_consumption_rate = current_demand / (
-                current_sys_eff_sofc * LHV_h2 * 3600
+                current_sys_eff_sofc * lhv_h2 * 3600
             )  # [kg/s]
         else:
             h2_consumption_rate = 0.0
         return h2_consumption_rate
 
     def oxygen_rate(self, current_h2_rate):
-        """
-        Returns the mass flow rate of oxygen,
-        based on the current hydrogen flow rate.
-        """
-        M_o2 = 31.9988  # g/mol
-        M_h2 = 2.01588  # g/mol
+        """Returns the mass flow rate of oxygen, based on the current hydrogen flow rate."""
+        m_o2 = 31.9988  # g/mol
+        m_h2 = 2.01588  # g/mol
         o2_flow_rate = (
-            (M_o2 / M_h2) * 0.5 * current_h2_rate
+            (m_o2 / m_h2) * 0.5 * current_h2_rate
         )  # Wang (2021) - Thermodynamic analysis of solid oxide electrolyzer integration with engine waste heat recovery for hydrogen production
         return o2_flow_rate
 
     def water_rate(self, current_h2_rate):
-        """
-        Returns the water mass flow rate,
-        based on the current hydrogen flow rate.
-        """
-        M_h2o = 18.01528  # g/mol
-        M_h2 = 2.01588  # g/mol
+        """Returns the water mass flow rate, based on the current hydrogen flow rate."""
+        m_h2o = 18.01528  # g/mol
+        m_h2 = 2.01588  # g/mol
         h2o_flow_rate = (
-            M_h2o / M_h2
+            m_h2o / m_h2
         ) * current_h2_rate  # Wang (2021) - Thermodynamic analysis of solid oxide electrolyzer integration with engine waste heat recovery for hydrogen production
         return h2o_flow_rate
 
@@ -594,8 +577,7 @@ class rSOC(cp.Component):
     def i_simulate(
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
-        # if force_convergence:
-        #    return
+        """Simulate the component."""
 
         seconds_per_timestep = (
             self.my_simulation_parameters.seconds_per_timestep

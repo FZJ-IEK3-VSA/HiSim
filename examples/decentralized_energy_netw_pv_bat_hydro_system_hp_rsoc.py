@@ -22,8 +22,8 @@ from hisim.components.controller_l2_rSOC_battery_system import (
     rSOCBatteryController,
     rSOCBatteryControllerConfig,
 )
-from hisim.components.controller_l1_rSOC import rSOCController, rSOCControllerConfig
-from hisim.components.generic_rSOC import rSOC, rSOCConfig
+from hisim.components.controller_l1_rsoc import RsocController, RsocControllerConfig
+from hisim.components.generic_rsoc import Rsoc, RsocConfig
 
 from hisim import loadtypes as lt
 from hisim.postprocessingoptions import PostProcessingOptions
@@ -129,21 +129,21 @@ def decentralized_energy_netw_pv_h2sys_hp_bat(
     # buffer bat test start
     my_rsoc_controller_l2 = rSOCBatteryController(
         my_simulation_parameters=my_simulation_parameters,
-        config=rSOCBatteryControllerConfig.confic_rSOC(
-            rSOC_name=rsoc_name,
+        config=rSOCBatteryControllerConfig.confic_rsoc_name(
+            rsoc_name=rsoc_name,
             operation_mode=operation_mode_rsoc,
         ),
     )
-    my_rsoc_controller_l1 = rSOCController(
+    my_rsoc_controller_l1 = RsocController(
         my_simulation_parameters=my_simulation_parameters,
-        config=rSOCControllerConfig.config_rSOC(
-            rSOC_name=rsoc_name,
+        config=RsocControllerConfig.config_rsoc(
+            rsoc_name=rsoc_name,
         ),
     )
-    my_rsoc = rSOC(
+    my_rsoc = Rsoc(
         my_simulation_parameters=my_simulation_parameters,
-        config=rSOCConfig.config_rSOC(
-            rSOC_name=rsoc_name,
+        config=RsocConfig.config_rsoc(
+            rsoc_name=rsoc_name,
         ),
     )
     # buffer bat test end

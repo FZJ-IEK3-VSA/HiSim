@@ -312,6 +312,8 @@ class ElectrolyzerController(Component):
         self.warm_start_time = config.warm_start_time
         self.cold_start_time = config.cold_start_time
         """
+        if self.nom_load == 0.0:
+            self.nom_load = 1.0
         warm_start_time_to_min = self.warm_start_time * (self.min_load / self.nom_load)
         cold_start_time_to_min = self.cold_start_time * (self.min_load / self.nom_load)
 

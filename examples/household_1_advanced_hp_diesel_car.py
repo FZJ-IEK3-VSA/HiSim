@@ -67,9 +67,6 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
     def get_default(cls) -> "HouseholdAdvancedHPDieselCarConfig":
         """Get default HouseholdAdvancedHPDieselCarConfig."""
 
-        # set number of apartments (mandatory for dhw storage config)
-        number_of_apartments = 1
-
         heating_reference_temperature_in_celsius: float = -7
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0
 
@@ -80,7 +77,7 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
 
         household_config = HouseholdAdvancedHPDieselCarConfig(
             building_type="blub",
-            number_of_apartments=number_of_apartments,
+            number_of_apartments=int(my_building_information.number_of_apartments),
             # simulation_parameters=SimulationParameters.one_day_only(2022),
             # total_base_area_in_m2=121.2,
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
@@ -176,7 +173,7 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
 
         household_config = HouseholdAdvancedHPDieselCarConfig(
             building_type="blub",
-            number_of_apartments=my_building_information.number_of_apartments,
+            number_of_apartments=int(my_building_information.number_of_apartments),
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
                 url="http://134.94.131.167:443/api/v1/profilerequest",
                 api_key="OrjpZY93BcNWw8lKaMp0BEchbCc",
@@ -207,13 +204,13 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
                 heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
             ),
             dhw_heatpump_config=generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
-                number_of_apartments=my_building_information.number_of_apartments
+                number_of_apartments=int(my_building_information.number_of_apartments)
             ),
             dhw_heatpump_controller_config=controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
                 name="DHWHeatpumpController"
             ),
             dhw_storage_config=generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
-                number_of_apartments=my_building_information.number_of_apartments
+                number_of_apartments=int(my_building_information.number_of_apartments)
             ),
             car_config=generic_car.CarConfig.get_default_diesel_config(),
             electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),

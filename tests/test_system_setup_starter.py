@@ -83,6 +83,14 @@ def test_system_setup_starter():
             "seconds_per_timestep"
         ]  # type: ignore
     )
+
+    # Check if the costs of the heat pump have been adapted.
+    with open(result_directory + "/webtool_kpis.json", "r", encoding="utf8") as f:
+        webtool_kpis = json.load(f)
+    assert (
+        webtool_kpis["capexDict"]["column 1"]["HeatPumpHPLib [Investment in EUR] "]
+        == 273.97
+    )
     # Remove result directory
     time.sleep(1)
     shutil.rmtree(result_directory)
@@ -143,6 +151,14 @@ def test_system_setup_starter_scaling():
             "seconds_per_timestep"
         ]  # type: ignore
     )
+
+    with open(result_directory + "/webtool_kpis.json", "r", encoding="utf8") as f:
+        webtool_kpis = json.load(f)
+    assert (
+        webtool_kpis["capexDict"]["column 1"]["HeatPumpHPLib [Investment in EUR] "]
+        == 4.09
+    )
+
     # Remove result directory
     time.sleep(1)
     shutil.rmtree(result_directory)

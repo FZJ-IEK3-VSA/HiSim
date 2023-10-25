@@ -460,3 +460,23 @@ def rhasattr(obj, attr):
     """Recursive hasattr for multi level attributes like `obj.attribute.subattribute`."""
     pre, _, post = attr.rpartition(".")
     return hasattr(rgetattr(obj, pre) if pre else obj, post)
+
+
+def set_attributes_of_dataclass_from_dict(dataclass_, dict_, nested=None):
+    """Set values in a Dataclass from a dictionary."""
+    for key, value in dict_.items():
+        if nested:
+            path_list = nested + [key]
+        else:
+            path_list = [key]
+        if isinstance(value, dict):
+            set_attributes_of_dataclass_from_dict(dataclass_, value, path_list)
+        else:
+            attribute = ".".join(path_list)
+            if rhasattr(dataclass_, attribute):
+                rsetattr(dataclass_, attribute, value)
+            else:
+                raise AttributeError(
+                    f"""Attribute `{attribute}` from JSON cannot be found
+                    in `{dataclass_.__class__.__name__}`."""
+                )

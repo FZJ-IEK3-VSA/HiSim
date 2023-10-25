@@ -95,7 +95,7 @@ class HouseholdAdvancedHPDieselCarConfig:
         setup_config_dict = module_config_dict.pop("setup_config", {})
         if setup_config_dict:
             log.information("Using `setup_config` to overwrite defaults.")
-            utils.set_attriburtes_of_dataclass_from_dict(my_config, setup_config_dict)
+            utils.set_attributes_of_dataclass_from_dict(my_config, setup_config_dict)
 
         return my_config
 

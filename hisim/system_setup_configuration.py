@@ -36,10 +36,14 @@ class SystemSetupConfigBase(JSONWizard):
             my_config = cls.get_default()
 
         # Read setup config
-        setup_config_dict = module_config_dict.pop("setup_config", {})
+        setup_config_dict = module_config_dict.pop("system_setup_config", {})
         if setup_config_dict:
-            log.information("Using `setup_config` to overwrite defaults.")
+            log.information("Using `system_setup_config` to overwrite defaults.")
             utils.set_attributes_of_dataclass_from_dict(my_config, setup_config_dict)
+        else:
+            log.information(
+                "Did not find `system_setup_config` in JSON. Using defaults."
+            )
 
         return my_config
 

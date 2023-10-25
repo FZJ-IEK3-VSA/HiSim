@@ -66,7 +66,7 @@ def make_system_setup(
     setup_config_dict = _parameters_json.pop("system_setup_config", {})
     module_config_dict = {
         "building_config": building_config_dict,
-        "setup_config": setup_config_dict,
+        "system_setup_config": setup_config_dict,
     }
     if _parameters_json:
         raise AttributeError(

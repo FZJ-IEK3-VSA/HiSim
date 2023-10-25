@@ -35,7 +35,7 @@ def read_in_configs(pathname: str) -> ModularHouseholdConfig:
     try:
         with open(pathname, encoding="utf8") as config_file:
             household_config_dict = json.load(config_file)
-            household_config: ModularHouseholdConfig = ModularHouseholdConfig.from_dict(household_config_dict["setup_config"])  # type: ignore
+            household_config: ModularHouseholdConfig = ModularHouseholdConfig.from_dict(household_config_dict["system_setup_config"])  # type: ignore
         log.information(f"Read modular household config from {pathname}")
     except Exception:
         household_config = ModularHouseholdConfig()

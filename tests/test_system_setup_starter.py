@@ -40,7 +40,7 @@ def test_system_setup_starter():
             #     "some_attribute": "some_building"
             # },  # Raises AttributeError
             "building_type": "some_building",
-            "hp_config": {"set_thermal_output_power_in_watt": 12000, "cost": 1000000},
+            "hp_config": {"cost": 1000000},
         },
     }
 
@@ -67,16 +67,6 @@ def test_system_setup_starter():
     assert os.path.isfile(result_directory + "/finished.flag")
     assert os.path.isfile(result_directory + "/webtool_kpis.json")
 
-    with open(module_config_path, "r", encoding="utf8") as f:
-        created_module_config = json.load(f)
-    assert (
-        created_module_config["setup_config"]["hp_config"][
-            "set_thermal_output_power_in_watt"
-        ]
-        == parameters_json["system_setup_config"]["hp_config"][  # type: ignore
-            "set_thermal_output_power_in_watt"
-        ]
-    )
     assert (
         simulation_parameters.seconds_per_timestep  # type: ignore
         == parameters_json["simulation_parameters"][

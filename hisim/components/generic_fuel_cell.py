@@ -62,7 +62,7 @@ class FuelCellConfig(cp.ConfigBase):
     # H_s_h2 = 33.33 #kWh/kg
 
     @classmethod
-    def get_default_PEM_fuel_cell_config(cls):
+    def get_default_pem_fuel_cell_config(cls):
         """Gets a default PEM Eletrolyzer."""
         return FuelCellConfig(
             name="PEM_Fuel_Cell",
@@ -80,6 +80,7 @@ class FuelCellConfig(cp.ConfigBase):
 
     @staticmethod
     def read_config(fuel_cell_name):
+        """Read config."""
         config_file = os.path.join(
             utils.HISIMPATH["inputs"], "fuel_cell_manufacturer_config.json"
         )
@@ -89,6 +90,7 @@ class FuelCellConfig(cp.ConfigBase):
 
     @classmethod
     def config_fuel_cell(cls, fuel_cell_name):
+        """Get config of fuel cell."""
         config_json = cls.read_config(fuel_cell_name)
         config = FuelCellConfig(
             name="FuelCell",  # config_json.get("name", "")
@@ -372,8 +374,8 @@ class FuelCell(cp.Component):
     def spec_el_stack_consumption_and_polarization_data_config(
         fuel_cell_type, nominal_power, h2_flow_rate, faraday_eff, i_cell_nom
     ):
-        """
-        Polarization curve data is provided corresponding to the used fuel cell technology.
+        """Polarization curve data is provided corresponding to the used fuel cell technology.
+
         Following this, the auxiliary power of the system and the cell volatge is calculated,
         based on the nominal current density.
         """
@@ -392,15 +394,15 @@ class FuelCell(cp.Component):
 
         # Extract the x and y data points for the selected technology
         i_cell = data[fuel_cell_type]["i_cell"]
-        U_cell = data[fuel_cell_type]["U_cell"]
+        u_cell = data[fuel_cell_type]["U_cell"]
 
         # constants
-        F = 96485  # C/mol
-        M_h2 = 2.01588  # g/mol
+        f_constant = 96485  # C/mol
+        m_h2 = 2.01588  # g/mol
 
         # from nom_current_density to aux_power
         spec_el_stack_consumption_nom = (
-            faraday_eff * (np.array(U_cell) * (2 * F)) / ((M_h2) * 3600)
+            faraday_eff * (np.array(u_cell) * (2 * f_constant)) / (m_h2 * 3600)
         )  # kWh/kg
         spec_el_consumption_stack = np.interp(
             i_cell_nom, i_cell, spec_el_stack_consumption_nom
@@ -412,33 +414,34 @@ class FuelCell(cp.Component):
         )  # might needs to be set to a constant value
 
         # interpolarization function
-        U_cell_nom = np.interp(i_cell_nom, i_cell, U_cell)  # V
+        u_cell_nom = np.interp(i_cell_nom, i_cell, u_cell)  # V
 
-        return i_cell, U_cell, i_cell_nom, U_cell_nom, aux_power
+        return i_cell, u_cell, i_cell_nom, u_cell_nom, aux_power
 
     def h2_consumption_rate(
         self,
         i_cell_nom,
-        U_cell_nom,
+        u_cell_nom,
         nominal_power,
         min_power,
         i_cell,
-        U_cell,
+        u_cell,
         h2_flow_rate,
         aux_power,
         current_power,
         state,
     ):
-        """
+        """H2 consumption rate.
+
         Based on the polarisation curve, the spec. electricity demand and
         the current load, the H2 demand and the spec. H2 demand rate
         is calculated.
         """
-        nominal_power_density = i_cell_nom * U_cell_nom  # W/cm²
+        nominal_power_density = i_cell_nom * u_cell_nom  # W/cm²
 
         h2_consumption_rate = np.array(i_cell) / i_cell_nom * h2_flow_rate  # kg/h
 
-        p_cell = np.array(i_cell) * np.array(U_cell)  # W/cm²
+        p_cell = np.array(i_cell) * np.array(u_cell)  # W/cm²
 
         stack_power = p_cell / nominal_power_density * nominal_power
 
@@ -490,28 +493,30 @@ class FuelCell(cp.Component):
         return current_h2_demenad_rate, current_eff
 
     def oxygen_demand(self, current_h2_demenad_rate):
-        """
+        """Oxygen demand.
+
         Returns the demand flow rate of oxygen,
         based on the current hydrogen flow rate.
         """
-        M_o2 = 31.9988
-        M_h2 = 2.01588
-        m_dot_O2 = (
-            (M_o2 / M_h2) * 0.5 * current_h2_demenad_rate
+        m_o2 = 31.9988
+        m_h2 = 2.01588
+        m_dot_o2 = (
+            (m_o2 / m_h2) * 0.5 * current_h2_demenad_rate
         )  # Kurzweil (2018) - Elektrolyse von Wasser
-        return m_dot_O2
+        return m_dot_o2
 
     def water_produced(self, current_h2_demenad_rate):
-        """
+        """Water produced.
+
         Returns the produced water flow rate,
         based on the current hydrogen flow rate.
         """
-        M_h2o = 18.01528
-        M_h2 = 2.01588
-        m_dot_H2O = (
-            M_h2o / M_h2
+        m_h2o = 18.01528
+        m_h2 = 2.01588
+        m_dot_h2o = (
+            m_h2o / m_h2
         ) * current_h2_demenad_rate  # Kurzweil (2018) - Elektrolyse von Wasser
-        return m_dot_H2O
+        return m_dot_h2o
 
     def i_save_state(self) -> None:
         """Saves the current state."""
@@ -558,6 +563,7 @@ class FuelCell(cp.Component):
     def i_simulate(
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Simulate the component."""
         if force_convergence:
             return
 
@@ -662,9 +668,9 @@ class FuelCell(cp.Component):
         # Applying polarization curve data
         (
             i_cell,
-            U_cell,
+            u_cell,
             i_cell_nom,
-            U_cell_nom,
+            u_cell_nom,
             aux_power,
         ) = self.spec_el_stack_consumption_and_polarization_data_config(
             self.technology_type,
@@ -678,11 +684,11 @@ class FuelCell(cp.Component):
         # self.current_spec_h2_demand_rate,
         current_h2_demand_rate, current_eff = self.h2_consumption_rate(
             i_cell_nom,
-            U_cell_nom,
+            u_cell_nom,
             self.nom_output,
             self.min_output,
             i_cell,
-            U_cell,
+            u_cell,
             self.nom_h2_flow_rate,
             aux_power,
             self.current_power_state,

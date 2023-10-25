@@ -259,7 +259,7 @@ def modular_household_explicit(
                 name="UTSPConnector",
                 url=arche_type_config_.url,
                 api_key=arche_type_config_.api_key,
-                household=occupancy_profile,
+                household=occupancy_profile,  # type: ignore
                 result_path=hisim.utils.HISIMPATH["results"],
                 travel_route_set=this_mobility_distance,
                 transportation_device_set=this_mobility_set,

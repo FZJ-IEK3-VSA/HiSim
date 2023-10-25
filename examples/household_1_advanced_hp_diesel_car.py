@@ -28,13 +28,14 @@ from hisim.components import controller_l1_heatpump
 from hisim.components import generic_hot_water_storage_modular
 from hisim.components import electricity_meter
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
+from hisim.system_setup_configuration import SystemSetupConfigBase
 from hisim import utils
 from hisim import loadtypes as lt
 from hisim import log
 
 from examples.modular_example import cleanup_old_lpg_requests
 
-__authors__ = "Markus Blasberg"
+__authors__ = ["Markus Blasberg", "Kevin Knosala"]
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
 __credits__ = ["Noah Pflugradt"]
 __license__ = "MIT"
@@ -43,9 +44,8 @@ __maintainer__ = "Markus Blasberg"
 __status__ = "development"
 
 
-@dataclass_json
 @dataclass
-class HouseholdAdvancedHPDieselCarConfig:
+class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
 
     """Configuration for with advanced heat pump and diesel car."""
 
@@ -65,39 +65,6 @@ class HouseholdAdvancedHPDieselCarConfig:
     dhw_storage_config: generic_hot_water_storage_modular.StorageConfig
     car_config: generic_car.CarConfig
     electricity_meter_config: electricity_meter.ElectricityMeterConfig
-
-    @classmethod
-    def load_from_json(
-        cls, module_config_path: str
-    ) -> "HouseholdAdvancedHPDieselCarConfig":
-        """Polulate config from JSON."""
-
-        log.information(f"Read module config from {module_config_path}.")
-
-        with open(module_config_path, "r", encoding="utf8") as file:
-            module_config_dict = json.loads(file.read())
-
-        # Read building config
-        building_config_dict = module_config_dict.pop("building_config", {})
-        if building_config_dict:
-            log.information("Using `building_config` for scaling.")
-            building_config = building.BuildingConfig.from_dict(building_config_dict)
-        else:
-            building_config = None
-
-        # Load (scaled) default values for system setup configuration
-        if building_config:
-            my_config = cls.get_scaled_default(building_config)
-        else:
-            my_config = cls.get_default()
-
-        # Read setup config
-        setup_config_dict = module_config_dict.pop("setup_config", {})
-        if setup_config_dict:
-            log.information("Using `setup_config` to overwrite defaults.")
-            utils.set_attributes_of_dataclass_from_dict(my_config, setup_config_dict)
-
-        return my_config
 
     @classmethod
     def get_default(cls) -> "HouseholdAdvancedHPDieselCarConfig":
@@ -321,9 +288,12 @@ def household_1_advanced_hp_diesel_car(
     if Path(utils.HISIMPATH["utsp_results"]).exists():
         cleanup_old_lpg_requests()
 
-    my_config = HouseholdAdvancedHPDieselCarConfig.load_from_json(
-        my_sim.my_module_config_path
-    )
+    if my_sim.my_module_config_path:
+        my_config = HouseholdAdvancedHPDieselCarConfig.load_from_json(
+            my_sim.my_module_config_path
+        )
+    else:
+        my_config = HouseholdAdvancedHPDieselCarConfig.get_default()
 
     # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
     # my_config_json = my_config.to_json()

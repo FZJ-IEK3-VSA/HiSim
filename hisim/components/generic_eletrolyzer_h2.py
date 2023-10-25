@@ -1,5 +1,5 @@
 """Green hydrogen electrolyzer."""
-
+# clean
 import os
 from typing import List
 import json
@@ -32,6 +32,7 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class ElectrolyzerConfig(cp.ConfigBase):
+
     """Configuration of the Electrolyzer."""
 
     @classmethod
@@ -40,7 +41,7 @@ class ElectrolyzerConfig(cp.ConfigBase):
         return Electrolyzer.get_full_classname()
 
     name: str
-    type: str
+    electrolyzer_type: str
     nom_load: float  # [kW]
     max_load: float  # [kW]
     nom_h2_flow_rate: float  # [m^3/h]
@@ -51,11 +52,11 @@ class ElectrolyzerConfig(cp.ConfigBase):
     # H_s_h2 = 33.33 #kWh/kg
 
     @classmethod
-    def get_default_Alkaline_electrolyzer_config(cls):
+    def get_default_alkaline_electrolyzer_config(cls):
         """Gets a default Alkaline Eletrolyzer."""
         config = ElectrolyzerConfig(
             name="Alkaline_electrolyzer",
-            type="Alkaline",
+            electrolyzer_type="Alkaline",
             nom_load=100.0,  # [kW]
             max_load=110.0,  # [kW]
             nom_h2_flow_rate=100.0,  # [m^3/h]
@@ -76,7 +77,20 @@ class ElectrolyzerConfig(cp.ConfigBase):
         )
         with open(config_file, "r", encoding="utf-8") as json_file:
             data = json.load(json_file)
-            return data.get("Electrolyzer variants", {}).get(electrolyzer_name, {})
+            electrolyzer_variants = data["Electrolyzer variants"]
+            if electrolyzer_name not in electrolyzer_variants:
+                raise KeyError(
+                    f"The electrolyzer {electrolyzer_name} could not be found in the inut data. Please check the input data for electrolyzer names."
+                )
+
+            for key, values in electrolyzer_variants.items():
+
+                if key == electrolyzer_name:
+                    data_for_specific_electrolyzer = values
+
+                    return data_for_specific_electrolyzer
+
+                return None
 
     @classmethod
     def config_electrolyzer(cls, electrolyzer_name):
@@ -85,7 +99,7 @@ class ElectrolyzerConfig(cp.ConfigBase):
         config_json = cls.read_config(electrolyzer_name)
         config = ElectrolyzerConfig(
             name="Electrolyzer",  # config_json.get("name", "")
-            type=config_json.get("type", ""),
+            electrolyzer_type=config_json.get("electrolyzer_type"),
             nom_load=config_json.get("nom_load", 0.0),
             max_load=config_json.get("max_load", 0.0),
             nom_h2_flow_rate=config_json.get("nom_h2_flow_rate", 0.0),
@@ -130,6 +144,7 @@ class Electrolyzer(cp.Component):
 
     ramp_down_rate : float
         Ramp down rate of the electrolyzer in [% of nom_load/s].
+
     """
 
     # Inputs
@@ -164,8 +179,13 @@ class Electrolyzer(cp.Component):
     ):
         """Constructs all the neccessary attributes."""
         self.electrolyzerconfig = config
+        print(config)
 
-        self.technology_type = config.type
+        self.technology_type = config.electrolyzer_type
+        if self.technology_type is None:
+            raise ValueError(
+                "Electrolyzer type should not be None. Please choose a different electrolyzer for config."
+            )
         self.nom_load = config.nom_load
         self.max_load = config.max_load
         self.nom_h2_flow_rate = config.nom_h2_flow_rate
@@ -346,8 +366,8 @@ class Electrolyzer(cp.Component):
     def spec_el_stack_demand_and_polarization_data_config(
         electrolyzer_type, nominal_load, h2_flow_rate, faraday_eff, i_cell_nom
     ):
-        """
-        Polarization curve data is provided corresponding to the used electrolyzer technology.
+        """Polarization curve data is provided corresponding to the used electrolyzer technology.
+
         Following this, the auxiliary power of the system and the cell volatge is calculated,
         based on the nominal current density.
         """
@@ -361,20 +381,20 @@ class Electrolyzer(cp.Component):
         # Check if the provided technology is valid
         if electrolyzer_type not in data:
             raise ValueError(
-                f"Invalid technology. Supported technologies are: {', '.join(data.keys())}"
+                f"{electrolyzer_type} is invalid technology. Supported technologies are: {', '.join(data.keys())}"
             )
 
         # Extract the x and y data points for the selected technology
         i_cell = data[electrolyzer_type]["i_cell"]
-        U_cell = data[electrolyzer_type]["U_cell"]
+        u_cell = data[electrolyzer_type]["U_cell"]
 
         # constants
-        F = 96485  # C/mol
-        M_h2 = 2.01588  # g/mol
+        f_constant = 96485  # C/mol
+        m_h2 = 2.01588  # g/mol
 
         # from nom_current_density to aux_power
         spec_el_stack_demand_nom = (
-            np.array(U_cell) * (2 * F) / (M_h2 / 1000) / 1000 / 3600
+            np.array(u_cell) * (2 * f_constant) / (m_h2 / 1000) / 1000 / 3600
         ) / faraday_eff  # kWh/kg
         spec_el_demand_stack = np.interp(i_cell_nom, i_cell, spec_el_stack_demand_nom)
 
@@ -384,14 +404,14 @@ class Electrolyzer(cp.Component):
         )  # might needs to be set to a constant value
 
         # interpolarization function
-        U_cell_nom = np.interp(i_cell_nom, i_cell, U_cell)  # V
+        u_cell_nom = np.interp(i_cell_nom, i_cell, u_cell)  # V
 
-        return i_cell, U_cell, i_cell_nom, U_cell_nom, aux_power
+        return i_cell, u_cell, i_cell_nom, u_cell_nom, aux_power
 
     @staticmethod
     def soec_efficiency(electrolyzer_type, current_load, max_load, state):
-        """
-        Efficiency curve data is provided corresponding to the used electrolyzer technology.
+        """Efficiency curve data is provided corresponding to the used electrolyzer technology.
+
         Following this, the auxiliary power of the system and the cell volatge is calculated,
         based on the nominal current density.
         """
@@ -421,37 +441,36 @@ class Electrolyzer(cp.Component):
         else:
             current_sys_eff_soec = 0.0
 
-        LHV_h2 = 33.33  # [kWh/kg]
+        lhv_h2 = 33.33  # [kWh/kg]
 
-        current_h2_production_rate = (current_sys_eff_soec * current_load) / (
-            LHV_h2
-        )  # [kg/h]
+        current_h2_production_rate = (current_sys_eff_soec * current_load) / lhv_h2  # [kg/h]
 
         return current_sys_eff_soec, current_h2_production_rate
 
     def h2_production_rate(
         self,
         i_cell_nom,
-        U_cell_nom,
+        u_cell_nom,
         nominal_load,
         i_cell,
-        U_cell,
+        u_cell,
         h2_flow_rate,
         aux_power,
         current_load,
         state,
     ):
-        """
+        """Hydrogen prodution rate.
+
         Based on the polarisation curve, the spec. electricity demand and
         the current load, the H2 production and the spec. H2 production rate
         is calculated.
         """
 
-        nominal_power_density = i_cell_nom * U_cell_nom  # W/cm²
+        nominal_power_density = i_cell_nom * u_cell_nom  # W/cm²
 
         h2_production_rate = np.array(i_cell) / i_cell_nom * h2_flow_rate  # kg/h
 
-        p_cell = np.array(i_cell) * np.array(U_cell)  # W/cm²
+        p_cell = np.array(i_cell) * np.array(u_cell)  # W/cm²
 
         stack_power = p_cell / nominal_power_density * nominal_load
 
@@ -487,28 +506,30 @@ class Electrolyzer(cp.Component):
         return current_h2_production_rate, current_eff
 
     def oxygen_productin(self, current_h2_production_rate):
-        """
+        """Oxygen production.
+
         Returns the produced flow rate of oxygen,
         based on the current hydrogen flow rate.
         """
-        M_o2 = 31.9988
-        M_h2 = 2.01588
-        m_dot_O2 = (
-            (M_o2 / M_h2) * 0.5 * current_h2_production_rate
+        m_o2 = 31.9988
+        m_h2 = 2.01588
+        m_dot_o2 = (
+            (m_o2 / m_h2) * 0.5 * current_h2_production_rate
         )  # Kurzweil (2018) - Elektrolyse von Wasser
-        return m_dot_O2
+        return m_dot_o2
 
     def water_demand(self, current_h2_production_rate):
-        """
+        """Water demand.
+
         Returns the water demand flow rate,
         based on the current hydrogen flow rate.
         """
-        M_h2o = 18.01528
-        M_h2 = 2.01588
-        m_dot_H2O = (
-            M_h2o / M_h2
+        m_h2o = 18.01528
+        m_h2 = 2.01588
+        m_dot_h2o = (
+            m_h2o / m_h2
         ) * current_h2_production_rate  # Kurzweil (2018) - Elektrolyse von Wasser
-        return m_dot_H2O
+        return m_dot_h2o
 
     def i_save_state(self) -> None:
         """Saves the current state."""
@@ -555,12 +576,12 @@ class Electrolyzer(cp.Component):
     def i_simulate(
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Simulate the component."""
         if force_convergence:
             return
-        # import pdb
 
         # get provided electricity
-        P_el = stsv.get_input_value(self.load_input)
+        p_el = stsv.get_input_value(self.load_input)
 
         # get state input
         state = stsv.get_input_value(self.input_state)
@@ -586,7 +607,7 @@ class Electrolyzer(cp.Component):
         total_ramp_down_per_timestep = ramp_down_per_timestep
 
         # calculating load input
-        new_load = abs(P_el - self.current_load_state)
+        new_load = abs(p_el - self.current_load_state)
         # pdb.set_trace()
         if state == 1:
             self.total_operating_time += seconds_per_timestep / 3600
@@ -605,13 +626,13 @@ class Electrolyzer(cp.Component):
             # Ramping up
             if (
                 new_load >= total_ramp_up_per_timestep
-                and self.current_load_state < P_el
+                and self.current_load_state < p_el
             ):
                 self.total_ramp_up_count_state += seconds_per_timestep
                 self.current_load_state += total_ramp_up_per_timestep
                 # pdb.set_trace()
             elif (
-                self.current_load_state < P_el and new_load < total_ramp_up_per_timestep
+                self.current_load_state < p_el and new_load < total_ramp_up_per_timestep
             ):
                 percentage_ramp_up_per_timestep = new_load / total_ramp_up_per_timestep
                 self.total_ramp_up_count_state += (
@@ -619,7 +640,7 @@ class Electrolyzer(cp.Component):
                 )
                 # pdb.set_trace()
                 if self.current_load_state == 0:
-                    self.current_load_state += P_el
+                    self.current_load_state += p_el
                     # pdb.set_trace()
                 else:
                     self.current_load_state += new_load
@@ -627,13 +648,13 @@ class Electrolyzer(cp.Component):
             # Ramping down
             elif (
                 total_ramp_down_per_timestep <= new_load
-                and P_el < self.current_load_state
+                and p_el < self.current_load_state
             ):
                 self.total_ramp_down_count_state += seconds_per_timestep
                 self.current_load_state -= new_load
                 # pdb.set_trace()
             elif (
-                P_el < self.current_load_state
+                p_el < self.current_load_state
                 and new_load < total_ramp_down_per_timestep
             ):
                 percentage_ramp_down_per_timestep = (
@@ -647,12 +668,12 @@ class Electrolyzer(cp.Component):
         elif state == 0:
             self.total_ramp_up_count_state += 0
             self.total_ramp_down_count_state += 0
-            self.current_load_state = P_el
+            self.current_load_state = p_el
             # pdb.set_trace()
         elif state == -1:
             self.total_ramp_up_count_state += 0
             self.total_ramp_down_count_state += 0
-            self.current_load_state = P_el
+            self.current_load_state = p_el
             # pdb.set_trace()
 
         if electrolyzer_type == "SolidOxide":
@@ -666,9 +687,9 @@ class Electrolyzer(cp.Component):
             # Applying polarization curve data
             (
                 i_cell,
-                U_cell,
+                u_cell,
                 i_cell_nom,
-                U_cell_nom,
+                u_cell_nom,
                 aux_power,
             ) = self.spec_el_stack_demand_and_polarization_data_config(
                 electrolyzer_type,
@@ -678,15 +699,12 @@ class Electrolyzer(cp.Component):
                 i_cell_nom,
             )
             # Current hydrogen prduction and specific hydrogen production rate
-            (
-                current_h2_production_rate,
-                current_eff,
-            ) = self.h2_production_rate(
+            (current_h2_production_rate, current_eff,) = self.h2_production_rate(
                 i_cell_nom,
-                U_cell_nom,
+                u_cell_nom,
                 nominal_load,
                 i_cell,
-                U_cell,
+                u_cell,
                 nom_h2_flow_rate,
                 aux_power,
                 self.current_load_state,

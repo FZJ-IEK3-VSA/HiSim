@@ -31,7 +31,7 @@ def test_electrolyzer():
     # Setup Electrolyzer
     my_electrolyzer_config = generic_eletrolyzer_h2.ElectrolyzerConfig(
         name=name,
-        type=type,
+        electrolyzer_type=type,
         nom_load=nom_load,
         max_load=max_load,
         nom_h2_flow_rate=nom_h2_flow_rate,

@@ -72,7 +72,7 @@ def electrolyzer_example(
     unit = lt.Units.KILOWATT
 
     # Set controller parameter
-    electrolyzer_name = "McPhy - McLyzer 200"
+    electrolyzer_name = "HTecME450"
 
     # Set the simulation parameters for the simulation
     if my_simulation_parameters is None:

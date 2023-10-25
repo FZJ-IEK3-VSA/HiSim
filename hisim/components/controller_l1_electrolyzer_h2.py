@@ -1,5 +1,5 @@
 """ Controller for the generic_electrolyzer_h2 component. """
-
+# clean
 import os
 from typing import List, Any
 import json
@@ -16,6 +16,7 @@ from hisim.component import (
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
+from hisim import log
 
 __authors__ = "Franz Oldopp"
 __copyright__ = "Copyright 2023, IEK-3"
@@ -78,6 +79,7 @@ class ElectrolyzerControllerConfig(ConfigBase):
         """Initializes the config variables based on the JSON-file."""
 
         config_json = cls.read_config(electrolyzer_name)
+        log.information("Electrolyzer config: " + str(config_json))
 
         config = ElectrolyzerControllerConfig(
             name="L1ElectrolyzerController",  # config_json.get("name", "")
@@ -92,6 +94,9 @@ class ElectrolyzerControllerConfig(ConfigBase):
 
 
 class ElectrolyzerController(Component):
+
+    """Electrolyzer Controller class."""
+
     # Inputs
     ProvidedLoad = "ProvidedLoad"
 
@@ -108,6 +113,7 @@ class ElectrolyzerController(Component):
         my_simulation_parameters: SimulationParameters,
         config: ElectrolyzerControllerConfig,
     ) -> None:
+        """Initialize the class."""
         self.controllerconfig = config
 
         self.nom_load = config.nom_load
@@ -181,7 +187,7 @@ class ElectrolyzerController(Component):
         # Initialize variables
 
         self.standby_count = 0.0
-        self.current_state = "OFF"  #  standby
+        self.current_state = "OFF"  # standby
         self.curtailed_load_count = 0.0
         self.off_count = 0.0
         self.activation_runtime = 0.0
@@ -193,6 +199,11 @@ class ElectrolyzerController(Component):
         self.activation_runtime_previous = self.activation_runtime
 
     def load_check(self, current_load, min_load, max_load, standby_load):
+        """Load check."""
+        if None in (current_load, min_load, max_load, standby_load):
+            raise ValueError(
+                f"None type not accepted. {current_load}, {min_load}, {max_load}, {standby_load}"
+            )
         if current_load > max_load:
             current_load_to_system = max_load
             self.curtailed_load_count += current_load - max_load
@@ -216,6 +227,7 @@ class ElectrolyzerController(Component):
         return current_load_to_system, state, self.curtailed_load_count
 
     def state_check(self, target_state, cold_start_time_to_min, warm_start_time_to_min):
+        """State check."""
         if target_state == "OFF":
             # System switches OFF
             if self.current_state == "ON":
@@ -303,6 +315,7 @@ class ElectrolyzerController(Component):
     def i_simulate(
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Simulate the component."""
         if force_convergence:
             return
         """

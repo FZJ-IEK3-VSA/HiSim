@@ -387,7 +387,7 @@ class FuelCell(cp.Component):
         # Check if the provided technology is valid
         if fuel_cell_type not in data:
             raise ValueError(
-                f"Invalid technology. Supported technologies are: {', '.join(data.keys())}"
+                f"{fuel_cell_type} is invalid technology. Supported technologies are: {', '.join(data.keys())}"
             )
 
         # Extract the x and y data points for the selected technology

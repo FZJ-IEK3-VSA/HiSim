@@ -210,9 +210,9 @@ class L1GenericElectrolyzerController(cp.Component):
         # minimum power of electrolyzer fulfilled when running
         if (
             self.state.state == 1
-            and electricity_target < self.config.P_min_electrolyzer
+            and electricity_target < self.config.p_min_electrolyzer
         ):
-            electricity_target = self.config.P_min_electrolyzer
+            electricity_target = self.config.p_min_electrolyzer
         stsv.set_output_value(
             self.available_electicity_output_channel,
             self.state.state * electricity_target,
@@ -240,7 +240,7 @@ class L1GenericElectrolyzerController(cp.Component):
             return
 
         # available electricity too low or hydrogen storage too full
-        if (electricity_target < self.config.P_min_electrolyzer) or (
+        if (electricity_target < self.config.p_min_electrolyzer) or (
             h2_soc > self.config.h2_soc_threshold
         ):
             self.state.deactivate(timestep)

@@ -1,5 +1,5 @@
 from hisim import component as cp
-from hisim.components import generic_eletrolyzer_h2
+from hisim.components import generic_electrolyzer_h2
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
@@ -29,7 +29,7 @@ def test_electrolyzer():
 
     # ===================================================================================================================
     # Setup Electrolyzer
-    my_electrolyzer_config = generic_eletrolyzer_h2.ElectrolyzerConfig(
+    my_electrolyzer_config = generic_electrolyzer_h2.ElectrolyzerConfig(
         name=name,
         electrolyzer_type=type,
         nom_load=nom_load,
@@ -40,7 +40,7 @@ def test_electrolyzer():
         ramp_up_rate=ramp_up_rate,
         ramp_down_rate=ramp_down_rate,
     )
-    my_electrolyzer = generic_eletrolyzer_h2.Electrolyzer(
+    my_electrolyzer = generic_electrolyzer_h2.Electrolyzer(
         config=my_electrolyzer_config, my_simulation_parameters=my_simulation_parameters
     )
 

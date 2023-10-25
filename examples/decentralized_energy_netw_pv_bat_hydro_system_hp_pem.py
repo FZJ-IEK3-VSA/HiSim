@@ -31,7 +31,7 @@ from hisim.components.controller_l1_electrolyzer_h2 import (
     ElectrolyzerController,
     ElectrolyzerControllerConfig,
 )
-from hisim.components.generic_eletrolyzer_h2 import Electrolyzer, ElectrolyzerConfig
+from hisim.components.generic_electrolyzer_h2 import Electrolyzer, ElectrolyzerConfig
 from hisim.components.building import Building, BuildingConfig
 from hisim.components.generic_heat_pump import (
     GenericHeatPump,

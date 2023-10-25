@@ -28,7 +28,7 @@ from hisim.components.controller_l1_electrolyzer_h2 import (
     ElectrolyzerController,
     ElectrolyzerControllerConfig,
 )
-from hisim.components.generic_eletrolyzer_h2 import (
+from hisim.components.generic_electrolyzer_h2 import (
     Electrolyzer,
     ElectrolyzerConfig,
 )

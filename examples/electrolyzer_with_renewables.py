@@ -9,7 +9,7 @@ from typing import Optional
 from hisim import log
 from hisim.simulator import Simulator
 from hisim.simulationparameters import SimulationParameters
-from hisim.components.generic_eletrolyzer_h2 import (
+from hisim.components.generic_electrolyzer_h2 import (
     Electrolyzer,
     ElectrolyzerConfig,
 )

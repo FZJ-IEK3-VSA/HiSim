@@ -78,7 +78,7 @@ jobs:
         prospector hisim/components/controller_l2_ptx_energy_management_system.py
         prospector hisim/components/controller_l2_rsoc_battery_system.py
         prospector hisim/components/controller_l2_xtp_fuel_cell_ems.py
-        prospector hisim/components/generic_eletrolyzer_h2.py
+        prospector hisim/components/generic_electrolyzer_h2.py
         prospector hisim/components/generic_fuel_cell.py
         prospector hisim/components/generic_rsoc.py
         prospector hisim/components/transformer_rectifier.py

@@ -80,7 +80,7 @@ class ElectrolyzerConfig(cp.ConfigBase):
             electrolyzer_variants = data["Electrolyzer variants"]
             if electrolyzer_name not in electrolyzer_variants:
                 raise KeyError(
-                    f"The electrolyzer {electrolyzer_name} could not be found in the inut data. Please check the input data for electrolyzer names."
+                    f"The electrolyzer {electrolyzer_name} could not be found in the input data. Please check the input data for electrolyzer names."
                 )
 
             for key, values in electrolyzer_variants.items():
@@ -88,15 +88,14 @@ class ElectrolyzerConfig(cp.ConfigBase):
                 if key == electrolyzer_name:
                     data_for_specific_electrolyzer = values
 
-                    return data_for_specific_electrolyzer
-
-                return None
+            return data_for_specific_electrolyzer
 
     @classmethod
     def config_electrolyzer(cls, electrolyzer_name):
         """Initializes the config variables based on the JSON-file."""
 
         config_json = cls.read_config(electrolyzer_name)
+
         config = ElectrolyzerConfig(
             name="Electrolyzer",  # config_json.get("name", "")
             electrolyzer_type=config_json.get("electrolyzer_type"),
@@ -443,7 +442,9 @@ class Electrolyzer(cp.Component):
 
         lhv_h2 = 33.33  # [kWh/kg]
 
-        current_h2_production_rate = (current_sys_eff_soec * current_load) / lhv_h2  # [kg/h]
+        current_h2_production_rate = (
+            current_sys_eff_soec * current_load
+        ) / lhv_h2  # [kg/h]
 
         return current_sys_eff_soec, current_h2_production_rate
 

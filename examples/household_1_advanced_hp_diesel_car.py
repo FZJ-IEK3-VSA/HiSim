@@ -5,9 +5,9 @@
 from typing import List, Optional, Any
 from os import listdir
 from pathlib import Path
+import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-import json
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,
     Households,
@@ -31,8 +31,8 @@ from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim import utils
 from hisim import loadtypes as lt
 from hisim import log
+
 from examples.modular_example import cleanup_old_lpg_requests
-from hisim.system_setup_starter import set_values
 
 __authors__ = "Markus Blasberg"
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
@@ -67,13 +67,15 @@ class HouseholdAdvancedHPDieselCarConfig:
     electricity_meter_config: electricity_meter.ElectricityMeterConfig
 
     @classmethod
-    def load_from_json(cls, module_config_path: str):
+    def load_from_json(
+        cls, module_config_path: str
+    ) -> "HouseholdAdvancedHPDieselCarConfig":
         """Polulate config from JSON."""
 
         log.information(f"Read module config from {module_config_path}.")
 
-        with open(module_config_path, "r", encoding="utf8") as f:
-            module_config_dict = json.loads(f.read())
+        with open(module_config_path, "r", encoding="utf8") as file:
+            module_config_dict = json.loads(file.read())
 
         # Read building config
         building_config_dict = module_config_dict.pop("building_config", {})
@@ -93,12 +95,12 @@ class HouseholdAdvancedHPDieselCarConfig:
         setup_config_dict = module_config_dict.pop("setup_config", {})
         if setup_config_dict:
             log.information("Using `setup_config` to overwrite defaults.")
-            set_values(my_config, setup_config_dict)
+            utils.set_attriburtes_of_dataclass_from_dict(my_config, setup_config_dict)
 
         return my_config
 
     @classmethod
-    def get_default(cls):
+    def get_default(cls) -> "HouseholdAdvancedHPDieselCarConfig":
         """Get default HouseholdAdvancedHPDieselCarConfig."""
 
         # set number of apartments (mandatory for dhw storage config)
@@ -198,7 +200,9 @@ class HouseholdAdvancedHPDieselCarConfig:
         return household_config
 
     @classmethod
-    def get_scaled_default(cls, building_config: building.BuildingConfig):
+    def get_scaled_default(
+        cls, building_config: building.BuildingConfig
+    ) -> "HouseholdAdvancedHPDieselCarConfig":
         """Get scaled default HouseholdAdvancedHPDieselCarConfig."""
 
         heating_reference_temperature_in_celsius: float = -7

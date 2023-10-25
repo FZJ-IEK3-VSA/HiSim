@@ -112,7 +112,7 @@ def test_system_setup_starter_scaling():
         },
     }
 
-    result_directory = "results2"
+    result_directory = "results_scaling"
     if Path(result_directory).is_dir():
         shutil.rmtree(result_directory)
     Path(result_directory).mkdir(parents=True)

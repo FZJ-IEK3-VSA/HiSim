@@ -21,7 +21,7 @@ from hisim.components import (
 )
 from hisim.modular_household import component_connections
 from hisim.modular_household.interface_configs.modular_household_config import (
-    ModularHouseholdConfig,
+    read_in_configs,
 )
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
@@ -93,13 +93,7 @@ def modular_household_explicit(
     year = 2021
     seconds_per_timestep = 60 * 15
 
-    # read the modular household config file
-    if my_sim.my_module_config_path:
-        household_config = ModularHouseholdConfig.load_from_json(
-            my_sim.my_module_config_path
-        )
-    else:
-        household_config = ModularHouseholdConfig.get_default()
+    household_config = read_in_configs(my_sim.my_module_config_path)
 
     assert household_config.archetype_config_ is not None
     assert household_config.system_config_ is not None
@@ -284,7 +278,7 @@ def modular_household_explicit(
         # Build occupancy
         my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
             "Occupancy",
-            occupancy_profile.Name or "",
+            occupancy_profile.Name or "CHR01_Couple_both_at_Work",
             location,
             not smart_devices_included,
             number_of_apartments=my_building_information.number_of_apartments,

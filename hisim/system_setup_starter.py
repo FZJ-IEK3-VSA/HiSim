@@ -62,16 +62,10 @@ def make_system_setup(
     simulation_parameters_path = str(
         Path(result_directory).joinpath("simulation_parameters.json")
     )
-    building_config_dict = _parameters_json.pop("building_config", {})
-    setup_config_dict = _parameters_json.pop("system_setup_config", {})
-    module_config_dict = {
-        "building_config": building_config_dict,
-        "system_setup_config": setup_config_dict,
-    }
-    if _parameters_json:
-        raise AttributeError(
-            f"There are unused attributes ({_parameters_json.keys()}) in parameters JSON."
-        )
+    # if _parameters_json:
+    #     raise AttributeError(
+    #         f"There are unused attributes ({_parameters_json.keys()}) in parameters JSON."
+    #     )
 
     # Set custom simulation parameters
     simulation_parameters = SimulationParameters(
@@ -92,7 +86,7 @@ def make_system_setup(
         out_file.write(simulation_parameters.to_json())  # ignore: type
 
     with open(module_config_path, "w", encoding="utf8") as out_file:
-        out_file.write(json.dumps(module_config_dict))  # ignore: type
+        out_file.write(json.dumps(_parameters_json))  # ignore: type
 
     return (
         path_to_module,

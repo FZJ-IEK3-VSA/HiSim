@@ -60,7 +60,6 @@ def configure_pv_system(
     pv_peak_power: Optional[float],
     count: int,
 ) -> Tuple[List, int]:
-
     """Sets PV System.
 
     Parameters

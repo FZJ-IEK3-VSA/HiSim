@@ -1,21 +1,25 @@
+"""Test for generic electrolyzer h2."""
+
+# clean
+import pytest
 from hisim import component as cp
 from hisim.components import generic_electrolyzer_h2
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from tests import functions_for_testing as fft
-import pytest
 
 
 @pytest.mark.base
 def test_electrolyzer():
+    """Test for electrolyzer h2."""
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(
         2021, seconds_per_timestep
     )
 
     name: str = "HTecME450"
-    type: str = "PEM"
+    electrolyzer_type: str = "PEM"
     nom_load: float = 987.0  # [kW]
     max_load: float = 1028.225  # [kW]
     nom_h2_flow_rate: float = 18.875  # [kg/h]
@@ -25,13 +29,12 @@ def test_electrolyzer():
     ramp_down_rate: float = 0.25  # [%/s]
 
     timestep = 1
-    force_convergence = False
 
     # ===================================================================================================================
     # Setup Electrolyzer
     my_electrolyzer_config = generic_electrolyzer_h2.ElectrolyzerConfig(
         name=name,
-        electrolyzer_type=type,
+        electrolyzer_type=electrolyzer_type,
         nom_load=nom_load,
         max_load=max_load,
         nom_h2_flow_rate=nom_h2_flow_rate,

@@ -259,7 +259,7 @@ def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
     if lastdate > timeshifts[0]:
         indices_of_additional_hour_in_spring = data.loc[
             timeshifts[0]
-            + dt.timedelta(seconds=3600) : timeshifts[0]
+            + dt.timedelta(seconds=3600) : timeshifts[0]  # noqa: E203
             + dt.timedelta(seconds=60 * (60 + 59))
         ].index
 
@@ -269,7 +269,7 @@ def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
     if lastdate > timeshifts[1]:
         additional_hours_in_autumn = data.loc[
             timeshifts[1]
-            + dt.timedelta(seconds=3600) : timeshifts[1]
+            + dt.timedelta(seconds=3600) : timeshifts[1]  # noqa: E203
             + dt.timedelta(seconds=60 * (60 + 59))
         ]
         data = pd.concat([data, additional_hours_in_autumn])

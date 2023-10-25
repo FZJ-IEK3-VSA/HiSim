@@ -1338,7 +1338,7 @@ def configure_electrolyzer_and_h2_storage(
     # electrolyzer controller default configuration and counting variable
     electrolyzer_controller_config = controller_l1_electrolyzer.L1ElectrolyzerControllerConfig.get_default_config()
     electrolyzer_controller_config.source_weight = count
-    electrolyzer_controller_config.P_min_electrolyzer = electrolyzer_config.min_power
+    electrolyzer_controller_config.p_min_electrolyzer = electrolyzer_config.min_power
     count += 1
 
     # electrolyzer

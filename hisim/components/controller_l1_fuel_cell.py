@@ -1,3 +1,6 @@
+"""Controller L1 for the fuel cell."""
+
+# clean
 import os
 from typing import List, Any
 import json
@@ -92,6 +95,9 @@ class FuelCellControllerConfig(ConfigBase):
 
 
 class FuelCellController(Component):
+
+    """Fuel Cell Controller class."""
+
     # Inputs
     DemandProfile = "DemandProfile"
 
@@ -108,6 +114,7 @@ class FuelCellController(Component):
         my_simulation_parameters: SimulationParameters,
         config: FuelCellControllerConfig,
     ) -> None:
+        """Initialize the class."""
         self.controllerconfig = config
 
         self.nom_output = config.nom_output
@@ -191,7 +198,7 @@ class FuelCellController(Component):
         # Initialize variables
 
         self.standby_count = 0.0
-        self.current_state = "OFF"  #  standby
+        self.current_state = "OFF"  # standby
         self.power_not_provided_count = 0.0
         self.off_count = 0.0
         self.activation_runtime = 0.0
@@ -203,6 +210,8 @@ class FuelCellController(Component):
         self.activation_runtime_previous = self.activation_runtime
 
     def load_check(self, current_demand, min_output, max_output, standby_load):
+        """Make a load check."""
+
         if current_demand > max_output:
             current_demand_to_system = max_output
             self.power_not_provided_count += current_demand - max_output
@@ -226,6 +235,7 @@ class FuelCellController(Component):
         return current_demand_to_system, state, self.power_not_provided_count
 
     def state_check(self, target_state, cold_start_time_to_min, warm_start_time_to_min):
+        """Make a state check."""
 
         if target_state == "OFF":
             # System switches OFF
@@ -313,6 +323,7 @@ class FuelCellController(Component):
     def i_simulate(
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Simulate the component."""
         if force_convergence:
             return
 

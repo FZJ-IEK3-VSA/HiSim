@@ -15,10 +15,9 @@ The values from `system_setup_config` replace single values of the example's con
 # clean
 
 import json
-import importlib
 import datetime
 from pathlib import Path
-from typing import Any, Union, Tuple, Optional
+from typing import Union, Tuple, Optional
 from copy import deepcopy
 
 from hisim import log
@@ -81,23 +80,20 @@ def make_system_setup(
         raise NotImplementedError(
             f"System setup starter can only be used with one of {', '.join(SUPPORTED_MODULES)}"
         )
-    config_class_name = _parameters_json.pop("config_class_name")
     function_in_module = _parameters_json.pop("function_in_module")
     simulation_parameters_dict = _parameters_json.pop("simulation_parameters")
     module_config_path = str(Path(result_directory).joinpath("module_config.json"))
     simulation_parameters_path = str(
         Path(result_directory).joinpath("simulation_parameters.json")
     )
-    setup_config_dict = _parameters_json.pop("system_setup_config")
+    building_config_dict = _parameters_json.pop("building_config", {})
+    setup_config_dict = _parameters_json.pop("system_setup_config", {})
+    module_config_dict = {
+        "building_config": building_config_dict,
+        "setup_config": setup_config_dict,
+    }
     if _parameters_json:
-        raise AttributeError("There are unused attributes in parameters JSON.")
-
-    # Import modules for the specified system setup
-    setup_module = importlib.import_module(setup_module_name)
-    config_class = getattr(setup_module, config_class_name)
-
-    setup_config: Any = config_class.get_default()
-    set_values(setup_config, setup_config_dict)
+        raise AttributeError(f"There are unused attributes ({_parameters_json.keys()}) in parameters JSON.")
 
     # Set custom simulation parameters
     simulation_parameters = SimulationParameters(
@@ -116,7 +112,7 @@ def make_system_setup(
         out_file.write(simulation_parameters.to_json())  # ignore: type
 
     with open(module_config_path, "w", encoding="utf8") as out_file:
-        out_file.write(setup_config.to_json())  # ignore: type
+        out_file.write(json.dumps(module_config_dict))  # ignore: type
 
     return (
         path_to_module,

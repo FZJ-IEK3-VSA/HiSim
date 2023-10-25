@@ -71,9 +71,15 @@ HISIMPATH: Dict[str, Any] = {
         "data_processed",
         "heater_efficiencies.csv",
     ),
-    "fuel_costs": os.path.join(hisim_abs_path, "modular_household", "emission_factors_and_costs_fuels.csv"),
-    "component_costs": os.path.join(hisim_abs_path, "modular_household", "emission_factors_and_costs_devices.csv"),
-    "occupancy_scaling_factors_per_country": os.path.join(hisim_inputs, "loadprofiles", "WHY_reference_data", "scaling_factors_demand.csv"),
+    "fuel_costs": os.path.join(
+        hisim_abs_path, "modular_household", "emission_factors_and_costs_fuels.csv"
+    ),
+    "component_costs": os.path.join(
+        hisim_abs_path, "modular_household", "emission_factors_and_costs_devices.csv"
+    ),
+    "occupancy_scaling_factors_per_country": os.path.join(
+        hisim_inputs, "loadprofiles", "WHY_reference_data", "scaling_factors_demand.csv"
+    ),
     "occupancy": {
         "CHR01 Couple both at Work": {
             "number_of_residents": [
@@ -193,9 +199,11 @@ HISIMPATH: Dict[str, Any] = {
     ),
     "modular_household": os.path.join(hisim_abs_path, "modular_household"),
     "price_signal": {
-        "PricePurchase": os.path.join(hisim_inputs, "price_signal", "PricePurchase.csv"),
-        "FeedInTarrif": os.path.join(hisim_inputs, "price_signal", "FeedInTarrif.csv")
-    }
+        "PricePurchase": os.path.join(
+            hisim_inputs, "price_signal", "PricePurchase.csv"
+        ),
+        "FeedInTarrif": os.path.join(hisim_inputs, "price_signal", "FeedInTarrif.csv"),
+    },
 }
 
 
@@ -206,13 +214,27 @@ def load_smart_appliance(name):  # noqa
     return data[name]
 
 
-def convert_lpg_timestep_to_utc(data: List[int], year: int, seconds_per_timestep: int) -> List[int]:
+def convert_lpg_timestep_to_utc(
+    data: List[int], year: int, seconds_per_timestep: int
+) -> List[int]:
     """Tranform LPG timesteps (list of integers) from local time to UTC."""
     timeshifts = pytz.timezone("Europe/Berlin")._utc_transition_times  # type: ignore # pylint: disable=W0212
     timeshifts = [elem for elem in timeshifts if elem.year == year]
     steps_per_hour = int(3600 / seconds_per_timestep)
-    timeshift1_as_step = int((timeshifts[0] - dt.datetime(year=year, month=1, day=1)).seconds / seconds_per_timestep) - 1
-    timeshift2_as_step = int((timeshifts[1] - dt.datetime(year=year, month=1, day=1)).seconds / seconds_per_timestep) - 1
+    timeshift1_as_step = (
+        int(
+            (timeshifts[0] - dt.datetime(year=year, month=1, day=1)).seconds
+            / seconds_per_timestep
+        )
+        - 1
+    )
+    timeshift2_as_step = (
+        int(
+            (timeshifts[1] - dt.datetime(year=year, month=1, day=1)).seconds
+            / seconds_per_timestep
+        )
+        - 1
+    )
 
     data_utc = []
     for elem in data:
@@ -224,7 +246,7 @@ def convert_lpg_timestep_to_utc(data: List[int], year: int, seconds_per_timestep
 
 
 def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
-    """Transform LPG data from local time (not having explicit time shifts) to UTC. """
+    """Transform LPG data from local time (not having explicit time shifts) to UTC."""
     # convert Time information to pandas datetime and make it to index
     data.index = pd.DatetimeIndex(pd.to_datetime(data["Time"]))
     lastdate = data.index[-1]
@@ -236,8 +258,9 @@ def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
     # delete hour in spring if neceary:
     if lastdate > timeshifts[0]:
         indices_of_additional_hour_in_spring = data.loc[
-            timeshifts[0] + dt.timedelta(seconds=3600):
-            timeshifts[0] + dt.timedelta(seconds=60 * (60 + 59))
+            timeshifts[0]
+            + dt.timedelta(seconds=3600) : timeshifts[0]
+            + dt.timedelta(seconds=60 * (60 + 59))
         ].index
 
         data.drop(index=indices_of_additional_hour_in_spring, inplace=True)
@@ -245,8 +268,9 @@ def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
     # add hour in autumn if necesary
     if lastdate > timeshifts[1]:
         additional_hours_in_autumn = data.loc[
-            timeshifts[1] + dt.timedelta(seconds=3600):
-            timeshifts[1] + dt.timedelta(seconds=60 * (60 + 59))
+            timeshifts[1]
+            + dt.timedelta(seconds=3600) : timeshifts[1]
+            + dt.timedelta(seconds=60 * (60 + 59))
         ]
         data = pd.concat([data, additional_hours_in_autumn])
         data.sort_index(inplace=True)
@@ -256,7 +280,8 @@ def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
 
     # add hour at end
     last_hour = data[
-        data.index >= dt.datetime(year=year, month=lastdate.month, day=lastdate.day, hour=23)
+        data.index
+        >= dt.datetime(year=year, month=lastdate.month, day=lastdate.day, hour=23)
     ]
     data = pd.concat([data, last_hour])
 
@@ -264,8 +289,11 @@ def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
     data.index = pd.Index(list(range(len(data))))
     data["Time"] = pd.date_range(
         start=dt.datetime(year=year, month=1, day=1, hour=0),
-        end=dt.datetime(year=year, month=lastdate.month, day=lastdate.day, hour=23, minute=59),
-        freq="T", tz="UTC",
+        end=dt.datetime(
+            year=year, month=lastdate.month, day=lastdate.day, hour=23, minute=59
+        ),
+        freq="T",
+        tz="UTC",
     )
     data["Time"] = data["Time"].dt.strftime("%m/%d/%Y %H:%M")
     return data
@@ -432,17 +460,3 @@ def rhasattr(obj, attr):
     """Recursive hasattr for multi level attributes like `obj.attribute.subattribute`."""
     pre, _, post = attr.rpartition(".")
     return hasattr(rgetattr(obj, pre) if pre else obj, post)
-
-
-def create_configuration(my_sim: Any, config_class: Any) -> Any:
-    """Create configuration object from JSON or from defaults."""
-    if my_sim.my_module_config_path:
-        with open(
-            my_sim.my_module_config_path, "r", encoding="utf8"
-        ) as system_config_file:
-            my_config = config_class.from_json(system_config_file.read())  # type: ignore
-        log.information(f"Read system config from {my_sim.my_module_config_path}.")
-    else:
-        my_config = config_class.get_default()
-        log.information(f"Read default config from {config_class.__name__}.")
-    return my_config

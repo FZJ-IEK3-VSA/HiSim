@@ -7,6 +7,7 @@ from os import listdir
 from pathlib import Path
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+import json
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,
     Households,
@@ -29,7 +30,9 @@ from hisim.components import electricity_meter
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim import utils
 from hisim import loadtypes as lt
+from hisim import log
 from examples.modular_example import cleanup_old_lpg_requests
+from hisim.system_setup_starter import set_values
 
 __authors__ = "Markus Blasberg"
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
@@ -62,6 +65,37 @@ class HouseholdAdvancedHPDieselCarConfig:
     dhw_storage_config: generic_hot_water_storage_modular.StorageConfig
     car_config: generic_car.CarConfig
     electricity_meter_config: electricity_meter.ElectricityMeterConfig
+
+    @classmethod
+    def load_from_json(cls, module_config_path: str):
+        """Polulate config from JSON."""
+
+        log.information(f"Read module config from {module_config_path}.")
+
+        with open(module_config_path, "r", encoding="utf8") as f:
+            module_config_dict = json.loads(f.read())
+
+        # Read building config
+        building_config_dict = module_config_dict.pop("building_config", {})
+        if building_config_dict:
+            log.information("Using `building_config` for scaling.")
+            building_config = building.BuildingConfig.from_dict(building_config_dict)
+        else:
+            building_config = None
+
+        # Load (scaled) default values for system setup configuration
+        if building_config:
+            my_config = cls.get_scaled_default(building_config)
+        else:
+            my_config = cls.get_default()
+
+        # Read setup config
+        setup_config_dict = module_config_dict.pop("setup_config", {})
+        if setup_config_dict:
+            log.information("Using `setup_config` to overwrite defaults.")
+            set_values(my_config, setup_config_dict)
+
+        return my_config
 
     @classmethod
     def get_default(cls):
@@ -163,6 +197,95 @@ class HouseholdAdvancedHPDieselCarConfig:
 
         return household_config
 
+    @classmethod
+    def get_scaled_default(cls, building_config: building.BuildingConfig):
+        """Get scaled default HouseholdAdvancedHPDieselCarConfig."""
+
+        heating_reference_temperature_in_celsius: float = -7
+        set_heating_threshold_outside_temperature_in_celsius: float = 16.0
+
+        my_building_information = building.BuildingInformation(config=building_config)
+
+        household_config = HouseholdAdvancedHPDieselCarConfig(
+            building_type="blub",
+            number_of_apartments=building_config.number_of_apartments,
+            occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
+                url="http://134.94.131.167:443/api/v1/profilerequest",
+                api_key="OrjpZY93BcNWw8lKaMp0BEchbCc",
+                household=Households.CHR01_Couple_both_at_Work,
+                result_path=utils.HISIMPATH["results"],
+                travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
+                transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
+                charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
+                name="UTSPConnector",
+                consumption=0.0,
+                profile_with_washing_machine_and_dishwasher=True,
+                predictive_control=False,
+            ),
+            building_config=building_config,
+            hds_controller_config=(
+                heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
+            ),
+            hds_config=(
+                heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+                )
+            ),
+            hp_controller_config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(),
+            hp_config=advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
+                heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+            ),
+            simple_hot_water_storage_config=simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
+                heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+            ),
+            dhw_heatpump_config=generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
+                number_of_apartments=building_config.number_of_apartments
+            ),
+            dhw_heatpump_controller_config=controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
+                name="DHWHeatpumpController"
+            ),
+            dhw_storage_config=generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
+                number_of_apartments=building_config.number_of_apartments
+            ),
+            car_config=generic_car.CarConfig.get_default_diesel_config(),
+            electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
+        )
+
+        # adjust HeatPump
+        household_config.hp_config.group_id = 1  # use modulating heatpump as default
+        household_config.hp_controller_config.mode = (
+            2  # use heating and cooling as default
+        )
+        household_config.hp_config.minimum_idle_time_in_seconds = (
+            900  # default value leads to switching on-off very often
+        )
+        household_config.hp_config.minimum_running_time_in_seconds = (
+            900  # default value leads to switching on-off very often
+        )
+
+        # set same heating threshold
+        household_config.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
+            set_heating_threshold_outside_temperature_in_celsius
+        )
+        household_config.hp_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
+            set_heating_threshold_outside_temperature_in_celsius
+        )
+
+        # set same heating reference temperature
+        household_config.hds_controller_config.heating_reference_temperature_in_celsius = (
+            heating_reference_temperature_in_celsius
+        )
+        household_config.hp_config.heating_reference_temperature_in_celsius = (
+            heating_reference_temperature_in_celsius
+        )
+        household_config.building_config.heating_reference_temperature_in_celsius = (
+            heating_reference_temperature_in_celsius
+        )
+
+        household_config.hp_config.flow_temperature_in_celsius = 21  # Todo: check value
+
+        return household_config
+
 
 def household_1_advanced_hp_diesel_car(
     my_sim: Any,
@@ -194,7 +317,9 @@ def household_1_advanced_hp_diesel_car(
     if Path(utils.HISIMPATH["utsp_results"]).exists():
         cleanup_old_lpg_requests()
 
-    my_config = utils.create_configuration(my_sim, HouseholdAdvancedHPDieselCarConfig)
+    my_config = HouseholdAdvancedHPDieselCarConfig.load_from_json(
+        my_sim.my_module_config_path
+    )
 
     # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
     # my_config_json = my_config.to_json()

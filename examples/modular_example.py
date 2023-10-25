@@ -259,7 +259,7 @@ def modular_household_explicit(
                 name="UTSPConnector",
                 url=arche_type_config_.url,
                 api_key=arche_type_config_.api_key,
-                household=occupancy_profile,  # type: ignore
+                household=occupancy_profile,
                 result_path=hisim.utils.HISIMPATH["results"],
                 travel_route_set=this_mobility_distance,
                 transportation_device_set=this_mobility_set,
@@ -278,7 +278,7 @@ def modular_household_explicit(
         # Build occupancy
         my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
             "Occupancy",
-            occupancy_profile.Name or "",  # type: ignore
+            occupancy_profile.Name or "",
             location,
             not smart_devices_included,
             number_of_apartments=my_building_information.number_of_apartments,

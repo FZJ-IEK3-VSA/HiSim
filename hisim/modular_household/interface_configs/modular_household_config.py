@@ -28,25 +28,3 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
 def write_config(config: ModularHouseholdConfig) -> None:
     with open("modular_example_config.json", "w", encoding="utf-8") as f:
         f.write(config.to_json())  # type: ignore
-
-
-def read_in_configs(pathname: str) -> ModularHouseholdConfig:
-    """Reads in ModularHouseholdConfig file and loads default if file cannot be found."""
-    try:
-        with open(pathname, encoding="utf8") as config_file:
-            household_config_dict = json.load(config_file)
-            household_config: ModularHouseholdConfig = ModularHouseholdConfig.from_dict(household_config_dict["system_setup_config"])  # type: ignore
-        log.information(f"Read modular household config from {pathname}")
-    except Exception:
-        household_config = ModularHouseholdConfig()
-        log.warning(
-            f"Could not read the modular household config from '{pathname}'. Using a default config instead."
-        )
-
-    # set default configs
-    if household_config.system_config_ is None:
-        household_config.system_config_ = system_config.SystemConfig()
-    if household_config.archetype_config_ is None:
-        household_config.archetype_config_ = archetype_config.ArcheTypeConfig()
-
-    return household_config

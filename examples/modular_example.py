@@ -94,7 +94,6 @@ def modular_household_explicit(
     seconds_per_timestep = 60 * 15
 
     # read the modular household config file
-    # household_config = read_in_configs(my_sim.my_module_config_path)
     if my_sim.my_module_config_path:
         household_config = ModularHouseholdConfig.load_from_json(
             my_sim.my_module_config_path

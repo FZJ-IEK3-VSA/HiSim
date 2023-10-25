@@ -3,12 +3,12 @@ from typing import Optional
 from hisim.modular_household.interface_configs import archetype_config, system_config
 from dataclasses_json import dataclass_json
 from hisim import log
+from hisim.system_setup_configuration import SystemSetupConfigBase
 import json
 
 
-@dataclass_json
 @dataclass
-class ModularHouseholdConfig:
+class ModularHouseholdConfig(SystemSetupConfigBase):
     #: configuration of the technological equipment of the household
     system_config_: Optional[system_config.SystemConfig] = None
     #: configuration of the framework of the household (climate, house type, mobility behaviour, heating system, etc. )

@@ -87,9 +87,9 @@ class BuildingConfig(cp.ConfigBase):
     building_code: str
     building_heat_capacity_class: str
     initial_internal_temperature_in_celsius: float
+    number_of_apartments: int
     absolute_conditioned_floor_area_in_m2: Optional[float]
     total_base_area_in_m2: Optional[float]
-    number_of_apartments: Optional[float]
     predictive: bool
 
     @classmethod
@@ -103,10 +103,10 @@ class BuildingConfig(cp.ConfigBase):
             building_heat_capacity_class="medium",
             initial_internal_temperature_in_celsius=23,
             heating_reference_temperature_in_celsius=-14,
+            number_of_apartments=1,
             absolute_conditioned_floor_area_in_m2=121.2,
             total_base_area_in_m2=None,
-            number_of_apartments=None,
-            predictive=False
+            predictive=False,
         )
         return config
 
@@ -233,7 +233,10 @@ class Building(dynamic_component.DynamicComponent):
         self.set_heating_temperature_in_celsius: float = 19
         self.set_cooling_temperature_in_celsius: float = 24
 
-        (self.is_in_cache, self.cache_file_path,) = utils.get_cache_file(
+        (
+            self.is_in_cache,
+            self.cache_file_path,
+        ) = utils.get_cache_file(
             self.component_name,
             self.buildingconfig,
             self.my_simulation_parameters,
@@ -709,7 +712,6 @@ class Building(dynamic_component.DynamicComponent):
     ) -> None:
         """Prepare the simulation."""
         if self.buildingconfig.predictive:
-
             # get weather forecast to compute forecasted solar gains
             # ambient_temperature_forecast = SingletonSimRepository().get_entry(
             #     key=SingletonDictKeyEnum.Weather_TemperatureOutside_yearly_forecast
@@ -741,9 +743,15 @@ class Building(dynamic_component.DynamicComponent):
                 solar_gains_forecast_yearly = self.get_solar_heat_gain_through_windows(
                     azimuth=azimuth_forecast[i],
                     direct_normal_irradiance=direct_normal_irradiance_forecast[i],
-                    direct_horizontal_irradiance=direct_horizontal_irradiance_forecast[i],
-                    global_horizontal_irradiance=global_horizontal_irradiance_forecast[i],
-                    direct_normal_irradiance_extra=direct_normal_irradiance_extra_forecast[i],
+                    direct_horizontal_irradiance=direct_horizontal_irradiance_forecast[
+                        i
+                    ],
+                    global_horizontal_irradiance=global_horizontal_irradiance_forecast[
+                        i
+                    ],
+                    direct_normal_irradiance_extra=direct_normal_irradiance_extra_forecast[
+                        i
+                    ],
                     apparent_zenith=apparent_zenith_forecast[i],
                 )
 
@@ -929,7 +937,6 @@ class Building(dynamic_component.DynamicComponent):
         for index, windows_direction in enumerate(
             self.my_building_information.windows_directions
         ):
-
             if windows_direction == "Horizontal":
                 window_tilt_angle = 0
             else:
@@ -1257,12 +1264,11 @@ class Building(dynamic_component.DynamicComponent):
             self.get_thermal_conductance_between_exterior_and_windows_and_door_in_watt_per_kelvin()
         )
         # labeled as H_tr_ms in paper [2] (*** Check header)
-        internal_part_of_transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin = (
-            self.get_thermal_conductance_between_thermal_mass_and_internal_surface_in_watt_per_kelvin(
+        internal_part_of_transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin = self.get_thermal_conductance_between_thermal_mass_and_internal_surface_in_watt_per_kelvin(
             heat_transfer_coeff_thermal_mass_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin=(
                 self.my_building_information.heat_transfer_coeff_thermal_mass_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin
             )
-        ))
+        )
         # external part of transmission heat transfer coeff opaque elements labeled as H_tr_em in paper [2] (*** Check header)
         (
             transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin,
@@ -1313,7 +1319,6 @@ class Building(dynamic_component.DynamicComponent):
             or direct_horizontal_irradiance != 0
             or global_horizontal_irradiance != 0
         ):
-
             for window in self.windows:
                 solar_heat_gain = Window.calc_solar_heat_gains(
                     self,
@@ -2205,7 +2210,6 @@ class BuildingInformation:
                 raise ValueError("Number of apartments can not be negative.")
 
         elif self.buildingconfig.number_of_apartments is None:
-
             number_of_apartments_origin = float(buildingdata["n_Apartment"].values[0])
 
             # if no value given or if the area given in the config is bigger than the tabula ref area
@@ -2266,7 +2270,6 @@ class BuildingInformation:
             )
 
         if self.buildingconfig.absolute_conditioned_floor_area_in_m2 is not None:
-
             # this is for preventing that the conditioned_floor_area is 0 (some buildings in TABULA have conditioned_floor_area (A_C_Ref) = 0)
             if conditioned_floor_area_in_m2 == 0:
                 scaled_conditioned_floor_area_in_m2 = (

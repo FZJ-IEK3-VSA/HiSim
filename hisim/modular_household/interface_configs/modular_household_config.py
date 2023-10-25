@@ -34,7 +34,8 @@ def read_in_configs(pathname: str) -> ModularHouseholdConfig:
     """Reads in ModularHouseholdConfig file and loads default if file cannot be found."""
     try:
         with open(pathname, encoding="utf8") as config_file:
-            household_config: ModularHouseholdConfig = ModularHouseholdConfig.from_json(config_file.read())  # type: ignore
+            household_config_dict = json.load(config_file)
+            household_config: ModularHouseholdConfig = ModularHouseholdConfig.from_dict(household_config_dict["setup_config"])  # type: ignore
         log.information(f"Read modular household config from {pathname}")
     except Exception:
         household_config = ModularHouseholdConfig()

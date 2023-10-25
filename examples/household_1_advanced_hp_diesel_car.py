@@ -5,9 +5,7 @@
 from typing import List, Optional, Any
 from os import listdir
 from pathlib import Path
-import json
 from dataclasses import dataclass
-from dataclasses_json import dataclass_json
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,
     Households,
@@ -31,7 +29,6 @@ from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.system_setup_configuration import SystemSetupConfigBase
 from hisim import utils
 from hisim import loadtypes as lt
-from hisim import log
 
 from examples.modular_example import cleanup_old_lpg_requests
 

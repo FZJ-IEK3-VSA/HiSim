@@ -1,14 +1,18 @@
+"""Test for generic rsoc."""
+
+# clean
+import pytest
+from tests import functions_for_testing as fft
 from hisim import component as cp
 from hisim.components import generic_rsoc
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-from tests import functions_for_testing as fft
-import pytest
 
 
 @pytest.mark.base
 def test_electrolyzer():
+    """Test for electrolyzer."""
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(
         2021, seconds_per_timestep
@@ -35,19 +39,19 @@ def test_electrolyzer():
     # ===================================================================================================================
     # Setup Electrolyzer
     my_rsoc_config = generic_rsoc.RsocConfig(
-        name = name,
-        nom_load_soec = nom_load_soec,
-        min_load_soec = min_load_soec,
-        max_load_soec = max_load_soec,
-        faraday_eff_soec = faraday_eff_soec,
-        ramp_up_rate_soec = ramp_up_rate_soec,
-        ramp_down_rate_soec = ramp_down_rate_soec,
-        nom_power_sofc = nom_power_sofc,
-        min_power_sofc = min_power_sofc,
-        max_power_sofc = max_power_sofc,
-        faraday_eff_sofc = faraday_eff_sofc,
-        ramp_up_rate_sofc = ramp_up_rate_sofc,
-        ramp_down_rate_sofc = ramp_down_rate_sofc,
+        name=name,
+        nom_load_soec=nom_load_soec,
+        min_load_soec=min_load_soec,
+        max_load_soec=max_load_soec,
+        faraday_eff_soec=faraday_eff_soec,
+        ramp_up_rate_soec=ramp_up_rate_soec,
+        ramp_down_rate_soec=ramp_down_rate_soec,
+        nom_power_sofc=nom_power_sofc,
+        min_power_sofc=min_power_sofc,
+        max_power_sofc=max_power_sofc,
+        faraday_eff_sofc=faraday_eff_sofc,
+        ramp_up_rate_sofc=ramp_up_rate_sofc,
+        ramp_down_rate_sofc=ramp_down_rate_sofc,
     )
     my_rsoc = generic_rsoc.Rsoc(
         config=my_rsoc_config, my_simulation_parameters=my_simulation_parameters
@@ -84,10 +88,8 @@ def test_electrolyzer():
 
     # Checking differnt values
     assert (
-            stsv.values[my_rsoc.soec_hydrogen_flow_rate.global_index] == 0.0
-        ) # should be zero because the systems ramp up is slow
-    assert (
-            stsv.values[my_rsoc.sofc_hydrogen_flow_rate.global_index] == 0.0
-        )
+        stsv.values[my_rsoc.soec_hydrogen_flow_rate.global_index] == 0.0
+    )  # should be zero because the systems ramp up is slow
+    assert stsv.values[my_rsoc.sofc_hydrogen_flow_rate.global_index] == 0.0
 
     # python -m pytest ../tests/test_generic_rSOC.py

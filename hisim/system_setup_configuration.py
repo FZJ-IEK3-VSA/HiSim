@@ -48,5 +48,5 @@ class SystemSetupConfigBase(JSONWizard):
         raise NotImplementedError
 
     @classmethod
-    def get_scaled_default(cls, building_config) -> Self:
+    def get_scaled_default(cls, building_config: building.BuildingConfig) -> Self:
         raise NotImplementedError

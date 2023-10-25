@@ -9,10 +9,10 @@ Required fields in the JSON file are: `path_to_module`, `function_in_module` and
 parameters from the JSON are set.
 
 Optional field: `building_config`
-The values from `building_config` replace single values of the example's building object. When 
+The values from `building_config` replace single values of the example's building object. When
 present, it is used to scale the default configuration with `get_scaled_default()`.
 
-Optional field: `system_setup_config`, .
+Optional field: `system_setup_config`
 The values from `system_setup_config` overwrite specific values of the configuration object.
 Arguments that are not present keep the (scaled) default value.
 """
@@ -63,7 +63,7 @@ def make_system_setup(
     building_config = _parameters_json.pop("building_config", {})
     system_setup_config = _parameters_json.pop("system_setup_config", {})
     module_config_dict = {"building_config": building_config, "system_setup_config": system_setup_config}
-    
+
     if _parameters_json:
         raise AttributeError(
             f"There are unused attributes ({_parameters_json.keys()}) in parameters JSON."

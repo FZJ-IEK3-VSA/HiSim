@@ -14,23 +14,15 @@ from typing import List, Any, Optional
 from dataclasses import dataclass
 import numpy as np
 from dataclasses_json import dataclass_json
-
+import pandas as pd
 
 from hisim import component as cp
 from hisim import log
-
-# Owned
 from hisim import utils
-
-# from hisim.components.extended_storage import WaterSlice
-# from hisim.components.configuration import WarmWaterStorageConfig
-# from hisim.components.configuration import PhysicsConfig
 from hisim.components.building import Building
 from hisim.components.weather import Weather
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
-
-import pandas as pd
 from hisim.component import OpexCostDataClass
 
 __authors__ = "Vitor Hugo Bellotto Zago"
@@ -71,8 +63,8 @@ class GenericHeatPumpConfig(cp.ConfigBase):
             manufacturer="Viessmann Werke GmbH & Co KG",
             min_operation_time=60 * 60,
             min_idle_time=15 * 60,
-            maintenance_cost_as_percentage_of_investment= 0.0,
-            consumption=0
+            maintenance_cost_as_percentage_of_investment=0.0,
+            consumption=0.0
         )
 
 

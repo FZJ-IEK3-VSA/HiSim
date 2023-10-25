@@ -4,7 +4,7 @@ Result files are stored in `/results`.
 See `tests/test_system_setup_starter.py` for an example.
 
 Run `hisim/system_setup_starter.py <json-file>` to start a simulation.
-Required fields in the JSON file are: `path_to_module`, `function_in_module` and 
+Required fields in the JSON file are: `path_to_module`, `function_in_module` and
 `simulation_parameters`. SimulationParameters from the examples is not used. Instead the
 parameters from the JSON are set.
 
@@ -59,34 +59,30 @@ def make_system_setup(
     function_in_module = _parameters_json.pop("function_in_module")
     simulation_parameters_dict = _parameters_json.pop("simulation_parameters")
     module_config_path = str(Path(result_directory).joinpath("module_config.json"))
-    simulation_parameters_path = str(
-        Path(result_directory).joinpath("simulation_parameters.json")
-    )
-    # if _parameters_json:
-    #     raise AttributeError(
-    #         f"There are unused attributes ({_parameters_json.keys()}) in parameters JSON."
-    #     )
+    simulation_parameters_path = str(Path(result_directory).joinpath("simulation_parameters.json"))
+    building_config = _parameters_json.pop("building_config", {})
+    system_setup_config = _parameters_json.pop("system_setup_config", {})
+    module_config_dict = {"building_config": building_config, "system_setup_config": system_setup_config}
+    
+    if _parameters_json:
+        raise AttributeError(
+            f"There are unused attributes ({_parameters_json.keys()}) in parameters JSON."
+        )
 
     # Set custom simulation parameters
     simulation_parameters = SimulationParameters(
-        start_date=datetime.datetime.fromisoformat(
-            simulation_parameters_dict.pop("start_date")
-        ),
-        end_date=datetime.datetime.fromisoformat(
-            simulation_parameters_dict.pop("end_date")
-        ),
+        start_date=datetime.datetime.fromisoformat(simulation_parameters_dict.pop("start_date")),
+        end_date=datetime.datetime.fromisoformat(simulation_parameters_dict.pop("end_date")),
         seconds_per_timestep=simulation_parameters_dict.pop("seconds_per_timestep"),
         result_directory=result_directory,
     )
-    set_attributes_of_dataclass_from_dict(
-        simulation_parameters, simulation_parameters_dict
-    )
+    set_attributes_of_dataclass_from_dict(simulation_parameters, simulation_parameters_dict)
 
     with open(simulation_parameters_path, "w", encoding="utf8") as out_file:
         out_file.write(simulation_parameters.to_json())  # ignore: type
 
     with open(module_config_path, "w", encoding="utf8") as out_file:
-        out_file.write(json.dumps(_parameters_json))  # ignore: type
+        out_file.write(json.dumps(module_config_dict))  # ignore: type
 
     return (
         path_to_module,

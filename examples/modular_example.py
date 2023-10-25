@@ -21,7 +21,7 @@ from hisim.components import (
 )
 from hisim.modular_household import component_connections
 from hisim.modular_household.interface_configs.modular_household_config import (
-    read_in_configs,
+    ModularHouseholdConfig,
 )
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
@@ -94,7 +94,14 @@ def modular_household_explicit(
     seconds_per_timestep = 60 * 15
 
     # read the modular household config file
-    household_config = read_in_configs(my_sim.my_module_config_path)
+    # household_config = read_in_configs(my_sim.my_module_config_path)
+    if my_sim.my_module_config_path:
+        household_config = ModularHouseholdConfig.load_from_json(
+            my_sim.my_module_config_path
+        )
+    else:
+        household_config = ModularHouseholdConfig.get_default()
+
     assert household_config.archetype_config_ is not None
     assert household_config.system_config_ is not None
     arche_type_config_ = household_config.archetype_config_

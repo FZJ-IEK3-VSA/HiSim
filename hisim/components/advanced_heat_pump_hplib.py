@@ -4,9 +4,11 @@ See library on https://github.com/FZJ-IEK3-VSA/hplib/tree/main/hplib
 """
 
 # clean
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional, Tuple, Dict
+import hashlib
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+from dataclass_wizard import JSONWizard
 
 import pandas as pd
 
@@ -180,6 +182,8 @@ class HeatPumpHplib(Component):
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
         )
+        # caching for hplib simulation
+        self.calculation_cache: Dict = {}
 
         self.model = config.model
 
@@ -315,19 +319,25 @@ class HeatPumpHplib(Component):
             self.get_default_connections_from_simple_hot_water_storage()
         )
 
-    def get_default_connections_from_heat_pump_controller(self,):
+    def get_default_connections_from_heat_pump_controller(
+        self,
+    ):
         """Get default connections."""
         log.information("setting heat pump controller default connections")
         connections = []
         hpc_classname = HeatPumpHplibController.get_classname()
         connections.append(
             ComponentConnection(
-                HeatPumpHplib.OnOffSwitch, hpc_classname, HeatPumpHplibController.State,
+                HeatPumpHplib.OnOffSwitch,
+                hpc_classname,
+                HeatPumpHplibController.State,
             )
         )
         return connections
 
-    def get_default_connections_from_weather(self,):
+    def get_default_connections_from_weather(
+        self,
+    ):
         """Get default connections."""
         log.information("setting weather default connections")
         connections = []
@@ -349,7 +359,9 @@ class HeatPumpHplib(Component):
         )
         return connections
 
-    def get_default_connections_from_simple_hot_water_storage(self,):
+    def get_default_connections_from_simple_hot_water_storage(
+        self,
+    ):
         """Get simple hot water storage default connections."""
         log.information("setting simple hot water storage default connections")
         connections = []
@@ -428,10 +440,19 @@ class HeatPumpHplib(Component):
 
         # OnOffSwitch
         if on_off == 1:
-            # Calulate outputs for heating mode
-            results = hpl.simulate(
-                t_in_primary, t_in_secondary, self.parameters, t_amb, mode=1
+            # // ggf. werte runden
+            results = self.get_cached_results_or_run_hplib_simulation(
+                t_in_primary=t_in_primary,
+                t_in_secondary=t_in_secondary,
+                parameters=self.parameters,
+                t_amb=t_amb,
+                mode=1,
             )
+
+            # results = hpl.simulate(
+            #     t_in_primary, t_in_secondary, self.parameters, t_amb, mode=1
+            # )
+            # Get outputs for heating mode
             p_th = results["P_th"].values[0]
             p_el = results["P_el"].values[0]
             cop = results["COP"].values[0]
@@ -446,9 +467,17 @@ class HeatPumpHplib(Component):
 
         elif on_off == -1:
             # Calulate outputs for cooling mode
-            results = hpl.simulate(
-                t_in_primary, t_in_secondary, self.parameters, t_amb, mode=2
+            results = self.get_cached_results_or_run_hplib_simulation(
+                t_in_primary=t_in_primary,
+                t_in_secondary=t_in_secondary,
+                parameters=self.parameters,
+                t_amb=t_amb,
+                mode=2,
             )
+
+            # results = hpl.simulate(
+            #     t_in_primary, t_in_secondary, self.parameters, t_amb, mode=2
+            # )
             p_th = results["P_th"].values[0]
             p_el = results["P_el"].values[0]
             cop = results["COP"].values[0]
@@ -501,7 +530,9 @@ class HeatPumpHplib(Component):
         return config.cost, config.co2_footprint, config.lifetime
 
     def get_cost_opex(
-        self, all_outputs: List, postprocessing_results: pd.DataFrame,
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of maintenance costs.
 
@@ -527,6 +558,35 @@ class HeatPumpHplib(Component):
 
         return opex_cost_data_class
 
+    def get_cached_results_or_run_hplib_simulation(
+        self,
+        t_in_primary: float,
+        t_in_secondary: float,
+        parameters: pd.DataFrame,
+        t_amb: float,
+        mode: int,
+    ) -> Any:
+        """Use caching of results of hplib simulation."""
+        my_data_class = CalculationRequest(
+            t_in_primary=t_in_primary,
+            t_in_secondary=t_in_secondary,
+            parameters=parameters,
+            t_amb=t_amb,
+            mode=mode,
+        )
+        my_json_key = my_data_class.to_json()
+        my_hash_key = hashlib.sha256(my_json_key.encode('utf-8')).hexdigest()
+        if my_hash_key in self.calculation_cache:
+            results = self.calculation_cache[my_hash_key]
+
+        else:
+            results = hpl.simulate(
+                t_in_primary, t_in_secondary, parameters, t_amb, mode=mode
+            )
+            self.calculation_cache[my_hash_key] = results
+
+        return results
+
 
 @dataclass
 class HeatPumpState:
@@ -538,7 +598,9 @@ class HeatPumpState:
     time_on_cooling: int = 0
     on_off_previous: float = 0
 
-    def self_copy(self,):
+    def self_copy(
+        self,
+    ):
         """Copy the Heat Pump State."""
         return HeatPumpState(
             self.time_on, self.time_off, self.time_on_cooling, self.on_off_previous
@@ -698,7 +760,9 @@ class HeatPumpHplibController(Component):
             self.get_default_connections_from_simple_hot_water_storage()
         )
 
-    def get_default_connections_from_heat_distribution_controller(self,):
+    def get_default_connections_from_heat_distribution_controller(
+        self,
+    ):
         """Get default connections."""
         log.information("setting heat distribution controller default connections")
         connections = []
@@ -714,7 +778,9 @@ class HeatPumpHplibController(Component):
         )
         return connections
 
-    def get_default_connections_from_weather(self,):
+    def get_default_connections_from_weather(
+        self,
+    ):
         """Get default connections."""
         log.information("setting weather default connections")
         connections = []
@@ -728,7 +794,9 @@ class HeatPumpHplibController(Component):
         )
         return connections
 
-    def get_default_connections_from_simple_hot_water_storage(self,):
+    def get_default_connections_from_simple_hot_water_storage(
+        self,
+    ):
         """Get simple hot water storage default connections."""
         log.information("setting simple hot water storage default connections")
         connections = []
@@ -743,7 +811,9 @@ class HeatPumpHplibController(Component):
         return connections
 
     def build(
-        self, mode: float, temperature_offset_for_state_conditions_in_celsius: float,
+        self,
+        mode: float,
+        temperature_offset_for_state_conditions_in_celsius: float,
     ) -> None:
         """Build function.
 
@@ -789,12 +859,14 @@ class HeatPumpHplibController(Component):
         else:
             # Retrieves inputs
 
-            water_temperature_input_from_heat_water_storage_in_celsius = stsv.get_input_value(
-                self.water_temperature_input_channel
+            water_temperature_input_from_heat_water_storage_in_celsius = (
+                stsv.get_input_value(self.water_temperature_input_channel)
             )
 
-            heating_flow_temperature_from_heat_distribution_system = stsv.get_input_value(
-                self.heating_flow_temperature_from_heat_distribution_system_channel
+            heating_flow_temperature_from_heat_distribution_system = (
+                stsv.get_input_value(
+                    self.heating_flow_temperature_from_heat_distribution_system_channel
+                )
             )
 
             daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
@@ -1025,3 +1097,17 @@ class HeatPumpHplibController(Component):
             )
 
         return cooling_mode
+
+
+@dataclass
+class CalculationRequest(JSONWizard):
+
+    """Class for caching hplib parameters so that hplib.simulate does not need to run so often."""
+
+    t_in_primary: float
+    t_in_secondary: float
+    parameters: pd.DataFrame
+    t_amb: float
+    mode: int
+
+    # maybe implement rounding also

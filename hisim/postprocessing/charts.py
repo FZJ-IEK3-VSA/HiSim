@@ -80,7 +80,7 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         # optimizing fonts
         fig.autofmt_xdate(rotation=45)
         # setting axis of the plot
-        axis.set_ylabel("Daytime [h]", fontsize=self.fontsize_label)
+        axis.set_ylabel("Time of day [h]", fontsize=self.fontsize_label)
         axis.set_xlabel("Month of the year", fontsize=self.fontsize_label)
         plt.title(self.title, fontsize=self.fontsize_title)
         plt.xticks(fontsize=self.fontsize_ticks)

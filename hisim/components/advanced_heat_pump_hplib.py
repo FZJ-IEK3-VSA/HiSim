@@ -452,6 +452,7 @@ class HeatPumpHplib(Component):
             # results = hpl.simulate(
             #     t_in_primary, t_in_secondary, self.parameters, t_amb, mode=1
             # )
+
             # Get outputs for heating mode
             p_th = results["P_th"].values[0]
             p_el = results["P_el"].values[0]
@@ -478,6 +479,7 @@ class HeatPumpHplib(Component):
             # results = hpl.simulate(
             #     t_in_primary, t_in_secondary, self.parameters, t_amb, mode=2
             # )
+
             p_th = results["P_th"].values[0]
             p_el = results["P_el"].values[0]
             cop = results["COP"].values[0]
@@ -567,6 +569,12 @@ class HeatPumpHplib(Component):
         mode: int,
     ) -> Any:
         """Use caching of results of hplib simulation."""
+        
+        # # rounding of variable values
+        # t_in_primary = round(t_in_primary,1)
+        # t_in_secondary = round(t_in_secondary,1)
+        # t_amb = round(t_amb, 1)
+
         my_data_class = CalculationRequest(
             t_in_primary=t_in_primary,
             t_in_secondary=t_in_secondary,
@@ -576,6 +584,7 @@ class HeatPumpHplib(Component):
         )
         my_json_key = my_data_class.to_json()
         my_hash_key = hashlib.sha256(my_json_key.encode('utf-8')).hexdigest()
+
         if my_hash_key in self.calculation_cache:
             results = self.calculation_cache[my_hash_key]
 
@@ -583,6 +592,7 @@ class HeatPumpHplib(Component):
             results = hpl.simulate(
                 t_in_primary, t_in_secondary, parameters, t_amb, mode=mode
             )
+
             self.calculation_cache[my_hash_key] = results
 
         return results
@@ -1109,5 +1119,3 @@ class CalculationRequest(JSONWizard):
     parameters: pd.DataFrame
     t_amb: float
     mode: int
-
-    # maybe implement rounding also

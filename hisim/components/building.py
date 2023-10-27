@@ -106,7 +106,7 @@ class BuildingConfig(cp.ConfigBase):
             absolute_conditioned_floor_area_in_m2=121.2,
             total_base_area_in_m2=None,
             number_of_apartments=None,
-            predictive=False
+            predictive=False,
         )
         return config
 
@@ -216,6 +216,7 @@ class Building(dynamic_component.DynamicComponent):
     ):
         """Construct all the neccessary attributes."""
         self.buildingconfig = config
+
         # dynamic
         self.my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
         self.my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
@@ -741,9 +742,15 @@ class Building(dynamic_component.DynamicComponent):
                 solar_gains_forecast_yearly = self.get_solar_heat_gain_through_windows(
                     azimuth=azimuth_forecast[i],
                     direct_normal_irradiance=direct_normal_irradiance_forecast[i],
-                    direct_horizontal_irradiance=direct_horizontal_irradiance_forecast[i],
-                    global_horizontal_irradiance=global_horizontal_irradiance_forecast[i],
-                    direct_normal_irradiance_extra=direct_normal_irradiance_extra_forecast[i],
+                    direct_horizontal_irradiance=direct_horizontal_irradiance_forecast[
+                        i
+                    ],
+                    global_horizontal_irradiance=global_horizontal_irradiance_forecast[
+                        i
+                    ],
+                    direct_normal_irradiance_extra=direct_normal_irradiance_extra_forecast[
+                        i
+                    ],
                     apparent_zenith=apparent_zenith_forecast[i],
                 )
 
@@ -759,12 +766,7 @@ class Building(dynamic_component.DynamicComponent):
             phi_st_forecast: list = []
             phi_ia_forecast: list = []
             for i in range(self.my_simulation_parameters.timesteps):
-                (
-                    _,
-                    phi_ia_yearly,
-                    phi_st_yearly,
-                    phi_m_yearly,
-                ) = self.calc_heat_flow(
+                (_, phi_ia_yearly, phi_st_yearly, phi_m_yearly,) = self.calc_heat_flow(
                     internal_gains_forecast[i],
                     solar_gains_forecast[i],
                 )
@@ -1151,7 +1153,7 @@ class Building(dynamic_component.DynamicComponent):
 
         return transmission_heat_transfer_coeff_windows_and_door_in_watt_per_kelvin
 
-    def get_thermal_conductance_between_thermal_mass_and_internal_surface_in_watt_per_kelvin(
+    def get_thermal_conductance_thermal_mass_and_internal_surface_in_watt_per_kelvin(
         self,
         heat_transfer_coeff_thermal_mass_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin: float,
     ) -> float:
@@ -1166,7 +1168,7 @@ class Building(dynamic_component.DynamicComponent):
 
     def get_thermal_conductance_of_opaque_surfaces_in_watt_per_kelvin(
         self,
-        internal_part_of_transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin: float,
+        internal_part_of_transmission_coeff_opaque_elements_in_watt_per_kelvin: float,
     ) -> Tuple[float, float]:
         """Based on the RC_BuildingSimulator project @[rc_buildingsimulator-jayathissa] (** Check header)."""
         # Long from for H_tr_op: H_tr_op = 1/ (1/H_tr_ms + 1/H_tr_em) with
@@ -1191,7 +1193,7 @@ class Building(dynamic_component.DynamicComponent):
             )
         if (
             transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin != 0
-            and internal_part_of_transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin
+            and internal_part_of_transmission_coeff_opaque_elements_in_watt_per_kelvin
             != 0
         ):
             external_part_of_transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin = 1 / (
@@ -1201,7 +1203,7 @@ class Building(dynamic_component.DynamicComponent):
                 )
                 - (
                     1
-                    / internal_part_of_transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin
+                    / internal_part_of_transmission_coeff_opaque_elements_in_watt_per_kelvin
                 )
             )
 
@@ -1210,7 +1212,7 @@ class Building(dynamic_component.DynamicComponent):
             external_part_of_transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin,
         )
 
-    def get_thermal_conductance_between_indoor_air_and_internal_surface_in_watt_per_kelvin(
+    def get_thermal_conductance_indoor_air_and_internal_surface_in_watt_per_kelvin(
         self,
         heat_transfer_coeff_indoor_air_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin: float,
     ) -> float:
@@ -1253,27 +1255,24 @@ class Building(dynamic_component.DynamicComponent):
         :key
         """
         # labeled as H_w in the paper [2] (*** Check header), before h_tr_w
-        transmission_heat_transfer_coeff_windows_and_door_in_watt_per_kelvin = (
+        transmission_coeff_windows_and_door_in_watt_per_kelvin = (
             self.get_thermal_conductance_between_exterior_and_windows_and_door_in_watt_per_kelvin()
         )
         # labeled as H_tr_ms in paper [2] (*** Check header)
-        internal_part_of_transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin = (
-            self.get_thermal_conductance_between_thermal_mass_and_internal_surface_in_watt_per_kelvin(
+        internal_part_of_transmission_coeff_opaque_elements_in_watt_per_kelvin = self.get_thermal_conductance_thermal_mass_and_internal_surface_in_watt_per_kelvin(
             heat_transfer_coeff_thermal_mass_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin=(
                 self.my_building_information.heat_transfer_coeff_thermal_mass_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin
             )
-        ))
+        )
         # external part of transmission heat transfer coeff opaque elements labeled as H_tr_em in paper [2] (*** Check header)
         (
             transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin,
-            external_part_of_transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin,
+            external_part_of_transmission_coeff_opaque_elements_in_watt_per_kelvin,
         ) = self.get_thermal_conductance_of_opaque_surfaces_in_watt_per_kelvin(
-            internal_part_of_transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin=(
-                internal_part_of_transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin
-            )
+            internal_part_of_transmission_coeff_opaque_elements_in_watt_per_kelvin=internal_part_of_transmission_coeff_opaque_elements_in_watt_per_kelvin
         )
         # labeled as H_tr_is in paper [2] (** Check header)
-        heat_transfer_coeff_indoor_air_and_internal_surface_in_watt_per_kelvin = self.get_thermal_conductance_between_indoor_air_and_internal_surface_in_watt_per_kelvin(
+        heat_transfer_coeff_indoor_air_and_internal_surface_in_watt_per_kelvin = self.get_thermal_conductance_indoor_air_and_internal_surface_in_watt_per_kelvin(
             heat_transfer_coeff_indoor_air_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin=(
                 self.my_building_information.heat_transfer_coeff_indoor_air_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin
             )
@@ -1283,10 +1282,10 @@ class Building(dynamic_component.DynamicComponent):
         )
 
         return (
-            transmission_heat_transfer_coeff_windows_and_door_in_watt_per_kelvin,
-            internal_part_of_transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin,
+            transmission_coeff_windows_and_door_in_watt_per_kelvin,
+            internal_part_of_transmission_coeff_opaque_elements_in_watt_per_kelvin,
             transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin,
-            external_part_of_transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin,
+            external_part_of_transmission_coeff_opaque_elements_in_watt_per_kelvin,
             heat_transfer_coeff_indoor_air_and_internal_surface_in_watt_per_kelvin,
             thermal_conductance_by_ventilation_in_watt_per_kelvin,
         )
@@ -1315,8 +1314,7 @@ class Building(dynamic_component.DynamicComponent):
         ):
 
             for window in self.windows:
-                solar_heat_gain = Window.calc_solar_heat_gains(
-                    self,
+                solar_heat_gain = window.calc_solar_heat_gains(
                     sun_azimuth=azimuth,
                     direct_normal_irradiance=direct_normal_irradiance,
                     direct_horizontal_irradiance=direct_horizontal_irradiance,
@@ -1839,6 +1837,7 @@ class Window:
         nonperpendicular_reduction_factor=None,
     ):
         """Construct all the neccessary attributes."""
+        self.warning_message_already_shown = False
         # Angles
         self.window_tilt_angle = window_tilt_angle
         self.window_azimuth_angle = window_azimuth_angle
@@ -1939,9 +1938,12 @@ class Window:
         """
         if window_azimuth_angle is None:
             window_azimuth_angle = 0
-            log.warning(
-                "window azimuth angle was set to 0 south because no value was set."
-            )
+            if self.warning_message_already_shown is False:
+                log.warning(
+                    "window azimuth angle was set to 0 south because no value was set."
+                )
+                self.warning_message_already_shown = True
+
         poa_irrad = pvlib.irradiance.get_total_irradiance(
             window_tilt_angle,
             window_azimuth_angle,

@@ -72,6 +72,16 @@ jobs:
         prospector hisim/components/sumbuilder.py
         prospector hisim/components/advanced_heat_pump_hplib.py
         prospector hisim/components/electricity_meter.py
+        prospector hisim/components/controller_l1_electrolyzer.py
+        prospector hisim/components/controller_l1_fuel_cell.py
+        prospector hisim/components/controller_l1_rsoc.py
+        prospector hisim/components/controller_l2_ptx_energy_management_system.py
+        prospector hisim/components/controller_l2_rsoc_battery_system.py
+        prospector hisim/components/controller_l2_xtp_fuel_cell_ems.py
+        prospector hisim/components/generic_electrolyzer_h2.py
+        prospector hisim/components/generic_fuel_cell.py
+        prospector hisim/components/generic_rsoc.py
+        prospector hisim/components/transformer_rectifier.py
         prospector hisim/components/controller_mpc.py
         prospector hisim/modular_household/component_connections.py
         prospector hisim/modular_household/interface_configs/system_config.py
@@ -118,6 +128,9 @@ jobs:
         prospector tests/test_house_with_pyam_postprocessingoption.py
         prospector tests/test_electricity_meter.py
         prospector tests/test_sizing_energy_systems.py
+        prospector tests/test_generic_electrolyzer_h2.py
+        prospector tests/test_generic_fuel_cell.py
+        prospector tests/test_generic_rsoc.py
         prospector tests/test_example_air_conditioned_house.py
 
 

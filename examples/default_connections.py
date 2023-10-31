@@ -143,6 +143,8 @@ def basic_household_with_default_connections(
             temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,
             offset=offset,
             mode=hp_mode,
+            maintenance_cost_as_percentage_of_investment=0.0,
+            consumption=0,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )

@@ -22,7 +22,6 @@ class CSVLoaderConfig(cp.ConfigBase):
     sep: str
     decimal: str
     multiplier: float
-    output_description: str
 
     @classmethod
     def get_main_classname(cls):
@@ -62,8 +61,9 @@ class CSVLoader(cp.Component):
         Multiplication factor, in case an amplification of
         the data is required
     """
+    # Outputs
 
-    Output1: str = "CSV Profile"
+    Output1 = "CSV Profile"
 
     def __init__(
         self, config: CSVLoaderConfig, my_simulation_parameters: SimulationParameters
@@ -77,10 +77,10 @@ class CSVLoader(cp.Component):
 
         self.output1: cp.ComponentOutput = self.add_output(
             self.component_name,
-            self.Output1,
+            CSVLoader.Output1,
             self.csvconfig.loadtype,
             self.csvconfig.unit,
-            output_description="CSV loader output 1",
+            output_description="description will follow for CSV"
         )
         self.output1.display_name = self.csvconfig.column_name
         self.multiplier = self.csvconfig.multiplier
@@ -130,6 +130,6 @@ class CSVLoader(cp.Component):
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
 
-    def write_to_report(self) -> List[str]:
+    def write_to_report(self):
         """Writes a report."""
         return self.csvconfig.get_string_dict()

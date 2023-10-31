@@ -440,7 +440,8 @@ class PyAmChartGenerator:
         )
         x_data = list(OrderedSet(list(filtered_data.time)))
 
-        year = filtered_data.time.values[0].split("-")[0]
+        # year = str(filtered_data.time.values[0]).split("-")[0]
+        year = str(filtered_data.time.values[0]).split('-', maxsplit=1)[0]
 
         x_data_transformed = np.asarray(x_data, dtype="datetime64[D]")
 

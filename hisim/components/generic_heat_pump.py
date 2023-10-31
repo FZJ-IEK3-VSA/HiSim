@@ -14,21 +14,16 @@ from typing import List, Any, Optional
 from dataclasses import dataclass
 import numpy as np
 from dataclasses_json import dataclass_json
-
+import pandas as pd
 
 from hisim import component as cp
 from hisim import log
-
-# Owned
 from hisim import utils
-
-# from hisim.components.extended_storage import WaterSlice
-# from hisim.components.configuration import WarmWaterStorageConfig
-# from hisim.components.configuration import PhysicsConfig
 from hisim.components.building import Building
 from hisim.components.weather import Weather
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
+from hisim.component import OpexCostDataClass
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -56,6 +51,8 @@ class GenericHeatPumpConfig(cp.ConfigBase):
     heat_pump_name: str
     min_operation_time: float
     min_idle_time: float
+    maintenance_cost_as_percentage_of_investment: float
+    consumption: float
 
     @classmethod
     def get_default_generic_heat_pump_config(cls):
@@ -66,6 +63,8 @@ class GenericHeatPumpConfig(cp.ConfigBase):
             manufacturer="Viessmann Werke GmbH & Co KG",
             min_operation_time=60 * 60,
             min_idle_time=15 * 60,
+            maintenance_cost_as_percentage_of_investment=0.0,
+            consumption=0.0
         )
 
 
@@ -85,6 +84,8 @@ class GenericHeatPumpControllerConfig(cp.ConfigBase):
     temperature_air_cooling_in_celsius: float
     offset: float
     mode: int
+    maintenance_cost_as_percentage_of_investment: float
+    consumption: float
 
     @classmethod
     def get_default_generic_heat_pump_controller_config(cls):
@@ -95,6 +96,8 @@ class GenericHeatPumpControllerConfig(cp.ConfigBase):
             temperature_air_cooling_in_celsius=26.0,
             offset=0.5,
             mode=1,
+            maintenance_cost_as_percentage_of_investment=0.0,
+            consumption=0,
         )
 
 
@@ -760,6 +763,35 @@ class GenericHeatPumpController(cp.Component):
         if self.controller_heatpumpmode == "off":
             state = 0
         stsv.set_output_value(self.state_channel, state)
+
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> OpexCostDataClass:
+        """Calculate OPEX costs, consisting of maintenance costs.
+
+        No electricity costs for components except for Electricity Meter,
+        because part of electricity consumption is feed by PV
+        """
+        for index, output in enumerate(all_outputs):
+            if (
+                output.component_name == "HeatPump"
+                and output.load_type == LoadTypes.ELECTRICITY
+            ):  # Todo: check component name from examples: find another way of using only heatpump-outputs
+                self.config.consumption = round(
+                    sum(postprocessing_results.iloc[:, index])
+                    * self.my_simulation_parameters.seconds_per_timestep
+                    / 3.6e6,
+                    1,
+                )
+        opex_cost_data_class = OpexCostDataClass(
+            opex_cost=self.calc_maintenance_cost(),
+            co2_footprint=0,
+            consumption=self.config.consumption,
+        )
+
+        return opex_cost_data_class
 
     def conditions(self, set_temperature: float) -> None:
         """Set conditions for the heat pump controller mode."""

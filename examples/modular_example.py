@@ -164,10 +164,8 @@ def modular_household_explicit(
         hisim.log.warning(
             "Both occupancy_profile_utsp and occupancy_profile are defined, so the connection to the UTSP is considered by default. "
         )
-    if occupancy_profile_utsp is not None:
-        utsp_connected = True
-    else:
-        utsp_connected = False
+
+    utsp_connected = occupancy_profile_utsp is not None
 
     # get system configuration: technical equipment
     heatpump_included = system_config_.heatpump_included
@@ -260,7 +258,7 @@ def modular_household_explicit(
                 name="UTSPConnector",
                 url=arche_type_config_.url,
                 api_key=arche_type_config_.api_key,
-                household=occupancy_profile_utsp,
+                household=occupancy_profile_utsp,  # type: ignore
                 energy_intensity=EnergyIntensityType.EnergySaving,
                 result_path=hisim.utils.HISIMPATH["results"],
                 travel_route_set=this_mobility_distance,

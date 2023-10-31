@@ -1,6 +1,7 @@
 """Get capacities for each componente."""
 
-from typing import List
+from typing import List, Tuple, Dict
+from enum import Enum
 
 from hisim import log
 from hisim.component_wrapper import ComponentWrapper
@@ -8,9 +9,8 @@ from hisim.component_wrapper import ComponentWrapper
 
 def get_capacities(
     components: List[ComponentWrapper],
-) -> List:
-    capacities = {}
-    capacities["Component"] = "Capacity"
+) -> Dict[str, float]:
+    capacities: Dict[str, float] = {}
     for component in components:
         component_unwrapped = component.my_component
         try:

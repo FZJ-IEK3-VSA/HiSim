@@ -189,7 +189,7 @@ class HeatPumpConfig(cp.ConfigBase):
     def get_capacity(self) -> Tuple[float, Enum]:
         """Return capacity and unit."""
         capacity = self.power_th
-        unit = Units.WATT
+        unit = lt.Units.WATT
         return capacity, unit
 
 

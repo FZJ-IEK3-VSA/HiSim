@@ -16,9 +16,9 @@ class SystemConfig:
     """Defines the configuration and sizing of all components considered in a modular household."""
 
     #: decision on the consideration of smart control for EV charging and heat pump
-    surplus_control_considered: bool = False
+    surplus_control_considered: bool = True
     #: decision on the consideration of Photovoltaic Panel
-    pv_included: bool = False
+    pv_included: bool = True
     #: peak power of the considered Photovoltaic Panel in Wp
     pv_peak_power: Optional[float] = 8e3
     #: decision on the consideration of Smart Control of Washing Machines, Dish Washers and Dryers
@@ -48,7 +48,7 @@ class SystemConfig:
     #: maximal power of the electroylzer in Watt
     electrolyzer_power: Optional[float] = 0.5
     #: decision on the consideration of an electriv vehicle
-    ev_included: bool = False
+    ev_included: bool = True
     #: choice of charging station related to the options available in LoadProfileGenerator
     charging_station: JsonReference = field(
         default_factory=lambda: ChargingStationSets.Charging_At_Home_with_03_7_kW  # type: ignore

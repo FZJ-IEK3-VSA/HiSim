@@ -109,9 +109,9 @@ def modular_household_explicit(
         my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-        # my_simulation_parameters.post_processing_options.append(
-        #     PostProcessingOptions.PLOT_CARPET
-        # )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.PLOT_CARPET
+        )
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.GENERATE_PDF_REPORT
         )
@@ -184,7 +184,7 @@ def modular_household_explicit(
         raise Exception(
             "Heat pump power cannot be smaller than default: choose values greater than one"
         )
-    clever = my_simulation_parameters.surplus_control
+    controlable = system_config_.surplus_control_considered
     pv_included = system_config_.pv_included  # True or False
     pv_peak_power = system_config_.pv_peak_power or 5e3  # set default
     smart_devices_included = system_config_.smart_devices_included  # True or False
@@ -328,7 +328,7 @@ def modular_household_explicit(
             ev_included=ev_included,
             occupancy_config=my_occupancy_config,
         )
-        if clever is False:
+        if controlable is False:
             for car in my_cars:
                 consumption.append(car)
 
@@ -391,12 +391,12 @@ def modular_household_explicit(
             charging_station_set=charging_station,
             mobility_set=mobility_set,
             my_electricity_controller=my_electricity_controller,
-            clever=clever,
+            controlable=controlable,
         )  # could return ev_capacities if needed
 
     # """SMART CONTROLLER FOR SMART DEVICES"""
     # use clever controller if smart devices are included and do not use it if it is false
-    if smart_devices_included and clever and utsp_connected:
+    if smart_devices_included and controlable and utsp_connected:
         component_connections.configure_smart_controller_for_smart_devices(
             my_electricity_controller=my_electricity_controller,
             my_smart_devices=my_smart_devices,
@@ -414,7 +414,7 @@ def modular_household_explicit(
             my_electricity_controller=my_electricity_controller,
             my_weather=my_weather,
             water_heating_system_installed=water_heating_system_installed,
-            controlable=clever,
+            controlable=controlable,
             count=count,
             number_of_apartments=my_building_information.number_of_apartments,
         )
@@ -448,7 +448,7 @@ def modular_household_explicit(
                 heating_system_installed=heating_system_installed,
                 heatpump_power=heatpump_power,
                 buffer_volume=buffer_volume,
-                controlable=clever,
+                controlable=controlable,
                 heating_season=heating_season,
                 count=count,
             )
@@ -480,7 +480,7 @@ def modular_household_explicit(
                 my_weather=my_weather,
                 heating_system_installed=heating_system_installed,
                 heatpump_power=heatpump_power,
-                controlable=clever,
+                controlable=controlable,
                 heating_season=heating_season,
                 count=count,
             )
@@ -503,7 +503,7 @@ def modular_household_explicit(
             my_boiler=my_boiler,
             my_electricity_controller=my_electricity_controller,
             chp_power=chp_power,
-            controlable=clever,
+            controlable=controlable,
             count=count,
         )
     if chp_included and buffer_included:
@@ -514,7 +514,7 @@ def modular_household_explicit(
             my_boiler=my_boiler,
             my_electricity_controller=my_electricity_controller,
             chp_power=chp_power,
-            controlable=clever,
+            controlable=controlable,
             count=count,
         )
 
@@ -529,7 +529,7 @@ def modular_household_explicit(
             fuel_cell_power=fuel_cell_power,
             h2_storage_size=h2_storage_size,
             electrolyzer_power=electrolyzer_power * pv_peak_power,
-            controlable=clever,
+            controlable=controlable,
             count=count,
         )
 
@@ -543,12 +543,12 @@ def modular_household_explicit(
             fuel_cell_power=fuel_cell_power,
             h2_storage_size=h2_storage_size,
             electrolyzer_power=electrolyzer_power * pv_peak_power,
-            controlable=clever,
+            controlable=controlable,
             count=count,
         )
 
     # """BATTERY"""
-    if battery_included and clever:
+    if battery_included and controlable:
         count = component_connections.configure_battery(
             my_sim=my_sim,
             my_simulation_parameters=my_simulation_parameters,

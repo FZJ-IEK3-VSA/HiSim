@@ -164,14 +164,13 @@ class L1Controller(cp.Component):
             mandatory=True,
         )
 
-        if self.clever:
-            self.electricity_target: cp.ComponentInput = self.add_input(
-                self.component_name,
-                self.ElectricityTarget,
-                lt.LoadTypes.ELECTRICITY,
-                lt.Units.WATT,
-                mandatory=True,
-            )
+        self.electricity_target: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.ElectricityTarget,
+            lt.LoadTypes.ELECTRICITY,
+            lt.Units.WATT,
+            mandatory=False,
+        )
 
         # add outputs
         self.p_set: cp.ComponentOutput = self.add_output(
@@ -276,7 +275,7 @@ class L1Controller(cp.Component):
             car_location = int(stsv.get_input_value(self.car_location))
             car_consumption = stsv.get_input_value(self.car_consumption)
             soc = stsv.get_input_value(self.state_of_charge)
-            if self.clever:
+            if self.electricity_target.source_output is not None:
                 electricity_target = stsv.get_input_value(self.electricity_target)
             else:
                 electricity_target = 0
@@ -327,7 +326,6 @@ class L1Controller(cp.Component):
             * 1e3
         )
         self.power = power
-        self.clever = my_simulation_parameters.surplus_control
 
     def write_to_report(self) -> List[str]:
         """Writes EV charge controller values to report."""

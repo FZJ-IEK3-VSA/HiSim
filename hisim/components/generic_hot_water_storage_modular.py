@@ -108,7 +108,7 @@ class StorageConfig(cp.ConfigBase):
     ) -> "StorageConfig":
         """Returns default configuration for boiler."""
 
-        volume = 230 * max(number_of_apartments, 1)
+        volume = 230 * max(number_of_apartments, 1) * 2.5
         radius = (volume * 1e-3 / (4 * np.pi)) ** (
             1 / 3
         )  # l to m^3 so that radius is given in m

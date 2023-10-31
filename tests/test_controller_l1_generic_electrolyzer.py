@@ -7,8 +7,7 @@ from tests import functions_for_testing as fft
 import pytest
 
 
-@pytest.mark.base
-@pytest.skip
+@pytest.mark.skip(reason="Missing configuration data.")
 def test_electrolyzer_controller():
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(

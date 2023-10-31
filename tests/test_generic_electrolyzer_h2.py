@@ -10,8 +10,7 @@ from hisim import log
 from tests import functions_for_testing as fft
 
 
-@pytest.mark.base
-@pytest.skip
+@pytest.mark.skip(reason="Missing configuration data.")
 def test_electrolyzer():
     """Test for electrolyzer h2."""
     seconds_per_timestep = 60

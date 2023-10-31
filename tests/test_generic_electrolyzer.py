@@ -13,8 +13,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.components import generic_electrolyzer, controller_l1_electrolyzer
 
 
-@pytest.mark.base
-@pytest.skip
+@pytest.mark.skip(reason="Missing configuration data.")
 def test_chp_system():
 
     seconds_per_timestep = 60

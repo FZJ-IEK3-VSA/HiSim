@@ -57,7 +57,7 @@ class HouseholdPVConfig:
         return HouseholdPVConfig(
             pv_size=5,
             building_type="blub",
-            household_type=Households.CHR01_Couple_both_at_Work,
+            household_type=[Households.CHR01_Couple_both_at_Work, Households.CHR02_Couple_30_64_age_with_work, Households.CHR03_Family_1_child_both_at_work],
             lpg_url="http://134.94.131.167:443/api/v1/profilerequest",
             api_key="OrjpZY93BcNWw8lKaMp0BEchbCc",
             simulation_parameters=SimulationParameters.one_day_only(2022),
@@ -128,7 +128,7 @@ def household_pv_hp(
 
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(
+        my_simulation_parameters = SimulationParameters.january_only_with_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     my_sim.set_simulation_parameters(my_simulation_parameters)

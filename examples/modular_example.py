@@ -93,8 +93,8 @@ def modular_household_explicit(
     year = 2021
     seconds_per_timestep = 60 * 15
 
-    # read the modular household config file
     household_config = read_in_configs(my_sim.my_module_config_path)
+
     assert household_config.archetype_config_ is not None
     assert household_config.system_config_ is not None
     arche_type_config_ = household_config.archetype_config_
@@ -259,7 +259,7 @@ def modular_household_explicit(
                 name="UTSPConnector",
                 url=arche_type_config_.url,
                 api_key=arche_type_config_.api_key,
-                household=occupancy_profile,
+                household=occupancy_profile,  # type: ignore
                 result_path=hisim.utils.HISIMPATH["results"],
                 travel_route_set=this_mobility_distance,
                 transportation_device_set=this_mobility_set,
@@ -278,7 +278,7 @@ def modular_household_explicit(
         # Build occupancy
         my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
             "Occupancy",
-            occupancy_profile.Name or "",
+            occupancy_profile.Name or "",  # type: ignore
             location,
             not smart_devices_included,
             number_of_apartments=my_building_information.number_of_apartments,

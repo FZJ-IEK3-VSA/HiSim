@@ -39,7 +39,7 @@ class HouseholdPVConfig:
     pv_size: float
     building_type: str
     household_type: JsonReference
-    energy_intensity: JsonReference
+    energy_intensity: EnergyIntensityType
     lpg_url: str
     result_path: str
     travel_route_set: JsonReference

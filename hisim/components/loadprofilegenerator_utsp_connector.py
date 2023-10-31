@@ -68,7 +68,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
             api_key="",
             household=Households.CHR01_Couple_both_at_Work,
             result_path=os.path.join(utils.get_input_directory(), "lpg_profiles"),
-            energy_intensity = EnergyIntensityType.EnergySaving,
+            energy_intensity=EnergyIntensityType.EnergySaving,
             travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
             transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
             charging_station_set=ChargingStationSets.Charging_At_Home_with_03_7_kW,

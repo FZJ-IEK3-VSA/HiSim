@@ -38,7 +38,6 @@ def first_example(
             PostProcessingOptions.PLOT_CARPET
         )
 
-
     # testmy_sim = copy.deepcopy(my_sim)
     my_sim.set_simulation_parameters(my_simulation_parameters)
 

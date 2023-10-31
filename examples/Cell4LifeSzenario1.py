@@ -20,7 +20,8 @@ from datetime import datetime
 from openpyxl.styles import NamedStyle
 import pandas as pd
 import sys
-sys.path.append("C://Users//Standard//4ward Energy Dropbox//Christof Bernsteiner//PC//Desktop//hisim//HiSim//hisim//")
+#sys.path.append("C://Users//Standard//4ward Energy Dropbox//Christof Bernsteiner//PC//Desktop//hisim//HiSim//hisim//")
+#os.chdir('C:\\Users\\Standard\\Desktop\\hisim\\HiSim\\hisim\\')
 from hisim import log
 from hisim.simulator import Simulator
 from hisim.simulationparameters import SimulationParameters

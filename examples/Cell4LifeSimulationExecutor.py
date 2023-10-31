@@ -1,8 +1,10 @@
 import pandas as pd
+import os
 import sys
-sys.path.append("C://Users//Standard//4ward Energy Dropbox//Christof Bernsteiner//PC//Desktop//hisim//HiSim//examples")
-sys.path.append("C://Users//Standard//4ward Energy Dropbox//Christof Bernsteiner//PC//Desktop//hisim//HiSim//hisim//postprocessing")
-sys.path.append("C://Users//Standard//4ward Energy Dropbox//Christof Bernsteiner//PC//Desktop//hisim//HiSim//hisim//")
+
+sys.path.append("C://Users//Standard//Desktop//hisim//HiSim//examples")
+sys.path.append("C://Users//Standard//Desktop//hisim//HiSim//hisim//postprocessing")
+sys.path.append("C://Users//Standard//Desktop//hisim//HiSim//")
 import Cell4LifeSzenario1
 import Cell4Life_Postprocessing
 
@@ -15,7 +17,7 @@ import Cell4Life_Postprocessing
 
 
  """
-
+os.chdir('C:\\Users\\Standard\\Desktop\\hisim\\HiSim\\hisim\\')
 FuelCellPowerW_list = [20000,40000]  #Electricity Power of Fuel Cell Power in Watt
 BatteryCapkWh_list = [500000]     #Total Capacity of Battery in kWh
 

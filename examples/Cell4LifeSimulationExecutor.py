@@ -2,6 +2,7 @@ import pandas as pd
 import sys
 sys.path.append("C://Users//Standard//4ward Energy Dropbox//Christof Bernsteiner//PC//Desktop//hisim//HiSim//examples")
 sys.path.append("C://Users//Standard//4ward Energy Dropbox//Christof Bernsteiner//PC//Desktop//hisim//HiSim//hisim//postprocessing")
+sys.path.append("C://Users//Standard//4ward Energy Dropbox//Christof Bernsteiner//PC//Desktop//hisim//HiSim//hisim//")
 import Cell4LifeSzenario1
 import Cell4Life_Postprocessing
 

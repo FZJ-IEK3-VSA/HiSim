@@ -468,11 +468,16 @@ class Occupancy(cp.Component):
                     "electricity_consumption_without_washing_machine_and_dishwasher"
                 ]
 
+            if self.profile_name == "AVG":
+                comma = ","
+            else:
+                comma = "."
+
             # load electricity consumption and water consumption
             pre_electricity_consumption = pd.read_csv(
                 profile_path,
                 sep=";",
-                decimal=",",
+                decimal=comma,
                 encoding="utf-8",
                 usecols=["Sum [kWh]"],
             ).loc[: (steps_desired_in_minutes - 1)]
@@ -486,7 +491,7 @@ class Occupancy(cp.Component):
             pre_water_consumption = pd.read_csv(
                 utils.HISIMPATH["occupancy"][self.profile_name]["water_consumption"],
                 sep=";",
-                decimal=",",
+                decimal=comma,
                 encoding="utf-8",
                 usecols=["Sum [L]"],
             ).loc[: (steps_desired_in_minutes - 1)]

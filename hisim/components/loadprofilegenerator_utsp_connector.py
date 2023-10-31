@@ -375,7 +375,7 @@ class UtspLpgConnector(cp.Component):
 
         # Prepare the time series request
         request = datastructures.TimeSeriesRequest(
-            simulation_config.to_json(), "LPG", required_result_files=result_files,
+            simulation_config.to_json(), "LPG", required_result_files=result_files,  # type: ignore
             guid="trybefore98",  # type: ignore
         )
 
@@ -603,26 +603,26 @@ class UtspLpgConnector(cp.Component):
             if minutes_per_timestep > 1:
                 # power needs averaging, not sum
                 self.electricity_consumption = [
-                    sum(self.electricity_consumption[n : n + minutes_per_timestep])
+                    sum(self.electricity_consumption[n: n + minutes_per_timestep])
                     / minutes_per_timestep
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.heating_by_devices = [
-                    sum(self.heating_by_devices[n : n + minutes_per_timestep])
+                    sum(self.heating_by_devices[n: n + minutes_per_timestep])
                     / minutes_per_timestep
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.water_consumption = [
-                    sum(self.water_consumption[n : n + minutes_per_timestep])
+                    sum(self.water_consumption[n: n + minutes_per_timestep])
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.heating_by_residents = [
-                    sum(self.heating_by_residents[n : n + minutes_per_timestep])
+                    sum(self.heating_by_residents[n: n + minutes_per_timestep])
                     / minutes_per_timestep
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.number_of_residents = [
-                    sum(self.number_of_residents[n : n + minutes_per_timestep])
+                    sum(self.number_of_residents[n: n + minutes_per_timestep])
                     / minutes_per_timestep
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]

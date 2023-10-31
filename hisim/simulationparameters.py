@@ -25,6 +25,8 @@ class SimulationParameters(JSONWizard):
     result_directory: str
     skip_finished_results: bool
     surplus_control: bool
+    predictive_control: bool
+    prediction_horizon: Optional[int]
 
     def __init__(
         self,
@@ -36,7 +38,8 @@ class SimulationParameters(JSONWizard):
         logging_level: int = log.LogPrio.INFORMATION,
         skip_finished_results: bool = False,
         surplus_control: bool = True,
-
+        predictive_control: bool = False,
+        prediction_horizon: Optional[int] = 0,
     ):
         """Initializes the class."""
         self.start_date: datetime.datetime = start_date
@@ -53,6 +56,8 @@ class SimulationParameters(JSONWizard):
         self.result_directory: str = result_directory
         self.skip_finished_results: bool = skip_finished_results
         self.surplus_control = surplus_control
+        self.predictive_control = predictive_control
+        self.prediction_horizon = prediction_horizon
 
         self.figure_format = FigureFormat.PNG
 
@@ -65,6 +70,17 @@ class SimulationParameters(JSONWizard):
             seconds_per_timestep,
             "",
         )
+    
+    @classmethod
+    def full_year_Cell4Life(cls, year: int, seconds_per_timestep: int) -> SimulationParameters:
+        """Generates a parameter set for a full year without any post processing, primarily for unit testing."""
+        return cls(
+            datetime.datetime(year, 4, 1),
+            datetime.datetime(year + 1, 4, 1),
+            seconds_per_timestep,
+            "",
+        )
+
 
     def enable_all_options(self) -> None:
         """Enables all the post processing options ."""
@@ -163,6 +179,19 @@ class SimulationParameters(JSONWizard):
         )
         pars.enable_plots_only()
         return pars
+
+    @classmethod
+    def two_week_only(
+        cls, year: int, seconds_per_timestep: int
+    ) -> SimulationParameters:
+        """Generates a parameter set for a single week, primarily for unit testing."""
+        return cls(
+            datetime.datetime(year, 1, 1),
+            datetime.datetime(year, 1, 15),
+            seconds_per_timestep,
+            "",
+        )
+
 
     @classmethod
     def one_week_only(

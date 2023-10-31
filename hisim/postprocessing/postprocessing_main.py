@@ -468,8 +468,8 @@ class PostProcessor:
                     ppdt.simulation_parameters.result_directory,
                     f"{column.split(' ', 3)[2]}_{column.split(' ', 3)[0]}.csv",
                 ),
-                sep=",",
-                decimal=".",
+                sep=";",
+                decimal=",",
             )
         for column in ppdt.results_monthly:
             csvfilename = os.path.join(
@@ -480,7 +480,7 @@ class PostProcessor:
                 f"{column.split('[', 1)[0]} - monthly [" f"{column.split('[', 1)[1]}"
             ]
             ppdt.results_monthly[column].to_csv(
-                csvfilename, sep=",", decimal=".", header=header
+                csvfilename, sep=";", decimal=",", header=header
             )
 
     def write_simulation_parameters_to_report(

@@ -17,7 +17,7 @@ import Cell4Life_Postprocessing
 
 
  """
-os.chdir('C:\\Users\\Standard\\Desktop\\hisim\\HiSim\\hisim\\')
+os.chdir('C:\\Users\\Standard\\Desktop\\hisim\\HiSim\\')
 FuelCellPowerW_list = [20000,40000]  #Electricity Power of Fuel Cell Power in Watt
 BatteryCapkWh_list = [500000]     #Total Capacity of Battery in kWh
 
@@ -40,7 +40,7 @@ for FuelCellPowerW in FuelCellPowerW_list:
         
         sys.argv = ["hisim_main.py", "examples/Cell4LifeSzenario1.py", "Cell4Life"]
 
-        with open("C:/Users/Standard/4ward Energy Dropbox/Christof Bernsteiner/PC/Desktop/hisim/HiSim/hisim/hisim_main.py") as f:        #with --> Handler--> mach etwas mit ... führe es aus...mache es wieder zu -> with kümmert sich um das :)
+        with open("C:/Users/Standard/Desktop/hisim/HiSim/hisim/hisim_main.py") as f:        #with --> Handler--> mach etwas mit ... führe es aus...mache es wieder zu -> with kümmert sich um das :)
             exec(f.read())
         
 

@@ -45,7 +45,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     api_key: str
     household: JsonReference
     result_path: str
-    energy_intensity: JsonReference
+    energy_intensity: EnergyIntensityType
     travel_route_set: JsonReference
     transportation_device_set: JsonReference
     charging_station_set: JsonReference

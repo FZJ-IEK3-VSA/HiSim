@@ -9,7 +9,7 @@ from typing import Optional
 from hisim import log
 from hisim.simulator import Simulator
 from hisim.simulationparameters import SimulationParameters
-from hisim.postprocessing import PostProcessingOptions
+from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.components.random_numbers import RandomNumbers, RandomNumbersConfig
 from hisim.components.example_transformer import (
     ExampleTransformer,
@@ -36,7 +36,7 @@ def first_example(
         )
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.PLOT_CARPET
-        )   
+        )
 
 
     # testmy_sim = copy.deepcopy(my_sim)

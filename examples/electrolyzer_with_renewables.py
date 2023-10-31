@@ -26,6 +26,7 @@ from hisim.components.controller_l1_generic_electrolyzer import (
     ElectrolyzerControllerConfig,
 )
 
+from hisim.postprocessingoptions import PostProcessingOptions
 
 __authors__ = "Franz Oldopp"
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
@@ -81,7 +82,8 @@ def electrolyzer_example(
             year=year, seconds_per_timestep=seconds_per_timestep
         )  # use a full year for testing
     my_sim.set_simulation_parameters(my_simulation_parameters)
-    # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
+    #my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
+    
 
     # =================================================================================================================================
     # Build Components
@@ -98,7 +100,7 @@ def electrolyzer_example(
         sep=sep,  # Separator used in the CSV file (e.g., "," or ";")
         decimal=decimal,  # Decimal indicator used in the CSV file (e.g., "." or ",")
         multiplier=multiplier,  # Multiplier factor for amplification (if needed)
-        output_description="CSV loader power generation",
+        output_description="CSV loader power generation"
     )
 
     # Create new CSV loader object

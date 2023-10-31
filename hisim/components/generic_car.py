@@ -216,25 +216,11 @@ class Car(cp.Component):
                     self.config.consumption = round(
                         sum(postprocessing_results.iloc[:, index]), 1
                     )
-                    emissions_and_cost_factors = (
-                        EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
-                            self.my_simulation_parameters.year
-                        )
-                    )
-                    co2_per_unit = (
-                        emissions_and_cost_factors.diesel_footprint_in_kg_per_l
-                    )
-                    euro_per_unit = (
-                        emissions_and_cost_factors.diesel_costs_in_euro_per_l
-                    )
+                    co2_per_unit = EmissionFactorsAndCostsForFuelsConfig.diesel_footprint_in_kg_per_l
+                    euro_per_unit = EmissionFactorsAndCostsForFuelsConfig.diesel_costs_in_euro_per_l
 
-                    opex_cost_per_simulated_period_in_euro = (
-                        self.calc_maintenance_cost()
-                        + self.config.consumption * euro_per_unit
-                    )
-                    co2_per_simulated_period_in_kg = (
-                        self.config.consumption * co2_per_unit
-                    )
+                    opex_cost_per_simulated_period_in_euro = self.calc_maintenance_cost() + self.config.consumption * euro_per_unit
+                    co2_per_simulated_period_in_kg = self.config.consumption * co2_per_unit
 
                 elif output.unit == lt.Units.WATT:
                     self.config.consumption = round(
@@ -244,9 +230,7 @@ class Car(cp.Component):
                         1,
                     )
                     # No electricity costs for components except for Electricity Meter, because part of electricity consumption is feed by PV
-                    opex_cost_per_simulated_period_in_euro = (
-                        self.calc_maintenance_cost()
-                    )
+                    opex_cost_per_simulated_period_in_euro = self.calc_maintenance_cost()
                     co2_per_simulated_period_in_kg = 0.0
 
         opex_cost_data_class = OpexCostDataClass(
@@ -325,9 +309,7 @@ class Car(cp.Component):
                 self.my_simulation_parameters.end_date
                 - self.my_simulation_parameters.start_date
             )
-            minutes_per_timestep = int(
-                self.my_simulation_parameters.seconds_per_timestep / 60
-            )
+            minutes_per_timestep = int(self.my_simulation_parameters.seconds_per_timestep / 60)
             steps_desired = int(
                 simulation_time_span.days
                 * 24
@@ -338,45 +320,37 @@ class Car(cp.Component):
             # extract values for location and distance of car,
             # include time information and
             # translate car location to integers (according to location_translator)
-            initial_data = pd.DataFrame(
-                {
-                    "Time": pd.date_range(
-                        start=dt.datetime(
-                            year=self.my_simulation_parameters.year, month=1, day=1
-                        ),
-                        end=dt.datetime(
-                            year=self.my_simulation_parameters.year, month=1, day=1
-                        )
-                        + dt.timedelta(days=simulation_time_span.days)
-                        - dt.timedelta(seconds=60),
-                        freq="T",
-                    ),
-                    "meters_driven": meters_driven["Values"][:steps_desired_in_minutes],
-                    "car_location": [
-                        location_translator[elem] for elem in car_location["Values"]
+            initial_data = pd.DataFrame({
+                "Time": pd.date_range(
+                start=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1),
+                end=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1) +
+                dt.timedelta(days=simulation_time_span.days) - dt.timedelta(seconds=60),
+                freq="T"
+                ),
+                "meters_driven": meters_driven["Values"][:steps_desired_in_minutes],
+                "car_location": [
+                    location_translator[elem] for elem in car_location["Values"]
                     ][:steps_desired_in_minutes],
-                }
-            )
+                })
             initial_data = utils.convert_lpg_data_to_utc(
                 data=initial_data, year=self.my_simulation_parameters.year
-            )
-            meters_driven = pd.to_numeric(initial_data["meters_driven"]).tolist()
-            car_location = pd.to_numeric(initial_data["car_location"]).tolist()
+                )
+            meters_driven = pd.to_numeric(
+                initial_data["meters_driven"]
+            ).tolist()
+            car_location = pd.to_numeric(
+                initial_data["car_location"]
+            ).tolist()
+
 
             # sum / extract most common value from data to match hisim time resolution
             if minutes_per_timestep > 1:
                 for i in range(steps_desired):
                     self.meters_driven.append(
-                        sum(
-                            meters_driven[
-                                i
-                                * minutes_per_timestep : (i + 1)
-                                * minutes_per_timestep
-                            ]
-                        )
+                        sum(meters_driven[i * minutes_per_timestep: (i + 1) * minutes_per_timestep])
                     )  # sum
                     location_list = car_location[
-                        i * minutes_per_timestep : (i + 1) * minutes_per_timestep
+                        i * minutes_per_timestep: (i + 1) * minutes_per_timestep
                     ]  # extract list
                     occurence_count = most_frequent(
                         input_list=location_list
@@ -387,12 +361,10 @@ class Car(cp.Component):
                 self.car_location = car_location
 
             # save data in cache
-            database = pd.DataFrame(
-                {
-                    "car_location": self.car_location,
-                    "meters_driven": self.meters_driven,
-                }
-            )
+            database = pd.DataFrame({
+                "car_location": self.car_location,
+                "meters_driven": self.meters_driven,
+                })
             database.to_csv(cache_filepath)
             del database
 

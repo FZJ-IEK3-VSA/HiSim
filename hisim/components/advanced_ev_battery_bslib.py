@@ -215,13 +215,11 @@ class CarBattery(Component):
 
         # Simulate battery discharge without losses (this is included in the car consumption of the car component)
         else:
-            soc = soc + (
-                p_set * self.my_simulation_parameters.seconds_per_timestep / 3600
-            ) / (self.e_bat_custom * 1e3)
+            soc = soc + (p_set * self.my_simulation_parameters.seconds_per_timestep / 3600) / (self.e_bat_custom * 1e3)
             if soc < 0:
                 raise ValueError(
-                    "Car cannot drive, because battery is empty."
-                    + "This points towards a major problem in the battery configuration - or the consumption pattern of the car."
+                    "Car cannot drive, because battery is empty." +
+                    "This points towards a major problem in the battery configuration - or the consumption pattern of the car."
                 )
             p_bs = 0
             p_bat = 0

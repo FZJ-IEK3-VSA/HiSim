@@ -1,0 +1,411 @@
+"""Cell4Life full model"""
+
+# clean
+
+# Generic
+from typing import Optional
+
+# Owned
+import copy
+import graphviz
+import graphlib
+import dot_parser
+import pydot
+import csv
+import os
+import json
+import openpyxl
+import shutil  # Needed for copying of excel file
+from datetime import datetime
+from openpyxl.styles import NamedStyle
+import pandas as pd
+from hisim import log
+from hisim.simulator import Simulator
+from hisim.simulationparameters import SimulationParameters
+from hisim.components.random_numbers import RandomNumbers, RandomNumbersConfig
+from hisim.components.example_transformer import (
+    ExampleTransformer,
+    ExampleTransformerConfig,
+)
+from hisim.components.sumbuilder import SumBuilderForTwoInputs, SumBuilderConfig
+from hisim.components.csvloader import CSVLoader, CSVLoaderConfig
+from hisim.components import electricity_meter
+from hisim.components import advanced_battery_bslib
+from hisim.components import generic_pv_system
+from hisim.components import (controller_l1_electrolyzer, generic_electrolyzer, generic_hydrogen_storage)
+from hisim.components import static_electrolyzer
+from hisim.components import (controller_l1_chp_CB, generic_CHP) 
+from hisim.components import controller_l2_energy_management_system
+from hisim.modular_household import component_connections
+from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
+from hisim import loadtypes
+from hisim import postprocessingoptions
+
+
+
+# Christof:
+def Cell4Life(
+    my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]
+) -> None:
+    """Cell4Life-Simulation Model
+    
+    
+
+    """
+    log.information("Starting Cell4Life-Simulation Model: ")
+    
+    #---Loading Input Data from Function---
+    input_variablen = InputParameter()
+
+    
+    
+    # Set the simulation parameters for the simulation
+    if my_simulation_parameters is None:
+        my_simulation_parameters = SimulationParameters.full_year_Cell4Life(
+            year=2021, seconds_per_timestep=3600
+        )
+    my_sim.set_simulation_parameters(my_simulation_parameters)
+
+
+    # Build Results Path
+    name = "S" + str(input_variablen["PreResultNumber"])+"_BatCap._" + str(input_variablen["battery_capacity"]) + "kWh_FCPower_" + str(input_variablen["fuel_cell_power"]) +"W"
+    ResultPathProviderSingleton().set_important_result_path_information(
+        module_directory = "C://Users//Standard//C4LResults",
+        model_name= name,
+        variant_name=my_sim.setup_function,
+        sorting_option=SortingOptionEnum.VARPARAMETERNAMED,
+        hash_number=None,
+    )
+    del name
+ 
+    # Postprocessing Options****
+    
+    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.EXPORT_TO_CSV)
+    #my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PLOT_LINE)
+    #my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.MAKE_NETWORK_CHARTS)
+    #my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PLOT_CARPET)
+    
+  
+            #******************************************************************
+            #***Loading of Input Data****
+            #******************************************************************
+    
+    #Loading Electricity consumption in W per m2 NGF****
+    #my_electricityconsumptionConfig = CSVLoaderConfig("Current total", "CurrentConsumptionper total", "Simulationsdaten_Pilzgasse_230705-Input-HiSim.csv", 1, loadtypes.LoadTypes.ELECTRICITY, loadtypes.Units.WATT, "Strom", ";", "," ,input_variablen["NGFm2"], "CurrentConspumtioninWperm2NGF")
+    my_electricityconsumptionConfig = CSVLoaderConfig("Current total", "Current needed", "01Simulation.csv", 1, loadtypes.LoadTypes.ELECTRICITY, loadtypes.Units.WATT, "Strom", ";", "," ,input_variablen["NGFm2"], "CurrentConspumtioninWperm2NGF")
+    my_electricityconsumption = CSVLoader(my_electricityconsumptionConfig, my_simulation_parameters)
+       
+    #******************************************************************   
+    #Loading Photovoltaic System  (PV Output in kW)
+    #my_photovoltaic_systemConfig = CSVLoaderConfig("PV", "PVComponent", "Simulationsdaten_Pilzgasse_230705-Input-HiSim.csv", 6, loadtypes.LoadTypes.ELECTRICITY, loadtypes.Units.WATT, "Photovoltaik", ";", ",",1000, "OutputPVinW")
+    my_photovoltaic_systemConfig = CSVLoaderConfig("PV", "PVComponent", "01Simulation.csv", 6, loadtypes.LoadTypes.ELECTRICITY, loadtypes.Units.WATT, "Photovoltaik", ";", ",",1000*input_variablen["PV_Faktor"], "OutputPVinW")
+    my_photovoltaic_system = CSVLoader(my_photovoltaic_systemConfig, my_simulation_parameters)
+  
+
+            #******************************************************************
+            # Building Components of Modell
+            #****************************************************************** 
+    
+    #******************************************************************
+    #Build EMS****
+    #First Controller
+    my_electricity_controller_config = (
+        controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
+    )
+    my_electricity_controller = (
+        controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_electricity_controller_config,
+        )
+    )
+
+    #******************************************************************   
+    #Build Battery****
+    my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_default_config()
+    my_advanced_battery_config.custom_battery_capacity_generic_in_kilowatt_hour = input_variablen["battery_capacity"]
+    my_advanced_battery_config.custom_pv_inverter_power_generic_in_watt = input_variablen["battery_inverter_power"]
+    my_advanced_battery_config.source_weight = input_variablen["init_source_weight_battery"]
+    
+    my_advanced_battery = advanced_battery_bslib.Battery(my_simulation_parameters=my_simulation_parameters, config=my_advanced_battery_config)
+
+    #******************************************************************
+    #Build Electrolyzer****
+
+    electrolyzer_config = static_electrolyzer.StaticElectrolyzerConfig.get_default_config()
+    electrolyzer_config.source_weight = input_variablen["electrolyzer_source_weight"]
+    electrolyzer_config.h2_soc_upper_threshold_electrolyzer = input_variablen["h2_soc_upper_threshold_electrolyzer"]
+    electrolyzer_config.p_el = input_variablen["p_el_elektrolyzer"]
+    electrolyzer_config.off_on_SOEC = input_variablen["off_on_SOEC"]
+    electrolyzer_config.on_off_SOEC = input_variablen["on_off_SOEC"]
+    
+    
+    #*Electrolyzer*s
+    my_electrolyzer = static_electrolyzer.StaticElectrolyzer(
+        my_simulation_parameters=my_simulation_parameters, config=electrolyzer_config
+    )
+    
+   
+    #******************************************************************
+    #Build Fuel Cell****
+    #First Controller
+    chp_controller_config = controller_l1_chp_CB.L1CHPControllerConfig.get_default_config_fuel_cell()
+    
+    #Build Chp Controller
+    chp_controller_config.source_weight = input_variablen["init_source_weight_chp"]
+    chp_controller_config.electricity_threshold = input_variablen["electricity_threshold"]
+    chp_controller_config.min_operation_time_in_seconds = input_variablen["min_operation_time_in_seconds_chp"]
+    chp_controller_config.min_idle_time_in_seconds = input_variablen["min_resting_time_in_seconds_chp"]
+    chp_controller_config.h2_soc_threshold = input_variablen["h2_soc_lower_threshold_chp"]
+    chp_controller_config.off_on_SOEC = input_variablen["off_on_SOEC"]
+    chp_controller_config.on_off_SOEC = input_variablen["on_off_SOEC"]
+    my_chp_controller = controller_l1_chp_CB.L1CHPController(
+        my_simulation_parameters=my_simulation_parameters, config=chp_controller_config
+    )
+
+    chp_config = generic_CHP.CHPConfig.get_default_config_fuelcell_p_el_based(fuel_cell_power=input_variablen["fuel_cell_power"])
+    chp_config.source_weight = input_variablen["init_source_weight_chp"]
+    chp_config.globalthermalpower = True
+
+    my_chp = generic_CHP.SimpleCHP(
+        my_simulation_parameters=my_simulation_parameters, config=chp_config, 
+    )
+
+     #******************************************************************
+    #Build Hydrogen Storage****
+    #First Controller
+    h2_storage_config = generic_hydrogen_storage.GenericHydrogenStorageConfig.get_default_config(
+        
+        max_charging_rate = 10e32,  #Storage Charging Rate in kg/s: 
+        max_discharging_rate = 10e32,        #Storage Discharging Rate in kg/s
+        #max_charging_rate=electrolyzer_power / (3.6e3 * 3.939e4),
+        #max_discharging_rate=input_variablen["fuel_cell_power"] / (3.6e3 * 3.939e4), 
+        source_weight=input_variablen["init_source_weight_hydrogenstorage"],
+    )
+    
+    h2_storage_config.loss_factor_per_day = input_variablen["h2_storage_losses"] #H2 Storage losses per Day
+    h2_storage_config.max_capacity = input_variablen["h2_storage_capacity_max"]
+    
+    my_h2storage = generic_hydrogen_storage.GenericHydrogenStorage(
+        my_simulation_parameters=my_simulation_parameters, config=h2_storage_config
+    )
+            
+            #******************************************************************
+            #****Connect Component Inputs with Outputs****
+            #******************************************************************
+
+    #****Connect EMS****
+    my_electricity_controller.add_component_input_and_connect(
+        source_component_class=my_electricityconsumption,
+        source_component_output=my_electricityconsumption.Output1,
+        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
+        source_unit=loadtypes.Units.WATT,
+        source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+        source_weight=999,
+    )
+
+    my_electricity_controller.add_component_input_and_connect(
+        source_component_class=my_electrolyzer,
+        source_component_output=my_electrolyzer.ElectricityConsumption,
+        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
+        source_unit=loadtypes.Units.WATT,
+        source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+        source_weight=999,
+    )
+
+    my_electricity_controller.add_component_input_and_connect(
+        source_component_class=my_photovoltaic_system,
+        source_component_output=my_photovoltaic_system.Output1,
+        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
+        source_unit=loadtypes.Units.WATT,
+        source_tags=[loadtypes.InandOutputType.ELECTRICITY_PRODUCTION],
+        source_weight=999,
+    )
+
+    my_electricity_controller.add_component_input_and_connect(
+        source_component_class=my_advanced_battery,
+        source_component_output=my_advanced_battery.AcBatteryPower,
+        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
+        source_unit=loadtypes.Units.WATT,
+        source_tags=[loadtypes.ComponentType.BATTERY, loadtypes.InandOutputType.ELECTRICITY_REAL],
+        source_weight=my_advanced_battery.source_weight,
+    )
+
+
+    my_electricity_controller.add_component_input_and_connect(
+        source_component_class=my_chp,
+        source_component_output="ElectricityOutput",
+        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
+        source_unit=loadtypes.Units.WATT,
+        source_tags=[loadtypes.ComponentType.CHP, loadtypes.InandOutputType.ELECTRICITY_PRODUCTION],
+        source_weight=my_chp.config.source_weight,
+    )
+
+    #Electricity to battery or from battery
+    electricity_to_or_from_battery_target = (
+        my_electricity_controller.add_component_output(
+            source_output_name=loadtypes.InandOutputType.ELECTRICITY_TARGET,
+            source_tags=[
+                loadtypes.ComponentType.BATTERY,
+                loadtypes.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_weight=my_advanced_battery.source_weight,
+            source_load_type=loadtypes.LoadTypes.ELECTRICITY,
+            source_unit=loadtypes.Units.WATT,
+            output_description="Target electricity for Battery Control. ",
+        )
+    )
+
+       
+
+    ems_target_electricity = my_electricity_controller.add_component_output(
+        source_output_name=loadtypes.InandOutputType.ELECTRICITY_TARGET,
+        source_tags=[
+                loadtypes.ComponentType.CHP,
+                loadtypes.InandOutputType.ELECTRICITY_TARGET,
+            ],
+        source_weight=my_chp.config.source_weight,
+        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
+        source_unit=loadtypes.Units.WATT,
+        output_description="Target electricity for CHP. ",
+        )
+
+
+
+    #Connect Battery****
+    my_advanced_battery.connect_dynamic_input(
+        input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
+        src_object=electricity_to_or_from_battery_target,
+    )
+
+   
+    #Connect Fuel Cell
+    my_chp_controller.connect_dynamic_input(
+            input_fieldname=my_chp_controller.ElectricityTarget,
+            src_object=ems_target_electricity,
+        )
+
+     
+    my_h2storage.connect_only_predefined_connections(my_electrolyzer)
+  
+    my_h2storage.connect_only_predefined_connections(my_chp)
+    my_chp_controller.connect_only_predefined_connections(my_h2storage)
+    my_electrolyzer.connect_only_predefined_connections(my_h2storage)
+    my_chp.connect_only_predefined_connections(my_chp_controller)
+
+
+        #******************************************************************
+        # Add Components to Simulation Parameters
+        #******************************************************************
+
+    my_sim.add_component(my_photovoltaic_system)
+    my_sim.add_component(my_electricityconsumption)
+    my_sim.add_component(my_h2storage)
+    my_sim.add_component(my_advanced_battery)
+    my_sim.add_component(my_electrolyzer)
+    my_sim.add_component(my_chp_controller)
+    my_sim.add_component(my_chp)
+    my_sim.add_component(my_electricity_controller)
+
+
+def InputParameter():
+    """
+    Loading Funktion for all Input Parameters
+    --There exists static Variables, which are not varied in the parameter study
+    
+    -- "Variation Parameters": Parameters, which should be variied: This parameters are loaded with the csv loader; Variation Parameters are defined in the Cell4Life-SimulationExecutor.py class
+        and are just loaded within this function for the execution for the simulation. 
+    
+    --Parameters witch depends on variation parameters: Some parameters depends on variation parameters...
+    
+    
+    Variation parameters:
+        fuel_cell_power  = param_1 #Electricity Power of Fuel Cell Power in Watt
+        battery_capacity: Optional[float] = param_2   #Total Capacity of Battery in kWh
+
+    Depending on variation parameters:    
+        battery_inverter_power = battery_capacity/12*1000 #in Watt: Batterie Inverter power is assumed to depend on Battery Capacity 
+
+    
+    Static Parameters within this example:
+
+        #NettoGesamtfläche (total area in squaremeters of building(s))
+        NGFm2 = 26804.8
+        PV_Faktor = 1.6 #Multiplier for PV-power (1--> given PV power; 2--> double of given PV power; 3--> 3 times given PV power)
+        init_source_weight_battery = 1
+        electricity_threshold = 0 #Minium required power to activate fuel cell
+        init_source_weight_hydrogenstorage = 999 #init_source_weight_electrolyzer
+        init_source_weight_chp = 2
+        p_el_elektrolyzer = fuel_cell_power*2 #Electrical Operating Power in Watt
+        electrolyzer_source_weight = 999
+        h2_storage_capacity_max = 12000  #Maximum of hydrogen storage in kg
+        h2_storage_losses = 0 # % of Hydrogen Losses per day in %
+        h2_soc_upper_threshold_electrolyzer = 0  #Electrolyzer works just until H2 storage goes up to this threshold
+        min_operation_time_in_seconds_chp = 0 #It is not working well so let it be "0"
+        min_resting_time_in_seconds_chp = 0 # This does not work well so let it be 0
+        h2_soc_lower_threshold_chp = 0 # Minimum state of charge to start operating the fuel cell in %
+        on_off_SOEC = 183 #Day: Turn off Electrolyzer and turn on Fuel Cell // Variable name should be read: turn SOEC from "on" to "off" // Day Depends on starting date: e.g. day 10 of the year 2021 is 10. Januar if the simulation year starts with 1st Jannuar;
+        off_on_SOEC = 500 #Day: Turn on Electrolyzer and turn off on Fuel Cell
+
+    Integration of csvload 
+    ##Loading of Project Data
+    """
+    
+    
+    #Loading of variation parameters
+    param_df = pd.read_csv("examples/params_to_loop.csv")
+    PreResultNumber  = param_df["PreResultNumber"][0]
+    FuelCellPowerW = param_df["FuelCellPowerW"][0]
+    BatteryCapkWh = param_df["BatteryCapkWh"][0]
+
+
+    
+    #Variation Parameters:
+    battery_capacity: Optional[float] = BatteryCapkWh   #Total Capacity of Battery in kWh
+    fuel_cell_power  = FuelCellPowerW #Electricity Power of Fuel Cell Power in Watt
+    del BatteryCapkWh, FuelCellPowerW
+    #Following parameter depends on a "variation parameter"
+    battery_inverter_power = battery_capacity/12*1000 #in Watt: Batterie Inverter power is assumed to depend on Battery Capacity 
+   
+
+    #Static Parameters:
+    NGFm2 = 26804.8 #NettoGesamtfläche (total area in squaremeters of building(s))
+    PV_Faktor = 1.6 #Multiplier for PV-power (1--> given PV power; 2--> double of given PV power; 3--> 3 times given PV power)
+    init_source_weight_battery = 1
+    electricity_threshold = 0 #Minium required power to activate fuel cell
+    init_source_weight_hydrogenstorage = 999 #init_source_weight_electrolyzer
+    init_source_weight_chp = 2
+    p_el_elektrolyzer = fuel_cell_power*2 #Electrical Operating Power in Watt
+    electrolyzer_source_weight = 999
+    h2_storage_capacity_max = 50000  #Maximum of hydrogen storage in kg
+    h2_storage_losses = 0 # % of Hydrogen Losses per day in %
+    h2_soc_upper_threshold_electrolyzer = 99  #Electrolyzer works just until H2 storage goes up to this threshold
+    min_operation_time_in_seconds_chp = 0 #It is not working well so let it be "0"
+    min_resting_time_in_seconds_chp = 0 # This does not work well so let it be 0
+    h2_soc_lower_threshold_chp = 0 # Minimum state of charge to start operating the fuel cell in %
+    on_off_SOEC = 183 #Day: Turn off Electrolyzer and turn on Fuel Cell // Variable name should be read: turn SOEC from "on" to "off" // Day Depends on starting date: e.g. day 10 of the year 2021 is 10. Januar if the simulation year starts with 1st Jannuar;
+    off_on_SOEC = 500 #Day: Turn on Electrolyzer and turn off on Fuel Cell
+
+    input_variablen = {
+        "PreResultNumber": PreResultNumber,
+        "battery_capacity": battery_capacity,
+        "battery_inverter_power": battery_inverter_power,
+        "fuel_cell_power": fuel_cell_power,
+        "NGFm2" : NGFm2,
+        "PV_Faktor": PV_Faktor,
+        "init_source_weight_battery": init_source_weight_battery,
+        "electricity_threshold": electricity_threshold,
+        "init_source_weight_hydrogenstorage": init_source_weight_hydrogenstorage,
+        "init_source_weight_chp": init_source_weight_chp,
+        "p_el_elektrolyzer":p_el_elektrolyzer,
+        "electrolyzer_source_weight": electrolyzer_source_weight,
+        "h2_storage_capacity_max": h2_storage_capacity_max,
+        "h2_storage_losses": h2_storage_losses,
+        "h2_soc_upper_threshold_electrolyzer": h2_soc_upper_threshold_electrolyzer,
+        "min_operation_time_in_seconds_chp": min_operation_time_in_seconds_chp,
+        "min_resting_time_in_seconds_chp": min_resting_time_in_seconds_chp,
+        "h2_soc_lower_threshold_chp": h2_soc_lower_threshold_chp,
+        "on_off_SOEC": on_off_SOEC,
+        "off_on_SOEC": off_on_SOEC
+    }
+    
+    return input_variablen

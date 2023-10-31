@@ -9,7 +9,7 @@ from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import advanced_battery_bslib
 from hisim.components import weather
-
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 # from hisim.components import generic_gas_heater
 from hisim.components import controller_l2_energy_management_system as cl2
 from hisim.components import generic_pv_system
@@ -66,17 +66,13 @@ def dynamic_components_demonstration(
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
-    my_advanced_battery_config_1 = (
-        advanced_battery_bslib.BatteryConfig.get_default_config()
-    )
+    my_advanced_battery_config_1 = advanced_battery_bslib.BatteryConfig.get_default_config()
     my_advanced_battery_config_1.system_id = "SG1"
     my_advanced_battery_config_1.custom_battery_capacity_generic_in_kilowatt_hour = 10.0
     my_advanced_battery_config_1.custom_pv_inverter_power_generic_in_watt = 5.0
     my_advanced_battery_config_1.source_weight = 1
 
-    my_advanced_battery_config_2 = (
-        advanced_battery_bslib.BatteryConfig.get_default_config()
-    )
+    my_advanced_battery_config_2 = advanced_battery_bslib.BatteryConfig.get_default_config()
     my_advanced_battery_config_2.system_id = "SG1"
     my_advanced_battery_config_2.custom_battery_capacity_generic_in_kilowatt_hour = 5.0
     my_advanced_battery_config_2.custom_pv_inverter_power_generic_in_watt = 2.5
@@ -112,7 +108,10 @@ def dynamic_components_demonstration(
     my_occupancy_config = (
         loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
     )
-
+    # choose 1 to be the default for the number of apartments
+    SingletonSimRepository().set_entry(
+        key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=1
+    )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
@@ -140,9 +139,6 @@ def dynamic_components_demonstration(
         cost=pv_cost,
         maintenance_cost_as_percentage_of_investment=pv_maintenance_cost_as_percentage_of_investment,
         lifetime=pv_lifetime,
-        predictive=False,
-        predictive_control=False,
-        prediction_horizon=None,
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         my_simulation_parameters=my_simulation_parameters,

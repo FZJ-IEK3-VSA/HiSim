@@ -99,7 +99,6 @@ def household_gas_heater(
         charging_station_set=charging_station_set,
         consumption=0,
         profile_with_washing_machine_and_dishwasher=True,
-        predictive_control=False,
     )
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
@@ -112,11 +111,11 @@ def household_gas_heater(
     )
 
     # Build Building
-    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
-    my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(
-        config=my_building_config, my_simulation_parameters=my_simulation_parameters
+        config=building.BuildingConfig.get_default_german_single_family_home(),
+        my_simulation_parameters=my_simulation_parameters,
     )
+
     # Build Gasheater
     my_gasheater = generic_gas_heater.GasHeater(
         config=generic_gas_heater.GenericGasHeaterConfig.get_default_gasheater_config(),
@@ -129,9 +128,7 @@ def household_gas_heater(
         my_simulation_parameters=my_simulation_parameters,
     )
     my_heat_water_storage_controller = generic_heat_water_storage.HeatStorageController(
-        config=generic_heat_water_storage.HeatStorageControllerConfig.get_default_heat_storage_controller_config(
-            heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
-        ),
+        config=generic_heat_water_storage.HeatStorageControllerConfig.get_default_heat_storage_controller_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
 

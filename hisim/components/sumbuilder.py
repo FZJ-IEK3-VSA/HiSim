@@ -42,9 +42,7 @@ class CalculateOperation(cp.Component):
     Output = "Output"
 
     def __init__(
-        self,
-        config: SumBuilderConfig,
-        my_simulation_parameters: SimulationParameters,
+        self, config: SumBuilderConfig, my_simulation_parameters: SimulationParameters,
     ) -> None:
         """Initializes the class."""
         super().__init__(
@@ -140,9 +138,7 @@ class SumBuilderForTwoInputs(Component):
     SumOutput = "Sum"
 
     def __init__(
-        self,
-        config: SumBuilderConfig,
-        my_simulation_parameters: SimulationParameters,
+        self, config: SumBuilderConfig, my_simulation_parameters: SimulationParameters,
     ) -> None:
         """Initializes the class."""
         super().__init__(
@@ -215,9 +211,7 @@ class SumBuilderForThreeInputs(Component):
     SumOutput = "Sum"
 
     def __init__(
-        self,
-        config: SumBuilderConfig,
-        my_simulation_parameters: SimulationParameters,
+        self, config: SumBuilderConfig, my_simulation_parameters: SimulationParameters,
     ) -> None:
         """Initializes the class."""
         super().__init__(

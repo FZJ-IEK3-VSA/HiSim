@@ -56,49 +56,16 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
     maintenance_cost_as_percentage_of_investment: float
 
     @classmethod
-    def get_default_simplehotwaterstorage_config(
-        cls,
-    ) -> "SimpleHotWaterStorageConfig":
+    def get_default_simplehotwaterstorage_config(cls,) -> Any:
         """Get a default simplehotwaterstorage config."""
         volume_heating_water_storage_in_liter: float = 500
         config = SimpleHotWaterStorageConfig(
             name="SimpleHotWaterStorage",
             volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
-            # https://www.energieverbraucher.de/de/heizungsspeicher__2102/#:~:text=Ein%20Speicher%20k%C3%BChlt%20t%C3%A4glich%20etwa,heutigen%20Energiepreisen%20t%C3%A4glich%2020%20Cent.
-            temperature_loss_in_celsius_per_hour=0.125,  # is the same as 3°C/day (see link)
+            temperature_loss_in_celsius_per_hour=0.21,
             heat_exchanger_is_present=True,  # until now stratified mode is causing problems, so heat exchanger mode is recommended
             co2_footprint=100,  # Todo: check value
-            cost=volume_heating_water_storage_in_liter
-            * 14.51,  # value from emission_factros_and_costs_devices.csv
-            lifetime=100,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.0,  # Todo: set correct value
-        )
-        return config
-
-    @classmethod
-    def get_scaled_hot_water_storage(
-        cls, heating_load_of_building_in_watt: float
-    ) -> "SimpleHotWaterStorageConfig":
-        """Gets a default storage with scaling according to heating load of the building."""
-
-        set_thermal_output_power_in_watt = heating_load_of_building_in_watt
-
-        # https://www.baunetzwissen.de/heizung/fachwissen/speicher/dimensionierung-von-pufferspeichern-161296
-        # approx. 60l per kW power of heating system
-        # here we say power heating system should correspond to heating load of building
-        # (see also https://www.sciencedirect.com/science/article/pii/S2352152X2201533X?via%3Dihub)
-        volume_heating_water_storage_in_liter: float = (
-            set_thermal_output_power_in_watt * 1e-3 * 60
-        )
-        config = SimpleHotWaterStorageConfig(
-            name="SimpleHotWaterStorage",
-            volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
-            # https://www.energieverbraucher.de/de/heizungsspeicher__2102/#:~:text=Ein%20Speicher%20k%C3%BChlt%20t%C3%A4glich%20etwa,heutigen%20Energiepreisen%20t%C3%A4glich%2020%20Cent.
-            temperature_loss_in_celsius_per_hour=0.125,  # is the same as 3°C/day (see link)
-            heat_exchanger_is_present=True,  # until now stratified mode is causing problems, so heat exchanger mode is recommended
-            co2_footprint=100,  # Todo: check value
-            cost=volume_heating_water_storage_in_liter
-            * 14.51,  # value from emission_factros_and_costs_devices.csv
+            cost=volume_heating_water_storage_in_liter * 14.51,  # value from emission_factros_and_costs_devices.csv
             lifetime=100,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.0,  # Todo: set correct value
         )
@@ -127,14 +94,18 @@ class SimpleHotWaterStorage(cp.Component):
 
     # Input
     # A hot water storage can be used also with more than one heat generator. In this case you need to add a new input and output.
-    WaterTemperatureFromHeatDistribution = "WaterTemperatureFromHeatDistribution"
+    WaterTemperatureFromHeatDistribution = (
+        "WaterTemperatureFromHeatDistribution"
+    )
     WaterTemperatureFromHeatGenerator = "WaterTemperaturefromHeatGenerator"
     WaterMassFlowRateFromHeatGenerator = "WaterMassFlowRateFromHeatGenerator"
     State = "State"
 
     # Output
 
-    WaterTemperatureToHeatDistribution = "WaterTemperatureToHeatDistribution"
+    WaterTemperatureToHeatDistribution = (
+        "WaterTemperatureToHeatDistribution"
+    )
     WaterTemperatureToHeatGenerator = "WaterTemperatureToHeatGenerator"
 
     WaterMeanTemperatureInStorage = "WaterMeanTemperatureInStorage"
@@ -143,7 +114,9 @@ class SimpleHotWaterStorage(cp.Component):
 
     ThermalEnergyInStorage = "ThermalEnergyInStorage"
     ThermalEnergyFromHeatGenerator = "ThermalEnergyFromHeatGenerator"
-    ThermalEnergyFromHeatDistribution = "ThermalEnergyFromHeatDistribution"
+    ThermalEnergyFromHeatDistribution = (
+        "ThermalEnergyFromHeatDistribution"
+    )
     ThermalEnergyIncreaseInStorage = "ThermalEnergyIncreaseInStorage"
 
     StandbyHeatLoss = "StandbyHeatLoss"
@@ -329,10 +302,8 @@ class SimpleHotWaterStorage(cp.Component):
 
         state_controller = stsv.get_input_value(self.state_channel)
 
-        water_temperature_from_heat_distribution_system_in_celsius = (
-            stsv.get_input_value(
-                self.water_temperature_heat_distribution_system_input_channel
-            )
+        water_temperature_from_heat_distribution_system_in_celsius = stsv.get_input_value(
+            self.water_temperature_heat_distribution_system_input_channel
         )
         water_temperature_from_heat_generator_in_celsius = stsv.get_input_value(
             self.water_temperature_heat_generator_input_channel
@@ -347,10 +318,8 @@ class SimpleHotWaterStorage(cp.Component):
                 self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo
             )
         else:
-            water_mass_flow_rate_from_heat_generator_in_kg_per_second = (
-                stsv.get_input_value(
-                    self.water_mass_flow_rate_heat_generator_input_channel
-                )
+            water_mass_flow_rate_from_heat_generator_in_kg_per_second = stsv.get_input_value(
+                self.water_mass_flow_rate_heat_generator_input_channel
             )
 
         # Water Temperature Limit Check  --------------------------------------------------------------------------------------------------------
@@ -642,10 +611,10 @@ class SimpleHotWaterStorage(cp.Component):
     ) -> float:
         """Calculate temperature loss in celsius per timestep."""
 
-        # make heat loss for mean storage temperature every timestep but only until min temp of 17°C is reached (approx. basement temperature)
-        # this is of course just an approximation. the real heat loss depends on water temp, outside temp, isolation and volume
+        # make heat loss for mean storage temperature every timestep but only until min temp of 16°C is reached (regular basement temperature)
+        # https://www.energieverbraucher.de/de/heizungsspeicher__2102/#:~:text=Ein%20Speicher%20k%C3%BChlt%20t%C3%A4glich%20etwa,heutigen%20Energiepreisen%20t%C3%A4glich%2020%20Cent.
 
-        if mean_water_temperature_in_water_storage_in_celsius >= 17.0:
+        if mean_water_temperature_in_water_storage_in_celsius >= 16.0:
             temperature_loss_in_celsius_per_timestep = (
                 temperature_loss_in_celsius_per_hour / (3600 / seconds_per_timestep)
             )
@@ -719,9 +688,7 @@ class SimpleHotWaterStorage(cp.Component):
         return heat_loss_in_watt_hour_per_timestep
 
     @staticmethod
-    def get_cost_capex(
-        config: SimpleHotWaterStorageConfig,
-    ) -> Tuple[float, float, float]:
+    def get_cost_capex(config: SimpleHotWaterStorageConfig) -> Tuple[float, float, float]:
         """Returns investment cost, CO2 emissions and lifetime."""
         return config.cost, config.co2_footprint, config.lifetime
 
@@ -755,9 +722,7 @@ class SimpleHotWaterStorageControllerConfig(cp.ConfigBase):
     name: str
 
     @classmethod
-    def get_default_simplehotwaterstoragecontroller_config(
-        cls,
-    ) -> Any:
+    def get_default_simplehotwaterstoragecontroller_config(cls,) -> Any:
         """Get a default simplehotwaterstorage controller config."""
         config = SimpleHotWaterStorageControllerConfig(
             name="SimpleHotWaterStorageController",
@@ -864,10 +829,8 @@ class SimpleHotWaterStorageController(cp.Component):
                     self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo
                 )
             else:
-                water_mass_flow_rate_from_heat_generator_in_kg_per_second = (
-                    stsv.get_input_value(
-                        self.water_mass_flow_rate_heat_generator_input_channel
-                    )
+                water_mass_flow_rate_from_heat_generator_in_kg_per_second = stsv.get_input_value(
+                    self.water_mass_flow_rate_heat_generator_input_channel
                 )
 
             self.conditions_on_off(
@@ -885,8 +848,7 @@ class SimpleHotWaterStorageController(cp.Component):
             stsv.set_output_value(self.state_channel, state)
 
     def conditions_on_off(
-        self,
-        water_mass_flow_rate_from_heat_generator_in_kg_per_second: float,
+        self, water_mass_flow_rate_from_heat_generator_in_kg_per_second: float,
     ) -> None:
         """Set conditions for the simple hot water storage controller mode."""
 

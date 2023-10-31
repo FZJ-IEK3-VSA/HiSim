@@ -12,8 +12,8 @@ from hisim.components import advanced_heat_pump_hplib
 from hisim.components import electricity_meter
 from hisim.components import simple_hot_water_storage
 from hisim.components import heat_distribution_system
+from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes
-
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -57,21 +57,31 @@ def household_with_hds_and_advanced_hp(
         2  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
     )
     set_heating_threshold_outside_temperature_for_heat_pump_in_celsius = 16.0
-    set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = 20.0
-    temperature_offset_for_state_conditions_in_celsius = 5.0
+    set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = 22.0
 
     # Set Heat Pump
+    model: str = "Generic"
     group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
     heating_reference_temperature_in_celsius: float = -7  # t_in
+    set_thermal_output_power_in_watt: float = 8000
     flow_temperature_in_celsius = 21  # t_out_val
+    cycling_mode = True
+    minimum_running_time_in_seconds = 600
+    minimum_idle_time_in_seconds = 600
+    hp_co2_footprint = set_thermal_output_power_in_watt * 1e-3 * 165.84
+    hp_cost = set_thermal_output_power_in_watt * 1e-3 * 1513.74
+    hp_lifetime = 10
+    hp_maintenance_cost_as_percentage_of_investment = 0.025
+    hp_consumption = 0
 
     # Set Heat Distribution Controller
     hds_controller_name = "HeatDistributionSystemController"
     set_heating_threshold_outside_temperature_for_heat_distribution_system_in_celsius = (
-        16.0
+        None
     )
     set_heating_temperature_for_building_in_celsius = 19.0
     set_cooling_temperature_for_building_in_celsius = 24.0
+    set_cooling_threshold_water_temperature_in_celsius_for_dew_protection = 17.0
     heating_system = heat_distribution_system.HeatingSystemType.FLOORHEATING
 
     # =================================================================================================================================
@@ -82,6 +92,9 @@ def household_with_hds_and_advanced_hp(
         my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
+    my_simulation_parameters.post_processing_options.append(
+        PostProcessingOptions.EXPORT_TO_CSV
+    )
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
@@ -95,6 +108,7 @@ def household_with_hds_and_advanced_hp(
             set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
             heating_system=heating_system,
+            set_cooling_threshold_water_temperature_in_celsius_for_dew_protection=set_cooling_threshold_water_temperature_in_celsius_for_dew_protection,
         ),
     )
     # Build Building
@@ -102,14 +116,15 @@ def household_with_hds_and_advanced_hp(
     my_building_config.heating_reference_temperature_in_celsius = (
         heating_reference_temperature_in_celsius
     )
-    my_building_information = building.BuildingInformation(config=my_building_config)
+
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_CHS01_according_to_number_of_apartments(
-        number_of_apartments=my_building_information.number_of_apartments
+    my_occupancy_config = (
+        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
     )
+
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
@@ -121,12 +136,12 @@ def household_with_hds_and_advanced_hp(
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
     )
+
     # Build PV
     my_photovoltaic_system_config = (
-        generic_pv_system.PVSystemConfig.get_scaled_PV_system(
-            rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
-        )
+        generic_pv_system.PVSystemConfig.get_default_PV_system()
     )
+
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -145,29 +160,34 @@ def household_with_hds_and_advanced_hp(
             mode=hp_controller_mode,
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_pump_in_celsius,
             set_cooling_threshold_outside_temperature_in_celsius=set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius,
-            temperature_offset_for_state_conditions_in_celsius=temperature_offset_for_state_conditions_in_celsius,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Pump
-    my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
-    )
-    my_heat_pump_config.group_id = group_id
-    my_heat_pump_config.flow_temperature_in_celsius = flow_temperature_in_celsius
-    my_heat_pump_config.heating_reference_temperature_in_celsius = (
-        heating_reference_temperature_in_celsius
-    )
-
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
-        config=my_heat_pump_config,
+        config=advanced_heat_pump_hplib.HeatPumpHplibConfig(
+            name="HeatPumpHPLib",
+            model=model,
+            group_id=group_id,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+            flow_temperature_in_celsius=flow_temperature_in_celsius,
+            set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
+            cycling_mode=cycling_mode,
+            minimum_running_time_in_seconds=minimum_running_time_in_seconds,
+            minimum_idle_time_in_seconds=minimum_idle_time_in_seconds,
+            co2_footprint=hp_co2_footprint,
+            cost=hp_cost,
+            lifetime=hp_lifetime,
+            maintenance_cost_as_percentage_of_investment=hp_maintenance_cost_as_percentage_of_investment,
+            consumption=hp_consumption,
+        ),
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Distribution System
-    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+    my_heat_distribution_system_config = (
+        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config,
@@ -175,8 +195,8 @@ def household_with_hds_and_advanced_hp(
     )
 
     # Build Heat Water Storage
-    my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+    my_simple_heat_water_storage_config = (
+        simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
     )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,

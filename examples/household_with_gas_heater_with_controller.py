@@ -88,7 +88,6 @@ def household_gas_heater(
         name="UTSPConnector",
         consumption=0,
         profile_with_washing_machine_and_dishwasher=True,
-        predictive_control=False,
     )
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
@@ -101,10 +100,9 @@ def household_gas_heater(
     )
 
     # Build Building
-    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
-    my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(
-        config=my_building_config, my_simulation_parameters=my_simulation_parameters
+        config=building.BuildingConfig.get_default_german_single_family_home(),
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Gasheater
@@ -119,8 +117,8 @@ def household_gas_heater(
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    hds_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+    hds_config = (
+        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config()
     )
 
     # Build Heat Distribution System

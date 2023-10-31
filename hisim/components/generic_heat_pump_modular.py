@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Optional, List, Any, Tuple
 
-import pandas as pd
+import  pandas as pd
 import numpy as np
 from dataclasses_json import dataclass_json
 
@@ -17,8 +17,8 @@ from hisim import utils
 from hisim.components import controller_l1_heatpump
 
 from hisim.components.weather import Weather
+from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "edited Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -77,12 +77,8 @@ class HeatPumpConfig(cp.ConfigBase):
             power_th=power_th,
             water_vs_heating=lt.InandOutputType.HEATING,
             device_category=lt.HeatingSystems.HEAT_PUMP,
-            co2_footprint=power_th
-            * 1e-3
-            * 165.84,  # value from emission_factros_and_costs_devices.csv
-            cost=power_th
-            * 1e-3
-            * 1513.74,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=power_th * 1e-3 * 165.84,  # value from emission_factros_and_costs_devices.csv
+            cost=power_th * 1e-3 * 1513.74,  # value from emission_factros_and_costs_devices.csv
             lifetime=10,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
             consumption=0,
@@ -101,12 +97,8 @@ class HeatPumpConfig(cp.ConfigBase):
             power_th=power_th,
             water_vs_heating=lt.InandOutputType.WATER_HEATING,
             device_category=lt.HeatingSystems.HEAT_PUMP,
-            co2_footprint=power_th
-            * 1e-3
-            * 165.84,  # value from emission_factros_and_costs_devices.csv
-            cost=power_th
-            * 1e-3
-            * 1513.74,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=power_th * 1e-3 * 165.84,  # value from emission_factros_and_costs_devices.csv
+            cost=power_th * 1e-3 * 1513.74,  # value from emission_factros_and_costs_devices.csv
             lifetime=10,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
             consumption=0,
@@ -125,9 +117,7 @@ class HeatPumpConfig(cp.ConfigBase):
             power_th=power_th,
             water_vs_heating=lt.InandOutputType.HEATING,
             device_category=lt.HeatingSystems.ELECTRIC_HEATING,
-            co2_footprint=power_th
-            * 1e-3
-            * 1.21,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=power_th * 1e-3 * 1.21,  # value from emission_factros_and_costs_devices.csv
             cost=4635,  # value from emission_factros_and_costs_devices.csv
             lifetime=20,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
@@ -147,39 +137,9 @@ class HeatPumpConfig(cp.ConfigBase):
             power_th=power_th,
             water_vs_heating=lt.InandOutputType.WATER_HEATING,
             device_category=lt.HeatingSystems.ELECTRIC_HEATING,
-            co2_footprint=power_th
-            * 1e-3
-            * 1.21,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=power_th * 1e-3 * 1.21,  # value from emission_factros_and_costs_devices.csv
             cost=4635,  # value from emission_factros_and_costs_devices.csv
             lifetime=20,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
-            consumption=0,
-        )
-        return config
-
-    @classmethod
-    def get_scaled_waterheating_to_number_of_apartments(
-        cls, number_of_apartments: float
-    ) -> "HeatPumpConfig":
-        """Gets a default heat pump with scaling according to number of apartments."""
-
-        # scale with number of apartments
-        power_th_in_watt: float = 3000 * number_of_apartments
-        config = HeatPumpConfig(
-            name="DHWHeatPump",
-            source_weight=1,
-            manufacturer="Viessmann Werke GmbH & Co KG",
-            device_name="Vitocal 300-A AWO-AC 301.B07",
-            power_th=power_th_in_watt,
-            water_vs_heating=lt.InandOutputType.WATER_HEATING,
-            device_category=lt.HeatingSystems.HEAT_PUMP,
-            co2_footprint=power_th_in_watt
-            * 1e-3
-            * 165.84,  # value from emission_factros_and_costs_devices.csv
-            cost=power_th_in_watt
-            * 1e-3
-            * 1513.74,  # value from emission_factros_and_costs_devices.csv
-            lifetime=10,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
             consumption=0,
         )
@@ -425,8 +385,9 @@ class ModularHeatPump(cp.Component):
         """
         for index, output in enumerate(all_outputs):
             if (
-                output.component_name
-                == self.config.name + "_w" + str(self.config.source_weight)
+                output.component_name == self.config.name + "_w" + str(
+                    self.config.source_weight
+                )
                 and output.load_type == lt.LoadTypes.ELECTRICITY
             ):  # Todo: check component name from examples: find another way of using only heatpump-outputs
                 self.config.consumption = round(

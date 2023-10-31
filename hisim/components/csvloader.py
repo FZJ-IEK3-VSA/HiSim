@@ -80,9 +80,10 @@ class CSVLoader(cp.Component):
             self.Output1,
             self.csvconfig.loadtype,
             self.csvconfig.unit,
-            output_description="CSV loader output 1",
+            output_description="CSV loader output 1"
         )
-        self.output1.display_name = self.csvconfig.column_name
+        print(self.output1)
+        self.output1.display_name = "CSV Profile"
         self.multiplier = self.csvconfig.multiplier
 
         # ? self.column = column
@@ -97,6 +98,7 @@ class CSVLoader(cp.Component):
             )
         dfcolumn = df.iloc[:, [self.csvconfig.column]]
         self.column_name = self.csvconfig.column_name
+        print(len(dfcolumn))
         if len(dfcolumn) < self.my_simulation_parameters.timesteps:
             raise Exception(
                 "Timesteps: "
@@ -119,6 +121,7 @@ class CSVLoader(cp.Component):
         stsv.set_output_value(
             self.output1, float(self.column[timestep]) * self.multiplier
         )
+        
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -129,7 +132,7 @@ class CSVLoader(cp.Component):
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
         pass
-
+    
     def write_to_report(self) -> List[str]:
         """Writes a report."""
         return self.csvconfig.get_string_dict()

@@ -31,7 +31,7 @@ __status__ = "development"
 @dataclass
 class ElectrolyzerControllerConfig(ConfigBase):
 
-    """Configuration of the Simple Electrolyzer Controller."""
+    """Configutation of the Simple Electrolyzer Controller."""
 
     @classmethod
     def get_main_classname(cls):
@@ -67,7 +67,7 @@ class ElectrolyzerControllerConfig(ConfigBase):
         config_file = os.path.join(
             utils.HISIMPATH["inputs"], "electrolyzer_manufacturer_config.json"
         )
-        with open(config_file, "r", encoding="utf-8") as json_file:
+        with open(config_file, "r") as json_file:
             data = json.load(json_file)
             return data.get("Electrolyzer variants", {}).get(electrolyzer_name, {})
 
@@ -89,9 +89,6 @@ class ElectrolyzerControllerConfig(ConfigBase):
 
 
 class ElectrolyzerController(Component):
-
-    """Simple Electrolyzer Controller."""
-
     # Inputs
     ProvidedLoad = "Provided Load"
 
@@ -108,7 +105,6 @@ class ElectrolyzerController(Component):
         my_simulation_parameters: SimulationParameters,
         config: ElectrolyzerControllerConfig,
     ) -> None:
-        """Initialize the class."""
         self.controllerconfig = config
 
         self.nom_load = config.nom_load
@@ -189,7 +185,7 @@ class ElectrolyzerController(Component):
         # Initialize variables
 
         self.standby_count = 0.0
-        self.current_mode = 0.0  # standby
+        self.current_mode = 0.0  #  standby
         self.warm_count = 0.0
         self.cold_count = 0.0
         self.initial_state = 0
@@ -239,18 +235,16 @@ class ElectrolyzerController(Component):
     def i_simulate(
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
-        """Simulate the component."""
-
         if force_convergence:
             return
 
         current_power = stsv.get_input_value(self.load_input)
-        # print("current_power: ", current_power)
-        # print("self.current_mode before: ", self.current_mode)
+        #print("current_power: ", current_power)
+        #print("self.current_mode before: ", self.current_mode)
 
         nominal_load = self.nom_load
         min_load = self.min_load
-        # print("min_load: ", min_load)
+        #print("min_load: ", min_load)
         max_load = self.max_load
         warm_up_time = self.warm_start_time
         cold_up_time = self.cold_start_time
@@ -261,8 +255,8 @@ class ElectrolyzerController(Component):
             current_power = max_load
 
         if current_power >= min_load and self.current_mode == 1:
-            self.current_mode = 1.0
-            stsv.set_output_value(self.distributed_load, current_power)
+                self.current_mode = 1.0
+                stsv.set_output_value(self.distributed_load, current_power)
 
         if current_power >= min_load and self.initial_state == -1:  # -1 equals to "off"
             self.current_mode = -0.5  # cold starting
@@ -276,9 +270,7 @@ class ElectrolyzerController(Component):
             self.warm_up_count = 0.0
 
         if self.current_mode == -0.5 and self.cold_up_count < cold_up_time:
-            self.cold_up_count += float(
-                self.my_simulation_parameters.seconds_per_timestep
-            )
+            self.cold_up_count += float(self.my_simulation_parameters.seconds_per_timestep)
             current_power = 0
             stsv.set_output_value(self.distributed_load, current_power)
 
@@ -301,7 +293,7 @@ class ElectrolyzerController(Component):
 
         standby_threshold = 0.06 * nominal_load
 
-        if standby_threshold <= current_power < min_load:
+        if current_power < min_load and current_power >= standby_threshold:
             # Power sufficient for standby mode
             if self.current_mode == 1:
                 self.current_mode = 0.0
@@ -319,7 +311,7 @@ class ElectrolyzerController(Component):
             stsv.set_output_value(self.curtailed_load, self.curtailed_load_count)
 
         elif current_power < min_load and current_power < standby_threshold:
-            # ("current power too small")
+            #("current power too small")
             # The system is to be switched off completely
             if self.current_mode == 1:  # Check if the system is in the "on" state
                 self.current_mode = -1.0
@@ -340,9 +332,9 @@ class ElectrolyzerController(Component):
             self.curtailed_load_count += current_power
             stsv.set_output_value(self.curtailed_load, self.curtailed_load_count)
 
-        # print("last self.curtailed_load_count: ", self.curtailed_load_count)
+        #print("last self.curtailed_load_count: ", self.curtailed_load_count)
         # Initializing outputs
-        # print("self.current_mode: ", self.current_mode)
+        #print("self.current_mode: ", self.current_mode)
         stsv.set_output_value(self.standby_count_timestep, self.standby_count)
         stsv.set_output_value(self.current_mode_electrolyzer, self.current_mode)
         # stsv.set_output_value(self.curtailed_load, self.curtailed_load_count)

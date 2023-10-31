@@ -10,6 +10,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.components import generic_CHP
 from hisim.components import generic_electrolyzer
+from hisim.components import static_electrolyzer
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
@@ -38,19 +39,23 @@ class GenericHydrogenStorageConfig(cp.ConfigBase):
     #: maximal discharge rate of the hydrgoen storage in kg/s
     max_discharging_rate: float
     #: energy demand for the charging process in Wh/kg
+    
+    #: permanent hydrogen loss in % per day
+    loss_factor_per_day: float
+    
+    #Wirklich notwendig???-->
+    #: energy demand for the charging process in Wh/kg
     energy_for_charge: float
     #: energy demand for the discharging process in Wh/kg
     energy_for_discharge: float
+    #---
+    
     #: permanent hydrogen loss in % per day
     loss_factor_per_day: float
 
     @staticmethod
-    def get_default_config(
-        capacity: float = 200,
-        max_charging_rate: float = 2 / 3600,
-        max_discharging_rate: float = 2 / 3600,
-        source_weight: int = 1,
-    ) -> Any:
+    def get_default_config(capacity: float = 200, max_charging_rate: float = 2/3600, max_discharging_rate: float = 2/3600,
+                           source_weight: int = 1, ) -> Any:
         """Returns default configuration for hydrogen storage"""
         config = GenericHydrogenStorageConfig(
             name="HydrogenStorage",
@@ -83,7 +88,7 @@ class GenericHydrogenStorage(cp.Component):
 
     Components to connect to:
     (1) Fuel cell (generic_CHP)
-    (2) Electrolyzer (generic_electrolyzer)
+    (2) Electrolyzer (generic_electrolyzer, static_electrolyzer...)
     """
 
     # input
@@ -139,6 +144,10 @@ class GenericHydrogenStorage(cp.Component):
         self.add_default_connections(
             self.get_default_connections_from_generic_electrolyzer()
         )
+        self.add_default_connections(
+            self.get_default_connections_from_static_electrolyzer()
+        )
+
         self.add_default_connections(self.get_default_connections_from_generic_CHP())
 
     def i_prepare_simulation(self) -> None:
@@ -176,15 +185,34 @@ class GenericHydrogenStorage(cp.Component):
             )
         )
         return connections
+    
+    def get_default_connections_from_static_electrolyzer(
+        self,
+    ) -> List[cp.ComponentConnection]:
+        log.information(
+            "setting static electrolyzer default connections in generic H2 storage"
+        )
+        connections: List[cp.ComponentConnection] = []
+        electrolyzer_classname = (
+            static_electrolyzer.StaticElectrolyzer.get_classname()
+        )
+        connections.append(
+            cp.ComponentConnection(
+                GenericHydrogenStorage.HydrogenInput,
+                electrolyzer_classname,
+                static_electrolyzer.StaticElectrolyzer.HydrogenOutput,
+            )
+        )
+        return connections
+
+
 
     def store(self, charging_rate: float) -> Tuple[float, float, float]:
 
         # limitation of charging rate
         delta_not_stored: float = 0
         if charging_rate > self.config.max_charging_rate:
-            delta_not_stored = (
-                delta_not_stored + charging_rate - self.config.max_charging_rate
-            )
+            delta_not_stored = delta_not_stored + charging_rate - self.config.max_charging_rate
             charging_rate = self.config.max_charging_rate
 
         # limitation of storage size

@@ -375,7 +375,6 @@ class WeatherConfig(ConfigBase):
     location: str
     source_path: str
     data_source: WeatherDataSourceEnum
-    predictive_control: bool
 
     @classmethod
     def get_main_classname(cls):
@@ -393,11 +392,10 @@ class WeatherConfig(ConfigBase):
             location_entry.value[3],
         )
         config = WeatherConfig(
-            name="Weather",
+            name="Weather_1",
             location=location_entry.value[0],
             source_path=path,
             data_source=location_entry.value[4],
-            predictive_control=False,
         )
         return config
 
@@ -422,13 +420,23 @@ class Weather(Component):
     Weather_Temperature_Forecast_24h = "Weather_Temperature_Forecast_24h"
     DailyAverageOutsideTemperatures = "DailyAverageOutsideTemperatures"
 
-    # Weather_TemperatureOutside_yearly_forecast = "Weather_TemperatureOutside_yearly_forecast"
-    # Weather_DiffuseHorizontalIrradiance_yearly_forecast = "Weather_DiffuseHorizontalIrradiance_yearly_forecast"
-    # Weather_DirectNormalIrradiance_yearly_forecast = "Weather_DirectNormalIrradiance_yearly_forecast"
-    # Weather_DirectNormalIrradianceExtra_yearly_forecast = "Weather_DirectNormalIrradianceExtra_yearly_forecast"
-    # Weather_GlobalHorizontalIrradiance_yearly_forecast = "Weather_GlobalHorizontalIrradiance_yearly_forecast"
-    # Weather_Azimuth_yearly_forecast = "Weather_Azimuth_yearly_forecast"
-    # Weather_ApparentZenith_yearly_forecast = "Weather_ApparentZenith_yearly_forecast"
+    Weather_TemperatureOutside_yearly_forecast = (
+        "Weather_TemperatureOutside_yearly_forecast"
+    )
+    Weather_DirectNormalIrradiance_yearly_forecast = (
+        "Weather_DirectNormalIrradiance_yearly_forecast"
+    )
+    Weather_DiffuseHorizontalIrradiance_yearly_forecast = (
+        "Weather_DiffuseHorizontalIrradiance_yearly_forecast"
+    )
+    Weather_DirectNormalIrradianceExtra_yearly_forecast = (
+        "Weather_DirectNormalIrradianceExtra_yearly_forecast"
+    )
+    Weather_GlobalHorizontalIrradiance_yearly_forecast = (
+        "Weather_GlobalHorizontalIrradiance_yearly_forecast"
+    )
+    Weather_Azimuth_yearly_forecast = "Weather_Azimuth_yearly_forecast"
+    Weather_ApparentZenith_yearly_forecast = "Weather_ApparentZenith_yearly_forecast"
     Weather_WindSpeed_yearly_forecast = "Weather_WindSpeed_yearly_forecast"
 
     @utils.measure_execution_time
@@ -586,7 +594,7 @@ class Weather(Component):
         )
 
         # set the temperature forecast
-        if self.weather_config.predictive_control:
+        if self.my_simulation_parameters.predictive_control:
             timesteps_24h = (
                 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
             )
@@ -775,42 +783,32 @@ class Weather(Component):
             database.to_csv(cache_filepath)
 
         # write one year forecast to simulation repository for PV processing -> if PV forecasts are needed
-        if self.weather_config.predictive_control:
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.Weather_TemperatureOutside_yearly_forecast,
-                entry=self.temperature_list
+        if self.my_simulation_parameters.predictive_control:
+            self.simulation_repository.set_entry(
+                self.Weather_TemperatureOutside_yearly_forecast, self.temperature_list
             )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.Weather_DiffuseHorizontalIrradiance_yearly_forecast,
-                entry=self.DHI_list
+            self.simulation_repository.set_entry(
+                self.Weather_DiffuseHorizontalIrradiance_yearly_forecast, self.DHI_list
             )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.Weather_DirectNormalIrradiance_yearly_forecast,
-                entry=self.DNI_list
+            self.simulation_repository.set_entry(
+                self.Weather_DirectNormalIrradiance_yearly_forecast, self.DNI_list
             )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.Weather_DirectNormalIrradianceExtra_yearly_forecast,
-                entry=self.DNIextra_list,
+            self.simulation_repository.set_entry(
+                self.Weather_DirectNormalIrradianceExtra_yearly_forecast,
+                self.DNIextra_list,
             )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.Weather_GlobalHorizontalIrradiance_yearly_forecast,
-                entry=self.GHI_list
+            self.simulation_repository.set_entry(
+                self.Weather_GlobalHorizontalIrradiance_yearly_forecast, self.GHI_list
             )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.Weather_Azimuth_yearly_forecast,
-                entry=self.azimuth_list
+            self.simulation_repository.set_entry(
+                self.Weather_Azimuth_yearly_forecast, self.azimuth_list
             )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.Weather_ApparentZenith_yearly_forecast,
-                entry=self.apparent_zenith_list
+            self.simulation_repository.set_entry(
+                self.Weather_ApparentZenith_yearly_forecast, self.apparent_zenith_list
             )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.Weather_WindSpeed_yearly_forecast,
-                entry=self.wind_speed_list
+            self.simulation_repository.set_entry(
+                self.Weather_WindSpeed_yearly_forecast, self.wind_speed_list
             )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.Weather_Altitude_yearly_forecast,
-                entry=self.altitude_list)
 
     def interpolate(self, pd_database: Any, year: int) -> Any:
         """Interpolates a time series."""
@@ -823,7 +821,7 @@ class Weather(Component):
             ],
         )
         lastday = pd.Series(
-            pd_database.iloc[-1],
+            pd_database[-1],
             index=[
                 pd.to_datetime(
                     datetime.datetime(year, 12, 31, 22, 59), utc=True
@@ -926,7 +924,7 @@ class Weather(Component):
         start_index = 0
         for index in range(0, total_number_of_timesteps_temperature_list):
             daily_average_temperature = float(
-                np.mean(temperaturelist[start_index : start_index + timestep_24h])
+                np.mean(temperaturelist[start_index: start_index + timestep_24h])
             )
             if index == start_index + timestep_24h:
                 start_index = index
@@ -947,7 +945,7 @@ def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Any:
     if source_enum == WeatherDataSourceEnum.NSRDB_15min:
         with open(filepath, encoding="utf-8") as csvfile:
             spamreader = csv.reader(csvfile)
-            for i, row in enumerate(spamreader):
+            for (i, row) in enumerate(spamreader):
                 if i == 1:
                     location_name = row[1]
                     lat = float(row[5])
@@ -1053,20 +1051,12 @@ def read_nsrdb_15min_data(filepath: str, year: int) -> pd.DataFrame:
     data.index = pd.date_range(
         f"{year}-01-01 00:00:00", periods=24 * 4 * 365, freq="900S", tz="UTC"
     )
-    data = data.rename(
-        columns={
-            "Temperature": "T",
-            "Wind Speed": "Wspd",
-        }
-    )
+    data = data.rename(columns={"Temperature": "T", "Wind Speed": "Wspd",})
     return data
 
 
 def calculate_direct_normal_radiation(
-    direct_horizontal_irradation: pd.Series,
-    lon: float,
-    lat: float,
-    zenith_tol: float = 87.0,
+    direct_horizontal_irradation: pd.Series, lon: float, lat: float, zenith_tol: float = 87.0
 ) -> pd.Series:
     """Calculates the direct NORMAL irradiance from the direct horizontal irradiance with the help of the PV lib.
 

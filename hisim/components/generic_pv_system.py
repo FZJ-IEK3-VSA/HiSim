@@ -4,7 +4,7 @@ import math
 import os
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any, List, Tuple, Optional
+from typing import Any, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -19,7 +19,6 @@ from hisim import utils
 from hisim.component import ConfigBase, OpexCostDataClass
 from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -220,12 +219,9 @@ class PVSystemConfig(ConfigBase):
     maintenance_cost_as_percentage_of_investment: float
     #: lifetime in years
     lifetime: float
-    predictive: bool
-    predictive_control: bool
-    prediction_horizon: Optional[int]
 
     @classmethod
-    def get_default_PV_system(cls) -> "PVSystemConfig":
+    def get_default_PV_system(cls):
         """Gets a default PV system."""
         power = 10e3  # W
         return PVSystemConfig(
@@ -240,87 +236,11 @@ class PVSystemConfig(ConfigBase):
             tilt=30,
             source_weight=0,
             location="Aachen",
-            co2_footprint=power
-            * 1e-3
-            * 330.51,  # value from emission_factros_and_costs_devices.csv
-            cost=power
-            * 1e-3
-            * 794.41,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=power * 1e-3 * 330.51,  # value from emission_factros_and_costs_devices.csv
+            cost=power * 1e-3 * 794.41,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
             lifetime=25,  # value from emission_factros_and_costs_devices.csv
-            predictive=False,
-            predictive_control=False,
-            prediction_horizon=None,
         )
-
-    @classmethod
-    def get_scaled_PV_system(
-        cls,
-        rooftop_area_in_m2: float,
-        share_of_maximum_pv_power: float = 1.0,
-        module_name: str = "Hanwha_HSL60P6_PA_4_250T__2013_",
-        load_module_data: bool = False,
-    ) -> "PVSystemConfig":
-        """Gets a default PV system with scaling according to rooftop area."""
-        total_pv_power_in_watt = cls.size_pv_system(
-            rooftop_area_in_m2=rooftop_area_in_m2,
-            share_of_maximum_pv_power=share_of_maximum_pv_power,
-            module_name=module_name,
-        )
-        return PVSystemConfig(
-            time=2019,
-            power=total_pv_power_in_watt,
-            load_module_data=load_module_data,
-            module_name=module_name,
-            integrate_inverter=True,
-            inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
-            name="PVSystem",
-            azimuth=180,
-            tilt=30,
-            source_weight=0,
-            location="Aachen",
-            co2_footprint=total_pv_power_in_watt
-            * 1e-3
-            * 330.51,  # value from emission_factros_and_costs_devices.csv
-            cost=total_pv_power_in_watt
-            * 1e-3
-            * 794.41,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
-            lifetime=25,  # value from emission_factros_and_costs_devices.csv
-            predictive=False,
-            predictive_control=False,
-            prediction_horizon=None,
-        )
-
-    @classmethod
-    def size_pv_system(
-        cls,
-        rooftop_area_in_m2: float,
-        share_of_maximum_pv_power: float = 1.0,
-        module_name: str = "Hanwha_HSL60P6_PA_4_250T__2013_",
-    ) -> float:
-        """Size the pv system according to the rooftop type and the share of the maximum pv power that should be used."""
-
-        # get area and power of module
-        if module_name == "Hanwha_HSL60P6_PA_4_250T__2013_":
-            module_area_in_m2 = 1.65
-            module_power_in_watt = 250
-
-        else:
-            raise ValueError(
-                "Module name not given in this function. Please check or add your module information."
-            )
-
-        # scale rooftop area with limiting factor due to shading and obstacles like chimneys etc.
-        # see p.18 in following paper https://www.mdpi.com/1996-1073/15/15/5536 (Stanleys work)
-        limiting_factor_for_rooftop = 0.6
-        effective_rooftop_area_in_m2 = rooftop_area_in_m2 * limiting_factor_for_rooftop
-
-        total_pv_power_in_watt = (
-            effective_rooftop_area_in_m2 / module_area_in_m2 * module_power_in_watt
-        ) * share_of_maximum_pv_power
-
-        return total_pv_power_in_watt
 
 
 class PVSystem(cp.Component):
@@ -478,17 +398,10 @@ class PVSystem(cp.Component):
             tilt=30,
             load_module_data=False,
             source_weight=source_weight,
-            co2_footprint=power
-            * 1e-3
-            * 130.7,  # value from emission_factros_and_costs_devices.csv
-            cost=power
-            * 1e-3
-            * 535.81,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=power * 1e-3 * 130.7,  # value from emission_factros_and_costs_devices.csv
+            cost=power * 1e-3 * 535.81,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
             lifetime=25,  # value from emission_factros_and_costs_devices.csv
-            prediction_horizon=None,
-            predictive=False,
-            predictive_control=False,
         )
         return config
 
@@ -635,12 +548,12 @@ class PVSystem(cp.Component):
                 database.to_csv(self.cache_filepath, sep=",", decimal=".", index=False)
 
         if (
-            self.pvconfig.predictive_control
-            and self.pvconfig.prediction_horizon is not None
+            self.my_simulation_parameters.predictive_control
+            and self.my_simulation_parameters.prediction_horizon
         ):
             last_forecast_timestep = int(
                 timestep
-                + self.pvconfig.prediction_horizon
+                + self.my_simulation_parameters.prediction_horizon
                 / self.my_simulation_parameters.seconds_per_timestep
             )
             if last_forecast_timestep > len(self.output):
@@ -657,32 +570,32 @@ class PVSystem(cp.Component):
 
             if timestep == 1:
                 # delete weather data for PV preprocessing from dictionary -> save memory
-                if SingletonSimRepository().exist_entry(
-                    key=SingletonDictKeyEnum.Weather_DirectNormalIrradianceExtra_yearly_forecast
+                if self.simulation_repository.exist_entry(
+                    Weather.Weather_DirectNormalIrradianceExtra_yearly_forecast
                 ):
-                    SingletonSimRepository().delete_entry(
-                        key=SingletonDictKeyEnum.Weather_DirectNormalIrradianceExtra_yearly_forecast
+                    self.simulation_repository.delete_entry(
+                        Weather.Weather_DirectNormalIrradianceExtra_yearly_forecast
                     )
-                    SingletonSimRepository().delete_entry(
-                        key=SingletonDictKeyEnum.Weather_DirectNormalIrradiance_yearly_forecast
+                    self.simulation_repository.delete_entry(
+                        Weather.Weather_DirectNormalIrradiance_yearly_forecast
                     )
-                    SingletonSimRepository().delete_entry(
-                        key=SingletonDictKeyEnum.Weather_DiffuseHorizontalIrradiance_yearly_forecast
+                    self.simulation_repository.delete_entry(
+                        Weather.Weather_DiffuseHorizontalIrradiance_yearly_forecast
                     )
-                    SingletonSimRepository().delete_entry(
-                        key=SingletonDictKeyEnum.Weather_GlobalHorizontalIrradiance_yearly_forecast
+                    self.simulation_repository.delete_entry(
+                        Weather.Weather_GlobalHorizontalIrradiance_yearly_forecast
                     )
-                    SingletonSimRepository().delete_entry(
-                        key=SingletonDictKeyEnum.Weather_Azimuth_yearly_forecast
+                    self.simulation_repository.delete_entry(
+                        Weather.Weather_Azimuth_yearly_forecast
                     )
-                    SingletonSimRepository().delete_entry(
-                        key=SingletonDictKeyEnum.Weather_ApparentZenith_yearly_forecast
+                    self.simulation_repository.delete_entry(
+                        Weather.Weather_ApparentZenith_yearly_forecast
                     )
-                    SingletonSimRepository().delete_entry(
-                        key=SingletonDictKeyEnum.Weather_TemperatureOutside_yearly_forecast
+                    self.simulation_repository.delete_entry(
+                        Weather.Weather_TemperatureOutside_yearly_forecast
                     )
-                    SingletonSimRepository().delete_entry(
-                        key=SingletonDictKeyEnum.Weather_WindSpeed_yearly_forecast
+                    self.simulation_repository.delete_entry(
+                        Weather.Weather_WindSpeed_yearly_forecast
                     )
 
     def i_save_state(self) -> None:
@@ -715,31 +628,31 @@ class PVSystem(cp.Component):
             self.ac_power_factor = math.ceil((self.pvconfig.power * 1e3) / 250)
 
             # when predictive control is activated, the PV simulation is run beforhand to make forecasting easier
-            if self.pvconfig.predictive_control:
+            if self.my_simulation_parameters.predictive_control:
                 # get yearly weather data from dictionary
-                dni_extra = SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.Weather_DirectNormalIrradianceExtra_yearly_forecast
+                dni_extra = self.simulation_repository.get_entry(
+                    Weather.Weather_DirectNormalIrradianceExtra_yearly_forecast
                 )
-                DNI = SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.Weather_DirectNormalIrradiance_yearly_forecast
+                DNI = self.simulation_repository.get_entry(
+                    Weather.Weather_DirectNormalIrradiance_yearly_forecast
                 )
-                DHI = SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.Weather_DiffuseHorizontalIrradiance_yearly_forecast
+                DHI = self.simulation_repository.get_entry(
+                    Weather.Weather_DiffuseHorizontalIrradiance_yearly_forecast
                 )
-                GHI = SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.Weather_GlobalHorizontalIrradiance_yearly_forecast
+                GHI = self.simulation_repository.get_entry(
+                    Weather.Weather_GlobalHorizontalIrradiance_yearly_forecast
                 )
-                azimuth = SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.Weather_Azimuth_yearly_forecast
+                azimuth = self.simulation_repository.get_entry(
+                    Weather.Weather_Azimuth_yearly_forecast
                 )
-                apparent_zenith = SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.Weather_ApparentZenith_yearly_forecast
+                apparent_zenith = self.simulation_repository.get_entry(
+                    Weather.Weather_ApparentZenith_yearly_forecast
                 )
-                temperature = SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.Weather_TemperatureOutside_yearly_forecast
+                temperature = self.simulation_repository.get_entry(
+                    Weather.Weather_TemperatureOutside_yearly_forecast
                 )
-                wind_speed = SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.Weather_WindSpeed_yearly_forecast
+                wind_speed = self.simulation_repository.get_entry(
+                    Weather.Weather_WindSpeed_yearly_forecast
                 )
 
                 x = []
@@ -770,21 +683,12 @@ class PVSystem(cp.Component):
                 self.data = [0] * self.my_simulation_parameters.timesteps
                 self.data_length = self.my_simulation_parameters.timesteps
 
-        if self.pvconfig.predictive:        
-            pv_forecast_yearly=[self.output[t] * self.pvconfig.power for t in range(self.my_simulation_parameters.timesteps)]
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.pv_forecast_yearly,
-                entry=pv_forecast_yearly
-            )                                                                         
-
         self.modules = pd.read_csv(
-            os.path.join(utils.HISIMPATH["photovoltaic"]["modules"]),
-            index_col=0,
+            os.path.join(utils.HISIMPATH["photovoltaic"]["modules"]), index_col=0,
         )
 
         self.inverters = pd.read_csv(
-            os.path.join(utils.HISIMPATH["photovoltaic"]["inverters"]),
-            index_col=0,
+            os.path.join(utils.HISIMPATH["photovoltaic"]["inverters"]), index_col=0,
         )
 
         self.temp_model = pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["sapm"][
@@ -920,11 +824,7 @@ class PVSystem(cp.Component):
             aoi=aoi,
         )
         # calculate pv performance
-        sapm_out = pvlib.pvsystem.sapm(
-            sapm_irr,
-            module=self.module,
-            temp_cell=pvtemps,
-        )
+        sapm_out = pvlib.pvsystem.sapm(sapm_irr, module=self.module, temp_cell=pvtemps,)
         # calculate peak load of single module [W]
         peak_load = self.module.loc["Impo"] * self.module.loc["Vmpo"]
         ac_power = pd.DataFrame()

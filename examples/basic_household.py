@@ -11,7 +11,11 @@ from hisim.components import building
 from hisim.components import generic_heat_pump
 from hisim.components import electricity_meter
 from hisim import loadtypes
-
+from hisim import postprocessingoptions
+import graphviz
+import graphlib
+import dot_parser
+import pydot
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -61,7 +65,10 @@ def basic_household_explicit(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
 
+    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.MAKE_NETWORK_CHARTS)
+
     my_sim.set_simulation_parameters(my_simulation_parameters)
+
 
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
@@ -89,7 +96,6 @@ def basic_household_explicit(
     my_photovoltaic_system_config = (
         generic_pv_system.PVSystemConfig.get_default_PV_system()
     )
-
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -171,7 +177,7 @@ def basic_household_explicit(
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.ElectricityInput,
         my_electricity_meter.component_name,
-        my_electricity_meter.ElectricityAvailable,
+        my_electricity_meter.ElectricityToOrFromGrid,
     )
     my_heat_pump.connect_only_predefined_connections(
         my_weather, my_heat_pump_controller

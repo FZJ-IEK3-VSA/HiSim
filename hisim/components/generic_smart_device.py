@@ -317,14 +317,14 @@ class SmartDevice(cp.Component):
                         sum(
                             el[
                                 offset
-                                + minutes_per_timestep * i : offset
+                                + minutes_per_timestep * i: offset
                                 + (i + 1) * minutes_per_timestep
                             ]
                         )
                         / minutes_per_timestep
                     )
 
-                last = el[offset + (i + 1) * minutes_per_timestep :]
+                last = el[offset + (i + 1) * minutes_per_timestep:]
                 if offset != minutes_per_timestep:
                     elem_el.append(sum(last) / (minutes_per_timestep - offset))
                 electricity_profile.append(elem_el)
@@ -333,19 +333,13 @@ class SmartDevice(cp.Component):
         earliest_start = earliest_start + [
             self.my_simulation_parameters.timesteps
         ]  # append value to continue simulation after last necesary run of flexible device at end of year
-        self.earliest_start = utils.convert_lpg_timestep_to_utc(
-            data=earliest_start,
-            year=self.my_simulation_parameters.year,
-            seconds_per_timestep=seconds_per_timestep,
-        )
+        self.earliest_start = utils.convert_lpg_timestep_to_utc(data=earliest_start, year=self.my_simulation_parameters.year,
+                                                                seconds_per_timestep=seconds_per_timestep)
         latest_start = latest_start + [
             self.my_simulation_parameters.timesteps + 999
         ]  # append value to continue simulation after last necesary run of smart device at end of year
-        self.latest_start = utils.convert_lpg_timestep_to_utc(
-            data=latest_start,
-            year=self.my_simulation_parameters.year,
-            seconds_per_timestep=seconds_per_timestep,
-        )
+        self.latest_start = utils.convert_lpg_timestep_to_utc(data=latest_start, year=self.my_simulation_parameters.year,
+                                                         seconds_per_timestep=seconds_per_timestep)
         self.electricity_profile = electricity_profile
         self.state = SmartDeviceState()
         self.previous_state = SmartDeviceState()
@@ -358,9 +352,7 @@ class SmartDevice(cp.Component):
         return lines
 
     def get_cost_opex(
-        self,
-        all_outputs: List,
-        postprocessing_results: pd.DataFrame,
+        self, all_outputs: List, postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         for index, output in enumerate(all_outputs):
             if (

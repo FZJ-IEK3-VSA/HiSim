@@ -318,7 +318,7 @@ class UtspLpgConnector(cp.Component):
         end_date = last_day.strftime("%Y-%m-%d")
 
         # choose if oen lpg request should be made or several in parallel
-        if isinstance(lpg_households, JsonReference):
+        if isinstance(lpg_households, JsonReference) and isinstance(self.utsp_config.household, JsonReference):
             simulation_config = self.prepare_lpg_simulation_config_for_utsp_request(
                 start_date=start_date,
                 end_date=end_date,
@@ -350,7 +350,7 @@ class UtspLpgConnector(cp.Component):
                 inner_device_heat_gains_file,
                 high_activity_file,
                 low_activity_file,
-                saved_files) = self.calculate_multiple_lpg_requests(
+                saved_files) = self.calculate_multiple_lpg_requests(  # type: ignore
                 url=self.utsp_config.url,
                 api_key=self.utsp_config.api_key,
                 lpg_configs=simulation_configs,
@@ -523,9 +523,10 @@ class UtspLpgConnector(cp.Component):
                     ]
 
                     self.max_hot_water_demand = max(self.water_consumption)
-                    self.cache_results(
-                        saved_files=saved_files[index], cache_filepath=cache_filepath
-                    )
+
+                self.cache_results(
+                    saved_files=saved_files, cache_filepath=cache_filepath
+                )
 
     def write_to_report(self):
         """Adds a report entry for this component."""
@@ -627,7 +628,7 @@ class UtspLpgConnector(cp.Component):
         api_key: str,
         raise_exceptions: bool = True,
         result_files: Any = None,
-    ) -> Tuple[List[str], List[str], List[str], List[str], List[str], List[str]]:
+    ) -> Tuple[List[str], List[str], List[str], List[str], List[str], List[List[str]]]:
         """Sends multiple lpg requests for parallel calculation and collects their results."""
 
         (
@@ -962,7 +963,7 @@ class UtspLpgConnector(cp.Component):
             number_of_residents,
         )
 
-    def cache_results(self, saved_files, cache_filepath):
+    def cache_results(self, saved_files: List, cache_filepath: str) -> None:
         """Make caching file for the results."""
 
         # Saves data in cache

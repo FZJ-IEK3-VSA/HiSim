@@ -1,7 +1,6 @@
 """Get capacities for each componente."""
 
-from typing import List, Tuple, Dict
-from enum import Enum
+from typing import Dict, List
 
 from hisim import log
 from hisim.component_wrapper import ComponentWrapper

@@ -1,7 +1,8 @@
 """Webtool results with important kpis."""
 
-from typing import Dict, Any
 from dataclasses import dataclass, field
+from typing import Any, Dict
+
 from dataclass_wizard import JSONWizard
 
 

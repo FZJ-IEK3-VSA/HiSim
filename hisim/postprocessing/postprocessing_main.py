@@ -1,38 +1,35 @@
 """ Main postprocessing module that starts all other modules. """
 # clean
-import os
-import sys
 import copy
-from typing import Any, Optional, List, Dict
-from timeit import default_timer as timer
+import os
 import string
+import sys
+from timeit import default_timer as timer
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
-from hisim.components import building
-from hisim.components import loadprofilegenerator_connector
-from hisim.postprocessing import reportgenerator
-from hisim.postprocessing import charts
-from hisim import log
-from hisim import utils
-from hisim.postprocessingoptions import PostProcessingOptions
+from hisim import log, utils
+from hisim.component import ComponentOutput
+from hisim.components import building, loadprofilegenerator_connector
+from hisim.json_generator import JsonConfigurationGenerator
+from hisim.postprocessing import charts, reportgenerator
+from hisim.postprocessing.capacities import get_capacities
 from hisim.postprocessing.chart_singleday import ChartSingleDay
 from hisim.postprocessing.compute_kpis import compute_kpis
-from hisim.postprocessing.capacities import get_capacities
 from hisim.postprocessing.generate_csv_for_housing_database import (
     generate_csv_for_database,
 )
 from hisim.postprocessing.opex_and_capex_cost_calculation import (
-    opex_calculation,
     capex_calculation,
+    opex_calculation,
 )
-from hisim.postprocessing.system_chart import SystemChart
-from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.report_image_entries import ReportImageEntry, SystemChartEntry
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
-from hisim.json_generator import JsonConfigurationGenerator
+from hisim.postprocessing.system_chart import SystemChart
 from hisim.postprocessing.webtool_kpi_entries import WebtoolKpiEntries
+from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
 
 
 class PostProcessor:

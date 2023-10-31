@@ -1,25 +1,22 @@
 """ Modular Heat Pump Class together with Configuration and State. """
 # Generic/Built-in
 from dataclasses import dataclass
-from typing import Optional, List, Any, Tuple
 from enum import Enum
+from typing import List, Tuple
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 from dataclasses_json import dataclass_json
 
 import hisim.loadtypes as lt
-from hisim import component as cp
-from hisim import log
-from hisim.component import OpexCostDataClass
 
 # Owned
-from hisim import utils
+from hisim import component as cp
+from hisim import log, utils
+from hisim.component import OpexCostDataClass
 from hisim.components import controller_l1_heatpump
-
 from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "edited Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"

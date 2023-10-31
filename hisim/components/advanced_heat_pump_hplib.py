@@ -7,6 +7,7 @@ See library on https://github.com/FZJ-IEK3-VSA/hplib/tree/main/hplib
 from typing import Any, List, Optional, Tuple
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+from enum import Enum
 
 import pandas as pd
 
@@ -128,6 +129,12 @@ class HeatPumpHplibConfig(ConfigBase):
             maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
             consumption=0,
         )
+
+    def get_capacity(self) -> Tuple[float, Enum]:
+        """Return capacity and unit."""
+        capacity = self.set_thermal_output_power_in_watt
+        unit = Units.WATT
+        return capacity, unit
 
 
 class HeatPumpHplib(Component):

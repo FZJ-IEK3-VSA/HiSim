@@ -15,3 +15,5 @@ class WebtoolKpiEntries(JSONWizard):
     opex_dict: Dict[str, Any] = field(default_factory=dict)
 
     capex_dict: Dict[str, Any] = field(default_factory=dict)
+
+    capacity_dict: Dict[str, Any] = field(default_factory=dict)

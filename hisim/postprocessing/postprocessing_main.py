@@ -18,6 +18,7 @@ from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.postprocessing.chart_singleday import ChartSingleDay
 from hisim.postprocessing.compute_kpis import compute_kpis
+from hisim.postprocessing.capacities import get_capacities
 from hisim.postprocessing.generate_csv_for_housing_database import (
     generate_csv_for_database,
 )
@@ -1081,11 +1082,17 @@ class PostProcessor:
                 value_list=opex_compute_return
             )
 
+            # get sizes of components
+            dict_with_important_capacities = get_capacities(
+                components=ppdt.wrapped_components,
+            )
+
             # initialize webtool kpi entries dataclass
             webtool_kpi_dataclass = WebtoolKpiEntries(
                 kpi_dict=dict_with_important_kpi,
                 capex_dict=dict_with_important_capex,
                 opex_dict=dict_with_important_opex,
+                capacity_dict=dict_with_important_capacities
             )
 
             # save dict as json file in results folder

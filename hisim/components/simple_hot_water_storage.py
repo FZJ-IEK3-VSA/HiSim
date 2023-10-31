@@ -5,6 +5,7 @@
 from typing import List, Any, Tuple
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+from enum import Enum
 
 import pandas as pd
 
@@ -103,6 +104,12 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
             maintenance_cost_as_percentage_of_investment=0.0,  # Todo: set correct value
         )
         return config
+
+    def get_capacity(self) -> Tuple[float, Enum]:
+        """Return capacity and unit."""
+        capacity = self.volume_heating_water_storage_in_liter
+        unit = lt.Units.LITER
+        return capacity, unit
 
 
 @dataclass

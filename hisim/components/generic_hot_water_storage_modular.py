@@ -5,6 +5,7 @@ The hot water storage simulates only storage and demand and needs to be connnect
 DHW hot water storage or as buffer storage.
 """
 from dataclasses import dataclass
+from enum import Enum
 
 # clean
 # Generic/Built-in
@@ -184,6 +185,12 @@ class StorageConfig(cp.ConfigBase):
         self.energy_full_cycle = (
             self.volume * temperature_difference_in_kelvin * 0.977 * 4.182 / 3600
         )
+
+    def get_capacity(self) -> Tuple[float, Enum]:
+        """Return capacity and unit."""
+        capacity = self.volume
+        unit = lt.Units.CUBICMETERS
+        return capacity, unit
 
 
 class StorageState:

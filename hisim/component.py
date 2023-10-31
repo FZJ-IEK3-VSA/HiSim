@@ -8,6 +8,7 @@ from __future__ import annotations
 import dataclasses as dc
 import typing
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple, Type
 
 import pandas as pd
@@ -53,6 +54,10 @@ class ConfigBase(JSONWizard):
                 first_entry = first_entry.capitalize()
                 my_list.append(first_entry + ": " + str(entry[1]))
         return my_list
+
+    def get_capacity(self) -> Tuple[float, Enum]:
+        """Return capacity and unit."""
+        raise NotImplementedError()
 
 
 @dataclass

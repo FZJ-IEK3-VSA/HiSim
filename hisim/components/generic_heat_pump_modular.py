@@ -2,6 +2,7 @@
 # Generic/Built-in
 from dataclasses import dataclass
 from typing import Optional, List, Any, Tuple
+from enum import Enum
 
 import pandas as pd
 import numpy as np
@@ -184,6 +185,12 @@ class HeatPumpConfig(cp.ConfigBase):
             consumption=0,
         )
         return config
+
+    def get_capacity(self) -> Tuple[float, Enum]:
+        """Return capacity and unit."""
+        capacity = self.power_th
+        unit = Units.WATT
+        return capacity, unit
 
 
 class ModularHeatPumpState:

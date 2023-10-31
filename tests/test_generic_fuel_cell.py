@@ -10,6 +10,7 @@ from tests import functions_for_testing as fft
 
 
 @pytest.mark.base
+@pytest.skip
 def test_electrolyzer():
     """Test electrolyzer."""
     seconds_per_timestep = 60

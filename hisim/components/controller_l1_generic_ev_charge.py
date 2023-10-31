@@ -131,7 +131,7 @@ class L1Controller(cp.Component):
         self.state = L1ControllerState(power=0)
         self.previous_state = self.state.clone()
         self.processed_state = self.state.clone()
-        self.build(config=config, my_simulation_parameters=my_simulation_parameters)
+        self.build(config=config)
 
         # add inputs
         self.car_consumption: cp.ComponentInput = self.add_input(
@@ -301,7 +301,6 @@ class L1Controller(cp.Component):
     def build(
         self,
         config: ChargingStationConfig,
-        my_simulation_parameters: SimulationParameters,
     ) -> None:
         """Translates and assigns config parameters to controller class and completes initialization."""
         self.name = config.name

@@ -9,6 +9,7 @@ from typing import Optional
 from hisim import log
 from hisim.simulator import Simulator
 from hisim.simulationparameters import SimulationParameters
+from hisim.postprocessing import PostProcessingOptions
 from hisim.components.random_numbers import RandomNumbers, RandomNumbersConfig
 from hisim.components.example_transformer import (
     ExampleTransformer,
@@ -33,8 +34,8 @@ def first_example(
         my_simulation_parameters = SimulationParameters.full_year(
             year=2021, seconds_per_timestep=60
         )
-    my_simulation_parameters.post_processing_options.append(
-            postprocessingoptions.PostProcessingOptions.PLOT_CARPET
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.PLOT_CARPET
         )   
 
 

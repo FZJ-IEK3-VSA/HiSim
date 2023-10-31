@@ -282,7 +282,7 @@ def modular_household_explicit(
         # Build occupancy
         my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
             "Occupancy",
-            occupancy_profile.Name or "",  # type: ignore
+            occupancy_profile or "",  # type: ignore
             location,
             not smart_devices_included,
             number_of_apartments=my_building_information.number_of_apartments,

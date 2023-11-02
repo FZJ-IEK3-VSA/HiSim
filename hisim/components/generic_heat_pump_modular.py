@@ -1,7 +1,10 @@
 """ Modular Heat Pump Class together with Configuration and State. """
+
+# clean
+
 # Generic/Built-in
 from dataclasses import dataclass
-from typing import Optional, List, Any, Tuple
+from typing import List, Tuple
 
 import pandas as pd
 import numpy as np
@@ -18,7 +21,6 @@ from hisim.components import controller_l1_heatpump
 
 from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "edited Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -33,6 +35,7 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class HeatPumpConfig(cp.ConfigBase):
+
     """Configuration of a HeatPump."""
 
     #: name of the device
@@ -187,9 +190,8 @@ class HeatPumpConfig(cp.ConfigBase):
 
 
 class ModularHeatPumpState:
-    """
-    This data class saves the state of the heat pump.
-    """
+
+    """Modular heat pump state saves the state of the heat pump."""
 
     def __init__(self, state: int = 0):
         """Initializes state."""
@@ -201,8 +203,10 @@ class ModularHeatPumpState:
 
 
 class ModularHeatPump(cp.Component):
-    """
-    Heat pump implementation. The generic_heatpump_modular differs to generic_heatpump in the sense that the minimal runtime is not in the component,
+
+    """Heat pump implementation.
+
+    The generic_heatpump_modular differs to generic_heatpump in the sense that the minimal runtime is not in the component,
     but in the related controller.
     This implementation does not consider cooling of buildings.
 
@@ -224,6 +228,7 @@ class ModularHeatPump(cp.Component):
     def __init__(
         self, config: HeatPumpConfig, my_simulation_parameters: SimulationParameters
     ):
+        """Initialize the class."""
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
@@ -365,12 +370,15 @@ class ModularHeatPump(cp.Component):
         return val
 
     def i_save_state(self) -> None:
+        """Saves the state."""
         self.previous_state = self.state.clone()
 
     def i_restore_state(self) -> None:
+        """Restores the state."""
         self.state = self.previous_state.clone()
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        """Doublechecks."""
         pass
 
     def write_to_report(self) -> List[str]:
@@ -387,8 +395,8 @@ class ModularHeatPump(cp.Component):
             self.heat_controller_power_modifier_channel
         )
 
-        T_outside: float = stsv.get_input_value(self.temperature_outside_channel)
-        cop = self.cal_cop(T_outside)
+        temperature_outside: float = stsv.get_input_value(self.temperature_outside_channel)
+        cop = self.cal_cop(temperature_outside)
         electric_power = self.config.power_th / cop
 
         # calculate modulation

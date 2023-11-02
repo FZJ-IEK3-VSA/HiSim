@@ -75,6 +75,18 @@ jobs:
         prospector hisim/components/advanced_heat_pump_hplib.py
         prospector hisim/components/electricity_meter.py
         prospector hisim/components/controller_mpc.py
+        prospector hisim/components/weather.py
+        prospector hisim/components/generic_smart_device.py
+        prospector hisim/components/loadprofilegenerator_connector.py
+        prospector hisim/components/loadprofilegenerator_utsp_connector.py
+        prospector hisim/components/random_numbers.py
+        prospector hisim/components/generic_pv_system.py
+        prospector hisim/components/generic_heat_water_storage.py
+        prospector hisim/components/generic_price_signal.py
+        prospector hisim/components/generic_ev_charger.py
+        prospector hisim/components/controller_pid.py
+        prospector hisim/components/generic_hydrogen_storage.py
+
         prospector hisim/modular_household/component_connections.py
         prospector hisim/modular_household/interface_configs/system_config.py
 

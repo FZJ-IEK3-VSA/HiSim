@@ -25,7 +25,6 @@ from hisim.components import controller_l1_generic_ev_charge
 from hisim.components import controller_l2_energy_management_system
 from hisim import utils
 from hisim import loadtypes as lt
-from hisim import log
 from examples.modular_example import cleanup_old_lpg_requests
 from examples.household_5_advanced_hp_ev_pv_battery import HouseholdAdvancedHpEvPvBatteryConfig
 
@@ -36,8 +35,6 @@ __license__ = "MIT"
 __version__ = "1.0"
 __maintainer__ = "Markus Blasberg"
 __status__ = "development"
-
-
 
 
 def household_5_advanced_hp_ev_pv_battery_new_sort(

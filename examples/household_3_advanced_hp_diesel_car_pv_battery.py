@@ -13,7 +13,7 @@ from utspclient.helpers.lpgdata import (
     TransportationDeviceSets,
     TravelRouteSets,
 )
-
+from hisim.system_setup_configuration import SystemSetupConfigBase
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
@@ -29,10 +29,8 @@ from hisim.components import electricity_meter
 from hisim.components import generic_pv_system
 from hisim.components import advanced_battery_bslib
 from hisim.components import controller_l2_energy_management_system
-from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim import utils
 from hisim import loadtypes as lt
-from hisim import log
 from examples.modular_example import cleanup_old_lpg_requests
 
 __authors__ = "Markus Blasberg"
@@ -46,7 +44,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class HouseholdAdvancedHPDieselCarPVBatteryConfig:
+class HouseholdAdvancedHPDieselCarPVBatteryConfig(SystemSetupConfigBase):
 
     """Configuration for with advanced heat pump, diesel car, PV and Battery."""
 

@@ -8,6 +8,7 @@ from hisim import log
 from hisim.simulationparameters import SimulationParameters
 from hisim.component_wrapper import ComponentWrapper
 from hisim.component import OpexCostDataClass
+from hisim.components.advanced_battery_bslib import Battery
 
 
 def opex_calculation(
@@ -95,7 +96,7 @@ def capex_calculation(
             # lifetime is per default set to 1.0 in class cp.Component to avoid devide by zero error
 
             # battery costs and emissions are calculated per used cycles not per simulation period  # better aproximation of aging
-            if component_unwrapped.component_name == "Battery_w1":  # Todo: change name
+            if isinstance(component_unwrapped, Battery) and hasattr(component_unwrapped, "get_battery_aging_information"):
                 virtual_number_of_full_charge_cycles, lifetime_in_cycles = component_unwrapped.get_battery_aging_information()
                 if lifetime_in_cycles > 0:
                     capex_per_simulated_period = (capex / lifetime_in_cycles) * (

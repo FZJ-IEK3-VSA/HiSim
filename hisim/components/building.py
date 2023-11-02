@@ -2089,11 +2089,11 @@ class BuildingInformation:
         )
 
         # Get number of apartments
-        self.number_of_apartments = self.get_number_of_apartments(
+        self.number_of_apartments = int(self.get_number_of_apartments(
             conditioned_floor_area_in_m2=self.scaled_conditioned_floor_area_in_m2,
             scaling_factor=scaling_factor,
             buildingdata=self.buildingdata,
-        )
+        ))
 
         # Get heating load of building
         self.max_thermal_building_demand_in_watt = self.calc_max_thermal_building_demand(

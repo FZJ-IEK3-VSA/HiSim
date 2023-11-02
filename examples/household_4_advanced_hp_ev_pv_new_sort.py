@@ -24,7 +24,6 @@ from hisim.components import controller_l1_generic_ev_charge
 from hisim.components import controller_l2_energy_management_system
 from hisim import utils
 from hisim import loadtypes as lt
-from hisim import log
 from examples.modular_example import cleanup_old_lpg_requests
 from examples.household_4_advanced_hp_ev_pv import HouseholdAdvancedHPEvPvConfig
 

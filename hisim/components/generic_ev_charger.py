@@ -1,19 +1,24 @@
+"""Generic ev charger module."""
+
+# clean
+
 # Generic/Built-in
+import os
+from typing import Any, List, Optional
 import json
 import copy
 import sqlite3
 import datetime
-import os
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
 import pandas as pd
-from hisim.simulationparameters import SimulationParameters
 
 # Owned
+from hisim.simulationparameters import SimulationParameters
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
-from dataclasses import dataclass
-from dataclasses_json import dataclass_json
-from typing import Any, List, Optional
+
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -28,6 +33,8 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class VehiclePureConfig(cp.ConfigBase):
+
+    """Vehicle Pure Config class."""
 
     name: str
     manufacturer: str
@@ -56,6 +63,8 @@ class VehiclePureConfig(cp.ConfigBase):
 @dataclass
 class EVChargerControllerConfig(cp.ConfigBase):
 
+    """Electrical vehicle charger controller config class."""
+
     name: str
     mode: int
 
@@ -73,6 +82,8 @@ class EVChargerControllerConfig(cp.ConfigBase):
 @dataclass_json
 @dataclass
 class VehicleConfig(cp.ConfigBase):
+
+    """Vehicle config class."""
 
     name: str
     manufacturer: str
@@ -99,6 +110,8 @@ class VehicleConfig(cp.ConfigBase):
 @dataclass
 class EVChargerConfig(cp.ConfigBase):
 
+    """Electrical vehicle config class."""
+
     name: str
     manufacturer: str
     charger_name: str
@@ -121,8 +134,8 @@ class EVChargerConfig(cp.ConfigBase):
 
 
 class VehiclePure(cp.Component):
-    """
-    Vehicle component class
+
+    """Vehicle component class.
 
     Parameters
     ----------
@@ -137,11 +150,13 @@ class VehiclePure(cp.Component):
         Family profile imported from LPG. The family
         denomination defines the electric vehicle usage
         throughout the simulation duration
+
     """
 
     def __init__(
         self, my_simulation_parameters: SimulationParameters, config: VehiclePureConfig
     ) -> None:
+        """Initialize the class."""
         super().__init__(
             name="EV_charger",
             my_simulation_parameters=my_simulation_parameters,
@@ -152,15 +167,7 @@ class VehiclePure(cp.Component):
         self.build()
 
     def build(self) -> None:
-        """:key
-
-        Defines ...
-        max_capacity
-        min_capacity
-        capacity
-        discharing
-        car_location
-        """
+        """Build function."""
         if self.evconfig.soc > 1 or self.evconfig.soc < 0:
             raise Exception("Invalid State Of Charge.")
 
@@ -208,21 +215,21 @@ class VehiclePure(cp.Component):
 
             def open_sql(path, table_name):
                 sql_file = sqlite3.connect(path)
-                return pd.read_sql("SELECT * FROM {};".format(table_name), sql_file)
+                return pd.read_sql(f"SELECT * FROM {table_name};", sql_file)
 
             def open_ev_json(filepath):
-                with open(filepath, encoding="utf-8") as f:
-                    data = json.load(f)
+                with open(filepath, encoding="utf-8") as file:
+                    data = json.load(file)
                 return data["Values"]
 
-            FILEPATH = utils.load_export_load_profile_generator(
+            filepath = utils.load_export_load_profile_generator(
                 target=self.evconfig.profile_name
             )
-            if FILEPATH is None:
-                FILEPATH = utils.HISIMPATH
+            if filepath is None:
+                filepath = utils.HISIMPATH
 
             ev_files = {}
-            filepaths = open_sql(FILEPATH["electric_vehicle"][1], "ResultFileEntries")
+            filepaths = open_sql(filepath["electric_vehicle"][1], "ResultFileEntries")
             list_columns = []
             list_values = []
             for _, row in filepaths.iterrows():
@@ -243,7 +250,7 @@ class VehiclePure(cp.Component):
 
             # Gets battery information to calculate discharging while not at home
             transportation_devices = open_sql(
-                FILEPATH["electric_vehicle"][0], "TransportationDevices"
+                filepath["electric_vehicle"][0], "TransportationDevices"
             )
             for _, vehicle in transportation_devices.iterrows():
                 if "Charging" in vehicle["Name"]:
@@ -260,7 +267,7 @@ class VehiclePure(cp.Component):
             discharge_stats = [0]
             # Gets transportation stats
             transportation_devices_stats = open_sql(
-                FILEPATH["electric_vehicle"][0], "TransportationDeviceStates"
+                filepath["electric_vehicle"][0], "TransportationDeviceStates"
             )
             for _, column in transportation_devices_stats.iterrows():
                 if datetime.datetime.strptime(
@@ -284,25 +291,6 @@ class VehiclePure(cp.Component):
                         else:
                             discharge_stats.append(0)
 
-            # discharge = []
-            # load = []
-            # for index, row in ev_pd.iterrows():
-            #    load.append(row["Soc"] * battery_stored_energy_wh)
-            #    if index == 0:
-            #        discharge.append(0)
-            #    else:
-            #        diff = load[-1] - load[-2]
-            #        if diff < 0:
-            #            discharge.append(diff)
-            #        else:
-            #            discharge.append(0)
-
-            # ev_pd["Discharge"] = discharge
-            # data = [ev_pd["CarLocation"].tolist()]
-            # data.append(discharge)
-            # data.append(car_state)
-            # data_parameters = ["CarLocation", "Discharging","CarInChargingStation","RealDischarge","CarState"]
-
             data: List = []
             data.append(car_in_charging_station)
             data.append(discharge_stats)
@@ -317,25 +305,30 @@ class VehiclePure(cp.Component):
             # utils.save_cache("Vehicle", [self.evconfig.profile_name], database)
 
     def i_save_state(self) -> None:
+        """Saves the state."""
         pass
 
     def i_restore_state(self) -> None:
+        """Restores the state."""
         pass
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        """Doublechecks."""
         pass
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Simulates the component."""
         pass
 
 
 class Vehicle(cp.Component):
-    """
-    Electric Vehicle Component. This is a
-    alternative implementation, not fully working,
-    to be used in future releases
+
+    """Electric Vehicle Component.
+
+    This is a alternative implementation, not fully working,
+    to be used in future releases.
 
     Parameters
     ----------
@@ -346,6 +339,7 @@ class Vehicle(cp.Component):
     soc : float
         Initial state of charge of battery before
         simulation
+
     """
 
     BeforeCapacity = "BeforeCapacity"
@@ -357,6 +351,7 @@ class Vehicle(cp.Component):
     def __init__(
         self, my_simulation_parameters: SimulationParameters, config: VehicleConfig
     ) -> None:
+        """Initialize the class."""
         super().__init__(
             name="ElectricVehicle",
             my_simulation_parameters=my_simulation_parameters,
@@ -365,7 +360,7 @@ class Vehicle(cp.Component):
 
         self.build(manufacturer=config.manufacturer, model=config.model, soc=config.soc)
 
-        self.before_capacityC: cp.ComponentInput = self.add_input(
+        self.before_capacity_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.BeforeCapacity,
             lt.LoadTypes.ELECTRICITY,
@@ -373,17 +368,18 @@ class Vehicle(cp.Component):
             True,
         )
 
-        self.after_capacityC: cp.ComponentOutput = self.add_output(
+        self.after_capacity_channel: cp.ComponentOutput = self.add_output(
             self.component_name, self.AfterCapacity, lt.LoadTypes.ANY, lt.Units.WATT
         )
-        self.max_capacityC: cp.ComponentOutput = self.add_output(
+        self.max_capacity_channel: cp.ComponentOutput = self.add_output(
             self.component_name, self.MaxCapacity, lt.LoadTypes.ANY, lt.Units.WATT
         )
-        self.dischargeC: cp.ComponentOutput = self.add_output(
+        self.discharge_channel: cp.ComponentOutput = self.add_output(
             self.component_name, self.Discharge, lt.LoadTypes.ELECTRICITY, lt.Units.WATT
         )
 
     def build(self, manufacturer: str, model: str, soc: float) -> None:
+        """Build function."""
         if soc > 1 or soc < 0:
             raise Exception("Invalid State Of Charge.")
 
@@ -418,31 +414,37 @@ class Vehicle(cp.Component):
         self.capacity = capacity
 
     def i_save_state(self) -> None:
+        """Saves the state."""
         pass
 
     def i_restore_state(self) -> None:
+        """Restores the state."""
         pass
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        """Doubelchecks."""
         pass
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Simulates the component."""
         if timestep == 0:
             capacity = self.capacity
         else:
-            capacity = stsv.get_input_value(self.before_capacityC)
-        stsv.set_output_value(self.after_capacityC, capacity)
-        stsv.set_output_value(self.max_capacityC, self.max_capacity)
+            capacity = stsv.get_input_value(self.before_capacity_channel)
+        stsv.set_output_value(self.after_capacity_channel, capacity)
+        stsv.set_output_value(self.max_capacity_channel, self.max_capacity)
 
 
 class SimpleStorageState:
-    """
+
+    """Simple Storage State class.
+
     Simplistic implementation for any type
     of energy state storage. Relevant for battery,
     electric vehicles, etc, to store or withdraw
-    certain amount of energy of a predefined storage
+    certain amount of energy of a predefined storage.
 
     Parameters
     ----------
@@ -459,6 +461,7 @@ class SimpleStorageState:
         step.
     seconds_per_timestep : int
         Duration in seconds of one time step.
+
     """
 
     def __init__(
@@ -469,6 +472,7 @@ class SimpleStorageState:
         time_correction_factor: Optional[float] = None,
         seconds_per_timestep: Optional[int] = None,
     ) -> None:
+        """Initialize the class."""
         self.max_var_val = max_var_val
         self.min_var_val = min_var_val
         self.stored_energy = stored_energy
@@ -482,6 +486,7 @@ class SimpleStorageState:
         val: float,
         efficiency: float = 1.0,
     ) -> Any:
+        """Store."""
         if val < max_capacity - current_capacity:
             amount = val
         else:
@@ -502,6 +507,7 @@ class SimpleStorageState:
         return amount, current_capacity
 
     def force_store(self, max_capacity: float, current_capacity: float) -> Any:
+        """Force store."""
         amount = self.max_var_val
         if amount > max_capacity - current_capacity:
             amount = max_capacity - current_capacity
@@ -521,6 +527,7 @@ class SimpleStorageState:
         val: float,
         efficiency: float = 1.0,
     ) -> Any:
+        """Withdraw."""
         val = abs(val)
         if current_capacity - min_capacity > val:
             amount = -val
@@ -540,16 +547,18 @@ class SimpleStorageState:
         return amount, current_capacity
 
     def keep_state(self, capacity: float) -> Any:
+        """Keep state."""
         charging_delta = 0
         # after_capacity = capacity
         return charging_delta, capacity
 
 
 class EVCharger(cp.Component):
-    """
-    Electric Vehicle Charger Component
-    Parameters:
-    ----------------
+
+    """Electric Vehicle Charger Component.
+
+    Parameters
+    ----------
         manufacturer : str
         name : str
         electric_vehicle : Vehicle_Pure
@@ -579,6 +588,7 @@ class EVCharger(cp.Component):
     def __init__(
         self, my_simulation_parameters: SimulationParameters, config: EVChargerConfig
     ) -> None:
+        """Initialize the class."""
         super().__init__(
             name="EVCharger",
             my_simulation_parameters=my_simulation_parameters,
@@ -602,28 +612,28 @@ class EVCharger(cp.Component):
 
         self.previous_state = copy.deepcopy(self.state)
 
-        self.charging_inputC: cp.ComponentInput = self.add_input(
+        self.charging_input_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.ElectricityInput,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
             True,
         )
-        self.stateC: cp.ComponentInput = self.add_input(
+        self.state_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.EVChargerState,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             True,
         )
-        self.modeC: cp.ComponentInput = self.add_input(
+        self.mode_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.EVChargerMode,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             True,
         )
-        self.min_socC: cp.ComponentInput = self.add_input(
+        self.min_soc_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.MinimumStateOfCharge,
             lt.LoadTypes.ANY,
@@ -631,19 +641,19 @@ class EVCharger(cp.Component):
             True,
         )
 
-        self.socC: cp.ComponentOutput = self.add_output(
+        self.soc_channel: cp.ComponentOutput = self.add_output(
             self.component_name, self.StateOfCharge, lt.LoadTypes.ANY, lt.Units.ANY
         )
-        self.after_capacityC: cp.ComponentOutput = self.add_output(
+        self.after_capacity_channel: cp.ComponentOutput = self.add_output(
             self.component_name, self.AfterStoredEnergy, lt.LoadTypes.ANY, lt.Units.ANY
         )
-        self.drivingC: cp.ComponentOutput = self.add_output(
+        self.driving_channel: cp.ComponentOutput = self.add_output(
             self.component_name, self.Driving, lt.LoadTypes.ANY, lt.Units.ANY
         )
-        self.at_charging_stationC: cp.ComponentOutput = self.add_output(
+        self.at_charging_station_channel: cp.ComponentOutput = self.add_output(
             self.component_name, self.AtChargingStation, lt.LoadTypes.ANY, lt.Units.ANY
         )
-        self.electricity_outputC: cp.ComponentOutput = self.add_output(
+        self.electricity_output_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.ElectricityOutput,
             lt.LoadTypes.ELECTRICITY,
@@ -658,6 +668,7 @@ class EVCharger(cp.Component):
         electric_vehicle: Any,
         sim_params: SimulationParameters,
     ) -> None:
+        """Build function."""
         self.time_correction_factor = 1 / sim_params.seconds_per_timestep
         self.seconds_per_timestep = sim_params.seconds_per_timestep
 
@@ -679,37 +690,42 @@ class EVCharger(cp.Component):
         self.electric_vehicle = electric_vehicle
 
     def write_to_report(self) -> List[str]:
+        """Write to resport."""
         lines = []
-        lines.append("Name: {}".format(self.component_name))
-        lines.append("Manufacturer: {}".format(self.manufacturer))
-        lines.append("Model: {}".format(self.name))
-        lines.append("Charging Power: {} kW".format(self.charging_power_original))
+        lines.append(f"Name: {self.component_name}")
+        lines.append(f"Manufacturer: {self.manufacturer}")
+        lines.append(f"Model: {self.name}")
+        lines.append(f"Charging Power: {self.charging_power_original} kW")
         lines.append(
-            "EV Battery Capacity: {}".format(self.electric_vehicle.max_capacity * 1e-3)
+            f"EV Battery Capacity: {self.electric_vehicle.max_capacity * 1e-3}"
         )
-        lines.append("Vehicle: {}".format(self.electric_vehicle.model))
+        lines.append(f"Vehicle: {self.electric_vehicle.model}")
         return lines
 
     def i_save_state(self) -> None:
+        """Saves the state."""
         self.previous_state = copy.deepcopy(self.state)
 
     def i_restore_state(self) -> None:
+        """Restores the state."""
         self.state = copy.deepcopy(self.previous_state)
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        """Doubelchecks."""
         pass
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Simulates the component."""
         if force_convergence:
             return
 
         # Gets inputs
-        charging = stsv.get_input_value(self.charging_inputC)
-        state = stsv.get_input_value(self.stateC)
+        charging = stsv.get_input_value(self.charging_input_channel)
+        state = stsv.get_input_value(self.state_channel)
         # mode = stsv.get_input_value(self.modeC)
-        min_soc = stsv.get_input_value(self.min_socC)
+        min_soc = stsv.get_input_value(self.min_soc_channel)
 
         capacity = self.state.stored_energy
         max_capacity = self.electric_vehicle.max_capacity
@@ -744,8 +760,8 @@ class EVCharger(cp.Component):
                 )
             else:
                 raise Exception(
-                    "State {} has not been implemented! "
-                    "Please check EVCharger and EVChargerController".format(state)
+                    f"State {state} has not been implemented! "
+                    "Please check EVCharger and EVChargerController "
                 )
 
         # Discharges battery according to electric vehicle use
@@ -764,13 +780,14 @@ class EVCharger(cp.Component):
             driving = 0
             charging_delta, after_capacity = self.state.keep_state(capacity=capacity)
 
-        stsv.set_output_value(self.socC, after_capacity / max_capacity)
-        stsv.set_output_value(self.after_capacityC, after_capacity)
-        stsv.set_output_value(self.drivingC, driving)
-        stsv.set_output_value(self.electricity_outputC, charging_delta)
-        stsv.set_output_value(self.at_charging_stationC, connected_to_charging_station)
+        stsv.set_output_value(self.soc_channel, after_capacity / max_capacity)
+        stsv.set_output_value(self.after_capacity_channel, after_capacity)
+        stsv.set_output_value(self.driving_channel, driving)
+        stsv.set_output_value(self.electricity_output_channel, charging_delta)
+        stsv.set_output_value(self.at_charging_station_channel, connected_to_charging_station)
 
     def charge_only_electricity_surplus(self, to_be_charged, max_capacity, capacity):
+        """Charge only electricity surplus."""
         if to_be_charged >= 0:
             charging_delta, after_capacity = self.state.store(
                 max_capacity=max_capacity, current_capacity=capacity, val=to_be_charged
@@ -786,6 +803,7 @@ class EVCharger(cp.Component):
         min_capacity: float,
         capacity: float,
     ) -> Any:
+        """Operate o vehicle to grid."""
         if to_be_charged >= 0:
             charging_delta, after_capacity = self.state.store(
                 max_capacity=max_capacity, current_capacity=capacity, val=to_be_charged
@@ -799,6 +817,7 @@ class EVCharger(cp.Component):
         return charging_delta, after_capacity
 
     def charge_only_from_the_grid(self, max_capacity, capacity):
+        """Charge only from the grid."""
         charging_delta, after_capacity = self.state.force_store(
             max_capacity=max_capacity, current_capacity=capacity
         )
@@ -806,9 +825,11 @@ class EVCharger(cp.Component):
 
 
 class EVChargerController(cp.Component):
-    """
+
+    """Electricle vehicle controller class.
+
     Imports data from Load Profile Generator and
-    uses as a Component Class in hisim
+    uses as a Component Class in hisim.
     """
 
     # Inputs
@@ -828,6 +849,7 @@ class EVChargerController(cp.Component):
         my_simulation_parameters: SimulationParameters,
         config: EVChargerControllerConfig,
     ) -> None:
+        """Initialize the class."""
         super().__init__(
             name="EVChargerController",
             my_simulation_parameters=my_simulation_parameters,
@@ -875,14 +897,14 @@ class EVChargerController(cp.Component):
             self.mode_extended_description = "WRITE MODE EXTENDED DESCRIPTION HERE!"
 
         # Inputs
-        self.charging_inputC: cp.ComponentInput = self.add_input(
+        self.charging_input_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.ElectricityInput,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
             True,
         )
-        self.socC: cp.ComponentInput = self.add_input(
+        self.soc_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.StateOfCharge,
             lt.LoadTypes.ANY,
@@ -890,13 +912,13 @@ class EVChargerController(cp.Component):
             True,
         )
 
-        self.stateC: cp.ComponentOutput = self.add_output(
+        self.state_channel: cp.ComponentOutput = self.add_output(
             self.component_name, self.EVChargerState, lt.LoadTypes.ANY, lt.Units.ANY
         )
-        self.modeC: cp.ComponentOutput = self.add_output(
+        self.mode_channel: cp.ComponentOutput = self.add_output(
             self.component_name, self.EVChargerMode, lt.LoadTypes.ANY, lt.Units.ANY
         )
-        self.min_socC: cp.ComponentOutput = self.add_output(
+        self.min_soc_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.MinimumStateOfCharge,
             lt.LoadTypes.ANY,
@@ -904,20 +926,24 @@ class EVChargerController(cp.Component):
         )
 
     def i_save_state(self) -> None:
+        """Saves the state."""
         pass
 
     def i_restore_state(self) -> None:
+        """Restores the state."""
         pass
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        """Doublechecks."""
         pass
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Simulates the component."""
         # Gets inputs
         # charging = stsv.get_input_value(self.charging_inputC)
-        state_of_charge = stsv.get_input_value(self.socC)
+        state_of_charge = stsv.get_input_value(self.soc_channel)
 
         minimum_state_of_charge = 0.1
 
@@ -936,7 +962,7 @@ class EVChargerController(cp.Component):
             if state_of_charge < 0.6:
                 state = 1
             # Under this condition, charge only on electricity surplus
-            elif state_of_charge >= 0.6 and state_of_charge < 0.8:
+            elif 0.6 <= state_of_charge < 0.8:
                 state = 2
             # Under this condition, charge on Vehicle-to-Grid basis
             elif state_of_charge >= 0.8:
@@ -949,7 +975,7 @@ class EVChargerController(cp.Component):
             if state_of_charge < 0.4:
                 state = 1
             # Under this condition, charge only on electricity surplus
-            elif state_of_charge >= 0.4 and state_of_charge < 0.7:
+            elif 0.4 <= state_of_charge < 0.7:
                 state = 2
             # Under this condition, charge on Vehicle-to-Grid basis
             elif state_of_charge >= 0.7:
@@ -962,7 +988,7 @@ class EVChargerController(cp.Component):
             if state_of_charge < 0.2:
                 state = 1
             # Under this condition, charge only on electricity surplus
-            elif state_of_charge >= 0.2 and state_of_charge < 0.6:
+            elif 0.2 <= state_of_charge < 0.6:
                 state = 2
             # Under this condition, charge on Vehicle-to-Grid basis
             elif state_of_charge >= 0.6:
@@ -971,20 +997,20 @@ class EVChargerController(cp.Component):
         else:
             if self.mode is None:
                 raise Exception("None mode is invalid.")
-            raise Exception("Mode {} has not been implemented yet.".format(self.mode))
+            raise Exception(f"Mode {self.mode} has not been implemented yet.")
 
-        stsv.set_output_value(self.stateC, state)
-        stsv.set_output_value(self.min_socC, minimum_state_of_charge)
-        stsv.set_output_value(self.modeC, self.mode)
+        stsv.set_output_value(self.state_channel, state)
+        stsv.set_output_value(self.min_soc_channel, minimum_state_of_charge)
+        stsv.set_output_value(self.mode_channel, self.mode)
 
     def write_to_report(self):
+        """Write to report."""
         lines = []
-        lines.append("Mode Number: {}".format(self.mode))
-        lines.append("Mode: {}".format(self.mode_description))
+        lines.append(f"Mode Number: {self.mode}")
+        lines.append(f"Mode: {self.mode_description}")
         try:
             lines.append(
-                "Extend Mode Description: {}".format(self.mode_extended_description)
-            )
+                f"Extend Mode Description: {self.mode_extended_description}")
         except AttributeError:
             lines.append("Extend Mode Description: TO BE IMPLEMENTED")
         return lines

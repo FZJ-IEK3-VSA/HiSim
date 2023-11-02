@@ -227,14 +227,15 @@ def household_3_advanced_hp_diesel_car_pv_battery(
     if Path(utils.HISIMPATH["utsp_results"]).exists():
         cleanup_old_lpg_requests()
 
-    my_config = utils.create_configuration(my_sim, HouseholdAdvancedHPDieselCarPVBatteryConfig)
+    # my_config = utils.create_configuration(my_sim, HouseholdAdvancedHPDieselCarPVBatteryConfig)
 
     # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
-    # config_filename = "household_3_advanced_hp_diesel_car_pv_battery_config.json"
-    # my_config_json = my_config.to_json()
-    # with open(config_filename, "w", encoding="utf8") as system_config_file:
-    #     system_config_file.write(my_config_json)
-
+    if my_sim.my_module_config_path:
+        my_config = HouseholdAdvancedHPDieselCarPVBatteryConfig.load_from_json(
+            my_sim.my_module_config_path
+        )
+    else:
+        my_config = HouseholdAdvancedHPDieselCarPVBatteryConfig.get_default()
     # =================================================================================================================================
     # Set System Parameters
 

@@ -244,14 +244,15 @@ def household_4_advanced_hp_ev_pv(
     if Path(utils.HISIMPATH["utsp_results"]).exists():
         cleanup_old_lpg_requests()
 
-    my_config = utils.create_configuration(my_sim, HouseholdAdvancedHPEvPvConfig)
+    # my_config = utils.create_configuration(my_sim, HouseholdAdvancedHPEvPvConfig)
 
     # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
-    # config_filename = "household_4_advanced_hp_ev_pv_config.json"
-    # my_config_json = my_config.to_json()
-    # with open(config_filename, "w", encoding="utf8") as system_config_file:
-    #     system_config_file.write(my_config_json)
-
+    if my_sim.my_module_config_path:
+        my_config = HouseholdAdvancedHPEvPvConfig.load_from_json(
+            my_sim.my_module_config_path
+        )
+    else:
+        my_config = HouseholdAdvancedHPEvPvConfig.get_default()
     # =================================================================================================================================
     # Set System Parameters
 

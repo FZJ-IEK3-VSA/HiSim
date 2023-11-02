@@ -68,6 +68,9 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
         heating_reference_temperature_in_celsius: float = -7
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0
 
+        building_config = (
+            building.BuildingConfig.get_default_german_single_family_home()
+        )
         my_building_information = building.BuildingInformation(config=building_config)
 
         household_config = HouseholdAdvancedHPDieselCarConfig(

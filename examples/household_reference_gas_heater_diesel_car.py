@@ -184,15 +184,16 @@ def household_reference_gas_heater_diesel_car(
     if Path(utils.HISIMPATH["utsp_results"]).exists():
         cleanup_old_lpg_requests()
 
-    my_config = utils.create_configuration(my_sim, ReferenceHouseholdConfig)
+    # my_config = utils.create_configuration(my_sim, ReferenceHouseholdConfig)
 
     # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
-    # config_filename = "household_reference_gas_heater_diesel_car_config.json"
-    # my_config_json = my_config.to_json()
-    # with open(config_filename, "w", encoding="utf8") as system_config_file:
-    #     system_config_file.write(my_config_json)
-
-    # =================================================================================================================================
+    if my_sim.my_module_config_path:
+        my_config = ReferenceHouseholdConfig.load_from_json(
+            my_sim.my_module_config_path
+        )
+    else:
+        my_config = ReferenceHouseholdConfig.get_default()
+    # =================================================================================
     # Set System Parameters
 
     # Set Simulation Parameters

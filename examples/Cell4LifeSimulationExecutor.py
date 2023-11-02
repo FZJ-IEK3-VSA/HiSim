@@ -19,12 +19,16 @@ import Cell4Life_Postprocessing
  """
 os.chdir('C:\\Users\\Standard\\Desktop\\hisim\\HiSim\\')
 FuelCellPowerW_list = [20000,40000]  #Electricity Power of Fuel Cell Power in Watt
-BatteryCapkWh_list = [500000]     #Total Capacity of Battery in kWh
+BatteryCapkWh_list = [500000,10]     #Total Capacity of Battery in kWh
 
 #FuelCellPowerW_list = [25000, 50000,100000,200000]  #Electricity Power of Fuel Cell Power in Watt
 #BatteryCapkWh_list = [500,1000,2000,4000,8000]     #Total Capacity of Battery in kWh
 
+FuelCellPowerWUnit = "W"
+BatteryCapkWhUnit = "kWh"
+
 PreResultNumber = 0
+PreResultNumberUnit = "-"
 
 for FuelCellPowerW in FuelCellPowerW_list:
     for BatteryCapkWh in BatteryCapkWh_list:
@@ -32,8 +36,11 @@ for FuelCellPowerW in FuelCellPowerW_list:
         # Lege neue Werte für Parameter in config_vars fest
         param_df = pd.read_csv("examples/params_to_loop.csv", sep=",")
         param_df["PreResultNumber"][0] = PreResultNumber
+        param_df["PreResultNumberUnit"][0] = PreResultNumberUnit
         param_df["FuelCellPowerW"][0] = FuelCellPowerW
+        param_df["FuelCellPowerWUnit"][0] = FuelCellPowerWUnit
         param_df["BatteryCapkWh"][0] = BatteryCapkWh
+        param_df["BatteryCapkWhUnit"][0] = BatteryCapkWhUnit
         param_df.to_csv("examples/params_to_loop.csv", sep=",", index= False)
         del param_df
         

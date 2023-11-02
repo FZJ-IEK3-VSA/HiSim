@@ -12,7 +12,7 @@ from openpyxl.styles import NamedStyle
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 
 def saveInputdata(input_variablen):
-    PreResultNumber = input_variablen["PreResultNumber"]
+    PreResultNumber = input_variablen["PreResultNumber"]["value"]
     #----Save all Input Data in a .txt ----
     path = ResultPathProviderSingleton().get_result_directory_name() 
     name = f"//S{PreResultNumber}_InputConfig.csv"
@@ -22,14 +22,14 @@ def saveInputdata(input_variablen):
     with open(path, mode='w', newline='') as file:
         writer = csv.writer(file)
         # Schreibe den Header (Spaltenüberschriften)
-        writer.writerow(['Variable', 'Wert'])
+        writer.writerow(['Variable', 'Wert', "Einheit"])
         # Schreibe die Variablen und ihre Werte in separate Zeilen
-        for variable, wert in input_variablen.items():
-            writer.writerow([variable, wert])
+        for variable, info in input_variablen.items():
+            writer.writerow([variable, info["value"], info["unit"]])
         file.close()
 
 def saveexcelforevaluations(input_variablen, excelfilepathallresults, excel_filename):
-    PreResultNumber = input_variablen["PreResultNumber"]
+    PreResultNumber = input_variablen["PreResultNumber"]["value"]
     path = ResultPathProviderSingleton().get_result_directory_name() 
     
     zusammengefuegte_daten = []
@@ -97,16 +97,23 @@ def saveexcelforevaluations(input_variablen, excelfilepathallresults, excel_file
     # Select the desired worksheet
     worksheet = workbook['Anlagendaten']  # 'Anlagendaten' durch den tatsächlichen Namen ersetzen
 
+    #In first simulation round, delete all data in worksheet "Anlagendaten"
+    if PreResultNumber == 0:
+        for row in worksheet.iter_rows(min_row=1, max_row=worksheet.max_row, min_col=1, max_col=worksheet.max_column):
+            for cell in row:
+                cell.value = None
+
     # Determine the row to append the data
     next_column = worksheet.max_column + 1
     next_row = 1
     # Write the data to the worksheet
-    for parameter, value in input_variablen.items():
+    for parameter, info in input_variablen.items():
         if PreResultNumber == 0:
             worksheet.cell(row=next_row, column=1, value=parameter)
-            worksheet.cell(row=next_row, column=2, value=value)
+            worksheet.cell(row=next_row, column=2, value=info["unit"])
+            worksheet.cell(row=next_row, column=3, value= info["value"])
         else:
-            worksheet.cell(row=next_row, column=next_column, value=value)    
+            worksheet.cell(row=next_row, column=next_column, value= info["value"])    
         next_row += 1
 
     #------------
@@ -114,8 +121,9 @@ def saveexcelforevaluations(input_variablen, excelfilepathallresults, excel_file
     print("------------------------------------------------------------------------------")
     print("------------------------------------------------------------------------------")
     print("------------------------------------------------------------------------------")
+    print("Parametervariation Runde: ", str(input_variablen["PreResultNumber"]["value"]))
     print("------------------------------------------------------------------------------")
-    print("Parametervariation---Batteriekapazität: ", str(input_variablen["battery_capacity"]), "  &  Brennstoffzellenleistung: ",input_variablen["fuel_cell_power"])
+    print("Parametervariation---Batteriekapazität: ", str(input_variablen["battery_capacity"]["value"]), "  &  Brennstoffzellenleistung: ",input_variablen["fuel_cell_power"]["value"])
     print("Simulation mit Parametern abgeschlossen - Ergebnisse werden im ökonomischen Bewertungstool gespeichert")
     print("------------------------------------------------------------------------------")
     print("------------------------------------------------------------------------------")

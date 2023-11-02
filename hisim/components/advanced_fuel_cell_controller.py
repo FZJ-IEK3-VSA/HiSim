@@ -1,5 +1,9 @@
-# pylint: skip-file
+"""Advanced fuel cell controller module."""
+
+# clean
 from typing import Any
+from math import ceil
+from copy import deepcopy
 from hisim.component import (
     Component,
     SingleTimeStepValues,
@@ -17,12 +21,14 @@ from hisim.components import advanced_fuel_cell as chp
 from hisim.components.configuration import ExtendedControllerConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-from math import ceil
-from copy import deepcopy
 
 
 class ExtendedControllerSimulation:
+
+    """Extended Controller Simulation."""
+
     def __init__(self, config: ExtendedControllerConfig):
+        """Initialize the class."""
         pass
 
     def regulate_chp_mode_power(
@@ -33,7 +39,8 @@ class ExtendedControllerSimulation:
         electricity_demand_household: Any,
         seconds_per_timestep: Any,
     ) -> Any:
-        """
+        """Regulate the power.
+
         :param power_supply_pv:
         :param electricity_demand_household:
         :param seconds_per_timestep:
@@ -135,6 +142,8 @@ class ExtendedControllerSimulation:
         electricity_demand_household,
         seconds_per_timestep,
     ):
+        """Regulate chp mode heat."""
+
         # the heat model has no modulation because there is a buffer (warm water storage)
 
         heights_in_tank = CHPControllerConfig.heights_in_tank
@@ -153,12 +162,10 @@ class ExtendedControllerSimulation:
             raise ValueError
 
         # get temperatures at the chosen sensors
-        for i in range(
-            len(heights_in_tank)
-        ):  # pylint: consider-using-enumerate # needs to be a range
-            if CHPControllerConfig.height_upper_sensor == heights_in_tank[i]:
+        for i, height_in_tank in enumerate(heights_in_tank):
+            if CHPControllerConfig.height_upper_sensor == height_in_tank:
                 temperature_upper_sensor = temperatures_in_tank[i]
-            if CHPControllerConfig.height_lower_sensor == heights_in_tank[i]:
+            if CHPControllerConfig.height_lower_sensor == height_in_tank:
                 temperature_lower_sensor = temperatures_in_tank[i]
         state_chp = previous_state
         # upper sensor
@@ -200,6 +207,8 @@ class ExtendedControllerSimulation:
         runtime_counter: int,
         seconds_per_timestep: int,
     ) -> Any:
+        """Regulate gas heater."""
+
         # the gas_heater model has no modulation because there is a buffer (warm water storage)
         # ToDo: future --> make modulating possible if the waste energy is to high? reduce power, increase mass_flow
 
@@ -217,12 +226,10 @@ class ExtendedControllerSimulation:
             )
             raise ValueError
 
-        for i in range(
-            len(heights_in_tank)
-        ):  # pylint: consider-using-enumerate # needs to be a range
-            if GasControllerConfig.height_upper_sensor == heights_in_tank[i]:
+        for i, height_in_tank in enumerate(heights_in_tank):
+            if GasControllerConfig.height_upper_sensor == height_in_tank:
                 temperature_upper_sensor = temperatures_in_tank[i]
-            if GasControllerConfig.height_lower_sensor == heights_in_tank[i]:
+            if GasControllerConfig.height_lower_sensor == height_in_tank:
                 temperature_lower_sensor = temperatures_in_tank[i]
         state_gas_heater = previous_state
         # upper sensor
@@ -254,7 +261,8 @@ class ExtendedControllerSimulation:
         return state_gas_heater, runtime_counter
 
     def power_distribution_to_electrolyzer(self, power_from_or_to_grid: Any) -> Any:
-        """
+        """Power distribution to electrolyzer.
+
         Hydrogen storage must be able to store the produced massflow of hydrogen.
         Otherwise the dimensioning of the system is incorrect --> is checked in hydrogen_storage
         power_from_or_to_grid is positive if there is a demand of energy and negative if there is a surplus of energy.
@@ -282,6 +290,9 @@ class ExtendedControllerSimulation:
 
 
 class ExtendedController(Component):
+
+    """Extended Controller class."""
+
     # inputs
     ElectricityDemand = "Electricity Demand"  # W
     PV_Production = "PV Production"  # W
@@ -309,20 +320,21 @@ class ExtendedController(Component):
         config: ExtendedControllerConfig,
         my_simulation_parameters: SimulationParameters,
     ) -> None:
+        """Initialize the class."""
         super().__init__(
             name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
         )
         # Input
-        self.electricity_demand_household: ComponentInput = self.add_input(
+        self.electricity_demand_household_channel: ComponentInput = self.add_input(
             self.component_name,
             ExtendedController.ElectricityDemand,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
             True,
         )
-        self.pv_production: ComponentInput = self.add_input(
+        self.pv_production_channel: ComponentInput = self.add_input(
             self.component_name,
             ExtendedController.PV_Production,
             lt.LoadTypes.ELECTRICITY,
@@ -330,42 +342,42 @@ class ExtendedController(Component):
             True,
         )
 
-        self.temperature_0_percent: ComponentInput = self.add_input(
+        self.temperature_0_percent_channel: ComponentInput = self.add_input(
             self.component_name,
             ExtendedController.Temperature0Percent,
             lt.LoadTypes.WARM_WATER,
             lt.Units.CELSIUS,
             True,
         )
-        self.temperature_20_percent: ComponentInput = self.add_input(
+        self.temperature_20_percent_channel: ComponentInput = self.add_input(
             self.component_name,
             ExtendedController.Temperature20Percent,
             lt.LoadTypes.WARM_WATER,
             lt.Units.CELSIUS,
             True,
         )
-        self.temperature_40_percent: ComponentInput = self.add_input(
+        self.temperature_40_percent_channel: ComponentInput = self.add_input(
             self.component_name,
             ExtendedController.Temperature40Percent,
             lt.LoadTypes.WARM_WATER,
             lt.Units.CELSIUS,
             True,
         )
-        self.temperature_60_percent: ComponentInput = self.add_input(
+        self.temperature_60_percent_channel: ComponentInput = self.add_input(
             self.component_name,
             ExtendedController.Temperature60Percent,
             lt.LoadTypes.WARM_WATER,
             lt.Units.CELSIUS,
             True,
         )
-        self.temperature_80_percent: ComponentInput = self.add_input(
+        self.temperature_80_percent_channel: ComponentInput = self.add_input(
             self.component_name,
             ExtendedController.Temperature80Percent,
             lt.LoadTypes.WARM_WATER,
             lt.Units.CELSIUS,
             True,
         )
-        self.temperature_100_percent: ComponentInput = self.add_input(
+        self.temperature_100_percent_channel: ComponentInput = self.add_input(
             self.component_name,
             ExtendedController.Temperature100Percent,
             lt.LoadTypes.WARM_WATER,
@@ -374,38 +386,38 @@ class ExtendedController(Component):
         )
 
         # Output
-        self.controller_chp: ComponentOutput = self.add_output(
+        self.controller_chp_channel: ComponentOutput = self.add_output(
             self.component_name,
             ExtendedController.ControllerCHP,
             lt.LoadTypes.ANY,
             lt.Units.PERCENT,
         )
-        self.controller_gas_heater: ComponentOutput = self.add_output(
+        self.controller_gas_heater_channel: ComponentOutput = self.add_output(
             self.component_name,
             ExtendedController.ControllerGasHeater,
             lt.LoadTypes.ANY,
             lt.Units.PERCENT,
         )
-        self.power_to_electrolyzer: ComponentOutput = self.add_output(
+        self.power_to_electrolyzer_channel: ComponentOutput = self.add_output(
             self.component_name,
             ExtendedController.PowerToElectrolyzer,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
         )
-        self.power_from_or_to_grid: ComponentOutput = self.add_output(
+        self.power_from_or_to_grid_channel: ComponentOutput = self.add_output(
             self.component_name,
             ExtendedController.PowerFromOrToGrid,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
         )
 
-        self.runtime_counter_chp: ComponentOutput = self.add_output(
+        self.runtime_counter_chp_channel: ComponentOutput = self.add_output(
             self.component_name,
             ExtendedController.RuntimeCounterCHP,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
         )
-        self.runtime_counter_gas_heater: ComponentOutput = self.add_output(
+        self.runtime_counter_gas_heater_channel: ComponentOutput = self.add_output(
             self.component_name,
             ExtendedController.RuntimeCounterGasHeater,
             lt.LoadTypes.ANY,
@@ -434,6 +446,7 @@ class ExtendedController(Component):
         self.test_state: float = 0
 
     def i_save_state(self) -> None:
+        """Saves the state."""
         # self.previous_state = self.extended_controller.begin_new_timestep()
         self.previous_state_chp1 = deepcopy(self.state_chp1)
         self.previous_runtime_chp1 = deepcopy(self.runtime_chp1)
@@ -441,6 +454,7 @@ class ExtendedController(Component):
         self.previous_runtime_gas_heater1 = deepcopy(self.runtime_gas_heater1)
 
     def i_restore_state(self) -> None:
+        """Restores the state."""
         # self.extended_controller.reset_to_last_timestep(self.previous_state)
         self.state_chp1 = deepcopy(self.previous_state_chp1)
         self.runtime_chp1 = deepcopy(self.previous_runtime_chp1)
@@ -450,26 +464,27 @@ class ExtendedController(Component):
     def i_simulate(
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Simulates the state."""
         if force_convergence:
             return
 
         # Inputs
         electricity_demand_household = stsv.get_input_value(
-            self.electricity_demand_household
+            self.electricity_demand_household_channel
         )
-        pv_production: float = stsv.get_input_value(self.pv_production)
+        pv_production: float = stsv.get_input_value(self.pv_production_channel)
 
         # not needed for power
         if (
             ExtendedControllerConfig.chp_mode == "heat"
             or ExtendedControllerConfig.gas_heater
         ):
-            temperature_0_percent = stsv.get_input_value(self.temperature_0_percent)
-            temperature_20_percent = stsv.get_input_value(self.temperature_20_percent)
-            temperature_40_percent = stsv.get_input_value(self.temperature_40_percent)
-            temperature_60_percent = stsv.get_input_value(self.temperature_60_percent)
-            temperature_80_percent = stsv.get_input_value(self.temperature_80_percent)
-            temperature_100_percent = stsv.get_input_value(self.temperature_100_percent)
+            temperature_0_percent = stsv.get_input_value(self.temperature_0_percent_channel)
+            temperature_20_percent = stsv.get_input_value(self.temperature_20_percent_channel)
+            temperature_40_percent = stsv.get_input_value(self.temperature_40_percent_channel)
+            temperature_60_percent = stsv.get_input_value(self.temperature_60_percent_channel)
+            temperature_80_percent = stsv.get_input_value(self.temperature_80_percent_channel)
+            temperature_100_percent = stsv.get_input_value(self.temperature_100_percent_channel)
 
             temperatures_in_tank = [
                 temperature_0_percent,
@@ -546,15 +561,15 @@ class ExtendedController(Component):
             power_to_electrolyzer = 0
 
         # Outputs
-        stsv.set_output_value(self.controller_chp, self.state_chp1)
+        stsv.set_output_value(self.controller_chp_channel, self.state_chp1)
         # stsv.set_output_value(self.controller_gas_heater, self.extended_controller.state_gas_heater)
-        stsv.set_output_value(self.controller_gas_heater, self.state_gas_heater1)
+        stsv.set_output_value(self.controller_gas_heater_channel, self.state_gas_heater1)
 
-        stsv.set_output_value(self.power_to_electrolyzer, power_to_electrolyzer)
-        stsv.set_output_value(self.power_from_or_to_grid, power_from_or_to_grid)
+        stsv.set_output_value(self.power_to_electrolyzer_channel, power_to_electrolyzer)
+        stsv.set_output_value(self.power_from_or_to_grid_channel, power_from_or_to_grid)
 
-        stsv.set_output_value(self.runtime_counter_chp, self.runtime_chp1)
-        stsv.set_output_value(self.runtime_counter_gas_heater, self.runtime_gas_heater1)
+        stsv.set_output_value(self.runtime_counter_chp_channel, self.runtime_chp1)
+        stsv.set_output_value(self.runtime_counter_gas_heater_channel, self.runtime_gas_heater1)
 
         # test
         self.test_demand = electricity_demand_household
@@ -566,6 +581,7 @@ class ExtendedController(Component):
         # self.test_state = self.extended_controller.state_chp
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
+        """Doublechecks."""
         # check the electricity balance
         if chp.CHPConfig.is_modulating:
             if self.test_state > 0:

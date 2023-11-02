@@ -1,8 +1,12 @@
-# Owned
-from hisim.simulationparameters import SimulationParameters
+"""Generic electrolyzer and h2 storage module."""
 
+# clean
+
+# Owned
+from typing import List, Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+
 from hisim.component import (
     Component,
     SingleTimeStepValues,
@@ -10,12 +14,11 @@ from hisim.component import (
     ComponentOutput,
     ConfigBase,
 )
-
 from hisim import loadtypes as lt
+from hisim.simulationparameters import SimulationParameters
 
 from hisim.components.configuration import PhysicsConfig
 from hisim import log
-from typing import List, Any
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -31,6 +34,8 @@ __status__ = ""
 @dataclass_json
 @dataclass
 class ElectrolyzerWithStorageConfig(ConfigBase):
+
+    """Electrolyzer wit storage config class."""
 
     name: str
     waste_energy: float  # [W]
@@ -49,6 +54,7 @@ class ElectrolyzerWithStorageConfig(ConfigBase):
 
     @classmethod
     def get_default_config(cls):
+        """Get default config."""
         config = ElectrolyzerWithStorageConfig(
             name="ElectrolyzerWithStorage",
             waste_energy=400,  # [W]
@@ -67,6 +73,8 @@ class ElectrolyzerWithStorageConfig(ConfigBase):
 @dataclass
 class ElectrolyzerWithHydrogenStorageConfig(ConfigBase):
 
+    """Electrolyzer with hydrogen storage config class."""
+
     name: str
     min_capacity: float  # [kg_H2]
     max_capacity: float  # [kg_H2]
@@ -84,6 +92,7 @@ class ElectrolyzerWithHydrogenStorageConfig(ConfigBase):
 
     @classmethod
     def get_default_config(cls):
+        """Get default config."""
         config = ElectrolyzerWithHydrogenStorageConfig(
             name="ElectrolyzerWithHydrogenStorage",
             min_capacity=0,
@@ -99,6 +108,9 @@ class ElectrolyzerWithHydrogenStorageConfig(ConfigBase):
 
 
 class ElectrolyzerSimulation:
+
+    """Electrolyzer simulation class."""
+
     def __init__(
         self,
         waste_energy: float,
@@ -110,7 +122,8 @@ class ElectrolyzerSimulation:
         max_hydrogen_production_rate: float,
         pressure_hydrogen_output: float,
     ):
-        """
+        """Initialze the class.
+
         The electrolyzer converts electrical energy [kWh] into hydrogen [kg]
         It can work in a certain range from x to 100% or be switched off = 0%
         The conversion rate is given by the supplier and is directly used
@@ -138,7 +151,8 @@ class ElectrolyzerSimulation:
         self.pressure_hydrogen_output = pressure_hydrogen_output  # not used so far
 
     def convert_electricity(self, electricity_input, hydrogen_not_stored):
-        """
+        """Convert electricity.
+
         Electricity from electricity distributor (combination of PV, Grid, CHP and demand) will be converted to hydrogen
 
         Check if electricity input is inside the power range of electrolyzer and eventually subtract the unusable power.
@@ -241,6 +255,9 @@ class ElectrolyzerSimulation:
 
 
 class AdvancedElectrolyzer(Component):
+
+    """Advanced Electrolyzer class."""
+
     # input
     ElectricityInput = "Electricity Input"  # W
     HydrogenNotStored = "HydrogenNotStored"  # kg/s
@@ -259,6 +276,7 @@ class AdvancedElectrolyzer(Component):
         my_simulation_parameters: SimulationParameters,
         config: ElectrolyzerWithStorageConfig,
     ):
+        """Initialize the class."""
 
         super().__init__(
             config.name,
@@ -267,7 +285,7 @@ class AdvancedElectrolyzer(Component):
         )
 
         # input
-        self.hydrogen_not_stored: ComponentInput = self.add_input(
+        self.hydrogen_not_stored_channel: ComponentInput = self.add_input(
             self.component_name,
             AdvancedElectrolyzer.HydrogenNotStored,
             lt.LoadTypes.HYDROGEN,
@@ -275,7 +293,7 @@ class AdvancedElectrolyzer(Component):
             True,
         )
 
-        self.electricity_input: ComponentInput = self.add_input(
+        self.electricity_input_channel: ComponentInput = self.add_input(
             self.component_name,
             AdvancedElectrolyzer.ElectricityInput,
             lt.LoadTypes.ELECTRICITY,
@@ -283,42 +301,42 @@ class AdvancedElectrolyzer(Component):
             True,
         )
         # output
-        self.water_demand: ComponentOutput = self.add_output(
+        self.water_demand_channel: ComponentOutput = self.add_output(
             self.component_name,
             AdvancedElectrolyzer.WaterDemand,
             lt.LoadTypes.WATER,
             lt.Units.KG_PER_SEC,
             output_description="Water Demand",
         )
-        self.hydrogen_output: ComponentOutput = self.add_output(
+        self.hydrogen_output_channel: ComponentOutput = self.add_output(
             self.component_name,
             AdvancedElectrolyzer.HydrogenOutput,
             lt.LoadTypes.HYDROGEN,
             lt.Units.KG_PER_SEC,
             output_description="Hydrogen Output",
         )
-        self.oxygen_output: ComponentOutput = self.add_output(
+        self.oxygen_output_channel: ComponentOutput = self.add_output(
             self.component_name,
             AdvancedElectrolyzer.OxygenOutput,
             lt.LoadTypes.OXYGEN,
             lt.Units.KG_PER_SEC,
             output_description="Oxygen Output",
         )
-        self.energy_losses: ComponentOutput = self.add_output(
+        self.energy_losses_channel: ComponentOutput = self.add_output(
             self.component_name,
             AdvancedElectrolyzer.EnergyLosses,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
             output_description="Energy Losses",
         )
-        self.unused_power: ComponentOutput = self.add_output(
+        self.unused_power_channel: ComponentOutput = self.add_output(
             self.component_name,
             AdvancedElectrolyzer.UnusedPower,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
             output_description="Unused Power",
         )
-        self.electricity_real_needed: ComponentOutput = self.add_output(
+        self.electricity_real_needed_channel: ComponentOutput = self.add_output(
             self.component_name,
             AdvancedElectrolyzer.ElectricityRealNeeded,
             lt.LoadTypes.ELECTRICITY,
@@ -326,14 +344,14 @@ class AdvancedElectrolyzer(Component):
             output_description="Electricity Real Needed",
         )
 
-        self.electrolyzer_efficiency: ComponentOutput = self.add_output(
+        self.electrolyzer_efficiency_channel: ComponentOutput = self.add_output(
             self.component_name,
             AdvancedElectrolyzer.ElectrolyzerEfficiency,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             output_description="Electrolyzer Efficiency",
         )
-        self.power_level: ComponentOutput = self.add_output(
+        self.power_level_channel: ComponentOutput = self.add_output(
             self.component_name,
             AdvancedElectrolyzer.PowerLevel,
             lt.LoadTypes.ANY,
@@ -365,6 +383,7 @@ class AdvancedElectrolyzer(Component):
         self.previous_state = 0
 
     def write_to_report(self):
+        """Write to report."""
         lines = []
         lines.append(
             "CHP operation with constant electical and thermal power: "
@@ -377,16 +396,19 @@ class AdvancedElectrolyzer(Component):
         pass
 
     def i_save_state(self):
+        """Saves the state."""
         self.previous_state = self.electrolyzer.state
 
     def i_restore_state(self):
+        """Restores the state."""
         self.electrolyzer.state = self.previous_state
 
     def i_simulate(
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
-        electricity_input: float = stsv.get_input_value(self.electricity_input)
-        hydrogen_input = stsv.get_input_value(self.hydrogen_not_stored)
+        """Simulates the component."""
+        electricity_input: float = stsv.get_input_value(self.electricity_input_channel)
+        hydrogen_input = stsv.get_input_value(self.hydrogen_not_stored_channel)
 
         if electricity_input < 0:
             raise Exception(
@@ -423,7 +445,7 @@ class AdvancedElectrolyzer(Component):
             # unused_hydrogen = charging_amount - hydrogen_input  # add if needed?
             unused_power = unused_power + (electricity_input - electricity_needed)
         electricity_real_needed = (
-            stsv.get_input_value(self.electricity_input) - unused_power
+            stsv.get_input_value(self.electricity_input_channel) - unused_power
         )
         # water is split into these products
         if oxygen_output == 0:
@@ -440,25 +462,29 @@ class AdvancedElectrolyzer(Component):
             electrolyzer_efficiency = 0
             assert electricity_input < self.min_power
 
-        stsv.set_output_value(self.water_demand, water_consumption)
-        stsv.set_output_value(self.hydrogen_output, hydrogen_output)
-        stsv.set_output_value(self.oxygen_output, oxygen_output)
-        stsv.set_output_value(self.energy_losses, losses_this_timestep)
+        stsv.set_output_value(self.water_demand_channel, water_consumption)
+        stsv.set_output_value(self.hydrogen_output_channel, hydrogen_output)
+        stsv.set_output_value(self.oxygen_output_channel, oxygen_output)
+        stsv.set_output_value(self.energy_losses_channel, losses_this_timestep)
 
-        stsv.set_output_value(self.electricity_real_needed, electricity_real_needed)
-        stsv.set_output_value(self.unused_power, unused_power)
-        stsv.set_output_value(self.electrolyzer_efficiency, electrolyzer_efficiency)
-        stsv.set_output_value(self.power_level, power_level)
+        stsv.set_output_value(self.electricity_real_needed_channel, electricity_real_needed)
+        stsv.set_output_value(self.unused_power_channel, unused_power)
+        stsv.set_output_value(self.electrolyzer_efficiency_channel, electrolyzer_efficiency)
+        stsv.set_output_value(self.power_level_channel, power_level)
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
+        """Doublechecks."""
         # alle ausgabewerte die zu überprüfen sind können hiermit fehlerausgabeüberprüft werden
         pass
 
 
 class HydrogenStorageSimulation:
-    """
+
+    """Hydrogen storage simulation class.
+
     Hydrogen storage to store hydrogen which is produced by the electrolyzer.
-    The charging and sometimes discharging of the tank is connected with an electricity (energy) consumption. (Compressor, cooling,...). This energy is given by a fixed value which is not related to the actual fill level.
+    The charging and sometimes discharging of the tank is connected with an electricity (energy) consumption.
+    (Compressor, cooling,...). This energy is given by a fixed value which is not related to the actual fill level.
     Losses are related to the fill level and are given in lost%/24h.
     """
 
@@ -473,7 +499,8 @@ class HydrogenStorageSimulation:
         energy_to_discharge: float,
         loss_factor: float,
     ):
-        """
+        """Initialize the class.
+
         The storage has a minimum and maximum storage level and a current fill status
         The fill status must be between the min and max capacity
         A maximum charging and discharging rate restrict these processes.
@@ -491,7 +518,8 @@ class HydrogenStorageSimulation:
         # assert self.max_discharging_rate > chp.CHPConfig.P_total_max / PhysicsConfig.hydrogen_specific_fuel_value_per_kg
 
     def store(self, hydrogen_input: float, seconds_per_timestep: int) -> Any:
-        """
+        """Store.
+
         Notice: Write return statement and the function goes back to to the caller method immediately
         Storage function:
         The maximum possible charging amount is calculated.
@@ -552,7 +580,8 @@ class HydrogenStorageSimulation:
         raise Exception("forgotten case")
 
     def withdraw(self, hydrogen_output: float, seconds_per_timestep: int) -> Any:
-        """
+        """Withdraw.
+
         Discharging function. Functionality its the reverse of the store function.
         :param      hydrogen_output:        Demand on hydrogen [kg_H2]
         :param      seconds_per_timestep:   Seconds in this timestep [s]
@@ -595,7 +624,8 @@ class HydrogenStorageSimulation:
         raise Exception("forgotten case")
 
     def storage_losses(self, seconds_per_timestep):
-        """
+        """Storage losses.
+
         How much hydrogen is lost in the time period:
         Liquid tanks:  evaporation
         Pressure tanks: leakages
@@ -619,6 +649,9 @@ class HydrogenStorageSimulation:
 
 
 class HydrogenStorage(Component):
+
+    """Hydrogen storage class."""
+
     # input
     ChargingHydrogenAmount = "Charging Hydrogen Amount"  # kg/s
     DischargingHydrogenAmountTarget = "DischargingHydrogenAmountTarget"  # kg/s
@@ -638,6 +671,8 @@ class HydrogenStorage(Component):
         my_simulation_parameters: SimulationParameters,
         config: ElectrolyzerWithHydrogenStorageConfig,
     ):
+        """Initialize the class."""
+
         super().__init__(
             config.name,
             my_simulation_parameters=my_simulation_parameters,
@@ -734,6 +769,7 @@ class HydrogenStorage(Component):
         )
 
     def i_save_state(self):
+        """Saves the state."""
         self.previous_state = self.hydrogenstorage.fill
 
     def i_prepare_simulation(self) -> None:
@@ -741,11 +777,13 @@ class HydrogenStorage(Component):
         pass
 
     def i_restore_state(self):
+        """Restores the state."""
         self.hydrogenstorage.fill = self.previous_state
 
     def i_simulate(
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Simulates the component."""
         # Setting up the internal values
         charging_amount_sec = stsv.get_input_value(self.charging_hydrogen)
         charging_amount = charging_amount_sec * self.seconds_per_timestep
@@ -829,10 +867,12 @@ class HydrogenStorage(Component):
         stsv.set_output_value(self.current_fill_percent, percent_fill)
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
+        """Doublechecks."""
         # alle ausgabewerte die zu überprüfen sind können hiermit fehlerausgabeüberprüft werden
         pass
 
     def write_to_report(self) -> List[str]:
+        """Write to report."""
         lines = []
         lines.append("Hydrogen Storage: " + self.component_name)
         return lines

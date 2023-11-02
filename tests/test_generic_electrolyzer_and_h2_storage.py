@@ -109,13 +109,13 @@ def test_hydrogen_generator():
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
     # Link inputs and outputs
-    my_electrolyzer.electricity_input.source_output = electricity_input
-    my_electrolyzer.hydrogen_not_stored.source_output = hydrogen_not_stored
+    my_electrolyzer.electricity_input_channel.source_output = electricity_input
+    my_electrolyzer.hydrogen_not_stored_channel.source_output = hydrogen_not_stored
     my_hydrogen_storage.discharging_hydrogen.source_output = (
         discharging_hydrogen_amount_target
     )
     my_hydrogen_storage.charging_hydrogen.source_output = (
-        my_electrolyzer.hydrogen_output
+        my_electrolyzer.hydrogen_output_channel
     )
 
     # Add Global Index and set values for fake Inputs
@@ -143,10 +143,10 @@ def test_hydrogen_generator():
 
     # Water Demand to produce Hydrogen
     assert (
-        stsv.values[my_electrolyzer.water_demand.global_index] == 0.001114707341269841
+        stsv.values[my_electrolyzer.water_demand_channel.global_index] == 0.001114707341269841
     )
     # Unused Power of Electrolyzer
-    assert stsv.values[my_electrolyzer.unused_power.global_index] == 1600
+    assert stsv.values[my_electrolyzer.unused_power_channel.global_index] == 1600
     # Amount of Hydrogen that is stored in Hydrogen-Storage
     assert (
         stsv.values[my_hydrogen_storage.storage_delta.global_index]

@@ -35,7 +35,7 @@ class ExampleConfig:
 
         # Occupancy
         my_occupancy_config = (
-            loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+            loadprofilegenerator_connector.OccupancyConfig.get_default_chr01_couple_both_at_work()
         )
         occ_entry = jcg.add_component(config=my_occupancy_config)
 

@@ -66,7 +66,7 @@ def basic_household_only_heating(
 
     # Build occupancy
     my_occupancy = loadprofilegenerator_connector.Occupancy(
-        config=loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01(),
+        config=loadprofilegenerator_connector.OccupancyConfig.get_default_chr01_couple_both_at_work(),
         my_simulation_parameters=my_simulation_parameters,
     )
 

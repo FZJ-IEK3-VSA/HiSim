@@ -20,7 +20,7 @@ def test_occupancy():
     )
     my_simulation_parameters.predictive_control = False
     my_occupancy_config = (
-        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+        loadprofilegenerator_connector.OccupancyConfig.get_default_chr01_couple_both_at_work()
     )
     my_occupancy_config.profile_name = my_occupancy_profile
     my_occupancy = loadprofilegenerator_connector.Occupancy(
@@ -42,19 +42,19 @@ def test_occupancy():
     for i in range(24 * 60 * 365):
         my_occupancy.i_simulate(i, stsv, False)
         number_of_residents.append(
-            stsv.values[my_occupancy.number_of_residentsC.global_index]
+            stsv.values[my_occupancy.number_of_residents_channel.global_index]
         )
         heating_by_residents.append(
-            stsv.values[my_occupancy.heating_by_residentsC.global_index]
+            stsv.values[my_occupancy.heating_by_residents_channel.global_index]
         )
         heating_by_devices.append(
             stsv.values[my_occupancy.heating_by_devices_channel.global_index]
         )
         electricity_consumption.append(
-            stsv.values[my_occupancy.electricity_outputC.global_index]
+            stsv.values[my_occupancy.electricity_output_channel.global_index]
         )
         water_consumption.append(
-            stsv.values[my_occupancy.water_consumptionC.global_index]
+            stsv.values[my_occupancy.water_consumption_channel.global_index]
         )
 
     year_heating_by_occupancy = sum(heating_by_residents) / (seconds_per_timestep * 1e3)

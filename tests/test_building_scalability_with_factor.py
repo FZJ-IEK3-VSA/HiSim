@@ -61,7 +61,7 @@ def test_building_scalability():
 
     # Set Occupancy
     my_occupancy_config = (
-        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+        loadprofilegenerator_connector.OccupancyConfig.get_default_chr01_couple_both_at_work()
     )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config,
@@ -96,7 +96,7 @@ def test_building_scalability():
         my_weather.dhi_output
     )
     my_residence.occupancy_heat_gain_channel.source_output = (
-        my_occupancy.heating_by_residentsC
+        my_occupancy.heating_by_residents_channel
     )
 
     fft.add_global_index_of_components([my_occupancy, my_weather, my_residence])

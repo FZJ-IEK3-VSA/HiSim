@@ -101,7 +101,7 @@ def simulation_for_one_time_step(
     )
 
     # Set Occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_CHS01_according_to_number_of_apartments(
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_chr01_according_to_number_of_apartments(
         number_of_apartments=building_number_of_apartments
     )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
@@ -136,7 +136,7 @@ def simulation_for_one_time_step(
         my_weather.dhi_output
     )
     my_residence.occupancy_heat_gain_channel.source_output = (
-        my_occupancy.heating_by_residentsC
+        my_occupancy.heating_by_residents_channel
     )
 
     fft.add_global_index_of_components([my_weather, my_residence, my_occupancy])

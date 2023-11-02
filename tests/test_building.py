@@ -84,7 +84,7 @@ def test_building():
 
     # Set Occupancy
     my_occupancy_config = (
-        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+        loadprofilegenerator_connector.OccupancyConfig.get_default_chr01_couple_both_at_work()
     )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config,
@@ -118,7 +118,7 @@ def test_building():
         my_weather.dhi_output
     )
     my_residence.occupancy_heat_gain_channel.source_output = (
-        my_occupancy.heating_by_residentsC
+        my_occupancy.heating_by_residents_channel
     )
     my_residence.thermal_power_delivered_channel.source_output = (
         thermal_power_delivered_output

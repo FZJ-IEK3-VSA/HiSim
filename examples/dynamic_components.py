@@ -110,7 +110,7 @@ def dynamic_components_demonstration(
     )
 
     my_occupancy_config = (
-        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+        loadprofilegenerator_connector.OccupancyConfig.get_default_chr01_couple_both_at_work()
     )
 
     my_occupancy = loadprofilegenerator_connector.Occupancy(

@@ -34,6 +34,8 @@ jobs:
       run: |
         prospector setup.py
         prospector examples/
+        prospector hisim/postprocessing/
+        
         prospector hisim/component.py
         prospector hisim/component_wrapper.py
         prospector hisim/dynamic_component.py
@@ -75,21 +77,7 @@ jobs:
         prospector hisim/components/controller_mpc.py
         prospector hisim/modular_household/component_connections.py
         prospector hisim/modular_household/interface_configs/system_config.py
-        prospector hisim/postprocessing/chartbase.py
-        prospector hisim/postprocessing/charts.py
-        prospector hisim/postprocessing/chart_singleday.py
-        prospector hisim/postprocessing/compute_kpis.py
-        prospector hisim/postprocessing/generate_csv_for_housing_database.py
-        prospector hisim/postprocessing/opex_and_capex_cost_calculation.py
-        prospector hisim/postprocessing/postprocessing_datatransfer.py
-        prospector hisim/postprocessing/postprocessing_main.py
-        prospector hisim/postprocessing/reportgenerator.py
-        prospector hisim/postprocessing/system_chart.py
-        prospector hisim/postprocessing/pyam_analysis_complete.py
-        prospector hisim/postprocessing/pyam_data_collection.py
-        prospector hisim/postprocessing/pyam_data_processing.py
-        prospector hisim/postprocessing/report_image_entries.py
-        
+
         prospector tests/functions_for_testing.py
         prospector tests/test_advanced_battery_bslib.py
         prospector tests/test_building.py

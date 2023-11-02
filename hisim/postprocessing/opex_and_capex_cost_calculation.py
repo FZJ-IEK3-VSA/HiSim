@@ -31,7 +31,8 @@ def opex_calculation(
         component_unwrapped = component.my_component
         # cost and co2_footprint are calculated per simulated period
         opex_cost_data_class: OpexCostDataClass = component_unwrapped.get_cost_opex(
-            all_outputs=all_outputs, postprocessing_results=postprocessing_results,
+            all_outputs=all_outputs,
+            postprocessing_results=postprocessing_results,
         )
         cost = opex_cost_data_class.opex_cost
         co2_footprint = opex_cost_data_class.co2_footprint
@@ -68,7 +69,8 @@ def opex_calculation(
 
 
 def capex_calculation(
-    components: List[ComponentWrapper], simulation_parameters: SimulationParameters,
+    components: List[ComponentWrapper],
+    simulation_parameters: SimulationParameters,
 ) -> List:
     """Loops over all components and calls capex cost calculation."""
     seconds_per_year = 365 * 24 * 60 * 60

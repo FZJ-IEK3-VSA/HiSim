@@ -1,13 +1,15 @@
 """Dummy class and configuration returning electricity prices (from grid) and returns (injection) in each time step. """
 
-import numpy as np
-import pandas as pd
-import os
+# clean
 
-# Owned
+import os
 from typing import List, Any, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+import pandas as pd
+import numpy as np
+
+# Owned
 from hisim import component as cp
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
@@ -27,6 +29,9 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class PriceSignalConfig(cp.ConfigBase):
+
+    """Price Signal config class."""
+
     @classmethod
     def get_main_classname(cls):
         """Return the full class name of the base class."""
@@ -63,7 +68,9 @@ class PriceSignalConfig(cp.ConfigBase):
 
 
 class PriceSignal(cp.Component):
-    """
+
+    """Price Signal class.
+
     Class component that provides price for electricity.
     Outputs: Price for injection: cents/kWh, Price for purchase: cents/kWh
     """
@@ -79,7 +86,7 @@ class PriceSignal(cp.Component):
     def __init__(
         self, my_simulation_parameters: SimulationParameters, config: PriceSignalConfig
     ) -> None:
-        """Initialization of Price Signal class
+        """Initialization of Price Signal class.
 
         :param my_simulation_parameters: _description_
         :type my_simulation_parameters: SimulationParameters
@@ -99,7 +106,7 @@ class PriceSignal(cp.Component):
         )
 
         # Outputs
-        self.PricePurchaseC: cp.ComponentOutput = self.add_output(
+        self.price_purchase_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.PricePurchase,
             lt.LoadTypes.PRICE,
@@ -110,7 +117,7 @@ class PriceSignal(cp.Component):
             ],
             output_description=f"here a description for {self.PricePurchase} will follow.",
         )
-        self.PriceInjectionC: cp.ComponentOutput = self.add_output(
+        self.price_injection_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.PriceInjection,
             lt.LoadTypes.PRICE,
@@ -123,12 +130,15 @@ class PriceSignal(cp.Component):
         )
 
     def i_save_state(self) -> None:
+        """Saves the state."""
         pass
 
     def i_restore_state(self) -> None:
+        """Restores the state."""
         pass
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        """Doublechecks."""
         pass
 
     def i_simulate(
@@ -186,8 +196,8 @@ class PriceSignal(cp.Component):
             key=SingletonDictKeyEnum.Price_Purchase_Forecast_24h,
             entry=pricepurchaseforecast,
         )
-        stsv.set_output_value(self.PricePurchaseC, pricepurchaseforecast[0])
-        stsv.set_output_value(self.PriceInjectionC, priceinjectionforecast[0])
+        stsv.set_output_value(self.price_purchase_channel, pricepurchaseforecast[0])
+        stsv.set_output_value(self.price_injection_channel, priceinjectionforecast[0])
 
     def build_dummy(self, start: int, end: int) -> None:
         """Initialization of information if step function is used for prices."""
@@ -196,18 +206,18 @@ class PriceSignal(cp.Component):
 
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""
-        PricePurchase = pd.read_csv(
+        price_purchase = pd.read_csv(
             os.path.join(utils.HISIMPATH["price_signal"]["PricePurchase"]),
             index_col=0,
         )
-        FeedInTarrif = pd.read_csv(
+        feed_in_tarrif = pd.read_csv(
             os.path.join(utils.HISIMPATH["price_signal"]["FeedInTarrif"]),
             index_col=0,
         )
 
-        if "Fixed_Price_" + self.price_signal_config.country in PricePurchase:
+        if "Fixed_Price_" + self.price_signal_config.country in price_purchase:
             self.price_signal_config.price_signal_type = "Prices at second half of 2021"
-            fixed_price = PricePurchase[
+            fixed_price = price_purchase[
                 "Fixed_Price_" + self.price_signal_config.country
             ].tolist()
             # convert euro/kWh to cent/kW-timestep
@@ -220,7 +230,7 @@ class PriceSignal(cp.Component):
                 int(3600 / self.my_simulation_parameters.seconds_per_timestep),
             ).tolist()
 
-            static_tou_price = PricePurchase[
+            static_tou_price = price_purchase[
                 "Static_TOU_Price_" + self.price_signal_config.country
             ].tolist()
             static_tou_price = [element * p_conversion for element in static_tou_price]
@@ -229,15 +239,15 @@ class PriceSignal(cp.Component):
                 int(3600 / self.my_simulation_parameters.seconds_per_timestep),
             ).tolist()
 
-            FITdata = FeedInTarrif.loc[self.price_signal_config.country]
-            for i in range(len(FITdata)):
+            fit_data = feed_in_tarrif.loc[self.price_signal_config.country]
+            for i in range(len(fit_data)):
                 if (
-                    FITdata["min_capacity (kW)"].values[i]
+                    fit_data["min_capacity (kW)"].values[i]
                     < self.price_signal_config.installed_capacity
-                    and FITdata["max_capacity (kW)"].values[i]
+                    and fit_data["max_capacity (kW)"].values[i]
                     >= self.price_signal_config.installed_capacity
                 ):
-                    price_injection = FITdata["FIT"].values[i]
+                    price_injection = fit_data["FIT"].values[i]
             self.price_signal_config.price_injection = price_injection * p_conversion
         pass
 

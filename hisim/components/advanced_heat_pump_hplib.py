@@ -989,7 +989,9 @@ class HeatPumpHplibController(Component):
 
         if self.controller_heatpumpmode == "heating":
             if (
-                water_temperature_input_in_celsius >= heating_set_temperature + storage_temperature_modifier # Todo: Check if storage_temperature_modifier is neccessary here
+                water_temperature_input_in_celsius
+                >= heating_set_temperature
+                + storage_temperature_modifier  # Todo: Check if storage_temperature_modifier is neccessary here
                 or summer_heating_mode == "off"
             ):
                 self.controller_heatpumpmode = "off"

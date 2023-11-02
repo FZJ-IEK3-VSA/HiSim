@@ -243,11 +243,11 @@ class GenericBattery(cp.Component):
             # send battery specification to the mpc controller for planning the cost optimal operation
             SingletonSimRepository().set_entry(
                 key=SingletonDictKeyEnum.MaximumBatteryCapacity,
-                entry=self.max_stored_energy
+                entry=self.max_stored_energy,
             )
             SingletonSimRepository().set_entry(
                 key=SingletonDictKeyEnum.MinimumBatteryCapacity,
-                entry=self.min_stored_energy
+                entry=self.min_stored_energy,
             )
             SingletonSimRepository().set_entry(
                 key=SingletonDictKeyEnum.MaximalChargingPower,
@@ -258,12 +258,11 @@ class GenericBattery(cp.Component):
                 entry=-self.min_var_stored_energy / self.time_correction_factor,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.BatteryEfficiency,
-                entry=self.efficiency
+                key=SingletonDictKeyEnum.BatteryEfficiency, entry=self.efficiency
             )
             SingletonSimRepository().set_entry(
                 key=SingletonDictKeyEnum.InverterEfficiency,
-                entry=self.efficiency_inverter
+                entry=self.efficiency_inverter,
             )
 
     def i_restore_state(self) -> None:

@@ -215,7 +215,7 @@ def household_cluster_advanced_hp_pv_battery_ems(
 
     # Build Weather
     my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.Aachen
+        location_entry=weather.LocationEnum.AACHEN
     )
 
     my_weather = weather.Weather(

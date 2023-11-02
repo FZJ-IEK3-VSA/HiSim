@@ -1,5 +1,6 @@
 """ Handles all the weather data processing. """
 
+# clean
 import csv
 import datetime
 import math
@@ -43,328 +44,328 @@ class WeatherDataSourceEnum(Enum):
 
     DWD = 1
     NSRDB = 2
-    NSRDB_15min = 3
+    NSRDB_15MIN = 3
 
 
 class LocationEnum(Enum):
 
     """contains all the locations and their corresponding directories."""
 
-    Aachen = (
+    AACHEN = (
         "Aachen",
         "test-reference-years_1995-2012_1-location",
         "data_processed",
         "aachen_center",
         WeatherDataSourceEnum.DWD,
-    )  # noqa: invalid-name
-    Bremerhaven = (
+    )
+    BREMERHAVEN = (
         "01_Bremerhaven",
         "test-reference-years_2015-2045_15-locations",
         "data_processed",
         "weather_region_01",
         WeatherDataSourceEnum.DWD,
-    )  # noqa: invalid-name
-    Rostock = (
+    )
+    ROSTOCK = (
         "02_Rostock",
         "test-reference-years_2015-2045_15-locations",
         "data_processed",
         "weather_region_02",
         WeatherDataSourceEnum.DWD,
-    )  # noqa: invalid-name
-    Hamburg = (
+    )
+    HAMBURG = (
         "03Hamburg",
         "test-reference-years_2015-2045_15-locations",
         "data_processed",
         "weather_region_03",
         WeatherDataSourceEnum.DWD,
-    )  # noqa: invalid-name
-    Potsdam = (
+    )
+    POTSDAM = (
         "04Potsdam",
         "test-reference-years_2015-2045_15-locations",
         "data_processed",
         "weather_region_04",
         WeatherDataSourceEnum.DWD,
-    )  # noqa: invalid-name
-    Essen = (
+    )
+    ESSEN = (
         "05Essen",
         "test-reference-years_2015-2045_15-locations",
         "data_processed",
         "weather_region_05",
         WeatherDataSourceEnum.DWD,
-    )  # noqa: invalid-name
-    Bad_Marienburg = (
+    )
+    BAD_MARIENBURG = (
         "06Bad Marienburg",
         "test-reference-years_2015-2045_15-locations",
         "data_processed",
         "weather_region_06",
         WeatherDataSourceEnum.DWD,
-    )  # noqa: invalid-name
-    Kassel = (
+    )
+    KASSEL = (
         "07Kassel",
         "test-reference-years_2015-2045_15-locations",
         "data_processed",
         "weather_region_07",
         WeatherDataSourceEnum.DWD,
-    )  # noqa: invalid-name
-    Braunlage = (
+    )
+    BRAUNLAGE = (
         "08Braunlage",
         "test-reference-years_2015-2045_15-locations",
         "data_processed",
         "weather_region_08",
         WeatherDataSourceEnum.DWD,
-    )  # noqa: invalid-name
-    Chemnitz = (
+    )
+    CHEMNITZ = (
         "09Chemnitz",
         "test-reference-years_2015-2045_15-locations",
         "data_processed",
         "weather_region_09",
         WeatherDataSourceEnum.DWD,
-    )  # noqa: invalid-name
-    Hof = (
+    )
+    HOF = (
         "10Hof",
         "test-reference-years_2015-2045_15-locations",
         "data_processed",
         "weather_region_10",
         WeatherDataSourceEnum.DWD,
-    )  # noqa: invalid-name
-    Fichtelberg = (
+    )
+    FICHTELBERG = (
         "11Fichtelberg",
         "test-reference-years_2015-2045_15-locations",
         "data_processed",
         "weather_region_11",
         WeatherDataSourceEnum.DWD,
-    )  # noqa: invalid-name
-    Mannheim = (
+    )
+    MANNHEIM = (
         "12Mannheim",
         "test-reference-years_2015-2045_15-locations",
         "data_processed",
         "weather_region_12",
         WeatherDataSourceEnum.DWD,
-    )  # noqa: invalid-name
-    Muehldorf = (
+    )
+    MUEHLDORF = (
         "13Muehldorf",
         "test-reference-years_2015-2045_15-locations",
         "data_processed",
         "weather_region_13",
         WeatherDataSourceEnum.DWD,
-    )  # noqa: invalid-name
-    Stoetten = (
+    )
+    STOETTEN = (
         "14Stoetten",
         "test-reference-years_2015-2045_15-locations",
         "data_processed",
         "weather_region_14",
         WeatherDataSourceEnum.DWD,
-    )  # noqa: invalid-name
-    Garmisch_Partenkirchen = (
+    )
+    GARMISCH_PARTENKIRCHEN = (
         "15Garmisch Partenkirchen",
         "test-reference-years_2015-2045_15-locations",
         "data_processed",
         "weather_region_15",
         WeatherDataSourceEnum.DWD,
-    )  # noqa: invalid-name
-    Madrid = (
+    )
+    MADRID = (
         "Madrid",
         "NSRDB",
         "Madrid",
         "Madrid",
         WeatherDataSourceEnum.NSRDB,
-    )  # noqa: invalid-name
-    Seville = (
+    )
+    SEVILLE = (
         "Seville",
         "NSRDB",
         "Seville",
         "Seville",
         WeatherDataSourceEnum.NSRDB,
-    )  # noqa: invalid-name
-    Athens = (
+    )
+    ATHENS = (
         "Athens",
         "NSRDB",
         "Athens",
         "Athens",
         WeatherDataSourceEnum.NSRDB,
-    )  # noqa: invalid-name
-    Belgrade = (
+    )
+    BELGRADE = (
         "Belgrade",
         "NSRDB",
         "Belgrade",
         "Belgrade",
         WeatherDataSourceEnum.NSRDB,
-    )  # noqa: invalid-name
-    Cyprus = (
+    )
+    CYPRUS = (
         "Cyprus",
         "NSRDB",
         "Cyprus",
         "Cyprus",
         WeatherDataSourceEnum.NSRDB,
-    )  # noqa: invalid-name
-    Ljubljana = (
+    )
+    LJUBLIANA = (
         "Ljubljana",
         "NSRDB",
         "Ljubljana",
         "Ljubljana",
         WeatherDataSourceEnum.NSRDB,
-    )  # noqa: invalid-name
-    Milan = (
+    )
+    MILAN = (
         "Milan",
         "NSRDB",
         "Milan",
         "Milan",
         WeatherDataSourceEnum.NSRDB,
-    )  # noqa: invalid-name
-    Sarajevo = (
+    )
+    SARAJEVO = (
         "Sarajevo",
         "NSRDB",
         "Sarajevo",
         "Sarajevo",
         WeatherDataSourceEnum.NSRDB,
-    )  # noqa: invalid-name
-    Vranje = (
+    )
+    VRANJE = (
         "Vranje",
         "NSRDB",
         "Vranje",
         "Vranje",
         WeatherDataSourceEnum.NSRDB,
-    )  # noqa: invalid-name
+    )
     FR = (
         "Paris",
         "NSRDB_15min",
         "Paris",
         "403286_48.85_2.34_2019.csv",
-        WeatherDataSourceEnum.NSRDB_15min,
-    )  # noqa: invalid-name
+        WeatherDataSourceEnum.NSRDB_15MIN,
+    )
     DE = (
         "Potsdam",
         "NSRDB_15min",
         "Potsdam",
         "742114_52.41_13.06_2019.csv",
-        WeatherDataSourceEnum.NSRDB_15min,
-    )  # noqa: invalid-name
+        WeatherDataSourceEnum.NSRDB_15MIN,
+    )
     PL = (
         "Warsaw",
         "NSRDB_15min",
         "Warsaw",
         "1138443_52.25_21.02_2019.csv",
-        WeatherDataSourceEnum.NSRDB_15min,
-    )  # noqa: invalid-name
+        WeatherDataSourceEnum.NSRDB_15MIN,
+    )
     SE = (
         "Stockholm",
         "NSRDB_15min",
         "Stockholm",
         "984998_59.33_18.06_2019.csv",
-        WeatherDataSourceEnum.NSRDB_15min,
-    )  # noqa: invalid-name
+        WeatherDataSourceEnum.NSRDB_15MIN,
+    )
     NO = (
         "Oslo",
         "NSRDB_15min",
         "Oslo",
         "653025_59.93_10.74_2019.csv",
-        WeatherDataSourceEnum.NSRDB_15min,
-    )  # noqa: invalid-name
+        WeatherDataSourceEnum.NSRDB_15MIN,
+    )
     RS = (
         "Belgrad",
         "NSRDB_15min",
         "Belgrad",
         "1108363_44.77_20.46_2019.csv",
-        WeatherDataSourceEnum.NSRDB_15min,
-    )  # noqa: invalid-name
+        WeatherDataSourceEnum.NSRDB_15MIN,
+    )
     IT = (
         "Rome",
         "NSRDB_15min",
         "Rome",
         "718838_41.89_12.50_2019.csv",
-        WeatherDataSourceEnum.NSRDB_15min,
-    )  # noqa: invalid-name
+        WeatherDataSourceEnum.NSRDB_15MIN,
+    )
     GB = (
         "London",
         "NSRDB_15min",
         "London",
         "337089_51.49_-0.10_2019.csv",
-        WeatherDataSourceEnum.NSRDB_15min,
-    )  # noqa: invalid-name
+        WeatherDataSourceEnum.NSRDB_15MIN,
+    )
     CY = (
         "Nicosia",
         "NSRDB_15min",
         "Nicosia",
         "1809004_35.17_33.38_2019.csv",
-        WeatherDataSourceEnum.NSRDB_15min,
-    )  # noqa: invalid-name
+        WeatherDataSourceEnum.NSRDB_15MIN,
+    )
     GR = (
         "Athens",
         "NSRDB_15min",
         "Athens",
         "1291832_37.97_23.74_2019.csv",
-        WeatherDataSourceEnum.NSRDB_15min,
-    )  # noqa: invalid-name
+        WeatherDataSourceEnum.NSRDB_15MIN,
+    )
     IE = (
         "Dublin",
         "NSRDB_15min",
         "Dublin",
         "165308_53.37_-6.26_2019.csv",
-        WeatherDataSourceEnum.NSRDB_15min,
-    )  # noqa: invalid-name
+        WeatherDataSourceEnum.NSRDB_15MIN,
+    )
     SI = (
         "Ljubljana",
         "NSRDB_15min",
         "Ljubljana",
         "808557_46.05_14.50_2019.csv",
-        WeatherDataSourceEnum.NSRDB_15min,
-    )  # noqa: invalid-name
+        WeatherDataSourceEnum.NSRDB_15MIN,
+    )
     CZ = (
         "Prague",
         "NSRDB_15min",
         "Prague",
         "804583_50.09_14.42_2019.csv",
-        WeatherDataSourceEnum.NSRDB_15min,
-    )  # noqa: invalid-name
+        WeatherDataSourceEnum.NSRDB_15MIN,
+    )
     AT = (
         "Viena",
         "NSRDB_15min",
         "Viena",
         "902141_48.21_16.38_2019.csv",
-        WeatherDataSourceEnum.NSRDB_15min,
-    )  # noqa: invalid-name
+        WeatherDataSourceEnum.NSRDB_15MIN,
+    )
     HU = (
         "Budapest",
         "NSRDB_15min",
         "Budapest",
         "1035927_47.49_19.06_2019.csv",
-        WeatherDataSourceEnum.NSRDB_15min,
-    )  # noqa: invalid-name
+        WeatherDataSourceEnum.NSRDB_15MIN,
+    )
     BE = (
         "Uccle",
         "NSRDB_15min",
         "Uccle",
         "454992_50.81_4.34_2019.csv",
-        WeatherDataSourceEnum.NSRDB_15min,
-    )  # noqa: invalid-name
+        WeatherDataSourceEnum.NSRDB_15MIN,
+    )
     ES = (
         "Malaga",
         "NSRDB_15min",
         "Malaga",
         "213028_36.73_-4.42_2019.csv",
-        WeatherDataSourceEnum.NSRDB_15min,
-    )  # noqa: invalid-name
+        WeatherDataSourceEnum.NSRDB_15MIN,
+    )
     DK = (
         "Copenhagen",
         "NSRDB_15min",
         "Copenhagen",
         "721796_55.69_12.58_2019.csv",
-        WeatherDataSourceEnum.NSRDB_15min,
-    )  # noqa: invalid-name
+        WeatherDataSourceEnum.NSRDB_15MIN,
+    )
     NL = (
         "Amsterdam",
         "NSRDB_15min",
         "Amsterdam",
         "469536_52.37_4.90_2019.csv",
-        WeatherDataSourceEnum.NSRDB_15min,
-    )  # noqa: invalid-name
+        WeatherDataSourceEnum.NSRDB_15MIN,
+    )
     BG = (
         "Sofia",
         "NSRDB_15min",
         "Sofia",
         "1267064_42.69_23.30_2019.csv",
-        WeatherDataSourceEnum.NSRDB_15min,
-    )  # noqa: invalid-name
+        WeatherDataSourceEnum.NSRDB_15MIN,
+    )
 
 
 @dataclass
@@ -458,7 +459,7 @@ class Weather(Component):
             output_description=f"here a description for {self.TemperatureOutside} will follow.",
         )
 
-        self.DNI_output: ComponentOutput = self.add_output(
+        self.dni_output: ComponentOutput = self.add_output(
             self.component_name,
             self.DirectNormalIrradiance,
             lt.LoadTypes.IRRADIANCE,
@@ -466,7 +467,7 @@ class Weather(Component):
             output_description=f"here a description for {self.DirectNormalIrradiance} will follow.",
         )
 
-        self.DNI_extra_output: ComponentOutput = self.add_output(
+        self.dni_extra_output: ComponentOutput = self.add_output(
             self.component_name,
             self.DirectNormalIrradianceExtra,
             lt.LoadTypes.IRRADIANCE,
@@ -474,7 +475,7 @@ class Weather(Component):
             output_description=f"here a description for {self.DirectNormalIrradianceExtra} will follow.",
         )
 
-        self.DHI_output: ComponentOutput = self.add_output(
+        self.dhi_output: ComponentOutput = self.add_output(
             self.component_name,
             self.DiffuseHorizontalIrradiance,
             lt.LoadTypes.IRRADIANCE,
@@ -482,7 +483,7 @@ class Weather(Component):
             output_description=f"here a description for {self.DiffuseHorizontalIrradiance} will follow.",
         )
 
-        self.GHI_output: ComponentOutput = self.add_output(
+        self.ghi_output: ComponentOutput = self.add_output(
             self.component_name,
             self.GlobalHorizontalIrradiance,
             lt.LoadTypes.IRRADIANCE,
@@ -531,14 +532,14 @@ class Weather(Component):
         )
 
         self.temperature_list: List[float]
-        self.DNI_list: List[float]
-        self.DNIextra_list: List[float]
+        self.dni_list: List[float]
+        self.dniextra_list: List[float]
         self.altitude_list: List[float]
         self.azimuth_list: List[float]
         self.wind_speed_list: List[float]
-        self.GHI_list: List[float]
+        self.ghi_list: List[float]
         self.apparent_zenith_list: List[float]
-        self.DHI_list: List[float]
+        self.dhi_list: List[float]
         self.dry_bulb_list: List[float]
         self.daily_average_outside_temperature_list_in_celsius: List[float]
 
@@ -570,10 +571,10 @@ class Weather(Component):
         stsv.set_output_value(
             self.air_temperature_output, self.temperature_list[timestep]
         )
-        stsv.set_output_value(self.DNI_output, self.DNI_list[timestep])
-        stsv.set_output_value(self.DNI_extra_output, self.DNIextra_list[timestep])
-        stsv.set_output_value(self.DHI_output, self.DHI_list[timestep])
-        stsv.set_output_value(self.GHI_output, self.GHI_list[timestep])
+        stsv.set_output_value(self.dni_output, self.dni_list[timestep])
+        stsv.set_output_value(self.dni_extra_output, self.dniextra_list[timestep])
+        stsv.set_output_value(self.dhi_output, self.dhi_list[timestep])
+        stsv.set_output_value(self.ghi_output, self.ghi_list[timestep])
         stsv.set_output_value(self.altitude_output, self.altitude_list[timestep])
         stsv.set_output_value(self.azimuth_output, self.azimuth_list[timestep])
         stsv.set_output_value(self.wind_speed_output, self.wind_speed_list[timestep])
@@ -623,12 +624,12 @@ class Weather(Component):
                 "t_out_daily_average"
             ].tolist()
             self.dry_bulb_list = self.temperature_list
-            self.DHI_list = my_weather["DHI"].tolist()
-            self.DNI_list = my_weather[
+            self.dhi_list = my_weather["DHI"].tolist()
+            self.dni_list = my_weather[
                 "DNI"
             ].tolist()  # self np.float64( maybe not needed? - Noah
-            self.DNIextra_list = my_weather["DNIextra"].tolist()
-            self.GHI_list = my_weather["GHI"].tolist()
+            self.dniextra_list = my_weather["DNIextra"].tolist()
+            self.ghi_list = my_weather["GHI"].tolist()
             self.altitude_list = my_weather["altitude"].tolist()
             self.azimuth_list = my_weather["azimuth"].tolist()
             self.apparent_zenith_list = my_weather["apparent_zenith"].tolist()
@@ -638,17 +639,17 @@ class Weather(Component):
                 weatherconfig=self.weather_config,
                 year=self.my_simulation_parameters.year,
             )
-            if self.weather_config.data_source == WeatherDataSourceEnum.NSRDB_15min:
-                DNI = (
+            if self.weather_config.data_source == WeatherDataSourceEnum.NSRDB_15MIN:
+                dni = (
                     tmy_data["DNI"].resample("1T").asfreq().interpolate(method="linear")
                 )
                 temperature = (
                     tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")
                 )
-                DHI = (
+                dhi = (
                     tmy_data["DHI"].resample("1T").asfreq().interpolate(method="linear")
                 )
-                GHI = (
+                ghi = (
                     tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")
                 )
                 wind_speed = (
@@ -658,25 +659,25 @@ class Weather(Component):
                     .interpolate(method="linear")
                 )
             else:
-                DNI = self.interpolate(
+                dni = self.interpolate(
                     tmy_data["DNI"], self.my_simulation_parameters.year
                 )
                 temperature = self.interpolate(
                     tmy_data["T"], self.my_simulation_parameters.year
                 )
-                DHI = self.interpolate(
+                dhi = self.interpolate(
                     tmy_data["DHI"], self.my_simulation_parameters.year
                 )
-                GHI = self.interpolate(
+                ghi = self.interpolate(
                     tmy_data["GHI"], self.my_simulation_parameters.year
                 )
                 wind_speed = self.interpolate(
                     tmy_data["Wspd"], self.my_simulation_parameters.year
                 )
             # calculate extra terrestrial radiation- n eeded for perez array diffuse irradiance models
-            dni_extra = pd.Series(pvlib.irradiance.get_extra_radiation(DNI.index), index=DNI.index)  # type: ignore
+            dni_extra = pd.Series(pvlib.irradiance.get_extra_radiation(dni.index), index=dni.index)  # type: ignore
 
-            solpos = pvlib.solarposition.get_solarposition(DNI.index, location_dict["latitude"], location_dict["longitude"])  # type: ignore
+            solpos = pvlib.solarposition.get_solarposition(dni.index, location_dict["latitude"], location_dict["longitude"])  # type: ignore
             altitude = solpos["elevation"]
             azimuth = solpos["azimuth"]
             apparent_zenith = solpos["apparent_zenith"]
@@ -697,18 +698,18 @@ class Weather(Component):
                     seconds_per_timestep=seconds_per_timestep,
                 )
 
-                self.DHI_list = (
-                    DHI.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                self.dhi_list = (
+                    dhi.resample(str(seconds_per_timestep) + "S").mean().tolist()
                 )
                 # np.float64( ## not sure what this is fore. python float and npfloat 64 are the same.
-                self.DNI_list = (
-                    DNI.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                self.dni_list = (
+                    dni.resample(str(seconds_per_timestep) + "S").mean().tolist()
                 )  # )  # type: ignore
-                self.DNIextra_list = (
+                self.dniextra_list = (
                     dni_extra.resample(str(seconds_per_timestep) + "S").mean().tolist()
                 )
-                self.GHI_list = (
-                    GHI.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                self.ghi_list = (
+                    ghi.resample(str(seconds_per_timestep) + "S").mean().tolist()
                 )
                 self.altitude_list = (
                     altitude.resample(str(seconds_per_timestep) + "S").mean().tolist()
@@ -731,10 +732,10 @@ class Weather(Component):
                     temperaturelist=self.temperature_list,
                     seconds_per_timestep=seconds_per_timestep,
                 )
-                self.DHI_list = DHI.tolist()
-                self.DNI_list = DNI.tolist()
-                self.DNIextra_list = dni_extra.tolist()
-                self.GHI_list = GHI.tolist()
+                self.dhi_list = dhi.tolist()
+                self.dni_list = dni.tolist()
+                self.dniextra_list = dni_extra.tolist()
+                self.ghi_list = ghi.tolist()
                 self.altitude_list = altitude.tolist()
                 self.azimuth_list = azimuth.tolist()
                 self.apparent_zenith_list = apparent_zenith.tolist()
@@ -743,16 +744,16 @@ class Weather(Component):
                 )
 
             solardata = [
-                self.DNI_list,
-                self.DHI_list,
-                self.GHI_list,
+                self.dni_list,
+                self.dhi_list,
+                self.ghi_list,
                 self.temperature_list,
                 self.altitude_list,
                 self.azimuth_list,
                 self.apparent_zenith_list,
                 self.dry_bulb_list,
                 self.wind_speed_list,
-                self.DNIextra_list,
+                self.dniextra_list,
                 self.daily_average_outside_temperature_list_in_celsius,
             ]
 
@@ -778,39 +779,40 @@ class Weather(Component):
         if self.weather_config.predictive_control:
             SingletonSimRepository().set_entry(
                 key=SingletonDictKeyEnum.Weather_TemperatureOutside_yearly_forecast,
-                entry=self.temperature_list
+                entry=self.temperature_list,
             )
             SingletonSimRepository().set_entry(
                 key=SingletonDictKeyEnum.Weather_DiffuseHorizontalIrradiance_yearly_forecast,
-                entry=self.DHI_list
+                entry=self.dhi_list,
             )
             SingletonSimRepository().set_entry(
                 key=SingletonDictKeyEnum.Weather_DirectNormalIrradiance_yearly_forecast,
-                entry=self.DNI_list
+                entry=self.dni_list,
             )
             SingletonSimRepository().set_entry(
                 key=SingletonDictKeyEnum.Weather_DirectNormalIrradianceExtra_yearly_forecast,
-                entry=self.DNIextra_list,
+                entry=self.dniextra_list,
             )
             SingletonSimRepository().set_entry(
                 key=SingletonDictKeyEnum.Weather_GlobalHorizontalIrradiance_yearly_forecast,
-                entry=self.GHI_list
+                entry=self.ghi_list,
             )
             SingletonSimRepository().set_entry(
                 key=SingletonDictKeyEnum.Weather_Azimuth_yearly_forecast,
-                entry=self.azimuth_list
+                entry=self.azimuth_list,
             )
             SingletonSimRepository().set_entry(
                 key=SingletonDictKeyEnum.Weather_ApparentZenith_yearly_forecast,
-                entry=self.apparent_zenith_list
+                entry=self.apparent_zenith_list,
             )
             SingletonSimRepository().set_entry(
                 key=SingletonDictKeyEnum.Weather_WindSpeed_yearly_forecast,
-                entry=self.wind_speed_list
+                entry=self.wind_speed_list,
             )
             SingletonSimRepository().set_entry(
                 key=SingletonDictKeyEnum.Weather_Altitude_yearly_forecast,
-                entry=self.altitude_list)
+                entry=self.altitude_list,
+            )
 
     def interpolate(self, pd_database: Any, year: int) -> Any:
         """Interpolates a time series."""
@@ -926,7 +928,7 @@ class Weather(Component):
         start_index = 0
         for index in range(0, total_number_of_timesteps_temperature_list):
             daily_average_temperature = float(
-                np.mean(temperaturelist[start_index : start_index + timestep_24h])
+                np.mean(temperaturelist[start_index: start_index + timestep_24h])
             )
             if index == start_index + timestep_24h:
                 start_index = index
@@ -944,7 +946,7 @@ def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Any:
     # get the correct file path
     # filepath = os.path.join(utils.HISIMPATH["weather"][location])
 
-    if source_enum == WeatherDataSourceEnum.NSRDB_15min:
+    if source_enum == WeatherDataSourceEnum.NSRDB_15MIN:
         with open(filepath, encoding="utf-8") as csvfile:
             spamreader = csv.reader(csvfile)
             for i, row in enumerate(spamreader):
@@ -976,7 +978,7 @@ def read_test_reference_year_data(weatherconfig: WeatherConfig, year: int) -> An
         data = read_nsrdb_data(filepath, year)
     elif weatherconfig.data_source == WeatherDataSourceEnum.DWD:
         data = read_dwd_data(filepath, year)
-    elif weatherconfig.data_source == WeatherDataSourceEnum.NSRDB_15min:
+    elif weatherconfig.data_source == WeatherDataSourceEnum.NSRDB_15MIN:
         data = read_nsrdb_15min_data(filepath, year)
 
     return data
@@ -1085,7 +1087,7 @@ def calculate_direct_normal_radiation(
 
     Returns
     -------
-    DNI: pd.Series
+    dni: pd.Series
 
     """
 
@@ -1093,9 +1095,9 @@ def calculate_direct_normal_radiation(
         direct_horizontal_irradation.index, lat, lon
     )
     solar_pos["apparent_zenith"][solar_pos.apparent_zenith > zenith_tol] = zenith_tol
-    DNI = direct_horizontal_irradation.div(
+    dni = direct_horizontal_irradation.div(
         solar_pos["apparent_zenith"].apply(math.radians).apply(math.cos)
     )
-    if sum(DNI.isnull()) > 0:
+    if sum(dni.isnull()) > 0:
         raise ValueError("Something went wrong...")
-    return DNI
+    return dni

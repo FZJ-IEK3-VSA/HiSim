@@ -770,12 +770,14 @@ class PVSystem(cp.Component):
                 self.data = [0] * self.my_simulation_parameters.timesteps
                 self.data_length = self.my_simulation_parameters.timesteps
 
-        if self.pvconfig.predictive:        
-            pv_forecast_yearly=[self.output[t] * self.pvconfig.power for t in range(self.my_simulation_parameters.timesteps)]
+        if self.pvconfig.predictive:
+            pv_forecast_yearly = [
+                self.output[t] * self.pvconfig.power
+                for t in range(self.my_simulation_parameters.timesteps)
+            ]
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.pv_forecast_yearly,
-                entry=pv_forecast_yearly
-            )                                                                         
+                key=SingletonDictKeyEnum.pv_forecast_yearly, entry=pv_forecast_yearly
+            )
 
         self.modules = pd.read_csv(
             os.path.join(utils.HISIMPATH["photovoltaic"]["modules"]),

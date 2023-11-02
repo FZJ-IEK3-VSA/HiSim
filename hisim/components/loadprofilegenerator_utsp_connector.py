@@ -71,7 +71,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
             charging_station_set=ChargingStationSets.Charging_At_Home_with_03_7_kW,
             consumption=0,
             profile_with_washing_machine_and_dishwasher=True,
-            predictive_control=False
+            predictive_control=False,
         )
         return config
 

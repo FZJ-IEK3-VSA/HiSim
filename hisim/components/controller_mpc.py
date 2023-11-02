@@ -675,19 +675,19 @@ class MpcController(cp.Component):
         # slicing yearly forecast to extract data points for the prediction horizon (24 hours)
         # number of data points extracted equals= self.prediction_horizon = 3600 * 24 h / seconds_per_timestep
         self.temperature_forecast_24h_1min = self.temp_forecast[
-            start_horizon: start_horizon + self.prediction_horizon
+            start_horizon : start_horizon + self.prediction_horizon
         ]
         self.phi_m_forecast_24h_1min = self.phi_m_forecast[
-            start_horizon: start_horizon + self.prediction_horizon
+            start_horizon : start_horizon + self.prediction_horizon
         ]
         self.phi_ia_forecast_24h_1min = self.phi_ia_forecast[
-            start_horizon: start_horizon + self.prediction_horizon
+            start_horizon : start_horizon + self.prediction_horizon
         ]
         self.phi_st_forecast_24h_1min = self.phi_st_forecast[
-            start_horizon: start_horizon + self.prediction_horizon
+            start_horizon : start_horizon + self.prediction_horizon
         ]
         self.pv_forecast_24h_1min = self.pv_forecast_yearly[
-            start_horizon: start_horizon + self.prediction_horizon
+            start_horizon : start_horizon + self.prediction_horizon
         ]
         self.price_purchase_forecast_24h_1min = SingletonSimRepository().get_entry(
             key=SingletonDictKeyEnum.Price_Purchase_Forecast_24h

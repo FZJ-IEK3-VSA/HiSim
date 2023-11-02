@@ -41,7 +41,7 @@ class ExampleConfig:
 
         # Weather
         my_weather_config = weather.WeatherConfig.get_default(
-            weather.LocationEnum.Aachen
+            weather.LocationEnum.AACHEN
         )
         weather_entry = jcg.add_component(config=my_weather_config)
 

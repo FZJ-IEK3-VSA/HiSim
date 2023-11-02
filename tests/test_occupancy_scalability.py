@@ -111,7 +111,7 @@ def simulation_for_one_time_step(
 
     # Set Weather
     my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.Aachen
+        location_entry=weather.LocationEnum.AACHEN
     )
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
@@ -131,9 +131,9 @@ def simulation_for_one_time_step(
     )
     my_residence.altitude_channel.source_output = my_weather.altitude_output
     my_residence.azimuth_channel.source_output = my_weather.azimuth_output
-    my_residence.direct_normal_irradiance_channel.source_output = my_weather.DNI_output
+    my_residence.direct_normal_irradiance_channel.source_output = my_weather.dni_output
     my_residence.direct_horizontal_irradiance_channel.source_output = (
-        my_weather.DHI_output
+        my_weather.dhi_output
     )
     my_residence.occupancy_heat_gain_channel.source_output = (
         my_occupancy.heating_by_residentsC

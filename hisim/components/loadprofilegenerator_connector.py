@@ -584,7 +584,7 @@ class Occupancy(cp.Component):
         if self.occupancy_config.predictive:
             SingletonSimRepository().set_entry(
                 key=SingletonDictKeyEnum.heating_by_residents_yearly_forecast,
-                entry=self.heating_by_residents
+                entry=self.heating_by_residents,
             )
 
         self.max_hot_water_demand = max(self.water_consumption)

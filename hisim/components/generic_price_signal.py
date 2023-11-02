@@ -137,10 +137,7 @@ class PriceSignal(cp.Component):
         """Outputs price signal of time step."""
         priceinjectionforecast = [0.1]
         pricepurchaseforecast = [0.5]
-        if (
-            self.config.predictive_control
-            and self.config.prediction_horizon
-        ):
+        if self.config.predictive_control and self.config.prediction_horizon:
             priceinjectionforecast = [0.1] * int(
                 self.config.prediction_horizon
                 / self.my_simulation_parameters.seconds_per_timestep
@@ -183,11 +180,11 @@ class PriceSignal(cp.Component):
 
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.Price_Injection_Forecast_24h,
-            entry=priceinjectionforecast
+            entry=priceinjectionforecast,
         )
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.Price_Purchase_Forecast_24h,
-            entry=pricepurchaseforecast
+            entry=pricepurchaseforecast,
         )
         stsv.set_output_value(self.PricePurchaseC, pricepurchaseforecast[0])
         stsv.set_output_value(self.PriceInjectionC, priceinjectionforecast[0])

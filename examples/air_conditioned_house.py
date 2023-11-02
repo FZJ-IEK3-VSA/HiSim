@@ -278,7 +278,7 @@ def household_air_conditioner_generic(
 
     """Weather"""
     my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.Seville
+        location_entry=weather.LocationEnum.SEVILLE
     )
     my_weather_config.predictive_control = predictive_control
 

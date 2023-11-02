@@ -692,7 +692,9 @@ class PostProcessor:
             report=report,
             table_as_list_of_list=capex_compute_return,
             headline=". Investment Cost and CO2-Emissions of devices for simulated period",
-            comment=["Values for Battery are calculated with lifetime in cycles instead of lifetime in years"],
+            comment=[
+                "Values for Battery are calculated with lifetime in cycles instead of lifetime in years"
+            ],
         )
 
     def write_new_chapter_with_text_content_to_report(

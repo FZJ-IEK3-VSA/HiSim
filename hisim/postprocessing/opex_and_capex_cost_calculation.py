@@ -32,7 +32,8 @@ def opex_calculation(
         component_unwrapped = component.my_component
         # cost and co2_footprint are calculated per simulated period
         opex_cost_data_class: OpexCostDataClass = component_unwrapped.get_cost_opex(
-            all_outputs=all_outputs, postprocessing_results=postprocessing_results,
+            all_outputs=all_outputs,
+            postprocessing_results=postprocessing_results,
         )
         cost = opex_cost_data_class.opex_cost
         co2_footprint = opex_cost_data_class.co2_footprint
@@ -69,7 +70,8 @@ def opex_calculation(
 
 
 def capex_calculation(
-    components: List[ComponentWrapper], simulation_parameters: SimulationParameters,
+    components: List[ComponentWrapper],
+    simulation_parameters: SimulationParameters,
 ) -> List:
     """Loops over all components and calls capex cost calculation."""
     seconds_per_year = 365 * 24 * 60 * 60
@@ -96,15 +98,20 @@ def capex_calculation(
             # lifetime is per default set to 1.0 in class cp.Component to avoid devide by zero error
 
             # battery costs and emissions are calculated per used cycles not per simulation period  # better aproximation of aging
-            if isinstance(component_unwrapped, Battery) and hasattr(component_unwrapped, "get_battery_aging_information"):
-                virtual_number_of_full_charge_cycles, lifetime_in_cycles = component_unwrapped.get_battery_aging_information()
+            if isinstance(component_unwrapped, Battery) and hasattr(
+                component_unwrapped, "get_battery_aging_information"
+            ):
+                (
+                    virtual_number_of_full_charge_cycles,
+                    lifetime_in_cycles,
+                ) = component_unwrapped.get_battery_aging_information()
                 if lifetime_in_cycles > 0:
                     capex_per_simulated_period = (capex / lifetime_in_cycles) * (
                         virtual_number_of_full_charge_cycles
                     )
-                    device_co2_footprint_per_simulated_period = (co2_footprint / lifetime_in_cycles) * (
-                            virtual_number_of_full_charge_cycles
-                    )
+                    device_co2_footprint_per_simulated_period = (
+                        co2_footprint / lifetime_in_cycles
+                    ) * (virtual_number_of_full_charge_cycles)
                 else:
                     log.warning(
                         f"capex calculation not valid. Check lifetime_in_cycles in Configuration of {component}"
@@ -113,9 +120,9 @@ def capex_calculation(
                 capex_per_simulated_period = (capex / lifetime) * (
                     simulation_parameters.duration.total_seconds() / seconds_per_year
                 )
-                device_co2_footprint_per_simulated_period = (co2_footprint / lifetime) * (
-                    simulation_parameters.duration.total_seconds() / seconds_per_year
-                )
+                device_co2_footprint_per_simulated_period = (
+                    co2_footprint / lifetime
+                ) * (simulation_parameters.duration.total_seconds() / seconds_per_year)
             total_investment_cost += capex
             total_device_co2_footprint += co2_footprint
             total_investment_cost_per_simulated_period += capex_per_simulated_period

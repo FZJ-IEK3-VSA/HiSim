@@ -44,14 +44,14 @@ def test_photovoltaic():
         number_of_outputs
     )
 
-    my_pvs.t_outC.source_output = my_weather.air_temperature_output
-    my_pvs.azimuthC.source_output = my_weather.azimuth_output
-    my_pvs.DNIC.source_output = my_weather.dni_output
-    my_pvs.DNIextraC.source_output = my_weather.dni_extra_output
-    my_pvs.DHIC.source_output = my_weather.dhi_output
-    my_pvs.GHIC.source_output = my_weather.ghi_output
-    my_pvs.apparent_zenithC.source_output = my_weather.apparent_zenith_output
-    my_pvs.wind_speedC.source_output = my_weather.wind_speed_output
+    my_pvs.t_out_channel.source_output = my_weather.air_temperature_output
+    my_pvs.azimuth_channel.source_output = my_weather.azimuth_output
+    my_pvs.dni_channel.source_output = my_weather.dni_output
+    my_pvs.dni_extra_channel.source_output = my_weather.dni_extra_output
+    my_pvs.dhi_channel.source_output = my_weather.dhi_output
+    my_pvs.ghi_channel.source_output = my_weather.ghi_output
+    my_pvs.apparent_zenith_channel.source_output = my_weather.apparent_zenith_output
+    my_pvs.wind_speed_channel.source_output = my_weather.wind_speed_output
 
     fft.add_global_index_of_components([my_weather, my_pvs])
 
@@ -59,6 +59,6 @@ def test_photovoltaic():
     my_weather.i_simulate(timestep, stsv, False)
     my_pvs.i_simulate(timestep, stsv, False)
     assert (
-        abs(0.4532226665022684 - stsv.values[my_pvs.electricity_outputC.global_index])
+        abs(0.4532226665022684 - stsv.values[my_pvs.electricity_output_channel.global_index])
         < 0.05
     )

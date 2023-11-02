@@ -52,7 +52,7 @@ class ExampleConfig:
         building_entry = jcg.add_component(config=building_config)
 
         # PV
-        pv_config = generic_pv_system.PVSystemConfig.get_default_PV_system()
+        pv_config = generic_pv_system.PVSystemConfig.get_default_pv_system()
         pv_entry = jcg.add_component(config=pv_config)
 
         jcg.add_default_connection(from_entry=weather_entry, to_entry=building_entry)

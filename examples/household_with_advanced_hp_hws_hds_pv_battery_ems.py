@@ -134,7 +134,7 @@ def household_with_hplib_hws_hds_pv_battery_ems(
 
     # Build PV
     my_photovoltaic_system_config = (
-        generic_pv_system.PVSystemConfig.get_scaled_PV_system(
+        generic_pv_system.PVSystemConfig.get_scaled_pv_system(
             rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
         )
     )

@@ -160,7 +160,7 @@ def household_pv_hp(
 
     # Build PV
     my_photovoltaic_system_config = (
-        generic_pv_system.PVSystemConfig.get_default_PV_system()
+        generic_pv_system.PVSystemConfig.get_default_pv_system()
     )
     my_photovoltaic_system_config.power_in_watt_peak = power
     my_photovoltaic_system_config.azimuth = azimuth

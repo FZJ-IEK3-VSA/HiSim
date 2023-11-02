@@ -109,7 +109,7 @@ class HouseholdAdvancedHPDieselCarPVConfig:
                 profile_with_washing_machine_and_dishwasher=True,
                 predictive_control=False,
             ),
-            pv_config=generic_pv_system.PVSystemConfig.get_default_PV_system(),
+            pv_config=generic_pv_system.PVSystemConfig.get_default_pv_system(),
             building_config=building_config,
             hds_controller_config=(
                 heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()

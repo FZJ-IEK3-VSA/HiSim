@@ -1,8 +1,9 @@
+"""Generic hydrogen storage module."""
+# clean
 # -*- coding: utf-8 -*-
 # Owned
-from dataclasses import dataclass
 from typing import List, Any, Tuple
-
+from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 from hisim import component as cp
@@ -25,6 +26,9 @@ __status__ = ""
 @dataclass_json
 @dataclass
 class GenericHydrogenStorageConfig(cp.ConfigBase):
+
+    """Generic hydrogen storage config class."""
+
     #: name of the device
     name: str
     #: priority of the device in hierachy: the higher the number the lower the priority
@@ -51,7 +55,7 @@ class GenericHydrogenStorageConfig(cp.ConfigBase):
         max_discharging_rate: float = 2 / 3600,
         source_weight: int = 1,
     ) -> Any:
-        """Returns default configuration for hydrogen storage"""
+        """Returns default configuration for hydrogen storage."""
         config = GenericHydrogenStorageConfig(
             name="HydrogenStorage",
             source_weight=source_weight,
@@ -67,19 +71,21 @@ class GenericHydrogenStorageConfig(cp.ConfigBase):
 
 
 class GenericHydrogenStorageState:
-    """
-    This data class saves the state of the hydrogen storage.
-    """
+
+    """Generic hydrogen storage state that saves the state of the hydrogen storage."""
 
     def __init__(self, fill: float = 0) -> None:
+        """Initialize the class."""
         self.fill = fill
 
     def clone(self) -> Any:
+        """Clones the state."""
         return GenericHydrogenStorageState(fill=self.fill)
 
 
 class GenericHydrogenStorage(cp.Component):
-    """This is a simple implementation of a hydrogen storage.
+
+    """Generic hydrogen storage is a simple implementation of a hydrogen storage.
 
     Components to connect to:
     (1) Fuel cell (generic_CHP)
@@ -98,6 +104,7 @@ class GenericHydrogenStorage(cp.Component):
         my_simulation_parameters: SimulationParameters,
         config: GenericHydrogenStorageConfig,
     ) -> None:
+        """Initialize the class."""
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
@@ -139,13 +146,14 @@ class GenericHydrogenStorage(cp.Component):
         self.add_default_connections(
             self.get_default_connections_from_generic_electrolyzer()
         )
-        self.add_default_connections(self.get_default_connections_from_generic_CHP())
+        self.add_default_connections(self.get_default_connections_from_generic_chp())
 
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""
         pass
 
-    def get_default_connections_from_generic_CHP(self) -> List[cp.ComponentConnection]:
+    def get_default_connections_from_generic_chp(self) -> List[cp.ComponentConnection]:
+        """Get default connections from generic chp."""
         log.information("setting fuel cell default connections in generic H2 storage")
         connections: List[cp.ComponentConnection] = []
         chp_classname = generic_CHP.SimpleCHP.get_classname()
@@ -161,6 +169,7 @@ class GenericHydrogenStorage(cp.Component):
     def get_default_connections_from_generic_electrolyzer(
         self,
     ) -> List[cp.ComponentConnection]:
+        """Get default connections from generic electrolyzer."""
         log.information(
             "setting electrolyzer default connections in generic H2 storage"
         )
@@ -178,6 +187,7 @@ class GenericHydrogenStorage(cp.Component):
         return connections
 
     def store(self, charging_rate: float) -> Tuple[float, float, float]:
+        """Store."""
 
         # limitation of charging rate
         delta_not_stored: float = 0
@@ -221,6 +231,7 @@ class GenericHydrogenStorage(cp.Component):
         return charging_rate, power_demand, delta_not_stored
 
     def withdraw(self, discharging_rate: float) -> Tuple[float, float, float]:
+        """Withdraw."""
 
         # limitations of discharging rate
         delta_not_released: float = 0
@@ -262,17 +273,21 @@ class GenericHydrogenStorage(cp.Component):
         return discharging_rate, power_demand, delta_not_released
 
     def storage_losses(self) -> None:
+        """Storage losses."""
         self.state.fill -= self.state.fill * self.loss_factor
 
     def i_save_state(self) -> None:
+        """Saves the state."""
         self.previous_state = self.state.clone()
 
     def i_restore_state(self) -> None:
+        """Restores the state."""
         self.state = self.previous_state.clone()
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Simulates the component."""
 
         # get input values
         charging_rate = stsv.get_input_value(self.hydrogen_input_channel)
@@ -312,6 +327,7 @@ class GenericHydrogenStorage(cp.Component):
         stsv.set_output_value(self.hydrogen_soc, percent_fill)
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        """Doublechecks."""
         # alle ausgabewerte die zu überprüfen sind können hiermit fehlerausgabeüberprüft werden
         pass
 

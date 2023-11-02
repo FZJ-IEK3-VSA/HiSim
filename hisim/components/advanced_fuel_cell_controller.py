@@ -42,8 +42,8 @@ class ExtendedControllerSimulation:
         demand = electricity_demand_household - power_supply_pv
         if chp.CHPConfig.is_modulating:
             power_states_possible = ExtendedControllerConfig.chp_power_states_possible
-            min_power = chp.CHPConfig.P_el_min
-            max_power = chp.CHPConfig.P_el_max
+            min_power = chp.CHPConfig.p_el_min
+            max_power = chp.CHPConfig.p_el_max
             power_delta = max_power - min_power
             # the first step is already the minimum power
             power_per_step_size = power_delta / (power_states_possible - 1)
@@ -61,7 +61,7 @@ class ExtendedControllerSimulation:
                         runtime_chp = 0
                     else:
                         state_chp = 1 / power_states_possible
-            elif 0 < demand < chp.CHPConfig.P_el_min:
+            elif 0 < demand < chp.CHPConfig.p_el_min:
                 # maximum_autarky --> production time if P > 0 or production only if P in range?
                 if ExtendedControllerConfig.maximum_autarky:
                     state_chp = 1 / power_states_possible  # eg 0.1
@@ -78,10 +78,10 @@ class ExtendedControllerSimulation:
                             runtime_chp = 0
                         else:
                             state_chp = 1 / power_states_possible
-            elif chp.CHPConfig.P_el_min <= demand < chp.CHPConfig.P_el_max:
+            elif chp.CHPConfig.p_el_min <= demand < chp.CHPConfig.p_el_max:
                 # minimum power plus the demand depending power
                 state_chp = (
-                    1 + ceil((demand - chp.CHPConfig.P_el_min) / power_per_step_size)
+                    1 + ceil((demand - chp.CHPConfig.p_el_min) / power_per_step_size)
                 ) / power_states_possible
                 assert (1 / power_states_possible) < state_chp <= 1
             else:  # demand >= chp.CHPConfig.P_el_max
@@ -91,7 +91,7 @@ class ExtendedControllerSimulation:
                 generated_electricity = 0
                 power_from_or_to_grid = demand - generated_electricity
             elif 0 < state_chp <= 1:
-                generated_electricity = chp.CHPConfig.P_el_min + power_per_step_size * (
+                generated_electricity = chp.CHPConfig.p_el_min + power_per_step_size * (
                     state_chp * power_states_possible - 1
                 )
                 power_from_or_to_grid = demand - generated_electricity
@@ -112,11 +112,11 @@ class ExtendedControllerSimulation:
                         power_from_or_to_grid = demand
                     else:
                         state_chp = 1
-                        power_from_or_to_grid = demand - chp.CHPConfig.P_el_max
+                        power_from_or_to_grid = demand - chp.CHPConfig.p_el_max
 
             else:  # demand > 0
                 state_chp = 1
-                power_from_or_to_grid = demand - chp.CHPConfig.P_el_max
+                power_from_or_to_grid = demand - chp.CHPConfig.p_el_max
 
         # independent of modulation
         if state_chp > 0:
@@ -188,7 +188,7 @@ class ExtendedControllerSimulation:
         power_from_or_to_grid = (
             electricity_demand_household
             - pv_production
-            - chp.CHPConfig.P_el_max * state_chp
+            - chp.CHPConfig.p_el_max * state_chp
         )
 
         return state_chp, runtime_chp, power_from_or_to_grid
@@ -569,8 +569,8 @@ class ExtendedController(Component):
         # check the electricity balance
         if chp.CHPConfig.is_modulating:
             if self.test_state > 0:
-                power_chp_test = chp.CHPConfig.P_el_min + (
-                    chp.CHPConfig.P_el_max - chp.CHPConfig.P_el_min
+                power_chp_test = chp.CHPConfig.p_el_min + (
+                    chp.CHPConfig.p_el_max - chp.CHPConfig.p_el_min
                 ) / (ExtendedControllerConfig.chp_power_states_possible - 1) * (
                     self.test_state * ExtendedControllerConfig.chp_power_states_possible
                     - 1
@@ -599,7 +599,7 @@ class ExtendedController(Component):
         else:
             if 0.00001 > (
                 self.test_pv
-                + chp.CHPConfig.P_el_max * self.test_state
+                + chp.CHPConfig.p_el_max * self.test_state
                 + self.test_grid
                 - self.test_electrolyzer
                 - self.test_demand
@@ -609,7 +609,7 @@ class ExtendedController(Component):
                 log.error("Wrong energy balance:")
                 log.error("State CHP: " + str(self.test_state))
                 log.error("test_pv: " + str(self.test_pv))
-                log.error("power_chp_test: " + str(chp.CHPConfig.P_el_max))
+                log.error("power_chp_test: " + str(chp.CHPConfig.p_el_max))
                 log.error("test_grid: " + str(self.test_grid))
                 log.error("test_demand: " + str(self.test_demand))
                 log.error("test_electrolyzer: " + str(self.test_electrolyzer))

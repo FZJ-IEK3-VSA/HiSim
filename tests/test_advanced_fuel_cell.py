@@ -56,9 +56,9 @@ def test_chp_system():
         lt.Units.WATT,
     )
 
-    my_chp_system.control_signal.source_output = control_signal
-    my_chp_system.mass_inp_temp.source_output = massflow_input_temperature
-    my_chp_system.electricity_target.source_output = electricity_from_CHP_target
+    my_chp_system.control_signal_channel.source_output = control_signal
+    my_chp_system.mass_inp_temp_channel.source_output = massflow_input_temperature
+    my_chp_system.electricity_target_channel.source_output = electricity_from_CHP_target
 
     number_of_outputs = fft.get_number_of_outputs(
         [
@@ -92,16 +92,16 @@ def test_chp_system():
 
     # Check if the delivered electricity demand got produced by chp
     #
-    assert stsv.values[my_chp_system.mass_out.global_index] == 0.011
-    assert stsv.values[my_chp_system.mass_out_temp.global_index] == 82.6072779444372
+    assert stsv.values[my_chp_system.mass_out_channel.global_index] == 0.011
+    assert stsv.values[my_chp_system.mass_out_temp_channel.global_index] == 82.6072779444372
     assert (
-        stsv.values[my_chp_system.gas_demand_target.global_index]
+        stsv.values[my_chp_system.gas_demand_target_channel.global_index]
         == 9.99470663620661e-05
     )
-    assert stsv.values[my_chp_system.el_power.global_index] == 400.0
-    assert stsv.values[my_chp_system.number_of_cyclesC.global_index] == 1
-    assert stsv.values[my_chp_system.th_power.global_index] == 1500.0
+    assert stsv.values[my_chp_system.el_power_channel.global_index] == 400.0
+    assert stsv.values[my_chp_system.number_of_cycles_channel.global_index] == 1
+    assert stsv.values[my_chp_system.th_power_channel.global_index] == 1500.0
     assert (
-        stsv.values[my_chp_system.gas_demand_real_used.global_index]
+        stsv.values[my_chp_system.gas_demand_real_used_channel.global_index]
         == 9.99470663620661e-05
     )

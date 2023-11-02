@@ -5,14 +5,6 @@
 from typing import List, Optional, Any
 from os import listdir
 from pathlib import Path
-from dataclasses import dataclass
-from dataclasses_json import dataclass_json
-from utspclient.helpers.lpgdata import (
-    ChargingStationSets,
-    Households,
-    TransportationDeviceSets,
-    TravelRouteSets,
-)
 
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
@@ -31,7 +23,6 @@ from hisim.components import advanced_battery_bslib
 from hisim.components import advanced_ev_battery_bslib
 from hisim.components import controller_l1_generic_ev_charge
 from hisim.components import controller_l2_energy_management_system
-from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim import utils
 from hisim import loadtypes as lt
 from hisim import log

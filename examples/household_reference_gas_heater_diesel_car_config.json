@@ -1,0 +1,155 @@
+{
+  "building_type": "blub",
+  "number_of_apartments": 1.0,
+  "occupancy_config": {
+    "name": "UTSPConnector",
+    "url": "http://134.94.131.167:443/api/v1/profilerequest",
+    "api_key": "OrjpZY93BcNWw8lKaMp0BEchbCc",
+    "household": {
+      "Name": "CHR01 Couple both at Work",
+      "Guid": {
+        "StrVal": "516a33ab-79e1-4221-853b-967fc11cc85a"
+      }
+    },
+    "result_path": "c:\\users\\markus\\hisim\\hisim\\results",
+    "travel_route_set": {
+      "Name": "Travel Route Set for 10km Commuting Distance",
+      "Guid": {
+        "StrVal": "0b217fce-ad99-4ef1-8540-c07081856d3c"
+      }
+    },
+    "transportation_device_set": {
+      "Name": "Bus and one 30 km/h Car",
+      "Guid": {
+        "StrVal": "6ac74bd0-bacd-4b39-b84a-dc7ae16702c9"
+      }
+    },
+    "charging_station_set": {
+      "Name": "Charging At Home with 11 kW",
+      "Guid": {
+        "StrVal": "78dae308-24c4-45cc-8bdf-b001d61f45c2"
+      }
+    },
+    "consumption": 0.0,
+    "profile_with_washing_machine_and_dishwasher": true,
+    "predictive_control": false
+  },
+  "building_config": {
+    "name": "Building",
+    "heating_reference_temperature_in_celsius": -7,
+    "building_code": "DE.N.SFH.05.Gen.ReEx.001.002",
+    "building_heat_capacity_class": "medium",
+    "initial_internal_temperature_in_celsius": 23,
+    "absolute_conditioned_floor_area_in_m2": 121.2,
+    "total_base_area_in_m2": null,
+    "number_of_apartments": null,
+    "predictive": false
+  },
+  "hds_controller_config": {
+    "name": "HeatDistributionController",
+    "heating_system": 2,
+    "set_heating_threshold_outside_temperature_in_celsius": 16.0,
+    "heating_reference_temperature_in_celsius": -7,
+    "set_heating_temperature_for_building_in_celsius": 19,
+    "set_cooling_temperature_for_building_in_celsius": 24
+  },
+  "hds_config": {
+    "name": "HeatDistributionSystem",
+    "heating_load_of_building_in_watt": 9865.68,
+    "co2_footprint": 0,
+    "cost": 8000,
+    "lifetime": 50,
+    "maintenance_cost_as_percentage_of_investment": 0.01
+  },
+  "gasheater_controller_config": {
+    "name": "GenericGasHeaterController",
+    "mode": 1,
+    "set_heating_threshold_outside_temperature_in_celsius": 16.0,
+    "minimal_thermal_power_in_watt": 1000,
+    "maximal_thermal_power_in_watt": 9865.68,
+    "set_temperature_difference_for_full_power": 5.0
+  },
+  "gasheater_config": {
+    "name": "GenericGasHeater",
+    "is_modulating": true,
+    "minimal_thermal_power_in_watt": 1000,
+    "maximal_thermal_power_in_watt": 9865.68,
+    "eff_th_min": 0.6,
+    "eff_th_max": 0.9,
+    "delta_temperature_in_celsius": 25,
+    "maximal_mass_flow_in_kilogram_per_second": 0.09440842105263159,
+    "maximal_temperature_in_celsius": 80,
+    "temperature_delta_in_celsius": 10,
+    "maximal_power_in_watt": 9865.68,
+    "co2_footprint": 488.05518960000006,
+    "cost": 7416,
+    "lifetime": 20,
+    "maintenance_cost_as_percentage_of_investment": 0.03,
+    "consumption": 0
+  },
+  "simple_hot_water_storage_config": {
+    "name": "SimpleHotWaterStorage",
+    "volume_heating_water_storage_in_liter": 591.9408000000001,
+    "temperature_loss_in_celsius_per_hour": 0.125,
+    "heat_exchanger_is_present": true,
+    "co2_footprint": 100,
+    "cost": 8589.061008,
+    "lifetime": 100,
+    "maintenance_cost_as_percentage_of_investment": 0.0
+  },
+  "dhw_heatpump_config": {
+    "name": "DHWHeatPump",
+    "source_weight": 1,
+    "manufacturer": "Viessmann Werke GmbH & Co KG",
+    "device_name": "Vitocal 300-A AWO-AC 301.B07",
+    "power_th": 3000.0,
+    "water_vs_heating": "WaterHeating",
+    "device_category": "HeatPump",
+    "co2_footprint": 497.52,
+    "cost": 4541.22,
+    "lifetime": 10,
+    "maintenance_cost_as_percentage_of_investment": 0.025,
+    "consumption": 0
+  },
+  "dhw_heatpump_controller_config": {
+    "name": "ControllerDHWHeatpumpController",
+    "source_weight": 1,
+    "t_min_heating_in_celsius": 40.0,
+    "t_max_heating_in_celsius": 60.0,
+    "cooling_considered": false,
+    "day_of_heating_season_begin": 270,
+    "day_of_heating_season_end": 150,
+    "min_operation_time_in_seconds": 1800,
+    "min_idle_time_in_seconds": 1800
+  },
+  "dhw_storage_config": {
+    "name": "DHWBoiler",
+    "source_weight": 1,
+    "use": "Boiler",
+    "volume": 250,
+    "surface": 2.181868240447087,
+    "u_value": 0.36,
+    "energy_full_cycle": null,
+    "power": 0,
+    "co2_footprint": 0,
+    "cost": 3337.2999999999997,
+    "lifetime": 20,
+    "maintenance_cost_as_percentage_of_investment": 0.02
+  },
+  "car_config": {
+    "name": "Car",
+    "source_weight": 1,
+    "fuel": "Diesel",
+    "consumption_per_km": 0.06,
+    "co2_footprint": 9139.3,
+    "cost": 32035.0,
+    "lifetime": 18,
+    "maintenance_cost_as_percentage_of_investment": 0.02,
+    "consumption": 0
+  },
+  "electricity_meter_config": {
+    "name": "ElectricityMeter",
+    "total_energy_to_grid_in_kwh": 0.0,
+    "total_energy_from_grid_in_kwh": 0.0
+  }
+}

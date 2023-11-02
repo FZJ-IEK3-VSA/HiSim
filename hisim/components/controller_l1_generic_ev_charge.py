@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """ Controller of EV battery with configuration and state. """
 
-from typing import List, Any, Tuple
+from typing import List, Tuple
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 

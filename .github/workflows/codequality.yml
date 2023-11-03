@@ -86,6 +86,13 @@ jobs:
         prospector hisim/components/generic_ev_charger.py
         prospector hisim/components/controller_pid.py
         prospector hisim/components/generic_hydrogen_storage.py
+        prospector hisim/components/generic_heat_source.py
+        prospector hisim/components/generic_heat_pump_modular.py
+        prospector hisim/components/generic_electrolyzer_and_h2_storage.py
+        prospector hisim/components/advanced_battery_bslib.py
+        prospector hisim/components/advanced_ev_battery_bslib.py
+        prospector hisim/components/advanced_fuel_cell.py
+        prospector hisim/components/advanced_fuel_cell_controller.py
 
         prospector hisim/modular_household/component_connections.py
         prospector hisim/modular_household/interface_configs/system_config.py

@@ -27,8 +27,9 @@ def test_storage():
     my_storage_config = (
         generic_heat_water_storage.HeatStorageConfig.get_default_heat_storage_config()
     )
-    my_storage_config.V_SP_heating_water = V_SP_heating_water
-    my_storage_config.V_SP_warm_water = V_SP_warm_water
+
+    my_storage_config.volume_sp_heating_water = V_SP_heating_water
+    my_storage_config.volume_sp_warm_water = V_SP_warm_water
     my_storage_config.temperature_of_warm_water_extratcion = (
         temperature_of_warm_water_extratcion
     )

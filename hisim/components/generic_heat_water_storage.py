@@ -38,7 +38,7 @@ class HeatStorageConfig(ConfigBase):
     name: str
     volume_sp_heating_water: float
     volume_sp_warm_water: float
-    temperature_of_warm_water_extratcion: float
+    temperature_of_warm_water_extraction: float
     ambient_temperature: float
     temperature_sp_ww: float
     temperature_sp_hw: float
@@ -50,7 +50,7 @@ class HeatStorageConfig(ConfigBase):
             name="HeatStorage",
             volume_sp_heating_water=1000,
             volume_sp_warm_water=100,
-            temperature_of_warm_water_extratcion=32,
+            temperature_of_warm_water_extraction=32,
             ambient_temperature=15,
             temperature_sp_ww=40,
             temperature_sp_hw=40,
@@ -153,7 +153,7 @@ class HeatStorage(Component):
         self.volume_sp_heating_water = self.heat_storage_config.volume_sp_heating_water
         self.volume_sp_warm_water = self.heat_storage_config.volume_sp_warm_water
         self.temperature_of_warm_water_extratcion = (
-            self.heat_storage_config.temperature_of_warm_water_extratcion
+            self.heat_storage_config.temperature_of_warm_water_extraction
         )
         self.ambient_temperature = self.heat_storage_config.ambient_temperature
         self.temperature_sp_warm_water = self.heat_storage_config.temperature_sp_ww

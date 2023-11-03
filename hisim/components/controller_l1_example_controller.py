@@ -1,5 +1,9 @@
+"""Controller l1 example module."""
+
+# clean
+
 # Generic/Built-in
-import copy
+
 from typing import Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -28,6 +32,7 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class SimpleControllerConfig(ConfigBase):
+
     """Config class."""
 
     name: str
@@ -45,6 +50,9 @@ class SimpleControllerConfig(ConfigBase):
 
 
 class SimpleController(Component):
+
+    """Simple controller class."""
+
     StorageFillLevel = "Fill Level Percent"
     GasHeaterPowerPercent = "Gas Heater Power Level"
 
@@ -54,17 +62,19 @@ class SimpleController(Component):
         my_simulation_parameters: SimulationParameters,
         config: SimpleControllerConfig,
     ) -> None:
+        """Initialize the class."""
+
         super().__init__(
             name, my_simulation_parameters=my_simulation_parameters, my_config=config
         )
-        self.input1: ComponentInput = self.add_input(
+        self.input1_channel: ComponentInput = self.add_input(
             self.component_name,
             SimpleController.StorageFillLevel,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KWH,
             True,
         )
-        self.output1: ComponentOutput = self.add_output(
+        self.output1_channel: ComponentOutput = self.add_output(
             self.component_name,
             SimpleController.GasHeaterPowerPercent,
             lt.LoadTypes.GAS,
@@ -74,19 +84,23 @@ class SimpleController(Component):
         self.previous_state = self.state
 
     def i_save_state(self) -> None:
+        """Saves the state."""
         self.previous_state = self.state
 
     def i_restore_state(self) -> None:
+        """Restores the state."""
         self.state = self.previous_state
 
     def i_simulate(
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Simulates the component."""
+
         if force_convergence:
             return
-        percent = stsv.get_input_value(self.input1)
+        percent = stsv.get_input_value(self.input1_channel)
         if percent < 0.4:
             self.state = 1
         if percent > 0.99:
             self.state = 0
-        stsv.set_output_value(self.output1, self.state)
+        stsv.set_output_value(self.output1_channel, self.state)

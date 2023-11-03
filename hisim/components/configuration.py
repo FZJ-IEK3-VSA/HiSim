@@ -1,3 +1,7 @@
+"""Configuration module."""
+
+# clean
+
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hisim.component import ConfigBase
@@ -6,6 +10,9 @@ from hisim.component import ConfigBase
 @dataclass_json
 @dataclass
 class WarmWaterStorageConfig(ConfigBase):
+
+    """Warm water storage config class."""
+
     name: str
     tank_diameter: float  # [m]
     tank_height: float  # [m]
@@ -29,11 +36,14 @@ class WarmWaterStorageConfig(ConfigBase):
 
 
 class CHPControllerConfig:
-    """
+
+    """Chp controller config.
+
     The CHP controller is used to implement an on and off hysteresis
     Decide if its heat- or electricity-led
 
-    Two temperature sensors in the tank are giving the needed information. They can be set at a height percentage in the tank. =% is the top, 100 % s the bottom of the tank.
+    Two temperature sensors in the tank are giving the needed information.
+    They can be set at a height percentage in the tank. =% is the top, 100 % s the bottom of the tank.
     If the T at the upper sensor is below temperature_switch_on the chp will run until the lower sensor is above temperature_switch_off.
     A minimum runtime in minutes can be defined for the chp.
 
@@ -53,18 +63,23 @@ class CHPControllerConfig:
 
 
 class GasHeaterConfig:
+
+    """Gas heater config class."""
+
     is_modulating = True
     P_th_min = 1_000  # [W]
     P_th_max = 12_000  # [W]
     eff_th_min = 0.60  # [-]
     eff_th_max = 0.90  # [-]
-    delta_T = 25
-    mass_flow_max = P_th_max / (4180 * delta_T)  # kg/s ## -> ~0.07
+    delta_temperature = 25
+    mass_flow_max = P_th_max / (4180 * delta_temperature)  # kg/s ## -> ~0.07
     temperature_max = 80  # [°C]
 
 
 class GasControllerConfig:
-    """
+
+    """Gas controller config class.
+
     This controller works like the CHP controller, but switches on later so the CHP is used more often.
     Gas heater is used as a backup if the CHP power is not high enough.
     If the minimum_runtime is smaller than the timestep, the minimum_runtime is 1 timestep --> generic_gas_heater.py
@@ -82,26 +97,35 @@ class GasControllerConfig:
 
 
 class LoadConfig:
+
+    """Load config."""
+
     # massflow_load_minute = 2.5          # [kg/min]
     # massflow_load = massflow_load_minute / 60   # [kg/s]
 
     possible_massflows_load = [0.1, 0.2, 0.3, 0.4]  # [kg/s]
-    delta_T = 20
+    delta_temperature = 20
 
     # the returnflow shows if there was enough energy in the water
     # -> use in load! Not in storage, there the water from WW is included
     temperature_returnflow_minimum = 30  # [°C]
 
-    kWh_per_year = 20_201
-    demand_factor = kWh_per_year / 1000
+    kwh_per_year = 20_201
+    demand_factor = kwh_per_year / 1000
 
 
 class ElectricityDemandConfig:
-    kWh_per_year = 6000
-    demand_factor = kWh_per_year / 1000
+
+    """Electricity demand config class."""
+
+    kwh_per_year = 6000
+    demand_factor = kwh_per_year / 1000
 
 
 class HouseholdWarmWaterDemandConfig:
+
+    """Household warm water demand config."""
+
     freshwater_temperature = 10  # [°C]
     ww_temperature_demand = 45  # [°C]
     # german --> Grädigkeit
@@ -111,11 +135,14 @@ class HouseholdWarmWaterDemandConfig:
 
     heat_exchanger_losses = 0
 
-    kWh_per_year = 2000
-    demand_factor = kWh_per_year / 1000
+    kwh_per_year = 2000
+    demand_factor = kwh_per_year / 1000
 
 
 class HydrogenStorageConfig:
+
+    """Hydrogen storage config class."""
+
     # combination of
     min_capacity = 0  # [kg_H2]
     max_capacity = 500  # [kg_H2]
@@ -135,6 +162,9 @@ class HydrogenStorageConfig:
 
 
 class AdvElectrolyzerConfig:
+
+    """Adv electrolyzer config class."""
+
     waste_energy = 400  # [W]   # 400
     min_power = 1_400  # [W]   # 1400
     max_power = 2_4000  # [W]   # 2400
@@ -160,12 +190,17 @@ class AdvElectrolyzerConfig:
 
 
 class PVConfig:
+
+    """PV config class."""
+
     peak_power = 20_000  # [W]
 
 
 @dataclass_json
 @dataclass
 class ExtendedControllerConfig(ConfigBase):
+
+    """Extended controller config class."""
 
     name: str
     # Active Components
@@ -198,6 +233,9 @@ class ExtendedControllerConfig(ConfigBase):
 
 
 class PhysicsConfig:
+
+    """Physics config class."""
+
     water_density = 1000  # [kg/m^3]
     water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin = 4_180  # J/kgK
 
@@ -225,6 +263,9 @@ class PhysicsConfig:
 @dataclass_json
 @dataclass
 class EmissionFactorsAndCostsForFuelsConfig:
+
+    """Emission factors and costs for fuels config class."""
+
     electricity_costs_in_euro_per_kwh: float  # EUR/kWh
     electricity_footprint_in_kg_per_kwh: float  # kgCO2eq/kWh
     electricity_to_grid_revenue_in_euro_per_kwh: float  # EUR/kWh
@@ -239,7 +280,7 @@ class EmissionFactorsAndCostsForFuelsConfig:
 
     @classmethod
     def get_default(cls) -> "EmissionFactorsAndCostsForFuelsConfig":
-        """These are old values copied from file emission_factors_and_costs_fuels.csv so far"""
+        """These are old values copied from file emission_factors_and_costs_fuels.csv so far."""
         # Todo: values copied from file emission_factors_and_costs_fuels.csv so far; Use only one location for data!
         # Todo: check Literature for values
         return EmissionFactorsAndCostsForFuelsConfig(

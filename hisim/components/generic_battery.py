@@ -1,6 +1,9 @@
+"""Generic battery."""
+
+# clean
+
 # Generic/Built-in
 import copy
-from typing import Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -23,6 +26,9 @@ __status__ = "development"
 
 
 class GenericBatteryState:
+
+    """Generic battery state class."""
+
     def __init__(
         self,
         init_stored_energy=0,
@@ -31,14 +37,16 @@ class GenericBatteryState:
         max_var_stored_energy=None,
         min_var_stored_energy=None,
     ):
+        """Initialize the class."""
         self.stored_energy = init_stored_energy
         self.max_stored_energy = max_stored_energy
         self.min_stored_energy = min_stored_energy
         self.max_var_stored_energy = max_var_stored_energy
         self.min_var_stored_energy = min_var_stored_energy
-        self.chargeWh: float
+        self.charge_wh: float
 
     def charge(self, energy):
+        """Charge."""
         energy = abs(energy)
         if self.stored_energy + energy < self.max_stored_energy:
             charge = energy
@@ -49,9 +57,10 @@ class GenericBatteryState:
             charge = self.max_var_stored_energy
 
         self.stored_energy = charge + self.stored_energy
-        self.chargeWh = charge
+        self.charge_wh = charge
 
     def discharge(self, energy):
+        """Discharge."""
         energy = -abs(energy)
         if self.stored_energy + energy > self.min_stored_energy:
             discharge = energy
@@ -62,7 +71,7 @@ class GenericBatteryState:
             discharge = self.min_var_stored_energy
 
         self.stored_energy = discharge + self.stored_energy
-        self.chargeWh = discharge
+        self.charge_wh = discharge
 
 
 @dataclass_json
@@ -118,6 +127,9 @@ class BatteryControllerConfig(cp.ConfigBase):
 
 
 class GenericBattery(cp.Component):
+
+    """Generic Battery class."""
+
     # Imports
     ElectricityInput = "ElectricityInput"
     State = "State"
@@ -140,6 +152,7 @@ class GenericBattery(cp.Component):
         my_simulation_parameters: SimulationParameters,
         config: GenericBatteryConfig,
     ) -> None:
+        """Initialize the class."""
         super().__init__("Battery", my_simulation_parameters, my_config=config)
 
         self.build(
@@ -153,18 +166,18 @@ class GenericBattery(cp.Component):
         )
         self.previous_state = copy.deepcopy(self.state)
 
-        self.inputC: cp.ComponentInput = self.add_input(
+        self.input_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.ElectricityInput,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
             True,
         )
-        self.stateC: cp.ComponentInput = self.add_input(
+        self.state_channel: cp.ComponentInput = self.add_input(
             self.component_name, self.State, lt.LoadTypes.ANY, lt.Units.ANY, True
         )
 
-        self.state_of_chargeC: cp.ComponentOutput = self.add_output(
+        self.state_of_charge_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.StateOfCharge,
             lt.LoadTypes.ANY,
@@ -172,7 +185,7 @@ class GenericBattery(cp.Component):
             output_description=f"here a description for {self.StateOfCharge} will follow.",
         )
 
-        self.stored_energyC: cp.ComponentOutput = self.add_output(
+        self.stored_energy_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.StoredEnergy,
             lt.LoadTypes.ELECTRICITY,
@@ -180,7 +193,7 @@ class GenericBattery(cp.Component):
             output_description=f"here a description for {self.StoredEnergy} will follow.",
         )
 
-        self.electricity_outputC: cp.ComponentOutput = self.add_output(
+        self.electricity_output_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.ElectricityOutput,
             lt.LoadTypes.ELECTRICITY,
@@ -189,6 +202,7 @@ class GenericBattery(cp.Component):
         )
 
     def build(self, manufacturer, model, base):
+        """Build function."""
         self.base = base
         self.time_correction_factor = (
             1 / self.my_simulation_parameters.seconds_per_timestep
@@ -225,8 +239,9 @@ class GenericBattery(cp.Component):
             self.min_var_stored_energy = -self.max_var_stored_energy
 
     def write_to_report(self):
+        """Writes to report."""
         lines = []
-        lines.append("MaxStoredEnergy: {}".format(self.max_stored_energy))
+        lines.append(f"MaxStoredEnergy: {self.max_stored_energy}")
         return lines
 
     # def i_save_state(self):
@@ -235,6 +250,7 @@ class GenericBattery(cp.Component):
     # def i_restore_state(self):
     #    self.state = copy.copy(self.previous_state)
     def i_save_state(self) -> None:
+        """Saves the state."""
         self.previous_state = copy.deepcopy(self.state)
 
     def i_prepare_simulation(self) -> None:
@@ -266,16 +282,19 @@ class GenericBattery(cp.Component):
             )
 
     def i_restore_state(self) -> None:
+        """Restores the state."""
         self.state = copy.deepcopy(self.previous_state)
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        """Doublechecks."""
         pass
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
-        load = stsv.get_input_value(self.inputC)
-        state = stsv.get_input_value(self.stateC)
+        """Simulates the component."""
+        load = stsv.get_input_value(self.input_channel)
+        state = stsv.get_input_value(self.state_channel)
 
         load = -load / self.seconds_per_timestep
 
@@ -301,12 +320,15 @@ class GenericBattery(cp.Component):
             charging_delta = 0
             after_capacity = capacity
 
-        stsv.set_output_value(self.state_of_chargeC, after_capacity / max_capacity)
-        stsv.set_output_value(self.stored_energyC, after_capacity)
-        stsv.set_output_value(self.electricity_outputC, charging_delta)
+        stsv.set_output_value(self.state_of_charge_channel, after_capacity / max_capacity)
+        stsv.set_output_value(self.stored_energy_channel, after_capacity)
+        stsv.set_output_value(self.electricity_output_channel, charging_delta)
 
 
 class BatteryController(cp.Component):
+
+    """Battery Controller class."""
+
     ElectricityInput = "ElectricityInput"
     State = "State"
 
@@ -315,27 +337,30 @@ class BatteryController(cp.Component):
         my_simulation_parameters: SimulationParameters,
         config: BatteryControllerConfig,
     ) -> None:
+        """Initialize the class."""
         super().__init__(
             name=config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
         )
 
-        self.inputC: cp.ComponentInput = self.add_input(
+        self.input_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.ElectricityInput,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
             True,
         )
-        self.stateC: cp.ComponentOutput = self.add_output(
+        self.state_channel: cp.ComponentOutput = self.add_output(
             self.component_name, self.State, lt.LoadTypes.ANY, lt.Units.ANY
         )
 
     def i_save_state(self) -> None:
+        """Saves the state."""
         pass
 
     def i_restore_state(self) -> None:
+        """Restores the state."""
         pass
 
     def i_prepare_simulation(self) -> None:
@@ -343,12 +368,14 @@ class BatteryController(cp.Component):
         pass
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        """Doublechecks."""
         pass
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
-        load = stsv.get_input_value(self.inputC)
+        """Simulates the component."""
+        load = stsv.get_input_value(self.input_channel)
         state: float = 0
         if load < 0.0:
             state = 1
@@ -357,4 +384,4 @@ class BatteryController(cp.Component):
         else:
             state = 0.0
 
-        stsv.set_output_value(self.stateC, state)
+        stsv.set_output_value(self.state_channel, state)

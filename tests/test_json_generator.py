@@ -1,14 +1,11 @@
-from hisim import component as cp
+"""Test json generator."""
 
-# import components as cps
-# import components
-from hisim.components import generic_heat_pump
 import pytest
+
 from hisim.components import loadprofilegenerator_connector
 from hisim.components import weather
 from hisim.components import building
 from hisim.components import generic_pv_system
-from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.json_generator import JsonConfigurationGenerator
 from hisim.postprocessingoptions import PostProcessingOptions
@@ -16,12 +13,17 @@ from hisim.postprocessingoptions import PostProcessingOptions
 
 @pytest.mark.base
 def test_execute_json_generator():
+    """Test execute json generator."""
     ex = ExampleConfig()
     ex.make_example_config()
 
 
 class ExampleConfig:
+
+    """Example config class."""
+
     def make_example_config(self):
+        """Make example config."""
         jcg: JsonConfigurationGenerator = JsonConfigurationGenerator("TestModel")
 
         # basic simulation parameters

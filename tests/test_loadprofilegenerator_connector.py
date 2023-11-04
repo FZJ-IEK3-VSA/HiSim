@@ -1,15 +1,17 @@
+"""Test for loadprofile generator connector."""
+
 import pytest
+from tests import functions_for_testing as fft
+
 from hisim import component
 from hisim.components import loadprofilegenerator_connector
 from hisim.simulationparameters import SimulationParameters
-from tests import functions_for_testing as fft
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 
 @pytest.mark.base
 def test_occupancy():
-    """
-    Tests Occupancy profile for profile CHR01
+    """Tests Occupancy profile for profile CHR01.
+
     Year heating generated: 1719 kWh
     """
 

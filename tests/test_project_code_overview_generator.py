@@ -8,5 +8,5 @@ from hisim import utils
 @utils.measure_execution_time
 def test_project_code_overview_generator():
     """Test project code overview generator."""
-    cf = OverviewGenerator()
-    cf.run()
+    c_f = OverviewGenerator()
+    c_f.run()

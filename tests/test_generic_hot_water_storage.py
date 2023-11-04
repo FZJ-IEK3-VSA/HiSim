@@ -67,8 +67,12 @@ def test_storage():
         lt.Units.CELSIUS,
     )
 
-    my_storage.thermal_demand_heating_water_channel.source_output = thermal_demand_heating_water
-    my_storage.thermal_demand_warm_water_channel.source_output = thermal_demand_warm_water
+    my_storage.thermal_demand_heating_water_channel.source_output = (
+        thermal_demand_heating_water
+    )
+    my_storage.thermal_demand_warm_water_channel.source_output = (
+        thermal_demand_warm_water
+    )
     my_storage.control_signal_choose_storage_channel.source_output = (
         control_signal_choose_storage
     )
@@ -109,13 +113,25 @@ def test_storage():
     # WW-Storage is choosed to be heated up
     assert 1 == stsv.values[control_signal_choose_storage.global_index]
     # Temperature of Heating-Water Storage sinks
-    assert 39.97334630595229 == stsv.values[my_storage.water_output_temperature_heating_water_channel.global_index]
+    assert (
+        39.97334630595229
+        == stsv.values[
+            my_storage.water_output_temperature_heating_water_channel.global_index
+        ]
+    )
     # Temperature of Heating-Water Storage raise
-    assert 40.02265485276707 == stsv.values[my_storage.water_output_temperature_warm_water_channel.global_index]
+    assert (
+        40.02265485276707
+        == stsv.values[
+            my_storage.water_output_temperature_warm_water_channel.global_index
+        ]
+    )
     # Energy Loss of Storage
     assert 6.26 == stsv.values[my_storage.storage_energy_loss_channel.global_index]
     # Temperature of choosed storage (warm-Water) to be heated up
     assert (
         stsv.values[my_storage.water_output_temperature_warm_water_channel.global_index]
-        == stsv.values[my_storage.water_output_temperature_storage_for_heaters_channel.global_index]
+        == stsv.values[
+            my_storage.water_output_temperature_storage_for_heaters_channel.global_index
+        ]
     )

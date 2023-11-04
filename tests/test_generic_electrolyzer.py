@@ -1,9 +1,10 @@
-# -*- coding: utf-8 -*-
-"""
+"""Test for generic electrolyzer.
+
 Created on Thu Jul 21 20:04:59 2022
 
 @author: Johanna
 """
+# -*- coding: utf-8 -*-
 import pytest
 from hisim import component as cp
 from tests import functions_for_testing as fft
@@ -15,6 +16,7 @@ from hisim.components import generic_electrolyzer, controller_l1_electrolyzer
 
 @pytest.mark.base
 def test_chp_system():
+    """Test chp system."""
 
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(
@@ -70,7 +72,7 @@ def test_chp_system():
     stsv.values[electricity_target.global_index] = 1.8e3
     stsv.values[hydrogensoc.global_index] = 50
 
-    for t in range(
+    for timestep in range(
         int(
             (
                 my_electrolyzer_controller_config.min_idle_time_in_seconds
@@ -79,8 +81,8 @@ def test_chp_system():
             + 2
         )
     ):
-        my_electrolyzer_controller.i_simulate(t, stsv, False)
-        my_electrolyzer.i_simulate(t, stsv, False)
+        my_electrolyzer_controller.i_simulate(timestep, stsv, False)
+        my_electrolyzer.i_simulate(timestep, stsv, False)
 
     assert stsv.values[my_electrolyzer.electricity_output_channel.global_index] == 1.8e3
     assert stsv.values[my_electrolyzer.hydrogen_output_channel.global_index] > 5e-5
@@ -89,9 +91,9 @@ def test_chp_system():
     stsv.values[electricity_target.global_index] = 1.8e3
     stsv.values[hydrogensoc.global_index] = 99
 
-    for tt in range(
-        t,
-        t
+    for timestep_t in range(
+        timestep,
+        timestep
         + int(
             (
                 my_electrolyzer_controller_config.min_operation_time_in_seconds
@@ -100,8 +102,8 @@ def test_chp_system():
             + 2
         ),
     ):
-        my_electrolyzer_controller.i_simulate(tt, stsv, False)
-        my_electrolyzer.i_simulate(tt, stsv, False)
+        my_electrolyzer_controller.i_simulate(timestep_t, stsv, False)
+        my_electrolyzer.i_simulate(timestep_t, stsv, False)
 
     assert stsv.values[my_electrolyzer.electricity_output_channel.global_index] == 0
     assert stsv.values[my_electrolyzer.hydrogen_output_channel.global_index] == 0
@@ -111,8 +113,8 @@ def test_chp_system():
     stsv.values[hydrogensoc.global_index] = 50
 
     for ttt in range(
-        tt,
-        tt
+        timestep_t,
+        timestep_t
         + int(
             (
                 my_electrolyzer_controller_config.min_idle_time_in_seconds
@@ -127,7 +129,7 @@ def test_chp_system():
     stsv.values[electricity_target.global_index] = 0
     stsv.values[hydrogensoc.global_index] = 50
 
-    for it in range(
+    for timestep_it in range(
         ttt,
         ttt
         + int(
@@ -138,8 +140,8 @@ def test_chp_system():
             + 2
         ),
     ):
-        my_electrolyzer_controller.i_simulate(it, stsv, False)
-        my_electrolyzer.i_simulate(it, stsv, False)
+        my_electrolyzer_controller.i_simulate(timestep_it, stsv, False)
+        my_electrolyzer.i_simulate(timestep_it, stsv, False)
 
     assert stsv.values[my_electrolyzer.electricity_output_channel.global_index] == 0
     assert stsv.values[my_electrolyzer.hydrogen_output_channel.global_index] == 0

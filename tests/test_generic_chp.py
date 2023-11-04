@@ -1,8 +1,9 @@
-# -*- coding: utf-8 -*-
-
 """Basic test for fuel cell."""
 
+# -*- coding: utf-8 -*-
 import pytest
+from tests import functions_for_testing as fft
+
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.components import (
@@ -10,11 +11,11 @@ from hisim.components import (
     controller_l1_chp,
 )
 from hisim.simulationparameters import SimulationParameters
-from tests import functions_for_testing as fft
 
 
 @pytest.mark.base
 def test_chp_system():
+    """Test chp system."""
     seconds_per_timestep = 60
     thermal_power = 500  # thermal power in Watt
     my_simulation_parameters = SimulationParameters.one_day_only(
@@ -100,11 +101,11 @@ def test_chp_system():
     stsv.values[buffer_temperature.global_index] = 30
     stsv.values[boiler_temperature.global_index] = 55
 
-    for t in range(
+    for timestep in range(
         int((chp_controller_config.min_idle_time_in_seconds / seconds_per_timestep) + 2)
     ):
-        my_chp_controller.i_simulate(t, stsv, False)
-        my_chp.i_simulate(t, stsv, False)
+        my_chp_controller.i_simulate(timestep, stsv, False)
+        my_chp.i_simulate(timestep, stsv, False)
 
     assert stsv.values[my_chp.thermal_power_output_building_channel.global_index] == 500
     assert stsv.values[my_chp.thermal_power_output_dhw_channel.global_index] == 0
@@ -119,15 +120,15 @@ def test_chp_system():
     stsv.values[buffer_temperature.global_index] = 30
     stsv.values[boiler_temperature.global_index] = 40
 
-    for tt in range(
-        t,
-        t
+    for timestep_t in range(
+        timestep,
+        timestep
         + int(
             (chp_controller_config.min_idle_time_in_seconds / seconds_per_timestep) + 2
         ),
     ):
-        my_chp_controller.i_simulate(tt, stsv, False)
-        my_chp.i_simulate(tt, stsv, False)
+        my_chp_controller.i_simulate(timestep_t, stsv, False)
+        my_chp.i_simulate(timestep_t, stsv, False)
 
     assert stsv.values[my_chp.thermal_power_output_building_channel.global_index] == 0
     assert stsv.values[my_chp.thermal_power_output_dhw_channel.global_index] == 0
@@ -140,14 +141,14 @@ def test_chp_system():
     stsv.values[buffer_temperature.global_index] = 40.5
     stsv.values[boiler_temperature.global_index] = 40
 
-    for t in range(
+    for timestep in range(
         int(
             (chp_controller_config.min_operation_time_in_seconds / seconds_per_timestep)
             + 2
         )
     ):
-        my_chp_controller.i_simulate(t, stsv, False)
-        my_chp.i_simulate(t, stsv, False)
+        my_chp_controller.i_simulate(timestep, stsv, False)
+        my_chp.i_simulate(timestep, stsv, False)
 
     stsv.values[electricity_target.global_index] = -2.5e3
     stsv.values[hydrogensoc.global_index] = 50
@@ -155,8 +156,8 @@ def test_chp_system():
     stsv.values[boiler_temperature.global_index] = 61
 
     for ttt in range(
-        tt,
-        tt
+        timestep_t,
+        timestep_t
         + int(
             (chp_controller_config.min_idle_time_in_seconds / seconds_per_timestep) + 2
         ),
@@ -175,14 +176,14 @@ def test_chp_system():
     stsv.values[buffer_temperature.global_index] = 40.5
     stsv.values[boiler_temperature.global_index] = 40
 
-    for t in range(
+    for timestep in range(
         int(
             (chp_controller_config.min_operation_time_in_seconds / seconds_per_timestep)
             + 2
         )
     ):
-        my_chp_controller.i_simulate(t, stsv, False)
-        my_chp.i_simulate(t, stsv, False)
+        my_chp_controller.i_simulate(timestep, stsv, False)
+        my_chp.i_simulate(timestep, stsv, False)
 
     stsv.values[electricity_target.global_index] = 2.5e3
     stsv.values[hydrogensoc.global_index] = 50
@@ -190,8 +191,8 @@ def test_chp_system():
     stsv.values[boiler_temperature.global_index] = 61
 
     for ttt in range(
-        tt,
-        tt
+        timestep_t,
+        timestep_t
         + int(
             (chp_controller_config.min_idle_time_in_seconds / seconds_per_timestep) + 2
         ),

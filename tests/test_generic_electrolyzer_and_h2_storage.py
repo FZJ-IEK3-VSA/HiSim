@@ -143,7 +143,8 @@ def test_hydrogen_generator():
 
     # Water Demand to produce Hydrogen
     assert (
-        stsv.values[my_electrolyzer.water_demand_channel.global_index] == 0.001114707341269841
+        stsv.values[my_electrolyzer.water_demand_channel.global_index]
+        == 0.001114707341269841
     )
     # Unused Power of Electrolyzer
     assert stsv.values[my_electrolyzer.unused_power_channel.global_index] == 1600

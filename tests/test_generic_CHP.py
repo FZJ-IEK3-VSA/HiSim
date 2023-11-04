@@ -6,7 +6,7 @@ import pytest
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.components import (
-    generic_CHP,
+    generic_chp,
     controller_l1_chp,
 )
 from hisim.simulationparameters import SimulationParameters
@@ -22,10 +22,10 @@ def test_chp_system():
     )
 
     # configure and add chp
-    chp_config = generic_CHP.CHPConfig.get_default_config_fuelcell(
+    chp_config = generic_chp.CHPConfig.get_default_config_fuelcell(
         thermal_power=thermal_power
     )
-    my_chp = generic_CHP.SimpleCHP(
+    my_chp = generic_chp.SimpleCHP(
         my_simulation_parameters=my_simulation_parameters, config=chp_config
     )
 

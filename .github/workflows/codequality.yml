@@ -51,6 +51,7 @@ jobs:
         prospector hisim/simulationparameters.py
         prospector hisim/simulator.py
         prospector hisim/sim_repository.py
+        prospector hisim/sim_repository_singleton.py
         prospector hisim/utils.py
         prospector hisim/system_setup_starter.py
 

@@ -258,26 +258,26 @@ class GenericBattery(cp.Component):
         if self.config.predictive:
             # send battery specification to the mpc controller for planning the cost optimal operation
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.MaximumBatteryCapacity,
+                key=SingletonDictKeyEnum.MAXIMUMBATTERYCAPACITY,
                 entry=self.max_stored_energy,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.MinimumBatteryCapacity,
+                key=SingletonDictKeyEnum.MINIMUMBATTERYCAPACITY,
                 entry=self.min_stored_energy,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.MaximalChargingPower,
+                key=SingletonDictKeyEnum.MAXIMALCHARGINGPOWER,
                 entry=self.max_var_stored_energy / self.time_correction_factor,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.MaximalDischargingPower,
+                key=SingletonDictKeyEnum.MAXIMALDISCHARGINGPOWER,
                 entry=-self.min_var_stored_energy / self.time_correction_factor,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.BatteryEfficiency, entry=self.efficiency
+                key=SingletonDictKeyEnum.BATTERYEFFICIENCY, entry=self.efficiency
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.InverterEfficiency,
+                key=SingletonDictKeyEnum.INVERTEREFFICIENCY,
                 entry=self.efficiency_inverter,
             )
 

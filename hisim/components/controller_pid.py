@@ -259,22 +259,22 @@ class PIDController(cp.Component):
         """For calculating internal things and preparing the simulation."""
         """ getting building physical properties for state space model """
         self.h_tr_w = SingletonSimRepository().get_entry(
-            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_glazing
+            key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING
         )
         self.h_tr_ms = SingletonSimRepository().get_entry(
-            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_opaque_ms
+            key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS
         )
         self.h_tr_em = SingletonSimRepository().get_entry(
-            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_opaque_em
+            key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM
         )
         self.h_ve_adj = SingletonSimRepository().get_entry(
-            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_ventillation
+            key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION
         )
         self.h_tr_is = SingletonSimRepository().get_entry(
-            key=SingletonDictKeyEnum.Thermal_transmission_Surface_IndoorAir
+            key=SingletonDictKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR
         )
         self.c_m = SingletonSimRepository().get_entry(
-            key=SingletonDictKeyEnum.Thermal_capacity_envelope
+            key=SingletonDictKeyEnum.THERMALCAPACITYENVELOPE
         )
 
     def i_save_state(self):

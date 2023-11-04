@@ -594,7 +594,7 @@ class Occupancy(cp.Component):
 
         if self.occupancy_config.predictive:
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.heating_by_residents_yearly_forecast,
+                key=SingletonDictKeyEnum.HEATINGBYRESIDENTSYEARLYFORECAST,
                 entry=self.heating_by_residents,
             )
 

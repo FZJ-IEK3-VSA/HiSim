@@ -189,11 +189,11 @@ class PriceSignal(cp.Component):
             pricepurchaseforecast = [0.5]
 
         SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.Price_Injection_Forecast_24h,
+            key=SingletonDictKeyEnum.PRICEINJECTIONFORECAST24H,
             entry=priceinjectionforecast,
         )
         SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.Price_Purchase_Forecast_24h,
+            key=SingletonDictKeyEnum.PRICEPURCHASEFORECAST24H,
             entry=pricepurchaseforecast,
         )
         stsv.set_output_value(self.price_purchase_channel, pricepurchaseforecast[0])

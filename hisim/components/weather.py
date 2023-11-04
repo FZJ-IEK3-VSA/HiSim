@@ -778,39 +778,39 @@ class Weather(Component):
         # write one year forecast to simulation repository for PV processing -> if PV forecasts are needed
         if self.weather_config.predictive_control:
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.Weather_TemperatureOutside_yearly_forecast,
+                key=SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST,
                 entry=self.temperature_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.Weather_DiffuseHorizontalIrradiance_yearly_forecast,
+                key=SingletonDictKeyEnum.WEATHERDIFFUSEHORIZONTALIRRADIANCEYEARLYFORECAST,
                 entry=self.dhi_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.Weather_DirectNormalIrradiance_yearly_forecast,
+                key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEYEARLYFORECAST,
                 entry=self.dni_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.Weather_DirectNormalIrradianceExtra_yearly_forecast,
+                key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST,
                 entry=self.dniextra_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.Weather_GlobalHorizontalIrradiance_yearly_forecast,
+                key=SingletonDictKeyEnum.WEATHERGLOBALHORIZONTALIRRADIANCEYEARLYFORECAST,
                 entry=self.ghi_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.Weather_Azimuth_yearly_forecast,
+                key=SingletonDictKeyEnum.WEATHERAZIMUTHYEARLYFORECAST,
                 entry=self.azimuth_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.Weather_ApparentZenith_yearly_forecast,
+                key=SingletonDictKeyEnum.WEATHERAPPARENTZENITHYEARLYFORECAST,
                 entry=self.apparent_zenith_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.Weather_WindSpeed_yearly_forecast,
+                key=SingletonDictKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST,
                 entry=self.wind_speed_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.Weather_Altitude_yearly_forecast,
+                key=SingletonDictKeyEnum.WEATHERALTITUDEYEARLYFORECAST,
                 entry=self.altitude_list,
             )
 

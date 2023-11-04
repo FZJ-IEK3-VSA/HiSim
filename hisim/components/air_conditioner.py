@@ -415,10 +415,10 @@ class AirConditioner(cp.Component):
         # Retrieves air conditioner from database - END
 
         SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.cop_coef_heating, entry=self.cop_coef
+            key=SingletonDictKeyEnum.COPCOEFFICIENTHEATING, entry=self.cop_coef
         )
         SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.eer_coef_cooling, entry=self.eer_coef
+            key=SingletonDictKeyEnum.EERCOEFFICIENTCOOLING, entry=self.eer_coef
         )
         # self.simulation_repository.set_entry(self.cop_coef_heating, self.cop_coef)
         # self.simulation_repository.set_entry(self.eer_coef_cooling, self.eer_coef)

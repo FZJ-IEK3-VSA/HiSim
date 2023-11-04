@@ -1,3 +1,4 @@
+"""Test basic household with default connections."""
 import pytest
 from hisim import hisim_main
 from hisim.simulationparameters import SimulationParameters
@@ -5,6 +6,7 @@ from hisim.simulationparameters import SimulationParameters
 
 @pytest.mark.examples
 def test_basic_household_with_default_connections():
+    """Test basic household with default connections."""
     # if os.path.isdir("../hisim/inputs/cache"):
     #   shutil.rmtree("../hisim/inputs/cache")
     path = "../examples/basic_household.py"

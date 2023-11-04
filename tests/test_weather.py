@@ -1,3 +1,4 @@
+"""Test for weather."""
 import pytest
 from hisim import sim_repository
 from hisim import component
@@ -8,6 +9,7 @@ from tests import functions_for_testing as fft
 
 @pytest.mark.base
 def test_weather():
+    """Test weather."""
     mysim: SimulationParameters = SimulationParameters.full_year(
         year=2021, seconds_per_timestep=60
     )
@@ -29,9 +31,9 @@ def test_weather():
     my_weather.set_sim_repo(repo)
     my_weather.i_prepare_simulation()
     # Simulate
-    DNI = []
+    dni = []
     for i in range(60 * 24 * 365):
         my_weather.i_simulate(i, stsv, False)
-        DNI.append(stsv.values[my_weather.dni_output.global_index])
+        dni.append(stsv.values[my_weather.dni_output.global_index])
 
-    assert sum(DNI) > 950
+    assert sum(dni) > 950

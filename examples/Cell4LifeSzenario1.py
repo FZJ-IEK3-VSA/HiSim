@@ -73,7 +73,7 @@ def Cell4Life(
     # Build Results Path
     name = "S" + str(input_variablen["PreResultNumber"]["value"])+"_BatCap._" + str(input_variablen["battery_capacity"]["value"]) + "kWh_FCPower_" + str(input_variablen["fuel_cell_power"]["value"]) +"W"
     ResultPathProviderSingleton().set_important_result_path_information(
-        module_directory = "C://Users//Standard//C4LResults",
+        module_directory = "C://Users//Standard//Desktop//hisim//C4LResults",
         model_name= name,
         variant_name=my_sim.setup_function,
         sorting_option=SortingOptionEnum.VARPARAMETERNAMED,
@@ -84,9 +84,9 @@ def Cell4Life(
     # Postprocessing Options****
     
     my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.EXPORT_TO_CSV)
-    #my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PLOT_LINE)
-    #my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.MAKE_NETWORK_CHARTS)
-    #my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PLOT_CARPET)
+    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PLOT_LINE)
+    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.MAKE_NETWORK_CHARTS)
+    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PLOT_CARPET)
     
   
             #******************************************************************
@@ -94,13 +94,11 @@ def Cell4Life(
             #******************************************************************
     
     #Loading Electricity consumption in W per m2 NGF****
-    #my_electricityconsumptionConfig = CSVLoaderConfig("Current total", "CurrentConsumptionper total", "Simulationsdaten_Pilzgasse_230705-Input-HiSim.csv", 1, loadtypes.LoadTypes.ELECTRICITY, loadtypes.Units.WATT, "Strom", ";", "," ,input_variablen["NGFm2"]["value"], "CurrentConspumtioninWperm2NGF")
     my_electricityconsumptionConfig = CSVLoaderConfig("Current total", "Current needed", "01Simulation.csv", 1, loadtypes.LoadTypes.ELECTRICITY, loadtypes.Units.WATT, "Strom", ";", "," ,input_variablen["NGFm2"]["value"], "CurrentConspumtioninWperm2NGF")
     my_electricityconsumption = CSVLoader(my_electricityconsumptionConfig, my_simulation_parameters)
        
     #******************************************************************   
     #Loading Photovoltaic System  (PV Output in kW)
-    #my_photovoltaic_systemConfig = CSVLoaderConfig("PV", "PVComponent", "Simulationsdaten_Pilzgasse_230705-Input-HiSim.csv", 6, loadtypes.LoadTypes.ELECTRICITY, loadtypes.Units.WATT, "Photovoltaik", ";", ",",1000, "OutputPVinW")
     my_photovoltaic_systemConfig = CSVLoaderConfig("PV", "PVComponent", "01Simulation.csv", 6, loadtypes.LoadTypes.ELECTRICITY, loadtypes.Units.WATT, "Photovoltaik", ";", ",",1000*input_variablen["PV_Faktor"]["value"], "OutputPVinW")
     my_photovoltaic_system = CSVLoader(my_photovoltaic_systemConfig, my_simulation_parameters)
   

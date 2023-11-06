@@ -1,12 +1,15 @@
 import pandas as pd
 import os
 import sys
-
+os.chdir('C://Users//Standard//Desktop//hisim//HiSim//')
 sys.path.append("C://Users//Standard//Desktop//hisim//HiSim//examples")
-sys.path.append("C://Users//Standard//Desktop//hisim//HiSim//hisim//postprocessing")
 sys.path.append("C://Users//Standard//Desktop//hisim//HiSim//")
 import Cell4LifeSzenario1
+
+sys.path.append("C://Users//Standard//Desktop//hisim//HiSim//hisim//postprocessing//")
+os.chdir("C://Users//Standard//Desktop//hisim//HiSim//hisim//postprocessing//")
 import Cell4Life_Postprocessing
+os.chdir('C://Users//Standard//Desktop//hisim//HiSim//')
 
 
 """This class executes Cell4Life Simulation
@@ -17,12 +20,12 @@ import Cell4Life_Postprocessing
 
 
  """
-os.chdir('C:\\Users\\Standard\\Desktop\\hisim\\HiSim\\')
-FuelCellPowerW_list = [20000,40000]  #Electricity Power of Fuel Cell Power in Watt
-BatteryCapkWh_list = [500000,10]     #Total Capacity of Battery in kWh
 
-#FuelCellPowerW_list = [25000, 50000,100000,200000]  #Electricity Power of Fuel Cell Power in Watt
-#BatteryCapkWh_list = [500,1000,2000,4000,8000]     #Total Capacity of Battery in kWh
+#FuelCellPowerW_list = [20000,40000]  #Electricity Power of Fuel Cell Power in Watt
+#BatteryCapkWh_list = [500000,10]     #Total Capacity of Battery in kWh
+
+FuelCellPowerW_list = [200000, 150000, 100000, 50000, 25000]  #Electricity Power of Fuel Cell Power in Watt
+BatteryCapkWh_list = [500, 1000, 2000, 4000, 8000]     #Total Capacity of Battery in kWh
 
 FuelCellPowerWUnit = "W"
 BatteryCapkWhUnit = "kWh"
@@ -54,7 +57,7 @@ for FuelCellPowerW in FuelCellPowerW_list:
         #Do a copy of the economic assessment excel file        
         
         if PreResultNumber == 0:
-            path = 'C://Users//Standard//C4LResults//results//'
+            path = 'C://Users//Standard//Desktop//hisim//C4LResults//results//'
             filepath = path + 'OriginalExcelFile//20231019_oekonomische_Auswertung_v4.xlsx'
             excelfilepathallresults, excel_filename = Cell4Life_Postprocessing.makeacopyofevaluationfile(path, filepath)
         

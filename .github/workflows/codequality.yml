@@ -36,6 +36,7 @@ jobs:
         prospector examples/
         prospector tests/
         prospector hisim/
+        prospector docs/
 
 
 #        # pylint hisim/simulator.py --rcfile=hisim_pylint_config.rc

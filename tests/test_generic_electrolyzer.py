@@ -6,10 +6,10 @@ Created on Thu Jul 21 20:04:59 2022
 """
 # -*- coding: utf-8 -*-
 import pytest
-from hisim import component as cp
-from tests import functions_for_testing as fft
-from hisim import loadtypes as lt
 
+from tests import functions_for_testing as fft
+from hisim import component as cp
+from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.components import generic_electrolyzer, controller_l1_electrolyzer
 

@@ -1,24 +1,23 @@
+"""Test for generic hot water storage."""
 import pytest
+from tests import functions_for_testing as fft
 from hisim import component as cp
-
-# import components as cps
-# import components
 from hisim.components import generic_heat_water_storage
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from tests import functions_for_testing as fft
 
 
 @pytest.mark.base
 def test_storage():
+    """Test hot water storage."""
 
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(
         2017, seconds_per_timestep
     )
     # Storage
-    V_SP_heating_water = 1000
-    V_SP_warm_water = 200
+    volume_sp_heating_water = 1000
+    volume_sp_warm_water = 200
     temperature_of_warm_water_extratcion = 32
     ambient_temperature = 15
 
@@ -28,8 +27,8 @@ def test_storage():
         generic_heat_water_storage.HeatStorageConfig.get_default_heat_storage_config()
     )
 
-    my_storage_config.volume_sp_heating_water = V_SP_heating_water
-    my_storage_config.volume_sp_warm_water = V_SP_warm_water
+    my_storage_config.volume_sp_heating_water = volume_sp_heating_water
+    my_storage_config.volume_sp_warm_water = volume_sp_warm_water
     my_storage_config.temperature_of_warm_water_extratcion = (
         temperature_of_warm_water_extratcion
     )

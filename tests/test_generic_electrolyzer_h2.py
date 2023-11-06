@@ -1,14 +1,16 @@
+"""Test for generic electrolyzer h2."""
+import pytest
+from tests import functions_for_testing as fft
 from hisim import component as cp
 from hisim.components import generic_eletrolyzer_h2
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-from tests import functions_for_testing as fft
-import pytest
 
 
 @pytest.mark.base
 def test_electrolyzer():
+    """Test electrolyzer."""
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(
         2021, seconds_per_timestep

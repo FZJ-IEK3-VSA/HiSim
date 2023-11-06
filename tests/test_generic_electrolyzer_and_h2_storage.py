@@ -1,17 +1,17 @@
-import pytest
-from hisim import component as cp
+"""Test for generic electrolyzer and h2 storage."""
 
-# import components as cps
-# import components
+import pytest
+from tests import functions_for_testing as fft
+from hisim import component as cp
 from hisim.components import generic_electrolyzer_and_h2_storage
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-from tests import functions_for_testing as fft
 
 
 @pytest.mark.base
 def test_hydrogen_generator():
+    """Test hydroge generator."""
 
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(

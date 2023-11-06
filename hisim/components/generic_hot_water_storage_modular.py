@@ -79,7 +79,6 @@ class StorageConfig(cp.ConfigBase):
     @classmethod
     def get_default_config_for_boiler(cls) -> "StorageConfig":
         """Returns default configuration for boiler."""
-        # here number of apartments = 1
 
         volume = 230
         radius = (volume * 1e-3 / (4 * np.pi)) ** (

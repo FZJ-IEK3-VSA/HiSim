@@ -3,7 +3,7 @@
 import os
 import sys
 import copy
-from typing import Any, Optional, List, Dict
+from typing import Any, Optional, List, Dict, Tuple
 from timeit import default_timer as timer
 import string
 
@@ -240,7 +240,7 @@ class PostProcessor:
             occupancy_config = None
             for elem in ppdt.wrapped_components:
                 if isinstance(elem.my_component, building.Building):
-                    building_data = elem.my_component.buildingdata
+                    building_data = elem.my_component.my_building_information.buildingdata
                 elif isinstance(
                     elem.my_component, loadprofilegenerator_connector.Occupancy
                 ):
@@ -961,7 +961,7 @@ class PostProcessor:
 
     def get_variable_name_and_unit_from_ppdt_results_column(
         self, column: str
-    ) -> tuple[str, str]:
+    ) -> Tuple[str, str]:
         """Get variable name and unit for pyam dictionary."""
 
         column_splitted = str(

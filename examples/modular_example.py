@@ -7,7 +7,7 @@ import shutil
 from typing import Any, List, Optional, Tuple
 
 import pandas as pd
-from utspclient.helpers.lpgdata import TransportationDeviceSets, TravelRouteSets
+from utspclient.helpers.lpgdata import TransportationDeviceSets, TravelRouteSets, EnergyIntensityType
 
 import hisim.loadtypes as lt
 import hisim.log
@@ -21,7 +21,7 @@ from hisim.components import (
 )
 from hisim.modular_household import component_connections
 from hisim.modular_household.interface_configs.modular_household_config import (
-    read_in_configs,
+    read_in_configs
 )
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
@@ -91,7 +91,7 @@ def modular_household_explicit(
 
     # Set simulation parameters
     year = 2021
-    seconds_per_timestep = 60 * 15
+    seconds_per_timestep = 60 * 60
 
     household_config = read_in_configs(my_sim.my_module_config_path)
 
@@ -118,8 +118,11 @@ def modular_household_explicit(
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
         )
+        # my_simulation_parameters.post_processing_options.append(
+        #     PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE
+        # )
         my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE
+            PostProcessingOptions.EXPORT_TO_CSV
         )
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT
@@ -161,12 +164,8 @@ def modular_household_explicit(
         hisim.log.warning(
             "Both occupancy_profile_utsp and occupancy_profile are defined, so the connection to the UTSP is considered by default. "
         )
-    if occupancy_profile_utsp is not None:
-        occupancy_profile = occupancy_profile_utsp
-        utsp_connected = True
-    else:
-        utsp_connected = False
-    del occupancy_profile_utsp
+
+    utsp_connected = occupancy_profile_utsp is not None
 
     # get system configuration: technical equipment
     heatpump_included = system_config_.heatpump_included
@@ -181,7 +180,7 @@ def modular_household_explicit(
         raise Exception(
             "Heat pump power cannot be smaller than default: choose values greater than one"
         )
-    clever = my_simulation_parameters.surplus_control
+    controlable = system_config_.surplus_control_considered
     pv_included = system_config_.pv_included  # True or False
     pv_peak_power = system_config_.pv_peak_power or 5e3  # set default
     smart_devices_included = system_config_.smart_devices_included  # True or False
@@ -259,7 +258,8 @@ def modular_household_explicit(
                 name="UTSPConnector",
                 url=arche_type_config_.url,
                 api_key=arche_type_config_.api_key,
-                household=occupancy_profile,  # type: ignore
+                household=occupancy_profile_utsp,  # type: ignore
+                energy_intensity=EnergyIntensityType.EnergySaving,
                 result_path=hisim.utils.HISIMPATH["results"],
                 travel_route_set=this_mobility_distance,
                 transportation_device_set=this_mobility_set,
@@ -278,7 +278,7 @@ def modular_household_explicit(
         # Build occupancy
         my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
             "Occupancy",
-            occupancy_profile.Name or "",  # type: ignore
+            occupancy_profile or "",  # type: ignore
             location,
             not smart_devices_included,
             number_of_apartments=my_building_information.number_of_apartments,
@@ -324,7 +324,7 @@ def modular_household_explicit(
             ev_included=ev_included,
             occupancy_config=my_occupancy_config,
         )
-        if clever is False:
+        if controlable is False:
             for car in my_cars:
                 consumption.append(car)
 
@@ -387,12 +387,12 @@ def modular_household_explicit(
             charging_station_set=charging_station,
             mobility_set=mobility_set,
             my_electricity_controller=my_electricity_controller,
-            clever=clever,
+            controlable=controlable,
         )  # could return ev_capacities if needed
 
     # """SMART CONTROLLER FOR SMART DEVICES"""
     # use clever controller if smart devices are included and do not use it if it is false
-    if smart_devices_included and clever and utsp_connected:
+    if smart_devices_included and controlable and utsp_connected:
         component_connections.configure_smart_controller_for_smart_devices(
             my_electricity_controller=my_electricity_controller,
             my_smart_devices=my_smart_devices,
@@ -410,7 +410,7 @@ def modular_household_explicit(
             my_electricity_controller=my_electricity_controller,
             my_weather=my_weather,
             water_heating_system_installed=water_heating_system_installed,
-            controlable=clever,
+            controlable=controlable,
             count=count,
             number_of_apartments=my_building_information.number_of_apartments,
         )
@@ -444,7 +444,7 @@ def modular_household_explicit(
                 heating_system_installed=heating_system_installed,
                 heatpump_power=heatpump_power,
                 buffer_volume=buffer_volume,
-                controlable=clever,
+                controlable=controlable,
                 heating_season=heating_season,
                 count=count,
             )
@@ -476,7 +476,7 @@ def modular_household_explicit(
                 my_weather=my_weather,
                 heating_system_installed=heating_system_installed,
                 heatpump_power=heatpump_power,
-                controlable=clever,
+                controlable=controlable,
                 heating_season=heating_season,
                 count=count,
             )
@@ -499,7 +499,7 @@ def modular_household_explicit(
             my_boiler=my_boiler,
             my_electricity_controller=my_electricity_controller,
             chp_power=chp_power,
-            controlable=clever,
+            controlable=controlable,
             count=count,
         )
     if chp_included and buffer_included:
@@ -510,7 +510,7 @@ def modular_household_explicit(
             my_boiler=my_boiler,
             my_electricity_controller=my_electricity_controller,
             chp_power=chp_power,
-            controlable=clever,
+            controlable=controlable,
             count=count,
         )
 
@@ -525,7 +525,7 @@ def modular_household_explicit(
             fuel_cell_power=fuel_cell_power,
             h2_storage_size=h2_storage_size,
             electrolyzer_power=electrolyzer_power * pv_peak_power,
-            controlable=clever,
+            controlable=controlable,
             count=count,
         )
 
@@ -539,12 +539,12 @@ def modular_household_explicit(
             fuel_cell_power=fuel_cell_power,
             h2_storage_size=h2_storage_size,
             electrolyzer_power=electrolyzer_power * pv_peak_power,
-            controlable=clever,
+            controlable=controlable,
             count=count,
         )
 
     # """BATTERY"""
-    if battery_included and clever:
+    if battery_included and controlable:
         count = component_connections.configure_battery(
             my_sim=my_sim,
             my_simulation_parameters=my_simulation_parameters,

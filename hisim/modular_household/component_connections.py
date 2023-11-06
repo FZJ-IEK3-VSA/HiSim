@@ -204,7 +204,7 @@ def configure_ev_batteries(
     charging_station_set: Optional[JsonReference],
     mobility_set: JsonReference,
     my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
-    clever: bool,
+    controlable: bool,
 ) -> List:
     """Sets batteries and controllers of electric vehicles.
 
@@ -222,7 +222,7 @@ def configure_ev_batteries(
         Encoding of the available cars.
     my_electricity_controller: L2GenericEnergyManagementSystem
         The initialized electricity controller.
-    clever: bool
+    controlable: bool
         True if battery of electric vehicle is charged with surplus.
 
     """
@@ -254,7 +254,7 @@ def configure_ev_batteries(
         )
         car_battery_controller_config.source_weight = car.config.source_weight
         car_battery_controller_config.lower_threshold_charging_power = charging_power * 1e3 * 0.1  # 10 % of charging power for acceptable efficiencies
-        if clever:
+        if controlable:
             car_battery_controller_config.battery_set = (
                 0.4  # lower threshold for soc of car battery in clever case
             )
@@ -268,7 +268,7 @@ def configure_ev_batteries(
         my_sim.add_component(my_carbattery)
         my_sim.add_component(my_controller_carbattery)
 
-        if clever:
+        if controlable:
             my_electricity_controller.add_component_input_and_connect(
                 source_component_class=my_carbattery,
                 source_component_output=my_carbattery.AcBatteryPower,

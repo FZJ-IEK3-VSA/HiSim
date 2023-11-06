@@ -74,6 +74,7 @@ class PostProcessor:
                 PostProcessingOptions.COMPUTE_OPEX,
                 PostProcessingOptions.COMPUTE_CAPEX,
                 PostProcessingOptions.MAKE_RESULT_JSON_WITH_KPI_FOR_WEBTOOL,
+                PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON,
             }
             # Of all specified options, select those that are allowed
             valid_options = list(
@@ -308,6 +309,13 @@ class PostProcessor:
         ):
             log.information("Make kpi json file for webtool.")
             self.write_kpis_for_webtool_to_json_file(ppdt)
+
+        if (
+            PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON
+            in ppdt.post_processing_options
+        ):
+            log.information("Writing component configurations to JSON file.")
+            self.write_component_configurations_to_json(ppdt)
 
         log.information("Finished main post processing function.")
 
@@ -932,6 +940,18 @@ class PostProcessor:
                 self.pyam_data_folder, "data_information_for_pyam.json"
             )
         )
+
+    def write_component_configurations_to_json(self, ppdt: PostProcessingDataTransfer) -> None:
+        """Collect all component configurations and write into JSON file in result directory."""
+        json_generator_config = JsonConfigurationGenerator(name="my_system")
+        for component in ppdt.wrapped_components:
+            json_generator_config.add_component(config=component.my_component.config)
+        json_generator_config.save_to_json(
+            filename=os.path.join(
+                ppdt.simulation_parameters.result_directory, "component_configurations.json"
+            )
+        )
+
 
     def write_kpis_in_pyam_dict(
         self,

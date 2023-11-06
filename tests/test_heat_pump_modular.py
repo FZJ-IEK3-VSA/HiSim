@@ -1,8 +1,8 @@
-import pytest
-from hisim import component as cp
+"""Test for modular heat pump."""
 
-# import components as cps
-# import components
+import pytest
+
+from hisim import component as cp
 from hisim.components import generic_heat_pump_modular
 from hisim.components import controller_l1_heatpump
 from hisim import loadtypes as lt
@@ -11,6 +11,7 @@ from hisim.simulationparameters import SimulationParameters
 
 @pytest.mark.base
 def test_heat_pump_modular():
+    """Test heat pump modular."""
 
     # simulation parameters
     seconds_per_timestep = 60
@@ -40,7 +41,7 @@ def test_heat_pump_modular():
     )
 
     # definition of weather output
-    t_air_outdoorC = cp.ComponentOutput(
+    t_air_outdoor_output = cp.ComponentOutput(
         "FakeTemperatureOutside",
         "TemperatureAir",
         lt.LoadTypes.TEMPERATURE,
@@ -48,12 +49,12 @@ def test_heat_pump_modular():
     )
 
     # definition of building output
-    t_mC = cp.ComponentOutput(
+    t_m_output = cp.ComponentOutput(
         "FakeHouse", "TemperatureMean", lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS
     )
 
     # definition of electricity surplus
-    ElectricityTargetC = cp.ComponentOutput(
+    electricity_target_output = cp.ComponentOutput(
         "FakeSurplusSignal",
         "ElectricityTarget",
         lt.LoadTypes.ELECTRICITY,
@@ -61,16 +62,16 @@ def test_heat_pump_modular():
     )
 
     # connection of in- and outputs
-    my_heat_pump.temperature_outside_channel.source_output = t_air_outdoorC
+    my_heat_pump.temperature_outside_channel.source_output = t_air_outdoor_output
     my_heat_pump.heat_controller_power_modifier_channel.source_output = (
         my_heat_pump_controller_l1.heat_pump_target_percentage_channel
     )
-    my_heat_pump_controller_l1.storage_temperature_channel.source_output = t_mC
+    my_heat_pump_controller_l1.storage_temperature_channel.source_output = t_m_output
 
     # indexing of in- and outputs
-    t_mC.global_index = 0
-    ElectricityTargetC.global_index = 1
-    t_air_outdoorC.global_index = 2
+    t_m_output.global_index = 0
+    electricity_target_output.global_index = 1
+    t_air_outdoor_output.global_index = 2
     my_heat_pump_controller_l1.heat_pump_target_percentage_channel.global_index = 3
     my_heat_pump.thermal_power_delicered_channel.global_index = 4
     my_heat_pump.electricity_output_channel.global_index = 5
@@ -79,14 +80,14 @@ def test_heat_pump_modular():
     stsv.values[0] = 10
     stsv.values[1] = 0
     stsv.values[2] = 0
-    j = 60 * 60
+    timestep = 60 * 60
 
     # Simulate
     my_heat_pump_controller_l1.i_restore_state()
-    my_heat_pump_controller_l1.i_simulate(j, stsv, False)
+    my_heat_pump_controller_l1.i_simulate(timestep, stsv, False)
 
     my_heat_pump.i_restore_state()
-    my_heat_pump.i_simulate(j, stsv, False)
+    my_heat_pump.i_simulate(timestep, stsv, False)
 
     # -> Did heat pump turn on?
     # Check if there is a signal to heat up the house

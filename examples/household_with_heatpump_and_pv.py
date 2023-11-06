@@ -154,13 +154,13 @@ def household_pv_hp(
 
     # Build Weather
     my_weather = weather.Weather(
-        config=weather.WeatherConfig.get_default(weather.LocationEnum.Aachen),
+        config=weather.WeatherConfig.get_default(weather.LocationEnum.AACHEN),
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build PV
     my_photovoltaic_system_config = (
-        generic_pv_system.PVSystemConfig.get_default_PV_system()
+        generic_pv_system.PVSystemConfig.get_default_pv_system()
     )
     my_photovoltaic_system_config.power_in_watt_peak = power
     my_photovoltaic_system_config.azimuth = azimuth

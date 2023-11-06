@@ -144,6 +144,8 @@ hisim/results
 
 # simulation log
 tests/mypath/
+tests/results1/
+tests/results_scaling/
 tests\hisim_simulation.log
 components_information.xlsx
 hisim/components_information.xlsx

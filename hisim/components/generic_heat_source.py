@@ -1,8 +1,10 @@
 """ Generic Heat Source (Oil, Gas or DistrictHeating) together with Configuration and State. """
 
+# clean
+
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from dataclasses import dataclass
-from typing import List, Any
+from typing import List
 
 from dataclasses_json import dataclass_json
 
@@ -26,9 +28,8 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class HeatSourceConfig(cp.ConfigBase):
-    """
-    Configuration of a generic HeatSource.
-    """
+
+    """Configuration of a generic HeatSource."""
 
     #: name of the device
     name: str
@@ -50,7 +51,7 @@ class HeatSourceConfig(cp.ConfigBase):
 
     @classmethod
     def get_default_config_heating(cls) -> "HeatSourceConfig":
-        """Returns default configuration of a Heat Source used for heating"""
+        """Returns default configuration of a Heat Source used for heating."""
         config = HeatSourceConfig(
             name="HeatingHeatSource",
             source_weight=1,
@@ -63,7 +64,7 @@ class HeatSourceConfig(cp.ConfigBase):
 
     @classmethod
     def get_default_config_waterheating(cls) -> "HeatSourceConfig":
-        """Returns default configuration of a Heat Source used for water heating (DHW)"""
+        """Returns default configuration of a Heat Source used for water heating (DHW)."""
         config = HeatSourceConfig(
             name="DHWHeatSource",
             source_weight=1,
@@ -76,9 +77,8 @@ class HeatSourceConfig(cp.ConfigBase):
 
 
 class HeatSourceState:
-    """
-    This data class saves the state of the heat source.
-    """
+
+    """Heat source state class saves the state of the heat source."""
 
     def __init__(self, state: int = 0):
         """Initializes state."""
@@ -90,8 +90,10 @@ class HeatSourceState:
 
 
 class HeatSource(cp.Component):
-    """
-    Heat Source implementation - District Heating, Oil Heating or Gas Heating. Heat is converted with given efficiency.
+
+    """Heat Source implementation.
+
+    District Heating, Oil Heating or Gas Heating. Heat is converted with given efficiency.
 
     Components to connect to:
     (1) Heat Pump Controller (controller_l1_heatpump)
@@ -107,6 +109,7 @@ class HeatSource(cp.Component):
     def __init__(
         self, my_simulation_parameters: SimulationParameters, config: HeatSourceConfig
     ) -> None:
+        """Initialize the class."""
 
         super().__init__(
             config.name + "_w" + str(config.source_weight),
@@ -178,17 +181,14 @@ class HeatSource(cp.Component):
         return connections
 
     def write_to_report(self) -> List[str]:
-        """
-        Writes relevant data to report.
-        """
+        """Writes relevant data to report."""
 
         lines = []
         lines.append(
-            "Name: {}".format(self.config.name + str(self.config.source_weight))
-        )
-        lines.append("Fuel: {}".format(self.config.fuel))
-        lines.append("Power: {:4.0f} kW".format((self.config.power_th) * 1e-3))
-        lines.append("Efficiency : {:4.0f} %".format((self.config.efficiency) * 100))
+            f"Name: {self.config.name + str(self.config.source_weight)})")
+        lines.append(f"Fuel: {self.config.fuel}")
+        lines.append(f"Power: {(self.config.power_th) * 1e-3:4.0f} kW")
+        lines.append(f"Efficiency : {(self.config.efficiency) * 100:4.0f} %")
         return lines
 
     def i_prepare_simulation(self) -> None:
@@ -196,20 +196,21 @@ class HeatSource(cp.Component):
         pass
 
     def i_save_state(self) -> None:
+        """Saves the state."""
         self.previous_state = self.state.clone()
 
     def i_restore_state(self) -> None:
+        """Restores the state."""
         self.state = self.previous_state.clone()
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        """Doublechecks."""
         pass
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
-        """
-        Performs the simulation of the heat source model.
-        """
+        """Performs the simulation of the heat source model."""
 
         # Inputs
         target_percentage = stsv.get_input_value(self.l1_heatsource_taget_percentage)
@@ -222,7 +223,7 @@ class HeatSource(cp.Component):
         if target_percentage < 0:
             power_modifier = 0
         if power_modifier > 1:
-            power_modifier = 1
+            power_modifier = min(power_modifier, 1)
 
         stsv.set_output_value(
             self.thermal_power_delivered_channel,

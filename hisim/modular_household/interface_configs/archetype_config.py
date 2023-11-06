@@ -1,14 +1,15 @@
-# -*- coding: utf-8 -*-
-from dataclasses import dataclass, field
-from typing import Optional, Union
-from dataclasses_json import dataclass_json
+"""Archetype config module."""
 
+# -*- coding: utf-8 -*-
+from typing import Optional
+from dataclasses import dataclass, field
+from dataclasses_json import dataclass_json
+from utspclient.helpers.lpgpythonbindings import JsonReference
 from utspclient.helpers.lpgdata import (
     TransportationDeviceSets,
     TravelRouteSets,
     Households,
 )
-from utspclient.helpers.lpgpythonbindings import JsonReference
 from hisim.loadtypes import HeatingSystems
 
 
@@ -16,7 +17,10 @@ from hisim.loadtypes import HeatingSystems
 @dataclass
 class ArcheTypeConfig:
 
-    """Defines the system config for the modular household."""
+    """Archetype config class.
+
+    Defines the system config for the modular household.
+    """
 
     #: modular household template of the LoadProfileGenerator, used to get the electrical- and hot water consumption profile (https://www.loadprofilegenerator.de/)
     # for an interface to the LoadProfileGenerator the UTSP is needed
@@ -38,12 +42,10 @@ class ArcheTypeConfig:
     heating_system_installed: HeatingSystems = HeatingSystems.DISTRICT_HEATING
     #: considered mobility options, passed as inputs to the LoadProfileGenerator and considered to model cars
     mobility_set: Optional[JsonReference] = field(
-        default_factory=lambda: TransportationDeviceSets.Bus_and_two_60_km_h_Cars  # type: ignore
-        )
+        default_factory=lambda: TransportationDeviceSets.Bus_and_two_60_km_h_Cars)  # type: ignore
     #: average daily commuting distance in kilometers, passed as input to the LoadProfileGenerator and considered to model consumption of cars
     mobility_distance: Optional[JsonReference] = field(
-        default_factory=lambda: TravelRouteSets.Travel_Route_Set_for_15km_Commuting_Distance  # type: ignore
-        )
+        default_factory=lambda: TravelRouteSets.Travel_Route_Set_for_15km_Commuting_Distance)  # type: ignore
     #: url of the UTSP
     url: str = "http://134.94.131.167:443/api/v1/profilerequest"
     #: passwort to connect to the UTSP

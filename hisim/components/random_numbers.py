@@ -1,3 +1,7 @@
+"""Module for generating random numbers."""
+
+# clean
+
 # Generic/Built-in
 import random
 from typing import List
@@ -8,8 +12,6 @@ from dataclasses_json import dataclass_json
 from hisim.component import (
     Component,
     SingleTimeStepValues,
-    ComponentInput,
-    ComponentOutput,
     ConfigBase,
 )
 from hisim import loadtypes as lt
@@ -44,6 +46,9 @@ class RandomNumbersConfig(ConfigBase):
 
 
 class RandomNumbers(Component):
+
+    """Random number class."""
+
     RandomOutput: str = "Random Numbers"
 
     def __init__(
@@ -51,6 +56,7 @@ class RandomNumbers(Component):
         config: RandomNumbersConfig,
         my_simulation_parameters: SimulationParameters,
     ) -> None:
+        """Initialize the class."""
         super().__init__(
             name=config.name,
             my_simulation_parameters=my_simulation_parameters,
@@ -72,18 +78,23 @@ class RandomNumbers(Component):
         )
 
     def i_restore_state(self) -> None:
+        """Restores the state."""
         pass
 
     def i_simulate(
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Simulates the component."""
+
         val1: float = self.values[timestep]
         stsv.set_output_value(self.output1, float(val1))
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
+        """Doublechecks."""
         pass
 
     def i_save_state(self) -> None:
+        """Saves the state."""
         pass
 
     def i_prepare_simulation(self) -> None:
@@ -91,8 +102,9 @@ class RandomNumbers(Component):
         pass
 
     def write_to_report(self) -> List[str]:
+        """Write to report."""
         lines = []
-        lines.append("Random number Generator: {}".format(self.component_name))
-        lines.append("Minimum number: {}".format(self.minimum))
-        lines.append("Maximum number: {}".format(self.maximum))
+        lines.append(f"Random number Generator: {self.component_name}")
+        lines.append(f"Minimum number: {self.minimum}")
+        lines.append(f"Maximum number: {self.maximum}")
         return lines

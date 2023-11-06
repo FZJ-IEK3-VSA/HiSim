@@ -16,6 +16,7 @@ Optional field: `system_setup_config`
 The values from `system_setup_config` overwrite specific values of the configuration object.
 Arguments that are not present keep the (scaled) default value.
 """
+# clean
 
 import json
 import datetime
@@ -49,7 +50,7 @@ def make_system_setup(
         )
 
     _parameters_json = deepcopy(parameters_json)
-    Path(result_directory).mkdir(parents=True, exist_ok=True)
+    Path(result_directory).mkdir(parents=True, exist_ok=True)  # pylint: disable=unexpected-keyword-arg
     path_to_module = _parameters_json.pop("path_to_module")
     setup_module_name = "examples." + path_to_module.split("/")[-1].replace(".py", "")
     if setup_module_name not in SUPPORTED_MODULES:

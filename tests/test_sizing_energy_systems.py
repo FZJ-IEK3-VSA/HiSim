@@ -184,7 +184,7 @@ def simulation_for_one_timestep(
     )
 
     # Set PV
-    my_pv_config = generic_pv_system.PVSystemConfig.get_scaled_PV_system(
+    my_pv_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
         rooftop_area_in_m2=my_residence_information.scaled_rooftop_area_in_m2
     )
 

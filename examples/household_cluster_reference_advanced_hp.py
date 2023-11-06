@@ -193,7 +193,7 @@ def household_cluster_reference_advanced_hp(
     )
 
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_CHS01_according_to_number_of_apartments(
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_chr01_according_to_number_of_apartments(
         number_of_apartments=my_building_information.number_of_apartments
     )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
@@ -202,7 +202,7 @@ def household_cluster_reference_advanced_hp(
 
     # Build Weather
     my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.Aachen
+        location_entry=weather.LocationEnum.AACHEN
     )
 
     my_weather = weather.Weather(

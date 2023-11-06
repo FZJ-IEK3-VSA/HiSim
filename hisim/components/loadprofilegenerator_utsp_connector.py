@@ -1,4 +1,7 @@
 """ Contains a component that uses the UTSP to provide LoadProfileGenerator data. """
+
+# clean
+
 import datetime
 import errno
 import io
@@ -8,7 +11,6 @@ import os
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Any
 
-import numpy as np
 import pandas as pd
 from dataclasses_json import dataclass_json
 
@@ -57,7 +59,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
         return UtspLpgConnector.get_full_classname()
 
     @classmethod
-    def get_default_UTSP_connector_config(cls) -> Any:
+    def get_default_utsp_connector_config(cls) -> Any:
         """Creates a default configuration. Chooses default values for the LPG parameters."""
 
         config = UtspLpgConnectorConfig(
@@ -71,7 +73,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
             charging_station_set=ChargingStationSets.Charging_At_Home_with_03_7_kW,
             consumption=0,
             profile_with_washing_machine_and_dishwasher=True,
-            predictive_control=False
+            predictive_control=False,
         )
         return config
 
@@ -408,8 +410,7 @@ class UtspLpgConnector(cp.Component):
         ), saved_files
 
     def save_result_file(self, name: str, content: str) -> str:
-        """
-        Saves a result file in the folder specified in the config object.
+        """Saves a result file in the folder specified in the config object.
 
         :param name: the name for the file
         :type name: str
@@ -599,26 +600,26 @@ class UtspLpgConnector(cp.Component):
             if minutes_per_timestep > 1:
                 # power needs averaging, not sum
                 self.electricity_consumption = [
-                    sum(self.electricity_consumption[n : n + minutes_per_timestep])
+                    sum(self.electricity_consumption[n: n + minutes_per_timestep])
                     / minutes_per_timestep
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.heating_by_devices = [
-                    sum(self.heating_by_devices[n : n + minutes_per_timestep])
+                    sum(self.heating_by_devices[n: n + minutes_per_timestep])
                     / minutes_per_timestep
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.water_consumption = [
-                    sum(self.water_consumption[n : n + minutes_per_timestep])
+                    sum(self.water_consumption[n: n + minutes_per_timestep])
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.heating_by_residents = [
-                    sum(self.heating_by_residents[n : n + minutes_per_timestep])
+                    sum(self.heating_by_residents[n: n + minutes_per_timestep])
                     / minutes_per_timestep
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.number_of_residents = [
-                    sum(self.number_of_residents[n : n + minutes_per_timestep])
+                    sum(self.number_of_residents[n: n + minutes_per_timestep])
                     / minutes_per_timestep
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]

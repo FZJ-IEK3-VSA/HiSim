@@ -24,7 +24,7 @@ from hisim.components import (advanced_battery_bslib,
                               controller_l1_electrolyzer,
                               controller_l2_energy_management_system,
                               generic_car,
-                              generic_CHP, generic_electrolyzer,
+                              generic_chp, generic_electrolyzer,
                               generic_heat_pump_modular, generic_heat_source,
                               generic_hot_water_storage_modular,
                               generic_hydrogen_storage, generic_pv_system,
@@ -1139,9 +1139,9 @@ def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, m
     chp_power = chp_power * (my_boiler.config.energy_full_cycle or 1) * 3.6e6 / chp_controller_config.min_operation_time_in_seconds or 1
 
     # configure and add chp
-    chp_config = generic_CHP.CHPConfig.get_default_config_chp(thermal_power=chp_power)
+    chp_config = generic_chp.CHPConfig.get_default_config_chp(thermal_power=chp_power)
     chp_config.source_weight = count
-    my_chp = generic_CHP.SimpleCHP(
+    my_chp = generic_chp.SimpleCHP(
         my_simulation_parameters=my_simulation_parameters, config=chp_config
     )
 
@@ -1236,9 +1236,9 @@ def configure_chp_with_buffer(
     chp_power = chp_power * (my_boiler.config.energy_full_cycle or 1) * 3.6e6 / chp_controller_config.min_operation_time_in_seconds
 
     # configure and add chp
-    chp_config = generic_CHP.CHPConfig.get_default_config_chp(thermal_power=chp_power)
+    chp_config = generic_chp.CHPConfig.get_default_config_chp(thermal_power=chp_power)
     chp_config.source_weight = count
-    my_chp = generic_CHP.SimpleCHP(
+    my_chp = generic_chp.SimpleCHP(
         my_simulation_parameters=my_simulation_parameters, config=chp_config,
     )
 
@@ -1301,7 +1301,7 @@ def configure_chp_with_buffer(
 
 
 def configure_electrolyzer_and_h2_storage(
-        my_sim: Any, my_simulation_parameters: SimulationParameters, my_chp: generic_CHP.SimpleCHP, my_chp_controller: controller_l1_chp.L1CHPController,
+        my_sim: Any, my_simulation_parameters: SimulationParameters, my_chp: generic_chp.SimpleCHP, my_chp_controller: controller_l1_chp.L1CHPController,
         my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem, electrolyzer_power: float,
         h2_storage_size: float, fuel_cell_power: float, count: int, ) -> int:
     """Configures electrolyzer and h2 storage with fuel cell already defined.
@@ -1313,7 +1313,7 @@ def configure_electrolyzer_and_h2_storage(
     :param my_simulation_parameters: Simulation parameters for HiSIM calculation.
     :type my_simulation_parameters: SimulationParameters
     :param my_chp: Fuel cell component of the HiSIM example
-    :type my_chp: generic_CHP.CHP
+    :type my_chp: generic_chp.CHP
     :param my_chp_controller: Fuel cell controller component of the HiSIM example
     :type my_chp_controller: controller_l1_chp.L1CHPController
     :param my_electricity_controller: Energy management system component of the HiSIM example
@@ -1443,9 +1443,9 @@ def configure_elctrolysis_h2storage_fuelcell_system(
     fuel_cell_power = fuel_cell_power * (my_boiler.config.energy_full_cycle or 1) * 3.6e6 / chp_controller_config.min_operation_time_in_seconds or 1
 
     # configure and add chp
-    chp_config = generic_CHP.CHPConfig.get_default_config_fuelcell(thermal_power=fuel_cell_power)
+    chp_config = generic_chp.CHPConfig.get_default_config_fuelcell(thermal_power=fuel_cell_power)
     chp_config.source_weight = count
-    my_chp = generic_CHP.SimpleCHP(
+    my_chp = generic_chp.SimpleCHP(
         my_simulation_parameters=my_simulation_parameters, config=chp_config
     )
 
@@ -1547,9 +1547,9 @@ def configure_elctrolysis_h2storage_fuelcell_system_with_buffer(
     fuel_cell_power = fuel_cell_power * (my_boiler.config.energy_full_cycle or 1) * 3.6e6 / chp_controller_config.min_operation_time_in_seconds or 1
 
     # configure and add chp
-    chp_config = generic_CHP.CHPConfig.get_default_config_fuelcell(thermal_power=fuel_cell_power)
+    chp_config = generic_chp.CHPConfig.get_default_config_fuelcell(thermal_power=fuel_cell_power)
     chp_config.source_weight = count
-    my_chp = generic_CHP.SimpleCHP(
+    my_chp = generic_chp.SimpleCHP(
         my_simulation_parameters=my_simulation_parameters, config=chp_config
     )
 

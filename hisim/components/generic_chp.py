@@ -3,13 +3,14 @@
 This can be either a natural gas driven turbine producing both electricity and heat,
 or also a fuel cell. In this implementation the CHP does not modulate: it is either
 on or off. When it runs, it outputs a constant thermal and electrical power signal
-and needs a constant input of hydrogen or natural gas."""
+and needs a constant input of hydrogen or natural gas.
+"""
+# clean
 
 from dataclasses import dataclass
 from typing import List
 
 from dataclasses_json import dataclass_json
-from hisim import utils
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import log
@@ -29,6 +30,7 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class CHPConfig(cp.ConfigBase):
+
     """Defininition of configuration of combined heat and power plant (CHP)."""
 
     #: name of the CHP
@@ -46,6 +48,7 @@ class CHPConfig(cp.ConfigBase):
 
     @staticmethod
     def get_default_config_chp(thermal_power: float) -> "CHPConfig":
+        """Get default config chp."""
         config = CHPConfig(
             name="CHP",
             source_weight=1,
@@ -58,6 +61,7 @@ class CHPConfig(cp.ConfigBase):
 
     @staticmethod
     def get_default_config_fuelcell(thermal_power: float) -> "CHPConfig":
+        """Get default config fuel cell."""
         config = CHPConfig(
             name="CHP",
             source_weight=1,
@@ -70,16 +74,20 @@ class CHPConfig(cp.ConfigBase):
 
 
 class GenericCHPState:
-    """This data class saves the state of the CHP."""
+
+    """Generic chp state class saves the state of the CHP."""
 
     def __init__(self, state: int) -> None:
+        """Initialize the class."""
         self.state = state
 
     def clone(self) -> "GenericCHPState":
+        """Clones the state."""
         return GenericCHPState(state=self.state)
 
 
 class SimpleCHP(cp.Component):
+
     """Simulates CHP operation with constant electical and thermal power as well as constant fuel consumption.
 
     Components to connect to:
@@ -99,6 +107,7 @@ class SimpleCHP(cp.Component):
     def __init__(
         self, my_simulation_parameters: SimulationParameters, config: CHPConfig
     ) -> None:
+        """Initializes the class."""
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
@@ -189,17 +198,21 @@ class SimpleCHP(cp.Component):
         pass
 
     def i_save_state(self) -> None:
+        """Saves the state."""
         self.previous_state = self.state.clone()
 
     def i_restore_state(self) -> None:
+        """Restores the state."""
         self.state = self.previous_state.clone()
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        """Doublechecks."""
         pass
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Simulates the component."""
         # Inputs
         self.state.state = int(stsv.get_input_value(self.chp_onoff_signal_channel))
         mode = stsv.get_input_value(self.chp_heatingmode_signal_channel)

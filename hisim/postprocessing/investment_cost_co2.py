@@ -1,7 +1,10 @@
 """Postprocessing: computes investment cost and CO2 footprint of technical equipment.
 
-Functions from this file are called in Postprocessing option compute_kpis."""
-
+Functions from this file are called in Postprocessing option compute_kpis.
+"""
+# clean
+from typing import List, Tuple
+import pandas as pd
 from hisim.components import (
     generic_hot_water_storage_modular,
     generic_pv_system,
@@ -9,15 +12,12 @@ from hisim.components import (
     generic_heat_source,
     advanced_battery_bslib,
     generic_car,
-    generic_CHP,
+    generic_chp,
     generic_hydrogen_storage,
     generic_electrolyzer,
 )
-
 from hisim.utils import HISIMPATH
-import pandas as pd
 from hisim.loadtypes import LoadTypes
-from typing import List, Tuple
 from hisim.component_wrapper import ComponentWrapper
 
 
@@ -33,7 +33,9 @@ def read_in_component_costs() -> pd.DataFrame:
     return price_frame
 
 
-def compute_investment_cost(components: List[ComponentWrapper],) -> Tuple[float, float]:
+def compute_investment_cost(
+    components: List[ComponentWrapper],
+) -> Tuple[float, float]:
     """Iterates over all components and computes annual investment cost and annual C02 footprint respectively.
 
     :param components: List of all configured components in the HiSIM example.
@@ -86,7 +88,7 @@ def compute_investment_cost(components: List[ComponentWrapper],) -> Tuple[float,
             elif component.my_component.config.fuel == LoadTypes.DIESEL:
                 column = price_frame.iloc[price_frame.index == "Diesel vehicle"]
             component_capacity = 1.0
-        elif isinstance(component.my_component, generic_CHP.SimpleCHP):
+        elif isinstance(component.my_component, generic_chp.SimpleCHP):
             if component.my_component.config.use == LoadTypes.GAS:
                 column = price_frame.iloc[
                     price_frame.index == "Gas powered Combined Heat and Power"

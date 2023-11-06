@@ -37,6 +37,7 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class L1CHPControllerConfig(ConfigBase):
+
     """CHP Controller Config."""
 
     #: name of the device
@@ -150,6 +151,7 @@ class L1CHPControllerConfig(ConfigBase):
 
 
 class L1CHPControllerState:
+
     """Data class that saves the state of the CHP controller."""
 
     def __init__(
@@ -196,12 +198,14 @@ class L1CHPControllerState:
 
     def deactivate(self, timestep: int) -> None:
         """Deactivates the heat pump and remembers the time step."""
+
         if self.on_off == 1:
             self.deactivation_time_step = timestep
         self.on_off = 0
 
 
 class L1CHPController(cp.Component):
+
     """L1 combined heat and power (CHP) or Fuel Cell Controller.
 
     Is activated when both Electricity and Heat are demanded. Decides if heat is transferred to
@@ -435,7 +439,8 @@ class L1CHPController(cp.Component):
     ) -> None:
         """Determines if hot water or building should be heated.
 
-        The mode in the state is 0 if water heating is considered and 1 if heating is enforced."""
+        The mode in the state is 0 if water heating is considered and 1 if heating is enforced.
+        """
         if (
             self.heating_season_begin > timestep > self.heating_season_end
             and t_building >= self.config.t_min_heating_in_celsius - 30
@@ -456,7 +461,7 @@ class L1CHPController(cp.Component):
             return
         self.state.mode = 1
 
-    def calculate_state(
+    def calculate_state(  # pylint: disable=R0911
         self,
         timestep: int,
         t_building: float,

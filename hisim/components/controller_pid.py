@@ -1,21 +1,17 @@
 """PI controller Tuned for 5R1C Network."""
 
-import numpy as np
-import control
+# clean
 
-# from typing import Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-
+import control
+import numpy as np
 # Owned
-# from hisim.components.weather import Weather
+
 from hisim import component as cp
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.building import Building
-
-# from hisim.components.weather import Weather
-# from hisim.components.loadprofilegenerator_connector import Occupancy
 from hisim import log
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
@@ -64,21 +60,21 @@ class PIDState:
         manipulated_variable: float,
     ):
         """Initializes the state of the PID."""
-        self.Integrator: float = integrator
-        self.Derivator: float = derivator
-        self.Integrator_d3: float = integrator_d3
-        self.Integrator_d4: float = integrator_d4
-        self.Integrator_d5: float = integrator_d5
+        self.integrator: float = integrator
+        self.derivator: float = derivator
+        self.integrator_d_three: float = integrator_d3
+        self.integrator_d_four: float = integrator_d4
+        self.integrator_d_five: float = integrator_d5
         self.manipulated_variable: float = manipulated_variable
 
     def clone(self):
         """Storing last timestep errors."""
         return PIDState(
-            self.Integrator,
-            self.Derivator,
-            self.Integrator_d3,
-            self.Integrator_d4,
-            self.Integrator_d5,
+            self.integrator,
+            self.derivator,
+            self.integrator_d_three,
+            self.integrator_d_four,
+            self.integrator_d_five,
             self.manipulated_variable,
         )
 
@@ -123,14 +119,14 @@ class PIDController(cp.Component):
 
         self.my_simulation_parameters = my_simulation_parameters
         self.build()
-        proportional_gain, integral_gain, derivative_gain = self.PIDtuning()
+        proportional_gain, integral_gain, derivative_gain = self.pid_tuning()
         # --------------------------------------------------
         # control saturation
-        self.MV_min = 0
-        self.MV_max = 5000
-        self.ki = integral_gain
-        self.kp = proportional_gain
-        self.kd = derivative_gain
+        self.mv_min = 0
+        self.mv_max = 5000
+        self.integral_gain = integral_gain
+        self.proportional_gain = proportional_gain
+        self.derivative_gain = derivative_gain
         self.state = PIDState(
             integrator=0,
             integrator_d3=0,
@@ -141,7 +137,7 @@ class PIDController(cp.Component):
         )
         self.previous_state = self.state.clone()
 
-        self.t_mC: cp.ComponentInput = self.add_input(
+        self.temperature_mean_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.TemperatureMean,
             LoadTypes.TEMPERATURE,
@@ -169,56 +165,56 @@ class PIDController(cp.Component):
             )
         )
 
-        self.thermal_power: cp.ComponentOutput = self.add_output(
+        self.thermal_power_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.ThermalPowerPID,
             LoadTypes.HEATING,
             Units.WATT,
             output_description=f"here a description for PV {self.ThermalPowerPID} will follow.",
         )
-        self.error_pvalue_output: cp.ComponentOutput = self.add_output(
+        self.error_pvalue_output_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.error_pvalue,
             LoadTypes.HEATING,
             Units.WATT,
             output_description=f"here a description for PV {self.error_pvalue} will follow.",
         )
-        self.error_ivalue_output: cp.ComponentOutput = self.add_output(
+        self.error_ivalue_output_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.error_ivalue,
             LoadTypes.HEATING,
             Units.WATT,
             output_description=f"here a description for PV {self.error_ivalue} will follow.",
         )
-        self.error_dvalue_output: cp.ComponentOutput = self.add_output(
+        self.error_dvalue_output_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.error_dvalue,
             LoadTypes.HEATING,
             Units.WATT,
             output_description=f"here a description for PV {self.error_dvalue} will follow.",
         )
-        self.error_output: cp.ComponentOutput = self.add_output(
+        self.error_output_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.error,
             LoadTypes.ANY,
             Units.CELSIUS,
             output_description=f"here a description for PV {self.error} will follow.",
         )
-        self.derivator_output: cp.ComponentOutput = self.add_output(
+        self.derivator_output_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.derivator,
             LoadTypes.ANY,
             Units.CELSIUS,
             output_description=f"here a description for PV {self.derivator} will follow.",
         )
-        self.integrator_output: cp.ComponentOutput = self.add_output(
+        self.integrator_output_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.integrator,
             LoadTypes.ANY,
             Units.CELSIUS,
             output_description=f"here a description for PV {self.integrator} will follow.",
         )
-        self.feed_forward_signalC: cp.ComponentOutput = self.add_output(
+        self.feed_forward_signal_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.FeedForwardSignal,
             LoadTypes.HEATING,
@@ -227,7 +223,7 @@ class PIDController(cp.Component):
         )
 
     def get_building_default_connections(self):
-        """get default inputs from the building component."""
+        """Get default inputs from the building component."""
         log.information("setting building default connections in PID controller")
         connections = []
         building_classname = Building.get_classname()
@@ -263,22 +259,22 @@ class PIDController(cp.Component):
         """For calculating internal things and preparing the simulation."""
         """ getting building physical properties for state space model """
         self.h_tr_w = SingletonSimRepository().get_entry(
-            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_glazing
+            key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING
         )
         self.h_tr_ms = SingletonSimRepository().get_entry(
-            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_opaque_ms
+            key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS
         )
         self.h_tr_em = SingletonSimRepository().get_entry(
-            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_opaque_em
+            key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM
         )
         self.h_ve_adj = SingletonSimRepository().get_entry(
-            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_ventillation
+            key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION
         )
         self.h_tr_is = SingletonSimRepository().get_entry(
-            key=SingletonDictKeyEnum.Thermal_transmission_Surface_IndoorAir
+            key=SingletonDictKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR
         )
         self.c_m = SingletonSimRepository().get_entry(
-            key=SingletonDictKeyEnum.Thermal_capacity_envelope
+            key=SingletonDictKeyEnum.THERMALCAPACITYENVELOPE
         )
 
     def i_save_state(self):
@@ -298,8 +294,8 @@ class PIDController(cp.Component):
         lines = []
         lines.append("PID Controller")
         lines.append("Control algorithm of the Air conditioner is: PI \n")
-        lines.append(f"Controller Proportional gain is {self.kp:4.2f} \n")
-        lines.append(f"Controller Integral gain is {self.ki:4.2f} \n")
+        lines.append(f"Controller Proportional gain is {self.proportional_gain:4.2f} \n")
+        lines.append(f"Controller Integral gain is {self.integral_gain:4.2f} \n")
         return lines
 
     def i_simulate(
@@ -315,31 +311,31 @@ class PIDController(cp.Component):
         )
 
         # Retrieve building temperature
-        building_temperature_t_mc = stsv.get_input_value(self.t_mC)
+        building_temperature_t_mc = stsv.get_input_value(self.temperature_mean_channel)
         # log.information('building_temperature_t_mc {}'.format(building_temperature_t_mc))
         feed_forward_signal = self.feedforward(phi_st, phi_m)
 
         set_point: float = 24.0
 
-        Kp: float = self.kp  # controller Proportional gain
-        Ki: float = self.ki  # integral gain
-        Kd: float = self.kd  # Derivative gain
+        proportional_gain: float = self.proportional_gain  # controller Proportional gain
+        integral_gain: float = self.integral_gain  # integral gain
+        derivative_gain: float = self.derivative_gain  # Derivative gain
 
         error = set_point - building_temperature_t_mc  # e(tk)
 
-        p_value = Kp * error
-        d_value = Kd * (error - self.state.Derivator)
+        p_value = proportional_gain * error
+        d_value = derivative_gain * (error - self.state.derivator)
 
-        self.state.Derivator = error
-        self.state.Integrator = self.state.Integrator + error
+        self.state.derivator = error
+        self.state.integrator = self.state.integrator + error
 
         limit = 500
-        if self.state.Integrator > limit:
-            self.state.Integrator = limit
-        elif self.state.Integrator < -limit:
-            self.state.Integrator = -limit
+        if self.state.integrator > limit:
+            self.state.integrator = limit
+        elif self.state.integrator < -limit:
+            self.state.integrator = -limit
 
-        i_value = self.state.Integrator * Ki
+        i_value = self.state.integrator * integral_gain
         manipulated_variable = p_value + i_value + d_value
 
         """ Un-comment to prevent heating and cooling in specific periods  """
@@ -357,17 +353,17 @@ class PIDController(cp.Component):
 
         self.state.manipulated_variable = manipulated_variable
 
-        stsv.set_output_value(self.error_pvalue_output, p_value)
-        stsv.set_output_value(self.error_dvalue_output, d_value)
-        stsv.set_output_value(self.error_ivalue_output, i_value)
-        stsv.set_output_value(self.error_output, error)
-        stsv.set_output_value(self.integrator_output, self.state.Integrator)
-        stsv.set_output_value(self.derivator_output, self.state.Derivator)
-        stsv.set_output_value(self.thermal_power, manipulated_variable)
-        stsv.set_output_value(self.feed_forward_signalC, feed_forward_signal)
+        stsv.set_output_value(self.error_pvalue_output_channel, p_value)
+        stsv.set_output_value(self.error_dvalue_output_channel, d_value)
+        stsv.set_output_value(self.error_ivalue_output_channel, i_value)
+        stsv.set_output_value(self.error_output_channel, error)
+        stsv.set_output_value(self.integrator_output_channel, self.state.integrator)
+        stsv.set_output_value(self.derivator_output_channel, self.state.derivator)
+        stsv.set_output_value(self.thermal_power_channel, manipulated_variable)
+        stsv.set_output_value(self.feed_forward_signal_channel, feed_forward_signal)
 
     def feedforward(self, phi_st, phi_m):
-        """the following gains are computed using the state space model in the function PIDtuning()."""
+        """The following gains are computed using the state space model in the function PIDtuning()."""
         process_gain: float = self.process_gain
         phi_st_gain: float = self.phi_st_gain
         phi_m_gain: float = self.phi_m_gain
@@ -378,7 +374,7 @@ class PIDController(cp.Component):
 
         return feed_forward_signal
 
-    def PIDtuning(self):
+    def pid_tuning(self):
         """State space model of a building with 5R1C configuration.
 
         The model is used to:
@@ -388,29 +384,29 @@ class PIDController(cp.Component):
         given these data one could find an acceptable tuning of a PI controller.
         """
         seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
-        X = ((self.h_tr_w + self.h_tr_ms) * (self.h_ve_adj + self.h_tr_is)) + (
+        x_value = ((self.h_tr_w + self.h_tr_ms) * (self.h_ve_adj + self.h_tr_is)) + (
             self.h_ve_adj * self.h_tr_is
         )
-        A11 = (
-            ((self.h_tr_ms**2) * (self.h_tr_is + self.h_ve_adj) / X)
+        a11 = (
+            ((self.h_tr_ms**2) * (self.h_tr_is + self.h_ve_adj) / x_value)
             - self.h_tr_ms
             - self.h_tr_em
         ) / (
             self.c_m / seconds_per_timestep
         )  # ((self.c_m_ref * self.A_f) * 3600)
 
-        b11 = (self.h_tr_ms * self.h_tr_is) / ((self.c_m / seconds_per_timestep) * X)
+        b11 = (self.h_tr_ms * self.h_tr_is) / ((self.c_m / seconds_per_timestep) * x_value)
 
         b_d11 = (
-            (self.h_tr_ms * self.h_tr_w * (self.h_tr_is + self.h_ve_adj) / X)
+            (self.h_tr_ms * self.h_tr_w * (self.h_tr_is + self.h_ve_adj) / x_value)
             + self.h_tr_em
         ) / (self.c_m / seconds_per_timestep)
         b_d12 = (self.h_tr_ms * self.h_tr_is * self.h_ve_adj) / (
-            (self.c_m / seconds_per_timestep) * X
+            (self.c_m / seconds_per_timestep) * x_value
         )
-        b_d13 = (self.h_tr_ms * self.h_tr_is) / ((self.c_m / seconds_per_timestep) * X)
+        b_d13 = (self.h_tr_ms * self.h_tr_is) / ((self.c_m / seconds_per_timestep) * x_value)
         b_d14 = (self.h_tr_ms * (self.h_tr_is + self.h_ve_adj)) / (
-            (self.c_m / seconds_per_timestep) * X
+            (self.c_m / seconds_per_timestep) * x_value
         )
         b_d15 = 1 / (self.c_m / seconds_per_timestep)
 
@@ -433,39 +429,39 @@ class PIDController(cp.Component):
         d_d25=0
         """
 
-        A = np.array([[A11]])  # transition matrix
-        B = np.array([[b11, b_d11, b_d12, b_d13, b_d14, b_d15]])  # selection matrix
+        transition_matrix = np.array([[a11]])  # transition matrix
+        selection_matrix = np.array([[b11, b_d11, b_d12, b_d13, b_d14, b_d15]])  # selection matrix
         # C=np.matrix([[c11],[c21]]) #design matrix #comment out due to pylint warning W0612 (unused-variable)
         # D=np.matrix([[d11,d_d11, d_d12,d_d13,d_d14,d_d15],[d21,d_d21, d_d22,d_d23,d_d24,d_d25]]) #comment out due to pylint warning W0612 (unused-variable)
 
-        A = A * 0.5
-        B = B * 0.5
+        transition_matrix = transition_matrix * 0.5
+        selection_matrix = selection_matrix * 0.5
 
         """ Gains of the uncontrolled systems, used for feedforward implementation """
 
         # Tm(s)/Pth(s)= K/Ts+1
-        self.process_gain = B[0, 0] / -A[0, 0]
+        self.process_gain = selection_matrix[0, 0] / -transition_matrix[0, 0]
         # Tm(s)/Tout(s)= K/Ts+1
-        self.t_out_gain = B[0, 1] / -A[0, 0]
+        self.t_out_gain = selection_matrix[0, 1] / -transition_matrix[0, 0]
         # Tm(s)/phi_ia(s)= K/Ts+1
-        self.phi_ia_gain = B[0, 3] / -A[0, 0]
+        self.phi_ia_gain = selection_matrix[0, 3] / -transition_matrix[0, 0]
         # Tm(s)/phi_st(s)= K/Ts+1
-        self.phi_st_gain = B[0, 4] / -A[0, 0]
+        self.phi_st_gain = selection_matrix[0, 4] / -transition_matrix[0, 0]
         # Tm(s)/phi_m(s)= K/Ts+1
-        self.phi_m_gain = B[0, 5] / -A[0, 0]
+        self.phi_m_gain = selection_matrix[0, 5] / -transition_matrix[0, 0]
 
         """ time scale and arbitrary input signal to observe the open loop repsone """
 
         # choosing a sufficiently long interval
-        ns = 20000
-        t = np.linspace(0, ns, ns + 1)
+        time_interval_ns = 20000
+        time_scale = np.linspace(0, time_interval_ns, time_interval_ns + 1)
         # input step signal
-        u = np.zeros(ns + 1)
-        for i in range(ns):
+        input_step_signal = np.zeros(time_interval_ns + 1)
+        for i in range(time_interval_ns):
             if i == 0:
-                u = 0 * np.ones(ns + 1)
+                input_step_signal = 0 * np.ones(time_interval_ns + 1)
             else:
-                u = 22 * np.ones(ns + 1)
+                input_step_signal = 22 * np.ones(time_interval_ns + 1)
 
         """ Converting the state space model into transfer function.
         We have one state variable wich is the thermal mass temperature and 6 inputs...
@@ -473,17 +469,17 @@ class PIDController(cp.Component):
         Therefore, the transfer function below shows the change in T_m in reponse the constrolled input (thermal power)
         """
         # transfer function:
-        tf_tm = control.TransferFunction([B[0, 0]], [1, -(A[0, 0])])
+        tf_tm = control.TransferFunction([selection_matrix[0, 0]], [1, -(transition_matrix[0, 0])])
 
         # open loop step response:
         # timestep_tm_o, tm_o = control.forced_response(tf_tm, t, u)
-        _, tm_o = control.forced_response(tf_tm, t, u)
+        _, tm_o = control.forced_response(tf_tm, time_scale, input_step_signal)
         # save 'timestep_tm_o' in dummy variable due to pylint warning W0612 (unused-variable)
         # since function 'control.forced_response' can only be used with a return value with a tuple of length 2
         # dummy1 = timestep_tm_o
 
         # steady state value:
-        tm_steady_state = tm_o[ns]
+        tm_steady_state = tm_o[time_interval_ns]
 
         # time constant "value at 63.2%" :
         t_m_initial = 0
@@ -497,7 +493,7 @@ class PIDController(cp.Component):
             return array[idx]
 
         tm_at_tau_tf_tm = find_nearest(tm_o, tm_at_tau)
-        for i in range(ns):
+        for i in range(time_interval_ns):
             if tm_o[i] == tm_at_tau_tf_tm:
                 time_constant_tm = i
 
@@ -511,7 +507,7 @@ class PIDController(cp.Component):
 
         desired pole = (- natural frequency * damping ratio) +/-  j (natural frequency * sqrt(1-damping ratio^2))
 
-        Closed loop transfer function = 
+        Closed loop transfer function =
             (transfer function plant * transfer function controller ) / (1+(transfer function plant * transfer function controller ))
 
         simplified Closed loop transfer function of a first order system 1/ms+b= (Kp s + Ki) / ms^2+(b+Kp)s+Ki
@@ -530,11 +526,11 @@ class PIDController(cp.Component):
         natural_frequency = 4 / (settling_time * damping_ratio)
         # damping_frequency=natural_frequency * np.sqrt(1-damping_ratio**2) #comment out due to pylint warning W0612 (unused-variable)
 
-        m = 1 / B[0, 0]
-        b = -A[0, 0] / B[0, 0]
+        m_value = 1 / selection_matrix[0, 0]
+        b_value = -transition_matrix[0, 0] / selection_matrix[0, 0]
 
-        integral_gain = natural_frequency**2 * m
-        proportional_gain = (natural_frequency * damping_ratio * 2 * m) - b
+        integral_gain = natural_frequency**2 * m_value
+        proportional_gain = (natural_frequency * damping_ratio * 2 * m_value) - b_value
         derivative_gain = 0
 
         log.information(f"gain Ki= {integral_gain}")

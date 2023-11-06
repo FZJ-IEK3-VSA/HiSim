@@ -1,14 +1,21 @@
-from dataclasses import dataclass
+"""Modular household config module."""
+
+# clean
+
 from typing import Optional
+import json
+from dataclasses import dataclass
+
 from hisim.modular_household.interface_configs import archetype_config, system_config
-from dataclasses_json import dataclass_json
 from hisim import log
 from hisim.system_setup_configuration import SystemSetupConfigBase
-import json
 
 
 @dataclass
 class ModularHouseholdConfig(SystemSetupConfigBase):
+
+    """Modular Household Config class."""
+
     #: configuration of the technological equipment of the household
     system_config_: Optional[system_config.SystemConfig] = None
     #: configuration of the framework of the household (climate, house type, mobility behaviour, heating system, etc. )
@@ -26,8 +33,9 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
 
 
 def write_config(config: ModularHouseholdConfig) -> None:
-    with open("modular_example_config.json", "w", encoding="utf-8") as f:
-        f.write(config.to_json())  # type: ignore
+    """Writes config."""
+    with open("modular_example_config.json", "w", encoding="utf-8") as file:
+        file.write(config.to_json())  # type: ignore
 
 
 def read_in_configs(pathname: str) -> ModularHouseholdConfig:

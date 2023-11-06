@@ -61,6 +61,7 @@ def household_gas_heater(
     url = my_config.lpg_url
     api_key = my_config.api_key
     household = my_config.household_type
+    energy_intensity = my_config.energy_intensity
     result_path = my_config.result_path
     travel_route_set = my_config.travel_route_set
     transportation_device_set = my_config.transportation_device_set
@@ -81,6 +82,7 @@ def household_gas_heater(
         url=url,
         api_key=api_key,
         household=household,
+        energy_intensity=energy_intensity,
         result_path=result_path,
         travel_route_set=travel_route_set,
         transportation_device_set=transportation_device_set,
@@ -96,7 +98,7 @@ def household_gas_heater(
 
     # Build Weather
     my_weather = weather.Weather(
-        config=weather.WeatherConfig.get_default(weather.LocationEnum.Aachen),
+        config=weather.WeatherConfig.get_default(weather.LocationEnum.AACHEN),
         my_simulation_parameters=my_simulation_parameters,
     )
 

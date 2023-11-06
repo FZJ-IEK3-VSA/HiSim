@@ -20,7 +20,7 @@ import hisim.log
 from hisim import loadtypes as lt
 from hisim.components import (
     controller_l1_building_heating,
-    generic_CHP,
+    generic_chp,
     generic_heat_pump_modular,
     generic_heat_source,
     configuration,
@@ -79,7 +79,6 @@ class StorageConfig(cp.ConfigBase):
     @classmethod
     def get_default_config_for_boiler(cls) -> "StorageConfig":
         """Returns default configuration for boiler."""
-        # here number of apartments = 1
 
         volume = 230
         radius = (volume * 1e-3 / (4 * np.pi)) ** (
@@ -443,12 +442,12 @@ class HotWaterStorage(dycp.DynamicComponent):
         """Sets chp default connections in hot water storage."""
         hisim.log.information("setting chp default connections in hot water storaage")
         connections = []
-        chp_classname = generic_CHP.SimpleCHP.get_classname()
+        chp_classname = generic_chp.SimpleCHP.get_classname()
         connections.append(
             cp.ComponentConnection(
                 HotWaterStorage.ThermalPowerCHP,
                 chp_classname,
-                generic_CHP.SimpleCHP.ThermalPowerOutputBoiler,
+                generic_chp.SimpleCHP.ThermalPowerOutputBoiler,
             )
         )
         return connections

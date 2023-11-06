@@ -124,7 +124,7 @@ def test_house_with_pyam(
     )
     # Build Occupancy
     my_occupancy_config = (
-        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+        loadprofilegenerator_connector.OccupancyConfig.get_default_chr01_couple_both_at_work()
     )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
@@ -132,7 +132,7 @@ def test_house_with_pyam(
 
     # Build Weather
     my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.Aachen
+        location_entry=weather.LocationEnum.AACHEN
     )
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
@@ -157,7 +157,7 @@ def test_house_with_pyam(
         lifetime=pv_lifetime,
         prediction_horizon=None,
         predictive=False,
-        predictive_control=False
+        predictive_control=False,
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,

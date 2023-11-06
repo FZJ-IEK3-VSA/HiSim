@@ -1,3 +1,5 @@
+"""Test for generic dhw boiler."""
+
 import pytest
 from hisim.components import generic_hot_water_storage_modular
 from hisim.components import generic_heat_source
@@ -10,6 +12,7 @@ from hisim.simulationparameters import SimulationParameters
 
 @pytest.mark.base
 def test_simple_bucket_boiler_state():
+    """Test simple bucket state."""
 
     # simulation parameters
     seconds_per_timestep = 60
@@ -47,7 +50,7 @@ def test_simple_bucket_boiler_state():
     )
 
     # definition of hot water use
-    WW_use = cp.ComponentOutput(
+    ww_use = cp.ComponentOutput(
         "FakeWarmwaterUse", "WaterConsumption", lt.LoadTypes.WARM_WATER, lt.Units.LITER
     )
 
@@ -56,7 +59,7 @@ def test_simple_bucket_boiler_state():
     my_boiler_controller_l1.storage_temperature_channel.source_output = (
         my_boiler.temperature_mean_channel
     )
-    my_boiler.water_consumption_channel.source_output = WW_use
+    my_boiler.water_consumption_channel.source_output = ww_use
     my_boiler.thermal_power_delivered_channel.source_output = (
         my_heater.thermal_power_delivered_channel
     )
@@ -65,7 +68,7 @@ def test_simple_bucket_boiler_state():
     )
 
     # indexing of in- and outputs
-    WW_use.global_index = 0
+    ww_use.global_index = 0
     my_boiler.temperature_mean_channel.global_index = 1
     my_heater.thermal_power_delivered_channel.global_index = 2
     my_boiler_controller_l1.heat_pump_target_percentage_channel.global_index = 3

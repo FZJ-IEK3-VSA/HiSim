@@ -215,7 +215,7 @@ class HeatingComponentInBuilding(dynamic_component.DynamicComponent):
                     PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
                     * massflows_possible_in_kilogram_per_second[mass_flow_level]
                 )
-                while temperature_delta_heat_in_kelvin > LoadConfig.delta_T:
+                while temperature_delta_heat_in_kelvin > LoadConfig.delta_temperature:
                     mass_flow_level += 1
                     temperature_delta_heat_in_kelvin = thermal_power_delivered_in_watt / (
                         PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin

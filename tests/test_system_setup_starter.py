@@ -75,8 +75,8 @@ def test_system_setup_starter():
     )
 
     # Check if the costs of the heat pump have been adapted.
-    with open(result_directory + "/webtool_kpis.json", "r", encoding="utf8") as f:
-        webtool_kpis = json.load(f)
+    with open(result_directory + "/webtool_kpis.json", "r", encoding="utf8") as file:
+        webtool_kpis = json.load(file)
     assert (
         webtool_kpis["capexDict"]["column 1"]["HeatPumpHPLib [Investment in EUR] "]
         == 273.97
@@ -142,8 +142,8 @@ def test_system_setup_starter_scaling():
         ]  # type: ignore
     )
 
-    with open(result_directory + "/webtool_kpis.json", "r", encoding="utf8") as f:
-        webtool_kpis = json.load(f)
+    with open(result_directory + "/webtool_kpis.json", "r", encoding="utf8") as file:
+        webtool_kpis = json.load(file)
     assert (
         webtool_kpis["capexDict"]["column 1"]["HeatPumpHPLib [Investment in EUR] "]
         == 4.09

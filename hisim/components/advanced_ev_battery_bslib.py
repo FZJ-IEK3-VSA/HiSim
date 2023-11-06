@@ -1,8 +1,10 @@
 """ Car Battery implementation built upon the bslib library. It contains a CarBattery Class together with its Configuration and State. """
 
+# clean
+
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from dataclasses import dataclass
-from typing import Any, List, Tuple
+from typing import Any, List
 
 import pandas as pd
 from bslib import bslib as bsl
@@ -36,6 +38,7 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class CarBatteryConfig(ConfigBase):
+
     """Configuration of a Car Battery."""
 
     #: name of the device
@@ -74,7 +77,9 @@ class CarBatteryConfig(ConfigBase):
 
 
 class CarBattery(Component):
-    """
+
+    """Car Battery class.
+
     Simulate state of charge and realized power of a ac coupled battery
     storage system with the bslib library. Relevant simulation parameters
     are loaded within the init for a specific or generic battery type.
@@ -94,9 +99,7 @@ class CarBattery(Component):
     def __init__(
         self, my_simulation_parameters: SimulationParameters, config: CarBatteryConfig
     ):
-        """
-        Loads the parameters of the specified battery storage.
-        """
+        """Loads the parameters of the specified battery storage."""
         self.battery_config = config
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
@@ -117,7 +120,7 @@ class CarBattery(Component):
         self.previous_state = self.state.clone()
 
         # Load battery object with parameters from bslib database
-        self.BAT = bsl.ACBatMod(
+        self.bat = bsl.ACBatMod(
             system_id=self.system_id,
             p_inv_custom=self.p_inv_custom,
             e_bat_custom=self.e_bat_custom,
@@ -167,6 +170,7 @@ class CarBattery(Component):
         )
 
     def get_default_connections_from_charge_controller(self) -> Any:
+        """Get default connections from charge controller."""
         log.information(
             "setting ev charge controller default connections in car battery"
         )
@@ -184,12 +188,15 @@ class CarBattery(Component):
         return connections
 
     def i_save_state(self) -> None:
+        """Saves the state."""
         self.previous_state = self.state.clone()
 
     def i_restore_state(self) -> None:
+        """Restores the state."""
         self.state = self.previous_state.clone()
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
+        """Doublechecks."""
         pass
 
     def i_prepare_simulation(self) -> None:
@@ -199,8 +206,9 @@ class CarBattery(Component):
     def i_simulate(
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Simulates the component."""
         # Parameters
-        dt = self.my_simulation_parameters.seconds_per_timestep
+        seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
 
         # Load input values
         p_set = stsv.get_input_value(self.p_set)
@@ -208,7 +216,7 @@ class CarBattery(Component):
 
         # Simulate battery charging
         if p_set >= 0:
-            results = self.BAT.simulate(p_load=p_set, soc=soc, dt=dt)
+            results = self.bat.simulate(p_load=p_set, soc=soc, dt=seconds_per_timestep)
             p_bs = results[0]
             p_bat = results[1]
             soc = results[2]
@@ -284,9 +292,12 @@ class CarBattery(Component):
 
 @dataclass
 class EVBatteryState:
+
+    """Electric vehicle battery state class."""
+
     # state of charge of the battery
     soc: float = 0
 
     def clone(self):
-        "Creates a copy of the Car Battery State."
+        """Creates a copy of the Car Battery State."""
         return EVBatteryState(soc=self.soc)

@@ -1,18 +1,26 @@
-from typing import List
-import pandas as pd
+"""Csvloader module."""
+
+# clean
+
 import os
+from typing import List
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
+import pandas as pd
+
 
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim import component as cp
 from hisim.simulationparameters import SimulationParameters
-from dataclasses import dataclass
-from dataclasses_json import dataclass_json
 
 
 @dataclass_json
 @dataclass
 class CSVLoaderConfig(cp.ConfigBase):
+
+    """Csvloader config class."""
+
     component_name: str
     csv_filename: str
     column: int
@@ -30,13 +38,15 @@ class CSVLoaderConfig(cp.ConfigBase):
 
 
 class CSVLoader(cp.Component):
-    """
+
+    """Csvloader class.
+
     Class component loads CSV file containing some
     load profile relevant to the applied setup
-    function
+    function.
 
     Parameters
-    --------------------------
+    ----------
     component_name: str
         Name of load profile from CSV file
     csv_filename: str
@@ -60,6 +70,7 @@ class CSVLoader(cp.Component):
     multiplier: float
         Multiplication factor, in case an amplification of
         the data is required
+
     """
     # Outputs
 
@@ -68,6 +79,7 @@ class CSVLoader(cp.Component):
     def __init__(
         self, config: CSVLoaderConfig, my_simulation_parameters: SimulationParameters
     ):
+        """Initialize the class."""
         self.csvconfig = config
         super().__init__(
             name=self.csvconfig.component_name,
@@ -75,27 +87,27 @@ class CSVLoader(cp.Component):
             my_config=config,
         )
 
-        self.output1: cp.ComponentOutput = self.add_output(
+        self.output1_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             CSVLoader.Output1,
             self.csvconfig.loadtype,
             self.csvconfig.unit,
             output_description="description will follow for CSV"
         )
-        self.output1.display_name = self.csvconfig.column_name
+        self.output1_channel.display_name = self.csvconfig.column_name
         self.multiplier = self.csvconfig.multiplier
 
         # ? self.column = column
-        df = pd.read_csv(
+        dataframe = pd.read_csv(
             os.path.join(utils.HISIMPATH["inputs"], self.csvconfig.csv_filename),
             sep=self.csvconfig.sep,
             decimal=self.csvconfig.decimal,
         )
-        if self.csvconfig.column >= len(df.columns):
+        if self.csvconfig.column >= len(dataframe.columns):
             raise RuntimeError(
-                f"Invalid column number for the csv file: {self.csvconfig.column}. Found {len(df.columns)} columns."
+                f"Invalid column number for the csv file: {self.csvconfig.column}. Found {len(dataframe.columns)} columns."
             )
-        dfcolumn = df.iloc[:, [self.csvconfig.column]]
+        dfcolumn = dataframe.iloc[:, [self.csvconfig.column]]
         self.column_name = self.csvconfig.column_name
         if len(dfcolumn) < self.my_simulation_parameters.timesteps:
             raise Exception(
@@ -111,13 +123,15 @@ class CSVLoader(cp.Component):
         self.values: List[float] = []
 
     def i_restore_state(self) -> None:
+        """Restores the state."""
         pass
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Simulates the component."""
         stsv.set_output_value(
-            self.output1, float(self.column[timestep]) * self.multiplier
+            self.output1_channel, float(self.column[timestep]) * self.multiplier
         )
 
     def i_prepare_simulation(self) -> None:
@@ -125,9 +139,11 @@ class CSVLoader(cp.Component):
         pass
 
     def i_save_state(self) -> None:
+        """Saves the state."""
         pass
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        """Doublechecks."""
         pass
 
     def write_to_report(self):

@@ -1,5 +1,7 @@
 """ Battery implementation built upon the bslib library. It contains a Battery Class together with its Configuration and State. """
 
+# clean
+
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from typing import List, Tuple
 from dataclasses import dataclass
@@ -33,6 +35,7 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class BatteryConfig(ConfigBase):
+
     """Battery Configuration."""
 
     @classmethod
@@ -93,7 +96,7 @@ class BatteryConfig(ConfigBase):
     @classmethod
     def get_scaled_battery(cls, total_pv_power_in_watt_peak: float) -> "BatteryConfig":
         """Returns scaled configuration of battery according to pv power."""
-        custom_battery_capacity_generic_in_kilowatt_hour = total_pv_power_in_watt_peak  # size/capacity of battery should be approx. the same as default pv power
+        custom_battery_capacity_generic_in_kilowatt_hour = total_pv_power_in_watt_peak * 1e-3  # size/capacity of battery should be approx. the same as default pv power
         c_rate = 0.5  # 0.5C corresponds to 0.5/h for fully charging or discharging
         config = BatteryConfig(
             name="Battery",
@@ -119,7 +122,9 @@ class BatteryConfig(ConfigBase):
 
 
 class Battery(Component):
-    """
+
+    """Battery class.
+
     Simulate state of charge and realized power of a ac coupled battery
     storage system with the bslib library. Relevant simulation parameters
     are loaded within the init for a specific or generic battery type.
@@ -139,9 +144,7 @@ class Battery(Component):
     def __init__(
         self, my_simulation_parameters: SimulationParameters, config: BatteryConfig
     ):
-        """
-        Loads the parameters of the specified battery storage.
-        """
+        """Loads the parameters of the specified battery storage."""
         self.battery_config = config
         super().__init__(
             name=self.battery_config.name
@@ -214,12 +217,15 @@ class Battery(Component):
         )
 
     def i_save_state(self) -> None:
+        """Saves the state."""
         self.previous_state = self.state.clone()
 
     def i_restore_state(self) -> None:
+        """Restores the state."""
         self.state = self.previous_state.clone()
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
+        """Doublechecks."""
         pass
 
     def i_prepare_simulation(self) -> None:
@@ -229,6 +235,7 @@ class Battery(Component):
     def i_simulate(
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Simulates the component."""
         # Parameters
         time_increment_in_seconds = self.my_simulation_parameters.seconds_per_timestep
 
@@ -257,6 +264,7 @@ class Battery(Component):
         self.state.state_of_charge = state_of_charge
 
     def write_to_report(self) -> List[str]:
+        """Write to report."""
         return self.battery_config.get_string_dict()
 
     @staticmethod
@@ -270,12 +278,7 @@ class Battery(Component):
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
-        """Calculate OPEX costs, consisting of battery aging and maintenance costs.
-
-        Battery aging is ROUGHLY approximated by costs for each virtual charging cycle used in simulated period
-        (costs_per_cycle = investment / lifetime_in_cycles).
-        """
-        # Todo: Think about better approximation for costs of battery aging
+        """Calculate OPEX costs, consisting of maintenance costs."""
 
         for index, output in enumerate(all_outputs):
             if (
@@ -299,21 +302,8 @@ class Battery(Component):
                         1,
                     )
 
-        virtual_number_of_full_charge_cycles = (
-            self.battery_config.charge_in_kwh
-            / self.battery_config.custom_battery_capacity_generic_in_kilowatt_hour
-        )
-        # virtual_number_of_full_discharge_cycles = self.battery_config.discharge_in_kwh / self.battery_config.custom_battery_capacity_generic_in_kilowatt_hour
-
-        investment = self.get_cost_capex(self.battery_config)[0]
-        battery_aging_costs_in_euro = (
-            investment
-            * virtual_number_of_full_charge_cycles
-            / self.battery_config.lifetime_in_cycles
-        )
-
         opex_cost_per_simulated_period_in_euro = (
-            self.calc_maintenance_cost() + battery_aging_costs_in_euro
+            self.calc_maintenance_cost()
         )
         opex_cost_data_class = OpexCostDataClass(
             opex_cost=opex_cost_per_simulated_period_in_euro,
@@ -323,12 +313,34 @@ class Battery(Component):
 
         return opex_cost_data_class
 
+    def get_battery_aging_information(
+        self,
+    ) -> Tuple[float, float]:
+        """Calculate battery aging.
+
+        This is used to calculate investment costs for battery per simulated period.
+        Battery aging is ROUGHLY approximated by costs for each virtual charging cycle used in simulated period
+        (costs_per_cycle = investment / lifetime_in_cycles).
+        """
+        # Todo: Think about better approximation for costs of battery aging
+
+        virtual_number_of_full_charge_cycles = (
+            self.battery_config.charge_in_kwh
+            / self.battery_config.custom_battery_capacity_generic_in_kilowatt_hour
+        )
+        # virtual_number_of_full_discharge_cycles = self.battery_config.discharge_in_kwh / self.battery_config.custom_battery_capacity_generic_in_kilowatt_hour
+
+        return virtual_number_of_full_charge_cycles, self.battery_config.lifetime_in_cycles
+
 
 @dataclass
 class BatteryState:
+
+    """Battery state class."""
+
     #: state of charge of the battery
     state_of_charge: float = 0
 
     def clone(self):
-        "Creates a copy of the Battery State."
+        """Creates a copy of the Battery State."""
         return BatteryState(state_of_charge=self.state_of_charge)

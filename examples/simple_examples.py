@@ -9,6 +9,7 @@ from typing import Optional
 from hisim import log
 from hisim.simulator import Simulator
 from hisim.simulationparameters import SimulationParameters
+from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.components.random_numbers import RandomNumbers, RandomNumbersConfig
 from hisim.components.example_transformer import (
     ExampleTransformer,
@@ -30,9 +31,14 @@ def first_example(
 
     # Set the simulation parameters for the simulation
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
+        my_simulation_parameters = SimulationParameters.full_year(
             year=2021, seconds_per_timestep=60
         )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.PLOT_CARPET
+        )
+
+    # testmy_sim = copy.deepcopy(my_sim)
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Create first RandomNumbers object and adds to simulator
@@ -96,7 +102,7 @@ def second_example(
 
     # Set the simulation parameters for the simulation
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
+        my_simulation_parameters = SimulationParameters.full_year(
             year=2021, seconds_per_timestep=60
         )  # use a full year for testing
     my_sim.set_simulation_parameters(my_simulation_parameters)

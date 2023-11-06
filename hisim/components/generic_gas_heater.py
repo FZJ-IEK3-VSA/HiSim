@@ -85,7 +85,36 @@ class GenericGasHeaterConfig(ConfigBase):
             eff_th_min=0.60,  # [-]
             eff_th_max=0.90,  # [-]
             delta_temperature_in_celsius=25,
-            maximal_mass_flow_in_kilogram_per_second=12_000
+            maximal_mass_flow_in_kilogram_per_second=maximal_power_in_watt
+            / (4180 * 25),  # kg/s ## -> ~0.07 P_th_max / (4180 * delta_T)
+            maximal_temperature_in_celsius=80,  # [°C])
+            co2_footprint=maximal_power_in_watt
+            * 1e-3
+            * 49.47,  # value from emission_factros_and_costs_devices.csv
+            cost=7416,  # value from emission_factros_and_costs_devices.csv
+            lifetime=20,  # value from emission_factros_and_costs_devices.csv
+            maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
+            consumption=0,
+        )
+        return config
+
+    @classmethod
+    def get_scaled_gasheater_config(
+            cls, heating_load_of_building_in_watt: float
+    ) -> "GenericGasHeaterConfig":
+        """Get a default Building."""
+        maximal_power_in_watt: float = heating_load_of_building_in_watt  # W
+        config = GenericGasHeaterConfig(
+            name="GenericGasHeater",
+            temperature_delta_in_celsius=10,
+            maximal_power_in_watt=maximal_power_in_watt,
+            is_modulating=True,
+            minimal_thermal_power_in_watt=1_000,  # [W]
+            maximal_thermal_power_in_watt=maximal_power_in_watt,  # [W]
+            eff_th_min=0.60,  # [-]
+            eff_th_max=0.90,  # [-]
+            delta_temperature_in_celsius=25,
+            maximal_mass_flow_in_kilogram_per_second=maximal_power_in_watt
             / (4180 * 25),  # kg/s ## -> ~0.07 P_th_max / (4180 * delta_T)
             maximal_temperature_in_celsius=80,  # [°C])
             co2_footprint=maximal_power_in_watt

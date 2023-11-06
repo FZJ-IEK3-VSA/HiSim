@@ -278,7 +278,7 @@ class L1Controller(cp.Component):
             car_location = int(stsv.get_input_value(self.car_location_channel))
             car_consumption = stsv.get_input_value(self.car_consumption_channel)
             soc = stsv.get_input_value(self.state_of_charge_channel)
-            if self.electricity_target.source_output is not None:
+            if self.electricity_target_channel.source_output is not None:
                 electricity_target = stsv.get_input_value(self.electricity_target_channel)
             else:
                 electricity_target = 0

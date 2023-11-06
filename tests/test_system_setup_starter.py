@@ -1,14 +1,15 @@
 """Test system setup starter."""
 
-import os
-import time
-import shutil
-from pathlib import Path
 import json
+import os
+import shutil
+import time
+from pathlib import Path
+
 import pytest
 
-from hisim.system_setup_starter import make_system_setup
 from hisim.hisim_main import main
+from hisim.system_setup_starter import make_system_setup
 
 
 @pytest.mark.base
@@ -44,7 +45,7 @@ def test_system_setup_starter():
         },
     }
 
-    result_directory = "results1"
+    result_directory = "test_system_setup_starter_results"
     if Path(result_directory).is_dir():
         shutil.rmtree(result_directory)
     Path(result_directory).mkdir(parents=True)
@@ -112,7 +113,7 @@ def test_system_setup_starter_scaling():
         },
     }
 
-    result_directory = "results_scaling"
+    result_directory = "test_system_setup_starter_scaling_results"
     if Path(result_directory).is_dir():
         shutil.rmtree(result_directory)
     Path(result_directory).mkdir(parents=True)

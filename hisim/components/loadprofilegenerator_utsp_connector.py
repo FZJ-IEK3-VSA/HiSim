@@ -133,14 +133,14 @@ class UtspLpgConnector(cp.Component):
         self.scaling_factor_according_to_number_of_apartments: float = 1.0
 
         # Inputs - Not Mandatory
-        self.ww_mass_input: cp.ComponentInput = self.add_input(
+        self.ww_mass_input_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.WW_MassInput,
             lt.LoadTypes.WARM_WATER,
             lt.Units.KG_PER_SEC,
             False,
         )
-        self.ww_temperature_input: cp.ComponentInput = self.add_input(
+        self.ww_temperature_input_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.WW_TemperatureInput,
             lt.LoadTypes.WARM_WATER,
@@ -148,14 +148,14 @@ class UtspLpgConnector(cp.Component):
             False,
         )
 
-        self.number_of_residents_c: cp.ComponentOutput = self.add_output(
+        self.number_of_residents_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.NumberByResidents,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             output_description=f"here a description for LPG UTSP {self.NumberByResidents} will follow.",
         )
-        self.heating_by_residents_c: cp.ComponentOutput = self.add_output(
+        self.heating_by_residents_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.HeatingByResidents,
             lt.LoadTypes.HEATING,
@@ -169,7 +169,7 @@ class UtspLpgConnector(cp.Component):
             lt.Units.WATT,
             output_description="Inner device heat gains, which heat the building (not intentionally)",
         )
-        self.electricity_output_c: cp.ComponentOutput = self.add_output(
+        self.electricity_output_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ElectricityOutput,
             load_type=lt.LoadTypes.ELECTRICITY,
@@ -180,7 +180,7 @@ class UtspLpgConnector(cp.Component):
             output_description=f"here a description for LPG UTSP {self.ElectricityOutput} will follow.",
         )
 
-        self.water_consumption_c: cp.ComponentOutput = self.add_output(
+        self.water_consumption_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.WaterConsumption,
             lt.LoadTypes.WARM_WATER,
@@ -208,15 +208,15 @@ class UtspLpgConnector(cp.Component):
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
         """Sets the current output values with data retrieved during initialization."""
-        if self.ww_mass_input.source_output is not None:
+        if self.ww_mass_input_channel.source_output is not None:
             # ww demand
             ww_temperature_demand = HouseholdWarmWaterDemandConfig.ww_temperature_demand
 
             # From Thermal Energy Storage
-            ww_mass_input_per_sec = stsv.get_input_value(self.ww_mass_input)  # kg/s
+            ww_mass_input_per_sec = stsv.get_input_value(self.ww_mass_input_channel)  # kg/s
             # ww_mass_input = ww_mass_input_per_sec * self.seconds_per_timestep           # kg
             ww_mass_input: float = ww_mass_input_per_sec
-            ww_temperature_input = stsv.get_input_value(self.ww_temperature_input)  # °C
+            ww_temperature_input = stsv.get_input_value(self.ww_temperature_input_channel)  # °C
 
             # Information import
             freshwater_temperature = (
@@ -263,19 +263,19 @@ class UtspLpgConnector(cp.Component):
                 energy_discharged = 0
 
         stsv.set_output_value(
-            self.number_of_residents_c, self.number_of_residents[timestep]
+            self.number_of_residents_channel, self.number_of_residents[timestep]
         )
         stsv.set_output_value(
-            self.heating_by_residents_c, self.heating_by_residents[timestep]
+            self.heating_by_residents_channel, self.heating_by_residents[timestep]
         )
         stsv.set_output_value(
             self.heating_by_devices_channel, self.heating_by_devices[timestep]
         )
         stsv.set_output_value(
-            self.electricity_output_c, self.electricity_consumption[timestep]
+            self.electricity_output_channel, self.electricity_consumption[timestep]
         )
         stsv.set_output_value(
-            self.water_consumption_c, self.water_consumption[timestep]
+            self.water_consumption_channel, self.water_consumption[timestep]
         )
 
         if self.config.predictive_control:
@@ -385,7 +385,11 @@ class UtspLpgConnector(cp.Component):
         :return: path of the file that was saved
         :rtype: str
         """
-        filepath = os.path.join(self.utsp_config.result_path, name)
+        try:
+            filepath = os.path.join(self.utsp_config.result_path, name)
+        except Exception as exc:
+            raise NameError(f"Could not create a filepath from config result_path {self.utsp_config.result_path} and name {name}.") from exc
+
         directory = os.path.dirname(filepath)
         # Create the directory if it does not exist
         try:
@@ -416,6 +420,7 @@ class UtspLpgConnector(cp.Component):
             # check if all of the additionally saved files that belong to the cached results
             # are also still there
             for filename in saved_files:
+
                 if not os.path.isfile(filename):
                     log.information(
                         f"A cache file for {self.component_name} was found, "
@@ -530,10 +535,9 @@ class UtspLpgConnector(cp.Component):
 
                     self.max_hot_water_demand = max(self.water_consumption)
 
-                self.cache_results(
-                    saved_files=saved_files, cache_filepath=cache_filepath
-                )
-
+                    self.cache_results(
+                        saved_files=saved_files[index], cache_filepath=cache_filepath
+                    )
 
     def write_to_report(self):
         """Adds a report entry for this component."""
@@ -610,13 +614,13 @@ class UtspLpgConnector(cp.Component):
 
         # Save flexibility and transportation files
         saved_files: List[str] = []
-        path = self.save_result_file(flexibility, flexibility_file)
+        path = self.save_result_file(name=flexibility, content=flexibility_file)
         saved_files.append(path)
         for filename in itertools.chain(
             car_states.keys(), car_locations.keys(), driving_distances.keys()
         ):
             if filename in result.data:
-                path = self.save_result_file(filename, result.data[filename].decode())
+                path = self.save_result_file(name=filename, content=result.data[filename].decode())
                 saved_files.append(path)
 
         return (
@@ -697,14 +701,14 @@ class UtspLpgConnector(cp.Component):
 
             # Save flexibility and transportation files
             saved_files_one_result: List = []
-            path = self.save_result_file(flexibility, flexibility_file_one_result)
+            path = self.save_result_file(name=flexibility, content=flexibility_file_one_result)
             saved_files_one_result.append(path)
             for filename in itertools.chain(
                 car_states.keys(), car_locations.keys(), driving_distances.keys()
             ):
                 if filename in result.data:
                     path = self.save_result_file(
-                        filename, result.data[filename].decode()
+                        name=filename, content=result.data[filename].decode()
                     )
                     saved_files_one_result.append(path)
 

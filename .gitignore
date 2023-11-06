@@ -53,8 +53,6 @@ coverage.xml
 *.py,cover
 .hypothesis/
 .pytest_cache/
-tests/results1/
-tests/results_scaling/
 
 # Translations
 *.mo
@@ -148,6 +146,7 @@ hisim/results
 tests/mypath/
 tests/results1
 tests/results_scaling/
+tests/lpg_utsp_scaling_test/
 
 tests\hisim_simulation.log
 components_information.xlsx

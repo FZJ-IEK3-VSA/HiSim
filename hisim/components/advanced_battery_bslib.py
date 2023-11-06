@@ -96,7 +96,7 @@ class BatteryConfig(ConfigBase):
     @classmethod
     def get_scaled_battery(cls, total_pv_power_in_watt_peak: float) -> "BatteryConfig":
         """Returns scaled configuration of battery according to pv power."""
-        custom_battery_capacity_generic_in_kilowatt_hour = total_pv_power_in_watt_peak  # size/capacity of battery should be approx. the same as default pv power
+        custom_battery_capacity_generic_in_kilowatt_hour = total_pv_power_in_watt_peak * 1e-3  # size/capacity of battery should be approx. the same as default pv power
         c_rate = 0.5  # 0.5C corresponds to 0.5/h for fully charging or discharging
         config = BatteryConfig(
             name="Battery",
@@ -278,12 +278,7 @@ class Battery(Component):
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
-        """Calculate OPEX costs, consisting of battery aging and maintenance costs.
-
-        Battery aging is ROUGHLY approximated by costs for each virtual charging cycle used in simulated period
-        (costs_per_cycle = investment / lifetime_in_cycles).
-        """
-        # Todo: Think about better approximation for costs of battery aging
+        """Calculate OPEX costs, consisting of maintenance costs."""
 
         for index, output in enumerate(all_outputs):
             if (
@@ -307,21 +302,8 @@ class Battery(Component):
                         1,
                     )
 
-        virtual_number_of_full_charge_cycles = (
-            self.battery_config.charge_in_kwh
-            / self.battery_config.custom_battery_capacity_generic_in_kilowatt_hour
-        )
-        # virtual_number_of_full_discharge_cycles = self.battery_config.discharge_in_kwh / self.battery_config.custom_battery_capacity_generic_in_kilowatt_hour
-
-        investment = self.get_cost_capex(self.battery_config)[0]
-        battery_aging_costs_in_euro = (
-            investment
-            * virtual_number_of_full_charge_cycles
-            / self.battery_config.lifetime_in_cycles
-        )
-
         opex_cost_per_simulated_period_in_euro = (
-            self.calc_maintenance_cost() + battery_aging_costs_in_euro
+            self.calc_maintenance_cost()
         )
         opex_cost_data_class = OpexCostDataClass(
             opex_cost=opex_cost_per_simulated_period_in_euro,
@@ -330,6 +312,25 @@ class Battery(Component):
         )
 
         return opex_cost_data_class
+
+    def get_battery_aging_information(
+        self,
+    ) -> Tuple[float, float]:
+        """Calculate battery aging.
+
+        This is used to calculate investment costs for battery per simulated period.
+        Battery aging is ROUGHLY approximated by costs for each virtual charging cycle used in simulated period
+        (costs_per_cycle = investment / lifetime_in_cycles).
+        """
+        # Todo: Think about better approximation for costs of battery aging
+
+        virtual_number_of_full_charge_cycles = (
+            self.battery_config.charge_in_kwh
+            / self.battery_config.custom_battery_capacity_generic_in_kilowatt_hour
+        )
+        # virtual_number_of_full_discharge_cycles = self.battery_config.discharge_in_kwh / self.battery_config.custom_battery_capacity_generic_in_kilowatt_hour
+
+        return virtual_number_of_full_charge_cycles, self.battery_config.lifetime_in_cycles
 
 
 @dataclass

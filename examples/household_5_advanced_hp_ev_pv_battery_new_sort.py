@@ -1,20 +1,11 @@
-"""  Household example with advanced heat pump, electric car, PV. """
+"""  Household example with advanced heat pump, electric car, PV and battery. Only Source_weights are different to household_4. """
 
 # clean
 
 from typing import List, Optional, Any
 from os import listdir
 from pathlib import Path
-from dataclasses import dataclass
-from dataclasses_json import dataclass_json
-from utspclient.helpers.lpgdata import (
-    ChargingStationSets,
-    Households,
-    TransportationDeviceSets,
-    TravelRouteSets,
-    EnergyIntensityType,
-)
-from hisim.system_setup_configuration import SystemSetupConfigBase
+
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
@@ -28,12 +19,14 @@ from hisim.components import controller_l1_heatpump
 from hisim.components import generic_hot_water_storage_modular
 from hisim.components import electricity_meter
 from hisim.components import generic_pv_system
+from hisim.components import advanced_battery_bslib
 from hisim.components import advanced_ev_battery_bslib
 from hisim.components import controller_l1_generic_ev_charge
 from hisim.components import controller_l2_energy_management_system
 from hisim import utils
 from hisim import loadtypes as lt
 from examples.modular_example import cleanup_old_lpg_requests
+from examples.household_5_advanced_hp_ev_pv_battery import HouseholdAdvancedHpEvPvBatteryConfig
 
 __authors__ = "Markus Blasberg"
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
@@ -44,179 +37,10 @@ __maintainer__ = "Markus Blasberg"
 __status__ = "development"
 
 
-@dataclass_json
-@dataclass
-class HouseholdAdvancedHPEvPvConfig(SystemSetupConfigBase):
-
-    """Configuration for with advanced heat pump, electric car, PV."""
-
-    building_type: str
-    number_of_apartments: int
-    # dhw_controlable: bool  # if dhw is controlled by EMS
-    # heatpump_controlable: bool  # if heatpump is controlled by EMS
-    surplus_control: bool  # decision on the consideration of smart control for heat pump and dhw, increase storage temperatures
-    surplus_control_building_temperature_modifier: bool  # increase set_room_temperature in case of surplus electricity
-    surplus_control_car: bool  # decision on the consideration of smart control for EV charging
-    # simulation_parameters: SimulationParameters
-    # total_base_area_in_m2: float
-    occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig
-    pv_config: generic_pv_system.PVSystemConfig
-    building_config: building.BuildingConfig
-    hds_controller_config: heat_distribution_system.HeatDistributionControllerConfig
-    hds_config: heat_distribution_system.HeatDistributionConfig
-    hp_controller_config: advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config
-    hp_config: advanced_heat_pump_hplib.HeatPumpHplibConfig
-    simple_hot_water_storage_config: simple_hot_water_storage.SimpleHotWaterStorageConfig
-    dhw_heatpump_config: generic_heat_pump_modular.HeatPumpConfig
-    dhw_heatpump_controller_config: controller_l1_heatpump.L1HeatPumpConfig
-    dhw_storage_config: generic_hot_water_storage_modular.StorageConfig
-    car_config: generic_car.CarConfig
-    car_battery_config: advanced_ev_battery_bslib.CarBatteryConfig
-    car_battery_controller_config: controller_l1_generic_ev_charge.ChargingStationConfig
-    electricity_meter_config: electricity_meter.ElectricityMeterConfig
-    electricity_controller_config: controller_l2_energy_management_system.EMSConfig
-
-    @classmethod
-    def get_default(cls):
-        """Get default HouseholdAdvancedHPEvPvConfig."""
-
-        charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
-        charging_power = float(
-            (charging_station_set.Name or "").split("with ")[1].split(" kW")[0]
-        )
-        heating_reference_temperature_in_celsius: float = -7
-        set_heating_threshold_outside_temperature_in_celsius: float = 16.0
-
-        building_config = (
-            building.BuildingConfig.get_default_german_single_family_home()
-        )
-        my_building_information = building.BuildingInformation(config=building_config)
-
-        household_config = HouseholdAdvancedHPEvPvConfig(
-            building_type="blub",
-            number_of_apartments=my_building_information.number_of_apartments,
-            # dhw_controlable=False,
-            # heatpump_controlable=False,
-            surplus_control=False,
-            surplus_control_building_temperature_modifier=False,
-            surplus_control_car=False,
-            # simulation_parameters=SimulationParameters.one_day_only(2022),
-            # total_base_area_in_m2=121.2,
-            occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-                url="http://134.94.131.167:443/api/v1/profilerequest",
-                api_key="OrjpZY93BcNWw8lKaMp0BEchbCc",
-                household=Households.CHR01_Couple_both_at_Work,
-                energy_intensity=EnergyIntensityType.EnergySaving,
-                result_path=utils.HISIMPATH["results"],
-                travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
-                transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
-                charging_station_set=charging_station_set,
-                name="UTSPConnector",
-                consumption=0.0,
-                profile_with_washing_machine_and_dishwasher=True,
-                predictive_control=False,
-            ),
-            pv_config=generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-                rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
-            ),
-            building_config=building_config,
-            hds_controller_config=(
-                heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
-            ),
-            hds_config=(
-                heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
-                )
-            ),
-            hp_controller_config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(),
-            hp_config=(
-                advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt)
-            ),
-            simple_hot_water_storage_config=(
-                simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt)
-            ),
-            dhw_heatpump_config=(
-                generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
-                    number_of_apartments=my_building_information.number_of_apartments
-                )
-            ),
-            dhw_heatpump_controller_config=controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-                name="DHWHeatpumpController"
-            ),
-            dhw_storage_config=(
-                generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
-                    number_of_apartments=my_building_information.number_of_apartments
-                )
-            ),
-            car_config=generic_car.CarConfig.get_default_ev_config(),
-            car_battery_config=advanced_ev_battery_bslib.CarBatteryConfig.get_default_config(),
-            car_battery_controller_config=(
-                controller_l1_generic_ev_charge.ChargingStationConfig.get_default_config(
-                    charging_station_set=charging_station_set
-                )
-            ),
-            electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
-            electricity_controller_config=(
-                controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
-            ),
-        )
-        # adjust HeatPump
-        household_config.hp_config.group_id = 1  # use modulating heatpump as default
-        household_config.hp_controller_config.mode = (
-            2  # use heating and cooling as default
-        )
-        # household_config.hp_config.set_thermal_output_power_in_watt = (
-        #     6000  # default value leads to switching on-off very often
-        # )
-        household_config.hp_config.minimum_idle_time_in_seconds = (
-            900  # default value leads to switching on-off very often
-        )
-        household_config.hp_config.minimum_running_time_in_seconds = (
-            900  # default value leads to switching on-off very often
-        )
-
-        # set same heating threshold
-        household_config.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
-            set_heating_threshold_outside_temperature_in_celsius
-        )
-        household_config.hp_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
-            set_heating_threshold_outside_temperature_in_celsius
-        )
-
-        # set same heating reference temperature
-        household_config.hds_controller_config.heating_reference_temperature_in_celsius = (
-            heating_reference_temperature_in_celsius
-        )
-        household_config.hp_config.heating_reference_temperature_in_celsius = (
-            heating_reference_temperature_in_celsius
-        )
-        household_config.building_config.heating_reference_temperature_in_celsius = (
-            heating_reference_temperature_in_celsius
-        )
-
-        household_config.hp_config.flow_temperature_in_celsius = 21  # Todo: check value
-
-        # set dhw storage volume, because default(volume = 230) leads to an error
-        household_config.dhw_storage_config.volume = 250
-
-        # set charging power from battery and controller to same value, to reduce error in simulation of battery
-        household_config.car_battery_config.p_inv_custom = charging_power * 1e3
-
-        if household_config.surplus_control_car:
-            # lower threshold for soc of car battery in clever case. This enables more surplus charging
-            household_config.car_battery_controller_config.battery_set = 0.4
-        else:
-            household_config.car_battery_controller_config.battery_set = 1.0
-
-        return household_config
-
-
-def household_4_advanced_hp_ev_pv(
+def household_5_advanced_hp_ev_pv_battery_new_sort(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
-    """Example with advanced hp and EV and PV.
+    """Example with advanced hp and EV and PV and battery.
 
     This setup function emulates a household with some basic components. Here the residents have their
     electricity and heating needs covered by a the advanced heat pump.
@@ -236,7 +60,8 @@ def household_4_advanced_hp_ev_pv(
 
         - DHW (Heatpump, Heatpumpcontroller, Storage; copied from modular_example)
         - Car (Electric Vehicle, Electric Vehicle Battery, Electric Vehicle Battery Controller)
-        - EMS (necessary for Electric Vehicle)
+        - Battery
+        - EMS (necessary for Battery and Electric Vehicle)
     """
 
     # cleanup old lpg requests, mandatory to change number of cars
@@ -244,15 +69,15 @@ def household_4_advanced_hp_ev_pv(
     if Path(utils.HISIMPATH["utsp_results"]).exists():
         cleanup_old_lpg_requests()
 
-    # my_config = utils.create_configuration(my_sim, HouseholdAdvancedHPEvPvConfig)
+    # my_config = utils.create_configuration(my_sim, HouseholdAdvancedHpEvPvBatteryConfig)
 
     # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
     if my_sim.my_module_config_path:
-        my_config = HouseholdAdvancedHPEvPvConfig.load_from_json(
+        my_config = HouseholdAdvancedHpEvPvBatteryConfig.load_from_json(
             my_sim.my_module_config_path
         )
     else:
-        my_config = HouseholdAdvancedHPEvPvConfig.get_default()
+        my_config = HouseholdAdvancedHpEvPvBatteryConfig.get_default()
     # =================================================================================================================================
     # Set System Parameters
 
@@ -429,6 +254,12 @@ def household_4_advanced_hp_ev_pv(
         )
     )
 
+    # Build Battery
+    my_advanced_battery = advanced_battery_bslib.Battery(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.advanced_battery_config,
+    )
+
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
 
@@ -509,7 +340,7 @@ def household_4_advanced_hp_ev_pv(
                     lt.InandOutputType.ELECTRICITY_REAL,
                 ],
                 # source_weight=car_battery.source_weight,
-                source_weight=1,
+                source_weight=4,
             )
 
             electricity_target = my_electricity_controller.add_component_output(
@@ -519,7 +350,7 @@ def household_4_advanced_hp_ev_pv(
                     lt.InandOutputType.ELECTRICITY_TARGET,
                 ],
                 # source_weight=car_battery_controller.source_weight,
-                source_weight=1,
+                source_weight=4,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 output_description="Target Electricity for EV Battery Controller. ",
@@ -570,7 +401,7 @@ def household_4_advanced_hp_ev_pv(
                 lt.InandOutputType.ELECTRICITY_REAL,
             ],
             # source_weight=my_dhw_heatpump_config.source_weight,
-            source_weight=2,
+            source_weight=3,
         )
 
         my_electricity_controller.add_component_output(
@@ -580,7 +411,7 @@ def household_4_advanced_hp_ev_pv(
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
             # source_weight=my_domnestic_hot_water_heatpump.config.source_weight,
-            source_weight=2,
+            source_weight=3,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for dhw heat pump.",
@@ -613,7 +444,7 @@ def household_4_advanced_hp_ev_pv(
                 lt.ComponentType.HEAT_PUMP_BUILDING,
                 lt.InandOutputType.ELECTRICITY_REAL,
             ],
-            source_weight=3,
+            source_weight=2,
         )
 
         my_electricity_controller.add_component_output(
@@ -622,7 +453,7 @@ def household_4_advanced_hp_ev_pv(
                 lt.ComponentType.HEAT_PUMP_BUILDING,
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
-            source_weight=3,
+            source_weight=2,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for Heat Pump. ",
@@ -661,6 +492,37 @@ def household_4_advanced_hp_ev_pv(
         source_weight=999,
     )
 
+    # connect EMS with Battery
+    my_electricity_controller.add_component_input_and_connect(
+        source_component_class=my_advanced_battery,
+        source_component_output=my_advanced_battery.AcBatteryPower,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_REAL],
+        source_weight=1,
+    )
+
+    electricity_to_or_from_battery_target = (
+        my_electricity_controller.add_component_output(
+            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+            source_tags=[
+                lt.ComponentType.BATTERY,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_weight=1,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for Battery Control. ",
+        )
+    )
+
+    # -----------------------------------------------------------------------------------------------------------------
+    # Connect Battery
+    my_advanced_battery.connect_dynamic_input(
+        input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
+        src_object=electricity_to_or_from_battery_target,
+    )
+
     # -----------------------------------------------------------------------------------------------------------------
     # connect Electricity Meter
     my_electricity_meter.add_component_input_and_connect(
@@ -687,6 +549,7 @@ def household_4_advanced_hp_ev_pv(
     my_sim.add_component(my_domnestic_hot_water_heatpump_controller)
     my_sim.add_component(my_domnestic_hot_water_heatpump)
     my_sim.add_component(my_electricity_meter)
+    my_sim.add_component(my_advanced_battery)
     my_sim.add_component(my_electricity_controller)
     for car in my_cars:
         my_sim.add_component(car)

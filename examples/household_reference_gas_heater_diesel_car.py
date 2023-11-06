@@ -14,7 +14,7 @@ from utspclient.helpers.lpgdata import (
     TravelRouteSets,
     EnergyIntensityType,
 )
-
+from hisim.system_setup_configuration import SystemSetupConfigBase
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
@@ -28,10 +28,8 @@ from hisim.components import generic_heat_pump_modular
 from hisim.components import controller_l1_heatpump
 from hisim.components import generic_hot_water_storage_modular
 from hisim.components import electricity_meter
-from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim import utils
 from hisim import loadtypes as lt
-from hisim import log
 from examples.modular_example import cleanup_old_lpg_requests
 
 __authors__ = "Markus Blasberg"
@@ -45,7 +43,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class ReferenceHouseholdConfig:
+class ReferenceHouseholdConfig(SystemSetupConfigBase):
 
     """Configuration for ReferenceHosuehold."""
 
@@ -70,9 +68,6 @@ class ReferenceHouseholdConfig:
     def get_default(cls):
         """Get default HouseholdPVConfig."""
 
-        # set number of apartments (mandatory for dhw storage config)
-        number_of_apartments = 1
-
         heating_reference_temperature_in_celsius: float = -7
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0
 
@@ -83,7 +78,7 @@ class ReferenceHouseholdConfig:
 
         household_config = ReferenceHouseholdConfig(
             building_type="blub",
-            number_of_apartments=number_of_apartments,
+            number_of_apartments=my_building_information.number_of_apartments,
             # simulation_parameters=SimulationParameters.one_day_only(2022),
             # total_base_area_in_m2=121.2,
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
@@ -110,20 +105,29 @@ class ReferenceHouseholdConfig:
                 )
             ),
             gasheater_controller_config=(
-                controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config.get_default_generic_gas_heater_controller_config()
+                controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config.get_scaled_generic_gas_heater_controller_config(
+                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+                )
             ),
-            gasheater_config=generic_gas_heater.GenericGasHeaterConfig.get_default_gasheater_config(),
+            gasheater_config=generic_gas_heater.GenericGasHeaterConfig.get_scaled_gasheater_config(
+                heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+            ),
             simple_hot_water_storage_config=(
-                simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
+                simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
+                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt)
             ),
             dhw_heatpump_config=(
-                generic_heat_pump_modular.HeatPumpConfig.get_default_config_waterheating()
+                generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
+                    number_of_apartments=my_building_information.number_of_apartments
+                )
             ),
             dhw_heatpump_controller_config=controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
                 name="DHWHeatpumpController"
             ),
             dhw_storage_config=(
-                generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler()
+                generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
+                    number_of_apartments=my_building_information.number_of_apartments
+                )
             ),
             car_config=generic_car.CarConfig.get_default_diesel_config(),
             electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
@@ -180,22 +184,16 @@ def household_reference_gas_heater_diesel_car(
     if Path(utils.HISIMPATH["utsp_results"]).exists():
         cleanup_old_lpg_requests()
 
-    config_filename = "household_reference_gas_heater_diesel_car.json"
+    # my_config = utils.create_configuration(my_sim, ReferenceHouseholdConfig)
 
-    my_config: ReferenceHouseholdConfig
-    if Path(config_filename).is_file():
-        with open(config_filename, encoding="utf8") as system_config_file:
-            my_config = ReferenceHouseholdConfig.from_json(system_config_file.read())  # type: ignore
-        log.information(f"Read system config from {config_filename}")
+    # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
+    if my_sim.my_module_config_path:
+        my_config = ReferenceHouseholdConfig.load_from_json(
+            my_sim.my_module_config_path
+        )
     else:
         my_config = ReferenceHouseholdConfig.get_default()
-
-        # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
-        # my_config_json = my_config.to_json()
-        # with open(config_filename, "w", encoding="utf8") as system_config_file:
-        #     system_config_file.write(my_config_json)
-
-    # =================================================================================================================================
+    # =================================================================================
     # Set System Parameters
 
     # Set Simulation Parameters
@@ -265,17 +263,6 @@ def household_reference_gas_heater_diesel_car(
 
     # Build DHW
     my_dhw_heatpump_config = my_config.dhw_heatpump_config
-    my_dhw_heatpump_config.power_th = (
-        my_occupancy.max_hot_water_demand
-        * (4180 / 3600)
-        * 0.5
-        * (3600 / my_simulation_parameters.seconds_per_timestep)
-        * (
-            HouseholdWarmWaterDemandConfig.ww_temperature_demand
-            - HouseholdWarmWaterDemandConfig.freshwater_temperature
-        )
-    )
-
     my_dhw_heatpump_controller_config = my_config.dhw_heatpump_controller_config
 
     my_dhw_storage_config = my_config.dhw_storage_config

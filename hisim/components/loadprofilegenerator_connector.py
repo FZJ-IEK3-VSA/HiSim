@@ -1,14 +1,14 @@
 """LoadProfile Generator Connector Module."""
-
+# clean
 # Generic/Built-in
 import json
 from typing import Any, Tuple
 from os import path, makedirs
+import datetime as dt
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import pandas as pd
-import datetime as dt
-import numpy as np
+
 
 # Owned
 from hisim import component as cp
@@ -31,6 +31,9 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class OccupancyConfig(cp.ConfigBase):
+
+    """Occupancy config class."""
+
     @classmethod
     def get_main_classname(cls):
         """Returns the fully qualified class name for the class that is getting configured. Used for Json."""
@@ -45,7 +48,8 @@ class OccupancyConfig(cp.ConfigBase):
     predictive_control: bool
 
     @classmethod
-    def get_default_CHS01(cls) -> Any:
+    def get_default_chr01_couple_both_at_work(cls) -> Any:
+        """Get default config of occupancy config class."""
         config = OccupancyConfig(
             name="Occupancy_1",
             profile_name="CHR01 Couple both at Work",
@@ -58,9 +62,10 @@ class OccupancyConfig(cp.ConfigBase):
         return config
 
     @classmethod
-    def get_scaled_CHS01_according_to_number_of_apartments(
+    def get_scaled_chr01_according_to_number_of_apartments(
         cls, number_of_apartments: float
     ) -> Any:
+        """Get default config and scale according to number of apartments of the building."""
         config = OccupancyConfig(
             name="Occupancy_1",
             profile_name="CHR01 Couple both at Work",
@@ -115,22 +120,21 @@ class OccupancyConfig(cp.ConfigBase):
 
 class Occupancy(cp.Component):
 
-    """
-    Class component that provides heating generated, the electricity consumed by the residents.
+    """Class component that provides heating generated, the electricity consumed by the residents.
 
     Data provided or based on LPG exports.
 
     Parameters
-    -----------------------------------------------
+    ----------
     profile: string
         profile code corresponded to the family or residents configuration
 
     ComponentInputs:
-    -----------------------------------------------
+    ----------------
        None
 
     ComponentOutputs:
-    -----------------------------------------------
+    -----------------
        Number of Residents: Any
        Heating by Residents: W
        Electricity Consumption: kWh
@@ -163,6 +167,7 @@ class Occupancy(cp.Component):
     def __init__(
         self, my_simulation_parameters: SimulationParameters, config: OccupancyConfig
     ) -> None:
+        """Initialize the class."""
         super().__init__(
             name="Occupancy",
             my_simulation_parameters=my_simulation_parameters,
@@ -215,14 +220,14 @@ class Occupancy(cp.Component):
         # self.energy_discharged: cp.ComponentOutput = self.add_output(self.ComponentName, self.EnergyDischarged, lt.LoadTypes.WarmWater, lt.Units.Watt)
         # self.demand_satisfied: cp.ComponentOutput = self.add_output(self.ComponentName, self.DemandSatisfied, lt.LoadTypes.WarmWater, lt.Units.Any)
 
-        self.number_of_residentsC: cp.ComponentOutput = self.add_output(
+        self.number_of_residents_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.NumberByResidents,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
             output_description=f"here a description for {self.NumberByResidents} will follow.",
         )
-        self.heating_by_residentsC: cp.ComponentOutput = self.add_output(
+        self.heating_by_residents_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.HeatingByResidents,
             lt.LoadTypes.HEATING,
@@ -236,7 +241,7 @@ class Occupancy(cp.Component):
             lt.Units.WATT,
             output_description="Inner device heat gains, which heat the building (not intentionally)",
         )
-        self.electricity_outputC: cp.ComponentOutput = self.add_output(
+        self.electricity_output_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ElectricityOutput,
             load_type=lt.LoadTypes.ELECTRICITY,
@@ -247,7 +252,7 @@ class Occupancy(cp.Component):
             output_description=f"here a description for Occupancy {self.ElectricityOutput} will follow.",
         )
 
-        self.water_consumptionC: cp.ComponentOutput = self.add_output(
+        self.water_consumption_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.WaterConsumption,
             lt.LoadTypes.WARM_WATER,
@@ -256,9 +261,11 @@ class Occupancy(cp.Component):
         )
 
     def i_save_state(self) -> None:
+        """Saves the state."""
         pass
 
     def i_restore_state(self) -> None:
+        """Restores the state."""
         pass
 
     def i_prepare_simulation(self) -> None:
@@ -266,11 +273,13 @@ class Occupancy(cp.Component):
         pass
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        """Doublechecks."""
         pass
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Simulates the component."""
         # if self.ww_mass_input.source_output is not None:
         # ww demand
         # ww_temperature_demand = HouseholdWarmWaterDemandConfig.ww_temperature_demand
@@ -325,13 +334,13 @@ class Occupancy(cp.Component):
         # stsv.set_output_value(self.demand_satisfied, demand_satisfied)  # stsv.set_output_value(self.energy_discharged, energy_discharged)
 
         stsv.set_output_value(
-            self.number_of_residentsC,
+            self.number_of_residents_channel,
             self.number_of_residents[timestep]
             * self.scaling_factor_according_to_number_of_apartments,
         )
 
         stsv.set_output_value(
-            self.heating_by_residentsC,
+            self.heating_by_residents_channel,
             self.heating_by_residents[timestep]
             * self.scaling_factor_according_to_number_of_apartments,
         )
@@ -341,12 +350,12 @@ class Occupancy(cp.Component):
             * self.scaling_factor_according_to_number_of_apartments,
         )
         stsv.set_output_value(
-            self.electricity_outputC,
+            self.electricity_output_channel,
             self.electricity_consumption[timestep]
             * self.scaling_factor_according_to_number_of_apartments,
         )
         stsv.set_output_value(
-            self.water_consumptionC,
+            self.water_consumption_channel,
             self.water_consumption[timestep]
             * self.scaling_factor_according_to_number_of_apartments,
         )
@@ -383,7 +392,9 @@ class Occupancy(cp.Component):
 
     def build(self):
         """Loads relevant consumption data (electricity consumption, hot water consumption and activity profiles of persons).
-        Also does the averaging to the desired time resolution conversion to the output format desired."""
+
+        Also does the averaging to the desired time resolution conversion to the output format desired.
+        """
         file_exists, cache_filepath = utils.get_cache_file(
             component_key=self.component_name,
             parameter_class=self.occupancy_config,
@@ -392,8 +403,8 @@ class Occupancy(cp.Component):
 
         # create directories to put in files for cars and smart devices
         for tag in ["utsp_reports", "utsp_results"]:
-            isExist = path.exists(utils.HISIMPATH[tag])
-            if not isExist:
+            is_exist = path.exists(utils.HISIMPATH[tag])
+            if not is_exist:
                 # Create a new directory because it does not exist
                 makedirs(utils.HISIMPATH[tag])
 
@@ -543,26 +554,26 @@ class Occupancy(cp.Component):
             if minutes_per_timestep > 1:
                 # power needs averaging, not sum
                 self.electricity_consumption = [
-                    sum(self.electricity_consumption[n : n + minutes_per_timestep])
+                    sum(self.electricity_consumption[n: n + minutes_per_timestep])
                     / minutes_per_timestep
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.heating_by_devices = [
-                    sum(self.heating_by_devices[n : n + minutes_per_timestep])
+                    sum(self.heating_by_devices[n: n + minutes_per_timestep])
                     / minutes_per_timestep
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.water_consumption = [
-                    sum(self.water_consumption[n : n + minutes_per_timestep])
+                    sum(self.water_consumption[n: n + minutes_per_timestep])
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.heating_by_residents = [
-                    sum(self.heating_by_residents[n : n + minutes_per_timestep])
+                    sum(self.heating_by_residents[n: n + minutes_per_timestep])
                     / minutes_per_timestep
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.number_of_residents = [
-                    sum(self.number_of_residents[n : n + minutes_per_timestep])
+                    sum(self.number_of_residents[n: n + minutes_per_timestep])
                     / minutes_per_timestep
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
@@ -583,8 +594,8 @@ class Occupancy(cp.Component):
 
         if self.occupancy_config.predictive:
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.heating_by_residents_yearly_forecast,
-                entry=self.heating_by_residents
+                key=SingletonDictKeyEnum.HEATINGBYRESIDENTSYEARLYFORECAST,
+                entry=self.heating_by_residents,
             )
 
         self.max_hot_water_demand = max(self.water_consumption)

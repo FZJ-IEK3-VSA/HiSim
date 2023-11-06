@@ -1,5 +1,7 @@
 """ Battery implementation built upon the bslib library. It contains a Battery Class together with its Configuration and State. """
 
+# clean
+
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from typing import List, Tuple
 from dataclasses import dataclass
@@ -33,6 +35,7 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class BatteryConfig(ConfigBase):
+
     """Battery Configuration."""
 
     @classmethod
@@ -119,7 +122,9 @@ class BatteryConfig(ConfigBase):
 
 
 class Battery(Component):
-    """
+
+    """Battery class.
+
     Simulate state of charge and realized power of a ac coupled battery
     storage system with the bslib library. Relevant simulation parameters
     are loaded within the init for a specific or generic battery type.
@@ -139,9 +144,7 @@ class Battery(Component):
     def __init__(
         self, my_simulation_parameters: SimulationParameters, config: BatteryConfig
     ):
-        """
-        Loads the parameters of the specified battery storage.
-        """
+        """Loads the parameters of the specified battery storage."""
         self.battery_config = config
         super().__init__(
             name=self.battery_config.name
@@ -214,12 +217,15 @@ class Battery(Component):
         )
 
     def i_save_state(self) -> None:
+        """Saves the state."""
         self.previous_state = self.state.clone()
 
     def i_restore_state(self) -> None:
+        """Restores the state."""
         self.state = self.previous_state.clone()
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
+        """Doublechecks."""
         pass
 
     def i_prepare_simulation(self) -> None:
@@ -229,6 +235,7 @@ class Battery(Component):
     def i_simulate(
         self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Simulates the component."""
         # Parameters
         time_increment_in_seconds = self.my_simulation_parameters.seconds_per_timestep
 
@@ -257,6 +264,7 @@ class Battery(Component):
         self.state.state_of_charge = state_of_charge
 
     def write_to_report(self) -> List[str]:
+        """Write to report."""
         return self.battery_config.get_string_dict()
 
     @staticmethod
@@ -327,9 +335,12 @@ class Battery(Component):
 
 @dataclass
 class BatteryState:
+
+    """Battery state class."""
+
     #: state of charge of the battery
     state_of_charge: float = 0
 
     def clone(self):
-        "Creates a copy of the Battery State."
+        """Creates a copy of the Battery State."""
         return BatteryState(state_of_charge=self.state_of_charge)

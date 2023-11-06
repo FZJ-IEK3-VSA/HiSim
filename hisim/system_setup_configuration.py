@@ -1,8 +1,11 @@
-import json
-from typing_extensions import Self
+"""System setup configuration module."""
 
+# clean
+
+import json
 from dataclasses import dataclass
 from dataclass_wizard import JSONWizard
+from typing_extensions import Self
 
 from hisim import log, utils
 from hisim.components import building
@@ -10,6 +13,7 @@ from hisim.components import building
 
 @dataclass
 class SystemSetupConfigBase(JSONWizard):
+
     """Base class for system setup."""
 
     @classmethod
@@ -49,8 +53,10 @@ class SystemSetupConfigBase(JSONWizard):
 
     @classmethod
     def get_default(cls) -> Self:
+        """Get default."""
         raise NotImplementedError
 
     @classmethod
     def get_scaled_default(cls, building_config: building.BuildingConfig) -> Self:
+        """Get scaled default."""
         raise NotImplementedError

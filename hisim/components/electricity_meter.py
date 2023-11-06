@@ -252,11 +252,13 @@ class ElectricityMeter(DynamicComponent):
             self.electricity_from_grid, electricity_from_grid_in_watt_hour
         )
         stsv.set_output_value(
-            self.electricity_consumption_channel, consumption_uncontrolled_in_watt_hour,
+            self.electricity_consumption_channel,
+            consumption_uncontrolled_in_watt_hour,
         )
 
         stsv.set_output_value(
-            self.electricity_production_channel, production_in_watt_hour,
+            self.electricity_production_channel,
+            production_in_watt_hour,
         )
 
         stsv.set_output_value(
@@ -277,7 +279,9 @@ class ElectricityMeter(DynamicComponent):
         )
 
     def get_cost_opex(
-        self, all_outputs: List, postprocessing_results: pd.DataFrame,
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
         for index, output in enumerate(all_outputs):
@@ -285,14 +289,18 @@ class ElectricityMeter(DynamicComponent):
                 if output.field_name == self.ElectricityToGrid:
                     # Todo: check component name from examples: find another way of using the correct outputs
                     self.config.total_energy_to_grid_in_kwh = round(
-                        postprocessing_results.iloc[:, index].sum() * 1e-3, 1,
+                        postprocessing_results.iloc[:, index].sum() * 1e-3,
+                        1,
                     )
                 elif output.field_name == self.ElectricityFromGrid:
                     self.config.total_energy_from_grid_in_kwh = round(
-                        postprocessing_results.iloc[:, index].sum() * 1e-3, 1,
+                        postprocessing_results.iloc[:, index].sum() * 1e-3,
+                        1,
                     )
-        emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
-            self.my_simulation_parameters.year
+        emissions_and_cost_factors = (
+            EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
+                self.my_simulation_parameters.year
+            )
         )
         co2_per_unit = emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh
         euro_per_unit = emissions_and_cost_factors.electricity_costs_in_euro_per_kwh
@@ -324,7 +332,9 @@ class ElectricityMeterState:
     cumulative_production_in_watt_hour: float
     cumulative_consumption_in_watt_hour: float
 
-    def self_copy(self,):
+    def self_copy(
+        self,
+    ):
         """Copy the ElectricityMeterState."""
         return ElectricityMeterState(
             self.cumulative_production_in_watt_hour,

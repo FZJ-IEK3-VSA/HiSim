@@ -441,8 +441,12 @@ class PyAmChartGenerator:
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
         x_data = list(OrderedSet(list(filtered_data.time)))
-
-        year = filtered_data.time.values[0].split("-")[0]
+        if filtered_data.time.values[0] is not None:
+            year = filtered_data.time.values[0].split("-")[0]
+        else:
+            raise ValueError(
+                "year could not be determined because time value of filtered data was None."
+            )
 
         x_data_transformed = np.asarray(x_data, dtype="datetime64[D]")
 

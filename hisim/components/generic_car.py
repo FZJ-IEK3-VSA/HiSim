@@ -2,6 +2,7 @@
 
 Evaluates diesel or electricity consumption based on driven kilometers and processes Car Location for charging stations.
 """
+# clean
 
 # -*- coding: utf-8 -*-
 from typing import List, Any, Tuple
@@ -12,7 +13,6 @@ import json
 from dataclasses_json import dataclass_json
 
 import pandas as pd
-import numpy as np
 
 from hisim import component as cp
 from hisim import loadtypes as lt
@@ -370,13 +370,13 @@ class Car(cp.Component):
                         sum(
                             meters_driven[
                                 i
-                                * minutes_per_timestep : (i + 1)
+                                * minutes_per_timestep: (i + 1)
                                 * minutes_per_timestep
                             ]
                         )
                     )  # sum
                     location_list = car_location[
-                        i * minutes_per_timestep : (i + 1) * minutes_per_timestep
+                        i * minutes_per_timestep: (i + 1) * minutes_per_timestep
                     ]  # extract list
                     occurence_count = most_frequent(
                         input_list=location_list

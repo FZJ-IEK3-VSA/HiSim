@@ -1,20 +1,21 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Thu Jul 21 10:08:01 2022
+"""Test for H2 storage.
 
+Created on Thu Jul 21 10:08:01 2022.
 @author: Johanna
 """
+# -*- coding: utf-8 -*-
 import pytest
-from hisim import component as cp
 from tests import functions_for_testing as fft
-from hisim import loadtypes as lt
+from hisim import component as cp
 
+from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.components import generic_hydrogen_storage
 
 
 @pytest.mark.base
 def test_chp_system():
+    """Test chp system."""
 
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(

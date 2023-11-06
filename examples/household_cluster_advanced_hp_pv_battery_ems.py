@@ -205,7 +205,7 @@ def household_cluster_advanced_hp_pv_battery_ems(
     )
 
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_CHS01_according_to_number_of_apartments(
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_chr01_according_to_number_of_apartments(
         number_of_apartments=my_building_information.number_of_apartments
     )
 
@@ -215,7 +215,7 @@ def household_cluster_advanced_hp_pv_battery_ems(
 
     # Build Weather
     my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.Aachen
+        location_entry=weather.LocationEnum.AACHEN
     )
 
     my_weather = weather.Weather(
@@ -223,7 +223,7 @@ def household_cluster_advanced_hp_pv_battery_ems(
     )
 
     # Build PV
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_PV_system(
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
         rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
     )
     my_photovoltaic_system_config.azimuth = azimuth

@@ -182,7 +182,7 @@ class L1GenericRuntimeController(cp.Component):
             cp.ComponentConnection(
                 L1GenericRuntimeController.L2DeviceSignal,
                 controller_classname,
-                controller_l2_generic_heat_clever_simple.L2HeatSmartController.l2_DeviceSignal,
+                controller_l2_generic_heat_clever_simple.L2HeatSmartController.L2DeviceSignal,
             )
         )
         return connections

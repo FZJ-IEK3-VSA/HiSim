@@ -60,7 +60,7 @@ def test_building():
 
     # Set Weather
     my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.Aachen
+        location_entry=weather.LocationEnum.AACHEN
     )
     my_weather = weather.Weather(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
@@ -84,7 +84,7 @@ def test_building():
 
     # Set Occupancy
     my_occupancy_config = (
-        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+        loadprofilegenerator_connector.OccupancyConfig.get_default_chr01_couple_both_at_work()
     )
     my_occupancy = loadprofilegenerator_connector.Occupancy(
         config=my_occupancy_config,
@@ -113,12 +113,12 @@ def test_building():
     )
     my_residence.altitude_channel.source_output = my_weather.altitude_output
     my_residence.azimuth_channel.source_output = my_weather.azimuth_output
-    my_residence.direct_normal_irradiance_channel.source_output = my_weather.DNI_output
+    my_residence.direct_normal_irradiance_channel.source_output = my_weather.dni_output
     my_residence.direct_horizontal_irradiance_channel.source_output = (
-        my_weather.DHI_output
+        my_weather.dhi_output
     )
     my_residence.occupancy_heat_gain_channel.source_output = (
-        my_occupancy.heating_by_residentsC
+        my_occupancy.heating_by_residents_channel
     )
     my_residence.thermal_power_delivered_channel.source_output = (
         thermal_power_delivered_output

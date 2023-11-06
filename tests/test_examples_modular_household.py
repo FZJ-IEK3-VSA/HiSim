@@ -1,3 +1,5 @@
+"""Test for example modular housheold."""
+
 import pytest
 
 from hisim import utils

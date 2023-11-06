@@ -239,7 +239,7 @@ def household_1_advanced_hp_diesel_car(
 
     # Build Weather
     my_weather = weather.Weather(
-        config=weather.WeatherConfig.get_default(weather.LocationEnum.Aachen),
+        config=weather.WeatherConfig.get_default(weather.LocationEnum.AACHEN),
         my_simulation_parameters=my_simulation_parameters,
     )
 

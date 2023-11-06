@@ -719,22 +719,22 @@ class Building(dynamic_component.DynamicComponent):
             #     key=SingletonDictKeyEnum.Weather_Altitude_yearly_forecast
             # )
             azimuth_forecast = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.Weather_Azimuth_yearly_forecast
+                key=SingletonDictKeyEnum.WEATHERAZIMUTHYEARLYFORECAST
             )
             apparent_zenith_forecast = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.Weather_ApparentZenith_yearly_forecast
+                key=SingletonDictKeyEnum.WEATHERAPPARENTZENITHYEARLYFORECAST
             )
             direct_horizontal_irradiance_forecast = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.Weather_DiffuseHorizontalIrradiance_yearly_forecast
+                key=SingletonDictKeyEnum.WEATHERDIFFUSEHORIZONTALIRRADIANCEYEARLYFORECAST
             )
             direct_normal_irradiance_forecast = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.Weather_DirectNormalIrradiance_yearly_forecast
+                key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEYEARLYFORECAST
             )
             direct_normal_irradiance_extra_forecast = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.Weather_DirectNormalIrradianceExtra_yearly_forecast
+                key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST
             )
             global_horizontal_irradiance_forecast = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.Weather_GlobalHorizontalIrradiance_yearly_forecast
+                key=SingletonDictKeyEnum.WEATHERGLOBALHORIZONTALIRRADIANCEYEARLYFORECAST
             )
 
             solar_gains_forecast = []
@@ -758,7 +758,7 @@ class Building(dynamic_component.DynamicComponent):
 
             # get internal gains forecast
             internal_gains_forecast = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.heating_by_residents_yearly_forecast
+                key=SingletonDictKeyEnum.HEATINGBYRESIDENTSYEARLYFORECAST
             )
 
             # compute the forecast of phi_ia phi_st and phi_m
@@ -776,15 +776,15 @@ class Building(dynamic_component.DynamicComponent):
 
             # disturbance forecast for model predictive control
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.Heat_flux_thermal_mass_node_forecast,
+                key=SingletonDictKeyEnum.HEATFLUXTHERMALMASSNODEFORECAST,
                 entry=phi_m_forecast,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.Heat_flux_surface_node_forecast,
+                key=SingletonDictKeyEnum.HEATFLUXSURFACENODEFORECAST,
                 entry=phi_st_forecast,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.Heat_flux_indoor_air_node_forecast,
+                key=SingletonDictKeyEnum.HEATFLUXINDOORAIRNODEFORECAST,
                 entry=phi_ia_forecast,
             )
 
@@ -830,27 +830,27 @@ class Building(dynamic_component.DynamicComponent):
         # send building parameters 5r1c to PID controller and to the MPC controller to generate an equivalent state space model
         # state space represntation is used for tuning of the pid and as a prediction model in the model predictive controller
         SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_glazing,
+            key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING,
             entry=self.transmission_heat_transfer_coeff_windows_and_door_in_watt_per_kelvin,
         )
         SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.Thermal_transmission_Surface_IndoorAir,
+            key=SingletonDictKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR,
             entry=self.heat_transfer_coeff_indoor_air_and_internal_surface_in_watt_per_kelvin,
         )
         SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_opaque_em,
+            key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM,
             entry=self.external_part_of_transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin,
         )
         SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_opaque_ms,
+            key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS,
             entry=self.internal_part_of_transmission_heat_transfer_coeff_opaque_elements_in_watt_per_kelvin,
         )
         SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.Thermal_transmission_coefficient_ventillation,
+            key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION,
             entry=self.thermal_conductance_by_ventilation_in_watt_per_kelvin,
         )
         SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.Thermal_capacity_envelope,
+            key=SingletonDictKeyEnum.THERMALCAPACITYENVELOPE,
             entry=self.my_building_information.thermal_capacity_of_building_thermal_mass_in_joule_per_kelvin,
         )
 

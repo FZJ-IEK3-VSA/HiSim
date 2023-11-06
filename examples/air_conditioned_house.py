@@ -264,7 +264,7 @@ def household_air_conditioner_generic(
     my_building_information = my_building.my_building_information
 
     """ Occupancy Profile """
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_CHS01_according_to_number_of_apartments(
+    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_chr01_according_to_number_of_apartments(
         number_of_apartments=my_building_information.number_of_apartments,
     )
     my_occupancy_config.predictive_control = predictive_control
@@ -278,7 +278,7 @@ def household_air_conditioner_generic(
 
     """Weather"""
     my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.Seville
+        location_entry=weather.LocationEnum.SEVILLE
     )
     my_weather_config.predictive_control = predictive_control
 

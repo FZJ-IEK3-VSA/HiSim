@@ -3,7 +3,7 @@
 import pytest
 from tests import functions_for_testing as fft
 from hisim import component as cp
-from hisim.components import controller_l1_generic_electrolyzer
+from hisim.components import controller_l1_electrolyzer_h2
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
@@ -31,16 +31,17 @@ def test_electrolyzer_controller():
     # Setup Electrolyzer
 
     my_controller_config = (
-        controller_l1_generic_electrolyzer.ElectrolyzerControllerConfig(
+        controller_l1_electrolyzer_h2.ElectrolyzerControllerConfig(
             name=name,
             nom_load=nom_load,
             min_load=min_load,
             max_load=max_load,
             warm_start_time=warm_start_time,
             cold_start_time=cold_start_time,
+            standby_load=5.0
         )
     )
-    my_controller = controller_l1_generic_electrolyzer.ElectrolyzerController(
+    my_controller = controller_l1_electrolyzer_h2.ElectrolyzerController(
         config=my_controller_config, my_simulation_parameters=my_simulation_parameters
     )
 

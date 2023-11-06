@@ -1,8 +1,8 @@
 {
     "Electrolyzer variants": {
-        "KumaTec - PEM-40-100": {
+        "KumaTecPEM40100": {
             "electrolyzer_type": "PEM",
-            "name": "KumaTec - PEM-40-100",
+            "name": "KumaTecPEM40100",
             "nom_load": 10.0,
             "min_load": 100.0,
             "max_load": 110.0,
@@ -16,19 +16,19 @@
             "ramp_up_rate": 0.01,
             "ramp_down_rate": 0.2
         },
-        "McPhy - McLyzer 200": {
+        "McPhyMcLyzer20030": {
             "electrolyzer_type": "Alkaline",
-            "name": "McPhy - McLyzer 200",
-            "nom_load": 1000.0,
-            "min_load": 200.0,
-            "max_load": 1020.0,
-            "standby_load": null,
-            "spec_el_demand": 5.1,
-            "nom_h2_flow_rate": 200.0,
-            "faraday_eff": 1.0,
-            "i_cell_nom": 0.3,
+            "name": "McPhyMcLyzer20030",
+            "nom_load": 930.0,
+            "min_load": 218.366,
+            "max_load": 998.366,
+            "standby_load": 68.366,
+            "spec_el_demand": 4.55,
+            "nom_h2_flow_rate": 17.976,
+            "faraday_eff": 0.95,
+            "i_cell_nom": 0.35,
             "warm_start_time": 30.0,
-            "cold_start_time": 3000.0,
+            "cold_start_time": 900.0,
             "ramp_up_rate": 0.05,
             "ramp_down_rate": 0.2
         },
@@ -47,6 +47,22 @@
             "cold_start_time": 1200.0,
             "ramp_up_rate": 0.05,
             "ramp_down_rate": 0.2
+        },
+        "HTecME450": {
+            "electrolyzer_type": "PEM",
+            "name": "HTecME450",
+            "nom_load": 987.0,
+            "min_load": 205.462,
+            "max_load": 1028.225,
+            "standby_load": 41.225,
+            "spec_el_demand": 4.7,
+            "nom_h2_flow_rate": 18.875,
+            "faraday_eff": 0.999,
+            "i_cell_nom": 2.0,
+            "warm_start_time": 30.0,
+            "cold_start_time": 600.0,
+            "ramp_up_rate": 0.03,
+            "ramp_down_rate": 0.25
         },
         "NEL - MC250": {
             "electrolyzer_type": "PEM",
@@ -80,25 +96,25 @@
             "ramp_up_rate": 0.15,
             "ramp_down_rate": 0.16
         },
-        "elogen - E4000": {
+        "KYROS50": {
             "electrolyzer_type": "PEM",
-            "name": "elogen - E4000",
-            "nom_load": 20000.0,
-            "min_load": 1000.0,
-            "max_load": 20000.0,
-            "standby_load": null,
-            "spec_el_demand": 5.1,
-            "nom_h2_flow_rate": 4000.0,
-            "faraday_eff": 0.95,
-            "i_cell_nom": 1.5,
-            "warm_start_time": 480.0,
+            "name": "KYROS50",
+            "nom_load": 50.0,
+            "min_load": 13.928,
+            "max_load": 59.914,
+            "standby_load": 9.914,
+            "spec_el_demand": 4.8,
+            "nom_h2_flow_rate": 0.8,
+            "faraday_eff": 0.999,
+            "i_cell_nom": 2.0,
+            "warm_start_time": 15.0,
             "cold_start_time": 1200.0,
-            "ramp_up_rate": 0.15,
-            "ramp_down_rate": 0.16
+            "ramp_up_rate": 0.25,
+            "ramp_down_rate": 0.25
         },
-        "Sunfire - HYLINK SOEC": {
-            "electrolyzer_type": "Solid-Oxide",
-            "name": "Sunfire - HYLINK SOEC",
+        "SunfireHYLINKSOEC": {
+            "electrolyzer_type": "SolidOxide",
+            "name": "SunfireHYLINKSOEC",
             "nom_load": 2475.0,
             "min_load": 135.0,
             "max_load": 2475.0,
@@ -111,6 +127,22 @@
             "cold_start_time": 36000.0,
             "ramp_up_rate": null,
             "ramp_down_rate": null
+        },
+        "FuelCellEnergySOEC": {
+            "electrolyzer_type": "SolidOxide",
+            "name": "FuelCellEnergySOEC",
+            "nom_load": 985.0,
+            "min_load": 55.0,
+            "max_load": 1040.0,
+            "standby_load": 50.0,
+            "spec_el_demand": 43.8,
+            "nom_h2_flow_rate": 25.0,
+            "faraday_eff": 1.0,
+            "i_cell_nom": 1.5,
+            "warm_start_time": 900.0,
+            "cold_start_time": 5400.0,
+            "ramp_up_rate": 0.167,
+            "ramp_down_rate": 0.167
         }
     }
 }

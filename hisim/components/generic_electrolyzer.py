@@ -1,11 +1,10 @@
-# -*- coding: utf-8 -*-
 """Simple implementation of an electrolyzer.
 
-The electrolyzer can moderate in a certain range,but the efficiency changes only linarly.
-Recovery heat is not considered so far."""
+The electrolyzer can moderate in a certain range,but the efficiency changes only
+linarly. Recovery heat is not considered so far.
+"""
 
 from dataclasses import dataclass
-
 from typing import List
 
 from dataclasses_json import dataclass_json
@@ -13,8 +12,8 @@ from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import log
-from hisim.simulationparameters import SimulationParameters
 from hisim.components import controller_l1_electrolyzer
+from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -29,6 +28,9 @@ __status__ = ""
 @dataclass_json
 @dataclass
 class GenericElectrolyzerConfig(cp.ConfigBase):
+
+    """Generic electrolyzer config."""
+
     #: name of the electrolyer
     name: str
     #: priority of the component in hierachy: the higher the number the lower the priority
@@ -57,33 +59,36 @@ class GenericElectrolyzerConfig(cp.ConfigBase):
 
 
 class ElectrolyzerState:
-    """This data class saves the state of the electrolyzer."""
+
+    """Saves the state of the electrolyzer."""
 
     def __init__(self, hydrogen: float = 0, electricity: float = 0):
+        """Initialize an instance."""
         self.hydrogen = hydrogen
         self.electricity = electricity
 
     def clone(self) -> "ElectrolyzerState":
+        """Return a second instance of this class with same attributes."""
         return ElectrolyzerState(hydrogen=self.hydrogen, electricity=self.electricity)
 
 
 class GenericElectrolyzer(cp.Component):
-    """
-    The electrolyzer converts electrical energy [kWh] into hydrogen [kg]
-    It can work in a certain range from x to 100% or be switched off = 0%
-    The conversion rate is given by the supplier and is directly used
-        maybe a change to efficiency can be made but its just making things more complex with no benefit
-    Between the given values, the values are calculated by an interpolation.
-        --> If the load curve is linear a fixed factor could be calculated.
 
-    Therefore it has an operational state
-    All the min values and  all the max values are connected and the electrolyzer can operate between them.
+    """Generic electrolyzer component.
 
-    The waste energy in electolyzers is not used to provide heat for the households demand
-    Output pressure may be used in the future.
+    The electrolyzer converts electrical energy [kWh] into hydrogen [kg]. It can
+    work in a certain range from x to 100% or be switched off = 0%. The
+    conversion rate is given by the supplier and is directly used. Maybe a
+    change to efficiency can be made but its just making things more complex
+    with no benefit. Between the given values, the values are calculated by an
+    interpolation. If the load curve is linear a fixed factor could be
+    calculated. Therefore it has an operational state. All the min values and
+    all the max values are connected and the electrolyzer can operate between
+    them. The waste energy in electolyzers is not used to provide heat for the
+    households demand. Output pressure may be used in the future.
 
-    Components to connect to:
-    (1) Electrolyzer controller (controller_l1_electrolyzer)
+    Components to connect to: (1) Electrolyzer controller (controller_l1_electrolyzer).
+
     """
 
     # Inputs
@@ -98,6 +103,7 @@ class GenericElectrolyzer(cp.Component):
         my_simulation_parameters: SimulationParameters,
         config: GenericElectrolyzerConfig,
     ):
+        """Initialize an instance."""
 
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
@@ -137,25 +143,19 @@ class GenericElectrolyzer(cp.Component):
             ],
             output_description="Electricity Output",
         )
-        self.add_default_connections(
-            self.get_default_connections_from_L1GenericElectrolyzerController()
-        )
+        self.add_default_connections(self.get_default_connections_from_l1_generic_electrolyzer_controller())
 
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""
         pass
 
-    def get_default_connections_from_L1GenericElectrolyzerController(
+    def get_default_connections_from_l1_generic_electrolyzer_controller(
         self,
     ) -> List[cp.ComponentConnection]:
         """Sets default connections of the controller in the Electroylzer."""
-        log.information(
-            "setting controller default connections in generic electrolyzer"
-        )
+        log.information("setting controller default connections in generic electrolyzer")
         connections: List[cp.ComponentConnection] = []
-        controller_classname = (
-            controller_l1_electrolyzer.L1GenericElectrolyzerController.get_classname()
-        )
+        controller_classname = controller_l1_electrolyzer.L1GenericElectrolyzerController.get_classname()
         connections.append(
             cp.ComponentConnection(
                 GenericElectrolyzer.AvailableElectricity,
@@ -166,18 +166,20 @@ class GenericElectrolyzer(cp.Component):
         return connections
 
     def i_save_state(self) -> None:
+        """Save state."""
         self.previous_state = self.state.clone()
 
     def i_restore_state(self) -> None:
+        """Restore state."""
         self.state = self.previous_state.clone()
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        """Doublecheck."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
+        """Simulate."""
         if force_convergence:
             pass
 
@@ -197,10 +199,7 @@ class GenericElectrolyzer(cp.Component):
             hydrogen_output_in_kg_per_sec = 0.0
         else:
             hydrogen_output_in_kg_per_sec = self.config.min_hydrogen_production_rate + (
-                (
-                    self.config.max_hydrogen_production_rate
-                    - self.config.min_hydrogen_production_rate
-                )
+                (self.config.max_hydrogen_production_rate - self.config.min_hydrogen_production_rate)
                 * (self.state.electricity - self.config.min_power)
                 / (self.config.max_power - self.config.min_power)
             )

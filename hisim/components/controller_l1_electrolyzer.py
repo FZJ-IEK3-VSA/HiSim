@@ -1,14 +1,14 @@
-"""Controller of a simple electrolyzer
+"""Controller of the generic_electrolyzer.
 
 The controller looks at the available surplus electricity and passes the signal to the electrolyzer accordingly.
-In addition the controller takes care of minimum operation and indle times and the available capacity in the hydrogen storage."""
-
+In addition the controller takes care of minimum operation and indle times and the available capacity in the hydrogen storage.
+"""
+# clean
 from dataclasses import dataclass
 from typing import List
-
-from hisim import utils
 from dataclasses_json import dataclass_json
 
+from hisim import utils
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import log
@@ -18,7 +18,8 @@ from hisim.simulationparameters import SimulationParameters
 
 @dataclass_json
 @dataclass
-class L1ElectrolyzerConfig(cp.ConfigBase):
+class L1ElectrolyzerControllerConfig(cp.ConfigBase):
+
     """Electrolyzer Controller Config."""
 
     #: name of the device
@@ -30,26 +31,27 @@ class L1ElectrolyzerConfig(cp.ConfigBase):
     # minimal resting time of heat source
     min_idle_time_in_seconds: int
     #: minimal electrical power of the electrolyzer
-    P_min_electrolyzer: float
+    p_min_electrolyzer: float
     #: maximal allowed content of hydrogen storage for turning the electrolyzer on
     h2_soc_threshold: float
 
     @staticmethod
-    def get_default_config() -> "L1ElectrolyzerConfig":
+    def get_default_config() -> "L1ElectrolyzerControllerConfig":
         """Returns the default configuration of an electrolyzer controller."""
-        config = L1ElectrolyzerConfig(
+        config = L1ElectrolyzerControllerConfig(
             name="L1 Electrolyzer Controller",
             source_weight=1,
             min_operation_time_in_seconds=14400,
             min_idle_time_in_seconds=7200,
-            P_min_electrolyzer=1200,
+            p_min_electrolyzer=1200,
             h2_soc_threshold=96,
         )
         return config
 
 
 class L1ElectrolyzerControllerState:
-    """This data class saves the state of the electrolyzer controller."""
+
+    """Data class for saving the state of the electrolyzer controller."""
 
     def __init__(
         self,
@@ -57,11 +59,13 @@ class L1ElectrolyzerControllerState:
         activation_time_step: int = 0,
         deactivation_time_step: int = 0,
     ):
+        """Initialize the class."""
         self.state: int = state
         self.activation_time_step: int = activation_time_step
         self.deactivation_time_step: int = deactivation_time_step
 
     def clone(self) -> "L1ElectrolyzerControllerState":
+        """Clone function."""
         return L1ElectrolyzerControllerState(
             state=self.state,
             activation_time_step=self.activation_time_step,
@@ -82,6 +86,7 @@ class L1ElectrolyzerControllerState:
 
 
 class L1GenericElectrolyzerController(cp.Component):
+
     """Controller of the Electrolyzer.
 
     It takes the available surplus electricity of the energy management system and passes it to the electrolyzer.
@@ -106,8 +111,9 @@ class L1GenericElectrolyzerController(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: L1ElectrolyzerConfig,
+        config: L1ElectrolyzerControllerConfig,
     ) -> None:
+        """Initialize the class."""
 
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
@@ -176,17 +182,21 @@ class L1GenericElectrolyzerController(cp.Component):
         pass
 
     def i_save_state(self) -> None:
+        """Save the state."""
         self.previous_state = self.state.clone()
 
     def i_restore_state(self) -> None:
+        """Restore the state."""
         self.state = self.previous_state.clone()
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        """Doublechecks."""
         pass
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Simulate the component."""
 
         if force_convergence:
             electricity_target = stsv.get_input_value(self.electricity_target_channel)
@@ -200,9 +210,9 @@ class L1GenericElectrolyzerController(cp.Component):
         # minimum power of electrolyzer fulfilled when running
         if (
             self.state.state == 1
-            and electricity_target < self.config.P_min_electrolyzer
+            and electricity_target < self.config.p_min_electrolyzer
         ):
-            electricity_target = self.config.P_min_electrolyzer
+            electricity_target = self.config.p_min_electrolyzer
         stsv.set_output_value(
             self.available_electicity_output_channel,
             self.state.state * electricity_target,
@@ -211,6 +221,7 @@ class L1GenericElectrolyzerController(cp.Component):
     def calculate_state(
         self, timestep: int, electricity_target: float, h2_soc: float
     ) -> None:
+        """Calculate the state."""
         # return device on if minimum operation time is not fulfilled and device was on in previous state
         if (
             self.state.state == 1
@@ -229,7 +240,7 @@ class L1GenericElectrolyzerController(cp.Component):
             return
 
         # available electricity too low or hydrogen storage too full
-        if (electricity_target < self.config.P_min_electrolyzer) or (
+        if (electricity_target < self.config.p_min_electrolyzer) or (
             h2_soc > self.config.h2_soc_threshold
         ):
             self.state.deactivate(timestep)

@@ -206,8 +206,6 @@ def decentralized_energy_netw_pv_h2sys_hp(my_sim: Any, my_simulation_parameters:
             temperature_air_cooling_in_celsius=24.0,
             offset=0.5,
             mode=hp_mode,
-            maintenance_cost_as_percentage_of_investment=0.0,
-            consumption=0,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )

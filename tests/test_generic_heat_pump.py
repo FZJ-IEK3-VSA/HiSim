@@ -2,8 +2,8 @@
 import pytest
 
 from hisim import component as cp
-from hisim.components import generic_heat_pump
 from hisim import loadtypes as lt
+from hisim.components import generic_heat_pump
 from hisim.simulationparameters import SimulationParameters
 
 
@@ -12,9 +12,7 @@ def test_generic_heat_pump():
     """Test generic heat pump."""
 
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(
-        2017, seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.one_day_only(2017, seconds_per_timestep)
     # Heat Pump
     manufacturer = "Viessmann Werke GmbH & Co KG"
     heat_pump_name = "Vitocal 300-A AWO-AC 301.B07"
@@ -63,9 +61,7 @@ def test_generic_heat_pump():
         lt.Units.WATT,
     )
 
-    t_m_output = cp.ComponentOutput(
-        "FakeHouse", "TemperatureMean", lt.LoadTypes.TEMPERATURE, lt.Units.WATT
-    )
+    t_m_output = cp.ComponentOutput("FakeHouse", "TemperatureMean", lt.LoadTypes.TEMPERATURE, lt.Units.WATT)
 
     my_heat_pump_controller.temperature_mean_channel.source_output = t_m_output
     my_heat_pump.temperature_outside_channel.source_output = t_air_outdoor_output

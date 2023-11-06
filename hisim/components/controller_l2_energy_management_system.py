@@ -272,13 +272,14 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             getattr(self, inputs[i].source_component_class) for i in sortindex
         ]
         self.outputs_sorted = []
-        for ind in range(len(source_weights)):  # noqa
+
+        for ind, source_weight in enumerate(source_weights):
             output = self.get_dynamic_output(
                 tags=[
                     self.components_sorted[ind],
                     lt.InandOutputType.ELECTRICITY_TARGET,
                 ],
-                weight_counter=source_weights[ind],
+                weight_counter=source_weight,
             )
             if output is not None:
                 self.outputs_sorted.append(output)
@@ -294,6 +295,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.consumption_ems_controlled_inputs = self.get_dynamic_inputs(
             tags=[lt.InandOutputType.ELECTRICITY_REAL]
         )
+        print([elem.field_name for elem in self.consumption_ems_controlled_inputs])
 
     def write_to_report(self):
         """Writes relevant information to report."""
@@ -373,9 +375,15 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     self.simple_hot_water_storage_temperature_modifier, 0
                 )
                 stsv.set_output_value(output=output, value=deltademand)
+        elif component_type == lt.ComponentType.ELECTROLYZER:
+            if deltademand > 0:
+                stsv.set_output_value(output=output, value=deltademand)
+                deltademand = deltademand + previous_signal
+            else:
+                stsv.set_output_value(output=output, value=0)
 
         elif component_type in [
-            lt.ComponentType.ELECTROLYZER,
+            # lt.ComponentType.ELECTROLYZER,
             lt.ComponentType.SMART_DEVICE,
             lt.ComponentType.CAR_BATTERY,
         ]:
@@ -393,9 +401,10 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         stsv: cp.SingleTimeStepValues,
     ) -> None:
         """Evaluates available suplus electricity component by component, iteratively, and sends updated signals back."""
-        for ind in range(len(self.inputs_sorted)):  # noqa
+
+        for ind, input_sorted in enumerate(self.inputs_sorted):
             component_type = self.components_sorted[ind]
-            single_input = self.inputs_sorted[ind]
+            single_input = input_sorted
             output = self.outputs_sorted[ind]
 
             delta_demand = self.control_electricity_component_iterative(

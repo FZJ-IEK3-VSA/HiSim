@@ -30,7 +30,7 @@ def test_chp_system():
         config=my_electrolyzer_config, my_simulation_parameters=my_simulation_parameters
     )
     my_electrolyzer_controller_config = (
-        controller_l1_electrolyzer.L1ElectrolyzerConfig.get_default_config()
+        controller_l1_electrolyzer.L1ElectrolyzerControllerConfig.get_default_config()
     )
     my_electrolyzer_controller = (
         controller_l1_electrolyzer.L1GenericElectrolyzerController(

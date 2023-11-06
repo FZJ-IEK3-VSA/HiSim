@@ -11,6 +11,7 @@ from utspclient.helpers.lpgdata import (
     Households,
     TransportationDeviceSets,
     TravelRouteSets,
+    EnergyIntensityType,
 )
 
 from hisim.simulator import SimulationParameters
@@ -90,6 +91,7 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
                 url="http://134.94.131.167:443/api/v1/profilerequest",
                 api_key="OrjpZY93BcNWw8lKaMp0BEchbCc",
                 household=Households.CHR01_Couple_both_at_Work,
+                energy_intensity=EnergyIntensityType.EnergySaving,
                 result_path=utils.HISIMPATH["results"],
                 travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
                 transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
@@ -239,7 +241,7 @@ def household_1_advanced_hp_diesel_car(
 
     # Build Weather
     my_weather = weather.Weather(
-        config=weather.WeatherConfig.get_default(weather.LocationEnum.Aachen),
+        config=weather.WeatherConfig.get_default(weather.LocationEnum.AACHEN),
         my_simulation_parameters=my_simulation_parameters,
     )
 

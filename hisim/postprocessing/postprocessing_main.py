@@ -3,7 +3,7 @@
 import os
 import sys
 import copy
-from typing import Any, Optional, List, Dict
+from typing import Any, Optional, List, Dict, Tuple
 from timeit import default_timer as timer
 import string
 
@@ -240,7 +240,7 @@ class PostProcessor:
             occupancy_config = None
             for elem in ppdt.wrapped_components:
                 if isinstance(elem.my_component, building.Building):
-                    building_data = elem.my_component.buildingdata
+                    building_data = elem.my_component.my_building_information.buildingdata
                 elif isinstance(
                     elem.my_component, loadprofilegenerator_connector.Occupancy
                 ):
@@ -692,7 +692,9 @@ class PostProcessor:
             report=report,
             table_as_list_of_list=capex_compute_return,
             headline=". Investment Cost and CO2-Emissions of devices for simulated period",
-            comment=["Here a comment on calculation of numbers will follow"],
+            comment=[
+                "Values for Battery are calculated with lifetime in cycles instead of lifetime in years"
+            ],
         )
 
     def write_new_chapter_with_text_content_to_report(
@@ -961,7 +963,7 @@ class PostProcessor:
 
     def get_variable_name_and_unit_from_ppdt_results_column(
         self, column: str
-    ) -> tuple[str, str]:
+    ) -> Tuple[str, str]:
         """Get variable name and unit for pyam dictionary."""
 
         column_splitted = str(

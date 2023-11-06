@@ -102,7 +102,9 @@ def building_temperature_control(
     )
 
 
-def get_heatpump_cycles(results: pd.DataFrame,) -> float:
+def get_heatpump_cycles(
+    results: pd.DataFrame,
+) -> float:
     """Get the number of cycles of the heat pump for the simulated period."""
     number_of_cycles = 0
     for column in results.columns:

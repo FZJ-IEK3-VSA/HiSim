@@ -1,4 +1,7 @@
 """ Contains a component that uses the UTSP to provide LoadProfileGenerator data. """
+
+# clean
+
 import datetime
 import errno
 import io
@@ -23,6 +26,7 @@ from utspclient.helpers.lpgdata import (
     LoadTypes,
     TransportationDeviceSets,
     TravelRouteSets,
+    EnergyIntensityType,
 )
 from utspclient.helpers.lpgpythonbindings import CalcOption, JsonReference
 
@@ -46,6 +50,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     api_key: str
     household: Union[JsonReference, List[JsonReference]]
     result_path: str
+    energy_intensity: EnergyIntensityType
     travel_route_set: JsonReference
     transportation_device_set: JsonReference
     charging_station_set: JsonReference
@@ -68,6 +73,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
             api_key="",
             household=Households.CHR01_Couple_both_at_Work,
             result_path=os.path.join(utils.get_input_directory(), "lpg_profiles"),
+            energy_intensity=EnergyIntensityType.EnergySaving,
             travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
             transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
             charging_station_set=ChargingStationSets.Charging_At_Home_with_03_7_kW,
@@ -527,6 +533,7 @@ class UtspLpgConnector(cp.Component):
                 self.cache_results(
                     saved_files=saved_files, cache_filepath=cache_filepath
                 )
+
 
     def write_to_report(self):
         """Adds a report entry for this component."""

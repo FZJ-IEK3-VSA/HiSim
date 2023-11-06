@@ -1,9 +1,12 @@
+"""PV system module."""
+
+# clean
+
 # Generic/Built-in
 import datetime
 import math
 import os
 from dataclasses import dataclass
-from functools import lru_cache
 from typing import Any, List, Tuple, Optional
 
 import numpy as np
@@ -34,7 +37,8 @@ __status__ = "development"
 The functions cited in this module are at some degree based on the tsib project:
 
 [tsib-kotzur]:
-Kotzur, Leander, Detlef Stolten, and Hermann-Josef Wagner. Future grid load of the residential building sector. No. RWTH-2018-231872. Lehrstuhl für Brennstoffzellen (FZ Jülich), 2019.
+Kotzur, Leander, Detlef Stolten, and Hermann-Josef Wagner.
+Future grid load of the residential building sector. No. RWTH-2018-231872. Lehrstuhl für Brennstoffzellen (FZ Jülich), 2019.
 ID: http://hdl.handle.net/2128/21115
     http://nbn-resolving.org/resolver?verb=redirect&identifier=urn:nbn:de:0001-2019020614
 
@@ -43,12 +47,12 @@ https://github.com/FZJ-IEK3-VSA/tsib
 """
 
 
-def simPhotovoltaicFast(
+def simphotovoltaicfast(
     temperature_model: Any,
     dni_extra: Any,
-    DNI: Any,
-    DHI: Any,
-    GHI: Any,
+    dni: Any,
+    dhi: Any,
+    ghi: Any,
     azimuth: Any,
     apparent_zenith: Any,
     temperature: Any,
@@ -56,8 +60,8 @@ def simPhotovoltaicFast(
     surface_azimuth: float,
     surface_tilt: float,
 ) -> Any:
-    """
-    Simulates a defined PV array with the Sandia PV Array Performance Model.
+    """Simulates a defined PV array with the Sandia PV Array Performance Model.
+
     The implementation is done in accordance with following tutorial:
     https://github.com/pvlib/pvlib-python/blob/master/docs/tutorials/tmy_to_power.ipynb
 
@@ -70,8 +74,30 @@ def simPhotovoltaicFast(
         90 degree east and 270 west.
     losses: float, optional (default: 0.1)
         Losses due to soiling, mismatch, diode connections, dc wiring etc.
+    apparent_zenith: Any
+        Apparent zenith.
+    azimuth: int, float
+        Azimuth.
+    dni: Any
+        direct normal irradiance.
+    ghi: Any
+        global horizontal irradiance.
+    dhi: Any
+        direct horizontal irradiance.
+    dni_extra: Any
+        direct normal irradiance extra.
+    temperature: Any
+        tempertaure.
+    temperature_model: Any
+        temperature model.
+    wind_speed: Any
+        wind_speed.
+
     Returns
-    --------
+    -------
+    pv_dc: Any
+        pv_dc
+
     """
 
     poa_irrad = pvlib.irradiance.get_total_irradiance(
@@ -79,9 +105,9 @@ def simPhotovoltaicFast(
         surface_azimuth,
         apparent_zenith,
         azimuth,
-        DNI,
-        GHI,
-        DHI,
+        dni,
+        ghi,
+        dhi,
         dni_extra,
     )
 
@@ -101,12 +127,12 @@ def simPhotovoltaicFast(
     return pv_dc
 
 
-def simPhotovoltaicSimple(
+def simphotovoltaicsimple(
     temperature_model,
     dni_extra=None,
-    DNI=None,
-    DHI=None,
-    GHI=None,
+    dni=None,
+    dhi=None,
+    ghi=None,
     azimuth=None,
     apparent_zenith=None,
     temperature=None,
@@ -115,8 +141,8 @@ def simPhotovoltaicSimple(
     surface_azimuth=180,
     albedo=0.2,
 ):
-    """
-    Simulates a defined PV array with the Sandia PV Array Performance Model.
+    r"""Simulates a defined PV array with the Sandia PV Array Performance Model.
+
     The implementation is done in accordance with following tutorial:
     https://github.com/pvlib/pvlib-python/blob/master/docs/tutorials/tmy_to_power.ipynb
 
@@ -145,10 +171,32 @@ def simPhotovoltaicSimple(
         If an inverter shall be added to the simulation, providing the photovoltaic output after the inverter.
     inverter_name: str, optional (default: 'ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_')
         Type of inverter.
+    apparent_zenith: Any
+        Apparent zenith.
+    azimuth: int, float
+        Azimuth.
+    dni: Any
+        direct normal irradiance.
+    ghi: Any
+        global horizontal irradiance.
+    dhi: Any
+        direct horizontal irradiance.
+    dni_extra: Any
+        direct normal irradiance extra.
+    temperature: Any
+        tempertaure.
+    temperature_model: Any
+        temperature model.
+    wind_speed: Any
+        wind_speed.
 
     Returns
-    --------
+    -------
+    pv_dc: Any
+        pv_dc
+
     """
+
     # automatic pd time series in future pvlib version
     # calculate airmass
     airmass = pvlib.atmosphere.get_relative_airmass(apparent_zenith)
@@ -156,8 +204,8 @@ def simPhotovoltaicSimple(
     poa_sky_diffuse = pvlib.irradiance.perez(
         surface_tilt,
         surface_azimuth,
-        DHI,
-        np.float64(DNI),
+        dhi,
+        np.float64(dni),
         dni_extra,
         apparent_zenith,
         azimuth,
@@ -165,13 +213,13 @@ def simPhotovoltaicSimple(
     )
     # calculate ground diffuse with specified albedo
     poa_ground_diffuse = pvlib.irradiance.get_ground_diffuse(
-        surface_tilt, GHI, albedo=albedo
+        surface_tilt, ghi, albedo=albedo
     )
     # calculate angle of incidence
     aoi = pvlib.irradiance.aoi(surface_tilt, surface_azimuth, apparent_zenith, azimuth)
     # calculate plane of array irradiance
     poa_irrad = pvlib.irradiance.poa_components(
-        aoi, np.float64(DNI), poa_sky_diffuse, poa_ground_diffuse
+        aoi, np.float64(dni), poa_sky_diffuse, poa_ground_diffuse
     )
     # calculate pv cell and module temperature
     # temp_model = pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["sapm"]["open_rack_glass_glass"]
@@ -194,6 +242,9 @@ def simPhotovoltaicSimple(
 @dataclass_json
 @dataclass
 class PVSystemConfig(ConfigBase):
+
+    """PVSystemConfig class."""
+
     @classmethod
     def get_main_classname(cls):
         """Returns the full class name of the base class."""
@@ -225,7 +276,7 @@ class PVSystemConfig(ConfigBase):
     prediction_horizon: Optional[int]
 
     @classmethod
-    def get_default_PV_system(cls) -> "PVSystemConfig":
+    def get_default_pv_system(cls) -> "PVSystemConfig":
         """Gets a default PV system."""
         power = 10e3  # W
         return PVSystemConfig(
@@ -254,7 +305,7 @@ class PVSystemConfig(ConfigBase):
         )
 
     @classmethod
-    def get_scaled_PV_system(
+    def get_scaled_pv_system(
         cls,
         rooftop_area_in_m2: float,
         share_of_maximum_pv_power: float = 1.0,
@@ -324,11 +375,11 @@ class PVSystemConfig(ConfigBase):
 
 
 class PVSystem(cp.Component):
-    """
-    Simulates PV Output based on weather data and peak power.
 
-    Parameters:
-    -----------------------------------------------------
+    """Simulates PV Output based on weather data and peak power.
+
+    Parameters
+    ----------
     time : int, optional
         Simulation timeline. The default is 2019.
     location : str, optional
@@ -373,6 +424,7 @@ class PVSystem(cp.Component):
     def __init__(
         self, my_simulation_parameters: SimulationParameters, config: PVSystemConfig
     ) -> None:
+        """Initialize the class."""
         self.my_simulation_parameters = my_simulation_parameters
         self.pvconfig = config
         self.data: Any
@@ -394,7 +446,7 @@ class PVSystem(cp.Component):
             my_config=config,
         )
 
-        self.t_outC: cp.ComponentInput = self.add_input(
+        self.t_out_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.TemperatureOutside,
             lt.LoadTypes.TEMPERATURE,
@@ -402,7 +454,7 @@ class PVSystem(cp.Component):
             True,
         )
 
-        self.DNIC: cp.ComponentInput = self.add_input(
+        self.dni_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.DirectNormalIrradiance,
             lt.LoadTypes.IRRADIANCE,
@@ -410,7 +462,7 @@ class PVSystem(cp.Component):
             True,
         )
 
-        self.DNIextraC: cp.ComponentInput = self.add_input(
+        self.dni_extra_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.DirectNormalIrradianceExtra,
             lt.LoadTypes.IRRADIANCE,
@@ -418,7 +470,7 @@ class PVSystem(cp.Component):
             True,
         )
 
-        self.DHIC: cp.ComponentInput = self.add_input(
+        self.dhi_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.DiffuseHorizontalIrradiance,
             lt.LoadTypes.IRRADIANCE,
@@ -426,7 +478,7 @@ class PVSystem(cp.Component):
             True,
         )
 
-        self.GHIC: cp.ComponentInput = self.add_input(
+        self.ghi_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.GlobalHorizontalIrradiance,
             lt.LoadTypes.IRRADIANCE,
@@ -434,11 +486,11 @@ class PVSystem(cp.Component):
             True,
         )
 
-        self.azimuthC: cp.ComponentInput = self.add_input(
+        self.azimuth_channel: cp.ComponentInput = self.add_input(
             self.component_name, self.Azimuth, lt.LoadTypes.ANY, lt.Units.DEGREES, True
         )
 
-        self.apparent_zenithC: cp.ComponentInput = self.add_input(
+        self.apparent_zenith_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.ApparentZenith,
             lt.LoadTypes.ANY,
@@ -446,7 +498,7 @@ class PVSystem(cp.Component):
             True,
         )
 
-        self.wind_speedC: cp.ComponentInput = self.add_input(
+        self.wind_speed_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.WindSpeed,
             lt.LoadTypes.SPEED,
@@ -454,7 +506,7 @@ class PVSystem(cp.Component):
             True,
         )
 
-        self.electricity_outputC: cp.ComponentOutput = self.add_output(
+        self.electricity_output_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ElectricityOutput,
             load_type=lt.LoadTypes.ELECTRICITY,
@@ -466,6 +518,7 @@ class PVSystem(cp.Component):
 
     @staticmethod
     def get_default_config(power: float = 10e3, source_weight: int = 1) -> Any:
+        """Get default config."""
         config = PVSystemConfig(
             name="PVSystem",
             time=2019,
@@ -513,6 +566,7 @@ class PVSystem(cp.Component):
         return opex_cost_data_class
 
     def get_default_connections_from_weather(self):
+        """Get default connections from weather."""
         log.information("setting weather default connections")
         connections = []
         weather_classname = Weather.get_classname()
@@ -567,30 +621,33 @@ class PVSystem(cp.Component):
         return connections
 
     def i_restore_state(self):
+        """Restores the state."""
         pass
 
     def write_to_report(self):
+        """Write to the report."""
         return self.pvconfig.get_string_dict()
 
     def i_simulate(
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
+        """Simulate the component."""
 
         if hasattr(self, "output"):
             # if(len(self.output) < timestep)
             #   raise Exception("Somehow the precalculated list of values for the PV system seems to be incorrect. Please delete the cache.")
             stsv.set_output_value(
-                self.electricity_outputC, self.output[timestep] * self.pvconfig.power
+                self.electricity_output_channel, self.output[timestep] * self.pvconfig.power
             )
         else:
-            DNI = stsv.get_input_value(self.DNIC)
-            dni_extra = stsv.get_input_value(self.DNIextraC)
-            DHI = stsv.get_input_value(self.DHIC)
-            GHI = stsv.get_input_value(self.GHIC)
-            azimuth = stsv.get_input_value(self.azimuthC)
-            temperature = stsv.get_input_value(self.t_outC)
-            wind_speed = stsv.get_input_value(self.wind_speedC)
-            apparent_zenith = stsv.get_input_value(self.apparent_zenithC)
+            dni = stsv.get_input_value(self.dni_channel)
+            dni_extra = stsv.get_input_value(self.dni_extra_channel)
+            dhi = stsv.get_input_value(self.dhi_channel)
+            ghi = stsv.get_input_value(self.ghi_channel)
+            azimuth = stsv.get_input_value(self.azimuth_channel)
+            temperature = stsv.get_input_value(self.t_out_channel)
+            wind_speed = stsv.get_input_value(self.wind_speed_channel)
+            apparent_zenith = stsv.get_input_value(self.apparent_zenith_channel)
 
             # ac_power = self.simPhotovoltaic2(dni_extra=dni_extra,
             #                                 DNI=DNI,
@@ -610,12 +667,12 @@ class PVSystem(cp.Component):
             #                                 temperature=temperature,
             #                                 wind_speed=wind_speed)
 
-            ac_power = simPhotovoltaicFast(
+            ac_power = simphotovoltaicfast(
                 temperature_model=self.temp_model,
                 dni_extra=dni_extra,
-                DNI=DNI,
-                DHI=DHI,
-                GHI=GHI,
+                dni=dni,
+                dhi=dhi,
+                ghi=ghi,
                 azimuth=azimuth,
                 apparent_zenith=apparent_zenith,
                 temperature=temperature,
@@ -627,7 +684,7 @@ class PVSystem(cp.Component):
             resultingvalue = ac_power * self.pvconfig.power
             # if you wanted to access the temperature forecast from the weather component:
             # val = self.simulation_repository.get_entry(Weather.Weather_Temperature_Forecast_24h)
-            stsv.set_output_value(self.electricity_outputC, resultingvalue)
+            stsv.set_output_value(self.electricity_output_channel, resultingvalue)
             self.data[timestep] = ac_power
             if timestep + 1 == self.data_length:
                 database = pd.DataFrame(self.data, columns=["output"])
@@ -658,41 +715,43 @@ class PVSystem(cp.Component):
             if timestep == 1:
                 # delete weather data for PV preprocessing from dictionary -> save memory
                 if SingletonSimRepository().exist_entry(
-                    key=SingletonDictKeyEnum.Weather_DirectNormalIrradianceExtra_yearly_forecast
+                    key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST
                 ):
                     SingletonSimRepository().delete_entry(
-                        key=SingletonDictKeyEnum.Weather_DirectNormalIrradianceExtra_yearly_forecast
+                        key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST
                     )
                     SingletonSimRepository().delete_entry(
-                        key=SingletonDictKeyEnum.Weather_DirectNormalIrradiance_yearly_forecast
+                        key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEYEARLYFORECAST
                     )
                     SingletonSimRepository().delete_entry(
-                        key=SingletonDictKeyEnum.Weather_DiffuseHorizontalIrradiance_yearly_forecast
+                        key=SingletonDictKeyEnum.WEATHERDIFFUSEHORIZONTALIRRADIANCEYEARLYFORECAST
                     )
                     SingletonSimRepository().delete_entry(
-                        key=SingletonDictKeyEnum.Weather_GlobalHorizontalIrradiance_yearly_forecast
+                        key=SingletonDictKeyEnum.WEATHERGLOBALHORIZONTALIRRADIANCEYEARLYFORECAST
                     )
                     SingletonSimRepository().delete_entry(
-                        key=SingletonDictKeyEnum.Weather_Azimuth_yearly_forecast
+                        key=SingletonDictKeyEnum.WEATHERAZIMUTHYEARLYFORECAST
                     )
                     SingletonSimRepository().delete_entry(
-                        key=SingletonDictKeyEnum.Weather_ApparentZenith_yearly_forecast
+                        key=SingletonDictKeyEnum.WEATHERAPPARENTZENITHYEARLYFORECAST
                     )
                     SingletonSimRepository().delete_entry(
-                        key=SingletonDictKeyEnum.Weather_TemperatureOutside_yearly_forecast
+                        key=SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST
                     )
                     SingletonSimRepository().delete_entry(
-                        key=SingletonDictKeyEnum.Weather_WindSpeed_yearly_forecast
+                        key=SingletonDictKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST
                     )
 
     def i_save_state(self) -> None:
+        """Saves the state."""
         pass
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues) -> None:
+        """Doublechecks."""
         pass
 
     def i_prepare_simulation(self) -> None:
-        """Prepares the component for the simulation"""
+        """Prepares the component for the simulation."""
         log.information(self.pvconfig.to_json())  # type: ignore
         file_exists, self.cache_filepath = utils.get_cache_file(
             "PVSystem", self.pvconfig, self.my_simulation_parameters
@@ -718,39 +777,39 @@ class PVSystem(cp.Component):
             if self.pvconfig.predictive_control:
                 # get yearly weather data from dictionary
                 dni_extra = SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.Weather_DirectNormalIrradianceExtra_yearly_forecast
+                    key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST
                 )
-                DNI = SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.Weather_DirectNormalIrradiance_yearly_forecast
+                dni = SingletonSimRepository().get_entry(
+                    key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEYEARLYFORECAST
                 )
-                DHI = SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.Weather_DiffuseHorizontalIrradiance_yearly_forecast
+                dhi = SingletonSimRepository().get_entry(
+                    key=SingletonDictKeyEnum.WEATHERDIFFUSEHORIZONTALIRRADIANCEYEARLYFORECAST
                 )
-                GHI = SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.Weather_GlobalHorizontalIrradiance_yearly_forecast
+                ghi = SingletonSimRepository().get_entry(
+                    key=SingletonDictKeyEnum.WEATHERGLOBALHORIZONTALIRRADIANCEYEARLYFORECAST
                 )
                 azimuth = SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.Weather_Azimuth_yearly_forecast
+                    key=SingletonDictKeyEnum.WEATHERAZIMUTHYEARLYFORECAST
                 )
                 apparent_zenith = SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.Weather_ApparentZenith_yearly_forecast
+                    key=SingletonDictKeyEnum.WEATHERAPPARENTZENITHYEARLYFORECAST
                 )
                 temperature = SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.Weather_TemperatureOutside_yearly_forecast
+                    key=SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST
                 )
                 wind_speed = SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.Weather_WindSpeed_yearly_forecast
+                    key=SingletonDictKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST
                 )
 
-                x = []
+                x_simplephotovoltaicfast = []
                 for i in range(self.my_simulation_parameters.timesteps):
-                    x.append(
-                        simPhotovoltaicFast(
+                    x_simplephotovoltaicfast.append(
+                        simphotovoltaicfast(
                             temperature_model=self.temp_model,
                             dni_extra=dni_extra[i],
-                            DNI=DNI[i],
-                            DHI=DHI[i],
-                            GHI=GHI[i],
+                            dni=dni[i],
+                            dhi=dhi[i],
+                            ghi=ghi[i],
                             azimuth=azimuth[i],
                             apparent_zenith=apparent_zenith[i],
                             temperature=temperature[i],
@@ -760,7 +819,7 @@ class PVSystem(cp.Component):
                         )
                     )
 
-                self.output = x
+                self.output = x_simplephotovoltaicfast
 
                 database = pd.DataFrame(self.output, columns=["output"])
 
@@ -770,12 +829,14 @@ class PVSystem(cp.Component):
                 self.data = [0] * self.my_simulation_parameters.timesteps
                 self.data_length = self.my_simulation_parameters.timesteps
 
-        if self.pvconfig.predictive:        
-            pv_forecast_yearly=[self.output[t] * self.pvconfig.power for t in range(self.my_simulation_parameters.timesteps)]
+        if self.pvconfig.predictive:
+            pv_forecast_yearly = [
+                self.output[t] * self.pvconfig.power
+                for t in range(self.my_simulation_parameters.timesteps)
+            ]
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.pv_forecast_yearly,
-                entry=pv_forecast_yearly
-            )                                                                         
+                key=SingletonDictKeyEnum.PVFORECASTYEARLY, entry=pv_forecast_yearly
+            )
 
         self.modules = pd.read_csv(
             os.path.join(utils.HISIMPATH["photovoltaic"]["modules"]),
@@ -806,18 +867,9 @@ class PVSystem(cp.Component):
 
             inverter = self.inverters[self.pvconfig.inverter_name]
             self.inverter = pd.to_numeric(inverter, errors="coerce")
-            # self.power = self.power  # self.module_name =  module_name  # self.inverter_name = inverter_name  # self.integrateInverter = integrateInverter  # self.simPhotovoltaicSimpleJit = simPhotovoltaicSimple
-
-    # def plot(self) -> None:
-    #     # Plots ac_power. One day is represented by 1440 steps.
-    #     # self.ac_power.iloc[0:7200].plot()
-    #     plt.plot(self.data)
-    #     plt.ylabel("Power [W]")
-    #     plt.xlabel("Time")
-    #     plt.show()
 
     def interpolate(self, pd_database: Any, year: Any) -> Any:
-        # firstday = pd.Series([0.0], index=[pd.to_datetime(datetime.datetime(year - 1, 12, 31, 23, 0), utc=True).tz_convert("Europe/Berlin")])
+        """Interpolates."""
         lastday = pd.Series(
             pd_database[-1],
             index=[
@@ -826,17 +878,17 @@ class PVSystem(cp.Component):
                 ).tz_convert("Europe/Berlin")
             ],
         )
-        # pd_database = pd_database.append(firstday)
+
         pd_database = pd_database.append(lastday)
         pd_database = pd_database.sort_index()
         return pd_database.resample("1T").asfreq().interpolate(method="linear").tolist()
 
-    def simPhotovoltaic2(
+    def simphotovoltaic_two(
         self,
         dni_extra=None,
-        DNI=None,
-        DHI=None,
-        GHI=None,
+        dni=None,
+        dhi=None,
+        ghi=None,
         azimuth=None,
         apparent_zenith=None,
         temperature=None,
@@ -845,8 +897,8 @@ class PVSystem(cp.Component):
         surface_azimuth=180,
         albedo=0.2,
     ):
-        """
-        Simulates a defined PV array with the Sandia PV Array Performance Model.
+        r"""Simulates a defined PV array with the Sandia PV Array Performance Model.
+
         The implementation is done in accordance with following tutorial:
         https://github.com/pvlib/pvlib-python/blob/master/docs/tutorials/tmy_to_power.ipynb
 
@@ -875,9 +927,28 @@ class PVSystem(cp.Component):
             If an inverter shall be added to the simulation, providing the photovoltaic output after the inverter.
         inverter_name: str, optional (default: 'ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_')
             Type of inverter.
+        apparent_zenith: Any
+            Apparent zenith.
+        azimuth: int, float
+            Azimuth.
+        dni: Any
+            direct normal irradiance.
+        ghi: Any
+            global horizontal irradiance.
+        dhi: Any
+            direct horizontal irradiance.
+        dni_extra: Any
+            direct normal irradiance extra.
+        temperature: Any
+            tempertaure.
+        wind_speed: Any
+            wind_speed.
 
         Returns
-        --------
+        -------
+        ac_power: Any
+            ac power
+
         """
         # automatic pd time series in future pvlib version
         # calculate airmass
@@ -886,8 +957,8 @@ class PVSystem(cp.Component):
         poa_sky_diffuse = pvlib.irradiance.perez(
             surface_tilt,
             surface_azimuth,
-            DHI,
-            np.float64(DNI),
+            dhi,
+            np.float64(dni),
             dni_extra,
             apparent_zenith,
             azimuth,
@@ -895,7 +966,7 @@ class PVSystem(cp.Component):
         )
         # calculate ground diffuse with specified albedo
         poa_ground_diffuse = pvlib.irradiance.get_ground_diffuse(
-            surface_tilt, GHI, albedo=albedo
+            surface_tilt, ghi, albedo=albedo
         )
         # calculate angle of incidence
         aoi = pvlib.irradiance.aoi(
@@ -903,7 +974,7 @@ class PVSystem(cp.Component):
         )
         # calculate plane of array irradiance
         poa_irrad = pvlib.irradiance.poa_components(
-            aoi, np.float64(DNI), poa_sky_diffuse, poa_ground_diffuse
+            aoi, np.float64(dni), poa_sky_diffuse, poa_ground_diffuse
         )
         # calculate pv cell and module temperature
         # temp_model = pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["sapm"]["open_rack_glass_glass"]
@@ -942,22 +1013,6 @@ class PVSystem(cp.Component):
         if math.isnan(ac_power):  # type: ignore
             raise ValueError("AC power was NAN")
             # ac_power = 0.0
-
-        # ac_power = ac_power * self.time_correction_factor
-        # ac_power = ac_power
-
-        # data = [DHI,
-        #        DNI,
-        #        GHI,
-        #        dni_extra,
-        #        aoi,
-        #        apparent_zenith,
-        #        azimuth,
-        #        airmass,
-        #        wind_speed]
-        # if timestep % 60 == 0 and timestep < 1442:
-        #    log.information(data)
-        #    log.information("Timestep:{} , AcPower: {}".format(timestep, ac_power))
 
         return ac_power
 

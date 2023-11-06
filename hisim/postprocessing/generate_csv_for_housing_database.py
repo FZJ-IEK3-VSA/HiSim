@@ -72,7 +72,6 @@ def compute_seasonal(
             )
         ].sum()
         * factor
-        / 94
     )
     csv_frame_seasonal.loc[index_in_seasonal_frame, "Summer-Night"] = (
         output_night[
@@ -85,7 +84,6 @@ def compute_seasonal(
             )
         ].sum()
         * factor
-        / 94
     )
     csv_frame_seasonal.loc[index_in_seasonal_frame, "Winter-Day"] = (
         output_day[
@@ -95,7 +93,6 @@ def compute_seasonal(
             )
         ].sum()
         * factor
-        / 92
     )
     csv_frame_seasonal.loc[index_in_seasonal_frame, "Winter-Night"] = (
         output_night[
@@ -108,7 +105,6 @@ def compute_seasonal(
             )
         ].sum()
         * factor
-        / 92
     )
     csv_frame_seasonal.loc[index_in_seasonal_frame, "Intermediate-Day"] = (
         output_day[
@@ -122,7 +118,6 @@ def compute_seasonal(
             )
         ].sum()
         * factor
-        / 179
     )
     csv_frame_seasonal.loc[index_in_seasonal_frame, "Intermediate-Night"] = (
         output_night[
@@ -142,7 +137,6 @@ def compute_seasonal(
             )
         ].sum()
         * factor
-        / 179
     )
 
     return csv_frame_seasonal
@@ -218,17 +212,17 @@ def generate_csv_for_database(
     tuples = list(zip(*[device_index, units]))
 
     csv_frame_annual = pd.Series(
-        [0] * len(device_index),
+        [0.0] * len(device_index),
         index=pd.MultiIndex.from_tuples(tuples, names=["Category", "Fuel"]),
     )
     csv_frame_seasonal = pd.DataFrame(
         {
-            "Summer-Day": [0] * (len(device_index) - 10),
-            "Summer-Night": [0] * (len(device_index) - 10),
-            "Winter-Day": [0] * (len(device_index) - 10),
-            "Winter-Night": [0] * (len(device_index) - 10),
-            "Intermediate-Day": [0] * (len(device_index) - 10),
-            "Intermediate-Night": [0] * (len(device_index) - 10),
+            "Summer-Day": [0.0] * (len(device_index) - 10),
+            "Summer-Night": [0.0] * (len(device_index) - 10),
+            "Winter-Day": [0.0] * (len(device_index) - 10),
+            "Winter-Night": [0.0] * (len(device_index) - 10),
+            "Intermediate-Day": [0.0] * (len(device_index) - 10),
+            "Intermediate-Night": [0.0] * (len(device_index) - 10),
         },
         index=pd.MultiIndex.from_tuples(tuples[:-10], names=["Category", "Fuel"]),
     )

@@ -22,3 +22,4 @@ control
 casadi
 plotly
 ordered_set
+typing_extensions

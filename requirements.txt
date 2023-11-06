@@ -15,7 +15,7 @@ psutil
 pydot
 graphviz
 dataclass_wizard
-utspclient
+utspclient==0.1.4.1
 pyam-iamc
 html2image
 control

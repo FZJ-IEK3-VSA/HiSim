@@ -35,30 +35,7 @@ jobs:
         prospector setup.py
         prospector examples/
         prospector tests/
-        prospector hisim/postprocessing/
-        prospector hisim/components/
-
-        prospector hisim/component.py
-        prospector hisim/component_wrapper.py
-        prospector hisim/dynamic_component.py
-        prospector hisim/hisim_main.py
-        prospector hisim/hisim_with_profiler.py
-        prospector hisim/json_executor.py
-        prospector hisim/json_generator.py
-        prospector hisim/loadtypes.py
-        prospector hisim/log.py
-        prospector hisim/postprocessingoptions.py
-        prospector hisim/project_code_overview_generator.py
-        prospector hisim/simulationparameters.py
-        prospector hisim/simulator.py
-        prospector hisim/sim_repository.py
-        prospector hisim/sim_repository_singleton.py
-        prospector hisim/utils.py
-        prospector hisim/system_setup_starter.py
-
-        prospector hisim/modular_household/component_connections.py
-        prospector hisim/modular_household/interface_configs/system_config.py
-
+        prospector hisim/
 
 
 #        # pylint hisim/simulator.py --rcfile=hisim_pylint_config.rc

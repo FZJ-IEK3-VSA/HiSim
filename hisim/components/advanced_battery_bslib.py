@@ -315,7 +315,7 @@ class Battery(Component):
 
     def get_battery_aging_information(
         self,
-    ) -> Tuple[float,float]:
+    ) -> Tuple[float, float]:
         """Calculate battery aging.
 
         This is used to calculate investment costs for battery per simulated period.

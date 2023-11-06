@@ -94,7 +94,7 @@ class HouseholdAdvancedHpEvPvBatteryConfig(SystemSetupConfigBase):
         )
         my_building_information = building.BuildingInformation(config=building_config)
 
-        pv_config = generic_pv_system.PVSystemConfig.get_scaled_PV_system(
+        pv_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
             rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
         )
 

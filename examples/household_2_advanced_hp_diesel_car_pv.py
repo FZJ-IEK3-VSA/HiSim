@@ -104,7 +104,7 @@ class HouseholdAdvancedHPDieselCarPVConfig(SystemSetupConfigBase):
                 profile_with_washing_machine_and_dishwasher=True,
                 predictive_control=False,
             ),
-            pv_config=generic_pv_system.PVSystemConfig.get_scaled_PV_system(
+            pv_config=generic_pv_system.PVSystemConfig.get_scaled_pv_system(
                 rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
             ),
             building_config=building_config,

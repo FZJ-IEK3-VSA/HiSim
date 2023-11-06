@@ -1,25 +1,21 @@
 """Green hydrogen electrolyzer."""
 
-import os
-from typing import List
 import json
+import os
 from dataclasses import dataclass
-from dataclasses_json import dataclass_json
-from scipy.interpolate import interp1d
+from typing import List
+
 import numpy as np
+from dataclasses_json import dataclass_json
 from scipy import interpolate
 
-# Import modules from HiSim
-from hisim.component import (
-    SingleTimeStepValues,
-    ComponentInput,
-    ComponentOutput,
-)
+from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim.simulationparameters import SimulationParameters
 
-from hisim import component as cp
+# Import modules from HiSim
+from hisim.component import ComponentInput, ComponentOutput, SingleTimeStepValues
+from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Franz Oldopp"
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
@@ -33,6 +29,7 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class ElectrolyzerConfig(cp.ConfigBase):
+
     """Configuration of the Electrolyzer."""
 
     @classmethod
@@ -52,7 +49,7 @@ class ElectrolyzerConfig(cp.ConfigBase):
     # H_s_h2 = 33.33 #kWh/kg
 
     @classmethod
-    def get_default_Alkaline_electrolyzer_config(cls):
+    def get_default_alkaline_electrolyzer_config(cls):
         """Gets a default Alkaline Eletrolyzer."""
         config = ElectrolyzerConfig(
             name="Alkaline_electrolyzer",
@@ -131,6 +128,7 @@ class Electrolyzer(cp.Component):
 
     ramp_down_rate : float
         Ramp down rate of the electrolyzer in [% of nom_load/s].
+
     """
 
     # Inputs
@@ -343,10 +341,13 @@ class Electrolyzer(cp.Component):
     def spec_el_stack_demand_and_polarization_data_config(
         electrolyzer_type, nominal_load, h2_flow_rate, faraday_eff, i_cell_nom
     ):
+
         """
+
         Polarization curve data is provided corresponding to the used electrolyzer technology.
         Following this, the auxiliary power of the system and the cell volatge is calculated,
         based on the nominal current density.
+
         """
         # Load data from the JSON file
         data_file = os.path.join(
@@ -363,7 +364,7 @@ class Electrolyzer(cp.Component):
 
         # Extract the x and y data points for the selected technology
         i_cell = data[electrolyzer_type]["i_cell"]
-        U_cell = data[electrolyzer_type]["U_cell"]
+        u_cell = data[electrolyzer_type]["U_cell"]
 
         # constants
         F = 96485  # C/mol
@@ -371,7 +372,7 @@ class Electrolyzer(cp.Component):
 
         # from nom_current_density to aux_power
         spec_el_stack_demand_nom = (
-            faraday_eff * np.array(U_cell) * (2 * F) / std_vol / 1000 / 3600
+            faraday_eff * np.array(u_cell) * (2 * F) / std_vol / 1000 / 3600
         )  # kWh/m³
         spec_el_demand_stack = np.interp(i_cell_nom, i_cell, spec_el_stack_demand_nom)
 
@@ -381,9 +382,9 @@ class Electrolyzer(cp.Component):
         )  # might needs to be set to a constant value
 
         # interpolarization function
-        U_cell_nom = np.interp(i_cell_nom, i_cell, U_cell)  # V
+        U_cell_nom = np.interp(i_cell_nom, i_cell, u_cell)  # V
 
-        return i_cell, U_cell, i_cell_nom, U_cell_nom, aux_power
+        return i_cell, u_cell, i_cell_nom, U_cell_nom, aux_power
 
     def h2_production_rate(
         self,

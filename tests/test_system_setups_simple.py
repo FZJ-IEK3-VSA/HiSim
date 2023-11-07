@@ -12,7 +12,7 @@ from hisim import utils
 def test_first_system_setup():
     """Performes a simple test for the first system setup."""
     path = "../system_setups/simple_system_setups.py"
-    func = "system_setup_one"
+    func = "setup_function_one"
     mysimpar = SimulationParameters.one_day_only_with_only_plots(
         year=2021, seconds_per_timestep=60
     )
@@ -24,7 +24,7 @@ def test_first_system_setup():
 def test_second_system_setup():
     """Test second system setup."""
     path = "../system_setups/simple_system_setups.py"
-    func = "system_setup_two"
+    func = "setup_function_two"
     mysimpar = SimulationParameters.one_day_only_with_only_plots(
         year=2021, seconds_per_timestep=60
     )

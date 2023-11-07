@@ -1,4 +1,4 @@
-"""  Household example with advanced heat pump, electric car, PV and battery. Only Source_weights are different to household_4. """
+"""  Household system setup with advanced heat pump, electric car, PV and battery. Only Source_weights are different to household_4. """
 
 # clean
 
@@ -37,10 +37,10 @@ __maintainer__ = "Markus Blasberg"
 __status__ = "development"
 
 
-def household_5_advanced_hp_ev_pv_battery_new_sort(
+def setup_function(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
-    """Example with advanced hp and EV and PV and battery.
+    """System setup with advanced hp and EV and PV and battery.
 
     This setup function emulates a household with some basic components. Here the residents have their
     electricity and heating needs covered by a the advanced heat pump.

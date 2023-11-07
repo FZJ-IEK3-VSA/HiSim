@@ -36,10 +36,10 @@ from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRep
 from hisim.simulator import SimulationParameters
 
 
-def decentralized_energy_netw_pv_h2sys_hp(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:  # first with bat
+def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:  # first with bat
     """Dynamic Components Demonstration.
 
-    In this example a generic controller is added. The generic controller
+    In this system setup a generic controller is added. The generic controller
     makes it possible to add component generically.
     Here two fuel_cell/chp_systems and two batteries
     are added.
@@ -409,4 +409,4 @@ def decentralized_energy_netw_pv_h2sys_hp(my_sim: Any, my_simulation_parameters:
     )
 
 
-# python ../hisim/hisim_main.py decentralized_energy_netw_pv_bat_h2system_hp.py decentralized_energy_netw_pv_h2sys_hp
+# python ../hisim/hisim_main.py decentralized_energy_netw_pv_bat_h2system_hp.py setup_function

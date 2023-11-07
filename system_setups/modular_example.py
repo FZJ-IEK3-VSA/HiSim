@@ -1,4 +1,4 @@
-"""Example sets up a modular household according to json input file."""
+"""System setup sets up a modular household according to json input file."""
 
 # clean
 
@@ -28,13 +28,13 @@ from hisim.simulator import SimulationParameters
 
 
 def cleanup_old_result_folders():
-    """Removes old result folders of previous modular_household_explicit simulations."""
+    """Removes old result folders of previous setup_function simulations."""
     base_path = os.path.join(
         hisim.utils.hisim_abs_path, os.path.pardir, "system_setups", "results"
     )
     files_in_folder = os.listdir(base_path)
     for file in files_in_folder:
-        if file.startswith("modular_household_explicit"):
+        if file.startswith("setup_function"):
             full_path = os.path.join(base_path, file)
             shutil.rmtree(full_path)
 
@@ -79,7 +79,7 @@ def get_heating_reference_temperature_and_season_from_location(
     )
 
 
-def modular_household_explicit(
+def setup_function(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: MC0001
     """Setup function emulates an household including the basic components.

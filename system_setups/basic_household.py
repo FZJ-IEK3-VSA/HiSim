@@ -22,10 +22,10 @@ __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
 
-def basic_household_explicit(
+def setup_function(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
-    """Basic household example.
+    """Basic household system setup.
 
     This setup function emulates an household including the basic components. Here the residents have their
     electricity and heating needs covered by the photovoltaic system and the heat pump.

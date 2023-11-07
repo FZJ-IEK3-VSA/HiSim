@@ -43,11 +43,11 @@ __maintainer__ = "Franz Oldopp"
 __status__ = "development"
 
 
-def ptx_trans_bat_ec_no_grid_pv_final(
+def setup_function(
     my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]
 ) -> None:
     """Setup function."""
-    log.information("Starting basic electrolyzer example")
+    log.information("Starting basic electrolyzer system setup")
     # =================================================================================================================================
     # Set System Parameters
 

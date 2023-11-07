@@ -1,4 +1,4 @@
-"""  Basic household new example. """
+"""  Basic household new system setup. """
 
 # clean
 
@@ -26,10 +26,10 @@ __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
 
-def household_with_hplib_hws_hds_pv_battery_ems(
+def setup_function(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
-    """Basic household example.
+    """Basic household system setup.
 
     This setup function emulates an household including the basic components. Here the residents have their
     electricity and heating needs covered by the photovoltaic system and the heat pump.

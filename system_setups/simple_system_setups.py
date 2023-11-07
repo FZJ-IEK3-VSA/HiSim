@@ -18,16 +18,16 @@ from hisim.components.example_transformer import (
 from hisim.components.sumbuilder import SumBuilderForTwoInputs, SumBuilderConfig
 
 
-def first_example(
+def setup_function_one(
     my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]
 ) -> None:
-    """First Example.
+    """First system setup.
 
-    In this first example, a series (my_rn1) of random numbers in a range between 100 and 200 is
+    In this first system setup, a series (my_rn1) of random numbers in a range between 100 and 200 is
     summed up with a series (my_rn2) of random numbers in a range between 10 and 20. The result is
     a series (my_sum) with values between 110 and 220.
     """
-    log.information("Starting first example: ")
+    log.information("Starting first system setup: ")
 
     # Set the simulation parameters for the simulation
     if my_simulation_parameters is None:
@@ -84,12 +84,12 @@ def first_example(
     my_sim.add_component(my_sum)
 
 
-def second_example(
+def setup_function_two(
     my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]
 ) -> None:
-    """Second Example.
+    """Second system setup.
 
-    In this second example, two series (my_rn1 and my_transformer) are summed up.
+    In this second system setup, two series (my_rn1 and my_transformer) are summed up.
 
     The first series (my_rn1) is a series of random numbers in a range between 100 and 200.
     The second series (my_transformer) is the result from a series (my_rn2) with random
@@ -98,7 +98,7 @@ def second_example(
 
     The result is a series (my_sum) with random values between 150 and 300.
     """
-    log.information("Starting second example")
+    log.information("Starting second system setup")
 
     # Set the simulation parameters for the simulation
     if my_simulation_parameters is None:

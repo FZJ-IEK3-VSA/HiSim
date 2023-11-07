@@ -31,7 +31,7 @@ __email__ = "s.dickler@fz-juelich.de"
 __status__ = "development"
 
 
-def house_aircon_mpc(
+def setup_function_mpc(
     my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:
     """Simulates household with air-conditioner with MPC controller."""
@@ -48,26 +48,26 @@ def house_aircon_mpc(
     # SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.battery_included, entry=True)
     # SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.mpc_battery_capacity, entry=mpc_battery_capacity)
 
-    household_air_conditioner_generic(my_sim, "MPC", my_simulation_parameters)
+    setup_function(my_sim, "MPC", my_simulation_parameters)
 
 
-def household_with_air_conditioner_and_controller_pid(
+def setup_function_pid(
     my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:
     """Simulates household with air-conditioner with PID controller."""
 
-    household_air_conditioner_generic(my_sim, "PID", my_simulation_parameters)
+    setup_function(my_sim, "PID", my_simulation_parameters)
 
 
-def household_with_air_conditioner_and_controller_onoff(
+def setup_function_onoff(
     my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:
     """Simulates household with air-conditioner with ON/OFF controller."""
 
-    household_air_conditioner_generic(my_sim, "on_off", my_simulation_parameters)
+    setup_function(my_sim, "on_off", my_simulation_parameters)
 
 
-def household_air_conditioner_generic(
+def setup_function(
     my_sim: Simulator,
     control: str,
     my_simulation_parameters: Optional[SimulationParameters] = None,

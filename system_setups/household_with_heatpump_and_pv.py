@@ -1,4 +1,4 @@
-"""  Household example with PV system and heatpump. """
+"""  Household system setup with PV system and heatpump. """
 # clean
 from typing import Optional, Any
 from dataclasses import dataclass
@@ -75,10 +75,10 @@ class HouseholdPVConfig:
         )
 
 
-def household_pv_hp(
+def setup_function(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
-    """Basic household example.
+    """Basic household system setup.
 
     This setup function emulates a household with some basic components. Here the residents have their
     electricity and heating needs covered by the photovoltaic system and the heat pump.

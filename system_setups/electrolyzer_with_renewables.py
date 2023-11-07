@@ -1,4 +1,4 @@
-"""Simple Electrolyzer Example."""
+"""Simple Electrolyzer system setup."""
 
 # clean
 
@@ -35,17 +35,17 @@ __maintainer__ = "Franz Oldopp"
 __status__ = "development"
 
 
-def electrolyzer_example(
+def setup_function(
     my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]
 ) -> None:
-    """Electrolyzer Example.
+    """Electrolyzer system setup.
 
-    In this example, a power input from a csv time series file is transformed
+    In this system setup, a power input from a csv time series file is transformed
     into a hydrogen mass flow as an output.
 
     The result is a time series (my_transformer).
     """
-    log.information("Starting basic electrolyzer example")
+    log.information("Starting basic electrolyzer system setup")
 
     # =================================================================================================================================
     # Set System Parameters
@@ -160,6 +160,4 @@ def electrolyzer_example(
     my_sim.add_component(my_electrolyzer)
 
 
-# python ../hisim/hisim_main.py electrolyzer_example_1_min_controller_test.py electrolyzer_example
-
-# python ../hisim/hisim_main.py electrolyzer_with_renewables.py electrolyzer_example
+# python ../hisim/hisim_main.py electrolyzer_with_renewables.py setup_function

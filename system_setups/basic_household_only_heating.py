@@ -19,7 +19,7 @@ __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
 
-def basic_household_only_heating(
+def setup_function(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:
     """Gas heater + buffer storage.

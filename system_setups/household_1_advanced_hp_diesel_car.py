@@ -1,4 +1,4 @@
-"""  Household example with advanced heat pump and diesel car. """
+"""  Household system setup with advanced heat pump and diesel car. """
 
 # clean
 
@@ -166,11 +166,11 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
         return household_config
 
 
-def household_1_advanced_hp_diesel_car(
+def setup_function(
     my_sim: Any,
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
-    """Example with advanced hp and diesel car.
+    """System setup with advanced hp and diesel car.
 
     This setup function emulates a household with some basic components. Here the residents have their
     electricity and heating needs covered by a the advanced heat pump.

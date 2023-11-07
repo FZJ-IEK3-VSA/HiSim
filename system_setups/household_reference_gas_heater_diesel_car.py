@@ -1,4 +1,4 @@
-"""  Reference Household example with gas heater and diesel car. """
+"""  Reference Household system setup with gas heater and diesel car. """
 
 # clean
 
@@ -155,10 +155,10 @@ class ReferenceHouseholdConfig(SystemSetupConfigBase):
         return household_config
 
 
-def household_reference_gas_heater_diesel_car(
+def setup_function(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
-    """Reference example.
+    """Reference system setup.
 
     This setup function emulates a household with some basic components. Here the residents have their
     electricity and heating needs covered by a generic gas heater.

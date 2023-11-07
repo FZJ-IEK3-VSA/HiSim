@@ -1,4 +1,4 @@
-"""  Household example with gas heater. """
+"""  Household system setup with gas heater. """
 # clean
 from typing import Optional, Any
 from pathlib import Path
@@ -21,10 +21,10 @@ __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
 
-def household_gas_heater(
+def setup_function(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
-    """Basic household example.
+    """Basic household system setup.
 
     This setup function emulates a household with some basic components. Here the residents have their
     electricity and heating needs covered by a generic gas heater.

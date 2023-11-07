@@ -42,11 +42,11 @@ __maintainer__ = "Franz Oldopp"
 __status__ = "development"
 
 
-def ptx_trans_bat_ec_no_grid_final(
+def setup_function(
     my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]
 ) -> None:
     """Setup function."""
-    log.information("Starting basic electrolyzer example")
+    log.information("Starting basic electrolyzer system setup")
     # =================================================================================================================================
     # Set System Parameters
 
@@ -246,4 +246,4 @@ def ptx_trans_bat_ec_no_grid_final(
     )
 
 
-# python ../hisim/hisim_main.py ptx_transf_bat_ec_no_gird.py ptx_trans_bat_ec_no_grid_final
+# python ../hisim/hisim_main.py ptx_transf_bat_ec_no_gird.py setup_function

@@ -1,4 +1,4 @@
-"""  Basic household new example. """
+"""  Basic household new system setup. """
 
 # clean
 
@@ -68,10 +68,10 @@ class BuildingPVWeatherConfig(ConfigBase):
         )
 
 
-def household_cluster_reference_advanced_hp(
+def setup_function(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
-    """Household example.
+    """Household system setup.
 
     This setup function emulates an household including the following components:
 

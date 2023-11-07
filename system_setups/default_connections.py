@@ -12,7 +12,7 @@ from hisim.components import electricity_meter
 from hisim import loadtypes
 
 
-def basic_household_with_default_connections(
+def setup_function(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> Any:
     """The setup function emulates an household including the basic components.

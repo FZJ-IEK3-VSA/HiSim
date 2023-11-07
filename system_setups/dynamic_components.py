@@ -27,12 +27,12 @@ from hisim import loadtypes as lt
 # from hisim import utils
 
 
-def dynamic_components_demonstration(
+def setup_function(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:
     """Dynamic Components Demonstration.
 
-    In this example a generic controller is added. The generic controller
+    In this system setup a generic controller is added. The generic controller
     makes it possible to add component generically.
     Here two fuel_cell/chp_systems and two batteries
     are added.

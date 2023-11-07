@@ -1,4 +1,4 @@
-""" Tests for the basic household example. """
+""" Tests for the basic household system setup. """
 # clean
 import os
 from pathlib import Path
@@ -21,7 +21,7 @@ def test_basic_household():
         os.remove(config_filename)
 
     path = "../system_setups/household_1_advanced_hp_diesel_car.py"
-    func = "household_1_advanced_hp_diesel_car"
+    func = "setup_function"
     mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
     mysimpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
     hisim_main.main(path, func, mysimpar)

@@ -8,11 +8,11 @@ import hisim.hisim_main as hsm
 def maincall() -> None:
     """For calling the Hisim main."""
     # change call here as needed
-    # hsm.main("..\\system_setups\\modular_example.py", "modular_household_explicit")
-    # hsm.main("..\\system_setups\\air_conditioned_house.py", "household_with_air_conditioner_and_controller_pid")
+    # hsm.main("..\\system_setups\\modular_example.py", "setup_function"")
+    # hsm.main("..\\system_setups\\air_conditioned_house.py", "setup_function_pid")
     hsm.main(
         "..\\system_setups\\household_with_advanced_hp_hws_hds_pv.py",
-        "household_with_hds_and_advanced_hp",
+        "setup_function",
     )
 
 

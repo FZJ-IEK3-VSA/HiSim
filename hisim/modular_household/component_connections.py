@@ -65,7 +65,7 @@ def configure_pv_system(
     Parameters
     ----------
     my_sim: str
-        filename of orginal built example.
+        filename of orginal built system setup.
     my_simulation_parameters: SimulationParameters
         The simulation parameters.
     my_weather: Weather
@@ -110,7 +110,7 @@ def configure_smart_devices(
     Parameters
     ----------
     my_sim: str
-        filename of orginal built example.
+        filename of orginal built system setup.
     my_simulation_parameters: SimulationParameters
         The simulation parameters.
     smart_devices_included: bool
@@ -157,7 +157,7 @@ def configure_cars(
     Parameters
     ----------
     my_sim: str
-        filename of orginal built example.
+        filename of orginal built system setup.
     my_simulation_parameters: SimulationParameters
         The simulation parameters.
     count: int
@@ -211,7 +211,7 @@ def configure_ev_batteries(
     Parameters
     ----------
     my_sim: str
-        filename of orginal built example.
+        filename of orginal built system setup.
     my_simulation_parameters: SimulationParameters
         The simulation parameters.
     my_cars: List[Car]
@@ -359,7 +359,7 @@ def configure_battery(
     Parameters
     ----------
     my_sim: str
-        filename of orginal built example.
+        filename of orginal built system setup.
     my_simulation_parameters: SimulationParameters
         The simulation parameters.
     my_electricity_controller: L2GenericEnergyManagementSystem
@@ -443,7 +443,7 @@ def configure_water_heating(
     Parameters
     ----------
     my_sim: str
-        filename of orginal built example.
+        filename of orginal built system setup.
     my_simulation_parameters: SimulationParameters
         The simulation parameters.
     my_occupancy: Occupancy
@@ -529,7 +529,7 @@ def configure_water_heating_electric(
     Parameters
     ----------
     my_sim: str
-        filename of orginal built example.
+        filename of orginal built system setup.
     my_simulation_parameters: SimulationParameters
         The simulation parameters.
     my_occupancy: Occupancy
@@ -658,7 +658,7 @@ def configure_heating(
     Parameters
     ----------
     my_sim: str
-        filename of orginal built example.
+        filename of orginal built system setup.
     my_simulation_parameters: SimulationParameters
         The simulation parameters.
     my_building: Building
@@ -730,7 +730,7 @@ def configure_heating_electric(
     Parameters
     ----------
     my_sim: str
-        filename of orginal built example.
+        filename of orginal built system setup.
     my_simulation_parameters: SimulationParameters
         The simulation parameters.
     my_building: Building
@@ -851,7 +851,7 @@ def configure_heating_with_buffer_electric(
     Parameters
     ----------
     my_sim: str
-        filename of orginal built example.
+        filename of orginal built system setup.
     my_simulation_parameters: SimulationParameters
         The simulation parameters.
     my_building: Building
@@ -1013,7 +1013,7 @@ def configure_heating_with_buffer(
     Parameters
     ----------
     my_sim: str
-        filename of orginal built example.
+        filename of orginal built system setup.
     my_simulation_parameters: SimulationParameters
         The simulation parameters.
     my_building: Building
@@ -1113,11 +1113,11 @@ def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, m
     :type my_sim: Any
     :param my_simulation_parameters: Simulation parameters for HiSIM calculation.
     :type my_simulation_parameters: SimulationParameters
-    :param my_building: Building of the HiSIM example.
+    :param my_building: Building of the HiSIM system setup.
     :type my_building: building.Building
-    :param my_boiler: Hot water storage of the HiSIM example.
+    :param my_boiler: Hot water storage of the HiSIM system setup.
     :type my_boiler: generic_hot_water_storage_modular.HotWaterStorage
-    :param my_electricity_controller: Energy Management System of the HiSIM example
+    :param my_electricity_controller: Energy Management System of the HiSIM system setup
     :type my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem
     :param chp_power: Power of the CHP in multiples of default (<=1).
     :type chp_power: float
@@ -1210,11 +1210,11 @@ def configure_chp_with_buffer(
     :type my_sim: Any
     :param my_simulation_parameters: Simulation parameters for HiSIM calculation.
     :type my_simulation_parameters: SimulationParameters
-    :param my_buffer: Buffer storage for heating of the HISIM example
+    :param my_buffer: Buffer storage for heating of the HISIM system setup
     :type my_buffer: generic_hot_water_storage_modular.HotWaterStorage
-    :param my_boiler: Hot water storage of the HiSIM example.
+    :param my_boiler: Hot water storage of the HiSIM system setup.
     :type my_boiler: generic_hot_water_storage_modular.HotWaterStorage
-    :param my_electricity_controller: Energy Management System of the HiSIM example
+    :param my_electricity_controller: Energy Management System of the HiSIM system setup
     :type my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem
     :param chp_power: Power of the CHP in multiples of default (<=1)
     :type chp_power: float
@@ -1312,11 +1312,11 @@ def configure_electrolyzer_and_h2_storage(
     :type my_sim: Any
     :param my_simulation_parameters: Simulation parameters for HiSIM calculation.
     :type my_simulation_parameters: SimulationParameters
-    :param my_chp: Fuel cell component of the HiSIM example
+    :param my_chp: Fuel cell component of the HiSIM system setup
     :type my_chp: generic_chp.CHP
-    :param my_chp_controller: Fuel cell controller component of the HiSIM example
+    :param my_chp_controller: Fuel cell controller component of the HiSIM system setup
     :type my_chp_controller: controller_l1_chp.L1CHPController
-    :param my_electricity_controller: Energy management system component of the HiSIM example
+    :param my_electricity_controller: Energy management system component of the HiSIM system setup
     :type my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem
     :param electrolyzer_power: Power of the electrolyzer in Watt
     :type electrolyzer_power: float
@@ -1415,9 +1415,9 @@ def configure_elctrolysis_h2storage_fuelcell_system(
     :type my_sim: Any
     :param my_simulation_parameters: Simulation parameters for HiSIM calculation.
     :type my_simulation_parameters: SimulationParameters
-    :param my_building: Building component of the HiSIM example.
+    :param my_building: Building component of the HiSIM system setup.
     :type my_building: building.Building
-    :param my_boiler: Hot water storage (for drain hot water) component of the HiSIM example.
+    :param my_boiler: Hot water storage (for drain hot water) component of the HiSIM system setup.
     :type my_boiler: generic_hot_water_storage_modular.HotWaterStorage
     :param my_electricity_controller:Energy Management System controller component of the HiSIM system_setups.
     :type my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem
@@ -1519,9 +1519,9 @@ def configure_elctrolysis_h2storage_fuelcell_system_with_buffer(
     :type my_sim: Any
     :param my_simulation_parameters: Simulation parameters for HiSIM calculation.
     :type my_simulation_parameters: SimulationParameters
-    :param my_buffer: Buffer storage component of the HiSIM example
+    :param my_buffer: Buffer storage component of the HiSIM system setup
     :type my_buffer: generic_hot_water_storage_modular.HotWaterStorage
-    :param my_boiler: Hot water storage (for drain hot water) component of the HiSIM example.
+    :param my_boiler: Hot water storage (for drain hot water) component of the HiSIM system setup.
     :type my_boiler: generic_hot_water_storage_modular.HotWaterStorage
     :param my_electricity_controller:Energy Management System controller component of the HiSIM system_setups.
     :type my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem

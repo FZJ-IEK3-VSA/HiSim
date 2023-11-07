@@ -1,4 +1,4 @@
-"""Test for example default connections."""
+"""Test for system setup default connections."""
 
 import os
 import pytest
@@ -13,7 +13,7 @@ from hisim import utils
 def test_basic_household_with_default_connections():
     """Test basic household with default connections."""
     path = "../system_setups/default_connections.py"
-    func = "basic_household_with_default_connections"
+    func = "setup_function"
     mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     hisim_main.main(path, func, mysimpar)
     log.information(os.getcwd())

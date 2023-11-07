@@ -1,4 +1,4 @@
-""" Tests for the basic household example. """
+""" Tests for the basic household system setup. """
 # clean
 import os
 import pytest
@@ -15,7 +15,7 @@ from hisim import utils
 def test_basic_household_network_chart():
     """Makes only the network charts."""
     path = "../system_setups/basic_household.py"
-    func = "basic_household_explicit"
+    func = "setup_function"
     mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     mysimpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
     hisim_main.main(path, func, mysimpar)

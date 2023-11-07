@@ -1,7 +1,7 @@
-"""Build and simulate a system setup for a specific example that is defined in a JSON file.
+"""Build and simulate a system setup for a specific system setup that is defined in a JSON file.
 
 Result files are stored in `/results`.
-See `tests/test_system_setup_starter.py` for an example.
+See `tests/test_system_setup_starter.py` for an system setup.
 
 Run `hisim/system_setup_starter.py <json-file>` to start a simulation.
 Required fields in the JSON file are: `path_to_module`, `function_in_module` and
@@ -9,7 +9,7 @@ Required fields in the JSON file are: `path_to_module`, `function_in_module` and
 parameters from the JSON are set.
 
 Optional field: `building_config`
-The values from `building_config` replace single values of the example's building object. When
+The values from `building_config` replace single values of the system setup's building object. When
 present, it is used to scale the default configuration with `get_scaled_default()`.
 
 Optional field: `system_setup_config`
@@ -40,7 +40,7 @@ SUPPORTED_MODULES = [
 def make_system_setup(
     parameters_json: Union[dict, list], result_directory: str
 ) -> Tuple[str, str, Optional[SimulationParameters], str]:
-    """Read setup parameters from JSON and build a system setup for a specific example.
+    """Read setup parameters from JSON and build a system setup for a specific system setup.
 
     The setup is simulated and result files are stored in `result_directory`.
     """

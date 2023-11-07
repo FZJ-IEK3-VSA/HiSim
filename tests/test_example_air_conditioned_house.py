@@ -16,7 +16,7 @@ def test_household_with_air_conditioner_and_controller_mpc():
     """The test should check if a normal simulation works with the smart cooling implementation."""
 
     path = "../system_setups/air_conditioned_house.py"
-    func = "house_aircon_mpc"
+    func = "setup_function_mpc"
 
     mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
 

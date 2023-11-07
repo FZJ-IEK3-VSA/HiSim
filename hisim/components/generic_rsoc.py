@@ -862,7 +862,7 @@ class Rsoc(cp.Component):
             stsv.set_output_value(self.soec_current_efficiency_state, 0.0)
             self.current_state_sofc = 0.0
             self.current_state_soec = 2.315
-            # stsv.set_output_value(self.current_output_sofc, -2315) #for WATT output in example
+            # stsv.set_output_value(self.current_output_sofc, -2315) #for WATT output in system setup
             # stsv.set_output_value(self.current_load_soec, 2315)
 
             self.total_hydrogen_produced_soec += 0.0
@@ -885,10 +885,10 @@ class Rsoc(cp.Component):
 
         stsv.set_output_value(
             self.current_output_sofc, (self.current_state_sofc * 1000)
-        )  # for WATT output in example
+        )  # for WATT output in system setup
         stsv.set_output_value(
             self.current_load_soec, (self.current_state_soec * 1000)
-        )  # for WATT output in example
+        )  # for WATT output in system setup
 
         self.total_energy_soec += self.current_state_soec * (
             seconds_per_timestep / 3600

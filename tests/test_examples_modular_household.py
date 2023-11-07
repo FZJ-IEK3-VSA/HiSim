@@ -1,4 +1,4 @@
-"""Test for example modular housheold."""
+"""Test for system setup modular housheold."""
 
 import pytest
 
@@ -12,7 +12,7 @@ from hisim.simulationparameters import SimulationParameters
 def test_modular_household_configurations_default():
     """Tests the modular households."""
     path = "../system_setups/modular_example.py"
-    func = "modular_household_explicit"
+    func = "setup_function"
     mysimpar = SimulationParameters.one_day_only(
         year=2021, seconds_per_timestep=60 * 15
     )

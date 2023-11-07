@@ -174,7 +174,7 @@ class HeatDistribution(cp.Component):
             raise KeyError(
                 "Key for heating system was not found in the singleton sim repository."
                 + "This might be because the heat distribution system controller was not initialized before the heat distribution system."
-                + "Please check the order of the initialization of the components in your example."
+                + "Please check the order of the initialization of the components in your system setup."
             )
 
         self.build(heating_system=self.heating_system)

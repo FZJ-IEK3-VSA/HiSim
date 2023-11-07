@@ -700,7 +700,7 @@ class HeatPumpHplibController(Component):
             raise KeyError(
                 "Keys for heating system was not found in the singleton sim repository."
                 + "This might be because the heat distribution system  was not initialized before the advanced hplib controller."
-                + "Please check the order of the initialization of the components in your example."
+                + "Please check the order of the initialization of the components in your system setup."
             )
         self.build(
             mode=self.heatpump_controller_config.mode,

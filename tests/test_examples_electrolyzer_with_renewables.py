@@ -1,4 +1,4 @@
-""" Tests for the electrolyzer with renewables example. """
+""" Tests for the electrolyzer with renewables system setup. """
 
 import os
 import pytest
@@ -14,7 +14,7 @@ from hisim import utils
 def test_electrolyzer_with_renewables():
     """Single day."""
     path = "../system_setups/electrolyzer_with_renewables.py"
-    func = "electrolyzer_example"
+    func = "setup_function"
     mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     hisim_main.main(path, func, mysimpar)
     log.information(os.getcwd())

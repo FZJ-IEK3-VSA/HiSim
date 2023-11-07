@@ -1125,7 +1125,7 @@ class PostProcessor:
             raise ValueError(
                 "Some PostProcessingOptions are not set."
                 "Please check if PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT, PostProcessingOptions.COMPUTE_CAPEX,"
-                "PostProcessingOptions.COMPUTE_OPEX are set in your example."
+                "PostProcessingOptions.COMPUTE_OPEX are set in your system setup."
             )
 
     def get_dict_from_kpi_lists(self, value_list: List[str]) -> Dict[str, Any]:

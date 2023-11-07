@@ -1,4 +1,4 @@
-"""  Basic household example. Shows how to set up a standard system. """
+"""  Basic household system setup. Shows how to set up a standard system. """
 
 # clean
 

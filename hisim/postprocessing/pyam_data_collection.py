@@ -34,7 +34,7 @@ class PyamDataCollector:
             os.pardir, os.pardir, "system_setups", "results_for_scenario_comparison", "data"
         )
 
-        # in each system_setups/results folder should be one example that was executed with the default config
+        # in each system_setups/results folder should be one system setup that was executed with the default config
         self.path_of_pyam_results_executed_with_default_config: str = ""
 
         log.information(f"Checking results from folder: {result_folder}")
@@ -482,7 +482,7 @@ class PyamDataCollector:
 
             list_with_module_configs.append(my_module_config_dict)
 
-        # add to each item in the dict also the default example if the default example exists
+        # add to each item in the dict also the default system setup if the default system setup exists
 
         if self.path_of_pyam_results_executed_with_default_config != "":
             list_with_csv_files.append(

@@ -1,4 +1,4 @@
-""" Tests for the basic household example. """
+""" Tests for the basic household system setup. """
 # clean
 import os
 import pytest
@@ -14,7 +14,7 @@ from hisim import utils
 def test_household_with_heatpump_and_pv():
     """Single day."""
     path = "../system_setups/household_with_heatpump_and_pv.py"
-    func = "household_pv_hp"
+    func = "setup_function"
     mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     hisim_main.main(path, func, mysimpar)
     log.information(os.getcwd())

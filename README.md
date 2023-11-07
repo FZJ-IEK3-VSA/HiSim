@@ -33,8 +33,8 @@ git clone https://github.com/FZJ-IEK3-VSA/HiSim.git
 
 Virtual Environment
 -----------------------
-Before installing `hisim`, it is recommended to set up a Python virtual environment. Let `hisimvenv` be the name of
-virtual environment to be created. For Windows users, setting the virtual environment in the path `\hisim` is done with
+Before installing `Hisim`, it is recommended to set up a Python virtual environment. Let `hisimvenv` be the name of
+virtual environment to be created. For Windows users, setting the virtual environment in the path `\Hisim` is done with
 the command line:
 
 ```python
@@ -75,21 +75,21 @@ Run Simple System Setups
 Run the python interpreter in the `HiSim/system_setups` directory with the following command:
 
 ```python
-python ../hisim/hisim_main.py simple_system_setups.py first_example
+python ../hisim/hisim_main.py simple_system_setups.py setup_function_one
 ```
 
-This command executes `hisim_main.py` on the setup function `first_example` implemented in the file `system_setups.py` that
-is stored in `HiSim/system_setups`. The same file contains another setup function that can be used: `second_example`. The
+This command executes `hisim_main.py` on the setup function `setup_function_one` implemented in the file `simple_system_setups.py` that
+is stored in `HiSim/system_setups`. The same file contains another setup function that can be used: `setup_function_one`. The
 results can be visualized under directory `results` created under the same directory where the script with the setup
 function is located.
 
-Run Basic Household Example
+Run Basic Household System setup
 -----------------------
 The directory `HiSim/system_setups` also contains a basic household configuration in the script `basic_household.py`. The
 first setup function (`setup_function`) can be executed with the following command:
 
 ```python
-python ../hisim/hisim_main.py basic_household.py basic_household_explicit
+python ../hisim/hisim_main.py basic_household.py setup_function
 ```
 
 The system is set up with the following elements:
@@ -117,7 +117,7 @@ The basic structure of a setup function follows:
     1. Finally, add your `Component` object to `Simulator` object
 1. Repeat step 2 while all the necessary components have been created, connected and added to the `Simulator` object.
 
-Once you are done, you can run the setup function according to the description in the simple example run.
+Once you are done, you can run the setup function according to the description in the simple system setup run.
 
 Package Structure
 -----------

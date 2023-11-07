@@ -9,10 +9,10 @@ from hisim import utils
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_first_example():
-    """Performes a simple test for the first example."""
+def test_first_system_setup():
+    """Performes a simple test for the first system setup."""
     path = "../system_setups/simple_system_setups.py"
-    func = "first_example"
+    func = "system_setup_one"
     mysimpar = SimulationParameters.one_day_only_with_only_plots(
         year=2021, seconds_per_timestep=60
     )
@@ -21,10 +21,10 @@ def test_first_example():
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_second_example():
-    """Test second example."""
+def test_second_system_setup():
+    """Test second system setup."""
     path = "../system_setups/simple_system_setups.py"
-    func = "second_example"
+    func = "system_setup_two"
     mysimpar = SimulationParameters.one_day_only_with_only_plots(
         year=2021, seconds_per_timestep=60
     )

@@ -1,4 +1,4 @@
-"""  Basic household example adapted for pyam postprocessing test. """
+"""  Basic household system setup adapted for pyam postprocessing test. """
 
 # clean
 import os
@@ -25,14 +25,14 @@ __status__ = "development"
 
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../system_setups/household_for_pyam_test.py"
-FUNC = "house_for_pyam_test"
+FUNC = "setup_function"
 
 
 @pytest.mark.base
 def test_house_with_pyam(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
-    """Basic household example.
+    """Basic household system setup.
 
     This setup function emulates an household including the basic components. Here the residents have their
     electricity and heating needs covered by the photovoltaic system and the heat pump.

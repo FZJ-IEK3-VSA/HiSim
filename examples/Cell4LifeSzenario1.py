@@ -165,7 +165,8 @@ def Cell4Life(
 
     chp_config = generic_CHP.CHPConfig.get_default_config_fuelcell_p_el_based(fuel_cell_power=input_variablen["fuel_cell_power"]["value"])
     chp_config.source_weight = input_variablen["init_source_weight_chp"]["value"]
-    chp_config.globalthermalpower = True
+    chp_config.h_fuel = input_variablen["h_fuel"]["value"]
+
 
     my_chp = generic_CHP.SimpleCHP(
         my_simulation_parameters=my_simulation_parameters, config=chp_config, 
@@ -404,11 +405,14 @@ def InputParameter():
     min_resting_time_in_seconds_chpUnit = "s"
     h2_soc_lower_threshold_chp = 0 # Minimum state of charge to start operating the fuel cell in %
     h2_soc_lower_threshold_chpUnit = "%"
+    h_fuel = 33.3 #heatng value ("Heizwert/Brennwert") of the choosen fuel in kWh/kg; upper value for H2 = 39,39 kWh/kg (3.939e4 Wh/kg); lower value for H2 = 33,3 
+    h_fuelUnit = "kWh/kg"
     on_off_SOEC = 183 #Day: Turn off Electrolyzer and turn on Fuel Cell // Variable name should be read: turn SOEC from "on" to "off" // Day Depends on starting date: e.g. day 10 of the year 2021 is 10. Januar if the simulation year starts with 1st Jannuar;
     on_off_SOECUnit = "days (counting: day one in Input Data = 1 ||Day: Turn off Electrolyzer and turn on Fuel Cell)"
     off_on_SOEC = 500 #Day: Turn on Electrolyzer and turn off on Fuel Cell
     off_on_SOECUnit = "days (counting: day one in Input Data = 1 ||Day: Turn on Electrolyzer and turn off on Fuel Cell"
     
+
     input_variablen = {
         "PreResultNumber": {
             "value": PreResultNumber,
@@ -499,6 +503,10 @@ def InputParameter():
         "off_on_SOEC": {
             "value": off_on_SOEC,
             "unit": off_on_SOECUnit,
+        },
+        "h_fuel": {
+            "value": h_fuel,
+            "unit": h_fuelUnit,
         },
     }
         

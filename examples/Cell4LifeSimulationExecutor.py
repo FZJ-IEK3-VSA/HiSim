@@ -21,11 +21,11 @@ os.chdir('C://Users//Standard//Desktop//hisim//HiSim//')
 
  """
 
-#FuelCellPowerW_list = [20000]  #Electricity Power of Fuel Cell Power in Watt
-#BatteryCapkWh_list = [500000]     #Total Capacity of Battery in kWh
+FuelCellPowerW_list = [200000]  #Electricity Power of Fuel Cell Power in Watt
+BatteryCapkWh_list = [8000]     #Total Capacity of Battery in kWh
 
-FuelCellPowerW_list = [200000, 150000, 100000, 50000, 25000]  #Electricity Power of Fuel Cell Power in Watt
-BatteryCapkWh_list = [8000,4000,2000,1000,500]     #Total Capacity of Battery in kWh
+#FuelCellPowerW_list = [200000, 150000, 100000, 50000, 25000]  #Electricity Power of Fuel Cell Power in Watt
+#BatteryCapkWh_list = [8000,4000,2000,1000,500]     #Total Capacity of Battery in kWh
 
 FuelCellPowerWUnit = "W"
 BatteryCapkWhUnit = "kWh"
@@ -58,7 +58,7 @@ for FuelCellPowerW in FuelCellPowerW_list:
         
         if PreResultNumber == 0:
             path = 'C://Users//Standard//Desktop//hisim//C4LResults//results//'
-            filepath = path + 'OriginalExcelFile//20231019_oekonomische_Auswertung_v4.xlsx'
+            filepath = path + 'OriginalExcelFile//20231107_Oekonomische_Auswertung_v5.xlsx'
             excelfilepathallresults, excel_filename = Cell4Life_Postprocessing.makeacopyofevaluationfile(path, filepath)
         
         #Save all Data in the created excel files

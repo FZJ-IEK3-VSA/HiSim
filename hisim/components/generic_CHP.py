@@ -42,16 +42,15 @@ class CHPConfig(cp.ConfigBase):
     p_th: float
     #: demanded power of fuel input in Watt, when activated
     p_fuel: float
+    #: demanded lower or upper heat vaule "Brennwert/Heizwert" of fuel input in kWh / kg
+    h_fuel: float
     
-    # #add von Christof
-    # #: thermal power true falls 
-    # globalthermalpower: bool
-    # #addend von Christof
+
     
     @staticmethod
     def get_default_config_chp(thermal_power: float) -> "CHPConfig":
         config = CHPConfig(
-            name="CHP", source_weight=1, use=lt.LoadTypes.GAS, p_el=(0.33 / 0.5) * thermal_power, p_th=thermal_power, p_fuel=(1 / 0.5) * thermal_power
+            name="CHP", source_weight=1, use=lt.LoadTypes.GAS, p_el=(0.33 / 0.5) * thermal_power, p_th=thermal_power, p_fuel=(1 / 0.5) * thermal_power,
         )
         return config
 
@@ -68,8 +67,8 @@ class CHPConfig(cp.ConfigBase):
         Assumption based on Dominik Mail of 4. October 2023: 1 Watt fuel power is converted to 58 % electrical voltage. Thermal power corresponds to 1/2 of the electrical voltage; 1 watt --> 0.58 el. + 0.29 th. = 0.87 total              '''
         
         config = CHPConfig(
-         #   name="CHP", source_weight=1, use=lt.LoadTypes.HYDROGEN, p_el = fuel_cell_power, p_th = fuel_cell_power * (0.43 / 0.48), p_fuel=(1 / 0.43) * (fuel_cell_power * (0.43 / 0.48)), globalthermalpower = False
-        name="CHP", source_weight=1, use=lt.LoadTypes.HYDROGEN, p_el = fuel_cell_power, p_th = fuel_cell_power * 0.5, p_fuel= (fuel_cell_power* (1 / 0.58)),  
+         #   name="CHP", source_weight=1, use=lt.LoadTypes.HYDROGEN, p_el = fuel_cell_power, p_th = fuel_cell_power * (0.43 / 0.48), p_fuel=(1 / 0.43) * (fuel_cell_power * (0.43 / 0.48)),
+        name="CHP", source_weight=1, use=lt.LoadTypes.HYDROGEN, p_el = fuel_cell_power, p_th = fuel_cell_power * 0.5, p_fuel= (fuel_cell_power* (1 / 0.58)), h_fuel = 0.0, 
 
         )
         return config
@@ -114,7 +113,10 @@ class SimpleCHP(cp.Component):
 
         self.config = config
         if self.config.use == lt.LoadTypes.HYDROGEN:
-            self.p_fuel = config.p_fuel / (3.6e3 * 3.939e4)  # converted to kg / s
+#            self.p_fuel = config.p_fuel / (3.6e3 * 3.939e4)  # converted to kg / s ((old original version until November 6.))
+
+            self.p_fuel = config.p_fuel / (3.6e3 * config.h_fuel * 1000)  # converted to kg / s h_fuel = heating value of vuel (Heizwert) in kWh/kg
+
         else:
             self.p_fuel = config.p_fuel * my_simulation_parameters.seconds_per_timestep / 3.6e3  # converted to Wh
 
@@ -142,8 +144,7 @@ class SimpleCHP(cp.Component):
 
 
         # Component outputs
-        #Christof: Add der if Schleife
-      #  if self.config.globalthermalpower == False: 
+
         self.thermal_power_output_building_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ThermalPowerOutputBuilding,
@@ -160,7 +161,7 @@ class SimpleCHP(cp.Component):
             postprocessing_flag=[lt.InandOutputType.THERMAL_PRODUCTION],
             output_description="Thermal Power output from CHP to drain hot water storage in Watt."
         )
-    #    elif self.config.globalthermalpower == True:
+
         self.thermal_power_output_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ThermalPowerOutput,

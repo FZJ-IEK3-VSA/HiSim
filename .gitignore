@@ -147,6 +147,10 @@ tests/mypath/
 tests/test_system_setup_starter_results/
 tests/test_system_setup_starter_scaling_results/
 tests/hisim_simulation.log
+tests/results1
+tests/results_scaling/
+tests/lpg_utsp_scaling_test/
+
 components_information.xlsx
 hisim/components_information.xlsx
 tests/components_information.xlsx

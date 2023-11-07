@@ -952,7 +952,6 @@ class PostProcessor:
             )
         )
 
-
     def write_kpis_in_pyam_dict(
         self,
         ppdt: PostProcessingDataTransfer,

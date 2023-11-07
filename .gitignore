@@ -144,11 +144,13 @@ hisim/results
 
 # simulation log
 tests/mypath/
+tests/test_system_setup_starter_results/
+tests/test_system_setup_starter_scaling_results/
+tests/hisim_simulation.log
 tests/results1
 tests/results_scaling/
 tests/lpg_utsp_scaling_test/
 
-tests\hisim_simulation.log
 components_information.xlsx
 hisim/components_information.xlsx
 tests/components_information.xlsx
@@ -185,4 +187,3 @@ hisim/inputs/extract_relevant_climate_data.py
 
 # cluster slurm outputs
 examples/*.out
-

@@ -24,7 +24,7 @@ __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
 # PATH and FUNC needed to build simulator, PATH is fake
-PATH = "../examples/household_for_pyam_test.py"
+PATH = "../system_setups/household_for_pyam_test.py"
 FUNC = "house_for_pyam_test"
 
 

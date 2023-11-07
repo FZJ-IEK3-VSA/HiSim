@@ -1,4 +1,4 @@
-"""Simple Examples Module."""
+"""Simple System Setup Module."""
 
 # clean
 

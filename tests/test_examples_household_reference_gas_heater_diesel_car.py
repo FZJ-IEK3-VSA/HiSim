@@ -9,11 +9,11 @@ from hisim import log
 from hisim import utils
 
 
-@pytest.mark.examples
+@pytest.mark.system_setups
 @utils.measure_execution_time
 def test_basic_household():
     """Single day."""
-    path = "../examples/household_reference_gas_heater_diesel_car.py"
+    path = "../system_setups/household_reference_gas_heater_diesel_car.py"
     func = "household_reference_gas_heater_diesel_car"
     mysimpar = SimulationParameters.one_day_only_with_only_plots(
         year=2019, seconds_per_timestep=60

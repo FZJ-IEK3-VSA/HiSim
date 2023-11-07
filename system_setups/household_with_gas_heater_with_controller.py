@@ -10,7 +10,7 @@ from hisim.components import generic_gas_heater_with_controller
 from hisim.components import heat_distribution_system
 from hisim.components import building
 from hisim import log
-from examples.household_with_heatpump_and_pv import HouseholdPVConfig
+from system_setups.household_with_heatpump_and_pv import HouseholdPVConfig
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"

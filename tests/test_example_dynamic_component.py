@@ -14,7 +14,7 @@ from hisim import utils
 def test_dynamic_components_example():
     """Test dynamic components example."""
 
-    path = "../examples/dynamic_components.py"
+    path = "../system_setups/dynamic_components.py"
     func = "dynamic_components_demonstration"
     mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     hisim_main.main(path, func, mysimpar)

@@ -16,7 +16,7 @@ from hisim import utils
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
-PATH = "../examples/household_for_test_sim_repository.py"
+PATH = "../system_setups/household_for_test_sim_repository.py"
 FUNC = "test_house"
 
 

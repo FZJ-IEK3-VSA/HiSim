@@ -5,7 +5,7 @@ See `tests/test_system_setup_starter.py` for an example.
 
 Run `hisim/system_setup_starter.py <json-file>` to start a simulation.
 Required fields in the JSON file are: `path_to_module`, `function_in_module` and
-`simulation_parameters`. SimulationParameters from the examples is not used. Instead the
+`simulation_parameters`. SimulationParameters from the system_setups is not used. Instead the
 parameters from the JSON are set.
 
 Optional field: `building_config`
@@ -29,11 +29,11 @@ from hisim.hisim_main import main
 from hisim.utils import set_attributes_of_dataclass_from_dict
 from hisim.simulator import SimulationParameters
 
-# Examples need to use `create_configuration()` and their config class needs to implement
+# System setups need to use `create_configuration()` and their config class needs to implement
 # `get_default()` to run with the system setup starter.
 SUPPORTED_MODULES = [
-    "examples.modular_example",
-    "examples.household_1_advanced_hp_diesel_car",
+    "system_setups.modular_example",
+    "system_setups.household_1_advanced_hp_diesel_car",
 ]
 
 
@@ -52,7 +52,7 @@ def make_system_setup(
     _parameters_json = deepcopy(parameters_json)
     Path(result_directory).mkdir(parents=True, exist_ok=True)  # pylint: disable=unexpected-keyword-arg
     path_to_module = _parameters_json.pop("path_to_module")
-    setup_module_name = "examples." + path_to_module.split("/")[-1].replace(".py", "")
+    setup_module_name = "system_setups." + path_to_module.split("/")[-1].replace(".py", "")
     if setup_module_name not in SUPPORTED_MODULES:
         raise NotImplementedError(
             f"System setup starter can only be used with one of {', '.join(SUPPORTED_MODULES)}"

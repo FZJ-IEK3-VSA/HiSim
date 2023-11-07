@@ -30,7 +30,7 @@ from hisim.simulator import SimulationParameters
 def cleanup_old_result_folders():
     """Removes old result folders of previous modular_household_explicit simulations."""
     base_path = os.path.join(
-        hisim.utils.hisim_abs_path, os.path.pardir, "examples", "results"
+        hisim.utils.hisim_abs_path, os.path.pardir, "system_setups", "results"
     )
     files_in_folder = os.listdir(base_path)
     for file in files_in_folder:

@@ -26,7 +26,7 @@ from hisim import log
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
-PATH = "../examples/household_for_test_electricity_meter.py"
+PATH = "../system_setups/household_for_test_electricity_meter.py"
 FUNC = "test_house"
 
 

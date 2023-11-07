@@ -11,7 +11,7 @@ from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
 
 
-@pytest.mark.examples
+@pytest.mark.system_setups
 def test_example_component():
     """Test for the Example Component."""
 

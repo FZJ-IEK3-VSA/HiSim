@@ -17,7 +17,7 @@ def test_system_setup_starter():
     """Run a simulation from JSON."""
 
     parameters_json = {
-        "path_to_module": "../examples/household_1_advanced_hp_diesel_car.py",
+        "path_to_module": "../system_setups/household_1_advanced_hp_diesel_car.py",
         "function_in_module": "household_1_advanced_hp_diesel_car",
         "simulation_parameters": {
             "start_date": "2021-01-01T00:00:00",
@@ -92,7 +92,7 @@ def test_system_setup_starter_scaling():
     """Run a simulation from JSON."""
 
     parameters_json = {
-        "path_to_module": "../examples/household_1_advanced_hp_diesel_car.py",
+        "path_to_module": "../system_setups/household_1_advanced_hp_diesel_car.py",
         "function_in_module": "household_1_advanced_hp_diesel_car",
         "simulation_parameters": {
             "start_date": "2021-01-01T00:00:00",

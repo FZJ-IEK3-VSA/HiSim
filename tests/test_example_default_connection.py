@@ -8,11 +8,11 @@ from hisim import log
 from hisim import utils
 
 
-@pytest.mark.examples
+@pytest.mark.system_setups
 @utils.measure_execution_time
 def test_basic_household_with_default_connections():
     """Test basic household with default connections."""
-    path = "../examples/default_connections.py"
+    path = "../system_setups/default_connections.py"
     func = "basic_household_with_default_connections"
     mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     hisim_main.main(path, func, mysimpar)

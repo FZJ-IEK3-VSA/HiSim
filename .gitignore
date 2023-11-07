@@ -136,9 +136,9 @@ dmypy.json
 inputs/cache
 
 hisim/inputs/cache
-examples/mypath
-examples/results
-examples/results_for_scenario_comparison
+system_setups/mypath
+system_setups/results
+system_setups/results_for_scenario_comparison
 results/Results
 hisim/results
 
@@ -154,15 +154,15 @@ tests/lpg_utsp_scaling_test/
 components_information.xlsx
 hisim/components_information.xlsx
 tests/components_information.xlsx
-examples/ac_test
-examples/ac_results
-examples/ac_results_5
+system_setups/ac_test
+system_setups/ac_results
+system_setups/ac_results_5
 tests/finished.flag
-examples/finished.flag
-examples/ac_results_5b
-examples/network_t1.png
-examples/*jpg
-examples/*.png
+system_setups/finished.flag
+system_setups/ac_results_5b
+system_setups/network_t1.png
+system_setups/*jpg
+system_setups/*.png
 hisim/inputs/cfg.json
 cfg.json
 tests/cfg.json
@@ -174,10 +174,10 @@ flake8_calls.txt
 prospector_calls.txt
 prospector_mass_call.cmd
 flake8_mass_call.cmd
-examples/profile.json
-examples/mypath/Reports/FlexibilityEvents.HH1.json
-examples/mypath/Results/Carstate.Car 2, 22kW Charging Power, avg. Speed 30 km h.HH1.json
-examples/mypath/Results/DrivingDistance.Car 2, 22kW Charging Power, avg. Speed 30 km h.HH1.json
+system_setups/profile.json
+system_setups/mypath/Reports/FlexibilityEvents.HH1.json
+system_setups/mypath/Results/Carstate.Car 2, 22kW Charging Power, avg. Speed 30 km h.HH1.json
+system_setups/mypath/Results/DrivingDistance.Car 2, 22kW Charging Power, avg. Speed 30 km h.HH1.json
 
 #personal file (JG)
 covert_building_sizer_to_tar_gz.py
@@ -186,4 +186,4 @@ counter_test.csv
 hisim/inputs/extract_relevant_climate_data.py
 
 # cluster slurm outputs
-examples/*.out
+system_setups/*.out

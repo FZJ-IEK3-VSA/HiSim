@@ -11,7 +11,7 @@ from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
 
 
-@pytest.mark.examples
+@pytest.mark.system_setups
 @utils.measure_execution_time
 def test_basic_household():
     """ Single day. """
@@ -20,7 +20,7 @@ def test_basic_household():
     if Path(config_filename).is_file():
         os.remove(config_filename)
 
-    path = "../examples/household_5_advanced_hp_ev_pv_battery_new_sort.py"
+    path = "../system_setups/household_5_advanced_hp_ev_pv_battery_new_sort.py"
     func = "household_5_advanced_hp_ev_pv_battery_new_sort"
     mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
     mysimpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)

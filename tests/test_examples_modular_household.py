@@ -7,11 +7,11 @@ from hisim import hisim_main
 from hisim.simulationparameters import SimulationParameters
 
 
-@pytest.mark.examples
+@pytest.mark.system_setups
 @utils.measure_execution_time
 def test_modular_household_configurations_default():
     """Tests the modular households."""
-    path = "../examples/modular_example.py"
+    path = "../system_setups/modular_example.py"
     func = "modular_household_explicit"
     mysimpar = SimulationParameters.one_day_only(
         year=2021, seconds_per_timestep=60 * 15

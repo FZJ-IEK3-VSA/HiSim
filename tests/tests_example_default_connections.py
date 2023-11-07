@@ -4,12 +4,12 @@ from hisim import hisim_main
 from hisim.simulationparameters import SimulationParameters
 
 
-@pytest.mark.examples
+@pytest.mark.system_setups
 def test_basic_household_with_default_connections():
     """Test basic household with default connections."""
     # if os.path.isdir("../hisim/inputs/cache"):
     #   shutil.rmtree("../hisim/inputs/cache")
-    path = "../examples/basic_household.py"
+    path = "../system_setups/basic_household.py"
     func = "basic_household_with_default_connections"
     mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
     hisim_main.main(path, func, mysimpar)

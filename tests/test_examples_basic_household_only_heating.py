@@ -8,11 +8,11 @@ from hisim import log
 from hisim import utils
 
 
-@pytest.mark.examples
+@pytest.mark.system_setups
 @utils.measure_execution_time
 def test_basic_household_only_heating():
     """Test for basic household only heating."""
-    path = "../examples/basic_household_only_heating.py"
+    path = "../system_setups/basic_household_only_heating.py"
     func = "basic_household_only_heating"
     mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     hisim_main.main(path, func, mysimpar)

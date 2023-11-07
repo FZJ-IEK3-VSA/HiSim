@@ -2,9 +2,9 @@
 # and building the image there.
 
 # unnecessary and potentially large directory
-examples/results/
+system_setups/results/
 # the finished.flag can prevent the calculation
-examples/finished.flag
+system_setups/finished.flag
 
 # cache folder for the inputs
 hisim/inputs/cache

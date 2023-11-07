@@ -30,7 +30,7 @@ from hisim.components import generic_hot_water_storage_modular
 from hisim.components import electricity_meter
 from hisim import utils
 from hisim import loadtypes as lt
-from examples.modular_example import cleanup_old_lpg_requests
+from system_setups.modular_example import cleanup_old_lpg_requests
 
 __authors__ = "Markus Blasberg"
 __copyright__ = "Copyright 2023, FZJ-IEK-3"

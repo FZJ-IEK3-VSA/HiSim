@@ -33,7 +33,7 @@ jobs:
       working-directory: ./
       run: |
         prospector setup.py
-        prospector examples/
+        prospector system_setups/
         prospector tests/
         prospector hisim/
         prospector docs/

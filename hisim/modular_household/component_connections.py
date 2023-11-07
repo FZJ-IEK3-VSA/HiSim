@@ -1419,7 +1419,7 @@ def configure_elctrolysis_h2storage_fuelcell_system(
     :type my_building: building.Building
     :param my_boiler: Hot water storage (for drain hot water) component of the HiSIM example.
     :type my_boiler: generic_hot_water_storage_modular.HotWaterStorage
-    :param my_electricity_controller:Energy Management System controller component of the HiSIM examples.
+    :param my_electricity_controller:Energy Management System controller component of the HiSIM system_setups.
     :type my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem
     :param fuel_cell_power: Power of the fuel cell in Watt
     :type fuel_cell_power: float
@@ -1523,7 +1523,7 @@ def configure_elctrolysis_h2storage_fuelcell_system_with_buffer(
     :type my_buffer: generic_hot_water_storage_modular.HotWaterStorage
     :param my_boiler: Hot water storage (for drain hot water) component of the HiSIM example.
     :type my_boiler: generic_hot_water_storage_modular.HotWaterStorage
-    :param my_electricity_controller:Energy Management System controller component of the HiSIM examples.
+    :param my_electricity_controller:Energy Management System controller component of the HiSIM system_setups.
     :type my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem
     :param fuel_cell_power: Power of the fuel cell in Watt
     :type fuel_cell_power: float

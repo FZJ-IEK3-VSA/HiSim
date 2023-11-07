@@ -8,10 +8,10 @@ import hisim.hisim_main as hsm
 def maincall() -> None:
     """For calling the Hisim main."""
     # change call here as needed
-    # hsm.main("..\\examples\\modular_example.py", "modular_household_explicit")
-    # hsm.main("..\\examples\\air_conditioned_house.py", "household_with_air_conditioner_and_controller_pid")
+    # hsm.main("..\\system_setups\\modular_example.py", "modular_household_explicit")
+    # hsm.main("..\\system_setups\\air_conditioned_house.py", "household_with_air_conditioner_and_controller_pid")
     hsm.main(
-        "..\\examples\\household_with_advanced_hp_hws_hds_pv.py",
+        "..\\system_setups\\household_with_advanced_hp_hws_hds_pv.py",
         "household_with_hds_and_advanced_hp",
     )
 
@@ -29,24 +29,24 @@ if __name__ == "__main__":
     profiler.disable()
 
     with open(
-        "..\\examples\\results\\profilingStatsAsTextSortedCumulative.txt",
+        "..\\system_setups\\results\\profilingStatsAsTextSortedCumulative.txt",
         "w",
         encoding="utf-8",
     ) as f:
         stats = pstats.Stats(profiler, stream=f).sort_stats("cumulative")
         stats.print_stats()
     with open(
-        "..\\examples\\results\\profilingStatsAsTextSortedcalls.txt",
+        "..\\system_setups\\results\\profilingStatsAsTextSortedcalls.txt",
         "w",
         encoding="utf-8",
     ) as f:
         stats = pstats.Stats(profiler, stream=f).sort_stats("ncalls")
         stats.print_stats()
     with open(
-        "..\\examples\\results\\profilingStatsAsTextSortedTotalTime.txt",
+        "..\\system_setups\\results\\profilingStatsAsTextSortedTotalTime.txt",
         "w",
         encoding="utf-8",
     ) as f:
         stats = pstats.Stats(profiler, stream=f).sort_stats("tottime")
         stats.print_stats()
-    stats.dump_stats("..\\examples\\results\\profile-export-data.prof")
+    stats.dump_stats("..\\system_setups\\results\\profile-export-data.prof")

@@ -16,7 +16,7 @@ from hisim import log
 
 class PyamDataCollector:
 
-    """PyamDataCollector class which collects and concatenate the pyam data from the examples/results."""
+    """PyamDataCollector class which collects and concatenate the pyam data from the system_setups/results."""
 
     def __init__(
         self,
@@ -24,17 +24,17 @@ class PyamDataCollector:
         simulation_duration_to_check: str,
         time_resolution_of_data_set: Any,
         folder_from_which_data_will_be_collected: str = os.path.join(
-            os.pardir, os.pardir, "examples", "results"
+            os.pardir, os.pardir, "system_setups", "results"
         ),
         path_to_default_config: Optional[str] = None,
     ) -> None:
         """Initialize the class."""
         result_folder = folder_from_which_data_will_be_collected
         self.pyam_data_folder = os.path.join(
-            os.pardir, os.pardir, "examples", "results_for_scenario_comparison", "data"
+            os.pardir, os.pardir, "system_setups", "results_for_scenario_comparison", "data"
         )
 
-        # in each examples/results folder should be one example that was executed with the default config
+        # in each system_setups/results folder should be one example that was executed with the default config
         self.path_of_pyam_results_executed_with_default_config: str = ""
 
         log.information(f"Checking results from folder: {result_folder}")
@@ -153,7 +153,7 @@ class PyamDataCollector:
     def clean_result_directory_from_unfinished_results(
         self, result_path: str
     ) -> None:  # TODO: add functionality
-        """When a result folder does not contain the finished_flag, it will be removed from the examples/result folder."""
+        """When a result folder does not contain the finished_flag, it will be removed from the system_setups/result folder."""
         pass
 
     def get_list_of_all_relevant_pyam_data_folders(self, result_path: str) -> List[str]:
@@ -591,7 +591,7 @@ class PyamDataCollector:
     def go_through_all_pyam_data_folders_and_check_if_module_configs_are_double_somewhere(
         self, list_of_pyam_folder_paths_to_check: List[str]
     ) -> List[Any]:
-        """Go through all pyam folders and remove the examples that are duplicated."""
+        """Go through all pyam folders and remove the system_setups that are duplicated."""
 
         list_of_all_module_configs = []
         list_of_pyam_folders_which_have_only_unique_configs = []
@@ -619,7 +619,7 @@ class PyamDataCollector:
                                 os.path.join(folder)
                             )
 
-            # delete folders which have doubled results from examples/results directory
+            # delete folders which have doubled results from system_setups/results directory
             if folder not in list_of_pyam_folders_which_have_only_unique_configs:
                 # remove whole result folder from result directory
                 whole_parent_folder = os.path.abspath(os.path.join(folder, os.pardir))

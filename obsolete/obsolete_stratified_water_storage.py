@@ -370,5 +370,5 @@
 #     unittest.main()
 #
 #     """
-#     Calculation of Examples is can be found in the file 'Run_examples'
+#     Calculation of System setups is can be found in the file 'Run_system_setups'
 #     """

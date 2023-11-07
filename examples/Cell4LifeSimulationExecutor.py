@@ -21,11 +21,11 @@ os.chdir('C://Users//Standard//Desktop//hisim//HiSim//')
 
  """
 
-#FuelCellPowerW_list = [20000,40000]  #Electricity Power of Fuel Cell Power in Watt
-#BatteryCapkWh_list = [500000,10]     #Total Capacity of Battery in kWh
+#FuelCellPowerW_list = [20000]  #Electricity Power of Fuel Cell Power in Watt
+#BatteryCapkWh_list = [500000]     #Total Capacity of Battery in kWh
 
 FuelCellPowerW_list = [200000, 150000, 100000, 50000, 25000]  #Electricity Power of Fuel Cell Power in Watt
-BatteryCapkWh_list = [500, 1000, 2000, 4000, 8000]     #Total Capacity of Battery in kWh
+BatteryCapkWh_list = [8000,4000,2000,1000,500]     #Total Capacity of Battery in kWh
 
 FuelCellPowerWUnit = "W"
 BatteryCapkWhUnit = "kWh"

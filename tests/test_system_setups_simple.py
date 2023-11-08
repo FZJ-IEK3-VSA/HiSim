@@ -11,8 +11,8 @@ from hisim import utils
 @utils.measure_execution_time
 def test_first_system_setup():
     """Performes a simple test for the first system setup."""
-    path = "../system_setups/simple_system_setups.py"
-    func = "setup_function_one"
+    path = "../system_setups/simple_system_setup_one.py"
+    func = "setup_function"
     mysimpar = SimulationParameters.one_day_only_with_only_plots(
         year=2021, seconds_per_timestep=60
     )
@@ -23,8 +23,8 @@ def test_first_system_setup():
 @utils.measure_execution_time
 def test_second_system_setup():
     """Test second system setup."""
-    path = "../system_setups/simple_system_setups.py"
-    func = "setup_function_two"
+    path = "../system_setups/simple_system_setup_two.py"
+    func = "setup_function"
     mysimpar = SimulationParameters.one_day_only_with_only_plots(
         year=2021, seconds_per_timestep=60
     )

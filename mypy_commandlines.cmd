@@ -9,5 +9,5 @@ python ..\hisim\hisim_main.py basic_household.py setup_function
 python ..\hisim\hisim_main.py basic_household_boiler.py setup_function
 python ..\hisim\hisim_main.py basic_household_Districtheating.py setup_function
 python ..\hisim\hisim_main.py basic_household_Oilheater.py setup_function
-python ..\hisim\hisim_main.py simple_system_setup.py setup_function_first
-python ..\hisim\hisim_main.py simple_system_setup.py setup_function_second
+python ..\hisim\hisim_main.py simple_system_setup_one.py setup_function
+python ..\hisim\hisim_main.py simple_system_setup_two.py setup_function

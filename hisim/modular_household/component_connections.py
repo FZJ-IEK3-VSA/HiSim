@@ -204,7 +204,7 @@ def configure_ev_batteries(
     charging_station_set: Optional[JsonReference],
     mobility_set: JsonReference,
     my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
-    controlable: bool,
+    controllable: bool,
 ) -> List:
     """Sets batteries and controllers of electric vehicles.
 
@@ -222,7 +222,7 @@ def configure_ev_batteries(
         Encoding of the available cars.
     my_electricity_controller: L2GenericEnergyManagementSystem
         The initialized electricity controller.
-    controlable: bool
+    controllable: bool
         True if battery of electric vehicle is charged with surplus.
 
     """
@@ -254,7 +254,7 @@ def configure_ev_batteries(
         )
         car_battery_controller_config.source_weight = car.config.source_weight
         car_battery_controller_config.lower_threshold_charging_power = charging_power * 1e3 * 0.1  # 10 % of charging power for acceptable efficiencies
-        if controlable:
+        if controllable:
             car_battery_controller_config.battery_set = (
                 0.4  # lower threshold for soc of car battery in clever case
             )
@@ -268,7 +268,7 @@ def configure_ev_batteries(
         my_sim.add_component(my_carbattery)
         my_sim.add_component(my_controller_carbattery)
 
-        if controlable:
+        if controllable:
             my_electricity_controller.add_component_input_and_connect(
                 source_component_class=my_carbattery,
                 source_component_output=my_carbattery.AcBatteryPower,
@@ -520,7 +520,7 @@ def configure_water_heating_electric(
     my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
     my_weather: weather.Weather,
     water_heating_system_installed: lt.HeatingSystems,
-    controlable: bool,
+    controllable: bool,
     count: int,
     number_of_apartments: float
 ) -> Tuple[generic_hot_water_storage_modular.HotWaterStorage, int]:
@@ -540,7 +540,7 @@ def configure_water_heating_electric(
         The initialized Weather component.
     water_heating_system_installed: str
         Type of installed WaterHeatingSystem
-    controlable: bool
+    controllable: bool
         True if control of heating device is smart, False if not.
     count: int
         Integer tracking component hierachy for EMS.
@@ -603,7 +603,7 @@ def configure_water_heating_electric(
     my_sim.add_component(my_heatpump)
     my_boiler.connect_only_predefined_connections(my_heatpump)
 
-    if controlable:
+    if controllable:
         my_heatpump_controller_l1.connect_input(
             my_heatpump_controller_l1.StorageTemperatureModifier,
             my_electricity_controller.component_name,
@@ -721,7 +721,7 @@ def configure_heating_electric(
     my_weather: weather.Weather,
     heating_system_installed: lt.HeatingSystems,
     heatpump_power: float,
-    controlable: bool,
+    controllable: bool,
     heating_season: List[int],
     count: int,
 ) -> Tuple[Component, int]:
@@ -743,7 +743,7 @@ def configure_heating_electric(
         Type of installed HeatingSystem
     heatpump_power: float,
         Power of heat pump in multiples of default.
-    controlable: bool
+    controllable: bool
         True if control of heating device is smart, False if not.
     heating_season: List[int]
         Contains first and last day of heating season.
@@ -785,7 +785,7 @@ def configure_heating_electric(
     my_heatpump.connect_only_predefined_connections(my_heatpump_controller_l1)
     my_sim.add_component(my_heatpump)
 
-    if controlable:
+    if controllable:
         my_heatpump_controller_l1.connect_input(
             my_heatpump_controller_l1.StorageTemperatureModifier,
             my_electricity_controller.component_name,
@@ -842,7 +842,7 @@ def configure_heating_with_buffer_electric(
     heating_system_installed: lt.HeatingSystems,
     heatpump_power: float,
     buffer_volume: float,
-    controlable: bool,
+    controllable: bool,
     heating_season: List[int],
     count: int,
 ) -> Tuple:
@@ -866,7 +866,7 @@ def configure_heating_with_buffer_electric(
         Power of heat pump in multiples of default.
     buffer_volume: float
         Volume of buffer storage in multiples of default.
-    controlable: bool
+    controllable: bool
         True if control of heating device is smart, False if not.
     heating_season: List[int]
         Contains first and last day of heating season.
@@ -941,7 +941,7 @@ def configure_heating_with_buffer_electric(
     my_buffer_controller.connect_only_predefined_connections(my_buffer)
     my_sim.add_component(my_buffer_controller)
 
-    if controlable:
+    if controllable:
         my_heatpump_controller_l1.connect_input(
             my_heatpump_controller_l1.StorageTemperatureModifier,
             my_electricity_controller.component_name,
@@ -1106,7 +1106,7 @@ def configure_heating_with_buffer(
 def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, my_building: building.Building,
                   my_boiler: generic_hot_water_storage_modular.HotWaterStorage,
                   my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
-                  chp_power: float, controlable: bool, count: int, ) -> int:
+                  chp_power: float, controllable: bool, count: int, ) -> int:
     """Sets up natural gas CHP. It heats the DHW storage and the building in winter.
 
     :param my_sim: Simulation class.
@@ -1121,8 +1121,8 @@ def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, m
     :type my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem
     :param chp_power: Power of the CHP in multiples of default (<=1).
     :type chp_power: float
-    :param controlable: When True, surplus control of Energy Management System is activated.
-    :type controlable: bool
+    :param controllable: When True, surplus control of Energy Management System is activated.
+    :type controllable: bool
     :param count: Number of component outputs relevant in the energy management system.
     :type count: int
     :return: New counter variable (+1).
@@ -1175,7 +1175,7 @@ def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, m
     )
 
     # connect to EMS electricity controller
-    if controlable:
+    if controllable:
         ems_target_electricity = my_electricity_controller.add_component_output(
             source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
             source_tags=[
@@ -1203,7 +1203,7 @@ def configure_chp_with_buffer(
         my_sim: Any, my_simulation_parameters: SimulationParameters, my_buffer: generic_hot_water_storage_modular.HotWaterStorage,
         my_boiler: generic_hot_water_storage_modular.HotWaterStorage,
         my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
-        chp_power: float, controlable: bool, count: int, ) -> int:
+        chp_power: float, controllable: bool, count: int, ) -> int:
     """Sets up natural gas CHP. It heats the DHW storage and the buffer storage for heating.
 
     :param my_sim: Simulation class.
@@ -1218,8 +1218,8 @@ def configure_chp_with_buffer(
     :type my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem
     :param chp_power: Power of the CHP in multiples of default (<=1)
     :type chp_power: float
-    :param controlable: When True, surplus control of Energy Management System is activated.
-    :type controlable: bool
+    :param controllable: When True, surplus control of Energy Management System is activated.
+    :type controllable: bool
     :param count: Number of component outputs relevant in the energy management system.
     :type count: int
     :return: New counter variable (+1).
@@ -1276,7 +1276,7 @@ def configure_chp_with_buffer(
     )
 
     # connect to EMS electricity controller
-    if controlable:
+    if controllable:
         ems_target_electricity = my_electricity_controller.add_component_output(
             source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
             source_tags=[
@@ -1408,7 +1408,7 @@ def configure_electrolyzer_and_h2_storage(
 def configure_elctrolysis_h2storage_fuelcell_system(
         my_sim: Any, my_simulation_parameters: SimulationParameters, my_building: building.Building,
         my_boiler: generic_hot_water_storage_modular.HotWaterStorage, my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
-        fuel_cell_power: float, h2_storage_size: float, electrolyzer_power: float, controlable: bool, count: int, ) -> int:
+        fuel_cell_power: float, h2_storage_size: float, electrolyzer_power: float, controllable: bool, count: int, ) -> int:
     """Sets electrolysis, H2-storage and chp system.
 
     :param my_sim: Simulation class.
@@ -1427,8 +1427,8 @@ def configure_elctrolysis_h2storage_fuelcell_system(
     :type h2_storage_size: float
     :param electrolyzer_power: Power of the electrolyzer in Watt.
     :type electrolyzer_power: float
-    :param controlable: Electricity based control of the fuel cell considered or not.
-    :type controlable: bool
+    :param controllable: Electricity based control of the fuel cell considered or not.
+    :type controllable: bool
     :param count: Number of component outputs relevant in the energy management system.
     :type count: int
     """
@@ -1480,7 +1480,7 @@ def configure_elctrolysis_h2storage_fuelcell_system(
     )
 
     # connect to EMS electricity controller
-    if controlable:
+    if controllable:
         ems_target_electricity = my_electricity_controller.add_component_output(
             source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
             source_tags=[
@@ -1512,7 +1512,7 @@ def configure_elctrolysis_h2storage_fuelcell_system(
 def configure_elctrolysis_h2storage_fuelcell_system_with_buffer(
         my_sim: Any, my_simulation_parameters: SimulationParameters, my_buffer: generic_hot_water_storage_modular.HotWaterStorage,
         my_boiler: generic_hot_water_storage_modular.HotWaterStorage, my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
-        fuel_cell_power: float, h2_storage_size: float, electrolyzer_power: float, controlable: bool, count: int, ) -> int:
+        fuel_cell_power: float, h2_storage_size: float, electrolyzer_power: float, controllable: bool, count: int, ) -> int:
     """Sets electrolysis, H2-storage and chp system.
 
     :param my_sim: Simulation class.
@@ -1531,8 +1531,8 @@ def configure_elctrolysis_h2storage_fuelcell_system_with_buffer(
     :type h2_storage_size: float
     :param electrolyzer_power: Power of the electrolyzer in Watt.
     :type electrolyzer_power: float
-    :param controlable: Electricity based control of the fuel cell considered or not.
-    :type controlable: bool
+    :param controllable: Electricity based control of the fuel cell considered or not.
+    :type controllable: bool
     :param count: Number of component outputs relevant in the energy management system.
     :type count: int
     """
@@ -1585,7 +1585,7 @@ def configure_elctrolysis_h2storage_fuelcell_system_with_buffer(
     )
 
     # connect to EMS electricity controller
-    if controlable:
+    if controllable:
         ems_target_electricity = my_electricity_controller.add_component_output(
             source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
             source_tags=[

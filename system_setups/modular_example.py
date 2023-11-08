@@ -180,7 +180,7 @@ def setup_function(
         raise Exception(
             "Heat pump power cannot be smaller than default: choose values greater than one"
         )
-    controlable = system_config_.surplus_control_considered
+    controllable = system_config_.surplus_control_considered
     pv_included = system_config_.pv_included  # True or False
     pv_peak_power = system_config_.pv_peak_power or 5e3  # set default
     smart_devices_included = system_config_.smart_devices_included  # True or False
@@ -324,7 +324,7 @@ def setup_function(
             ev_included=ev_included,
             occupancy_config=my_occupancy_config,
         )
-        if controlable is False:
+        if controllable is False:
             for car in my_cars:
                 consumption.append(car)
 
@@ -387,12 +387,12 @@ def setup_function(
             charging_station_set=charging_station,
             mobility_set=mobility_set,
             my_electricity_controller=my_electricity_controller,
-            controlable=controlable,
+            controllable=controllable,
         )  # could return ev_capacities if needed
 
     # """SMART CONTROLLER FOR SMART DEVICES"""
     # use clever controller if smart devices are included and do not use it if it is false
-    if smart_devices_included and controlable and utsp_connected:
+    if smart_devices_included and controllable and utsp_connected:
         component_connections.configure_smart_controller_for_smart_devices(
             my_electricity_controller=my_electricity_controller,
             my_smart_devices=my_smart_devices,
@@ -410,7 +410,7 @@ def setup_function(
             my_electricity_controller=my_electricity_controller,
             my_weather=my_weather,
             water_heating_system_installed=water_heating_system_installed,
-            controlable=controlable,
+            controllable=controllable,
             count=count,
             number_of_apartments=my_building_information.number_of_apartments,
         )
@@ -444,7 +444,7 @@ def setup_function(
                 heating_system_installed=heating_system_installed,
                 heatpump_power=heatpump_power,
                 buffer_volume=buffer_volume,
-                controlable=controlable,
+                controllable=controllable,
                 heating_season=heating_season,
                 count=count,
             )
@@ -476,7 +476,7 @@ def setup_function(
                 my_weather=my_weather,
                 heating_system_installed=heating_system_installed,
                 heatpump_power=heatpump_power,
-                controlable=controlable,
+                controllable=controllable,
                 heating_season=heating_season,
                 count=count,
             )
@@ -499,7 +499,7 @@ def setup_function(
             my_boiler=my_boiler,
             my_electricity_controller=my_electricity_controller,
             chp_power=chp_power,
-            controlable=controlable,
+            controllable=controllable,
             count=count,
         )
     if chp_included and buffer_included:
@@ -510,7 +510,7 @@ def setup_function(
             my_boiler=my_boiler,
             my_electricity_controller=my_electricity_controller,
             chp_power=chp_power,
-            controlable=controlable,
+            controllable=controllable,
             count=count,
         )
 
@@ -525,7 +525,7 @@ def setup_function(
             fuel_cell_power=fuel_cell_power,
             h2_storage_size=h2_storage_size,
             electrolyzer_power=electrolyzer_power * pv_peak_power,
-            controlable=controlable,
+            controllable=controllable,
             count=count,
         )
 
@@ -539,12 +539,12 @@ def setup_function(
             fuel_cell_power=fuel_cell_power,
             h2_storage_size=h2_storage_size,
             electrolyzer_power=electrolyzer_power * pv_peak_power,
-            controlable=controlable,
+            controllable=controllable,
             count=count,
         )
 
     # """BATTERY"""
-    if battery_included and controlable:
+    if battery_included and controllable:
         count = component_connections.configure_battery(
             my_sim=my_sim,
             my_simulation_parameters=my_simulation_parameters,

@@ -50,8 +50,8 @@ class HouseholdAdvancedHPDieselCarPVConfig(SystemSetupConfigBase):
 
     building_type: str
     number_of_apartments: int
-    # dhw_controlable: bool  # if dhw is controlled by EMS
-    # heatpump_controlable: bool  # if heatpump is controlled by EMS
+    # dhw_controllable: bool  # if dhw is controlled by EMS
+    # heatpump_controllable: bool  # if heatpump is controlled by EMS
     surplus_control: bool  # decision on the consideration of smart control for heat pump and dhw, increase storage temperatures
     surplus_control_building_temperature_modifier: bool  # increase set_room_temperature in case of surplus electricity
     # simulation_parameters: SimulationParameters
@@ -86,8 +86,8 @@ class HouseholdAdvancedHPDieselCarPVConfig(SystemSetupConfigBase):
         household_config = HouseholdAdvancedHPDieselCarPVConfig(
             building_type="blub",
             number_of_apartments=my_building_information.number_of_apartments,
-            # dhw_controlable=False,
-            # heatpump_controlable=False,
+            # dhw_controllable=False,
+            # heatpump_controllable=False,
             surplus_control=False,
             surplus_control_building_temperature_modifier=False,
             # simulation_parameters=SimulationParameters.one_day_only(2022),

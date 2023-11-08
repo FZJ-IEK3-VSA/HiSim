@@ -49,7 +49,7 @@ HISIMPATH: Dict[str, Any] = {
     ),
     "cfg": os.path.join(hisim_abs_path, "inputs", "cfg.json"),
     "utsp_results": os.path.join(hisim_results, "Results"),
-    "utsp_system setup_results": os.path.join(
+    "utsp_system_setup_results": os.path.join(
         hisim_inputs, "LPGResults_for_tests", "Results"
     ),
     "utsp_reports": os.path.join(hisim_results, "Reports"),

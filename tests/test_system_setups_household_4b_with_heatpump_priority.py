@@ -21,8 +21,8 @@ def test_basic_household():
         os.remove(config_filename)
 
     path = "../system_setups/household_4b_with_heatpump_priority_advanced_hp_ev_pv.py"
-    func = "setup_function"
+
     mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
     mysimpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-    hisim_main.main(path, func, mysimpar)
+    hisim_main.main(path, mysimpar)
     log.information(os.getcwd())

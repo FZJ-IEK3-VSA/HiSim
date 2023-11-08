@@ -39,8 +39,8 @@ class Simulator:
         self,
         module_directory: str,
         module_filename: str,
-        setup_function: str,
         my_simulation_parameters: Optional[SimulationParameters],
+        setup_function: str = "setup_function",
         my_module_config_path: Optional[str] = None,
     ) -> None:
         """Initializes the simulator class and creates the result directory."""
@@ -51,8 +51,7 @@ class Simulator:
             log.LOGGING_LEVEL = self._simulation_parameters.logging_level
         self.wrapped_components: List[ComponentWrapper] = []
         self.all_outputs: List[cp.ComponentOutput] = []
-        if setup_function is None:
-            raise ValueError("No setup function was set")
+
         self.setup_function = setup_function
         self.module_filename = module_filename
         self.module_directory = module_directory

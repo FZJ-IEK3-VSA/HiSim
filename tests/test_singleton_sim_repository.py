@@ -17,8 +17,6 @@ from hisim import utils
 
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../system_setups/household_for_test_sim_repository.py"
-FUNC = "test_house"
-
 
 @utils.measure_execution_time
 @pytest.mark.base
@@ -55,7 +53,6 @@ def test_house(
 
     my_sim: sim.Simulator = sim.Simulator(
         module_directory=path_to_be_added,
-        setup_function=FUNC,
         my_simulation_parameters=my_simulation_parameters,
         module_filename="household_for_test_sim_repository.py",
     )

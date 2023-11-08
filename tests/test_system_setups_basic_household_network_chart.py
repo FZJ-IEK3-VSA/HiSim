@@ -15,8 +15,7 @@ from hisim import utils
 def test_basic_household_network_chart():
     """Makes only the network charts."""
     path = "../system_setups/basic_household.py"
-    func = "setup_function"
     mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     mysimpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-    hisim_main.main(path, func, mysimpar)
+    hisim_main.main(path, mysimpar)
     log.information(os.getcwd())

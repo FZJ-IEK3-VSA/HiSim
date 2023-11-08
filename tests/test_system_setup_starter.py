@@ -51,7 +51,6 @@ def test_system_setup_starter():
     Path(result_directory).mkdir(parents=True)
     (
         path_to_module,
-        function_in_module,
         simulation_parameters,
         module_config_path,
     ) = make_system_setup(
@@ -60,7 +59,6 @@ def test_system_setup_starter():
     )
     main(
         path_to_module,
-        function_in_module,
         simulation_parameters,
         module_config_path,
     )
@@ -119,7 +117,6 @@ def test_system_setup_starter_scaling():
     Path(result_directory).mkdir(parents=True)
     (
         path_to_module,
-        function_in_module,
         simulation_parameters,
         module_config_path,
     ) = make_system_setup(
@@ -128,7 +125,6 @@ def test_system_setup_starter_scaling():
     )
     main(
         path_to_module,
-        function_in_module,
         simulation_parameters,
         module_config_path,
     )

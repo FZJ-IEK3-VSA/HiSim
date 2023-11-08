@@ -15,7 +15,6 @@ def test_dynamic_components_system_setup():
     """Test dynamic components system setup."""
 
     path = "../system_setups/dynamic_components.py"
-    func = "setup_function"
     mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    hisim_main.main(path, func, mysimpar)
+    hisim_main.main(path, mysimpar)
     log.information(os.getcwd())

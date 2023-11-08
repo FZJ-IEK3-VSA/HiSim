@@ -13,7 +13,7 @@ from hisim import utils
 def test_basic_household_with_default_connections():
     """Test basic household with default connections."""
     path = "../system_setups/default_connections.py"
-    func = "setup_function"
+
     mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    hisim_main.main(path, func, mysimpar)
+    hisim_main.main(path, mysimpar)
     log.information(os.getcwd())

@@ -12,8 +12,8 @@ from hisim.simulationparameters import SimulationParameters
 def test_modular_household_configurations_default():
     """Tests the modular households."""
     path = "../system_setups/modular_example.py"
-    func = "setup_function"
+
     mysimpar = SimulationParameters.one_day_only(
         year=2021, seconds_per_timestep=60 * 15
     )
-    hisim_main.main(path, func, mysimpar)
+    hisim_main.main(path, mysimpar)

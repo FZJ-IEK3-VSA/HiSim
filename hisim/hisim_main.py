@@ -12,15 +12,15 @@ from hisim.simulationparameters import SimulationParameters
 
 def main(
     path_to_module: str,
-    function_in_module: str,
     my_simulation_parameters: Optional[SimulationParameters] = None,
     my_module_config_path: Optional[str] = None,
 ) -> None:
     """Core function."""
+    
+    function_in_module = "setup_function"
     log.information("#################################")
     log.information(
-        "starting simulation of " + path_to_module + " " + function_in_module
-    )
+        "starting simulation of " + path_to_module)
     starttime = datetime.now()
     starting_date_time_str = starttime.strftime("%d-%b-%Y %H:%M:%S")
     log.information("Start @ " + starting_date_time_str + " ")
@@ -81,16 +81,16 @@ def main(
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        log.information("HiSim needs at least two arguments")
+    if len(sys.argv) < 2:
+        log.information("HiSim needs at least one argument.")
         sys.exit(1)
     FILE_NAME = sys.argv[1]
-    FUNCTION_NAME = sys.argv[2]
-    if len(sys.argv) == 3:
+    FUNCTION_NAME = "setup_function"
+    if len(sys.argv) == 2:
         log.information("calling " + FUNCTION_NAME + " from " + FILE_NAME)
-        main(path_to_module=FILE_NAME, function_in_module=FUNCTION_NAME)
-    if len(sys.argv) == 4:
-        MODULE_CONFIG = sys.argv[3]
+        main(path_to_module=FILE_NAME)
+    if len(sys.argv) == 3:
+        MODULE_CONFIG = sys.argv[2]
         log.information(
             "calling "
             + FUNCTION_NAME
@@ -101,6 +101,5 @@ if __name__ == "__main__":
         )
         main(
             path_to_module=FILE_NAME,
-            function_in_module=FUNCTION_NAME,
             my_module_config_path=MODULE_CONFIG,
         )

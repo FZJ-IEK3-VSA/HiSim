@@ -20,9 +20,9 @@ def test_basic_household():
     if Path(config_filename).is_file():
         os.remove(config_filename)
 
-    path = "../system_setups/household_5b_with_battery_priority_advanced_hp_ev_pv_battery_new_sort.py"
-    func = "setup_function"
+    path = "../system_setups/household_5b_with_battery_priority_advanced_hp_ev_pv_battery.py"
+
     mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
     mysimpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-    hisim_main.main(path, func, mysimpar)
+    hisim_main.main(path, mysimpar)
     log.information(os.getcwd())

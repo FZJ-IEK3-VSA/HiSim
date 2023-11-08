@@ -25,8 +25,6 @@ __status__ = "development"
 
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../system_setups/household_for_pyam_test.py"
-FUNC = "setup_function"
-
 
 @pytest.mark.base
 def test_house_with_pyam(
@@ -98,7 +96,6 @@ def test_house_with_pyam(
 
     my_sim: sim.Simulator = sim.Simulator(
         module_directory=path_to_be_added,
-        setup_function=FUNC,
         my_simulation_parameters=my_simulation_parameters,
         module_filename="household_for_pyam_test.py",
     )
@@ -107,7 +104,7 @@ def test_house_with_pyam(
     # Build Results Path
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
-        model_name=my_sim.setup_function,
+        model_name=my_sim.module_filename,
         variant_name="pyam_test",
         sorting_option=SortingOptionEnum.FLAT,
         hash_number=None,

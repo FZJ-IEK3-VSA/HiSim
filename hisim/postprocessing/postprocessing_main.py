@@ -806,7 +806,7 @@ class PostProcessor:
                 key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME
             )
         else:
-            self.scenario = ppdt.setup_function
+            self.scenario = ""
 
         # set pyam region
         if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.LOCATION):

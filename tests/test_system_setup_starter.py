@@ -18,7 +18,6 @@ def test_system_setup_starter():
 
     parameters_json = {
         "path_to_module": "../system_setups/household_1_advanced_hp_diesel_car.py",
-        "function_in_module": "setup_function",
         "simulation_parameters": {
             "start_date": "2021-01-01T00:00:00",
             "end_date": "2021-01-02T00:00:00",
@@ -91,7 +90,6 @@ def test_system_setup_starter_scaling():
 
     parameters_json = {
         "path_to_module": "../system_setups/household_1_advanced_hp_diesel_car.py",
-        "function_in_module": "setup_function",
         "simulation_parameters": {
             "start_date": "2021-01-01T00:00:00",
             "end_date": "2021-01-02T00:00:00",

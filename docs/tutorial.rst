@@ -5,12 +5,12 @@ Run Simple System Setups
 Run the python interpreter in the `HiSim/system_setups` directory with the following command:
 
 ```python
-python ../hisim/hisim_main.py simple_system_setup_one.py setup_function
+python ../hisim/hisim_main.py simple_system_setup_one.py
 ```
 or
 
 ```python
-python ../hisim/hisim_main.py simple_system_setup_two.py setup_function
+python ../hisim/hisim_main.py simple_system_setup_two.py
 ```
 
 This command executes `hisim_main.py` on the setup function `setup_function` implemented in the files `simple_system_setup_one.py`
@@ -19,10 +19,11 @@ The results can be visualized under directory `results` created under the same d
 function is located.
 Run Basic Household System Setup
 -----------------------
-The directory `HiSim\system_setups` also contains a basic household configuration in the script `basic_household.py`. The first setup function (`setup_function`) can be executed with the following command:
+The directory `HiSim\system_setups` also contains a basic household configuration in the script `basic_household.py`.
+It can be executed with the following command:
 
 ```python
-python ../hisim/hisim.py basic_household setup_function
+python ../hisim/hisim.py basic_household
 ```
 
 The system is set up with the following elements:
@@ -37,10 +38,10 @@ Hence, photovoltaic modules and the heat pump are responsible to cover the elect
 
 Run Modular Household System Setup
 -----------------------
-The directory `HiSim\system_setups` also contains a modular system setup in the script `modular_example.py`. The first setup function (`setup_function`) can be executed with the following command:
+The directory `HiSim\system_setups` also contains a modular system setup in the script `modular_example.py`. It can be executed with the following command:
 
 ```python
-python ../hisim/hisim.py modular_example setup_function
+python ../hisim/hisim.py modular_example
 ```
 
 The system setup automatically builds and connects all components, which are desired. The components are set up according the system configuration, which is built upon the specifications provided by a json file 'modular_example_config.json' located in the `system_setups` directory. Please, check the :ref:`modularexampleinterfaces` explanation to completely understand the json interface.

@@ -194,7 +194,7 @@ class Simulator:
                 # if not, build a flat result path itself
                 ResultPathProviderSingleton().set_important_result_path_information(
                     module_directory=self.module_directory,
-                    model_name=self.setup_function,
+                    model_name=self.module_filename,
                     variant_name=None,
                     hash_number=None,
                     sorting_option=SortingOptionEnum.FLAT,

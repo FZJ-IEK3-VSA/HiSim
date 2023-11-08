@@ -75,12 +75,12 @@ Run Simple System Setups
 Run the python interpreter in the `HiSim/system_setups` directory with the following command:
 
 ```python
-python ../hisim/hisim_main.py simple_system_setup_one.py setup_function
+python ../hisim/hisim_main.py simple_system_setup_one.py
 ```
 or
 
 ```python
-python ../hisim/hisim_main.py simple_system_setup_two.py setup_function
+python ../hisim/hisim_main.py simple_system_setup_two.py
 ```
 
 This command executes `hisim_main.py` on the setup function `setup_function` implemented in the files `simple_system_setup_one.py`
@@ -90,11 +90,11 @@ function is located.
 
 Run Basic Household System setup
 -----------------------
-The directory `HiSim/system_setups` also contains a basic household configuration in the script `basic_household.py`. The
-first setup function (`setup_function`) can be executed with the following command:
+The directory `HiSim/system_setups` also contains a basic household configuration in the script `basic_household.py`.
+It can be executed with the following command:
 
 ```python
-python ../hisim/hisim_main.py basic_household.py setup_function
+python ../hisim/hisim_main.py basic_household.py
 ```
 
 The system is set up with the following elements:

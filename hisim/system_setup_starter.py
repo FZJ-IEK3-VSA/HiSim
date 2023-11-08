@@ -39,7 +39,7 @@ SUPPORTED_MODULES = [
 
 def make_system_setup(
     parameters_json: Union[dict, list], result_directory: str
-) -> Tuple[str, Optional[SimulationParameters], str]: # str
+) -> Tuple[str, Optional[SimulationParameters], str]:
     """Read setup parameters from JSON and build a system setup for a specific system setup.
 
     The setup is simulated and result files are stored in `result_directory`.
@@ -57,7 +57,7 @@ def make_system_setup(
         raise NotImplementedError(
             f"System setup starter can only be used with one of {', '.join(SUPPORTED_MODULES)}"
         )
-    # function_in_module = _parameters_json.pop("function_in_module")
+
     simulation_parameters_dict = _parameters_json.pop("simulation_parameters")
     module_config_path = str(Path(result_directory).joinpath("module_config.json"))
     simulation_parameters_path = str(Path(result_directory).joinpath("simulation_parameters.json"))
@@ -87,7 +87,6 @@ def make_system_setup(
 
     return (
         path_to_module,
-        # function_in_module,
         simulation_parameters,
         module_config_path,
     )
@@ -120,7 +119,6 @@ if __name__ == "__main__":
 
     (
         my_path_to_module,
-        my_function_in_module,
         my_simulation_parameters,
         my_module_config_path,
     ) = make_system_setup(
@@ -129,7 +127,6 @@ if __name__ == "__main__":
 
     main(
         my_path_to_module,
-        my_function_in_module,
         my_simulation_parameters,
         my_module_config_path,
     )

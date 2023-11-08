@@ -16,7 +16,6 @@ def main(
     my_module_config_path: Optional[str] = None,
 ) -> None:
     """Core function."""
-    
     function_in_module = "setup_function"
     log.information("#################################")
     log.information(

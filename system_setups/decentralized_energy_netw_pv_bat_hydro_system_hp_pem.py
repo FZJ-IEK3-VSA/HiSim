@@ -36,7 +36,9 @@ from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRep
 from hisim.simulator import SimulationParameters
 
 
-def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:  # first with bat
+def setup_function(
+    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
+) -> None:  # first with bat
     """Dynamic Components Demonstration.
 
     In this system setup a generic controller is added. The generic controller
@@ -79,18 +81,38 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     # Build Components
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters = SimulationParameters.full_year(
+            year=year, seconds_per_timestep=seconds_per_timestep
+        )
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_ALL_OUTPUTS_TO_REPORT)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM)
+    my_simulation_parameters.post_processing_options.append(
+        PostProcessingOptions.PLOT_LINE
+    )
+    my_simulation_parameters.post_processing_options.append(
+        PostProcessingOptions.PLOT_CARPET
+    )
+    my_simulation_parameters.post_processing_options.append(
+        PostProcessingOptions.MAKE_NETWORK_CHARTS
+    )
+    my_simulation_parameters.post_processing_options.append(
+        PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT
+    )
+    my_simulation_parameters.post_processing_options.append(
+        PostProcessingOptions.WRITE_ALL_OUTPUTS_TO_REPORT
+    )
+    my_simulation_parameters.post_processing_options.append(
+        PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT
+    )
+    my_simulation_parameters.post_processing_options.append(
+        PostProcessingOptions.GENERATE_PDF_REPORT
+    )
+    my_simulation_parameters.post_processing_options.append(
+        PostProcessingOptions.COMPUTE_OPEX
+    )
+    my_simulation_parameters.post_processing_options.append(
+        PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
+    )
 
     """
     my_advanced_battery_config_1 = advanced_battery_bslib.BatteryConfig.get_default_config()
@@ -107,11 +129,15 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
 
     my_fuel_cell_controller_l2 = XTPController(
         my_simulation_parameters=my_simulation_parameters,
-        config=XTPControllerConfig.control_fuel_cell(fuel_cell_name=fuel_cell_name, operation_mode=operation_mode),
+        config=XTPControllerConfig.control_fuel_cell(
+            fuel_cell_name=fuel_cell_name, operation_mode=operation_mode
+        ),
     )
     my_fuel_cell_controller = FuelCellController(
         my_simulation_parameters=my_simulation_parameters,
-        config=FuelCellControllerConfig.control_fuel_cell(fuel_cell_name=fuel_cell_name),
+        config=FuelCellControllerConfig.control_fuel_cell(
+            fuel_cell_name=fuel_cell_name
+        ),
     )
     my_fuel_cell = FuelCell(
         my_simulation_parameters=my_simulation_parameters,
@@ -129,23 +155,39 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
 
     my_electrolyzer_controller = ElectrolyzerController(
         my_simulation_parameters=my_simulation_parameters,
-        config=ElectrolyzerControllerConfig.control_electrolyzer(electrolyzer_name=electrolyzer_name),
+        config=ElectrolyzerControllerConfig.control_electrolyzer(
+            electrolyzer_name=electrolyzer_name
+        ),
     )
     my_electrolyzer = Electrolyzer(
         my_simulation_parameters=my_simulation_parameters,
-        config=ElectrolyzerConfig.config_electrolyzer(electrolyzer_name=electrolyzer_name),
+        config=ElectrolyzerConfig.config_electrolyzer(
+            electrolyzer_name=electrolyzer_name
+        ),
     )
 
     my_cl2_config = cl2.EMSConfig.get_default_config_ems()
-    my_cl2 = cl2.L2GenericEnergyManagementSystem(my_simulation_parameters=my_simulation_parameters, config=my_cl2_config)
+    my_cl2 = cl2.L2GenericEnergyManagementSystem(
+        my_simulation_parameters=my_simulation_parameters, config=my_cl2_config
+    )
 
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    my_occupancy_config = (
+        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    )
     # choose 1 to be the default for the number of apartments
-    SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments)
-    my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
+    SingletonSimRepository().set_entry(
+        key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments
+    )
+    my_occupancy = loadprofilegenerator_connector.Occupancy(
+        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
+    )
 
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
-    my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
+    my_weather_config = weather.WeatherConfig.get_default(
+        location_entry=weather.LocationEnum.AACHEN
+    )
+    my_weather = weather.Weather(
+        config=my_weather_config, my_simulation_parameters=my_simulation_parameters
+    )
 
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig(
         time=time,
@@ -196,7 +238,9 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
 
     # Build Heat Pump Controller Config
-    my_heat_pump_controller_config = GenericHeatPumpControllerConfig.get_default_generic_heat_pump_controller_config()
+    my_heat_pump_controller_config = (
+        GenericHeatPumpControllerConfig.get_default_generic_heat_pump_controller_config()
+    )
     my_heat_pump_controller_config.mode = hp_mode  # hp_mode
     # Build Heat Pump Controller
     my_heat_pump_controller = GenericHeatPumpController(
@@ -263,7 +307,9 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         my_cl2.component_name,
         my_cl2.ElectricityToOrFromGrid,
     )
-    my_heat_pump.connect_only_predefined_connections(my_weather, my_heat_pump_controller)
+    my_heat_pump.connect_only_predefined_connections(
+        my_weather, my_heat_pump_controller
+    )
     my_heat_pump.get_default_connections_heatpump_controller()
     # hp test end
 

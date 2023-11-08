@@ -131,11 +131,13 @@ class HouseholdAdvancedHPEvPvConfig(SystemSetupConfigBase):
             hp_controller_config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(),
             hp_config=(
                 advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt)
+                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+                )
             ),
             simple_hot_water_storage_config=(
                 simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt)
+                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+                )
             ),
             dhw_heatpump_config=(
                 generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(

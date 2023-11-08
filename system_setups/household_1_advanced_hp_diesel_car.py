@@ -65,11 +65,17 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
     @classmethod
     def get_default(cls) -> "HouseholdAdvancedHPDieselCarConfig":
         """Get default HouseholdAdvancedHPDieselCarConfig."""
-        building_config = building.BuildingConfig.get_default_german_single_family_home()
+        building_config = (
+            building.BuildingConfig.get_default_german_single_family_home()
+        )
         household_config = cls.get_scaled_default(building_config)
 
-        household_config.hp_config.set_thermal_output_power_in_watt = 6000  # default value leads to switching on-off very often
-        household_config.dhw_storage_config.volume = 250  # default(volume = 230) leads to an error
+        household_config.hp_config.set_thermal_output_power_in_watt = (
+            6000  # default value leads to switching on-off very often
+        )
+        household_config.dhw_storage_config.volume = (
+            250  # default(volume = 230) leads to an error
+        )
 
         return household_config
 

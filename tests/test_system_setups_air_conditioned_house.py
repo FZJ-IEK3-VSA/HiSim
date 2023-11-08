@@ -15,8 +15,8 @@ from hisim import utils
 def test_household_with_air_conditioner_and_controller_mpc():
     """The test should check if a normal simulation works with the smart cooling implementation."""
 
-    path = "../system_setups/air_conditioned_house.py"
-    func = "setup_function_mpc"
+    path = "../system_setups/air_conditioned_house_a_with_mpc_controller.py"
+    func = "setup_function"
 
     mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
 

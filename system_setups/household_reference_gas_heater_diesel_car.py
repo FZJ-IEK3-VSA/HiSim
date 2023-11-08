@@ -114,7 +114,8 @@ class ReferenceHouseholdConfig(SystemSetupConfigBase):
             ),
             simple_hot_water_storage_config=(
                 simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt)
+                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+                )
             ),
             dhw_heatpump_config=(
                 generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(

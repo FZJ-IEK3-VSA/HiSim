@@ -130,7 +130,7 @@ def setup_function(
         sep=sep,  # Separator used in the CSV file (e.g., "," or ";")
         decimal=decimal,  # Decimal indicator used in the CSV file (e.g., "." or ",")
         multiplier=multiplier,  # Multiplier factor for amplification (if needed)
-        output_description="Values from CSV"
+        output_description="Values from CSV",
     )
 
     # Create new CSV loader object

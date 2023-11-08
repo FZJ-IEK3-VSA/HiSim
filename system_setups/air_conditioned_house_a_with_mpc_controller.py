@@ -3,8 +3,6 @@
 # clean
 from typing import Optional
 
-# import numpy as np
-# import os
 from hisim.simulator import SimulationParameters
 from hisim.simulator import Simulator
 from hisim.components import loadprofilegenerator_connector
@@ -17,7 +15,6 @@ from hisim.components import controller_mpc  # mpc
 from hisim.components import generic_battery  # mpc
 from hisim.components import generic_price_signal  # mpc
 
-# from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 __authors__ = "Marwa Alfouly, Sebastian Dickler"
 __copyright__ = (
@@ -31,43 +28,15 @@ __email__ = "s.dickler@fz-juelich.de"
 __status__ = "development"
 
 
-def setup_function_mpc(
+def setup_function(
     my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:
     """Simulates household with air-conditioner with MPC controller."""
 
-    # household_with_air_conditioner_and_controller_mpc
-    # prediction_horizon = 24*3600
-    # mpc_battery_capacity = 5e3
-    # mpc_pv_power = 4e3
-    # SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.predictive, entry=True)
-    # SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.prediction_horizon, entry=prediction_horizon)
-    # SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.pv_included, entry=True)
-    # SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.pv_peak_power, entry=mpc_pv_power)
-    # SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.smart_devices_included, entry=True)
-    # SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.battery_included, entry=True)
-    # SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.mpc_battery_capacity, entry=mpc_battery_capacity)
-
-    setup_function(my_sim, "MPC", my_simulation_parameters)
+    air_conditioned_house(my_sim, "MPC", my_simulation_parameters)
 
 
-def setup_function_pid(
-    my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None
-) -> None:
-    """Simulates household with air-conditioner with PID controller."""
-
-    setup_function(my_sim, "PID", my_simulation_parameters)
-
-
-def setup_function_onoff(
-    my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None
-) -> None:
-    """Simulates household with air-conditioner with ON/OFF controller."""
-
-    setup_function(my_sim, "on_off", my_simulation_parameters)
-
-
-def setup_function(
+def air_conditioned_house(
     my_sim: Simulator,
     control: str,
     my_simulation_parameters: Optional[SimulationParameters] = None,

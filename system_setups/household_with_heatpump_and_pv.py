@@ -9,7 +9,7 @@ from utspclient.helpers.lpgdata import (
     Households,
     TransportationDeviceSets,
     TravelRouteSets,
-    EnergyIntensityType
+    EnergyIntensityType,
 )
 from utspclient.helpers.lpgpythonbindings import JsonReference
 from hisim.simulator import SimulationParameters

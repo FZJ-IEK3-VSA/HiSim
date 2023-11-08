@@ -14,7 +14,9 @@ from tests import functions_for_testing as fft
 def test_electrolyzer():
     """Test electrolyzer."""
     seconds_per_timestep = 60
-    my_simulation_parameters = SimulationParameters.one_day_only(2021, seconds_per_timestep)
+    my_simulation_parameters = SimulationParameters.one_day_only(
+        2021, seconds_per_timestep
+    )
 
     name: str = "NedstackFCS10XXL"
     type_electrolyzer: str = "PEM"
@@ -43,7 +45,9 @@ def test_electrolyzer():
         ramp_up_rate=ramp_up_rate,
         ramp_down_rate=ramp_down_rate,
     )
-    my_fuelcell = generic_fuel_cell.FuelCell(config=my_fuelcell_config, my_simulation_parameters=my_simulation_parameters)
+    my_fuelcell = generic_fuel_cell.FuelCell(
+        config=my_fuelcell_config, my_simulation_parameters=my_simulation_parameters
+    )
 
     # ===================================================================================================================
     # Set Fake Inputs
@@ -54,9 +58,13 @@ def test_electrolyzer():
         lt.Units.KILOWATT,
     )
 
-    control_signal = cp.ComponentOutput("FakeControlSignal", "ControlSignal", lt.LoadTypes.ANY, lt.Units.ANY)
+    control_signal = cp.ComponentOutput(
+        "FakeControlSignal", "ControlSignal", lt.LoadTypes.ANY, lt.Units.ANY
+    )
 
-    number_of_outputs = fft.get_number_of_outputs([demand_profile_target, control_signal])
+    number_of_outputs = fft.get_number_of_outputs(
+        [demand_profile_target, control_signal]
+    )
 
     my_fuelcell.demand_profile_target.source_output = demand_profile_target
     my_fuelcell.control_signal.source_output = control_signal
@@ -76,6 +84,9 @@ def test_electrolyzer():
     log.information(str(stsv.values))
 
     # Checking differnt values
-    assert pytest.approx(stsv.values[my_fuelcell.current_hydrogen_demand.global_index]) == 0.3650165
+    assert (
+        pytest.approx(stsv.values[my_fuelcell.current_hydrogen_demand.global_index])
+        == 0.3650165
+    )
 
     # python -m pytest ../tests/test_generic_fuel_cell.py

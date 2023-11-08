@@ -48,11 +48,7 @@ def test_system_setup_starter():
     if Path(result_directory).is_dir():
         shutil.rmtree(result_directory)
     Path(result_directory).mkdir(parents=True)
-    (
-        path_to_module,
-        simulation_parameters,
-        module_config_path,
-    ) = make_system_setup(
+    (path_to_module, simulation_parameters, module_config_path,) = make_system_setup(
         parameters_json=parameters_json,
         result_directory=result_directory,
     )
@@ -113,11 +109,7 @@ def test_system_setup_starter_scaling():
     if Path(result_directory).is_dir():
         shutil.rmtree(result_directory)
     Path(result_directory).mkdir(parents=True)
-    (
-        path_to_module,
-        simulation_parameters,
-        module_config_path,
-    ) = make_system_setup(
+    (path_to_module, simulation_parameters, module_config_path,) = make_system_setup(
         parameters_json=parameters_json,
         result_directory=result_directory,
     )

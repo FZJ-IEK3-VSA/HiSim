@@ -29,6 +29,7 @@ __status__ = "development"
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../system_setups/household_for_test_building_heat_demand.py"
 
+
 @pytest.mark.buildingtest
 @utils.measure_execution_time
 def test_house_with_idealized_electric_heater_for_testing_heating_demand(

@@ -1,4 +1,4 @@
-""" RES to buffer battery to electrolyzer. """
+""" RES (renewable energy sources) to buffer battery to electrolyzer. """
 
 # clean
 
@@ -17,7 +17,6 @@ from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDict
 # CSV lib
 from hisim.components.csvloader import CSVLoader, CSVLoaderConfig
 from hisim.components.transformer_rectifier import Transformer, TransformerConfig
-
 
 # import controller
 from hisim.components.controller_l2_ptx_energy_management_system import (
@@ -57,11 +56,11 @@ def setup_function(
 
     # Set CSV Parameters
     component_name = "CSVLoader"
-    csv_filename = "PV_power_capped_2500kW_1min_FINAL.csv"
-    column = 1  # The column number in the CSV file containing the load profile data !!!!!!!!!!
+    csv_filename = "wind_power_capped_2500kW_1min_FINAL.csv"
+    column = 1  # The column number in the CSV file containing the load profile data
     loadtype = lt.LoadTypes.ELECTRICITY  # Replace with the desired load type
     unit = lt.Units.KILOWATT  # Replace with the desired unit
-    column_name = "power"
+    column_name = "capped_powers"
     sep = ";"  # Separator used in the CSV file (e.g., "," or ";")
     decimal = "."  # Decimal indicator used in the CSV file (e.g., "." or ",")
     multiplier = 1  # Multiplier factor for amplification (if needed)
@@ -247,4 +246,4 @@ def setup_function(
     )
 
 
-# python ../hisim/hisim_main.py ptx_transf_bat_ec_gird.py ptx_trans_bat_ec_grid_final
+# python ../hisim/hisim_main.py ptx_transf_bat_ec_no_gird.py setup_function

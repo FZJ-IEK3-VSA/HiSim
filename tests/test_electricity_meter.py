@@ -68,7 +68,7 @@ def test_house(
     my_sim: sim.Simulator = sim.Simulator(
         module_directory=path_to_be_added,
         my_simulation_parameters=my_simulation_parameters,
-        module_filename="household_for_test_electricity_meter.py",
+        module_filename="household_for_test_electricity_meter",
     )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 

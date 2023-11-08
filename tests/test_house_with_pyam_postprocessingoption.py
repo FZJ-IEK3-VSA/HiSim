@@ -97,7 +97,7 @@ def test_house_with_pyam(
     my_sim: sim.Simulator = sim.Simulator(
         module_directory=path_to_be_added,
         my_simulation_parameters=my_simulation_parameters,
-        module_filename="household_for_pyam_test.py",
+        module_filename="household_for_pyam_test",
     )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 

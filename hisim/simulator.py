@@ -492,3 +492,8 @@ class Simulator:
             results_merged_daily,
             results_merged_hourly,
         )
+
+    def connect_everything_automatically(self):
+        """Connect all components in the sytem setups automatically."""
+        
+        pass

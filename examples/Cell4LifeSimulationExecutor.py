@@ -1,6 +1,7 @@
 import pandas as pd
 import os
 import sys
+import graphviz
 os.chdir('C://Users//Standard//Desktop//hisim//HiSim//')
 sys.path.append("C://Users//Standard//Desktop//hisim//HiSim//examples")
 sys.path.append("C://Users//Standard//Desktop//hisim//HiSim//")

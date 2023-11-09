@@ -183,7 +183,10 @@ def Cell4Life(
         #max_discharging_rate=input_variablen["fuel_cell_power"] / (3.6e3 * 3.939e4), 
         source_weight=input_variablen["init_source_weight_hydrogenstorage"]["value"],
     )
-    
+    h2_storage_config.energy_for_charge_based_on_massflow_h_fuel = input_variablen["h2storage_energy_for_charge_based_on_massflow_h_fuel"]["value"]
+    h2_storage_config.energy_for_discharge_based_on_massflow_h_fuel = input_variablen["h2storage_energy_for_discharge_based_on_massflow_h_fuel"]["value"]
+    h2_storage_config.energy_for_operation = input_variablen["h2storage_energy_for_operation"]["value"]
+    h2_storage_config.h_fuel = input_variablen["h_fuel"]["value"]
     h2_storage_config.loss_factor_per_day = input_variablen["h2_storage_losses"]["value"] #H2 Storage losses per Day
     h2_storage_config.max_capacity = input_variablen["h2_storage_capacity_max"]["value"]
     
@@ -213,6 +216,17 @@ def Cell4Life(
         source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
         source_weight=999,
     )
+
+    
+    my_electricity_controller.add_component_input_and_connect(
+        source_component_class=my_h2storage,
+        source_component_output=my_h2storage.ElectricityConsumption,
+        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
+        source_unit=loadtypes.Units.WATT,
+        source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+        source_weight=999,
+    )
+    
 
     my_electricity_controller.add_component_input_and_connect(
         source_component_class=my_photovoltaic_system,
@@ -288,7 +302,6 @@ def Cell4Life(
 
      
     my_h2storage.connect_only_predefined_connections(my_electrolyzer)
-  
     my_h2storage.connect_only_predefined_connections(my_chp)
     my_chp_controller.connect_only_predefined_connections(my_h2storage)
     my_electrolyzer.connect_only_predefined_connections(my_h2storage)
@@ -412,7 +425,22 @@ def InputParameter():
     off_on_SOEC = 500 #Day: Turn on Electrolyzer and turn off on Fuel Cell
     off_on_SOECUnit = "days (counting: day one in Input Data = 1 ||Day: Turn on Electrolyzer and turn off on Fuel Cell"
     
+    #H2 storage energy demands; the energy demand is covered by electricit; 
+    # -in general: if storage is empty, no energy is needed!
+    # -energy for charging, discharging and for operation of the tank is considered; 
+    # -the operation energy demand is always considererd and added to charging/discharging energy demand if there is fuel stored; 
+    
+    #charging: in % in relation to the energy content of the fuel which is stored in the time step; e.g. xx % of energy of energy contend of the fuel stored in the time step
+    h2storage_energy_for_charge_based_on_massflow_h_fuel = 0
+    h2storage_energy_for_charge_based_on_massflow_h_fuelUnit = "%" #of given h_fuel heat value
+    #discharging: in % in relation to the energy content of the fuel which is withdrawn in the time step 
+    h2storage_energy_for_discharge_based_on_massflow_h_fuel = 0
+    h2storage_energy_for_discharge_based_on_massflow_h_fuelUnit = "%" #of given h_fuel heat value
+    #operation
+    h2storage_energy_for_operation = 0 #in Watt, energy demand just for operation, if there isb fuel stored in the tank; this energy amount is always added to charging & discharging energy; if no fuel is in the tank, this energy is not considered! (h2 storage does not need energy)
+    h2storage_energy_for_operationUnit = "W" 
 
+    
     input_variablen = {
         "PreResultNumber": {
             "value": PreResultNumber,
@@ -508,6 +536,21 @@ def InputParameter():
             "value": h_fuel,
             "unit": h_fuelUnit,
         },
+        
+        "h2storage_energy_for_charge_based_on_massflow_h_fuel": {
+            "value": h2storage_energy_for_charge_based_on_massflow_h_fuel,
+            "unit": h2storage_energy_for_charge_based_on_massflow_h_fuelUnit,
+        },
+        
+        "h2storage_energy_for_discharge_based_on_massflow_h_fuel": {
+            "value": h2storage_energy_for_discharge_based_on_massflow_h_fuel,
+            "unit": h2storage_energy_for_discharge_based_on_massflow_h_fuelUnit,
+        },
+        "h2storage_energy_for_operation": {
+            "value": h2storage_energy_for_operation,
+            "unit": h2storage_energy_for_operationUnit,
+        },
+        
     }
         
 

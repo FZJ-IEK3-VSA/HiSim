@@ -436,7 +436,7 @@ class ModularHeatPump(cp.Component):
                 output.component_name
                 == self.config.name + "_w" + str(self.config.source_weight)
                 and output.load_type == lt.LoadTypes.ELECTRICITY
-            ):  # Todo: check component name from examples: find another way of using only heatpump-outputs
+            ):  # Todo: check component name from system_setups: find another way of using only heatpump-outputs
                 self.config.consumption = round(
                     sum(postprocessing_results.iloc[:, index])
                     * self.my_simulation_parameters.seconds_per_timestep

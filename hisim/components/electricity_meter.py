@@ -287,7 +287,7 @@ class ElectricityMeter(DynamicComponent):
         for index, output in enumerate(all_outputs):
             if output.component_name == self.config.name:
                 if output.field_name == self.ElectricityToGrid:
-                    # Todo: check component name from examples: find another way of using the correct outputs
+                    # Todo: check component name from system_setups: find another way of using the correct outputs
                     self.config.total_energy_to_grid_in_kwh = round(
                         postprocessing_results.iloc[:, index].sum() * 1e-3,
                         1,

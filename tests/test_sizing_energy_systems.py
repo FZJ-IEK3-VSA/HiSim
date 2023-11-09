@@ -144,7 +144,7 @@ def test_energy_system_scalability():
 def simulation_for_one_timestep(
     scaling_factor_for_absolute_conditioned_floor_area: int,
 ) -> Tuple[Any, float, float, float, float, float, float]:
-    """Test function for the example house for one timestep."""
+    """Test function for the system setup house for one timestep."""
 
     # Set building inputs
     absolute_conditioned_floor_area_in_m2 = (

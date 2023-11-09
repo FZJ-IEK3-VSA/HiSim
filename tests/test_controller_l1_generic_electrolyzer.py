@@ -30,16 +30,14 @@ def test_electrolyzer_controller():
     # ===================================================================================================================
     # Setup Electrolyzer
 
-    my_controller_config = (
-        controller_l1_electrolyzer_h2.ElectrolyzerControllerConfig(
-            name=name,
-            nom_load=nom_load,
-            min_load=min_load,
-            max_load=max_load,
-            warm_start_time=warm_start_time,
-            cold_start_time=cold_start_time,
-            standby_load=5.0
-        )
+    my_controller_config = controller_l1_electrolyzer_h2.ElectrolyzerControllerConfig(
+        name=name,
+        nom_load=nom_load,
+        min_load=min_load,
+        max_load=max_load,
+        warm_start_time=warm_start_time,
+        cold_start_time=cold_start_time,
+        standby_load=5.0,
     )
     my_controller = controller_l1_electrolyzer_h2.ElectrolyzerController(
         config=my_controller_config, my_simulation_parameters=my_simulation_parameters

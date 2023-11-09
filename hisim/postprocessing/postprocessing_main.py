@@ -806,7 +806,7 @@ class PostProcessor:
                 key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME
             )
         else:
-            self.scenario = ppdt.setup_function
+            self.scenario = ""
 
         # set pyam region
         if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.LOCATION):
@@ -951,7 +951,6 @@ class PostProcessor:
                 ppdt.simulation_parameters.result_directory, "component_configurations.json"
             )
         )
-
 
     def write_kpis_in_pyam_dict(
         self,
@@ -1125,7 +1124,7 @@ class PostProcessor:
             raise ValueError(
                 "Some PostProcessingOptions are not set."
                 "Please check if PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT, PostProcessingOptions.COMPUTE_CAPEX,"
-                "PostProcessingOptions.COMPUTE_OPEX are set in your example."
+                "PostProcessingOptions.COMPUTE_OPEX are set in your system setup."
             )
 
     def get_dict_from_kpi_lists(self, value_list: List[str]) -> Dict[str, Any]:

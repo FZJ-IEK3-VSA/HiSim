@@ -17,8 +17,7 @@ def test_system_setup_starter():
     """Run a simulation from JSON."""
 
     parameters_json = {
-        "path_to_module": "../examples/household_1_advanced_hp_diesel_car.py",
-        "function_in_module": "household_1_advanced_hp_diesel_car",
+        "path_to_module": "../system_setups/household_1_advanced_hp_diesel_car.py",
         "simulation_parameters": {
             "start_date": "2021-01-01T00:00:00",
             "end_date": "2021-01-02T00:00:00",
@@ -49,18 +48,12 @@ def test_system_setup_starter():
     if Path(result_directory).is_dir():
         shutil.rmtree(result_directory)
     Path(result_directory).mkdir(parents=True)
-    (
-        path_to_module,
-        function_in_module,
-        simulation_parameters,
-        module_config_path,
-    ) = make_system_setup(
+    (path_to_module, simulation_parameters, module_config_path,) = make_system_setup(
         parameters_json=parameters_json,
         result_directory=result_directory,
     )
     main(
         path_to_module,
-        function_in_module,
         simulation_parameters,
         module_config_path,
     )
@@ -92,8 +85,7 @@ def test_system_setup_starter_scaling():
     """Run a simulation from JSON."""
 
     parameters_json = {
-        "path_to_module": "../examples/household_1_advanced_hp_diesel_car.py",
-        "function_in_module": "household_1_advanced_hp_diesel_car",
+        "path_to_module": "../system_setups/household_1_advanced_hp_diesel_car.py",
         "simulation_parameters": {
             "start_date": "2021-01-01T00:00:00",
             "end_date": "2021-01-02T00:00:00",
@@ -117,18 +109,12 @@ def test_system_setup_starter_scaling():
     if Path(result_directory).is_dir():
         shutil.rmtree(result_directory)
     Path(result_directory).mkdir(parents=True)
-    (
-        path_to_module,
-        function_in_module,
-        simulation_parameters,
-        module_config_path,
-    ) = make_system_setup(
+    (path_to_module, simulation_parameters, module_config_path,) = make_system_setup(
         parameters_json=parameters_json,
         result_directory=result_directory,
     )
     main(
         path_to_module,
-        function_in_module,
         simulation_parameters,
         module_config_path,
     )

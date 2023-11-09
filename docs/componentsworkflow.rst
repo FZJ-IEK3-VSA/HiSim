@@ -8,14 +8,14 @@ Understanding components is an essential part of `HiSim`. For the basic simulati
 * create an Component object to be implemented within the `setup function`
 * connect Component objects among themselves.
 
-The snippets showed here are found in the examples file `basic_household.py`.
+The snippets showed here are found in the system_setup file `basic_household.py`.
 
 Create a Component object
 --------------------------------------
 
 All the implemented *Component* classes are implemented in directory *hisim/components*. The Python modules are named after the corresponded class, but it might have supplementary classes implemented, as such, the module *battery.py* has the *Battery* class implemented in it along with *BatteryController*.
 
-In the following example, the object component *PVSystem* (for Photovoltaic System) from setup function *basic_household_explicit* is explored. The class *PVSystem* is found under the directory *hisim/components* in module *pvs.py*. To create an object, the module *pvs.py* has to be imported, and the required parameters from the class constructor have to be passed in the instantiation, as shown in the following snippet.
+In the following example, the object component *PVSystem* (for Photovoltaic System) from setup function *setup_function* is explored. The class *PVSystem* is found under the directory *hisim/components* in module *pvs.py*. To create an object, the module *pvs.py* has to be imported, and the required parameters from the class constructor have to be passed in the instantiation, as shown in the following snippet.
 
 .. code-block:: python
 

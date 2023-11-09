@@ -537,7 +537,7 @@ class HeatPumpHplib(Component):
             if (
                 output.component_name == "HeatPumpHPLib"
                 and output.load_type == LoadTypes.ELECTRICITY
-            ):  # Todo: check component name from examples: find another way of using only heatpump-outputs
+            ):  # Todo: check component name from system_setups: find another way of using only heatpump-outputs
                 self.config.consumption = round(
                     sum(postprocessing_results.iloc[:, index])
                     * self.my_simulation_parameters.seconds_per_timestep
@@ -700,7 +700,7 @@ class HeatPumpHplibController(Component):
             raise KeyError(
                 "Keys for heating system was not found in the singleton sim repository."
                 + "This might be because the heat distribution system  was not initialized before the advanced hplib controller."
-                + "Please check the order of the initialization of the components in your example."
+                + "Please check the order of the initialization of the components in your system setup."
             )
         self.build(
             mode=self.heatpump_controller_config.mode,

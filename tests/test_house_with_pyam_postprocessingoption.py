@@ -1,4 +1,4 @@
-"""  Basic household example adapted for pyam postprocessing test. """
+"""  Basic household system setup adapted for pyam postprocessing test. """
 
 # clean
 import os
@@ -24,15 +24,14 @@ __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
 # PATH and FUNC needed to build simulator, PATH is fake
-PATH = "../examples/household_for_pyam_test.py"
-FUNC = "house_for_pyam_test"
+PATH = "../system_setups/household_for_pyam_test.py"
 
 
 @pytest.mark.base
 def test_house_with_pyam(
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
-    """Basic household example.
+    """Basic household system setup.
 
     This setup function emulates an household including the basic components. Here the residents have their
     electricity and heating needs covered by the photovoltaic system and the heat pump.
@@ -98,16 +97,15 @@ def test_house_with_pyam(
 
     my_sim: sim.Simulator = sim.Simulator(
         module_directory=path_to_be_added,
-        setup_function=FUNC,
         my_simulation_parameters=my_simulation_parameters,
-        module_filename="household_for_pyam_test.py",
+        module_filename="household_for_pyam_test",
     )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Results Path
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
-        model_name=my_sim.setup_function,
+        model_name=my_sim.module_filename,
         variant_name="pyam_test",
         sorting_option=SortingOptionEnum.FLAT,
         hash_number=None,

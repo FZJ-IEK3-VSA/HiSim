@@ -69,7 +69,7 @@ class HeatDistributionConfig(cp.ConfigBase):
             name="HeatDistributionSystem",
             heating_load_of_building_in_watt=heating_load_of_building_in_watt,
             co2_footprint=0,  # Todo: check value
-            cost=8000,  # SOURCE: https://www.hausjournal.net/heizungsrohre-verlegen-kosten  # Todo: use price per m2 in examples instead
+            cost=8000,  # SOURCE: https://www.hausjournal.net/heizungsrohre-verlegen-kosten  # Todo: use price per m2 in system_setups instead
             lifetime=50,  # SOURCE: VDI2067-1
             maintenance_cost_as_percentage_of_investment=0.01,  # SOURCE: VDI2067-1
         )
@@ -174,7 +174,7 @@ class HeatDistribution(cp.Component):
             raise KeyError(
                 "Key for heating system was not found in the singleton sim repository."
                 + "This might be because the heat distribution system controller was not initialized before the heat distribution system."
-                + "Please check the order of the initialization of the components in your example."
+                + "Please check the order of the initialization of the components in your system setup."
             )
 
         self.build(heating_system=self.heating_system)

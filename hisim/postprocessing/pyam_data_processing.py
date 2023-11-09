@@ -117,7 +117,7 @@ class PyAmChartGenerator:
         self.folder_path = os.path.join(
             os.pardir,
             os.pardir,
-            "examples",
+            "system_setups",
             "results_for_scenario_comparison",
             "data",
             data_path_strip,
@@ -125,7 +125,7 @@ class PyAmChartGenerator:
         self.result_folder = os.path.join(
             os.pardir,
             os.pardir,
-            "examples",
+            "system_setups",
             "results_for_scenario_comparison",
             "results",
             result_path_strip,
@@ -1297,7 +1297,7 @@ class FilterClass:
     def get_variables_to_check(self):
         """Get specific variables to check for the scenario evaluation."""
 
-        # examples for variables to check (check names of your variables before your evaluation, if they are correct)
+        # system_setups for variables to check (check names of your variables before your evaluation, if they are correct)
         # kpi data has no time series, so only choose when you analyze yearly data
         kpi_data = [
             "Consumption",
@@ -1364,7 +1364,7 @@ class FilterClass:
     def get_building_properties_to_check(self):
         """Get building properties."""
 
-        # examples for scenarios to filter
+        # system_setups for scenarios to filter
         building_type = [
             "DE.N.SFH",
             "DE.N.TH",
@@ -1398,7 +1398,7 @@ class FilterClass:
     def get_pv_properties_to_check(self):
         """Get pv properties."""
 
-        # examples for scenarios to filter
+        # system_setups for scenarios to filter
         pv_share = [0, 0.25, 0.5, 1]
 
         return pv_share

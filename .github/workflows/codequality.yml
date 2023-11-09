@@ -33,7 +33,7 @@ jobs:
       working-directory: ./
       run: |
         prospector setup.py
-        prospector examples/
+        prospector system_setups/
         prospector tests/
         prospector hisim/
         prospector docs/
@@ -77,11 +77,11 @@ jobs:
 #    - name: Lint with flake8
 #      working-directory: ./
 #      run: |
-#        flake8 examples/basic_household.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
-#        flake8 examples/basic_household_only_heating.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
-#        flake8 examples/default_connections.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
-#        flake8 examples/dynamic_components.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
-#        flake8 examples/simple_examples.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+#        flake8 system_setups/basic_household.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+#        flake8 system_setups/basic_household_only_heating.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+#        flake8 system_setups/default_connections.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+#        flake8 system_setups/dynamic_components.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
+#        flake8 system_setups/simple_examples.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
 #        flake8 hisim/component.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
 #        flake8 hisim/component_wrapper.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics
 #        flake8 hisim/dynamic_component.py --count --select=E9,F63,F7,F82,E800 --show-source --statistics

@@ -403,11 +403,11 @@ def compute_kpis(
 ) -> List[str]:  # noqa: MC0001
     """Calculation of Kpi's: self consumption rate, autarky rate, injection, annual CO2 emissions and annual cost.
 
-    :param components: List of configured components in the HiSIM example
+    :param components: List of configured components in the HiSIM system setup
     :type components: List[ComponentWrapper]
     :param results: DataFrame of all results of the HiSIM evaluation
     :type results: pd.DataFrame
-    :param all_outputs: List of all configured ComponentOutputs in the HiSIM example.
+    :param all_outputs: List of all configured ComponentOutputs in the HiSIM system setup.
     :type all_outputs: List[ComponentOutput]
     :param simulation_parameters: Simulation parameters for HiSIM calculation
     :type simulation_parameters: SimulationParameters

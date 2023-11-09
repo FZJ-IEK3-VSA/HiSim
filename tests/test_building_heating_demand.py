@@ -27,8 +27,7 @@ __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
 # PATH and FUNC needed to build simulator, PATH is fake
-PATH = "../examples/household_for_test_building_heat_demand.py"
-FUNC = "house_with_idealized_electric_heater_for_heating_test"
+PATH = "../system_setups/household_for_test_building_heat_demand.py"
 
 
 @pytest.mark.buildingtest
@@ -91,9 +90,8 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
 
     my_sim: sim.Simulator = sim.Simulator(
         module_directory=path_to_be_added,
-        setup_function=FUNC,
         my_simulation_parameters=my_simulation_parameters,
-        module_filename="household_for_test_building_heat_demand.py",
+        module_filename="household_for_test_building_heat_demand",
     )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 

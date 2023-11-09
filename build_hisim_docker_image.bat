@@ -19,6 +19,6 @@ docker cp hisim_config.json %ID%:/input/request.json
 docker start -ai %ID%
 if %errorlevel% neq 0 exit /b %errorlevel%
 
-echo "Copying results from container to examples\results\docker_test. Please specify whether you want to clear this folder first."
-rmdir /s examples\results\docker_test\
-docker cp %ID%:/results/ ./examples/results/docker_test/
+echo "Copying results from container to system_setups\results\docker_test. Please specify whether you want to clear this folder first."
+rmdir /s system_setups\results\docker_test\
+docker cp %ID%:/results/ ./system_setups/results/docker_test/

@@ -51,12 +51,12 @@ def main():
 
     folder_from_which_data_will_be_collected = os.path.join(
         cluster_storage_path,
-        # "repositories/HiSim/examples/results/household_cluster_reference_advanced_hp/german_tabula_buildings_20230919_1905"
-        # "repositories/HiSim/examples/results/household_cluster_test_advanced_hp/hplib_configs_20230915_1122",
-        "repositories/HiSim/examples/results/comparison_ref_and_pv_case",
+        # "repositories/HiSim/system_setups/results/household_cluster_reference_advanced_hp/german_tabula_buildings_20230919_1905"
+        # "repositories/HiSim/system_setups/results/household_cluster_test_advanced_hp/hplib_configs_20230915_1122",
+        "repositories/HiSim/system_setups/results/comparison_ref_and_pv_case",
     )
     # folder_from_which_data_will_be_collected = (
-    #     r"C:\Users\k.rieck\Cluster_stuff_copied\examples_results"
+    #     r"C:\Users\k.rieck\Cluster_stuff_copied\system_setups_results"
     # )
     path_to_default_config = os.path.join(
         cluster_storage_path,

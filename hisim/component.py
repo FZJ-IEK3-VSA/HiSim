@@ -251,7 +251,7 @@ class Component:
         src_field_name = src_object.field_name
         self.connect_input(input_fieldname=input_fieldname, src_object_name=src_object_name, src_field_name=src_field_name)
 
-    # added variable input length and loop to be able to set default connections in one line in examples
+    # added variable input length and loop to be able to set default connections in one line in system_setups
     def connect_only_predefined_connections(self, *source_components):
         """ Wrapper for default connections and connect with connections list. """
         for source_component in source_components:

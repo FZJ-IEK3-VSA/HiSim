@@ -38,7 +38,7 @@ def compute_investment_cost(
 ) -> Tuple[float, float]:
     """Iterates over all components and computes annual investment cost and annual C02 footprint respectively.
 
-    :param components: List of all configured components in the HiSIM example.
+    :param components: List of all configured components in the HiSIM system setup.
     :type components: List[ComponentWrapper]
     :return: annual investment cost for considered equipment and annual C02 footprint.
     :rtype: Tuple[float, float]

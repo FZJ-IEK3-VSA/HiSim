@@ -33,8 +33,8 @@ git clone https://github.com/FZJ-IEK3-VSA/HiSim.git
 
 Virtual Environment
 -----------------------
-Before installing `hisim`, it is recommended to set up a Python virtual environment. Let `hisimvenv` be the name of
-virtual environment to be created. For Windows users, setting the virtual environment in the path `\hisim` is done with
+Before installing `Hisim`, it is recommended to set up a Python virtual environment. Let `hisimvenv` be the name of
+virtual environment to be created. For Windows users, setting the virtual environment in the path `\Hisim` is done with
 the command line:
 
 ```python
@@ -60,7 +60,7 @@ conda create -n hisimvenv python=3.9
 conda activate hisimvenv
 ```
 
-With the successful activation, `hisim` is ready to be locally installed.
+With the successful activation, `HiSim` is ready to be locally installed.
 
 Install package
 ------------------------
@@ -70,26 +70,31 @@ After setting up the virtual environment, install the package to your local libr
 pip install -e .
 ```
 
-Run Simple Examples
+Run Simple System Setups
 -----------------------
-Run the python interpreter in the `hisim/examples` directory with the following command:
+Run the python interpreter in the `HiSim/system_setups` directory with the following command:
 
 ```python
-python ../hisim/hisim_main.py simple_examples.py first_example
+python ../hisim/hisim_main.py simple_system_setup_one.py
+```
+or
+
+```python
+python ../hisim/hisim_main.py simple_system_setup_two.py
 ```
 
-This command executes `hisim_main.py` on the setup function `first_example` implemented in the file `examples.py` that
-is stored in `hisim/examples`. The same file contains another setup function that can be used: `second_example`. The
-results can be visualized under directory `results` created under the same directory where the script with the setup
+This command executes `hisim_main.py` on the setup function `setup_function` implemented in the files `simple_system_setup_one.py`
+and `simple_system_setup_two.py` that are stored in `HiSim/system_setups`.
+The results can be visualized under directory `results` created under the same directory where the script with the setup
 function is located.
 
-Run Basic Household Example
+Run Basic Household System setup
 -----------------------
-The directory `hisim\examples` also contains a basic household configuration in the script `basic_household.py`. The
-first setup function (`basic_household_explicit`) can be executed with the following command:
+The directory `HiSim/system_setups` also contains a basic household configuration in the script `basic_household.py`.
+It can be executed with the following command:
 
 ```python
-python ../hisim/hisim_main.py basic_household.py basic_household_explicit
+python ../hisim/hisim_main.py basic_household.py
 ```
 
 The system is set up with the following elements:
@@ -117,7 +122,7 @@ The basic structure of a setup function follows:
     1. Finally, add your `Component` object to `Simulator` object
 1. Repeat step 2 while all the necessary components have been created, connected and added to the `Simulator` object.
 
-Once you are done, you can run the setup function according to the description in the simple example run.
+Once you are done, you can run the setup function according to the description in the simple system setup run.
 
 Package Structure
 -----------

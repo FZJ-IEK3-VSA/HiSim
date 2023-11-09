@@ -69,7 +69,12 @@ class Simulator:
         if self._simulation_parameters is not None:
             log.LOGGING_LEVEL = self._simulation_parameters.logging_level
 
-    def add_component(self, component: cp.Component, is_cachable: bool = False) -> None:
+    def add_component(
+        self,
+        component: cp.Component,
+        is_cachable: bool = False,
+        connect_automatically: bool = False,
+    ) -> None:
         """Adds component to simulator and wraps it up the output in the register."""
         if self._simulation_parameters is None:
             raise ValueError("Simulation Parameters were not initialized")
@@ -77,7 +82,9 @@ class Simulator:
         component.set_sim_repo(self.simulation_repository)
 
         # set the wrapper
-        wrap = ComponentWrapper(component, is_cachable)
+        wrap = ComponentWrapper(
+            component, is_cachable, connect_automatically=connect_automatically
+        )
         wrap.register_component_outputs(self.all_outputs)
         self.wrapped_components.append(wrap)
         if component.component_name in self.config_dictionary:
@@ -94,6 +101,14 @@ class Simulator:
     def prepare_calculation(self) -> None:
         """Connects the inputs from every component to the corresponding outputs."""
         for wrapped_component in self.wrapped_components:
+            # check if component should be connected to default connections automatically
+            if wrapped_component.connect_automatically is True:
+                self.connect_everything_automatically(
+                    source_component_list=[
+                        wp.my_component for wp in self.wrapped_components
+                    ],
+                    target_component=wrapped_component.my_component,
+                )
             wrapped_component.prepare_calculation()
 
     def process_one_timestep(
@@ -493,7 +508,42 @@ class Simulator:
             results_merged_hourly,
         )
 
-    def connect_everything_automatically(self):
+    def connect_everything_automatically(
+        self, source_component_list: List[cp.Component], target_component: cp.Component
+    ) -> None:
         """Connect all components in the sytem setups automatically."""
-        
-        pass
+
+        target_default_connection_dict = target_component.default_connections
+
+        # check if target component has any default connections
+        if bool(target_default_connection_dict) is True:
+
+            # check if at least one source_component is in the target default connections
+            if (
+                any(source_component.get_classname() in target_default_connection_dict for source_component in source_component_list)
+                is False
+            ):
+                raise KeyError(
+                    f"No component in the system setup matches the default connections of {target_component.component_name}."
+                )
+
+            for source_component in source_component_list:
+                source_component_classname = source_component.get_classname()
+
+                if source_component_classname in target_default_connection_dict.keys():
+
+                    connections = target_component.get_default_connections(
+                        source_component=source_component
+                    )
+                    log.information(
+                        f"Default connection was successful between {target_component.component_name} and {source_component.component_name}."
+                    )
+                    # try connect with connection list
+                    target_component.connect_with_connections_list(
+                        connections=connections
+                    )
+        else:
+            log.warning(
+                f"The component {target_component.component_name} has no default connections set in its init function. "
+                + "If no component connection is needed, that's fine. Otherwise you can connect your components manually or create a default connection."
+            )

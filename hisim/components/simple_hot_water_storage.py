@@ -15,11 +15,12 @@ from hisim.component import (
     ComponentOutput,
     OpexCostDataClass,
 )
+
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
-from hisim import utils
+from hisim import utils, log
 
 __authors__ = "Katharina Rieck, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -299,6 +300,22 @@ class SimpleHotWaterStorage(cp.Component):
             lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.StandbyHeatLoss} will follow.",
         )
+        self.add_default_connections(self.get_default_connections_from_heat_distribution_system())
+
+    def get_default_connections_from_heat_distribution_system(self) -> List[cp.ComponentConnection]:
+        """Get heat distribution default connections."""
+        log.information("setting controller default connections in simple hot water storage.")
+        from hisim.components.heat_distribution_system import HeatDistribution  # pylint: disable=import-outside-toplevel
+        connections = []
+        hds_classname = HeatDistribution.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                SimpleHotWaterStorage.WaterTemperatureFromHeatDistribution,
+                hds_classname,
+                HeatDistribution.WaterTemperatureOutput,
+            )
+        )
+        return connections
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""

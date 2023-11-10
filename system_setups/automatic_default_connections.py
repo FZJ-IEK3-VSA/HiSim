@@ -36,7 +36,6 @@ def setup_function(
     year = 2021
     seconds_per_timestep = 60
 
-
     # ==== Build Components ====
 
     # Build system parameters
@@ -97,8 +96,6 @@ def setup_function(
         config=generic_heat_pump.GenericHeatPumpConfig.get_default_generic_heat_pump_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
-
-
 
     # Electricity Grid
     my_electricity_meter.add_component_input_and_connect(

@@ -5,7 +5,7 @@ It iterates over all components in each timestep until convergence and loops ove
 # clean
 import os
 import datetime
-from typing import List, Tuple, Optional, Dict, Any
+from typing import List, Tuple, Optional, Dict, Any, Union
 import time
 import pandas as pd
 
@@ -14,6 +14,7 @@ from hisim.component_wrapper import ComponentWrapper
 from hisim import sim_repository
 from hisim.postprocessing import postprocessing_main as pp
 import hisim.component as cp
+import hisim.dynamic_component as dcp
 from hisim import log
 from hisim.simulationparameters import SimulationParameters
 from hisim import utils
@@ -509,7 +510,7 @@ class Simulator:
         )
 
     def connect_everything_automatically(
-        self, source_component_list: List[cp.Component], target_component: cp.Component
+        self, source_component_list: Union[List[cp.Component], List[dcp.DynamicComponent]], target_component: Union[cp.Component, dcp.DynamicComponent]
     ) -> None:
         """Connect all components in the sytem setups automatically."""
 
@@ -532,16 +533,34 @@ class Simulator:
 
                 if source_component_classname in target_default_connection_dict.keys():
 
-                    connections = target_component.get_default_connections(
-                        source_component=source_component
-                    )
-                    log.information(
-                        f"Default connection was successful between {target_component.component_name} and {source_component.component_name}."
-                    )
-                    # try connect with connection list
-                    target_component.connect_with_connections_list(
-                        connections=connections
-                    )
+                    if isinstance(target_component, dcp.DynamicComponent):
+
+                        connections = target_component.get_dynamic_default_connections(
+                            source_component=source_component
+                        )
+                        target_component.connect_with_dynamic_connections_list(
+                            dynamic_component_connections=connections
+                        )
+                        log.information(
+                            f"Dynamic default connection was successful between {target_component.component_name} and {source_component.component_name}."
+                        )
+
+                    if isinstance(target_component, cp.Component) and not isinstance(target_component, dcp.DynamicComponent):
+                        
+
+                        connections = target_component.get_default_connections(
+                            source_component=source_component
+                        )
+                        target_component.connect_with_connections_list(
+                            connections=connections
+                        )
+                        log.information(
+                            f"Default connection was successful between {target_component.component_name} and {source_component.component_name}."
+                        )
+
+
+                    elif not isinstance(target_component, cp.Component) and not isinstance(target_component, dcp.DynamicComponent):
+                        raise TypeError(f"Type {type(target_component)} of target_component should be Component or Dyanmic Component.")
         else:
             log.warning(
                 f"The component {target_component.component_name} has no default connections set in its init function. "

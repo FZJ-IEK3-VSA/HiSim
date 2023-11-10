@@ -318,7 +318,7 @@ class GenericHeatPump(cp.Component):
 
     def get_default_connections_from_weather(self) -> List[cp.ComponentConnection]:
         """Get weather default connections."""
-        log.information("setting weather default connections in HeatPump")
+        log.information("setting default connections in generic heat pump")
         connections = []
         weather_classname = Weather.get_classname()
         connections.append(
@@ -334,7 +334,7 @@ class GenericHeatPump(cp.Component):
         self,
     ) -> List[cp.ComponentConnection]:
         """Get heat pump controller default connections."""
-        log.information("setting controller default connections in HeatPump")
+        log.information("setting default connections in generic heat pump")
         connections = []
         controller_classname = GenericHeatPumpController.get_classname()
         connections.append(
@@ -682,7 +682,7 @@ class GenericHeatPumpController(cp.Component):
 
     def get_default_connections_from_building(self) -> List[cp.ComponentConnection]:
         """Get building default connections."""
-        log.information("setting building default connections in Heatpumpcontroller")
+        log.information("setting default connections in generic heat pump controller")
         connections = []
         building_classname = Building.get_classname()
         connections.append(

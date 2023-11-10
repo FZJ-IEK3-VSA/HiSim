@@ -303,7 +303,7 @@ class ModularHeatPump(cp.Component):
 
     def get_default_connections_from_weather(self):
         """Sets default connections of Weather."""
-        log.information("setting weather default connections in HeatPump")
+        log.information("setting default connections in modular heat pump")
         connections = []
         weather_classname = Weather.get_classname()
         connections.append(
@@ -317,7 +317,7 @@ class ModularHeatPump(cp.Component):
 
     def get_default_connections_from_controller_l1_heatpump(self):
         """Sets default connections of heat pump controller."""
-        log.information("setting l1 default connections in HeatPump")
+        log.information("setting default connections in modular heat pump")
         connections = []
         controller_classname = (
             controller_l1_heatpump.L1HeatPumpController.get_classname()

@@ -323,7 +323,7 @@ class HeatPumpHplib(Component):
         self,
     ):
         """Get default connections."""
-        log.information("setting heat pump controller default connections")
+        log.information("setting default connections in advanced heat pump")
         connections = []
         hpc_classname = HeatPumpHplibController.get_classname()
         connections.append(
@@ -339,7 +339,7 @@ class HeatPumpHplib(Component):
         self,
     ):
         """Get default connections."""
-        log.information("setting weather default connections")
+        log.information("setting default connections in advanced heat pump")
         connections = []
         weather_classname = weather.Weather.get_classname()
         connections.append(
@@ -363,7 +363,7 @@ class HeatPumpHplib(Component):
         self,
     ):
         """Get simple hot water storage default connections."""
-        log.information("setting simple hot water storage default connections")
+        log.information("setting default connections in advanced heat pump")
         connections = []
         hws_classname = simple_hot_water_storage.SimpleHotWaterStorage.get_classname()
         connections.append(

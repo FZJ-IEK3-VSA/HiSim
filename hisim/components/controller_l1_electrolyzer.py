@@ -162,7 +162,7 @@ class L1GenericElectrolyzerController(cp.Component):
     def get_default_connections_from_h2_storage(self):
         """Sets default connections for the hydrogen storage in the electrolyzer controller."""
         log.information(
-            "setting hydrogen storage default connections in Electrolyzer Controller"
+            "setting default connections in electrolyzer controller"
         )
         connections = []
         h2_storage_classname = (

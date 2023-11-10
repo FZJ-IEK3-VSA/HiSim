@@ -304,7 +304,7 @@ class SimpleHotWaterStorage(cp.Component):
 
     def get_default_connections_from_heat_distribution_system(self) -> List[cp.ComponentConnection]:
         """Get heat distribution default connections."""
-        log.information("setting controller default connections in simple hot water storage.")
+        log.information("setting default connections in simple hot water storage.")
         from hisim.components.heat_distribution_system import HeatDistribution  # pylint: disable=import-outside-toplevel
         connections = []
         hds_classname = HeatDistribution.get_classname()

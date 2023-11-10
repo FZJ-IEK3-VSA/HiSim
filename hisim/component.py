@@ -8,7 +8,7 @@ from __future__ import annotations
 import dataclasses as dc
 import typing
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 from dataclass_wizard import JSONWizard
@@ -17,7 +17,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
-
+# from hisim.dynamic_component import DynamicComponent, DynamicComponentConnection
 # Package
 
 
@@ -349,7 +349,7 @@ class Component:
         for source_component in source_components:
 
             connections = self.get_default_connections(source_component)
-            self.connect_with_connections_list(connections)
+            self.connect_with_dynamic_connections_list(connections)
 
     def connect_with_connections_list(
         self, connections: List[ComponentConnection]

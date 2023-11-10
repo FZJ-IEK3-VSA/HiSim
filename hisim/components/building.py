@@ -150,7 +150,8 @@ class BuildingState:
         )
 
 
-class Building(dynamic_component.DynamicComponent):
+# class Building(dynamic_component.DynamicComponent):
+class Building(cp.Component):
 
     """Building class.
 
@@ -217,12 +218,12 @@ class Building(dynamic_component.DynamicComponent):
         """Construct all the neccessary attributes."""
         self.buildingconfig = config
 
-        # dynamic
-        self.my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
-        self.my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
+        # # dynamic
+        # self.my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
+        # self.my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
         super().__init__(
-            my_component_inputs=self.my_component_inputs,
-            my_component_outputs=self.my_component_outputs,
+            # my_component_inputs=self.my_component_inputs,
+            # my_component_outputs=self.my_component_outputs,
             name=self.buildingconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
@@ -428,7 +429,7 @@ class Building(dynamic_component.DynamicComponent):
         self,
     ):
         """Get weather default connnections."""
-        log.information("setting weather default connections")
+        log.information("setting default connections in building")
         connections = []
         weather_classname = Weather.get_classname()
         connections.append(
@@ -493,7 +494,7 @@ class Building(dynamic_component.DynamicComponent):
         self,
     ):
         """Get occupancy default connections."""
-        log.information("setting occupancy default connections")
+        log.information("setting default connections in building")
         connections = []
         occupancy_classname = Occupancy.get_classname()
         connections.append(
@@ -516,7 +517,7 @@ class Building(dynamic_component.DynamicComponent):
         self,
     ):
         """Get UTSP default connections."""
-        log.information("setting utsp default connections")
+        log.information("setting default connections in building")
         connections = []
         utsp_classname = UtspLpgConnector.get_classname()
         connections.append(

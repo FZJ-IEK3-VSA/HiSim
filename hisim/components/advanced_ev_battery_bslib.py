@@ -172,7 +172,7 @@ class CarBattery(Component):
     def get_default_connections_from_charge_controller(self) -> Any:
         """Get default connections from charge controller."""
         log.information(
-            "setting ev charge controller default connections in car battery"
+            "setting default connections in car battery"
         )
         connections: List[ComponentConnection] = []
         ev_charge_controller_classname = (

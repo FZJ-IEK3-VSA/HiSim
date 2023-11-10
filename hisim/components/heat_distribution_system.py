@@ -253,7 +253,7 @@ class HeatDistribution(cp.Component):
         self,
     ):
         """Get heat distribution controller default connections."""
-        log.information("setting heat distribution controller default connections")
+        log.information("setting default connections in heat distribution system")
         connections = []
         hdsc_classname = HeatDistributionController.get_classname()
         connections.append(
@@ -269,7 +269,7 @@ class HeatDistribution(cp.Component):
         self,
     ):
         """Get building default connections."""
-        log.information("setting building default connections")
+        log.information("setting default connections in heat distribution system")
         connections = []
         building_classname = Building.get_classname()
         connections.append(
@@ -293,7 +293,7 @@ class HeatDistribution(cp.Component):
         self,
     ):
         """Get simple hot water storage default connections."""
-        log.information("setting simple hot water storage default connections")
+        log.information("setting default connections in heat distribution system")
         connections = []
         hws_classname = SimpleHotWaterStorage.get_classname()
         connections.append(
@@ -647,7 +647,7 @@ class HeatDistributionController(cp.Component):
         self,
     ):
         """Get weather default connections."""
-        log.information("setting weather default connections")
+        log.information("setting default connections in heat distribution controller")
         connections = []
         weather_classname = Weather.get_classname()
         connections.append(
@@ -663,7 +663,7 @@ class HeatDistributionController(cp.Component):
         self,
     ):
         """Get building default connections."""
-        log.information("setting building default connections")
+        log.information("setting default connections in heat distribution controller")
         connections = []
         building_classname = Building.get_classname()
         connections.append(
@@ -679,7 +679,7 @@ class HeatDistributionController(cp.Component):
         self,
     ):
         """Get simple_hot_water_storage default connections."""
-        log.information("setting simple_hot_water_storage default connections")
+        log.information("setting default connections in heat distribution controller")
         connections = []
         hws_classname = SimpleHotWaterStorage.get_classname()
         connections.append(

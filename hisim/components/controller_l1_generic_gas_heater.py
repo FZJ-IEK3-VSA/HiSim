@@ -182,7 +182,7 @@ class GenericGasHeaterControllerL1(Component):
         self,
     ):
         """Get simple_hot_water_storage default connections."""
-        log.information("setting simple_hot_water_storage default connections")
+        log.information("setting default connections in controller l1 generic gas heater")
         connections = []
         storage_classname = SimpleHotWaterStorage.get_classname()
         connections.append(
@@ -198,7 +198,7 @@ class GenericGasHeaterControllerL1(Component):
         self,
     ):
         """Get simple_hot_water_storage default connections."""
-        log.information("setting weather default connections")
+        log.information("setting default connections in controller l1 generic gas heater")
         connections = []
         weather_classname = Weather.get_classname()
         connections.append(
@@ -214,7 +214,7 @@ class GenericGasHeaterControllerL1(Component):
         self,
     ):
         """Get heat distribution controller default connections."""
-        log.information("setting heat distribution controller default connections")
+        log.information("setting default connections in controller l1 generic gas heater")
         connections = []
         hds_controller_classname = HeatDistributionController.get_classname()
         connections.append(

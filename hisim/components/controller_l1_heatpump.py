@@ -255,7 +255,7 @@ class L1HeatPumpController(cp.Component):
 
     def get_default_connections_generic_hot_water_storage_modular(self):
         """Sets default connections for the boiler."""
-        log.information("setting buffer default connections in L1 building Controller")
+        log.information("setting default connections in l1 heat pump ontroller")
         connections = []
         boiler_classname = (
             generic_hot_water_storage_modular.HotWaterStorage.get_classname()
@@ -271,7 +271,7 @@ class L1HeatPumpController(cp.Component):
 
     def get_default_connections_from_building(self):
         """Sets default connections for the boiler."""
-        log.information("setting buffer default connections in L1 building Controller")
+        log.information("setting default connections in l1 heat pump ontroller")
         connections = []
         building_classname = building.Building.get_classname()
         connections.append(

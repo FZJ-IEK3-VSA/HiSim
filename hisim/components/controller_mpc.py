@@ -426,7 +426,7 @@ class MpcController(cp.Component):
 
     def get_weather_default_connections(self):
         """Get default connections from the weather component."""
-        log.information("setting weather default connections")
+        log.information("setting default connections in mpc controller")
         connections = []
         weather_classname = Weather.get_classname()
         connections.append(

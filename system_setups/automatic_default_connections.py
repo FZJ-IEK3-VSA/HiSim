@@ -18,6 +18,7 @@ from hisim.components import (
     generic_hot_water_storage_modular,
 )
 
+
 def setup_function(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> Any:

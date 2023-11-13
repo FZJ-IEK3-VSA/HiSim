@@ -263,23 +263,23 @@ def setup_function(
     # -----------------------------------------------------------------------------------------------------------------
     # Connect EMS
     my_electricity_controller.add_component_input_and_connect(
-        source_component_class=my_occupancy,
-        source_component_output="ElectricityOutput",
+        source_object_name=my_occupancy.component_name,
+        source_component_output=my_occupancy.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
         source_weight=999,
     )
     my_electricity_controller.add_component_input_and_connect(
-        source_component_class=my_photovoltaic_system,
-        source_component_output="ElectricityOutput",
+        source_object_name=my_photovoltaic_system.component_name,
+        source_component_output=my_photovoltaic_system.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
         source_weight=999,
     )
     my_electricity_controller.add_component_input_and_connect(
-        source_component_class=my_heat_pump,
+        source_object_name=my_heat_pump.component_name,
         source_component_output=my_heat_pump.ElectricalInputPower,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
@@ -298,7 +298,7 @@ def setup_function(
         output_description="Target electricity for Heat Pump. ",
     )
     my_electricity_controller.add_component_input_and_connect(
-        source_component_class=my_advanced_battery,
+        source_object_name=my_advanced_battery.component_name,
         source_component_output=my_advanced_battery.AcBatteryPower,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,

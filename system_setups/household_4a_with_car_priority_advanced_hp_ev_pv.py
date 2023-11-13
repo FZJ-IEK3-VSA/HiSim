@@ -502,7 +502,7 @@ def setup_function(
 
         if my_config.surplus_control_car:
             my_electricity_controller.add_component_input_and_connect(
-                source_component_class=car_battery_controller,
+                source_object_name=car_battery_controller.component_name,
                 source_component_output=car_battery_controller.BatteryChargingPowerToEMS,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
@@ -533,7 +533,7 @@ def setup_function(
             )
         else:
             my_electricity_controller.add_component_input_and_connect(
-                source_component_class=car_battery_controller,
+                source_object_name=car_battery_controller.component_name,
                 source_component_output=car_battery_controller.BatteryChargingPowerToEMS,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
@@ -547,7 +547,7 @@ def setup_function(
     # connect EMS
     # copied and adopted from household_with_advanced_hp_hws_hds_pv_battery_ems
     my_electricity_controller.add_component_input_and_connect(
-        source_component_class=my_occupancy,
+        source_object_name=my_occupancy.component_name,
         source_component_output=my_occupancy.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
@@ -563,7 +563,7 @@ def setup_function(
             my_electricity_controller.StorageTemperatureModifier,
         )
         my_electricity_controller.add_component_input_and_connect(
-            source_component_class=my_domnestic_hot_water_heatpump,
+            source_object_name=my_domnestic_hot_water_heatpump.component_name,
             source_component_output=my_domnestic_hot_water_heatpump.ElectricityOutput,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
@@ -590,7 +590,7 @@ def setup_function(
 
     else:
         my_electricity_controller.add_component_input_and_connect(
-            source_component_class=my_domnestic_hot_water_heatpump,
+            source_object_name=my_domnestic_hot_water_heatpump.component_name,
             source_component_output=my_domnestic_hot_water_heatpump.ElectricityOutput,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
@@ -607,7 +607,7 @@ def setup_function(
         )
 
         my_electricity_controller.add_component_input_and_connect(
-            source_component_class=my_heat_pump,
+            source_object_name=my_heat_pump.component_name,
             source_component_output=my_heat_pump.ElectricalInputPower,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
@@ -632,7 +632,7 @@ def setup_function(
 
     else:
         my_electricity_controller.add_component_input_and_connect(
-            source_component_class=my_heat_pump,
+            source_object_name=my_heat_pump.component_name,
             source_component_output=my_heat_pump.ElectricalInputPower,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
@@ -655,7 +655,7 @@ def setup_function(
 
     # connect EMS with PV
     my_electricity_controller.add_component_input_and_connect(
-        source_component_class=my_photovoltaic_system,
+        source_object_name=my_photovoltaic_system.component_name,
         source_component_output=my_photovoltaic_system.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
@@ -666,7 +666,7 @@ def setup_function(
     # -----------------------------------------------------------------------------------------------------------------
     # connect Electricity Meter
     my_electricity_meter.add_component_input_and_connect(
-        source_component_class=my_electricity_controller,
+        source_object_name=my_electricity_controller.component_name,
         source_component_output=my_electricity_controller.ElectricityToOrFromGrid,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,

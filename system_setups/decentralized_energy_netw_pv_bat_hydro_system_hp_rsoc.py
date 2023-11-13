@@ -254,7 +254,7 @@ def setup_function(
 
     # hp test start
     my_cl2.add_component_input_and_connect(
-        source_component_class=my_heat_pump,
+        source_object_name=my_heat_pump.component_name,
         source_component_output=my_heat_pump.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
@@ -286,7 +286,7 @@ def setup_function(
     my_heat_pump.get_default_connections_heatpump_controller()
 
     my_cl2.add_component_input_and_connect(
-        source_component_class=my_rsoc,
+        source_object_name=my_rsoc.component_name,
         source_component_output=my_rsoc.SOFCCurrentOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
@@ -298,7 +298,7 @@ def setup_function(
     )
 
     my_cl2.add_component_input_and_connect(
-        source_component_class=my_rsoc,
+        source_object_name=my_rsoc.component_name,
         source_component_output=my_rsoc.SOECCurrentLoad,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
@@ -357,7 +357,7 @@ def setup_function(
     )
 
     my_cl2.add_component_input_and_connect(
-        source_component_class=my_advanced_battery_1,
+        source_object_name=my_advanced_battery_1.component_name,
         source_component_output=my_advanced_battery_1.AcBatteryPower,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,

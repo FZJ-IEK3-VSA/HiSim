@@ -2,7 +2,7 @@
 # clean
 
 from dataclasses import dataclass
-from typing import Any, List, Union, Dict, cast
+from typing import Any, List, Union, Dict, cast, Optional
 import hisim.loadtypes as lt
 from hisim import log
 from hisim.component import (Component, ComponentInput, ComponentOutput, ConfigBase,
@@ -14,13 +14,14 @@ class DynamicComponentConnection:
 
     """Used in the dynamic component class for defining a dynamic connection."""
 
-    source_component_class: Component
+    source_component_class: Any # Component
     source_class_name: str
     source_component_field_name: str
     source_load_type: lt.LoadTypes
     source_unit: lt.Units
     source_tags: List[Union[lt.ComponentType, lt.InandOutputType]]
     source_weight: int
+    source_instance_name: Optional[str] = None
 
 @dataclass
 class DynamicConnectionInput:
@@ -83,7 +84,7 @@ class DynamicComponent(Component):
 
         self.my_component_inputs = my_component_inputs
         self.my_component_outputs = my_component_outputs
-        self.default_connections: Dict[str, List[DynamicComponentConnection]] = {}
+        self.dynamic_default_connections: Dict[str, List[DynamicComponentConnection]] = {}
 
     def add_component_output(self, source_output_name: str,
                              source_tags: list,
@@ -212,12 +213,12 @@ class DynamicComponent(Component):
                 raise ValueError(
                     "Trying to add dynamic connections to different components in one go."
                 )
-        self.default_connections[component_name] = connections
+        self.dynamic_default_connections[component_name] = connections
         log.trace(
             "added dynamic default connections for connections from : "
             + component_name
             + "\n"
-            + str(self.default_connections)
+            + str(self.dynamic_default_connections)
         )
 
     def get_dynamic_default_connections(
@@ -226,16 +227,16 @@ class DynamicComponent(Component):
         source_classname: str = source_component.get_classname()
         target_classname: str = self.get_classname()
 
-        if source_classname not in self.default_connections:
+        if source_classname not in self.dynamic_default_connections:
             raise ValueError(
                 "No dynamic default connections for "
                 + source_classname
                 + " in the connections for "
                 + target_classname
                 + ". content:\n"
-                + str(self.default_connections)
+                + str(self.dynamic_default_connections)
             )
-        connections = self.default_connections[source_classname]
+        connections = self.dynamic_default_connections[source_classname]
         new_connections: List[DynamicComponentConnection] = []
         for connection in connections:
             connection_copy = dc.replace(connection)

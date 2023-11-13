@@ -514,7 +514,12 @@ class Simulator:
     ) -> None:
         """Connect all components in the sytem setups automatically."""
 
-        target_default_connection_dict = target_component.default_connections
+        # get the default connection lists
+        target_default_connection_dict: Union[Dict[str, List[cp.ComponentConnection]], Dict[str, List[dcp.DynamicComponentConnection]]]
+        if isinstance(target_component, dcp.DynamicComponent):
+            target_default_connection_dict = target_component.dynamic_default_connections
+        elif isinstance(target_component, cp.Component) and not isinstance(target_component, dcp.DynamicComponent):
+            target_default_connection_dict = target_component.default_connections
 
         # check if target component has any default connections
         if bool(target_default_connection_dict) is True:
@@ -527,7 +532,7 @@ class Simulator:
                 raise KeyError(
                     f"No component in the system setup matches the default connections of {target_component.component_name}."
                 )
-
+            # go through all registered components
             for source_component in source_component_list:
                 source_component_classname = source_component.get_classname()
 
@@ -535,11 +540,11 @@ class Simulator:
 
                     if isinstance(target_component, dcp.DynamicComponent):
 
-                        connections = target_component.get_dynamic_default_connections(
+                        dynamic_connections = target_component.get_dynamic_default_connections(
                             source_component=source_component
                         )
                         target_component.connect_with_dynamic_connections_list(
-                            dynamic_component_connections=connections
+                            dynamic_component_connections=dynamic_connections
                         )
                         log.information(
                             f"Dynamic default connection was successful between {target_component.component_name} and {source_component.component_name}."
@@ -558,8 +563,7 @@ class Simulator:
                             f"Default connection was successful between {target_component.component_name} and {source_component.component_name}."
                         )
 
-
-                    elif not isinstance(target_component, cp.Component) and not isinstance(target_component, dcp.DynamicComponent):
+                    else:
                         raise TypeError(f"Type {type(target_component)} of target_component should be Component or Dyanmic Component.")
         else:
             log.warning(

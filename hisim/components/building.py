@@ -49,7 +49,6 @@ import pvlib
 import pandas as pd
 
 from hisim import (
-    dynamic_component,
     utils,
 )
 from hisim import component as cp

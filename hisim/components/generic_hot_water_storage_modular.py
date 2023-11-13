@@ -15,7 +15,6 @@ from dataclasses_json import dataclass_json
 
 # Owned
 import hisim.component as cp
-import hisim.dynamic_component as dycp
 import hisim.log
 from hisim import loadtypes as lt
 from hisim.components import (

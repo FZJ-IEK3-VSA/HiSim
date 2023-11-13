@@ -510,15 +510,24 @@ class Simulator:
         )
 
     def connect_everything_automatically(
-        self, source_component_list: Union[List[cp.Component], List[dcp.DynamicComponent]], target_component: Union[cp.Component, dcp.DynamicComponent]
+        self,
+        source_component_list: Union[List[cp.Component], List[dcp.DynamicComponent]],
+        target_component: Union[cp.Component, dcp.DynamicComponent],
     ) -> None:
         """Connect all components in the sytem setups automatically."""
 
         # get the default connection lists
-        target_default_connection_dict: Union[Dict[str, List[cp.ComponentConnection]], Dict[str, List[dcp.DynamicComponentConnection]]]
+        target_default_connection_dict: Union[
+            Dict[str, List[cp.ComponentConnection]],
+            Dict[str, List[dcp.DynamicComponentConnection]],
+        ]
         if isinstance(target_component, dcp.DynamicComponent):
-            target_default_connection_dict = target_component.dynamic_default_connections
-        elif isinstance(target_component, cp.Component) and not isinstance(target_component, dcp.DynamicComponent):
+            target_default_connection_dict = (
+                target_component.dynamic_default_connections
+            )
+        elif isinstance(target_component, cp.Component) and not isinstance(
+            target_component, dcp.DynamicComponent
+        ):
             target_default_connection_dict = target_component.default_connections
 
         # check if target component has any default connections
@@ -526,7 +535,10 @@ class Simulator:
 
             # check if at least one source_component is in the target default connections
             if (
-                any(source_component.get_classname() in target_default_connection_dict for source_component in source_component_list)
+                any(
+                    source_component.get_classname() in target_default_connection_dict
+                    for source_component in source_component_list
+                )
                 is False
             ):
                 raise KeyError(
@@ -540,8 +552,10 @@ class Simulator:
 
                     if isinstance(target_component, dcp.DynamicComponent):
 
-                        dynamic_connections = target_component.get_dynamic_default_connections(
-                            source_component=source_component
+                        dynamic_connections = (
+                            target_component.get_dynamic_default_connections(
+                                source_component=source_component
+                            )
                         )
                         target_component.connect_with_dynamic_connections_list(
                             dynamic_component_connections=dynamic_connections
@@ -550,8 +564,9 @@ class Simulator:
                             f"Dynamic default connection was successful between {target_component.component_name} and {source_component.component_name}."
                         )
 
-                    if isinstance(target_component, cp.Component) and not isinstance(target_component, dcp.DynamicComponent):
-                        
+                    if isinstance(target_component, cp.Component) and not isinstance(
+                        target_component, dcp.DynamicComponent
+                    ):
 
                         connections = target_component.get_default_connections(
                             source_component=source_component
@@ -564,7 +579,9 @@ class Simulator:
                         )
 
                     else:
-                        raise TypeError(f"Type {type(target_component)} of target_component should be Component or Dyanmic Component.")
+                        raise TypeError(
+                            f"Type {type(target_component)} of target_component should be Component or Dyanmic Component."
+                        )
         else:
             log.warning(
                 f"The component {target_component.component_name} has no default connections set in its init function. "

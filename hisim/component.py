@@ -8,7 +8,7 @@ from __future__ import annotations
 import dataclasses as dc
 import typing
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 from dataclass_wizard import JSONWizard
@@ -17,7 +17,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
-# from hisim.dynamic_component import DynamicComponent, DynamicComponentConnection
+
 # Package
 
 

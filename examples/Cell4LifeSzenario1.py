@@ -84,9 +84,9 @@ def Cell4Life(
     # Postprocessing Options****
     
     my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.EXPORT_TO_CSV)
-    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PLOT_LINE)
-    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.MAKE_NETWORK_CHARTS)
-    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PLOT_CARPET)
+    #my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PLOT_LINE)
+    #my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.MAKE_NETWORK_CHARTS)
+    #my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PLOT_CARPET)
     
   
             #******************************************************************
@@ -98,10 +98,42 @@ def Cell4Life(
     my_electricityconsumption = CSVLoader(my_electricityconsumptionConfig, my_simulation_parameters)
        
     #******************************************************************   
-    #Loading Photovoltaic System  (PV Output in kW)
+    #Loading Photovoltaic System  (PV Output transformed from kW in Watt)
     my_photovoltaic_systemConfig = CSVLoaderConfig("PV", "PVComponent", "01Simulation.csv", 6, loadtypes.LoadTypes.ELECTRICITY, loadtypes.Units.WATT, "Photovoltaik", ";", ",",1000*input_variablen["PV_Faktor"]["value"], "OutputPVinW")
     my_photovoltaic_system = CSVLoader(my_photovoltaic_systemConfig, my_simulation_parameters)
   
+    #******************************************************************   
+    #Loading heat demand (warm water)
+    my_wartmwaterConfig = CSVLoaderConfig("WarmWater", "WarmWaterComponent", "01Simulation.csv", 2, loadtypes.LoadTypes.HEATING, loadtypes.Units.WATT, "Warmwasser", ";", ",",input_variablen["NGFm2"]["value"], "HotWaterThermischinW")
+    my_wartmwater_system = CSVLoader(my_wartmwaterConfig, my_simulation_parameters)
+    #******************************************************************   
+    #Loading heat demand (heating system)
+    my_heatingsystem_systemConfig = CSVLoaderConfig("HeatingSystem", "HeatingSystemComponent", "01Simulation.csv", 3, loadtypes.LoadTypes.HEATING, loadtypes.Units.WATT, "Waerme", ";", ",",input_variablen["NGFm2"]["value"], "HeatinW")
+    my_heatingsystem_system = CSVLoader(my_heatingsystem_systemConfig , my_simulation_parameters)
+
+    	
+    #Calculate Sum of energy needed hot water and heating 
+    # Create sum builder object
+    my_sum_of_heat_energy = SumBuilderForTwoInputs(
+        config=SumBuilderConfig.get_sumbuilder_default_config(),
+        my_simulation_parameters=my_simulation_parameters,
+    )
+    my_sum_of_heat_energy.config.name = 'my_sum_of_heat_energy'
+    my_sum_of_heat_energy.config.unit = loadtypes.Units.WATT
+    my_sum_of_heat_energy.output1.component_name = 'my_sum_of_heat_energy'
+
+    # Connect inputs from sum object to both previous outputs
+    my_sum_of_heat_energy.connect_input(
+        input_fieldname=my_sum_of_heat_energy.SumInput1,
+        src_object_name= my_wartmwater_system.component_name,
+        src_field_name= my_wartmwater_system.Output1,
+    )
+    my_sum_of_heat_energy.connect_input(
+        input_fieldname=my_sum_of_heat_energy.SumInput2,
+        src_object_name= my_heatingsystem_system.component_name,
+        src_field_name= my_heatingsystem_system.Output1,
+    )
+
 
             #******************************************************************
             # Building Components of Modell
@@ -308,6 +340,8 @@ def Cell4Life(
     my_chp.connect_only_predefined_connections(my_chp_controller)
 
 
+
+
         #******************************************************************
         # Add Components to Simulation Parameters
         #******************************************************************
@@ -320,7 +354,11 @@ def Cell4Life(
     my_sim.add_component(my_chp_controller)
     my_sim.add_component(my_chp)
     my_sim.add_component(my_electricity_controller)
-
+    
+    
+    my_sim.add_component(my_wartmwater_system)
+    my_sim.add_component(my_heatingsystem_system)
+    my_sim.add_component(my_sum_of_heat_energy)
 
 def InputParameter():
     """
@@ -385,43 +423,59 @@ def InputParameter():
     
     
     del BatteryCapkWh, FuelCellPowerW, BatteryCapkWhUnit, FuelCellPowerWUnit 
+    
     #Following parameter depends on a "variation parameter"
-    battery_inverter_power = battery_capacity/12*1000 #in Watt: Batterie Inverter power is assumed to depend on Battery Capacity 
+    battery_inverter_power = battery_capacity/6*1000 #in Watt: Batterie Inverter power is assumed to depend on Battery Capacity 
     battery_inverter_powerUnit = "W"
 
     #Static Parameters:
     NGFm2 = 26804.8 #NettoGesamtfläche (total area in squaremeters of building(s))
     NGFm2Unit = "m2"
+    
     PV_Faktor = 1.6 #Multiplier for PV-power (1--> given PV power; 2--> double of given PV power; 3--> 3 times given PV power)
     PV_FaktorUnit = "-"
+    
     init_source_weight_battery = 1
     init_source_weight_batteryUnit = "-"
+    
     electricity_threshold = 0 #Minium required power to activate fuel cell
     electricity_thresholdUnit = "W"
+    
     init_source_weight_hydrogenstorage = 999 #init_source_weight_electrolyzer
     init_source_weight_hydrogenstorageUnit = "-"
+    
     init_source_weight_chp = 2
     init_source_weight_chpUnit = "W"
+    
     p_el_elektrolyzer = fuel_cell_power*2 #Electrical Operating Power in Watt
     p_el_elektrolyzerUnit = "W"
+    
     electrolyzer_source_weight = 999
     electrolyzer_source_weightUnit = "-"
+    
     h2_storage_capacity_max = 50000  #Maximum of hydrogen storage in kg
     h2_storage_capacity_maxUnit = "kg"
     h2_storage_losses = 0 # % of Hydrogen Losses per day in %
     h2_storage_lossesUnit = "%"
+    
     h2_soc_upper_threshold_electrolyzer = 99  #Electrolyzer works just until H2 storage goes up to this threshold
     h2_soc_upper_threshold_electrolyzerUnit = "%"
+    
     min_operation_time_in_seconds_chp = 0 #It is not working well so let it be "0"
     min_operation_time_in_seconds_chpUnit = "s"
+    
     min_resting_time_in_seconds_chp = 0 # This does not work well so let it be 0
     min_resting_time_in_seconds_chpUnit = "s"
+    
     h2_soc_lower_threshold_chp = 0 # Minimum state of charge to start operating the fuel cell in %
     h2_soc_lower_threshold_chpUnit = "%"
+    
     h_fuel = 33.3 #heatng value ("Heizwert/Brennwert") of the choosen fuel in kWh/kg; upper value for H2 = 39,39 kWh/kg (3.939e4 Wh/kg); lower value for H2 = 33,3 
     h_fuelUnit = "kWh/kg"
+    
     on_off_SOEC = 183 #Day: Turn off Electrolyzer and turn on Fuel Cell // Variable name should be read: turn SOEC from "on" to "off" // Day Depends on starting date: e.g. day 10 of the year 2021 is 10. Januar if the simulation year starts with 1st Jannuar;
     on_off_SOECUnit = "days (counting: day one in Input Data = 1 ||Day: Turn off Electrolyzer and turn on Fuel Cell)"
+    
     off_on_SOEC = 500 #Day: Turn on Electrolyzer and turn off on Fuel Cell
     off_on_SOECUnit = "days (counting: day one in Input Data = 1 ||Day: Turn on Electrolyzer and turn off on Fuel Cell"
     

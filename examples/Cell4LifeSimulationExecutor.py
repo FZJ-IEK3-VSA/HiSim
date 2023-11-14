@@ -6,7 +6,7 @@ os.chdir('C://Users//Standard//Desktop//hisim//HiSim//')
 sys.path.append("C://Users//Standard//Desktop//hisim//HiSim//examples")
 sys.path.append("C://Users//Standard//Desktop//hisim//HiSim//")
 import Cell4LifeSzenario1
-
+from hisim.result_path_provider import ResultPathProviderSingleton
 sys.path.append("C://Users//Standard//Desktop//hisim//HiSim//hisim//postprocessing//")
 os.chdir("C://Users//Standard//Desktop//hisim//HiSim//hisim//postprocessing//")
 import Cell4Life_Postprocessing
@@ -23,7 +23,8 @@ os.chdir('C://Users//Standard//Desktop//hisim//HiSim//')
  """
 
 FuelCellPowerW_list = [200000]  #Electricity Power of Fuel Cell Power in Watt
-BatteryCapkWh_list = [8000]     #Total Capacity of Battery in kWh
+BatteryCapkWh_list = [1000]     #Total Capacity of Battery in kWh
+
 
 #FuelCellPowerW_list = [200000, 150000, 100000, 50000, 25000]  #Electricity Power of Fuel Cell Power in Watt
 #BatteryCapkWh_list = [8000,4000,2000,1000,500]     #Total Capacity of Battery in kWh
@@ -58,17 +59,30 @@ for FuelCellPowerW in FuelCellPowerW_list:
         #Do a copy of the economic assessment excel file        
         
         if PreResultNumber == 0:
-            path = 'C://Users//Standard//Desktop//hisim//C4LResults//results//'
-            filepath = path + 'OriginalExcelFile//20231107_Oekonomische_Auswertung_v5.xlsx'
-            excelfilepathallresults, excel_filename = Cell4Life_Postprocessing.makeacopyofevaluationfile(path, filepath)
+            pathbase = 'C://Users//Standard//Desktop//hisim//C4LResults//results//'
+            name1 = '20231107_AllSimulationResults_Assessment_v5'
+            filepath1 = pathbase + 'OriginalExcelFile//' + name1 + '.xlsx'
+            copytopath1= pathbase
+            excelfilepathallresults1, excel_filename1 = Cell4Life_Postprocessing.makeacopyofevaluationfile(copytopath1, filepath1, name1)
+
+        copyfrompath = 'C://Users//Standard//Desktop//hisim//C4LResults//results//'
+        name2 = 'Sim_Oek_Assessment_v2'
+        filepath2 = copyfrompath + 'OriginalExcelFile//' + name2 + '.xlsx'
+        copytopath2 = ResultPathProviderSingleton().get_result_directory_name()
+        copytopath2 = copytopath2 + '//'
+        
+        name2 = 'S'+ str(PreResultNumber) + '_Oek_Assessment'
+        excelfilepathresults, excel_filename2 = Cell4Life_Postprocessing.makeacopyofevaluationfile(copytopath2, filepath2, name2)
+        del copytopath2, filepath2, name2,
+        
         
         #Save all Data in the created excel files
         input_variablen = Cell4LifeSzenario1.InputParameter()
         Cell4Life_Postprocessing.saveInputdata(input_variablen)
-        Cell4Life_Postprocessing.saveexcelforevaluations(input_variablen, excelfilepathallresults, excel_filename)
-        
-        
-             
+        Cell4Life_Postprocessing.saveexcelforevaluations(input_variablen, excelfilepathallresults1, excel_filename1)
+        Cell4Life_Postprocessing.save_data_in_excel_for_economic_assessment(input_variablen, excelfilepathresults, excel_filename2)
+        del excelfilepathresults
+
 
         del input_variablen
         PreResultNumber += 1

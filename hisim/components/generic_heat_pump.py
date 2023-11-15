@@ -22,9 +22,6 @@ from hisim import log
 # Owned
 from hisim import utils
 
-# from hisim.components.extended_storage import WaterSlice
-# from hisim.components.configuration import WarmWaterStorageConfig
-# from hisim.components.configuration import PhysicsConfig
 from hisim.components.building import Building
 from hisim.components.weather import Weather
 from hisim.loadtypes import LoadTypes, Units
@@ -183,10 +180,6 @@ class GenericHeatPump(cp.Component):
     WaterInput_temperature = "WaterInput_temperature"  # °C
 
     # Outputs
-    # WaterOutput_mass = "WaterOutput_mass"                           # kg/s
-    # WaterOutput_temperature = "WaterOutput_temperature"             # °C
-    # WastedEnergyMaxTemperature = "Wasted Energy Max Temperature"    # W
-
     ThermalPowerDelivered = "ThermalPowerDelivered"
     Heating = "Heating"
     Cooling = "Cooling"
@@ -260,19 +253,6 @@ class GenericHeatPump(cp.Component):
         )
 
         # Outputs
-        # self.water_output_mass: cp.ComponentOutput = self.add_output(self.ComponentName,
-        #                                                          self.WaterOutput_mass,
-        #                                                          LoadTypes.WarmWater,
-        #                                                          Units.kg_per_sec)
-        # self.water_output_temperature: cp.ComponentOutput = self.add_output(self.ComponentName,
-        #                                                                 self.WaterOutput_temperature,
-        # ä                                                                      LoadTypes.WarmWater,
-        #                                                                 Units.Celsius)
-        # self.wasted_energy_max_temperature: cp.ComponentOutput = self.add_output(self.ComponentName,
-        #                                                                      self.WastedEnergyMaxTemperature,
-        #                                                                      LoadTypes.WarmWater,
-        #                                                                      Units.Watt)
-
         self.thermal_power_delivered_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.ThermalPowerDelivered,
@@ -677,6 +657,7 @@ class GenericHeatPumpController(cp.Component):
         )
 
         self.add_default_connections(self.get_default_connections_from_building())
+        self.add_default_connections(self.get_default_connections_from_electricity_meter())
         self.controller_heatpumpmode: Any
         self.previous_heatpump_mode: Any
 
@@ -690,6 +671,20 @@ class GenericHeatPumpController(cp.Component):
                 GenericHeatPumpController.TemperatureMean,
                 building_classname,
                 Building.TemperatureMeanThermalMass,
+            )
+        )
+        return connections
+    def get_default_connections_from_electricity_meter(self) -> List[cp.ComponentConnection]:
+        """Get electricity meter default connections."""
+        log.information("setting default connections in generic heat pump controller")
+        from hisim.components.electricity_meter import ElectricityMeter  # pylint: disable=import-outside-toplevel
+        connections = []
+        em_classname = ElectricityMeter.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                GenericHeatPumpController.ElectricityInput,
+                em_classname,
+                ElectricityMeter.ElectricityAvailable,
             )
         )
         return connections

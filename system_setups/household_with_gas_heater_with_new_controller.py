@@ -149,13 +149,6 @@ def setup_function(
         my_simulation_parameters=my_simulation_parameters, config=hds_config
     )
 
-    # # Build Heat Water Storage Controller
-    # my_simple_hot_water_storage_controller = (
-    #     simple_hot_water_storage.SimpleHotWaterStorageController(
-    #         my_simulation_parameters=my_simulation_parameters
-    #     )
-    # )
-
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = (
         simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
@@ -166,77 +159,12 @@ def setup_function(
     )
 
     # =================================================================================================================================
-    # Connect Component Inputs with Outputs
-
-    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
-    my_building.connect_input(
-        my_building.ThermalPowerDelivered,
-        my_heat_distribution.component_name,
-        my_heat_distribution.ThermalPowerDelivered,
-    )
-
-    my_gasheater.connect_input(
-        my_gasheater.ControlSignal,
-        my_gasheater_controller.component_name,
-        my_gasheater_controller.ControlSignalToGasHeater,
-    )
-
-    my_gasheater.connect_input(
-        my_gasheater.MassflowInputTemperature,
-        my_simple_hot_water_storage.component_name,
-        my_simple_hot_water_storage.WaterTemperatureToHeatGenerator,
-    )
-
-    my_gasheater_controller.connect_only_predefined_connections(
-        my_simple_hot_water_storage, my_weather, my_heat_distribution_controller
-    )
-
-    my_heat_distribution_controller.connect_only_predefined_connections(
-        my_weather, my_building, my_simple_hot_water_storage
-    )
-
-    my_heat_distribution.connect_only_predefined_connections(
-        my_heat_distribution_controller, my_building, my_simple_hot_water_storage
-    )
-
-    my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterTemperatureFromHeatDistribution,
-        my_heat_distribution.component_name,
-        my_heat_distribution.WaterTemperatureOutput,
-    )
-
-    my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterTemperatureFromHeatGenerator,
-        my_gasheater.component_name,
-        my_gasheater.MassflowOutputTemperature,
-    )
-
-    my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterMassFlowRateFromHeatGenerator,
-        my_gasheater.component_name,
-        my_gasheater.MassflowOutput,
-    )
-
-    # my_simple_hot_water_storage.connect_input(
-    #     my_simple_hot_water_storage.State,
-    #     my_simple_hot_water_storage_controller.component_name,
-    #     my_simple_hot_water_storage_controller.State,
-    # )
-
-    # my_simple_hot_water_storage_controller.connect_input(
-    #     my_simple_hot_water_storage_controller.WaterMassFlowRateFromHeatGenerator,
-    #     my_gasheater.component_name,
-    #     my_gasheater.MassflowOutput,
-    # )
-
-    # =================================================================================================================================
     # Add Components to Simulation Parameters
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_weather)
-    my_sim.add_component(my_building)
-    my_sim.add_component(my_gasheater)
-    my_sim.add_component(my_gasheater_controller)
-    my_sim.add_component(my_heat_distribution)
-    my_sim.add_component(my_heat_distribution_controller)
-    my_sim.add_component(my_simple_hot_water_storage)
-    # my_sim.add_component(my_simple_hot_water_storage_controller)
+    my_sim.add_component(my_building, connect_automatically=True)
+    my_sim.add_component(my_gasheater, connect_automatically=True)
+    my_sim.add_component(my_gasheater_controller, connect_automatically=True)
+    my_sim.add_component(my_heat_distribution, connect_automatically=True)
+    my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
+    my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)

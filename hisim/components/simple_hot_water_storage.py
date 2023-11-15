@@ -302,6 +302,7 @@ class SimpleHotWaterStorage(cp.Component):
         )
         self.add_default_connections(self.get_default_connections_from_heat_distribution_system())
         self.add_default_connections(self.get_default_connections_from_advanced_heat_pump())
+        self.add_default_connections(self.get_default_connections_from_gasheater())
 
     def get_default_connections_from_heat_distribution_system(self) -> List[cp.ComponentConnection]:
         """Get heat distribution default connections."""
@@ -336,6 +337,28 @@ class SimpleHotWaterStorage(cp.Component):
                 SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator,
                 hp_classname,
                 HeatPumpHplib.MassFlowOutput,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_gasheater(self) -> List[cp.ComponentConnection]:
+        """Get gasheater default connections."""
+        log.information("setting default connections in simple hot water storage.")
+        from hisim.components.generic_gas_heater import GasHeater  # pylint: disable=import-outside-toplevel
+        connections = []
+        gasheater_classname = GasHeater.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator,
+                gasheater_classname,
+                GasHeater.MassflowOutputTemperature,
+            )
+        )
+        connections.append(
+            cp.ComponentConnection(
+                SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator,
+                gasheater_classname,
+                GasHeater.MassflowOutput,
             )
         )
         return connections

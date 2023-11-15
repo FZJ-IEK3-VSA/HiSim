@@ -144,19 +144,6 @@ def setup_function(
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
 
-    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
-    my_building.connect_input(
-        my_building.ThermalPowerDelivered,
-        my_heat_distribution.component_name,
-        my_heat_distribution.ThermalPowerDelivered,
-    )
-
-    my_gasheater.connect_input(
-        my_gasheater.State,
-        my_gasheater_controller.component_name,
-        my_gasheater_controller.State,
-    )
-
     my_gasheater.connect_input(
         my_gasheater.CooledWaterTemperatureBoilerInput,
         my_heat_distribution.component_name,
@@ -168,11 +155,11 @@ def setup_function(
         my_building.ReferenceMaxHeatBuildingDemand,
     )
 
-    # my_gasheater.connect_input(
-    #     my_gasheater.InitialResidenceTemperature,
-    #     my_building.component_name,
-    #     my_building.InitialInternalTemperature,
-    # )
+    my_gasheater.connect_input(
+        my_gasheater.InitialResidenceTemperature,
+        my_building.component_name,
+        my_building.InitialInternalTemperature,
+    )
     my_gasheater.connect_input(
         my_gasheater.ResidenceTemperature,
         my_building.component_name,
@@ -186,12 +173,6 @@ def setup_function(
     )
 
     my_heat_distribution.connect_input(
-        my_heat_distribution.State,
-        my_heat_distribution_controller.component_name,
-        my_heat_distribution_controller.State,
-    )
-
-    my_heat_distribution.connect_input(
         my_heat_distribution.WaterTemperatureInput,
         my_gasheater.component_name,
         my_gasheater.HeatedWaterTemperatureBoilerOutput,
@@ -201,17 +182,6 @@ def setup_function(
         my_heat_distribution.MaxWaterMassFlowRate,
         my_gasheater.component_name,
         my_gasheater.MaxMassFlow,
-    )
-    my_heat_distribution.connect_input(
-        my_heat_distribution.ResidenceTemperature,
-        my_building.component_name,
-        my_building.TemperatureMeanThermalMass,
-    )
-
-    my_heat_distribution_controller.connect_input(
-        my_heat_distribution_controller.ResidenceTemperature,
-        my_building.component_name,
-        my_building.TemperatureMeanThermalMass,
     )
 
     my_heat_distribution_controller.connect_input(
@@ -224,8 +194,8 @@ def setup_function(
     # Add Components to Simulation Parameters
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_weather)
-    my_sim.add_component(my_building)
-    my_sim.add_component(my_gasheater)
+    my_sim.add_component(my_building, connect_automatically=True)
+    my_sim.add_component(my_gasheater, connect_automatically=True)
     my_sim.add_component(my_gasheater_controller)
-    my_sim.add_component(my_heat_distribution)
-    my_sim.add_component(my_heat_distribution_controller)
+    my_sim.add_component(my_heat_distribution, connect_automatically=True)
+    my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)

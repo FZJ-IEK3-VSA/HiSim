@@ -384,65 +384,6 @@ def setup_function(
         config=my_config.advanced_battery_config,
     )
 
-    # =================================================================================================================================
-    # Connect Component Inputs with Outputs
-
-    my_photovoltaic_system.connect_only_predefined_connections(my_weather)
-
-    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
-    my_building.connect_input(
-        my_building.ThermalPowerDelivered,
-        my_heat_distribution.component_name,
-        my_heat_distribution.ThermalPowerDelivered,
-    )
-
-    my_heat_pump_controller.connect_only_predefined_connections(
-        my_weather, my_simple_hot_water_storage, my_heat_distribution_controller
-    )
-
-    my_heat_pump.connect_only_predefined_connections(
-        my_heat_pump_controller, my_weather, my_simple_hot_water_storage
-    )
-
-    my_heat_distribution_controller.connect_only_predefined_connections(
-        my_weather, my_building, my_simple_hot_water_storage
-    )
-
-    my_heat_distribution.connect_only_predefined_connections(
-        my_heat_distribution_controller, my_building, my_simple_hot_water_storage
-    )
-
-    my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterTemperatureFromHeatDistribution,
-        my_heat_distribution.component_name,
-        my_heat_distribution.WaterTemperatureOutput,
-    )
-
-    my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterTemperatureFromHeatGenerator,
-        my_heat_pump.component_name,
-        my_heat_pump.TemperatureOutput,
-    )
-
-    my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterMassFlowRateFromHeatGenerator,
-        my_heat_pump.component_name,
-        my_heat_pump.MassFlowOutput,
-    )
-
-    # connect DHW
-    my_domnestic_hot_water_storage.connect_only_predefined_connections(
-        my_occupancy, my_domnestic_hot_water_heatpump
-    )
-
-    my_domnestic_hot_water_heatpump_controller.connect_only_predefined_connections(
-        my_domnestic_hot_water_storage
-    )
-
-    my_domnestic_hot_water_heatpump.connect_only_predefined_connections(
-        my_weather, my_domnestic_hot_water_heatpump_controller
-    )
-
     # -----------------------------------------------------------------------------------------------------------------
     # connect EMS
     # copied and adopted from household_with_advanced_hp_hws_hds_pv_battery_ems
@@ -609,16 +550,16 @@ def setup_function(
     # Add Components to Simulation Parameters
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_weather)
-    my_sim.add_component(my_photovoltaic_system)
-    my_sim.add_component(my_building)
-    my_sim.add_component(my_heat_pump)
-    my_sim.add_component(my_heat_pump_controller)
-    my_sim.add_component(my_heat_distribution)
-    my_sim.add_component(my_heat_distribution_controller)
-    my_sim.add_component(my_simple_hot_water_storage)
-    my_sim.add_component(my_domnestic_hot_water_storage)
-    my_sim.add_component(my_domnestic_hot_water_heatpump_controller)
-    my_sim.add_component(my_domnestic_hot_water_heatpump)
+    my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
+    my_sim.add_component(my_building, connect_automatically=True)
+    my_sim.add_component(my_heat_pump, connect_automatically=True)
+    my_sim.add_component(my_heat_pump_controller, connect_automatically=True)
+    my_sim.add_component(my_heat_distribution, connect_automatically=True)
+    my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
+    my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)
+    my_sim.add_component(my_domnestic_hot_water_storage, connect_automatically=True)
+    my_sim.add_component(my_domnestic_hot_water_heatpump_controller, connect_automatically=True)
+    my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
     my_sim.add_component(my_electricity_meter)
     my_sim.add_component(my_advanced_battery)
     my_sim.add_component(my_electricity_controller)

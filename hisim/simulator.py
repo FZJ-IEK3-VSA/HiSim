@@ -521,7 +521,7 @@ class Simulator:
             Dict[str, List[cp.ComponentConnection]],
             Dict[str, List[dcp.DynamicComponentConnection]],
         ]
-        
+
         # check if target component is a normal or a dynamic component and get all default connections
         if isinstance(target_component, dcp.DynamicComponent):
             target_default_connection_dict = (
@@ -549,7 +549,7 @@ class Simulator:
             # go through all registered components
             for source_component in source_component_list:
                 source_component_classname = source_component.get_classname()
-                
+
                 # if the source components' classname is found in the target components' default connection dict, a connection is made
                 if source_component_classname in target_default_connection_dict.keys():
 

@@ -197,8 +197,8 @@ def setup_function(
 
     # =================================================================================================================================
     # Add Components to Simulation Parameters
-    my_sim.add_component(my_occupancy, connect_automatically=True)
-    my_sim.add_component(my_weather, connect_automatically=True)
+    my_sim.add_component(my_occupancy)
+    my_sim.add_component(my_weather)
     my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
     my_sim.add_component(my_building, connect_automatically=True)
     my_sim.add_component(my_heat_pump, connect_automatically=True)

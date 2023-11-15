@@ -167,7 +167,7 @@ def setup_function(
         source_weight=999,
     )
     my_cl2.add_component_input_and_connect(
-        source_component_class=my_advanced_battery_1,
+        source_object_name=my_advanced_battery_1.component_name,
         source_component_output=my_advanced_battery_1.AcBatteryPower,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
@@ -175,7 +175,7 @@ def setup_function(
         source_weight=1,
     )
     my_cl2.add_component_input_and_connect(
-        source_component_class=my_advanced_battery_2,
+        source_object_name=my_advanced_battery_2.component_name,
         source_component_output=my_advanced_battery_2.AcBatteryPower,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
@@ -210,7 +210,7 @@ def setup_function(
     )
 
     my_cl2.add_component_input_and_connect(
-        source_component_class=my_advanced_fuel_cell_1,
+        source_object_name=my_advanced_fuel_cell_1.component_name,
         source_component_output=my_advanced_fuel_cell_1.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
@@ -218,7 +218,7 @@ def setup_function(
         source_weight=3,
     )
     my_cl2.add_component_input_and_connect(
-        source_component_class=my_advanced_fuel_cell_2,
+        source_object_name=my_advanced_fuel_cell_2.component_name,
         source_component_output=my_advanced_fuel_cell_2.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,

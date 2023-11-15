@@ -154,7 +154,7 @@ class GenericHydrogenStorage(cp.Component):
 
     def get_default_connections_from_generic_chp(self) -> List[cp.ComponentConnection]:
         """Get default connections from generic chp."""
-        log.information("setting fuel cell default connections in generic H2 storage")
+        log.information("setting default connections in generic h2 storage")
         connections: List[cp.ComponentConnection] = []
         chp_classname = generic_chp.SimpleCHP.get_classname()
         connections.append(
@@ -171,7 +171,7 @@ class GenericHydrogenStorage(cp.Component):
     ) -> List[cp.ComponentConnection]:
         """Get default connections from generic electrolyzer."""
         log.information(
-            "setting electrolyzer default connections in generic H2 storage"
+            "setting default connections in generic h2 storage"
         )
         connections: List[cp.ComponentConnection] = []
         electrolyzer_classname = (

@@ -242,7 +242,7 @@ class SimpleCHP(cp.Component):
         self,
     ) -> List[cp.ComponentConnection]:
         """Sets default connections of the controller in the Fuel Cell / CHP."""
-        log.information("setting l1 default connections in generic CHP")
+        log.information("setting default connections in generic chp")
         connections: List[cp.ComponentConnection] = []
         controller_classname = controller_l1_chp.L1CHPController.get_classname()
         connections.append(

@@ -281,7 +281,7 @@ def setup_function(
 
     # hp test start
     my_cl2.add_component_input_and_connect(
-        source_component_class=my_heat_pump,
+        source_object_name=my_heat_pump.component_name,
         source_component_output=my_heat_pump.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
@@ -314,7 +314,7 @@ def setup_function(
     # hp test end
 
     my_cl2.add_component_input_and_connect(
-        source_component_class=my_fuel_cell,
+        source_object_name=my_fuel_cell.component_name,
         source_component_output=my_fuel_cell.PowerOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
@@ -323,7 +323,7 @@ def setup_function(
     )
 
     my_cl2.add_component_input_and_connect(
-        source_component_class=my_electrolyzer,
+        source_object_name=my_electrolyzer.component_name,
         source_component_output=my_electrolyzer.CurrentLoad,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,

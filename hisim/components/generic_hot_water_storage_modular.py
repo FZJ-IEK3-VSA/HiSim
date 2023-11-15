@@ -15,7 +15,6 @@ from dataclasses_json import dataclass_json
 
 # Owned
 import hisim.component as cp
-import hisim.dynamic_component as dycp
 import hisim.log
 from hisim import loadtypes as lt
 from hisim.components import (
@@ -253,7 +252,8 @@ class StorageState:
         )
 
 
-class HotWaterStorage(dycp.DynamicComponent):
+# class HotWaterStorage(dycp.DynamicComponent):
+class HotWaterStorage(cp.Component):
 
     """Simple hot water storage implementation.
 
@@ -275,8 +275,8 @@ class HotWaterStorage(dycp.DynamicComponent):
     ThermalPowerCHP = "ThermalPowerCHP"
     WaterConsumption = "WaterConsumption"
     HeatControllerTargetPercentage = "HeatControllerTargetPercentage"
-    my_component_inputs: List[dycp.DynamicConnectionInput] = []
-    my_component_outputs: List[dycp.DynamicConnectionOutput] = []
+    # my_component_inputs: List[dycp.DynamicConnectionInput] = []
+    # my_component_outputs: List[dycp.DynamicConnectionOutput] = []
 
     # obligatory Outputs
     TemperatureMean = "TemperatureMean"
@@ -290,8 +290,8 @@ class HotWaterStorage(dycp.DynamicComponent):
         """Initializes instance of HotWaterStorage class."""
 
         super().__init__(
-            my_component_inputs=self.my_component_inputs,
-            my_component_outputs=self.my_component_outputs,
+            # my_component_inputs=self.my_component_inputs,
+            # my_component_outputs=self.my_component_outputs,
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
@@ -379,7 +379,7 @@ class HotWaterStorage(dycp.DynamicComponent):
     def get_occupancy_default_connections(self):
         """Sets occupancy default connections in hot water storage."""
         hisim.log.information(
-            "setting occupancy default connections in hot water storage"
+            "setting default connections in hot water storage modular"
         )
         connections = []
         occupancy_classname = Occupancy.get_classname()
@@ -394,7 +394,7 @@ class HotWaterStorage(dycp.DynamicComponent):
 
     def get_utsp_default_connections(self):
         """Sets occupancy default connections in hot water storage."""
-        hisim.log.information("setting utsp default connections in hot water storage")
+        hisim.log.information("setting default connections in hot water storage modular")
         connections = []
         utsp_classname = UtspLpgConnector.get_classname()
         connections.append(
@@ -409,7 +409,7 @@ class HotWaterStorage(dycp.DynamicComponent):
     def get_default_connections_from_generic_heat_pump_modular(self):
         """Sets heat pump default connections in hot water storage."""
         hisim.log.information(
-            "setting heat pump default connections in hot water storage"
+            "setting default connections in hot water storage modular"
         )
         connections = []
         heatpump_classname = generic_heat_pump_modular.ModularHeatPump.get_classname()
@@ -425,7 +425,7 @@ class HotWaterStorage(dycp.DynamicComponent):
     def get_heatsource_default_connections(self):
         """Sets heat source default connections in hot water storage."""
         hisim.log.information(
-            "setting heat source default connections in hot water storaage"
+            "setting default connections in hot water storage modular"
         )
         connections = []
         heatsource_classname = generic_heat_source.HeatSource.get_classname()
@@ -440,7 +440,7 @@ class HotWaterStorage(dycp.DynamicComponent):
 
     def get_chp_default_connections(self):
         """Sets chp default connections in hot water storage."""
-        hisim.log.information("setting chp default connections in hot water storaage")
+        hisim.log.information("setting default connections in hot water storage modular")
         connections = []
         chp_classname = generic_chp.SimpleCHP.get_classname()
         connections.append(
@@ -455,7 +455,7 @@ class HotWaterStorage(dycp.DynamicComponent):
     def get_heating_controller_default_connections(self):
         """Sets heating controller default connections in hot water storage."""
         hisim.log.information(
-            "setting heating controller default connections in hot water storaage"
+            "setting default connections in hot water storage modular"
         )
         connections = []
         heating_controller_classname = (

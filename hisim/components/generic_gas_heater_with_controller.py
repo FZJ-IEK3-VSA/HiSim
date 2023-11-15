@@ -228,7 +228,7 @@ class GasHeaterWithController(cp.Component):
         self,
     ) -> List[cp.ComponentConnection]:
         """Get gas heater controller default connections."""
-        log.information("setting controller default connections in GasHeater")
+        log.information("setting default connections in gas heater")
         connections = []
         controller_classname = GasHeaterController.get_classname()
         connections.append(

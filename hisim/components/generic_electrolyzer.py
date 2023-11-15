@@ -153,7 +153,7 @@ class GenericElectrolyzer(cp.Component):
         self,
     ) -> List[cp.ComponentConnection]:
         """Sets default connections of the controller in the Electroylzer."""
-        log.information("setting controller default connections in generic electrolyzer")
+        log.information("setting default connections in generic electrolyzer")
         connections: List[cp.ComponentConnection] = []
         controller_classname = controller_l1_electrolyzer.L1GenericElectrolyzerController.get_classname()
         connections.append(

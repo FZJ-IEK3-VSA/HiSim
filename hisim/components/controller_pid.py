@@ -224,7 +224,7 @@ class PIDController(cp.Component):
 
     def get_building_default_connections(self):
         """Get default inputs from the building component."""
-        log.information("setting building default connections in PID controller")
+        log.information("setting default connections in pid controller")
         connections = []
         building_classname = Building.get_classname()
         connections.append(

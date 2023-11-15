@@ -190,7 +190,7 @@ def setup_function(
 
     # Electricity Grid
     my_electricity_meter.add_component_input_and_connect(
-        source_component_class=my_photovoltaic_system,
+        source_object_name=my_photovoltaic_system.component_name,
         source_component_output=my_photovoltaic_system.ElectricityOutput,
         source_load_type=loadtypes.LoadTypes.ELECTRICITY,
         source_unit=loadtypes.Units.WATT,
@@ -202,7 +202,7 @@ def setup_function(
     )
 
     my_electricity_meter.add_component_input_and_connect(
-        source_component_class=my_occupancy,
+        source_object_name=my_occupancy.component_name,
         source_component_output=my_occupancy.ElectricityOutput,
         source_load_type=loadtypes.LoadTypes.ELECTRICITY,
         source_unit=loadtypes.Units.WATT,
@@ -211,7 +211,7 @@ def setup_function(
     )
 
     my_electricity_meter.add_component_input_and_connect(
-        source_component_class=my_heat_pump,
+        source_object_name=my_heat_pump.component_name,
         source_component_output=my_heat_pump.ElectricalInputPower,
         source_load_type=loadtypes.LoadTypes.ELECTRICITY,
         source_unit=loadtypes.Units.WATT,

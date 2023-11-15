@@ -270,7 +270,7 @@ def configure_ev_batteries(
 
         if controllable:
             my_electricity_controller.add_component_input_and_connect(
-                source_component_class=my_carbattery,
+                source_object_name=my_carbattery.component_name,
                 source_component_output=my_carbattery.AcBatteryPower,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
@@ -318,7 +318,7 @@ def configure_smart_controller_for_smart_devices(
 
     for elem in my_smart_devices:
         my_electricity_controller.add_component_input_and_connect(
-            source_component_class=elem,
+            source_object_name=elem.component_name,
             source_component_output=elem.ElectricityOutput,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
@@ -327,6 +327,7 @@ def configure_smart_controller_for_smart_devices(
                 lt.InandOutputType.ELECTRICITY_REAL,
             ],
             source_weight=elem.source_weight,
+
         )
 
         electricity_to_smart_device = my_electricity_controller.add_component_output(
@@ -399,12 +400,13 @@ def configure_battery(
     )
 
     my_electricity_controller.add_component_input_and_connect(
-        source_component_class=my_advanced_battery,
+        source_object_name=my_advanced_battery.component_name,
         source_component_output=my_advanced_battery.AcBatteryPower,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_REAL],
         source_weight=my_advanced_battery.source_weight,
+
     )
 
     electricity_to_or_from_battery_target = (
@@ -610,7 +612,7 @@ def configure_water_heating_electric(
             my_electricity_controller.StorageTemperatureModifier,
         )
         my_electricity_controller.add_component_input_and_connect(
-            source_component_class=my_heatpump,
+            source_object_name=my_heatpump.component_name,
             source_component_output=my_heatpump.ElectricityOutput,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
@@ -635,7 +637,7 @@ def configure_water_heating_electric(
 
     else:
         my_electricity_controller.add_component_input_and_connect(
-            source_component_class=my_heatpump,
+            source_object_name=my_heatpump.component_name,
             source_component_output=my_heatpump.ElectricityOutput,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
@@ -792,7 +794,7 @@ def configure_heating_electric(
             my_electricity_controller.BuildingTemperatureModifier,
         )
         my_electricity_controller.add_component_input_and_connect(
-            source_component_class=my_heatpump,
+            source_object_name=my_heatpump.component_name,
             source_component_output=my_heatpump.ElectricityOutput,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
@@ -816,7 +818,7 @@ def configure_heating_electric(
         )
     else:
         my_electricity_controller.add_component_input_and_connect(
-            source_component_class=my_heatpump,
+            source_object_name=my_heatpump.component_name,
             source_component_output=my_heatpump.ElectricityOutput,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
@@ -954,7 +956,7 @@ def configure_heating_with_buffer_electric(
         )
 
         my_electricity_controller.add_component_input_and_connect(
-            source_component_class=my_heatpump,
+            source_object_name=my_heatpump.component_name,
             source_component_output=my_heatpump.ElectricityOutput,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
@@ -963,6 +965,7 @@ def configure_heating_with_buffer_electric(
                 lt.InandOutputType.ELECTRICITY_REAL,
             ],
             source_weight=my_heatpump.config.source_weight,
+
         )
 
         my_electricity_controller.add_component_output(
@@ -979,7 +982,7 @@ def configure_heating_with_buffer_electric(
 
     else:
         my_electricity_controller.add_component_input_and_connect(
-            source_component_class=my_heatpump,
+            source_object_name=my_heatpump.component_name,
             source_component_output=my_heatpump.ElectricityOutput,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
@@ -1166,7 +1169,7 @@ def configure_chp(my_sim: Any, my_simulation_parameters: SimulationParameters, m
                               )
 
     my_electricity_controller.add_component_input_and_connect(
-        source_component_class=my_chp,
+        source_object_name=my_chp.component_name,
         source_component_output="ElectricityOutput",
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
@@ -1267,7 +1270,7 @@ def configure_chp_with_buffer(
     )
 
     my_electricity_controller.add_component_input_and_connect(
-        source_component_class=my_chp,
+        source_object_name=my_chp.component_name,
         source_component_output="ElectricityOutput",
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
@@ -1359,7 +1362,7 @@ def configure_electrolyzer_and_h2_storage(
 
     # electricity controller of fuel cell
     my_electricity_controller.add_component_input_and_connect(
-        source_component_class=my_electrolyzer,
+        source_object_name=my_electrolyzer.component_name,
         source_component_output=my_electrolyzer.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
@@ -1471,12 +1474,13 @@ def configure_elctrolysis_h2storage_fuelcell_system(
     )
 
     my_electricity_controller.add_component_input_and_connect(
-        source_component_class=my_chp,
+        source_object_name=my_chp.component_name,
         source_component_output="ElectricityOutput",
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[lt.ComponentType.CHP, lt.InandOutputType.ELECTRICITY_PRODUCTION],
         source_weight=my_chp.config.source_weight,
+
     )
 
     # connect to EMS electricity controller
@@ -1576,12 +1580,13 @@ def configure_elctrolysis_h2storage_fuelcell_system_with_buffer(
                             )
 
     my_electricity_controller.add_component_input_and_connect(
-        source_component_class=my_chp,
+        source_object_name=my_chp.component_name,
         source_component_output="ElectricityOutput",
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[lt.ComponentType.CHP, lt.InandOutputType.ELECTRICITY_PRODUCTION],
         source_weight=my_chp.config.source_weight,
+
     )
 
     # connect to EMS electricity controller

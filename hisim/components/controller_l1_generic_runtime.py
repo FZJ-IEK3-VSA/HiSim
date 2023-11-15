@@ -173,7 +173,7 @@ class L1GenericRuntimeController(cp.Component):
         self,
     ) -> List[cp.ComponentConnection]:
         """Makes default connections to l2 smart controllers."""
-        log.information("setting l2 default connections in l1")
+        log.information("setting default connections in l1 generic runtime controller")
         connections = []
         controller_classname = (
             controller_l2_generic_heat_clever_simple.L2HeatSmartController.get_classname()

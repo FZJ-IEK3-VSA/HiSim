@@ -375,7 +375,7 @@ def setup_function(
     # -----------------------------------------------------------------------------------------------------------------
     # connect Electricity Meter
     my_electricity_meter.add_component_input_and_connect(
-        source_component_class=my_occupancy,
+        source_object_name=my_occupancy.component_name,
         source_component_output=my_occupancy.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
@@ -384,7 +384,7 @@ def setup_function(
     )
 
     my_electricity_meter.add_component_input_and_connect(
-        source_component_class=my_domnestic_hot_water_heatpump,
+        source_object_name=my_domnestic_hot_water_heatpump.component_name,
         source_component_output=my_domnestic_hot_water_heatpump.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,

@@ -228,7 +228,7 @@ class GasHeater(Component):
         self,
     ):
         """Get Controller L1 Gas Heater default connections."""
-        log.information("setting Controller L1 Gas Heater default connections")
+        log.information("setting default connections in gas heater")
         connections = []
         l1_controller_classname = GenericGasHeaterControllerL1.get_classname()
         connections.append(
@@ -244,7 +244,7 @@ class GasHeater(Component):
         self,
     ):
         """Get Simple hot water storage default connections."""
-        log.information("setting Simple Hot Water Storage default connections")
+        log.information("setting default connections in gas heater")
         connections = []
         hws_classname = SimpleHotWaterStorage.get_classname()
         connections.append(

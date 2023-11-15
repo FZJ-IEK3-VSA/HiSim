@@ -11,7 +11,7 @@ class ComponentWrapper:
 
     """ Wraps components for use. """
 
-    def __init__(self, component: cp.Component, is_cachable: bool):
+    def __init__(self, component: cp.Component, is_cachable: bool, connect_automatically: bool):
         """ Initializes the component wrapper.
 
         Used to handle the connection of inputs and outputs.
@@ -21,6 +21,7 @@ class ComponentWrapper:
         self.component_outputs: List[cp.ComponentOutput] = []
         # self.cachedict: = {}
         self.is_cachable = is_cachable
+        self.connect_automatically = connect_automatically
 
     def clear(self):
         """ Clears properties to help with saving memory. """

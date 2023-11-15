@@ -567,7 +567,7 @@ class PVSystem(cp.Component):
 
     def get_default_connections_from_weather(self):
         """Get default connections from weather."""
-        log.information("setting weather default connections")
+        log.information("setting default connections in generic py system")
         connections = []
         weather_classname = Weather.get_classname()
         connections.append(
@@ -637,7 +637,8 @@ class PVSystem(cp.Component):
             # if(len(self.output) < timestep)
             #   raise Exception("Somehow the precalculated list of values for the PV system seems to be incorrect. Please delete the cache.")
             stsv.set_output_value(
-                self.electricity_output_channel, self.output[timestep] * self.pvconfig.power
+                self.electricity_output_channel,
+                self.output[timestep] * self.pvconfig.power,
             )
         else:
             dni = stsv.get_input_value(self.dni_channel)
@@ -769,7 +770,15 @@ class PVSystem(cp.Component):
                     + str(len(self.output))
                 )
         else:
-            self.coordinates = self.simulation_repository.get_entry("weather_location")
+            if self.simulation_repository.exist_entry("weather_location"):
+                self.coordinates = self.simulation_repository.get_entry(
+                    "weather_location"
+                )
+            else:
+                raise KeyError(
+                    "The key weather_location was not found in the repository."
+                    "Please check in your system setup if the weather component was added to the simulator before the pv system."
+                )
             # Factor to guarantee peak power based on module with 250 Wh
             self.ac_power_factor = math.ceil((self.pvconfig.power * 1e3) / 250)
 

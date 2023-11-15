@@ -22,8 +22,8 @@ os.chdir('C://Users//Standard//Desktop//hisim//HiSim//')
 
  """
 
-FuelCellPowerW_list = [200000]  #Electricity Power of Fuel Cell Power in Watt
-BatteryCapkWh_list = [1000]     #Total Capacity of Battery in kWh
+#FuelCellPowerW_list = [00000]  #Electricity Power of Fuel Cell Power in Watt
+#BatteryCapkWh_list = [0]     #Total Capacity of Battery in kWh
 
 
 #FuelCellPowerW_list = [200000, 150000, 100000, 50000, 25000]  #Electricity Power of Fuel Cell Power in Watt
@@ -66,7 +66,7 @@ for FuelCellPowerW in FuelCellPowerW_list:
             excelfilepathallresults1, excel_filename1 = Cell4Life_Postprocessing.makeacopyofevaluationfile(copytopath1, filepath1, name1)
 
         copyfrompath = 'C://Users//Standard//Desktop//hisim//C4LResults//results//'
-        name2 = 'Sim_Oek_Assessment_v2'
+        name2 = 'Sim_Oek_Assessment_v3'
         filepath2 = copyfrompath + 'OriginalExcelFile//' + name2 + '.xlsx'
         copytopath2 = ResultPathProviderSingleton().get_result_directory_name()
         copytopath2 = copytopath2 + '//'
@@ -79,7 +79,7 @@ for FuelCellPowerW in FuelCellPowerW_list:
         #Save all Data in the created excel files
         input_variablen = Cell4LifeSzenario1.InputParameter()
         Cell4Life_Postprocessing.saveInputdata(input_variablen)
-        Cell4Life_Postprocessing.saveexcelforevaluations(input_variablen, excelfilepathallresults1, excel_filename1)
+        #Cell4Life_Postprocessing.saveexcelforevaluations(input_variablen, excelfilepathallresults1, excel_filename1)
         Cell4Life_Postprocessing.save_data_in_excel_for_economic_assessment(input_variablen, excelfilepathresults, excel_filename2)
         del excelfilepathresults
 

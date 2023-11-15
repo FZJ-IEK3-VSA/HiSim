@@ -170,6 +170,13 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
     #----------------------------------------------   
     #Add "Anlagendaten" to excek
     worksheet = workbook['Anlagendaten']  # 'Anlagendaten' durch den tatsächlichen Namen ersetzen
+    
+    # delete all data in sheet
+
+    for row in worksheet.iter_rows(min_row=1, max_row=worksheet.max_row, min_col=1, max_col=worksheet.max_column):
+        for cell in row:
+            cell.value = None
+    
     next_column = worksheet.max_column + 1
     next_row = 1
     for parameter, info in input_variablen.items():
@@ -178,6 +185,7 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
         worksheet.cell(row=next_row, column=3, value= info["value"])
         next_row += 1
     #----------------------------------------------
+    
     #Add Input Data for calcuation within "Gesamtmodell"
     #Load Original Energy-Input Data
     model_energy_input_data = []
@@ -224,7 +232,7 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
             EnergyInputData4.append(row[1])
 
     # Load data from "CSV_WarmWaterComponent" (column 2) and add the collected data to list
-    csv_datei5 = os.path.join(path, 'Sum_my_sum_of_heat_energy.csv')
+    csv_datei5 = os.path.join(path, 'Sum_Sum_of_heat_energy_demand.csv')
     with open(csv_datei5, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
         for row in csvreader:
@@ -233,20 +241,40 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
 
     #Add all data in prepared list
     model_energy_input_data = [(x[0], x[1], x[2], EnergyInputData2[i], EnergyInputData3[i], EnergyInputData4[i], EnergyInputData5[i]) for i, x in enumerate(model_energy_input_data)]
-
     #Save List in Excel File
     # Add all the result data from this simulation round within the economic assessment excel file; 
     worksheet = workbook['InputGesamtmodell']  # 'Anlagendaten' durch den tatsächlichen Namen ersetzen
-    # Schreibe die zusammengeführten Daten in das Excel-Arbeitsblatt
-    for row in model_energy_input_data:
-        worksheet.append(row)
     
+    # # Go through the following columns and delete the data
+    # zu_loeschende_spalten = [0, 1, 2, 3, 4, 5, 6]
+    # # Go through the rows and delete the data in the desired columns
+    # for zeile in range(worksheet.max_row):
+    #     for spalte in zu_loeschende_spalten:
+    #         zelle = worksheet.cell(row=zeile+1, column=spalte+1)
+    #         zelle.value = None
+    
+    # # Schreibe die zusammengeführten Daten in das Excel-Arbeitsblatt
+    # for row in model_energy_input_data:
+    #     worksheet.append(row)
+    
+    # worksheet = workbook['InputGesamtmodellTest2']  # 'Anlagendaten' durch den tatsächlichen Namen ersetzen
+    # # Durchlaufen der Daten und Einfügen in die Excel-Datei
+    # for row_idx, row_data in enumerate(model_energy_input_data, start=1):
+    #     for col_idx, value in enumerate(row_data, start=1):
+    #         worksheet.cell(row=row_idx, column=col_idx).value = value
+
+    # # Excel-Berechnung für die 7. Spalte (Summe der ersten und zweiten Spalte)
+    #     if row_idx == 1:
+    #         worksheet.cell(row=row_idx, column=7).value = None
+    #         worksheet.cell(row=row_idx, column=7).value = f"Electr. Result. = -Current needed + PV Component"  # Summe der Werte in der ersten und zweiten Spalte
+    #     else: 
+    #         worksheet.cell(row=row_idx, column=7).value = f"=-C{row_idx}+D{row_idx}"  # Summe der Werte in der ersten und zweiten Spalte
  
 
     del csv_datei1, csv_datei2, csv_datei3, csv_datei4, model_energy_input_data, EnergyInputData2, EnergyInputData3, EnergyInputData4, EnergyInputData5,izaehler
     #----------------------------------------------
     
-    
+    #Add Input Data for calcuation within "Gesamtmodell"
     #Prepare Model-Result-Data for Saving in Excel
     
     zusammengefuegte_daten = []
@@ -255,7 +283,7 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
     Data4 = []
     Data5 = []
     Data6 = []
-    
+    Data7 = []
     # Lade Daten aus dem ersten CSV-Datei "Electricity TO or FROM Grid Ergebnisse" (Spalte 1 und Spalte 2) und füge sie zur Liste hinzu
     csv_datei1 = os.path.join(path, 'ElectricityToOrFromGrid_L2EMSElectricityController.csv')
     with open(csv_datei1, 'r') as csvfile:
@@ -309,10 +337,17 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
         for row in csvreader:
             Data6.append(row[1])
-    
+
+
+    # Load 7. CSV-Datei "TotalElectricityConsumption_L2EMSElectricityController.csv" (only second column) und add it to the list
+    csv_datei7 = os.path.join(path, 'TotalElectricityConsumption_L2EMSElectricityController.csv')
+    with open(csv_datei7, 'r') as csvfile:
+        csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        for row in csvreader:
+            Data7.append(row[1])    
 
     #Zusammenfuehren der Daten
-    zusammengefuegte_daten = [(x[0], x[1], x[2], Data2[i], Data3[i], Data4[i], Data5[i], Data6[i],) for i, x in enumerate(zusammengefuegte_daten)]
+    zusammengefuegte_daten = [(x[0], x[1], x[2], Data2[i], Data3[i], Data4[i], Data5[i], Data6[i], Data7[i]) for i, x in enumerate(zusammengefuegte_daten)]
 
     
 
@@ -320,8 +355,13 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
     
 
     # Save "zusammengefuegte_data" which represents the Result data of the model in the excel file
-    worksheet = workbook['OutputGesamtmodell']  # 'Anlagendaten' durch den tatsächlichen Namen ersetzen
-       
+    worksheet = workbook['OutputGesamtmodell']
+    # delete all data in sheet
+    for row in worksheet.iter_rows(min_row=1, max_row=worksheet.max_row, min_col=1, max_col=worksheet.max_column):
+        for cell in row:
+            cell.value = None
+
+   
     for zeile, daten in enumerate(zusammengefuegte_daten, start=1):  # Start bei Zeile 2, um Überschriften zu vermeiden
         for spalte, wert in enumerate(daten, start=1):
             zelle = worksheet.cell(row=zeile, column=spalte)

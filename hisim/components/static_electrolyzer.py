@@ -249,8 +249,8 @@ class StaticElectrolyzer(cp.Component):
                     stsv.set_output_value(self.hydrogen_output_channel, 0)
                     stsv.set_output_value(self.output_needed_electricity, 0)
                 else:
-                    hydrogen_production = self.config.p_el / (3600*40000)
-                    stsv.set_output_value(self.hydrogen_output_channel, hydrogen_production) #umrechnung von Watt [=Joule/Sekunde, Leistung) p_el in  kg/s H2
+                    hydrogen_production = self.config.p_el / (3600*40000) #umrechnung von Watt [=Joule/Sekunde, Leistung) p_el in  kg/s H2
+                    stsv.set_output_value(self.hydrogen_output_channel, hydrogen_production) 
                     stsv.set_output_value(self.output_needed_electricity, self.config.p_el)
             
             self.processed_state = self.state.clone() #Neu

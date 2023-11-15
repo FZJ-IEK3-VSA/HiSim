@@ -84,9 +84,9 @@ def Cell4Life(
     # Postprocessing Options****
     
     my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.EXPORT_TO_CSV)
-    #my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PLOT_LINE)
-    #my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.MAKE_NETWORK_CHARTS)
-    #my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PLOT_CARPET)
+    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PLOT_LINE)
+    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.MAKE_NETWORK_CHARTS)
+    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PLOT_CARPET)
     
   
             #******************************************************************
@@ -114,22 +114,22 @@ def Cell4Life(
     	
     #Calculate Sum of energy needed hot water and heating 
     # Create sum builder object
-    my_sum_of_heat_energy = SumBuilderForTwoInputs(
+    my_sum_of_heat_energy_demand = SumBuilderForTwoInputs(
         config=SumBuilderConfig.get_sumbuilder_default_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
-    my_sum_of_heat_energy.config.name = 'my_sum_of_heat_energy'
-    my_sum_of_heat_energy.config.unit = loadtypes.Units.WATT
-    my_sum_of_heat_energy.output1.component_name = 'my_sum_of_heat_energy'
+    my_sum_of_heat_energy_demand.config.name = 'Sum_of_heat_energy_demand'
+    my_sum_of_heat_energy_demand.config.unit = loadtypes.Units.WATT
+    my_sum_of_heat_energy_demand.output1.component_name = 'Sum_of_heat_energy_demand'
 
     # Connect inputs from sum object to both previous outputs
-    my_sum_of_heat_energy.connect_input(
-        input_fieldname=my_sum_of_heat_energy.SumInput1,
+    my_sum_of_heat_energy_demand.connect_input(
+        input_fieldname=my_sum_of_heat_energy_demand.SumInput1,
         src_object_name= my_wartmwater_system.component_name,
         src_field_name= my_wartmwater_system.Output1,
     )
-    my_sum_of_heat_energy.connect_input(
-        input_fieldname=my_sum_of_heat_energy.SumInput2,
+    my_sum_of_heat_energy_demand.connect_input(
+        input_fieldname=my_sum_of_heat_energy_demand.SumInput2,
         src_object_name= my_heatingsystem_system.component_name,
         src_field_name= my_heatingsystem_system.Output1,
     )
@@ -358,7 +358,7 @@ def Cell4Life(
     
     my_sim.add_component(my_wartmwater_system)
     my_sim.add_component(my_heatingsystem_system)
-    my_sim.add_component(my_sum_of_heat_energy)
+    my_sim.add_component(my_sum_of_heat_energy_demand)
 
 def InputParameter():
     """
@@ -425,7 +425,7 @@ def InputParameter():
     del BatteryCapkWh, FuelCellPowerW, BatteryCapkWhUnit, FuelCellPowerWUnit 
     
     #Following parameter depends on a "variation parameter"
-    battery_inverter_power = battery_capacity/6*1000 #in Watt: Batterie Inverter power is assumed to depend on Battery Capacity 
+    battery_inverter_power = battery_capacity/3.5*1000 #in Watt: Batterie Inverter power is assumed to depend on Battery Capacity 
     battery_inverter_powerUnit = "W"
 
     #Static Parameters:
@@ -447,19 +447,13 @@ def InputParameter():
     init_source_weight_chp = 2
     init_source_weight_chpUnit = "W"
     
-    p_el_elektrolyzer = fuel_cell_power*2 #Electrical Operating Power in Watt
+    p_el_elektrolyzer = fuel_cell_power*2.1 #Electrical Operating Power in Watt
     p_el_elektrolyzerUnit = "W"
     
     electrolyzer_source_weight = 999
     electrolyzer_source_weightUnit = "-"
     
-    h2_storage_capacity_max = 50000  #Maximum of hydrogen storage in kg
-    h2_storage_capacity_maxUnit = "kg"
-    h2_storage_losses = 0 # % of Hydrogen Losses per day in %
-    h2_storage_lossesUnit = "%"
-    
-    h2_soc_upper_threshold_electrolyzer = 99  #Electrolyzer works just until H2 storage goes up to this threshold
-    h2_soc_upper_threshold_electrolyzerUnit = "%"
+
     
     min_operation_time_in_seconds_chp = 0 #It is not working well so let it be "0"
     min_operation_time_in_seconds_chpUnit = "s"
@@ -479,6 +473,15 @@ def InputParameter():
     off_on_SOEC = 500 #Day: Turn on Electrolyzer and turn off on Fuel Cell
     off_on_SOECUnit = "days (counting: day one in Input Data = 1 ||Day: Turn on Electrolyzer and turn off on Fuel Cell"
     
+    #h2_storage_capacity_max = 50000  #Maximum of hydrogen storage in kg
+    h2_storage_capacity_max = p_el_elektrolyzer / (3600*40000) *3600 * 24 * (on_off_SOEC +1) #Storage Capacity based on Electrolyzer Production Rate
+    h2_storage_capacity_maxUnit = "kg"
+    h2_storage_losses = 0 # % of Hydrogen Losses per day in %
+    h2_storage_lossesUnit = "%"
+    
+    h2_soc_upper_threshold_electrolyzer = 99  #Electrolyzer works just until H2 storage goes up to this threshold
+    h2_soc_upper_threshold_electrolyzerUnit = "%"
+
     #H2 storage energy demands; the energy demand is covered by electricit; 
     # -in general: if storage is empty, no energy is needed!
     # -energy for charging, discharging and for operation of the tank is considered; 
@@ -608,27 +611,4 @@ def InputParameter():
     }
         
 
-    # input_variablen = {
-    #     "PreResultNumber": PreResultNumber,
-    #     "battery_capacity": battery_capacity,
-    #     "battery_inverter_power": battery_inverter_power,
-    #     "fuel_cell_power": fuel_cell_power,
-    #     "NGFm2" : NGFm2,
-    #     "PV_Faktor": PV_Faktor,
-    #     "init_source_weight_battery": init_source_weight_battery,
-    #     "electricity_threshold": electricity_threshold,
-    #     "init_source_weight_hydrogenstorage": init_source_weight_hydrogenstorage,
-    #     "init_source_weight_chp": init_source_weight_chp,
-    #     "p_el_elektrolyzer":p_el_elektrolyzer,
-    #     "electrolyzer_source_weight": electrolyzer_source_weight,
-    #     "h2_storage_capacity_max": h2_storage_capacity_max,
-    #     "h2_storage_losses": h2_storage_losses,
-    #     "h2_soc_upper_threshold_electrolyzer": h2_soc_upper_threshold_electrolyzer,
-    #     "min_operation_time_in_seconds_chp": min_operation_time_in_seconds_chp,
-    #     "min_resting_time_in_seconds_chp": min_resting_time_in_seconds_chp,
-    #     "h2_soc_lower_threshold_chp": h2_soc_lower_threshold_chp,
-    #     "on_off_SOEC": on_off_SOEC,
-    #     "off_on_SOEC": off_on_SOEC
-    # }
-    
     return input_variablen

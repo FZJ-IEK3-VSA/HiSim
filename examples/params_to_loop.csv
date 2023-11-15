@@ -1,2 +1,2 @@
 PreResultNumber,FuelCellPowerW,BatteryCapkWh,PreResultNumberUnit,FuelCellPowerWUnit,BatteryCapkWhUnit
-0,200000,1000,-,W,kWh
+4,200000,500.0,-,W,kWh

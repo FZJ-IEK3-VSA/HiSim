@@ -2,11 +2,6 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Install HDF5, which is required to build h5py during the installation of the requirements
-RUN apt-get update
-RUN apt-get -y upgrade
-RUN apt-get install libhdf5-serial-dev -y
-
 # Copy relevant files
 COPY setup.py setup.py
 # These files are needed by setup.py
@@ -19,7 +14,7 @@ RUN pip install -e .
 # Copy source code to image
 COPY hisim hisim
 
-# Copy the system_setups folder containing the modular_household file
+# Copy the system_setups folder
 COPY system_setups system_setups 
 
 # Set an environment variable flag so HiSim can check whether it runs in a container or not

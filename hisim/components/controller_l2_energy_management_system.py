@@ -16,7 +16,7 @@ from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import dynamic_component
 from hisim import loadtypes as lt
-from hisim import utils
+from hisim import utils, log
 from hisim.component import ComponentInput, ComponentOutput
 from hisim.simulationparameters import SimulationParameters
 
@@ -257,6 +257,126 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             sankey_flow_direction=False,
             output_description=f"here a description for {self.CheckPeakShaving} will follow.",
         )
+        
+        self.add_default_connections(self.get_default_connections_from_occupancy())
+        self.add_default_connections(self.get_default_connections_from_pv_system())
+        self.add_default_connections(self.get_default_connections_from_dhw_heat_pump())
+        self.add_default_connections(
+            self.get_default_connections_from_advanced_heat_pump()
+        )
+
+    def get_default_connections_from_occupancy(
+        self,
+    ):
+        """Get occupancy default connections."""
+        log.information("setting default connections in l2 generic energy management system")
+        from hisim.components.loadprofilegenerator_connector import Occupancy  # pylint: disable=import-outside-toplevel
+
+        dynamic_connections = []
+        occupancy_class_name = Occupancy.get_classname()
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=Occupancy,
+                source_class_name=occupancy_class_name,
+                source_component_field_name=Occupancy.ElectricityOutput,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+                source_weight=999,
+            )
+        )
+        return dynamic_connections
+
+    def get_default_connections_from_pv_system(
+        self,
+    ):
+        """Get pv system default connections."""
+        log.information("setting default connections in l2 generic energy management system")
+        from hisim.components.generic_pv_system import PVSystem  # pylint: disable=import-outside-toplevel
+
+        dynamic_connections = []
+        pv_class_name = PVSystem.get_classname()
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=PVSystem,
+                source_class_name=pv_class_name,
+                source_component_field_name=PVSystem.ElectricityOutput,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.ComponentType.PV,
+                    lt.InandOutputType.ELECTRICITY_PRODUCTION,
+                ],
+                source_weight=999,
+            )
+        )
+        return dynamic_connections
+
+    def get_default_connections_from_dhw_heat_pump(
+        self,
+    ):
+        """Get dhw heat pump default connections."""
+        log.information("setting default connections in l2 generic energy management system")
+        from hisim.components.generic_heat_pump_modular import ModularHeatPump  # pylint: disable=import-outside-toplevel
+
+        dynamic_connections = []
+        dhw_heat_pump_class_name = ModularHeatPump.get_classname()
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=ModularHeatPump,
+                source_class_name=dhw_heat_pump_class_name,
+                source_component_field_name=ModularHeatPump.ElectricityOutput,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[lt.ComponentType.HEAT_PUMP_DHW, lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+                source_weight=1,
+            )
+        )
+        return dynamic_connections
+
+    def get_default_connections_from_advanced_heat_pump(
+        self,
+    ):
+        """Get advanced heat pump default connections."""
+        log.information("setting default connections in l2 generic energy management system")
+        from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib  # pylint: disable=import-outside-toplevel
+
+        dynamic_connections = []
+        advanced_heat_pump_class_name = HeatPumpHplib.get_classname()
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=HeatPumpHplib,
+                source_class_name=advanced_heat_pump_class_name,
+                source_component_field_name=HeatPumpHplib.ElectricalInputPower,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.ELECTRICITY_REAL],
+                source_weight=2,
+            )
+        )
+        return dynamic_connections
+
+    def get_default_connections_from_advanced_battery(
+        self,
+    ):
+        """Get advanced battery default connections."""
+        log.information("setting default connections in l2 generic energy management system")
+        from hisim.components.advanced_battery_bslib import Battery  # pylint: disable=import-outside-toplevel
+
+        dynamic_connections = []
+        advanced_battery_class_name = Battery.get_classname()
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=Battery,
+                source_class_name=advanced_battery_class_name,
+                source_component_field_name=Battery.AcBatteryPower,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_REAL],
+                source_weight=3,
+            )
+        )
+        return dynamic_connections
 
     def sort_source_weights_and_components(self) -> None:
         """Sorts dynamic Inputs and Outputs according to source weights."""

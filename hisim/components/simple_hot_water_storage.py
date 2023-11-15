@@ -301,6 +301,7 @@ class SimpleHotWaterStorage(cp.Component):
             output_description=f"here a description for {self.StandbyHeatLoss} will follow.",
         )
         self.add_default_connections(self.get_default_connections_from_heat_distribution_system())
+        self.add_default_connections(self.get_default_connections_from_advanced_heat_pump())
 
     def get_default_connections_from_heat_distribution_system(self) -> List[cp.ComponentConnection]:
         """Get heat distribution default connections."""
@@ -313,6 +314,28 @@ class SimpleHotWaterStorage(cp.Component):
                 SimpleHotWaterStorage.WaterTemperatureFromHeatDistribution,
                 hds_classname,
                 HeatDistribution.WaterTemperatureOutput,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_advanced_heat_pump(self) -> List[cp.ComponentConnection]:
+        """Get advanced het pump default connections."""
+        log.information("setting default connections in simple hot water storage.")
+        from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib  # pylint: disable=import-outside-toplevel
+        connections = []
+        hp_classname = HeatPumpHplib.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator,
+                hp_classname,
+                HeatPumpHplib.TemperatureOutput,
+            )
+        )
+        connections.append(
+            cp.ComponentConnection(
+                SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator,
+                hp_classname,
+                HeatPumpHplib.MassFlowOutput,
             )
         )
         return connections

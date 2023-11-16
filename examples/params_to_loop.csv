@@ -1,2 +1,2 @@
 PreResultNumber,FuelCellPowerW,BatteryCapkWh,Inverter_Ratio,PreResultNumberUnit,FuelCellPowerWUnit,BatteryCapkWhUnit,Inverter_RatioUnit
-24,100000,924.0,0.5,-,W,kWh,-
+11,50000,462.0,0.333,-,W,kWh,-

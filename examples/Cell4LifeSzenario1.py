@@ -71,7 +71,7 @@ def Cell4Life(
 
 
     # Build Results Path
-    name = "S" + str(input_variablen["PreResultNumber"]["value"])+"_BatCap._" + str(input_variablen["battery_capacity"]["value"]) + "kWh_Inv_" + str(input_variablen["battery_inverter_power"]["value"]/1000) + "kW_FCPower_" + str(input_variablen["fuel_cell_power"]["value"]) +"W"
+    name = "S" + str(input_variablen["PreResultNumber"]["value"])+"_BCap._" + str(input_variablen["battery_capacity"]["value"]) + "kWh_Inv_" + str(input_variablen["battery_inverter_power"]["value"]/1000) + "kW_FCPow_" + str(input_variablen["fuel_cell_power"]["value"]) +"W"
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory = "C://Users//Standard//Desktop//hisim//C4LResults",
         model_name= name,

@@ -71,7 +71,7 @@ def Cell4Life(
 
 
     # Build Results Path
-    name = "S" + str(input_variablen["PreResultNumber"]["value"])+"_BatCap._" + str(input_variablen["battery_capacity"]["value"]) + "kWh_FCPower_" + str(input_variablen["fuel_cell_power"]["value"]) +"W"
+    name = "S" + str(input_variablen["PreResultNumber"]["value"])+"_BatCap._" + str(input_variablen["battery_capacity"]["value"]) + "kWh_Inv_" + str(input_variablen["battery_inverter_power"]["value"]/1000) + "kW_FCPower_" + str(input_variablen["fuel_cell_power"]["value"]) +"W"
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory = "C://Users//Standard//Desktop//hisim//C4LResults",
         model_name= name,
@@ -85,7 +85,7 @@ def Cell4Life(
     
     my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.EXPORT_TO_CSV)
     my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PLOT_LINE)
-    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.MAKE_NETWORK_CHARTS)
+    #my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.MAKE_NETWORK_CHARTS)
     my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PLOT_CARPET)
     
   
@@ -409,11 +409,14 @@ def InputParameter():
     PreResultNumber  = param_df["PreResultNumber"][0]
     FuelCellPowerW = param_df["FuelCellPowerW"][0]
     BatteryCapkWh = param_df["BatteryCapkWh"][0]
-    
+    Inverter_Ratio = param_df["Inverter_Ratio"][0]
+            
     PreResultNumberUnit = param_df["PreResultNumberUnit"][0]
     FuelCellPowerWUnit = param_df["FuelCellPowerWUnit"][0]
     BatteryCapkWhUnit = param_df["BatteryCapkWhUnit"][0]
-    
+    Inverter_RatioUnit = param_df["Inverter_RatioUnit"][0]
+
+
     #Variation Parameters:
     battery_capacity: Optional[float] = BatteryCapkWh   #Total Capacity of Battery in kWh
     battery_capacityUnit = BatteryCapkWhUnit
@@ -425,7 +428,7 @@ def InputParameter():
     del BatteryCapkWh, FuelCellPowerW, BatteryCapkWhUnit, FuelCellPowerWUnit 
     
     #Following parameter depends on a "variation parameter"
-    battery_inverter_power = battery_capacity/3.5*1000 #in Watt: Batterie Inverter power is assumed to depend on Battery Capacity 
+    battery_inverter_power = battery_capacity*1000*Inverter_Ratio #in Watt: Batterie Inverter power is assumed to depend on Battery Capacity which is given in kWh!
     battery_inverter_powerUnit = "W"
 
     #Static Parameters:
@@ -488,7 +491,7 @@ def InputParameter():
     # -the operation energy demand is always considererd and added to charging/discharging energy demand if there is fuel stored; 
     
     #charging: in % in relation to the energy content of the fuel which is stored in the time step; e.g. xx % of energy of energy contend of the fuel stored in the time step
-    h2storage_energy_for_charge_based_on_massflow_h_fuel = 0
+    h2storage_energy_for_charge_based_on_massflow_h_fuel = 12  #Energieaufwand nach [19] Wikipedia: 12 % des Energieinhalts des Wasserstoffs gehen für Komprimierung auf 700 bar auf
     h2storage_energy_for_charge_based_on_massflow_h_fuelUnit = "%" #of given h_fuel heat value
     #discharging: in % in relation to the energy content of the fuel which is withdrawn in the time step 
     h2storage_energy_for_discharge_based_on_massflow_h_fuel = 0
@@ -606,6 +609,10 @@ def InputParameter():
         "h2storage_energy_for_operation": {
             "value": h2storage_energy_for_operation,
             "unit": h2storage_energy_for_operationUnit,
+        },
+        "Inverter_Ratio": {
+            "value": Inverter_Ratio,
+            "unit": Inverter_RatioUnit,
         },
         
     }

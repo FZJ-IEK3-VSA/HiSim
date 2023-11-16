@@ -8,7 +8,6 @@ from dataclasses_json import dataclass_json
 
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim import log
 from hisim.components import generic_chp
 from hisim.components import generic_electrolyzer
 from hisim.simulationparameters import SimulationParameters
@@ -154,7 +153,7 @@ class GenericHydrogenStorage(cp.Component):
 
     def get_default_connections_from_generic_chp(self) -> List[cp.ComponentConnection]:
         """Get default connections from generic chp."""
-        log.information("setting default connections in generic h2 storage")
+
         connections: List[cp.ComponentConnection] = []
         chp_classname = generic_chp.SimpleCHP.get_classname()
         connections.append(
@@ -170,9 +169,7 @@ class GenericHydrogenStorage(cp.Component):
         self,
     ) -> List[cp.ComponentConnection]:
         """Get default connections from generic electrolyzer."""
-        log.information(
-            "setting default connections in generic h2 storage"
-        )
+
         connections: List[cp.ComponentConnection] = []
         electrolyzer_classname = (
             generic_electrolyzer.GenericElectrolyzer.get_classname()

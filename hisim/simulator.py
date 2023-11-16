@@ -102,6 +102,7 @@ class Simulator:
     def prepare_calculation(self) -> None:
         """Connects the inputs from every component to the corresponding outputs."""
         for wrapped_component in self.wrapped_components:
+
             # check if component should be connected to default connections automatically
             if wrapped_component.connect_automatically is True:
                 self.connect_everything_automatically(
@@ -527,10 +528,16 @@ class Simulator:
             target_default_connection_dict = (
                 target_component.dynamic_default_connections
             )
+
         elif isinstance(target_component, cp.Component) and not isinstance(
             target_component, dcp.DynamicComponent
         ):
             target_default_connection_dict = target_component.default_connections
+
+        else:
+            raise TypeError(
+                f"Type {type(target_component)} of target_component should be Component or Dynamic Component."
+            )
 
         # check if target component has any default connections (otherwise automatic connection cannot be made)
         if bool(target_default_connection_dict) is True:
@@ -546,6 +553,7 @@ class Simulator:
                 raise KeyError(
                     f"No component in the system setup matches the default connections of {target_component.component_name}."
                 )
+
             # go through all registered components
             for source_component in source_component_list:
                 source_component_classname = source_component.get_classname()
@@ -560,11 +568,9 @@ class Simulator:
                                 source_component=source_component
                             )
                         )
+
                         target_component.connect_with_dynamic_connections_list(
                             dynamic_component_connections=dynamic_connections
-                        )
-                        log.information(
-                            f"Dynamic default connection was successful between {target_component.component_name} and {source_component.component_name}."
                         )
 
                     if isinstance(target_component, cp.Component) and not isinstance(
@@ -577,16 +583,8 @@ class Simulator:
                         target_component.connect_with_connections_list(
                             connections=connections
                         )
-                        log.information(
-                            f"Default connection was successful between {target_component.component_name} and {source_component.component_name}."
-                        )
-
-                    else:
-                        raise TypeError(
-                            f"Type {type(target_component)} of target_component should be Component or Dyanmic Component."
-                        )
         else:
-            log.warning(
-                f"The component {target_component.component_name} has no default connections set in its init function. "
-                + "If no component connection is needed, that's fine. Otherwise you can connect your components manually or create a default connection."
+            raise KeyError(
+                f"Automatic connection does not work for {target_component.component_name} because no default connections were found. "
+                + "Please check if a connection is needed and if yes, create the missing default connection in your component."
             )

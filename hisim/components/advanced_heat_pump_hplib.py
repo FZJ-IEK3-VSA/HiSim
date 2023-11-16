@@ -29,7 +29,6 @@ from hisim.loadtypes import LoadTypes, Units, InandOutputType
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.components.heat_distribution_system import HeatingSystemType
-from hisim import log
 
 
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
@@ -323,7 +322,7 @@ class HeatPumpHplib(Component):
         self,
     ):
         """Get default connections."""
-        log.information("setting default connections in advanced heat pump")
+
         connections = []
         hpc_classname = HeatPumpHplibController.get_classname()
         connections.append(
@@ -339,7 +338,7 @@ class HeatPumpHplib(Component):
         self,
     ):
         """Get default connections."""
-        log.information("setting default connections in advanced heat pump")
+
         connections = []
         weather_classname = weather.Weather.get_classname()
         connections.append(
@@ -363,7 +362,7 @@ class HeatPumpHplib(Component):
         self,
     ):
         """Get simple hot water storage default connections."""
-        log.information("setting default connections in advanced heat pump")
+
         connections = []
         hws_classname = simple_hot_water_storage.SimpleHotWaterStorage.get_classname()
         connections.append(
@@ -765,7 +764,6 @@ class HeatPumpHplibController(Component):
         self,
     ):
         """Get default connections."""
-        log.information("setting heat distribution controller default connections")
         connections = []
         hdsc_classname = (
             heat_distribution_system.HeatDistributionController.get_classname()
@@ -783,7 +781,6 @@ class HeatPumpHplibController(Component):
         self,
     ):
         """Get default connections."""
-        log.information("setting weather default connections")
         connections = []
         weather_classname = weather.Weather.get_classname()
         connections.append(
@@ -799,7 +796,6 @@ class HeatPumpHplibController(Component):
         self,
     ):
         """Get simple hot water storage default connections."""
-        log.information("setting simple hot water storage default connections")
         connections = []
         hws_classname = simple_hot_water_storage.SimpleHotWaterStorage.get_classname()
         connections.append(

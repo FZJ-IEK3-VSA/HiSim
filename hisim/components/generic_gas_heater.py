@@ -23,7 +23,6 @@ from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
-from hisim import log
 
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
@@ -228,7 +227,7 @@ class GasHeater(Component):
         self,
     ):
         """Get Controller L1 Gas Heater default connections."""
-        log.information("setting default connections in gas heater")
+
         connections = []
         l1_controller_classname = GenericGasHeaterControllerL1.get_classname()
         connections.append(
@@ -244,7 +243,7 @@ class GasHeater(Component):
         self,
     ):
         """Get Simple hot water storage default connections."""
-        log.information("setting default connections in gas heater")
+
         connections = []
         hws_classname = SimpleHotWaterStorage.get_classname()
         connections.append(

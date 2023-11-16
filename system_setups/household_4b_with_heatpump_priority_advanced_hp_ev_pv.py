@@ -25,7 +25,9 @@ from hisim.components import controller_l2_energy_management_system
 from hisim import utils
 from hisim import loadtypes as lt
 from system_setups.modular_example import cleanup_old_lpg_requests
-from system_setups.household_4a_with_car_priority_advanced_hp_ev_pv import HouseholdAdvancedHPEvPvConfig
+from system_setups.household_4a_with_car_priority_advanced_hp_ev_pv import (
+    HouseholdAdvancedHPEvPvConfig,
+)
 
 __authors__ = "Markus Blasberg"
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
@@ -448,7 +450,9 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
     my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)
     my_sim.add_component(my_domnestic_hot_water_storage, connect_automatically=True)
-    my_sim.add_component(my_domnestic_hot_water_heatpump_controller, connect_automatically=True)
+    my_sim.add_component(
+        my_domnestic_hot_water_heatpump_controller, connect_automatically=True
+    )
     my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
     my_sim.add_component(my_electricity_meter)
     my_sim.add_component(my_electricity_controller)

@@ -16,7 +16,7 @@ from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import dynamic_component
 from hisim import loadtypes as lt
-from hisim import utils, log
+from hisim import utils
 from hisim.component import ComponentInput, ComponentOutput
 from hisim.simulationparameters import SimulationParameters
 
@@ -257,11 +257,11 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             sankey_flow_direction=False,
             output_description=f"here a description for {self.CheckPeakShaving} will follow.",
         )
-        
-        self.add_default_connections(self.get_default_connections_from_occupancy())
-        self.add_default_connections(self.get_default_connections_from_pv_system())
-        self.add_default_connections(self.get_default_connections_from_dhw_heat_pump())
-        self.add_default_connections(
+
+        self.add_dynamic_default_connections(self.get_default_connections_from_occupancy())
+        self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
+        self.add_dynamic_default_connections(self.get_default_connections_from_dhw_heat_pump())
+        self.add_dynamic_default_connections(
             self.get_default_connections_from_advanced_heat_pump()
         )
 
@@ -269,7 +269,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self,
     ):
         """Get occupancy default connections."""
-        log.information("setting default connections in l2 generic energy management system")
+
         from hisim.components.loadprofilegenerator_connector import Occupancy  # pylint: disable=import-outside-toplevel
 
         dynamic_connections = []
@@ -291,9 +291,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self,
     ):
         """Get pv system default connections."""
-        log.information("setting default connections in l2 generic energy management system")
-        from hisim.components.generic_pv_system import PVSystem  # pylint: disable=import-outside-toplevel
 
+        from hisim.components.generic_pv_system import PVSystem  # pylint: disable=import-outside-toplevel
+        print("sett defalt connections for ems")
         dynamic_connections = []
         pv_class_name = PVSystem.get_classname()
         dynamic_connections.append(
@@ -316,7 +316,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self,
     ):
         """Get dhw heat pump default connections."""
-        log.information("setting default connections in l2 generic energy management system")
+
         from hisim.components.generic_heat_pump_modular import ModularHeatPump  # pylint: disable=import-outside-toplevel
 
         dynamic_connections = []
@@ -338,7 +338,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self,
     ):
         """Get advanced heat pump default connections."""
-        log.information("setting default connections in l2 generic energy management system")
+
         from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib  # pylint: disable=import-outside-toplevel
 
         dynamic_connections = []
@@ -360,7 +360,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self,
     ):
         """Get advanced battery default connections."""
-        log.information("setting default connections in l2 generic energy management system")
+
         from hisim.components.advanced_battery_bslib import Battery  # pylint: disable=import-outside-toplevel
 
         dynamic_connections = []
@@ -383,10 +383,12 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         inputs = [
             elem for elem in self.my_component_inputs if elem.source_weight != 999
         ]
+
         source_tags = [elem.source_tags[0] for elem in inputs]
         source_weights = [elem.source_weight for elem in inputs]
         sortindex = sorted(range(len(source_weights)), key=lambda k: source_weights[k])
         source_weights = [source_weights[i] for i in sortindex]
+
         self.components_sorted = [source_tags[i] for i in sortindex]
         self.inputs_sorted = [
             getattr(self, inputs[i].source_component_class) for i in sortindex
@@ -401,10 +403,11 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 ],
                 weight_counter=source_weight,
             )
+
             if output is not None:
                 self.outputs_sorted.append(output)
             else:
-                raise Exception("Danamic input is not conncted to dynamic output")
+                raise Exception("Dynamic input is not conncted to dynamic output")
 
         self.production_inputs = self.get_dynamic_inputs(
             tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION]
@@ -415,7 +418,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.consumption_ems_controlled_inputs = self.get_dynamic_inputs(
             tags=[lt.InandOutputType.ELECTRICITY_REAL]
         )
-        print([elem.field_name for elem in self.consumption_ems_controlled_inputs])
 
     def write_to_report(self):
         """Writes relevant information to report."""

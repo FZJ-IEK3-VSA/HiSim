@@ -17,7 +17,6 @@ from hisim.dynamic_component import (
 )
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
-from hisim import log
 
 
 @dataclass_json
@@ -150,13 +149,13 @@ class ElectricityMeter(DynamicComponent):
             sankey_flow_direction=False,
             output_description=f"here a description for {self.CumulativeProduction} will follow.",
         )
-        self.add_default_connections(self.get_default_connections_from_occupancy())
-        self.add_default_connections(self.get_default_connections_from_pv_system())
-        self.add_default_connections(self.get_default_connections_from_dhw_heat_pump())
-        self.add_default_connections(
+        self.add_dynamic_default_connections(self.get_default_connections_from_occupancy())
+        self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
+        self.add_dynamic_default_connections(self.get_default_connections_from_dhw_heat_pump())
+        self.add_dynamic_default_connections(
             self.get_default_connections_from_advanced_heat_pump()
         )
-        self.add_default_connections(
+        self.add_dynamic_default_connections(
             self.get_default_connections_from_generic_heat_pump()
         )
 
@@ -164,7 +163,7 @@ class ElectricityMeter(DynamicComponent):
         self,
     ):
         """Get occupancy default connections."""
-        log.information("setting default connections in electricity meter")
+
         from hisim.components.loadprofilegenerator_connector import Occupancy  # pylint: disable=import-outside-toplevel
 
         dynamic_connections = []
@@ -186,7 +185,7 @@ class ElectricityMeter(DynamicComponent):
         self,
     ):
         """Get pv system default connections."""
-        log.information("setting default connections in electricity meter")
+
         from hisim.components.generic_pv_system import PVSystem  # pylint: disable=import-outside-toplevel
 
         dynamic_connections = []
@@ -211,7 +210,7 @@ class ElectricityMeter(DynamicComponent):
         self,
     ):
         """Get dhw heat pump default connections."""
-        log.information("setting default connections in electricity meter")
+
         from hisim.components.generic_heat_pump_modular import ModularHeatPump  # pylint: disable=import-outside-toplevel
 
         dynamic_connections = []
@@ -233,7 +232,7 @@ class ElectricityMeter(DynamicComponent):
         self,
     ):
         """Get advanced heat pump default connections."""
-        log.information("setting default connections in electricity meter")
+
         from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib  # pylint: disable=import-outside-toplevel
 
         dynamic_connections = []
@@ -255,7 +254,7 @@ class ElectricityMeter(DynamicComponent):
         self,
     ):
         """Get generic heat pump default connections."""
-        log.information("setting default connections in electricity meter")
+
         from hisim.components.generic_heat_pump import GenericHeatPump  # pylint: disable=import-outside-toplevel
 
         dynamic_connections = []

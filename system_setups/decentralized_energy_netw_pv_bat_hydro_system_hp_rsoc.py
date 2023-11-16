@@ -398,7 +398,7 @@ def setup_function(
     # Set Results Path
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
-        model_name=my_sim.setup_function,
+        model_name=my_sim.my_sim.module_filename,
         variant_name=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_rSOC_{operation_mode_rsoc}",
         hash_number=None,
         sorting_option=SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION,

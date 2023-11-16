@@ -429,7 +429,7 @@ class Building(cp.Component):
         self,
     ):
         """Get weather default connnections."""
-        log.information("setting default connections in building")
+
         connections = []
         weather_classname = Weather.get_classname()
         connections.append(
@@ -494,7 +494,7 @@ class Building(cp.Component):
         self,
     ):
         """Get occupancy default connections."""
-        log.information("setting default connections in building")
+
         connections = []
         occupancy_classname = Occupancy.get_classname()
         connections.append(
@@ -517,7 +517,7 @@ class Building(cp.Component):
         self,
     ):
         """Get UTSP default connections."""
-        log.information("setting default connections in building")
+
         connections = []
         utsp_classname = UtspLpgConnector.get_classname()
         connections.append(
@@ -540,7 +540,7 @@ class Building(cp.Component):
         self,
     ):
         """Get heat distribution default connections."""
-        log.information("setting default connections in building")
+
         from hisim.components.heat_distribution_system import HeatDistribution  # pylint: disable=import-outside-toplevel
         connections = []
         hds_classname = HeatDistribution.get_classname()

@@ -14,7 +14,7 @@ from dataclasses_json import dataclass_json
 
 # Generic/Built-in
 from hisim import component as cp
-from hisim import log, utils
+from hisim import utils
 from hisim.component import ConfigBase
 from hisim.components import (
     building,
@@ -329,9 +329,7 @@ class L1CHPController(cp.Component):
 
     def get_default_connections_generic_hot_water_storage_modular(self):
         """Sets default connections for the boiler."""
-        log.information(
-            "setting default connections in l1 chp/fuell cell controller"
-        )
+
         connections = []
         boiler_classname = (
             generic_hot_water_storage_modular.HotWaterStorage.get_classname()
@@ -347,9 +345,7 @@ class L1CHPController(cp.Component):
 
     def get_default_connections_from_building(self):
         """Sets default connections for the boiler."""
-        log.information(
-            "setting default connections in l1 chp/fuell cell controller"
-        )
+
         connections = []
         building_classname = building.Building.get_classname()
         connections.append(
@@ -363,9 +359,7 @@ class L1CHPController(cp.Component):
 
     def get_default_connections_from_h2_storage(self):
         """Sets default connections for the hydrogen storage."""
-        log.information(
-            "setting default connections in l1 chp/fuell cell controller"
-        )
+
         connections = []
         h2_storage_classname = (
             generic_hydrogen_storage.GenericHydrogenStorage.get_classname()

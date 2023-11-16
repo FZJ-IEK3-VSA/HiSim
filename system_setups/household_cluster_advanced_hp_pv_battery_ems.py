@@ -122,24 +122,24 @@ def setup_function(
     seconds_per_timestep = 60
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(
+        my_simulation_parameters = SimulationParameters.one_day_only(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
         )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_OPEX
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_CAPEX
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER
-        )
+        # my_simulation_parameters.post_processing_options.append(
+        #     PostProcessingOptions.COMPUTE_OPEX
+        # )
+        # my_simulation_parameters.post_processing_options.append(
+        #     PostProcessingOptions.COMPUTE_CAPEX
+        # )
+        # my_simulation_parameters.post_processing_options.append(
+        #     PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
+        # )
+        # my_simulation_parameters.post_processing_options.append(
+        #     PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER
+        # )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Set Photovoltaic System
@@ -349,10 +349,23 @@ def setup_function(
     my_electricity_controller.add_component_output(
         source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
         source_tags=[
-            lt.ComponentType.HEAT_PUMP,
+            lt.ComponentType.HEAT_PUMP_DHW,
             lt.InandOutputType.ELECTRICITY_TARGET,
         ],
+        # source_weight=my_domnestic_hot_water_heatpump.config.source_weight,
         source_weight=1,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        output_description="Target electricity for dhw heat pump.",
+    )
+
+    my_electricity_controller.add_component_output(
+        source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+        source_tags=[
+            lt.ComponentType.HEAT_PUMP_BUILDING,
+            lt.InandOutputType.ELECTRICITY_TARGET,
+        ],
+        source_weight=2,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         output_description="Target electricity for Heat Pump. ",
@@ -365,7 +378,7 @@ def setup_function(
                 lt.ComponentType.BATTERY,
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
-            source_weight=2,
+            source_weight=3,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for Battery Control. ",
@@ -403,7 +416,9 @@ def setup_function(
     my_sim.add_component(my_heat_pump_controller, connect_automatically=True)
     my_sim.add_component(my_heat_pump, connect_automatically=True)
     my_sim.add_component(my_domnestic_hot_water_storage, connect_automatically=True)
-    my_sim.add_component(my_domnestic_hot_water_heatpump_controller, connect_automatically=True)
+    my_sim.add_component(
+        my_domnestic_hot_water_heatpump_controller, connect_automatically=True
+    )
     my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
     my_sim.add_component(my_electricity_meter)
     my_sim.add_component(my_advanced_battery)
@@ -434,7 +449,7 @@ def setup_function(
 
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
-        model_name=my_sim.setup_function,
+        model_name=my_sim.module_filename,
         variant_name=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s",
         hash_number=hash_number,
         sorting_option=sorting_option,

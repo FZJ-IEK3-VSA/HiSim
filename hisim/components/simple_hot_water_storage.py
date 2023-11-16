@@ -20,7 +20,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
-from hisim import utils, log
+from hisim import utils
 
 __authors__ = "Katharina Rieck, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -306,7 +306,7 @@ class SimpleHotWaterStorage(cp.Component):
 
     def get_default_connections_from_heat_distribution_system(self) -> List[cp.ComponentConnection]:
         """Get heat distribution default connections."""
-        log.information("setting default connections in simple hot water storage.")
+
         from hisim.components.heat_distribution_system import HeatDistribution  # pylint: disable=import-outside-toplevel
         connections = []
         hds_classname = HeatDistribution.get_classname()
@@ -321,7 +321,7 @@ class SimpleHotWaterStorage(cp.Component):
 
     def get_default_connections_from_advanced_heat_pump(self) -> List[cp.ComponentConnection]:
         """Get advanced het pump default connections."""
-        log.information("setting default connections in simple hot water storage.")
+
         from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib  # pylint: disable=import-outside-toplevel
         connections = []
         hp_classname = HeatPumpHplib.get_classname()
@@ -343,7 +343,7 @@ class SimpleHotWaterStorage(cp.Component):
 
     def get_default_connections_from_gasheater(self) -> List[cp.ComponentConnection]:
         """Get gasheater default connections."""
-        log.information("setting default connections in simple hot water storage.")
+
         from hisim.components.generic_gas_heater import GasHeater  # pylint: disable=import-outside-toplevel
         connections = []
         gasheater_classname = GasHeater.get_classname()

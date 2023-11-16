@@ -13,7 +13,6 @@ from typing import List
 from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim import log
 from hisim.components import controller_l1_chp
 from hisim.simulationparameters import SimulationParameters
 
@@ -242,7 +241,7 @@ class SimpleCHP(cp.Component):
         self,
     ) -> List[cp.ComponentConnection]:
         """Sets default connections of the controller in the Fuel Cell / CHP."""
-        log.information("setting default connections in generic chp")
+
         connections: List[cp.ComponentConnection] = []
         controller_classname = controller_l1_chp.L1CHPController.get_classname()
         connections.append(

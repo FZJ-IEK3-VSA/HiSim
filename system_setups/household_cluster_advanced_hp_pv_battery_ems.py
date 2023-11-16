@@ -122,24 +122,24 @@ def setup_function(
     seconds_per_timestep = 60
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only(
+        my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
         )
-        # my_simulation_parameters.post_processing_options.append(
-        #     PostProcessingOptions.COMPUTE_OPEX
-        # )
-        # my_simulation_parameters.post_processing_options.append(
-        #     PostProcessingOptions.COMPUTE_CAPEX
-        # )
-        # my_simulation_parameters.post_processing_options.append(
-        #     PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
-        # )
-        # my_simulation_parameters.post_processing_options.append(
-        #     PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER
-        # )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.COMPUTE_OPEX
+        )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.COMPUTE_CAPEX
+        )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
+        )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER
+        )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Set Photovoltaic System

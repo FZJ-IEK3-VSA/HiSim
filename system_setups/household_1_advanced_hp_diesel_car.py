@@ -93,7 +93,7 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
             building_type="blub",
             number_of_apartments=int(my_building_information.number_of_apartments),
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-                url="http://134.94.131.167:443/api/v1/profilerequest",
+                url="http://134.94.131.109:5000/api/v1/profilerequest",
                 api_key="OrjpZY93BcNWw8lKaMp0BEchbCc",
                 household=Households.CHR01_Couple_both_at_Work,
                 energy_intensity=EnergyIntensityType.EnergySaving,

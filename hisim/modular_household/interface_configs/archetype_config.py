@@ -45,7 +45,7 @@ class ArcheTypeConfig:
     mobility_distance: Optional[JsonReference] = field(
         default_factory=lambda: TravelRouteSets.Travel_Route_Set_for_15km_Commuting_Distance)  # type: ignore
     #: url of the UTSP
-    url: str = "http://134.94.131.167:443/api/v1/profilerequest"
+    url: str = "http://134.94.131.109:5000/api/v1/profilerequest"
     #: passwort to connect to the UTSP
     api_key: str = "OrjpZY93BcNWw8lKaMp0BEchbCc"
 

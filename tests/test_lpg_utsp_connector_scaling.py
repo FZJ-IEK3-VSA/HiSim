@@ -75,7 +75,7 @@ def initialize_lpg_utsp_connector_and_return_results(
     seconds_per_timestep = 60
 
     # Set Occupancy
-    url = "http://134.94.131.167:443/api/v1/profilerequest"
+    url = "http://134.94.131.109:5000/api/v1/profilerequest"
     api_key = "OrjpZY93BcNWw8lKaMp0BEchbCc"
     result_path = "lpg_utsp_scaling_test"
     travel_route_set = TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance

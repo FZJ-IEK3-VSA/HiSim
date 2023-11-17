@@ -61,7 +61,7 @@ class HouseholdPVConfig:
             building_type="blub",
             household_type=Households.CHR01_Couple_both_at_Work,
             energy_intensity=EnergyIntensityType.EnergySaving,
-            lpg_url="http://134.94.131.167:443/api/v1/profilerequest",
+            lpg_url="http://134.94.131.109:5000/api/v1/profilerequest",
             api_key="OrjpZY93BcNWw8lKaMp0BEchbCc",
             simulation_parameters=SimulationParameters.one_day_only(2022),
             result_path="mypath",

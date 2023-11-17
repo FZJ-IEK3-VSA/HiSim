@@ -16,7 +16,7 @@ def test_household_with_advanced_hp_hws_hds_pv():
     path = "../system_setups/household_with_advanced_hp_hws_hds_pv.py "
 
     mysimpar = SimulationParameters.one_day_only(
-        year=2019, seconds_per_timestep=60
+        year=2021, seconds_per_timestep=60
     )
     hisim_main.main(path, mysimpar)
     log.information(os.getcwd())

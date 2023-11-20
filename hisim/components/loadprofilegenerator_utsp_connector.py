@@ -49,7 +49,6 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     url: str
     api_key: str
     household: Union[JsonReference, List[JsonReference]]
-    result_path: str
     energy_intensity: EnergyIntensityType
     travel_route_set: JsonReference
     transportation_device_set: JsonReference
@@ -57,6 +56,9 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     consumption: float
     profile_with_washing_machine_and_dishwasher: bool
     predictive_control: bool
+    result_dir_path: str
+    cache_dir_path: Optional[str]
+    guid: str = ""
 
     @classmethod
     def get_main_classname(cls):
@@ -69,17 +71,19 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
 
         config = UtspLpgConnectorConfig(
             name="UTSPConnector",
-            url="http://localhost:443/api/v1/profilerequest",
-            api_key="",
+            url="http://134.94.131.109:5000/api/v1/profilerequest",
+            api_key="OrjpZY93BcNWw8lKaMp0BEchbCc",
             household=Households.CHR01_Couple_both_at_Work,
-            result_path=os.path.join(utils.get_input_directory(), "lpg_profiles"),
+            result_dir_path=utils.HISIMPATH["utsp_results"],
             energy_intensity=EnergyIntensityType.EnergySaving,
             travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
             transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
-            charging_station_set=ChargingStationSets.Charging_At_Home_with_03_7_kW,
+            charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
             consumption=0,
             profile_with_washing_machine_and_dishwasher=True,
             predictive_control=False,
+            cache_dir_path=None,
+            guid="",
         )
         return config
 
@@ -303,7 +307,7 @@ class UtspLpgConnector(cp.Component):
         return str(resolution)
 
     def get_profiles_from_utsp(
-        self, lpg_households: Union[JsonReference, List[JsonReference]]
+        self, lpg_households: Union[JsonReference, List[JsonReference]], guid: str
     ) -> Tuple[
         Union[str, List],
         Union[str, List],
@@ -338,7 +342,8 @@ class UtspLpgConnector(cp.Component):
                 high_activity_file,
                 low_activity_file,
                 saved_files) = self.calculate_one_lpg_request(
-                simulation_config=simulation_config
+                simulation_config=simulation_config,
+                guid=guid,
             )
 
         elif isinstance(lpg_households, List):
@@ -360,6 +365,7 @@ class UtspLpgConnector(cp.Component):
                 url=self.utsp_config.url,
                 api_key=self.utsp_config.api_key,
                 lpg_configs=simulation_configs,
+                guid=guid,
             )
 
         else:
@@ -386,9 +392,9 @@ class UtspLpgConnector(cp.Component):
         :rtype: str
         """
         try:
-            filepath = os.path.join(self.utsp_config.result_path, name)
+            filepath = os.path.join(self.utsp_config.result_dir_path, name)
         except Exception as exc:
-            raise NameError(f"Could not create a filepath from config result_path {self.utsp_config.result_path} and name {name}.") from exc
+            raise NameError(f"Could not create a filepath from config result_path {self.utsp_config.result_dir_path} and name {name}.") from exc
 
         directory = os.path.dirname(filepath)
         # Create the directory if it does not exist
@@ -406,11 +412,23 @@ class UtspLpgConnector(cp.Component):
 
     def build(self):
         """Retrieves and preprocesses all data for this component."""
-        file_exists, cache_filepath = utils.get_cache_file(
-            component_key=self.component_name,
-            parameter_class=self.utsp_config,
-            my_simulation_parameters=self.my_simulation_parameters,
-        )
+        
+        # check if file exists and get cache_filepath
+        if self.utsp_config.cache_dir_path is None:
+            file_exists, cache_filepath = utils.get_cache_file(
+                component_key=self.component_name + "_" + str(self.utsp_config.household),
+                parameter_class=self.utsp_config,
+                my_simulation_parameters=self.my_simulation_parameters,
+            )
+        else:
+            file_exists, cache_filepath = utils.get_cache_file(
+                component_key=self.component_name + "_" + str(self.utsp_config.household),
+                parameter_class=self.utsp_config,
+                my_simulation_parameters=self.my_simulation_parameters,
+                cache_dir_path=self.utsp_config.cache_dir_path
+            )
+        log.information(f"Cache lpg files in {cache_filepath}")
+
         cache_complete = False
         if file_exists:
             with open(cache_filepath, "r", encoding="utf-8") as file:
@@ -430,6 +448,7 @@ class UtspLpgConnector(cp.Component):
                     cache_complete = False
                     break
             if cache_complete:
+                log.information("LPG data taken from cache.")
                 cached_data = io.StringIO(cache_content["data"])
                 dataframe = pd.read_csv(
                     cached_data, sep=",", decimal=".", encoding="cp1252"
@@ -451,7 +470,7 @@ class UtspLpgConnector(cp.Component):
                 high_activity_file,
                 low_activity_file,
                 saved_files,
-            ) = self.get_profiles_from_utsp(lpg_households=self.utsp_config.household)
+            ) = self.get_profiles_from_utsp(lpg_households=self.utsp_config.household, guid=self.utsp_config.guid)
 
             if isinstance(electricity_file, str):
 
@@ -575,7 +594,7 @@ class UtspLpgConnector(cp.Component):
         return opex_cost_data_class
 
     def calculate_one_lpg_request(
-        self, simulation_config: HouseCreationAndCalculationJob
+        self, simulation_config: HouseCreationAndCalculationJob, guid: str
     ) -> Tuple[str, str, str, str, str, List[str]]:
         """Calculate one lpg request."""
 
@@ -595,7 +614,7 @@ class UtspLpgConnector(cp.Component):
 
         # Prepare the time series request
         request = datastructures.TimeSeriesRequest(
-            simulation_config.to_json(), "LPG", required_result_files=result_files  # type: ignore
+            simulation_config.to_json(), "LPG", required_result_files=result_files, guid=guid  # type: ignore
         )
 
         log.information("Requesting LPG profiles from the UTSP for one household.")
@@ -637,8 +656,10 @@ class UtspLpgConnector(cp.Component):
         lpg_configs: List,
         url: str,
         api_key: str,
+        guid: str,
         raise_exceptions: bool = True,
         result_files: Any = None,
+
     ) -> Tuple[List[str], List[str], List[str], List[str], List[str], List[List[str]]]:
         """Sends multiple lpg requests for parallel calculation and collects their results."""
 
@@ -655,12 +676,14 @@ class UtspLpgConnector(cp.Component):
             driving_distances,
         ) = self.define_required_result_files()
 
+
         # Create all request objects
         all_requests: List[TimeSeriesRequest] = [
             TimeSeriesRequest(
                 config.to_json(),
                 "LPG",
                 required_result_files=result_files,
+                guid=guid,
             )
             for config in lpg_configs
         ]
@@ -996,3 +1019,6 @@ class UtspLpgConnector(cp.Component):
         with open(cache_filepath, "w", encoding="utf-8") as file:
             json.dump(cache_content, file)
         del database
+        
+        log.information("Caching of lpg utsp results finished.")
+

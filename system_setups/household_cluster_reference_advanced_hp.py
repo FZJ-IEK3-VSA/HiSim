@@ -2,12 +2,13 @@
 
 # clean
 
-from typing import Optional, Any, Union
+from typing import Optional, Any, Union, List
 import re
 import os
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-
+from utspclient.helpers.lpgdata import Households
+from utspclient.helpers.lpgpythonbindings import JsonReference
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
@@ -59,12 +60,12 @@ class BuildingPVWeatherConfig(ConfigBase):
 
         return BuildingPVWeatherConfig(
             name="BuildingPVConfig",
-            pv_size=5, 
-            pv_azimuth=180, 
-            pv_tilt=30, 
-            share_of_maximum_pv_power=1, 
-            building_code="DE.N.SFH.05.Gen.ReEx.001.002", 
-            conditioned_floor_area_in_m2=121.2, 
+            pv_size=5,
+            pv_azimuth=180,
+            pv_tilt=30,
+            share_of_maximum_pv_power=1,
+            building_code="DE.N.SFH.05.Gen.ReEx.001.002",
+            conditioned_floor_area_in_m2=121.2,
             number_of_dwellings_per_building=1,
             lpg_households="CHR01_Couple_both_at_Work",
         )
@@ -141,11 +142,32 @@ def setup_function(
 
     # Set Building (scale building according to total base area and not absolute floor area)
     building_code = my_config.building_code
-    total_base_area_in_m2 = my_config.total_base_area_in_m2
-    absolute_conditioned_floor_area_in_m2 = None
+    total_base_area_in_m2 = None
+    absolute_conditioned_floor_area_in_m2 = my_config.conditioned_floor_area_in_m2
+    number_of_apartments = my_config.number_of_dwellings_per_building
 
-    # # Set Weather
-    # location_entry = my_config.location
+    # Set occupancy
+    cache_dir_path = "/fast/home/k-rieck/lpg-utsp-data-parallel"
+
+    # get household attribute jsonreferences from strings or from list of strings
+    lpg_households: Union[JsonReference, List[JsonReference]]
+
+    if isinstance(my_config.lpg_households, str):
+
+        if hasattr(Households, my_config.lpg_households):
+            lpg_households = getattr(Households, my_config.lpg_households)
+
+    elif isinstance(my_config.lpg_households, List):
+
+        lpg_households = []
+        for household_string in my_config.lpg_households:
+            if hasattr(Households, household_string):
+                lpg_household = getattr(Households, household_string)
+                lpg_households.append(lpg_household)
+    else:
+        raise TypeError(
+            f"Type {type(my_config.lpg_households)} is incompatible. Should be str or List[str]."
+        )
 
     # =================================================================================================================================
     # Set Fix System Parameters
@@ -175,11 +197,9 @@ def setup_function(
     my_heat_distribution_controller_config.heating_reference_temperature_in_celsius = (
         heating_reference_temperature_in_celsius
     )
-    my_heat_distribution_controller = (
-        heat_distribution_system.HeatDistributionController(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_heat_distribution_controller_config,
-        )
+    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_distribution_controller_config,
     )
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
@@ -191,16 +211,22 @@ def setup_function(
     my_building_config.absolute_conditioned_floor_area_in_m2 = (
         absolute_conditioned_floor_area_in_m2
     )
+    my_building_config.number_of_apartments = number_of_apartments
     my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
-    my_occupancy_config.household = my_config.lpg_households
-    
-    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
+    my_occupancy_config = (
+        loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    )
+    my_occupancy_config.household = lpg_households
+    my_occupancy_config.cache_dir_path = cache_dir_path
+
+    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
+        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
+    )
 
     # Build Weather
     my_weather_config = weather.WeatherConfig.get_default(
@@ -237,8 +263,7 @@ def setup_function(
     )
 
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
-        config=my_heat_pump_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_pump_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Distribution System
@@ -280,11 +305,9 @@ def setup_function(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 
-    my_domnestic_hot_water_heatpump_controller = (
-        controller_l1_heatpump.L1HeatPumpController(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_dhw_heatpump_controller_config,
-        )
+    my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_dhw_heatpump_controller_config,
     )
 
     my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(

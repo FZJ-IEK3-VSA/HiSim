@@ -48,12 +48,12 @@ HISIMPATH: Dict[str, Any] = {
         hisim_abs_path, "inputs", "cache", "cache_indices.json"
     ),
     "cfg": os.path.join(hisim_abs_path, "inputs", "cfg.json"),
-    "utsp_results": os.path.join(hisim_results, "Results"),
-    "utsp_system_setup_results": os.path.join(
+    "utsp_results": os.path.join(hisim_results, "lpg_ustp_results"),
+    "utsp_example_results": os.path.join(
         hisim_inputs, "LPGResults_for_tests", "Results"
     ),
     "utsp_reports": os.path.join(hisim_results, "Reports"),
-    "utsp_system setup_reports": os.path.join(
+    "utsp_example_reports": os.path.join(
         hisim_inputs, "LPGResults_for_tests", "Reports"
     ),
     "housing": os.path.join(
@@ -303,6 +303,7 @@ def get_cache_file(
     component_key: str,
     parameter_class: Any,
     my_simulation_parameters: SimulationParameters,
+    cache_dir_path: str = os.path.join(hisim_abs_path, "inputs", "cache")
 ) -> Tuple[bool, str]:  # noqa
     """Gets a cache path for a given parameter set.
 
@@ -322,8 +323,8 @@ def get_cache_file(
     # I removed the second input argument "usedforsecurity=False" and it works - maybe I need to update the hashlib package?
     sha_key = hashlib.sha256(json_str_encoded).hexdigest()
     filename = component_key + "_" + sha_key + ".cache"
-    cache_dir_path = os.path.join(hisim_abs_path, "inputs", "cache")
-    cache_absolute_filepath = os.path.join(hisim_abs_path, "inputs", "cache", filename)
+    cache_dir_path = cache_dir_path
+    cache_absolute_filepath = os.path.join(cache_dir_path, filename)
     if not os.path.isdir(cache_dir_path):
         os.mkdir(cache_dir_path)
     if os.path.isfile(cache_absolute_filepath):

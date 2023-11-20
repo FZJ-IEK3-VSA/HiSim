@@ -39,37 +39,6 @@ __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
 
-# @dataclass_json
-# @dataclass
-# class BuildingPVWeatherConfig(ConfigBase):
-
-#     """Configuration for BuildingPv."""
-
-#     name: str
-#     pv_size: float
-#     pv_azimuth: float
-#     pv_tilt: float
-#     share_of_maximum_pv_power: float
-#     building_code: str
-#     total_base_area_in_m2: float
-#     # location: Any
-
-#     @classmethod
-#     def get_default(cls):
-#         """Get default BuildingPVConfig."""
-
-#         return BuildingPVWeatherConfig(
-#             name="BuildingPVWeatherConfig",
-#             pv_size=5,
-#             pv_azimuth=180,
-#             pv_tilt=30,
-#             share_of_maximum_pv_power=1,
-#             building_code="DE.N.SFH.05.Gen.ReEx.001.002",
-#             total_base_area_in_m2=121.2,
-#             # location=weather.LocationEnum.Aachen,
-#         )
-
-
 def setup_function(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements

@@ -452,7 +452,7 @@ def setup_function(
 
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
-        model_name=my_sim.setup_function,
+        model_name=my_sim.module_filename,
         variant_name=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s",
         hash_number=hash_number,
         sorting_option=sorting_option,

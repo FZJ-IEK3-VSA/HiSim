@@ -819,7 +819,6 @@ class PostProcessor:
         # set pyam year or timeseries
         self.year = ppdt.simulation_parameters.year
         timeseries_hourly = ppdt.results_hourly.index
-        log.information(str(timeseries_hourly))
         timeseries_daily = ppdt.results_daily.index
         timeseries_monthly = ppdt.results_monthly.index
 

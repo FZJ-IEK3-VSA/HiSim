@@ -2,13 +2,13 @@
 
 # clean
 
-from typing import Optional, Any
+from typing import Optional, Any, Union, List
 import re
 import os
-from dataclasses import dataclass
-from dataclasses_json import dataclass_json
+from utspclient.helpers.lpgdata import Households
+from utspclient.helpers.lpgpythonbindings import JsonReference
 from hisim.simulator import SimulationParameters
-from hisim.components import loadprofilegenerator_connector
+from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import generic_pv_system
 from hisim.components import building
@@ -23,12 +23,12 @@ from hisim.components import (
     controller_l1_heatpump,
     electricity_meter,
 )
-from hisim.component import ConfigBase
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim import log
+from system_setups.household_cluster_reference_advanced_hp import BuildingPVWeatherConfig
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -39,35 +39,35 @@ __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
 
-@dataclass_json
-@dataclass
-class BuildingPVWeatherConfig(ConfigBase):
+# @dataclass_json
+# @dataclass
+# class BuildingPVWeatherConfig(ConfigBase):
 
-    """Configuration for BuildingPv."""
+#     """Configuration for BuildingPv."""
 
-    name: str
-    pv_size: float
-    pv_azimuth: float
-    pv_tilt: float
-    share_of_maximum_pv_power: float
-    building_code: str
-    total_base_area_in_m2: float
-    # location: Any
+#     name: str
+#     pv_size: float
+#     pv_azimuth: float
+#     pv_tilt: float
+#     share_of_maximum_pv_power: float
+#     building_code: str
+#     total_base_area_in_m2: float
+#     # location: Any
 
-    @classmethod
-    def get_default(cls):
-        """Get default BuildingPVConfig."""
+#     @classmethod
+#     def get_default(cls):
+#         """Get default BuildingPVConfig."""
 
-        return BuildingPVWeatherConfig(
-            name="BuildingPVWeatherConfig",
-            pv_size=5,
-            pv_azimuth=180,
-            pv_tilt=30,
-            share_of_maximum_pv_power=1,
-            building_code="DE.N.SFH.05.Gen.ReEx.001.002",
-            total_base_area_in_m2=121.2,
-            # location=weather.LocationEnum.Aachen,
-        )
+#         return BuildingPVWeatherConfig(
+#             name="BuildingPVWeatherConfig",
+#             pv_size=5,
+#             pv_azimuth=180,
+#             pv_tilt=30,
+#             share_of_maximum_pv_power=1,
+#             building_code="DE.N.SFH.05.Gen.ReEx.001.002",
+#             total_base_area_in_m2=121.2,
+#             # location=weather.LocationEnum.Aachen,
+#         )
 
 
 def setup_function(
@@ -148,12 +148,32 @@ def setup_function(
 
     # Set Building (scale building according to total base area and not absolute floor area)
     building_code = my_config.building_code
-    total_base_area_in_m2 = my_config.total_base_area_in_m2
-    absolute_conditioned_floor_area_in_m2 = None
+    total_base_area_in_m2 = None
+    absolute_conditioned_floor_area_in_m2 = my_config.conditioned_floor_area_in_m2
+    number_of_apartments = my_config.number_of_dwellings_per_building
 
-    # # Set Weather
-    # location_entry = my_config.location
+    # Set occupancy
+    cache_dir_path = "/fast/home/k-rieck/lpg-utsp-data-parallel"
 
+    # get household attribute jsonreferences from strings or from list of strings
+    lpg_households: Union[JsonReference, List[JsonReference]]
+
+    if isinstance(my_config.lpg_households, str):
+
+        if hasattr(Households, my_config.lpg_households):
+            lpg_households = getattr(Households, my_config.lpg_households)
+
+    elif isinstance(my_config.lpg_households, List):
+
+        lpg_households = []
+        for household_string in my_config.lpg_households:
+            if hasattr(Households, household_string):
+                lpg_household = getattr(Households, household_string)
+                lpg_households.append(lpg_household)
+    else:
+        raise TypeError(
+            f"Type {type(my_config.lpg_households)} is incompatible. Should be str or List[str]."
+        )
     # =================================================================================================================================
     # Set Fix System Parameters
 
@@ -199,19 +219,20 @@ def setup_function(
     my_building_config.absolute_conditioned_floor_area_in_m2 = (
         absolute_conditioned_floor_area_in_m2
     )
-
+    my_building_config.number_of_apartments = number_of_apartments
     my_building_information = building.BuildingInformation(config=my_building_config)
-
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_chr01_according_to_number_of_apartments(
-        number_of_apartments=my_building_information.number_of_apartments
+    my_occupancy_config = (
+        loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
     )
+    my_occupancy_config.household = lpg_households
+    my_occupancy_config.cache_dir_path = cache_dir_path
 
-    my_occupancy = loadprofilegenerator_connector.Occupancy(
+    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
 
@@ -410,15 +431,6 @@ def setup_function(
     # Connect EMS
 
     my_electricity_controller.add_component_input_and_connect(
-        source_object_name=my_domnestic_hot_water_heatpump.component_name,
-        source_component_output=my_domnestic_hot_water_heatpump.ElectricityOutput,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-        source_weight=999,
-    )
-
-    my_electricity_controller.add_component_input_and_connect(
         source_object_name=my_occupancy.component_name,
         source_component_output=my_occupancy.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
@@ -434,13 +446,23 @@ def setup_function(
         source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
         source_weight=999,
     )
+
+    my_electricity_controller.add_component_input_and_connect(
+        source_object_name=my_domnestic_hot_water_heatpump.component_name,
+        source_component_output=my_domnestic_hot_water_heatpump.ElectricityOutput,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+        source_weight=1,
+    )
+
     my_electricity_controller.add_component_input_and_connect(
         source_object_name=my_heat_pump.component_name,
         source_component_output=my_heat_pump.ElectricalInputPower,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[lt.ComponentType.HEAT_PUMP, lt.InandOutputType.ELECTRICITY_REAL],
-        source_weight=1,
+        source_weight=2,
     )
     my_electricity_controller.add_component_output(
         source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
@@ -448,7 +470,7 @@ def setup_function(
             lt.ComponentType.HEAT_PUMP,
             lt.InandOutputType.ELECTRICITY_TARGET,
         ],
-        source_weight=1,
+        source_weight=2,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         output_description="Target electricity for Heat Pump. ",
@@ -459,7 +481,7 @@ def setup_function(
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_REAL],
-        source_weight=2,
+        source_weight=3,
     )
 
     electricity_to_or_from_battery_target = (
@@ -469,7 +491,7 @@ def setup_function(
                 lt.ComponentType.BATTERY,
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
-            source_weight=2,
+            source_weight=3,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for Battery Control. ",
@@ -538,7 +560,7 @@ def setup_function(
 
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
-        model_name=my_sim.setup_function,
+        model_name=my_sim.module_filename,
         variant_name=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s",
         hash_number=hash_number,
         sorting_option=sorting_option,

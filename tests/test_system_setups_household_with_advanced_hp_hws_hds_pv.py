@@ -13,7 +13,7 @@ from hisim import utils
 @utils.measure_execution_time
 def test_household_with_advanced_hp_hws_hds_pv():
     """Single day."""
-    path = "../system_setups/household_with_advanced_hp_hws_hds_pv.py "
+    path = "../system_setups/household_with_advanced_hp_hws_hds_pv.py"
 
     mysimpar = SimulationParameters.one_day_only(
         year=2021, seconds_per_timestep=60

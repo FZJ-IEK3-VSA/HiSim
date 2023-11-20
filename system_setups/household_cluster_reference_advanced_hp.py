@@ -2,14 +2,14 @@
 
 # clean
 
-from typing import Optional, Any
+from typing import Optional, Any, Union
 import re
 import os
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 from hisim.simulator import SimulationParameters
-from hisim.components import loadprofilegenerator_connector
+from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import building
 from hisim.components import (
@@ -49,22 +49,24 @@ class BuildingPVWeatherConfig(ConfigBase):
     pv_tilt: float
     share_of_maximum_pv_power: float
     building_code: str
-    total_base_area_in_m2: float
-    # location: Any
+    conditioned_floor_area_in_m2: float
+    number_of_dwellings_per_building: int
+    lpg_households: Union[str, List[str]]
 
     @classmethod
     def get_default(cls):
         """Get default BuildingPVConfig."""
 
         return BuildingPVWeatherConfig(
-            name="BuildingPVWeatherConfig",
-            pv_size=5,
-            pv_azimuth=180,
-            pv_tilt=30,
-            share_of_maximum_pv_power=1,
-            building_code="DE.N.SFH.05.Gen.ReEx.001.002",
-            total_base_area_in_m2=121.2,
-            # location=weather.LocationEnum.Aachen,
+            name="BuildingPVConfig",
+            pv_size=5, 
+            pv_azimuth=180, 
+            pv_tilt=30, 
+            share_of_maximum_pv_power=1, 
+            building_code="DE.N.SFH.05.Gen.ReEx.001.002", 
+            conditioned_floor_area_in_m2=121.2, 
+            number_of_dwellings_per_building=1,
+            lpg_households="CHR01_Couple_both_at_Work",
         )
 
 
@@ -195,12 +197,10 @@ def setup_function(
     )
 
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_chr01_according_to_number_of_apartments(
-        number_of_apartments=my_building_information.number_of_apartments
-    )
-    my_occupancy = loadprofilegenerator_connector.Occupancy(
-        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    my_occupancy_config.household = my_config.lpg_households
+    
+    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
 
     # Build Weather
     my_weather_config = weather.WeatherConfig.get_default(

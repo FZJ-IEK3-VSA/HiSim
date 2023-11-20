@@ -271,5 +271,5 @@ def setup_function(
     my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)
     my_sim.add_component(my_heat_pump_controller, connect_automatically=True)
     my_sim.add_component(my_heat_pump, connect_automatically=True)
-    my_sim.add_component(my_advanced_battery, connect_automatically=True)
+    my_sim.add_component(my_advanced_battery)
     my_sim.add_component(my_electricity_controller, connect_automatically=True)

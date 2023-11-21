@@ -217,10 +217,14 @@ class UtspLpgConnector(cp.Component):
             ww_temperature_demand = HouseholdWarmWaterDemandConfig.ww_temperature_demand
 
             # From Thermal Energy Storage
-            ww_mass_input_per_sec = stsv.get_input_value(self.ww_mass_input_channel)  # kg/s
+            ww_mass_input_per_sec = stsv.get_input_value(
+                self.ww_mass_input_channel
+            )  # kg/s
             # ww_mass_input = ww_mass_input_per_sec * self.seconds_per_timestep           # kg
             ww_mass_input: float = ww_mass_input_per_sec
-            ww_temperature_input = stsv.get_input_value(self.ww_temperature_input_channel)  # °C
+            ww_temperature_input = stsv.get_input_value(
+                self.ww_temperature_input_channel
+            )  # °C
 
             # Information import
             freshwater_temperature = (
@@ -328,7 +332,9 @@ class UtspLpgConnector(cp.Component):
         end_date = last_day.strftime("%Y-%m-%d")
 
         # choose if oen lpg request should be made or several in parallel
-        if isinstance(lpg_households, JsonReference) and isinstance(self.utsp_config.household, JsonReference):
+        if isinstance(lpg_households, JsonReference) and isinstance(
+            self.utsp_config.household, JsonReference
+        ):
             simulation_config = self.prepare_lpg_simulation_config_for_utsp_request(
                 start_date=start_date,
                 end_date=end_date,
@@ -341,9 +347,9 @@ class UtspLpgConnector(cp.Component):
                 inner_device_heat_gains_file,
                 high_activity_file,
                 low_activity_file,
-                saved_files) = self.calculate_one_lpg_request(
-                simulation_config=simulation_config,
-                guid=guid,
+                saved_files,
+            ) = self.calculate_one_lpg_request(
+                simulation_config=simulation_config, guid=guid,
             )
 
         elif isinstance(lpg_households, List):
@@ -361,7 +367,8 @@ class UtspLpgConnector(cp.Component):
                 inner_device_heat_gains_file,
                 high_activity_file,
                 low_activity_file,
-                saved_files) = self.calculate_multiple_lpg_requests(  # type: ignore
+                saved_files,
+            ) = self.calculate_multiple_lpg_requests(  # type: ignore
                 url=self.utsp_config.url,
                 api_key=self.utsp_config.api_key,
                 lpg_configs=simulation_configs,
@@ -379,7 +386,8 @@ class UtspLpgConnector(cp.Component):
             inner_device_heat_gains_file,
             high_activity_file,
             low_activity_file,
-            saved_files)
+            saved_files,
+        )
 
     def save_result_file(self, name: str, content: str) -> str:
         """Saves a result file in the folder specified in the config object.
@@ -394,7 +402,9 @@ class UtspLpgConnector(cp.Component):
         try:
             filepath = os.path.join(self.utsp_config.result_dir_path, name)
         except Exception as exc:
-            raise NameError(f"Could not create a filepath from config result_path {self.utsp_config.result_dir_path} and name {name}.") from exc
+            raise NameError(
+                f"Could not create a filepath from config result_path {self.utsp_config.result_dir_path} and name {name}."
+            ) from exc
 
         directory = os.path.dirname(filepath)
         # Create the directory if it does not exist
@@ -412,120 +422,59 @@ class UtspLpgConnector(cp.Component):
 
     def build(self):
         """Retrieves and preprocesses all data for this component."""
-        
-        # check if file exists and get cache_filepath
-        if self.utsp_config.cache_dir_path is None:
-            file_exists, cache_filepath = utils.get_cache_file(
-                component_key=self.component_name + "_" + str(self.utsp_config.household),
-                parameter_class=self.utsp_config,
-                my_simulation_parameters=self.my_simulation_parameters,
-            )
-        else:
-            file_exists, cache_filepath = utils.get_cache_file(
-                component_key=self.component_name + "_" + str(self.utsp_config.household),
-                parameter_class=self.utsp_config,
-                my_simulation_parameters=self.my_simulation_parameters,
-                cache_dir_path=self.utsp_config.cache_dir_path
-            )
-        log.information(f"Cache lpg files in {cache_filepath}")
 
+        # check if file exists and get cache_filepath and put in list
+        list_of_file_exists_and_cache_files = (
+            self.get_list_of_file_exists_bools_and_cache_file_paths()
+        )
+
+        # go through list of file_exists and cache_filepaths and get caches if possible,
+        # otherwise send request to UTSP
         cache_complete = False
-        if file_exists:
-            with open(cache_filepath, "r", encoding="utf-8") as file:
-                cache_content: Dict = json.load(file)
-            saved_files = cache_content["saved_files"]
-            cache_complete = True
-            # check if all of the additionally saved files that belong to the cached results
-            # are also still there
-            for filename in saved_files:
+        value_dict: Dict = {
+            "electricity_consumption": [],
+            "water_consumption": [],
+            "heating_by_devices": [],
+            "heating_by_residents": [],
+            "number_of_residents": [],
+        }
+        for list_item in list_of_file_exists_and_cache_files:
+            file_exists = list_item[0]
+            cache_filepath = list_item[1]
 
-                if not os.path.isfile(filename):
-                    log.information(
-                        f"A cache file for {self.component_name} was found, "
-                        "but some of the additional result files from the UTSP could not be "
-                        "found anymore, so the cache is discarded."
+            if file_exists:
+                with open(cache_filepath, "r", encoding="utf-8") as file:
+                    cache_content: Dict = json.load(file)
+                saved_files = cache_content["saved_files"]
+                cache_complete = True
+                # check if all of the additionally saved files that belong to the cached results
+                # are also still there
+                for filename in saved_files:
+
+                    if not os.path.isfile(filename):
+                        log.information(
+                            f"A cache file for {self.component_name} was found, "
+                            "but some of the additional result files from the UTSP could not be "
+                            "found anymore, so the cache is discarded."
+                        )
+                        cache_complete = False
+                        break
+                if cache_complete:
+                    log.information("LPG data taken from cache. ")
+                    cached_data = io.StringIO(cache_content["data"])
+                    dataframe = pd.read_csv(
+                        cached_data, sep=",", decimal=".", encoding="cp1252"
                     )
-                    cache_complete = False
-                    break
-            if cache_complete:
-                log.information("LPG data taken from cache.")
-                cached_data = io.StringIO(cache_content["data"])
-                dataframe = pd.read_csv(
-                    cached_data, sep=",", decimal=".", encoding="cp1252"
-                )
-                self.number_of_residents = dataframe["number_of_residents"].tolist()
-                self.heating_by_residents = dataframe["heating_by_residents"].tolist()
-                self.electricity_consumption = dataframe[
-                    "electricity_consumption"
-                ].tolist()
-                self.water_consumption = dataframe["water_consumption"].tolist()
-                self.heating_by_devices = dataframe["heating_by_devices"].to_list()
 
-        if not cache_complete:
+                    number_of_residents = dataframe["number_of_residents"].tolist()
+                    heating_by_residents = dataframe["heating_by_residents"].tolist()
+                    electricity_consumption = dataframe[
+                        "electricity_consumption"
+                    ].tolist()
+                    water_consumption = dataframe["water_consumption"].tolist()
+                    heating_by_devices = dataframe["heating_by_devices"].to_list()
 
-            (
-                electricity_file,
-                warm_water_file,
-                inner_device_heat_gains_file,
-                high_activity_file,
-                low_activity_file,
-                saved_files,
-            ) = self.get_profiles_from_utsp(lpg_households=self.utsp_config.household, guid=self.utsp_config.guid)
-
-            if isinstance(electricity_file, str):
-
-                log.information("one result from lpg utsp connector.")
-                (
-                    self.electricity_consumption,
-                    self.heating_by_devices,
-                    self.water_consumption,
-                    self.heating_by_residents,
-                    self.number_of_residents,
-                ) = self.load_result_files_and_transform_to_lists(
-                    electricity=electricity_file,
-                    warm_water=warm_water_file,
-                    inner_device_heat_gains=inner_device_heat_gains_file,
-                    high_activity=high_activity_file,
-                    low_activity=low_activity_file,
-                )
-
-                self.cache_results(
-                    saved_files=saved_files, cache_filepath=cache_filepath
-                )
-
-                self.max_hot_water_demand = max(self.water_consumption)
-
-            elif isinstance(electricity_file, List):
-
-                log.information("multiple results from lpg utsp connector.")
-
-                value_dict: Dict = {
-                    "electricity_consumption": [],
-                    "water_consumption": [],
-                    "heating_by_devices": [],
-                    "heating_by_residents": [],
-                    "number_of_residents": [],
-                }
-                for index, electricity in enumerate(electricity_file):
-
-                    warm_water = warm_water_file[index]
-                    inner_device_heat_gains = inner_device_heat_gains_file[index]
-                    high_activity = high_activity_file[index]
-                    low_activity = low_activity_file[index]
-
-                    (
-                        electricity_consumption,
-                        heating_by_devices,
-                        water_consumption,
-                        heating_by_residents,
-                        number_of_residents,
-                    ) = self.load_result_files_and_transform_to_lists(
-                        electricity=electricity,
-                        warm_water=warm_water,
-                        inner_device_heat_gains=inner_device_heat_gains,
-                        high_activity=high_activity,
-                        low_activity=low_activity,
-                    )
+                    number_of_residents = dataframe["number_of_residents"].tolist()
 
                     # write lists to dict
                     value_dict["electricity_consumption"].append(
@@ -536,36 +485,125 @@ class UtspLpgConnector(cp.Component):
                     value_dict["water_consumption"].append(water_consumption)
                     value_dict["number_of_residents"].append(number_of_residents)
 
-                    self.electricity_consumption = [
-                        sum(x) for x in zip(*value_dict["electricity_consumption"])
-                    ]
-                    self.heating_by_residents = [
-                        sum(x) for x in zip(*value_dict["heating_by_residents"])
-                    ]
-                    self.water_consumption = [
-                        sum(x) for x in zip(*value_dict["water_consumption"])
-                    ]
-                    self.heating_by_devices = [
-                        sum(x) for x in zip(*value_dict["heating_by_devices"])
-                    ]
-                    self.number_of_residents = [
-                        sum(x) for x in zip(*value_dict["number_of_residents"])
-                    ]
+                # get sums from result lists
+                self.electricity_consumption = [
+                    sum(x) for x in zip(*value_dict["electricity_consumption"])
+                ]
+                self.heating_by_residents = [
+                    sum(x) for x in zip(*value_dict["heating_by_residents"])
+                ]
+                self.water_consumption = [
+                    sum(x) for x in zip(*value_dict["water_consumption"])
+                ]
+                self.heating_by_devices = [
+                    sum(x) for x in zip(*value_dict["heating_by_devices"])
+                ]
+                self.number_of_residents = [
+                    sum(x) for x in zip(*value_dict["number_of_residents"])
+                ]
+
+            if not cache_complete:
+
+                (
+                    electricity_file,
+                    warm_water_file,
+                    inner_device_heat_gains_file,
+                    high_activity_file,
+                    low_activity_file,
+                    saved_files,
+                ) = self.get_profiles_from_utsp(
+                    lpg_households=self.utsp_config.household,
+                    guid=self.utsp_config.guid,
+                )
+
+                if isinstance(electricity_file, str):
+
+                    log.information("One result obtained from lpg utsp connector.")
+                    (
+                        self.electricity_consumption,
+                        self.heating_by_devices,
+                        self.water_consumption,
+                        self.heating_by_residents,
+                        self.number_of_residents,
+                    ) = self.load_result_files_and_transform_to_lists(
+                        electricity=electricity_file,
+                        warm_water=warm_water_file,
+                        inner_device_heat_gains=inner_device_heat_gains_file,
+                        high_activity=high_activity_file,
+                        low_activity=low_activity_file,
+                    )
+
+                    self.cache_results(
+                        saved_files=saved_files, cache_filepath=cache_filepath
+                    )
 
                     self.max_hot_water_demand = max(self.water_consumption)
 
-                    self.cache_results(
-                        saved_files=saved_files[index], cache_filepath=cache_filepath
+                elif isinstance(electricity_file, List):
+
+                    log.information(
+                        "Multiple results obtained from lpg utsp connector."
                     )
+
+                    for index, electricity in enumerate(electricity_file):
+
+                        warm_water = warm_water_file[index]
+                        inner_device_heat_gains = inner_device_heat_gains_file[index]
+                        high_activity = high_activity_file[index]
+                        low_activity = low_activity_file[index]
+
+                        (
+                            electricity_consumption,
+                            heating_by_devices,
+                            water_consumption,
+                            heating_by_residents,
+                            number_of_residents,
+                        ) = self.load_result_files_and_transform_to_lists(
+                            electricity=electricity,
+                            warm_water=warm_water,
+                            inner_device_heat_gains=inner_device_heat_gains,
+                            high_activity=high_activity,
+                            low_activity=low_activity,
+                        )
+
+                        # write lists to dict
+                        value_dict["electricity_consumption"].append(
+                            electricity_consumption
+                        )
+                        value_dict["heating_by_devices"].append(heating_by_devices)
+                        value_dict["heating_by_residents"].append(heating_by_residents)
+                        value_dict["water_consumption"].append(water_consumption)
+                        value_dict["number_of_residents"].append(number_of_residents)
+
+                        self.electricity_consumption = [
+                            sum(x) for x in zip(*value_dict["electricity_consumption"])
+                        ]
+                        self.heating_by_residents = [
+                            sum(x) for x in zip(*value_dict["heating_by_residents"])
+                        ]
+                        self.water_consumption = [
+                            sum(x) for x in zip(*value_dict["water_consumption"])
+                        ]
+                        self.heating_by_devices = [
+                            sum(x) for x in zip(*value_dict["heating_by_devices"])
+                        ]
+                        self.number_of_residents = [
+                            sum(x) for x in zip(*value_dict["number_of_residents"])
+                        ]
+
+                        self.max_hot_water_demand = max(self.water_consumption)
+
+                        self.cache_results(
+                            saved_files=saved_files[index],
+                            cache_filepath=cache_filepath,
+                        )
 
     def write_to_report(self):
         """Adds a report entry for this component."""
         return self.utsp_config.get_string_dict()
 
     def get_cost_opex(
-        self,
-        all_outputs: List,
-        postprocessing_results: pd.DataFrame,
+        self, all_outputs: List, postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, snd write total energy consumption to component-config.
 
@@ -586,12 +624,57 @@ class UtspLpgConnector(cp.Component):
                 )
 
         opex_cost_data_class = OpexCostDataClass(
-            opex_cost=0,
-            co2_footprint=0,
-            consumption=self.utsp_config.consumption,
+            opex_cost=0, co2_footprint=0, consumption=self.utsp_config.consumption,
         )
 
         return opex_cost_data_class
+
+    def get_list_of_file_exists_bools_and_cache_file_paths(self):
+        """Check if file exists and get cache_filepath and put in list."""
+
+        list_of_file_exists_and_cache_files: List = []
+
+        # check if cache_dir_path was chosen, otherwise use default cache_dir_path
+        if self.utsp_config.cache_dir_path is None:
+            cache_dir_path: str = os.path.join(utils.hisim_abs_path, "inputs", "cache")
+        else:
+            cache_dir_path = self.utsp_config.cache_dir_path
+
+        # config household is list of jsonreferences
+        if isinstance(self.utsp_config.household, List):
+
+            for household in self.utsp_config.household:
+
+                # make new config object with only one household in order to find local cache in cache_dir_path
+                new_config_object = self.utsp_config
+                new_config_object.household = household
+
+                file_exists, cache_filepath = utils.get_cache_file(
+                    component_key=self.component_name
+                    + "_"
+                    + str(new_config_object.household),
+                    parameter_class=new_config_object,
+                    my_simulation_parameters=self.my_simulation_parameters,
+                    cache_dir_path=cache_dir_path,
+                )
+                list_of_file_exists_and_cache_files.append(
+                    [file_exists, cache_filepath]
+                )
+
+        # config household is one jsonreference
+        else:
+
+            file_exists, cache_filepath = utils.get_cache_file(
+                component_key=self.component_name
+                + "_"
+                + str(self.utsp_config.household),
+                parameter_class=self.utsp_config,
+                my_simulation_parameters=self.my_simulation_parameters,
+                cache_dir_path=cache_dir_path,
+            )
+            list_of_file_exists_and_cache_files.append([file_exists, cache_filepath])
+
+        return list_of_file_exists_and_cache_files
 
     def calculate_one_lpg_request(
         self, simulation_config: HouseCreationAndCalculationJob, guid: str
@@ -639,7 +722,9 @@ class UtspLpgConnector(cp.Component):
             car_states.keys(), car_locations.keys(), driving_distances.keys()
         ):
             if filename in result.data:
-                path = self.save_result_file(name=filename, content=result.data[filename].decode())
+                path = self.save_result_file(
+                    name=filename, content=result.data[filename].decode()
+                )
                 saved_files.append(path)
 
         return (
@@ -659,7 +744,6 @@ class UtspLpgConnector(cp.Component):
         guid: str,
         raise_exceptions: bool = True,
         result_files: Any = None,
-
     ) -> Tuple[List[str], List[str], List[str], List[str], List[str], List[List[str]]]:
         """Sends multiple lpg requests for parallel calculation and collects their results."""
 
@@ -676,14 +760,10 @@ class UtspLpgConnector(cp.Component):
             driving_distances,
         ) = self.define_required_result_files()
 
-
         # Create all request objects
         all_requests: List[TimeSeriesRequest] = [
             TimeSeriesRequest(
-                config.to_json(),
-                "LPG",
-                required_result_files=result_files,
-                guid=guid,
+                config.to_json(), "LPG", required_result_files=result_files, guid=guid,
             )
             for config in lpg_configs
         ]
@@ -691,10 +771,7 @@ class UtspLpgConnector(cp.Component):
         log.information("Requesting LPG profiles from the UTSP for multiple household.")
 
         results = calculate_multiple_requests(
-            url,
-            all_requests,
-            api_key,
-            raise_exceptions,
+            url, all_requests, api_key, raise_exceptions,
         )
 
         # append all results in lists
@@ -724,7 +801,9 @@ class UtspLpgConnector(cp.Component):
 
             # Save flexibility and transportation files
             saved_files_one_result: List = []
-            path = self.save_result_file(name=flexibility, content=flexibility_file_one_result)
+            path = self.save_result_file(
+                name=flexibility, content=flexibility_file_one_result
+            )
             saved_files_one_result.append(path)
             for filename in itertools.chain(
                 car_states.keys(), car_locations.keys(), driving_distances.keys()
@@ -773,7 +852,8 @@ class UtspLpgConnector(cp.Component):
                 CalcOption.BodilyActivityStatistics,
                 CalcOption.TansportationDeviceJsons,
                 CalcOption.FlexibilityEvents,
-            ])
+            ],
+        )
         assert simulation_config.CalcSpec is not None
 
         # Enable simulation of transportation and flexible devices
@@ -894,10 +974,7 @@ class UtspLpgConnector(cp.Component):
         # load electricity consumption, water consumption and inner device heat gains
         electricity_data = io.StringIO(electricity)
         pre_electricity_consumption = pd.read_csv(
-            electricity_data,
-            sep=";",
-            decimal=".",
-            encoding="cp1252",
+            electricity_data, sep=";", decimal=".", encoding="cp1252",
         ).loc[: (steps_desired_in_minutes - 1)]
         electricity_consumption_list = pd.to_numeric(
             pre_electricity_consumption["Sum [kWh]"] * 1000 * 60
@@ -905,10 +982,7 @@ class UtspLpgConnector(cp.Component):
 
         water_data = io.StringIO(warm_water)
         pre_water_consumption = pd.read_csv(
-            water_data,
-            sep=";",
-            decimal=".",
-            encoding="cp1252",
+            water_data, sep=";", decimal=".", encoding="cp1252",
         ).loc[: (steps_desired_in_minutes - 1)]
         water_consumption_list = pd.to_numeric(
             pre_water_consumption["Sum [L]"]
@@ -916,10 +990,7 @@ class UtspLpgConnector(cp.Component):
 
         inner_device_heat_gain_data = io.StringIO(inner_device_heat_gains)
         pre_inner_device_heat_gains = pd.read_csv(
-            inner_device_heat_gain_data,
-            sep=";",
-            decimal=".",
-            encoding="cp1252",
+            inner_device_heat_gain_data, sep=";", decimal=".", encoding="cp1252",
         ).loc[: (steps_desired_in_minutes - 1)]
         inner_device_heat_gains_list = pd.to_numeric(
             pre_inner_device_heat_gains["Sum [kWh]"] * 1000 * 60
@@ -1019,6 +1090,7 @@ class UtspLpgConnector(cp.Component):
         with open(cache_filepath, "w", encoding="utf-8") as file:
             json.dump(cache_content, file)
         del database
-        
-        log.information("Caching of lpg utsp results finished.")
 
+        log.information(
+            f"Caching of lpg utsp results finished. Cache filepath is {cache_filepath}."
+        )

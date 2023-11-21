@@ -122,27 +122,29 @@ def setup_function(
     number_of_apartments = my_config.number_of_dwellings_per_building
 
     # Set occupancy
-    cache_dir_path = "/fast/home/k-rieck/lpg-utsp-data-parallel"
+    cache_dir_path = "/fast/home/k-rieck/lpg-utsp-data"
 
-    # get household attribute jsonreferences from strings or from list of strings
+    # get household attribute jsonreferences from list of strings
     lpg_households: Union[JsonReference, List[JsonReference]]
 
-    if isinstance(my_config.lpg_households, str):
+    if isinstance(my_config.lpg_households, List):
 
-        if hasattr(Households, my_config.lpg_households):
-            lpg_households = getattr(Households, my_config.lpg_households)
+        if len(my_config.lpg_households) == 1:
+            lpg_households = getattr(Households, my_config.lpg_households[0])
+        elif len(my_config.lpg_households) > 1:
+            lpg_households = []
+            for household_string in my_config.lpg_households:
+                if hasattr(Households, household_string):
+                    lpg_household = getattr(Households, household_string)
+                    lpg_households.append(lpg_household)
+        else:
+            raise ValueError("Config list with lpg household is empty.")
 
-    elif isinstance(my_config.lpg_households, List):
-
-        lpg_households = []
-        for household_string in my_config.lpg_households:
-            if hasattr(Households, household_string):
-                lpg_household = getattr(Households, household_string)
-                lpg_households.append(lpg_household)
     else:
         raise TypeError(
-            f"Type {type(my_config.lpg_households)} is incompatible. Should be str or List[str]."
+            f"Type {type(my_config.lpg_households)} is incompatible. Should be List[str]."
         )
+
     # =================================================================================================================================
     # Set Fix System Parameters
 

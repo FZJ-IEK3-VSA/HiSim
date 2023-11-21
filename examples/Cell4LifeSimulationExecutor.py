@@ -27,10 +27,9 @@ import math
 #BatteryCapkWh_list = [0]     #Total Capacity of Battery in kWh
 
 
-FuelCellPowerW_list = [200000, 100000, 50000, 25000, 12500]  #Electricity Power of Fuel Cell Power in Watt
-Inverter_Ratio_list = [0.5, 0.333, 0.25, 0.2,0.1666] #Means: Inverter_power_demand  = Battery capacity multiplied with a factor of the list; Battery Capacity = BatterieFaktor * electrolyzer_energy
-
-
+#FuelCellPowerW_list = [200000, 100000, 50000, 25000, 12500]  #Electricity Power of Fuel Cell Power in Watt
+FuelCellPowerW_list = [200000, 100000]  #Electricity Power of Fuel Cell Power in Watt
+Inverter_Ratio_list = [0.5, 0.333, 0.25, 0.2,0.1666] #Means: Inverter_power_demand  = Battery capacity multiplied with a factor of the list; Battery Capacity = BatterieFaktor * (electrolyzer_energy + h2 storage)
 
 FuelCellPowerWUnit = "W"
 BatteryCapkWhUnit = "kWh"
@@ -40,6 +39,7 @@ Inverter_RatioUnit = "-"
 # PreResultNumberUnit = "-"
 
 BatterieFaktorList = [4,5,6,7,8]
+
 
 for BatterieFaktor in BatterieFaktorList:
 
@@ -67,9 +67,10 @@ for BatterieFaktor in BatterieFaktorList:
             charging_rate = input_variablen["p_el_elektrolyzer"]["value"] / (3600*40000) #umrechnung von Watt [=Joule/Sekunde, Leistung) p_el in  kg/s H2
             power_demand_charging_h2storage = charging_rate * input_variablen["h_fuel"]["value"] * 3.6e3 * 1000 * input_variablen["h2storage_energy_for_charge_based_on_massflow_h_fuel"]["value"]/100 # electricity power_demand of hydrogen storage for compression of H2 in Watt;
             inverte_power_demand_min = power_demand_charging_h2storage  + input_variablen["p_el_elektrolyzer"]["value"]
+           
             BatteryCapkWh = math.ceil(inverte_power_demand_min / 1000 * BatterieFaktor) #Befehl Ceil Rundet auf; BatteryCKapazität in kWh..INverterleistung in Watt gerechnet; Minimum Inverterleistung = 0,25 der Batteriekapazität --> folglich ist die Batteriekapazität immer 4* der Inverterleistung
 
-
+            
             param_df["BatteryCapkWh"][0] = BatteryCapkWh
             param_df["BatteryCapkWhUnit"][0] = BatteryCapkWhUnit
             param_df["Inverter_Ratio"][0] = Inverter_Ratio
@@ -93,7 +94,7 @@ for BatterieFaktor in BatterieFaktorList:
                 excelfilepathallresults1, excel_filename1 = Cell4Life_Postprocessing.makeacopyofevaluationfile(copytopath1, filepath1, name1)
 
             copyfrompath = 'C://Users//Standard//Desktop//hisim//C4LResults//results//'
-            name2 = 'Sim_Oek_Assessment_v3'
+            name2 = 'Sim_Oek_Assessment_v6'
             filepath2 = copyfrompath + 'OriginalExcelFile//' + name2 + '.xlsx'
             copytopath2 = ResultPathProviderSingleton().get_result_directory_name()
             copytopath2 = copytopath2 + '//'

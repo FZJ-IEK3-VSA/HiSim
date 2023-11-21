@@ -193,6 +193,7 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
     EnergyInputData3 = []
     EnergyInputData4 = []
     EnergyInputData5 = []
+
     # Load data from "-_Current" (column 1 & 2) and add the collected data to list
     csv_datei1 = os.path.join(path, '-_Current.csv')
     with open(csv_datei1, 'r') as csvfile:
@@ -231,12 +232,15 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
         for row in csvreader:
             EnergyInputData4.append(row[1])
 
-    # Load data from "CSV_WarmWaterComponent" (column 2) and add the collected data to list
+    # Load data from "CSV_Sum_of_heat_energy_demand" (column 2) and add the collected data to list
     csv_datei5 = os.path.join(path, 'Sum_Sum_of_heat_energy_demand.csv')
     with open(csv_datei5, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
         for row in csvreader:
-            EnergyInputData5.append(row[1])   
+            EnergyInputData5.append(row[1])
+
+
+  
 
 
     #Add all data in prepared list
@@ -245,23 +249,19 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
     # Add all the result data from this simulation round within the economic assessment excel file; 
     worksheet = workbook['InputGesamtmodell']  # 'Anlagendaten' durch den tatsächlichen Namen ersetzen
     
-    # # Go through the following columns and delete the data
-    # zu_loeschende_spalten = [0, 1, 2, 3, 4, 5, 6]
-    # # Go through the rows and delete the data in the desired columns
-    # for zeile in range(worksheet.max_row):
-    #     for spalte in zu_loeschende_spalten:
-    #         zelle = worksheet.cell(row=zeile+1, column=spalte+1)
-    #         zelle.value = None
+    # Go through the following columns and delete the data
+    zu_loeschende_spalten = [0, 1, 2, 3, 4, 5, 6,7]
+    # Go through the rows and delete the data in the desired columns
+    for zeile in range(worksheet.max_row):
+        for spalte in zu_loeschende_spalten:
+            zelle = worksheet.cell(row=zeile+1, column=spalte+1)
+            zelle.value = None
     
-    # # Schreibe die zusammengeführten Daten in das Excel-Arbeitsblatt
-    # for row in model_energy_input_data:
-    #     worksheet.append(row)
-    
-    # worksheet = workbook['InputGesamtmodellTest2']  # 'Anlagendaten' durch den tatsächlichen Namen ersetzen
-    # # Durchlaufen der Daten und Einfügen in die Excel-Datei
-    # for row_idx, row_data in enumerate(model_energy_input_data, start=1):
-    #     for col_idx, value in enumerate(row_data, start=1):
-    #         worksheet.cell(row=row_idx, column=col_idx).value = value
+
+    # Durchlaufen der Daten und Einfügen in die Excel-Datei
+    for row_idx, row_data in enumerate(model_energy_input_data, start=1):
+        for col_idx, value in enumerate(row_data, start=1):
+            worksheet.cell(row=row_idx, column=col_idx).value = value
 
     # # Excel-Berechnung für die 7. Spalte (Summe der ersten und zweiten Spalte)
     #     if row_idx == 1:
@@ -284,6 +284,9 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
     Data5 = []
     Data6 = []
     Data7 = []
+    Data8 = []
+    Data9 = []
+
     # Lade Daten aus dem ersten CSV-Datei "Electricity TO or FROM Grid Ergebnisse" (Spalte 1 und Spalte 2) und füge sie zur Liste hinzu
     csv_datei1 = os.path.join(path, 'ElectricityToOrFromGrid_L2EMSElectricityController.csv')
     with open(csv_datei1, 'r') as csvfile:
@@ -339,15 +342,30 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
             Data6.append(row[1])
 
 
-    # Load 7. CSV-Datei "TotalElectricityConsumption_L2EMSElectricityController.csv" (only second column) und add it to the list
-    csv_datei7 = os.path.join(path, 'TotalElectricityConsumption_L2EMSElectricityController.csv')
+#Neu:Electricity Consumption of different parts:
+    # Load 7. data from "ElectricityConsumptionElectrolyzer" (column 2) and add the collected data to list
+    csv_datei7 = os.path.join(path, 'ElectricityConsumptionElectrolyzer_StaticElectrolyzer.csv')
     with open(csv_datei7, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
         for row in csvreader:
-            Data7.append(row[1])    
+            Data7.append(row[1])
+
+    # Load data from "StorageElectricityConsumption_HydrogenStorage_w999" (column 2) and add the collected data to list
+    csv_datei8 = os.path.join(path, 'StorageElectricityConsumption_HydrogenStorage_w999.csv')
+    with open(csv_datei8, 'r') as csvfile:
+        csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        for row in csvreader:
+            Data8.append(row[1])
+
+    # Load 9. CSV-Datei "TotalElectricityConsumption_L2EMSElectricityController.csv" (only second column) und add it to the list --> IS NOT THE TOTAL CONSUMPTION (based on a comparison and validation done by 4ward)
+    csv_datei9 = os.path.join(path, 'TotalElectricityConsumption_L2EMSElectricityController.csv')
+    with open(csv_datei9, 'r') as csvfile:
+        csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        for row in csvreader:
+            Data9.append(row[1])      
 
     #Zusammenfuehren der Daten
-    zusammengefuegte_daten = [(x[0], x[1], x[2], Data2[i], Data3[i], Data4[i], Data5[i], Data6[i], Data7[i]) for i, x in enumerate(zusammengefuegte_daten)]
+    zusammengefuegte_daten = [(x[0], x[1], x[2], Data2[i], Data3[i], Data4[i], Data5[i], Data6[i], Data7[i], Data8[i], Data9[i]) for i, x in enumerate(zusammengefuegte_daten)]
 
     
 

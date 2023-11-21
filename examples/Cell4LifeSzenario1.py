@@ -20,6 +20,7 @@ from datetime import datetime
 from openpyxl.styles import NamedStyle
 import pandas as pd
 import sys
+import math
 #sys.path.append("C://Users//Standard//4ward Energy Dropbox//Christof Bernsteiner//PC//Desktop//hisim//HiSim//hisim//")
 #os.chdir('C:\\Users\\Standard\\Desktop\\hisim\\HiSim\\hisim\\')
 from hisim import log
@@ -71,7 +72,7 @@ def Cell4Life(
 
 
     # Build Results Path
-    name = "S" + str(input_variablen["PreResultNumber"]["value"])+"_BCap._" + str(input_variablen["battery_capacity"]["value"]) + "kWh_Inv_" + str(input_variablen["battery_inverter_power"]["value"]/1000) + "kW_FCPow_" + str(input_variablen["fuel_cell_power"]["value"]) +"W"
+    name = "S" + str(input_variablen["PreResultNumber"]["value"])+"_BCap._" + str(math.ceil(input_variablen["battery_capacity"]["value"])) + "kWh_Inv_" + str(math.ceil(input_variablen["battery_inverter_power"]["value"]/1000)) + "kW_FCPow_" + str(math.ceil(input_variablen["fuel_cell_power"]["value"]/1000)) +"kW"
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory = "C://Users//Standard//Desktop//hisim//C4LResults",
         model_name= name,
@@ -421,15 +422,22 @@ def InputParameter():
     battery_capacity: Optional[float] = BatteryCapkWh   #Total Capacity of Battery in kWh
     battery_capacityUnit = BatteryCapkWhUnit
     
+
+    #Test Christof:
+
     fuel_cell_power  = FuelCellPowerW #Electricity Power of Fuel Cell Power in Watt
     fuel_cell_powerUnit = FuelCellPowerWUnit
     
+    
+
     
     del BatteryCapkWh, FuelCellPowerW, BatteryCapkWhUnit, FuelCellPowerWUnit 
     
     #Following parameter depends on a "variation parameter"
     battery_inverter_power = battery_capacity*1000*Inverter_Ratio #in Watt: Batterie Inverter power is assumed to depend on Battery Capacity which is given in kWh!
     battery_inverter_powerUnit = "W"
+
+  
 
     #Static Parameters:
     NGFm2 = 26804.8 #NettoGesamtfläche (total area in squaremeters of building(s))
@@ -478,6 +486,8 @@ def InputParameter():
     
     #h2_storage_capacity_max = 50000  #Maximum of hydrogen storage in kg
     h2_storage_capacity_max = p_el_elektrolyzer / (3600*40000) *3600 * 24 * (on_off_SOEC +1) #Storage Capacity based on Electrolyzer Production Rate
+    
+    
     h2_storage_capacity_maxUnit = "kg"
     h2_storage_losses = 0 # % of Hydrogen Losses per day in %
     h2_storage_lossesUnit = "%"

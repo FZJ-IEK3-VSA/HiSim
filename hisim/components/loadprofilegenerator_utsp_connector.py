@@ -57,7 +57,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     profile_with_washing_machine_and_dishwasher: bool
     predictive_control: bool
     result_dir_path: str
-    cache_dir_path: Optional[str]
+    cache_dir_path: Optional[str] = None
     guid: str = ""
 
     @classmethod

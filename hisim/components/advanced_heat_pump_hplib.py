@@ -373,7 +373,7 @@ class HeatPumpHplib(Component):
             ComponentConnection(
                 HeatPumpHplib.TemperatureInputSecondary,
                 hws_classname,
-                component_class.SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
+                component_class.WaterTemperatureToHeatGenerator,
             )
         )
         return connections

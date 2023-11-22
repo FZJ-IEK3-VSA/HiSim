@@ -352,7 +352,7 @@ class SimpleHotWaterStorage(cp.Component):
         """Get gasheater default connections."""
 
         # use importlib for importing the other component in order to avoid circular-import errors
-        component_module_name = "hisim.components.generic_gasheater"
+        component_module_name = "hisim.components.generic_gas_heater"
         component_module = importlib.import_module(name=component_module_name)
         component_class = getattr(component_module, "GasHeater")
         connections = []

@@ -3,6 +3,7 @@
 # clean
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
+import importlib
 from dataclasses import dataclass
 from typing import Any, List
 
@@ -20,7 +21,6 @@ from hisim.component import (
     SingleTimeStepValues,
     OpexCostDataClass,
 )
-from hisim.components import controller_l1_generic_ev_charge
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 
@@ -170,16 +170,19 @@ class CarBattery(Component):
 
     def get_default_connections_from_charge_controller(self) -> Any:
         """Get default connections from charge controller."""
-
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.controller_l1_generic_ev_charge"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "L1Controller")
         connections: List[ComponentConnection] = []
         ev_charge_controller_classname = (
-            controller_l1_generic_ev_charge.L1Controller.get_classname()
+            component_class.get_classname()
         )
         connections.append(
             ComponentConnection(
                 CarBattery.LoadingPowerInput,
                 ev_charge_controller_classname,
-                controller_l1_generic_ev_charge.L1Controller.ToOrFromBattery,
+                component_class.ToOrFromBattery,
             )
         )
         return connections

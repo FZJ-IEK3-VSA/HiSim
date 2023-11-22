@@ -13,6 +13,7 @@ or temperature is between upper target and increased upper target from ESM
 """
 
 # Owned
+import importlib
 from dataclasses import dataclass
 from typing import List
 from dataclasses_json import dataclass_json
@@ -21,7 +22,6 @@ from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import utils
 from hisim.component import ConfigBase
-from hisim.components import building, generic_hot_water_storage_modular
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 
@@ -256,29 +256,36 @@ class L1HeatPumpController(cp.Component):
     def get_default_connections_generic_hot_water_storage_modular(self):
         """Sets default connections for the boiler."""
 
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.generic_hot_water_storage_modular"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "HotWaterStorage")
         connections = []
         boiler_classname = (
-            generic_hot_water_storage_modular.HotWaterStorage.get_classname()
+            component_class.get_classname()
         )
         connections.append(
             cp.ComponentConnection(
                 L1HeatPumpController.StorageTemperature,
                 boiler_classname,
-                generic_hot_water_storage_modular.HotWaterStorage.TemperatureMean,
+                component_class.TemperatureMean,
             )
         )
         return connections
 
     def get_default_connections_from_building(self):
         """Sets default connections for the boiler."""
-
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.building"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "Building")
         connections = []
-        building_classname = building.Building.get_classname()
+        building_classname = component_class.get_classname()
         connections.append(
             cp.ComponentConnection(
                 L1HeatPumpController.StorageTemperature,
                 building_classname,
-                building.Building.TemperatureMeanThermalMass,
+                component_class.TemperatureMeanThermalMass,
             )
         )
         return connections

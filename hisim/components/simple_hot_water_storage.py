@@ -2,6 +2,7 @@
 
 # clean
 # Owned
+import importlib
 from typing import List, Any, Tuple
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -307,14 +308,17 @@ class SimpleHotWaterStorage(cp.Component):
     def get_default_connections_from_heat_distribution_system(self) -> List[cp.ComponentConnection]:
         """Get heat distribution default connections."""
 
-        from hisim.components.heat_distribution_system import HeatDistribution  # pylint: disable=import-outside-toplevel
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.heat_distribution_system"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "HeatDistribution")
         connections = []
-        hds_classname = HeatDistribution.get_classname()
+        hds_classname = component_class.get_classname()
         connections.append(
             cp.ComponentConnection(
                 SimpleHotWaterStorage.WaterTemperatureFromHeatDistribution,
                 hds_classname,
-                HeatDistribution.WaterTemperatureOutput,
+                component_class.WaterTemperatureOutput,
             )
         )
         return connections
@@ -322,21 +326,24 @@ class SimpleHotWaterStorage(cp.Component):
     def get_default_connections_from_advanced_heat_pump(self) -> List[cp.ComponentConnection]:
         """Get advanced het pump default connections."""
 
-        from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib  # pylint: disable=import-outside-toplevel
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.advanced_heat_pump_hplib"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "HeatPumpHplib")
         connections = []
-        hp_classname = HeatPumpHplib.get_classname()
+        hp_classname = component_class.get_classname()
         connections.append(
             cp.ComponentConnection(
                 SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator,
                 hp_classname,
-                HeatPumpHplib.TemperatureOutput,
+                component_class.TemperatureOutput,
             )
         )
         connections.append(
             cp.ComponentConnection(
                 SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator,
                 hp_classname,
-                HeatPumpHplib.MassFlowOutput,
+                component_class.MassFlowOutput,
             )
         )
         return connections
@@ -344,21 +351,24 @@ class SimpleHotWaterStorage(cp.Component):
     def get_default_connections_from_gasheater(self) -> List[cp.ComponentConnection]:
         """Get gasheater default connections."""
 
-        from hisim.components.generic_gas_heater import GasHeater  # pylint: disable=import-outside-toplevel
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.generic_gasheater"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "GasHeater")
         connections = []
-        gasheater_classname = GasHeater.get_classname()
+        gasheater_classname = component_class.get_classname()
         connections.append(
             cp.ComponentConnection(
                 SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator,
                 gasheater_classname,
-                GasHeater.MassflowOutputTemperature,
+                component_class.MassflowOutputTemperature,
             )
         )
         connections.append(
             cp.ComponentConnection(
                 SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator,
                 gasheater_classname,
-                GasHeater.MassflowOutput,
+                component_class.MassflowOutput,
             )
         )
         return connections

@@ -1,6 +1,7 @@
 """Gas Heater Module."""
 # clean
 # Owned
+import importlib
 from typing import List, Any, Tuple
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -16,10 +17,7 @@ from hisim.component import (
     ConfigBase,
     OpexCostDataClass,
 )
-from hisim.components.controller_l1_generic_gas_heater import (
-    GenericGasHeaterControllerL1,
-)
-from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
+
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
@@ -227,14 +225,17 @@ class GasHeater(Component):
         self,
     ):
         """Get Controller L1 Gas Heater default connections."""
-
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.controller_l1_generic_gas_heater"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "GenericGasHeaterControllerL1")
         connections = []
-        l1_controller_classname = GenericGasHeaterControllerL1.get_classname()
+        l1_controller_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
                 GasHeater.ControlSignal,
                 l1_controller_classname,
-                GenericGasHeaterControllerL1.ControlSignalToGasHeater,
+                component_class.ControlSignalToGasHeater,
             )
         )
         return connections
@@ -243,14 +244,17 @@ class GasHeater(Component):
         self,
     ):
         """Get Simple hot water storage default connections."""
-
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.simple_hot_water_storage"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "SimpleHotWaterStorage")
         connections = []
-        hws_classname = SimpleHotWaterStorage.get_classname()
+        hws_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
                 GasHeater.MassflowInputTemperature,
                 hws_classname,
-                SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
+                component_class.WaterTemperatureToHeatGenerator,
             )
         )
         return connections

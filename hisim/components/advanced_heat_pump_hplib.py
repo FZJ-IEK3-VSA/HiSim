@@ -4,6 +4,7 @@ See library on https://github.com/FZJ-IEK3-VSA/hplib/tree/main/hplib
 """
 
 # clean
+import importlib
 from typing import Any, List, Optional, Tuple, Dict
 import hashlib
 from dataclasses import dataclass
@@ -362,14 +363,17 @@ class HeatPumpHplib(Component):
         self,
     ):
         """Get simple hot water storage default connections."""
-
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.simple_hot_water_storage"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "SimpleHotWaterStorage")
         connections = []
-        hws_classname = simple_hot_water_storage.SimpleHotWaterStorage.get_classname()
+        hws_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
                 HeatPumpHplib.TemperatureInputSecondary,
                 hws_classname,
-                simple_hot_water_storage.SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
+                component_class.SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
             )
         )
         return connections

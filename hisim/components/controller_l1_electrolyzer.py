@@ -4,6 +4,7 @@ The controller looks at the available surplus electricity and passes the signal 
 In addition the controller takes care of minimum operation and indle times and the available capacity in the hydrogen storage.
 """
 # clean
+import importlib
 from dataclasses import dataclass
 from typing import List
 from dataclasses_json import dataclass_json
@@ -11,7 +12,6 @@ from dataclasses_json import dataclass_json
 from hisim import utils
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim.components import generic_hydrogen_storage
 from hisim.simulationparameters import SimulationParameters
 
 
@@ -160,16 +160,19 @@ class L1GenericElectrolyzerController(cp.Component):
 
     def get_default_connections_from_h2_storage(self):
         """Sets default connections for the hydrogen storage in the electrolyzer controller."""
-
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.generic_hydrogen_storage"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "GenericHydrogenStorage")
         connections = []
         h2_storage_classname = (
-            generic_hydrogen_storage.GenericHydrogenStorage.get_classname()
+            component_class.get_classname()
         )
         connections.append(
             cp.ComponentConnection(
                 L1GenericElectrolyzerController.HydrogenSOC,
                 h2_storage_classname,
-                generic_hydrogen_storage.GenericHydrogenStorage.HydrogenSOC,
+                component_class.HydrogenSOC,
             )
         )
         return connections

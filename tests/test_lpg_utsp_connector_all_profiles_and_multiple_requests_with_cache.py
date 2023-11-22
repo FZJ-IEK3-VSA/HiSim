@@ -84,7 +84,7 @@ def initialize_lpg_utsp_connector_and_return_results(
     )
 
 
-@pytest.mark.base
+@pytest.mark.utsp
 def test_utsp_calculation_for_multiple_households_using_caches():
     """Test if utsp can handle multiple households using local caches."""
 

@@ -17,7 +17,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import log
 
 
-@pytest.mark.base
+@pytest.mark.utsp
 def test_occupancy_scaling_with_utsp():
     """Test for testing if the scaling with the lpg utsp connector works when calculating several households."""
 

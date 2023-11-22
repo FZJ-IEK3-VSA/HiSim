@@ -69,6 +69,7 @@ def search_and_compare(
         return False
 
     for tag_search in tags_to_search:
+
         if tag_search not in tags_of_component:
             return False
 
@@ -271,9 +272,9 @@ class DynamicComponent(Component):
     ) -> None:
         """Adds a dynamic default connection list definition."""
 
-        component_name = connections[0].source_component_class.component_name
+        component_name = connections[0].source_class_name
         for connection in connections:
-            if connection.source_component_class.component_name != component_name:
+            if connection.source_class_name != component_name:
                 raise ValueError(
                     "Trying to add dynamic connections to different components in one go."
                 )
@@ -290,6 +291,7 @@ class DynamicComponent(Component):
     ) -> List[DynamicComponentConnection]:
         """Gets the dynamic default connections for this component."""
         source_classname: str = source_component.get_classname()
+
         target_classname: str = self.get_classname()
 
         if source_classname not in self.dynamic_default_connections:
@@ -399,6 +401,7 @@ class DynamicComponent(Component):
         """Sets all output values with given component type and weight."""
 
         # check if component of component type is available
+
         for _, element in enumerate(self.my_component_outputs):  # loop over all inputs
             if search_and_compare(
                 weight_to_search=weight_counter,

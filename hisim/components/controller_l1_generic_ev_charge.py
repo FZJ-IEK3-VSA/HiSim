@@ -195,7 +195,7 @@ class L1Controller(cp.Component):
 
     def get_default_connections_from_generic_car(self) -> List[cp.ComponentConnection]:
         """Default connections of car in ev charge controller."""
-        log.information("setting default connections in ev charge controller")
+
         connections: List[cp.ComponentConnection] = []
         car_classname = generic_car.Car.get_classname()
         connections.append(
@@ -214,7 +214,7 @@ class L1Controller(cp.Component):
 
     def get_default_connections_advanced_battery(self) -> List[cp.ComponentConnection]:
         """Default connections of car battery in ev charge controller."""
-        log.information("setting default connections in ev charge controller")
+
         connections: List[cp.ComponentConnection] = []
         battery_classname = advanced_ev_battery_bslib.CarBattery.get_classname()
         connections.append(

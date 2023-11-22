@@ -26,7 +26,6 @@ from hisim.component import ConfigBase
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
-from hisim import loadtypes as lt
 from hisim import log
 
 __authors__ = "Katharina Rieck"
@@ -322,111 +321,21 @@ def setup_function(
     )
 
     # =================================================================================================================================
-    # Connect Component Inputs with Outputs
-
-    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
-    my_building.connect_input(
-        my_building.ThermalPowerDelivered,
-        my_heat_distribution_system.component_name,
-        my_heat_distribution_system.ThermalPowerDelivered,
-    )
-
-    my_heat_pump_controller.connect_only_predefined_connections(
-        my_weather, my_simple_hot_water_storage, my_heat_distribution_controller
-    )
-
-    my_heat_pump.connect_only_predefined_connections(
-        my_heat_pump_controller, my_weather, my_simple_hot_water_storage
-    )
-
-    my_heat_distribution_controller.connect_only_predefined_connections(
-        my_weather, my_building, my_simple_hot_water_storage
-    )
-
-    my_heat_distribution_system.connect_only_predefined_connections(
-        my_heat_distribution_controller, my_building, my_simple_hot_water_storage
-    )
-
-    my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterTemperatureFromHeatDistribution,
-        my_heat_distribution_system.component_name,
-        my_heat_distribution_system.WaterTemperatureOutput,
-    )
-
-    my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterTemperatureFromHeatGenerator,
-        my_heat_pump.component_name,
-        my_heat_pump.TemperatureOutput,
-    )
-
-    my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterMassFlowRateFromHeatGenerator,
-        my_heat_pump.component_name,
-        my_heat_pump.MassFlowOutput,
-    )
-
-    # connect DHW
-    my_domnestic_hot_water_storage.connect_only_predefined_connections(
-        my_occupancy, my_domnestic_hot_water_heatpump
-    )
-
-    my_domnestic_hot_water_heatpump_controller.connect_only_predefined_connections(
-        my_domnestic_hot_water_storage
-    )
-
-    my_domnestic_hot_water_heatpump.connect_only_predefined_connections(
-        my_weather, my_domnestic_hot_water_heatpump_controller
-    )
-
-    # -----------------------------------------------------------------------------------------------------------------
-    # connect Electricity Meter
-
-    my_electricity_meter.add_component_input_and_connect(
-        source_object_name=my_occupancy.component_name,
-        source_component_output=my_occupancy.ElectricityOutput,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-        source_weight=999,
-    )
-
-    my_electricity_meter.add_component_input_and_connect(
-        source_object_name=my_heat_pump.component_name,
-        source_component_output=my_heat_pump.ElectricalInputPower,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        source_tags=[
-            lt.ComponentType.HEAT_PUMP,
-            lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
-        ],
-        source_weight=999,
-    )
-    my_electricity_meter.add_component_input_and_connect(
-        source_object_name=my_domnestic_hot_water_heatpump.component_name,
-        source_component_output=my_domnestic_hot_water_heatpump.ElectricityOutput,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        source_tags=[
-            lt.ComponentType.HEAT_PUMP,
-            lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
-        ],
-        source_weight=999,
-    )
-
-    # =================================================================================================================================
     # Add Components to Simulation Parameters
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_weather)
-    my_sim.add_component(my_building)
-    my_sim.add_component(my_heat_pump)
-    my_sim.add_component(my_heat_pump_controller)
-    my_sim.add_component(my_heat_distribution_system)
-    my_sim.add_component(my_heat_distribution_controller)
-    my_sim.add_component(my_simple_hot_water_storage)
-    my_sim.add_component(my_domnestic_hot_water_storage)
-    my_sim.add_component(my_domnestic_hot_water_heatpump_controller)
-    my_sim.add_component(my_domnestic_hot_water_heatpump)
-    my_sim.add_component(my_electricity_meter)
+    my_sim.add_component(my_building, connect_automatically=True)
+    my_sim.add_component(my_heat_pump, connect_automatically=True)
+    my_sim.add_component(my_heat_pump_controller, connect_automatically=True)
+    my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
+    my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
+    my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)
+    my_sim.add_component(my_domnestic_hot_water_storage, connect_automatically=True)
+    my_sim.add_component(
+        my_domnestic_hot_water_heatpump_controller, connect_automatically=True
+    )
+    my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
+    my_sim.add_component(my_electricity_meter, connect_automatically=True)
 
     # Set Results Path
     # if config_filename is given, get hash number and sampling mode for result path

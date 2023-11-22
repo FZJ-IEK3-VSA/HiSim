@@ -17,7 +17,6 @@ from hisim.dynamic_component import (
 )
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
-from hisim import log
 
 
 @dataclass_json
@@ -150,18 +149,21 @@ class ElectricityMeter(DynamicComponent):
             sankey_flow_direction=False,
             output_description=f"here a description for {self.CumulativeProduction} will follow.",
         )
-        self.add_default_connections(self.get_default_connections_from_occupancy())
-        self.add_default_connections(self.get_default_connections_from_pv_system())
-        self.add_default_connections(self.get_default_connections_from_dhw_heat_pump())
-        self.add_default_connections(
+        self.add_dynamic_default_connections(self.get_default_connections_from_occupancy())
+        self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
+        self.add_dynamic_default_connections(self.get_default_connections_from_dhw_heat_pump())
+        self.add_dynamic_default_connections(
             self.get_default_connections_from_advanced_heat_pump()
+        )
+        self.add_dynamic_default_connections(
+            self.get_default_connections_from_generic_heat_pump()
         )
 
     def get_default_connections_from_occupancy(
         self,
     ):
         """Get occupancy default connections."""
-        log.information("setting default connections in electricity meter")
+
         from hisim.components.loadprofilegenerator_connector import Occupancy  # pylint: disable=import-outside-toplevel
 
         dynamic_connections = []
@@ -183,7 +185,7 @@ class ElectricityMeter(DynamicComponent):
         self,
     ):
         """Get pv system default connections."""
-        log.information("setting default connections in electricity meter")
+
         from hisim.components.generic_pv_system import PVSystem  # pylint: disable=import-outside-toplevel
 
         dynamic_connections = []
@@ -208,7 +210,7 @@ class ElectricityMeter(DynamicComponent):
         self,
     ):
         """Get dhw heat pump default connections."""
-        log.information("setting default connections in electricity meter")
+
         from hisim.components.generic_heat_pump_modular import ModularHeatPump  # pylint: disable=import-outside-toplevel
 
         dynamic_connections = []
@@ -220,7 +222,7 @@ class ElectricityMeter(DynamicComponent):
                 source_component_field_name=ModularHeatPump.ElectricityOutput,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
-                source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+                source_tags=[lt.ComponentType.HEAT_PUMP_DHW, lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
                 source_weight=999,
             )
         )
@@ -230,7 +232,7 @@ class ElectricityMeter(DynamicComponent):
         self,
     ):
         """Get advanced heat pump default connections."""
-        log.information("setting default connections in electricity meter")
+
         from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib  # pylint: disable=import-outside-toplevel
 
         dynamic_connections = []
@@ -242,7 +244,29 @@ class ElectricityMeter(DynamicComponent):
                 source_component_field_name=HeatPumpHplib.ElectricalInputPower,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
-                source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+                source_tags=[lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+                source_weight=999,
+            )
+        )
+        return dynamic_connections
+
+    def get_default_connections_from_generic_heat_pump(
+        self,
+    ):
+        """Get generic heat pump default connections."""
+
+        from hisim.components.generic_heat_pump import GenericHeatPump  # pylint: disable=import-outside-toplevel
+
+        dynamic_connections = []
+        generic_heat_pump_class_name = GenericHeatPump.get_classname()
+        dynamic_connections.append(
+            DynamicComponentConnection(
+                source_component_class=GenericHeatPump,
+                source_class_name=generic_heat_pump_class_name,
+                source_component_field_name=GenericHeatPump.ElectricityOutput,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
                 source_weight=999,
             )
         )

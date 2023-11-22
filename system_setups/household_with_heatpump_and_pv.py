@@ -19,7 +19,7 @@ from hisim.components import generic_pv_system
 from hisim.components import building
 from hisim.components import generic_heat_pump
 from hisim.components import electricity_meter
-from hisim import log, loadtypes
+from hisim import log
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -61,7 +61,7 @@ class HouseholdPVConfig:
             building_type="blub",
             household_type=Households.CHR01_Couple_both_at_Work,
             energy_intensity=EnergyIntensityType.EnergySaving,
-            lpg_url="http://134.94.131.167:443/api/v1/profilerequest",
+            lpg_url="http://134.94.131.109:5000/api/v1/profilerequest",
             api_key="OrjpZY93BcNWw8lKaMp0BEchbCc",
             simulation_parameters=SimulationParameters.one_day_only(2022),
             result_path="mypath",
@@ -205,71 +205,12 @@ def setup_function(
     )
 
     # =================================================================================================================================
-    # Connect Component Inputs with Outputs
-    my_photovoltaic_system.connect_only_predefined_connections(my_weather)
+    # # Connect Component Inputs with Outputs
 
-    # Electricity Grid
-    my_electricity_meter.add_component_input_and_connect(
-        source_object_name=my_photovoltaic_system.component_name,
-        source_component_output=my_photovoltaic_system.ElectricityOutput,
-        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
-        source_unit=loadtypes.Units.WATT,
-        source_tags=[
-            loadtypes.ComponentType.PV,
-            loadtypes.InandOutputType.ELECTRICITY_PRODUCTION,
-        ],
-        source_weight=999,
-    )
-
-    my_electricity_meter.add_component_input_and_connect(
-        source_object_name=my_occupancy.component_name,
-        source_component_output=my_occupancy.ElectricityOutput,
-        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
-        source_unit=loadtypes.Units.WATT,
-        source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-        source_weight=999,
-    )
-
-    my_electricity_meter.add_component_input_and_connect(
-        source_object_name=my_heat_pump.component_name,
-        source_component_output=my_heat_pump.ElectricityOutput,
-        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
-        source_unit=loadtypes.Units.WATT,
-        source_tags=[
-            loadtypes.ComponentType.HEAT_PUMP,
-            loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
-        ],
-        source_weight=999,
-    )
-
-    my_building.connect_only_predefined_connections(my_weather)
-    my_building.connect_only_predefined_connections(my_occupancy)
     my_building.connect_input(
         my_building.ThermalPowerDelivered,
         my_heat_pump.component_name,
         my_heat_pump.ThermalPowerDelivered,
-    )
-
-    my_heat_pump_controller.connect_input(
-        my_heat_pump_controller.TemperatureMean,
-        my_building.component_name,
-        my_building.TemperatureMeanThermalMass,
-    )
-    my_heat_pump_controller.connect_input(
-        my_heat_pump_controller.ElectricityInput,
-        my_electricity_meter.component_name,
-        my_electricity_meter.ElectricityAvailable,
-    )
-
-    my_heat_pump.connect_input(
-        my_heat_pump.State,
-        my_heat_pump_controller.component_name,
-        my_heat_pump_controller.State,
-    )
-    my_heat_pump.connect_input(
-        my_heat_pump.TemperatureOutside,
-        my_weather.component_name,
-        my_weather.TemperatureOutside,
     )
 
     # =================================================================================================================================
@@ -277,8 +218,8 @@ def setup_function(
 
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_weather)
-    my_sim.add_component(my_photovoltaic_system)
-    my_sim.add_component(my_electricity_meter)
-    my_sim.add_component(my_building)
-    my_sim.add_component(my_heat_pump_controller)
-    my_sim.add_component(my_heat_pump)
+    my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
+    my_sim.add_component(my_electricity_meter, connect_automatically=True)
+    my_sim.add_component(my_building, connect_automatically=True)
+    my_sim.add_component(my_heat_pump_controller, connect_automatically=True)
+    my_sim.add_component(my_heat_pump, connect_automatically=True)

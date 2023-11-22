@@ -11,7 +11,6 @@ from bslib import bslib as bsl
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
-from hisim import log
 from hisim.component import (
     Component,
     ComponentConnection,
@@ -171,9 +170,7 @@ class CarBattery(Component):
 
     def get_default_connections_from_charge_controller(self) -> Any:
         """Get default connections from charge controller."""
-        log.information(
-            "setting default connections in car battery"
-        )
+
         connections: List[ComponentConnection] = []
         ev_charge_controller_classname = (
             controller_l1_generic_ev_charge.L1Controller.get_classname()

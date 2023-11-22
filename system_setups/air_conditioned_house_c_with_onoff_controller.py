@@ -3,7 +3,9 @@
 # clean
 from typing import Optional
 
-from system_setups.air_conditioned_house_a_with_mpc_controller import air_conditioned_house
+from system_setups.air_conditioned_house_a_with_mpc_controller import (
+    air_conditioned_house,
+)
 
 from hisim.simulator import SimulationParameters
 from hisim.simulator import Simulator

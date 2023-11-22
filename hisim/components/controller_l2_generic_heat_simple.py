@@ -11,7 +11,6 @@ from dataclasses_json import dataclass_json
 
 from hisim import utils
 from hisim import component as cp
-from hisim import log
 from hisim.components import generic_hot_water_storage_modular
 from hisim.components.building import Building
 from hisim.loadtypes import LoadTypes, Units
@@ -248,7 +247,7 @@ class L2GenericHeatController(cp.Component):
 
     def get_default_connections_from_buildings(self):
         """Sets the default connections for the building."""
-        log.information("setting default connections in L2 generic heat controller")
+
         connections = []
         building_classname = Building.get_classname()
         connections.append(
@@ -262,7 +261,7 @@ class L2GenericHeatController(cp.Component):
 
     def get_default_connections_from_generic_hot_water_storage_modular(self):
         """Sets default connections for the boiler."""
-        log.information("setting default connections in L2 generic heat controller")
+
         connections = []
         hotwaterstorage_classname = (
             generic_hot_water_storage_modular.HotWaterStorage.get_classname()

@@ -567,7 +567,7 @@ class PVSystem(cp.Component):
 
     def get_default_connections_from_weather(self):
         """Get default connections from weather."""
-        log.information("setting default connections in generic py system")
+
         connections = []
         weather_classname = Weather.get_classname()
         connections.append(

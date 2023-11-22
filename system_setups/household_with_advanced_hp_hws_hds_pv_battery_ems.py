@@ -211,85 +211,13 @@ def setup_function(
         config=my_advanced_battery_config,
     )
 
-    # =================================================================================================================================
-    # Connect Component Inputs with Outputs
+    # -----------------------------------------------------------------------------------------------------------------
+    # Add outputs to EMS
 
-    # Connect PV
-    my_photovoltaic_system.connect_only_predefined_connections(my_weather)
-    # -----------------------------------------------------------------------------------------------------------------
-    # Connect Building
-    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
-    my_building.connect_input(
-        my_building.ThermalPowerDelivered,
-        my_heat_distribution_system.component_name,
-        my_heat_distribution_system.ThermalPowerDelivered,
-    )
-
-    # -----------------------------------------------------------------------------------------------------------------
-    # Connect Heat Pump
-    my_heat_pump_controller.connect_only_predefined_connections(
-        my_weather, my_simple_hot_water_storage, my_heat_distribution_controller
-    )
-
-    my_heat_pump.connect_only_predefined_connections(
-        my_heat_pump_controller, my_weather, my_simple_hot_water_storage
-    )
-    # -----------------------------------------------------------------------------------------------------------------
-    # Connect Water Storage
-    my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterTemperatureFromHeatDistribution,
-        my_heat_distribution_system.component_name,
-        my_heat_distribution_system.WaterTemperatureOutput,
-    )
-    my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterTemperatureFromHeatGenerator,
-        my_heat_pump.component_name,
-        my_heat_pump.TemperatureOutput,
-    )
-    my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterMassFlowRateFromHeatGenerator,
-        my_heat_pump.component_name,
-        my_heat_pump.MassFlowOutput,
-    )
-
-    # -----------------------------------------------------------------------------------------------------------------
-    # Connect Heat Distribution System
-    my_heat_distribution_controller.connect_only_predefined_connections(
-        my_weather, my_building, my_simple_hot_water_storage
-    )
-    my_heat_distribution_system.connect_only_predefined_connections(
-        my_building, my_heat_distribution_controller, my_simple_hot_water_storage
-    )
-    # -----------------------------------------------------------------------------------------------------------------
-    # Connect EMS
-    my_electricity_controller.add_component_input_and_connect(
-        source_object_name=my_occupancy.component_name,
-        source_component_output=my_occupancy.ElectricityOutput,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-        source_weight=999,
-    )
-    my_electricity_controller.add_component_input_and_connect(
-        source_object_name=my_photovoltaic_system.component_name,
-        source_component_output=my_photovoltaic_system.ElectricityOutput,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
-        source_weight=999,
-    )
-    my_electricity_controller.add_component_input_and_connect(
-        source_object_name=my_heat_pump.component_name,
-        source_component_output=my_heat_pump.ElectricalInputPower,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        source_tags=[lt.ComponentType.HEAT_PUMP, lt.InandOutputType.ELECTRICITY_REAL],
-        source_weight=1,
-    )
     my_electricity_controller.add_component_output(
         source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
         source_tags=[
-            lt.ComponentType.HEAT_PUMP,
+            lt.ComponentType.HEAT_PUMP_DHW,
             lt.InandOutputType.ELECTRICITY_TARGET,
         ],
         source_weight=1,
@@ -297,13 +225,17 @@ def setup_function(
         source_unit=lt.Units.WATT,
         output_description="Target electricity for Heat Pump. ",
     )
-    my_electricity_controller.add_component_input_and_connect(
-        source_object_name=my_advanced_battery.component_name,
-        source_component_output=my_advanced_battery.AcBatteryPower,
+
+    my_electricity_controller.add_component_output(
+        source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+        source_tags=[
+            lt.ComponentType.HEAT_PUMP_BUILDING,
+            lt.InandOutputType.ELECTRICITY_TARGET,
+        ],
+        source_weight=2,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_REAL],
-        source_weight=2,
+        output_description="Target electricity for Heat Pump. ",
     )
 
     electricity_to_or_from_battery_target = (
@@ -313,12 +245,13 @@ def setup_function(
                 lt.ComponentType.BATTERY,
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
-            source_weight=2,
+            source_weight=3,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for Battery Control. ",
         )
     )
+
     # -----------------------------------------------------------------------------------------------------------------
     # Connect Battery
     my_advanced_battery.connect_dynamic_input(
@@ -331,12 +264,12 @@ def setup_function(
 
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_weather)
-    my_sim.add_component(my_photovoltaic_system)
-    my_sim.add_component(my_building)
-    my_sim.add_component(my_heat_distribution_controller)
-    my_sim.add_component(my_heat_distribution_system)
-    my_sim.add_component(my_simple_hot_water_storage)
-    my_sim.add_component(my_heat_pump_controller)
-    my_sim.add_component(my_heat_pump)
+    my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
+    my_sim.add_component(my_building, connect_automatically=True)
+    my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
+    my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
+    my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)
+    my_sim.add_component(my_heat_pump_controller, connect_automatically=True)
+    my_sim.add_component(my_heat_pump, connect_automatically=True)
     my_sim.add_component(my_advanced_battery)
-    my_sim.add_component(my_electricity_controller)
+    my_sim.add_component(my_electricity_controller, connect_automatically=True)

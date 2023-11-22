@@ -20,7 +20,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
-from hisim import utils, log
+from hisim import utils
 
 __authors__ = "Katharina Rieck, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -301,10 +301,12 @@ class SimpleHotWaterStorage(cp.Component):
             output_description=f"here a description for {self.StandbyHeatLoss} will follow.",
         )
         self.add_default_connections(self.get_default_connections_from_heat_distribution_system())
+        self.add_default_connections(self.get_default_connections_from_advanced_heat_pump())
+        self.add_default_connections(self.get_default_connections_from_gasheater())
 
     def get_default_connections_from_heat_distribution_system(self) -> List[cp.ComponentConnection]:
         """Get heat distribution default connections."""
-        log.information("setting default connections in simple hot water storage.")
+
         from hisim.components.heat_distribution_system import HeatDistribution  # pylint: disable=import-outside-toplevel
         connections = []
         hds_classname = HeatDistribution.get_classname()
@@ -313,6 +315,50 @@ class SimpleHotWaterStorage(cp.Component):
                 SimpleHotWaterStorage.WaterTemperatureFromHeatDistribution,
                 hds_classname,
                 HeatDistribution.WaterTemperatureOutput,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_advanced_heat_pump(self) -> List[cp.ComponentConnection]:
+        """Get advanced het pump default connections."""
+
+        from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib  # pylint: disable=import-outside-toplevel
+        connections = []
+        hp_classname = HeatPumpHplib.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator,
+                hp_classname,
+                HeatPumpHplib.TemperatureOutput,
+            )
+        )
+        connections.append(
+            cp.ComponentConnection(
+                SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator,
+                hp_classname,
+                HeatPumpHplib.MassFlowOutput,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_gasheater(self) -> List[cp.ComponentConnection]:
+        """Get gasheater default connections."""
+
+        from hisim.components.generic_gas_heater import GasHeater  # pylint: disable=import-outside-toplevel
+        connections = []
+        gasheater_classname = GasHeater.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator,
+                gasheater_classname,
+                GasHeater.MassflowOutputTemperature,
+            )
+        )
+        connections.append(
+            cp.ComponentConnection(
+                SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator,
+                gasheater_classname,
+                GasHeater.MassflowOutput,
             )
         )
         return connections

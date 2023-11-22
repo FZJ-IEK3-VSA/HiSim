@@ -80,7 +80,7 @@ def test_system_setup_starter():
     shutil.rmtree(result_directory)
 
 
-@pytest.mark.base
+@pytest.mark.utsp
 def test_system_setup_starter_scaling():
     """Run a simulation from JSON."""
 

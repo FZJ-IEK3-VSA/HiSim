@@ -196,30 +196,9 @@ def setup_function(
     )
 
     # =================================================================================================================================
-    # Connect Component Inputs with Outputs
-
-    my_building.connect_input(
-        my_building.ThermalPowerDelivered,
-        my_heat_distribution_system.component_name,
-        my_heat_distribution_system.ThermalPowerDelivered,
-    )
-
-    my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterTemperatureFromHeatGenerator,
-        my_heat_pump.component_name,
-        my_heat_pump.TemperatureOutput,
-    )
-
-    my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterMassFlowRateFromHeatGenerator,
-        my_heat_pump.component_name,
-        my_heat_pump.MassFlowOutput,
-    )
-
-    # =================================================================================================================================
     # Add Components to Simulation Parameters
-    my_sim.add_component(my_occupancy, connect_automatically=True)
-    my_sim.add_component(my_weather, connect_automatically=True)
+    my_sim.add_component(my_occupancy)
+    my_sim.add_component(my_weather)
     my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
     my_sim.add_component(my_building, connect_automatically=True)
     my_sim.add_component(my_heat_pump, connect_automatically=True)

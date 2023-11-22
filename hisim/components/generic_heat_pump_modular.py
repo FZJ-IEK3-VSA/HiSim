@@ -12,7 +12,6 @@ from dataclasses_json import dataclass_json
 
 import hisim.loadtypes as lt
 from hisim import component as cp
-from hisim import log
 from hisim.component import OpexCostDataClass
 
 # Owned
@@ -303,7 +302,7 @@ class ModularHeatPump(cp.Component):
 
     def get_default_connections_from_weather(self):
         """Sets default connections of Weather."""
-        log.information("setting default connections in modular heat pump")
+
         connections = []
         weather_classname = Weather.get_classname()
         connections.append(
@@ -317,7 +316,7 @@ class ModularHeatPump(cp.Component):
 
     def get_default_connections_from_controller_l1_heatpump(self):
         """Sets default connections of heat pump controller."""
-        log.information("setting default connections in modular heat pump")
+
         connections = []
         controller_classname = (
             controller_l1_heatpump.L1HeatPumpController.get_classname()

@@ -294,7 +294,7 @@ class AirConditioner(cp.Component):
 
     def get_default_connections_from_weather(self):
         """Get default inputs from the weather component."""
-        print("setting default connections in air conditioner")
+
         connections = []
         weather_classname = Weather.get_classname()
         connections.append(
@@ -308,7 +308,7 @@ class AirConditioner(cp.Component):
 
     def get_default_connections_from_air_condition_controller(self):
         """Get default inputs from the on_off controller."""
-        log.information("setting default connections in air conditioner")
+
         connections = []
         controller_classname = AirConditionerController.get_classname()
         connections.append(
@@ -322,7 +322,7 @@ class AirConditioner(cp.Component):
 
     def get_pid_controller_default_connections(self):
         """Get default inputs from the PID controller component."""
-        log.information("setting default connections in air conditioner")
+
         connections = []
         controller_classname = AirConditionerController.get_classname()
         connections.append(

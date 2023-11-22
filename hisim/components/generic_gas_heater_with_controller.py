@@ -13,8 +13,6 @@ from hisim.component import (
 from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim import log
-
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -228,7 +226,7 @@ class GasHeaterWithController(cp.Component):
         self,
     ) -> List[cp.ComponentConnection]:
         """Get gas heater controller default connections."""
-        log.information("setting default connections in gas heater")
+
         connections = []
         controller_classname = GasHeaterController.get_classname()
         connections.append(

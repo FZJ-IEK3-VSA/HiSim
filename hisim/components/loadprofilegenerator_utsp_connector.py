@@ -69,7 +69,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
 
         config = UtspLpgConnectorConfig(
             name="UTSPConnector",
-            url="http://localhost:443/api/v1/profilerequest",
+            url="http://134.94.131.109:5000/api/v1/profilerequest",
             api_key="",
             household=Households.CHR01_Couple_both_at_Work,
             result_path=os.path.join(utils.get_input_directory(), "lpg_profiles"),

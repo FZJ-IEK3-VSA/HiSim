@@ -86,6 +86,7 @@ class ComponentWrapper:
 
     def connect_inputs(self, all_outputs: List[cp.ComponentOutput]) -> None:
         """ Connects cp.ComponentOutputs to ComponentInputs of WrapperComponent. """
+
         # Returns a List of ComponentInputs
         self.my_component.get_input_definitions()
 

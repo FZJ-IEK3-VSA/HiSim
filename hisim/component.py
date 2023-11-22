@@ -3,13 +3,14 @@
 The component class is the base class for all other components.
 """
 # clean
-from __future__ import annotations
 
+from __future__ import annotations
+import os
 import dataclasses as dc
 import typing
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
-
+import json
 import pandas as pd
 from dataclass_wizard import JSONWizard
 
@@ -308,6 +309,7 @@ class Component:
         """Connecting an input to an output."""
         if len(self.inputs) == 0:
             raise ValueError("The component " + self.component_name + " has no inputs.")
+
         component_input: ComponentInput
         input_to_set = None
         for component_input in self.inputs:
@@ -330,6 +332,20 @@ class Component:
             )
         input_to_set.src_object_name = src_object_name
         input_to_set.src_field_name = src_field_name
+
+        # write input and output connection to json file
+        file_name = os.path.join(
+            self.my_simulation_parameters.result_directory, "component_connections.json"
+        )
+
+        dict_with_connection_information = {
+            f"Component {input_to_set.component_name}": {
+                f" with Input {input_to_set.field_name}": f" is connected to Output: {input_to_set.src_object_name} - {input_to_set.src_field_name}"
+            }
+        }
+
+        with open(file_name, "a", encoding="utf-8") as file:
+            json.dump(dict_with_connection_information, file, indent=2)
 
     def connect_dynamic_input(
         self, input_fieldname: str, src_object: ComponentOutput

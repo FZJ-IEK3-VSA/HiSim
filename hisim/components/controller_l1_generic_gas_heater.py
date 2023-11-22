@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
-from hisim import log
 from hisim.component import (
     Component,
     ComponentInput,
@@ -182,7 +181,7 @@ class GenericGasHeaterControllerL1(Component):
         self,
     ):
         """Get simple_hot_water_storage default connections."""
-        log.information("setting default connections in controller l1 generic gas heater")
+
         connections = []
         storage_classname = SimpleHotWaterStorage.get_classname()
         connections.append(
@@ -198,7 +197,7 @@ class GenericGasHeaterControllerL1(Component):
         self,
     ):
         """Get simple_hot_water_storage default connections."""
-        log.information("setting default connections in controller l1 generic gas heater")
+
         connections = []
         weather_classname = Weather.get_classname()
         connections.append(
@@ -214,7 +213,7 @@ class GenericGasHeaterControllerL1(Component):
         self,
     ):
         """Get heat distribution controller default connections."""
-        log.information("setting default connections in controller l1 generic gas heater")
+
         connections = []
         hds_controller_classname = HeatDistributionController.get_classname()
         connections.append(

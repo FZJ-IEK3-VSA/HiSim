@@ -17,7 +17,6 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.components import controller_l1_generic_runtime
 from hisim.components.building import Building
 from hisim.components import generic_hot_water_storage_modular
-from hisim import log
 
 
 __authors__ = "edited Johanna Ganglbauer"
@@ -211,7 +210,7 @@ class L2HeatSmartController(cp.Component):
 
     def get_default_connections_from_buildings(self):
         """Get default connections from buildings."""
-        log.information("setting default connections in l2 smart controller")
+
         connections = []
         building_classname = Building.get_classname()
         connections.append(
@@ -229,7 +228,7 @@ class L2HeatSmartController(cp.Component):
 
     def get_default_connections_from_hot_water_storage(self):
         """Get default connections from hot water storage."""
-        log.information("setting default connections in l2 smart controller")
+
         connections = []
         boiler_classname = (
             generic_hot_water_storage_modular.HotWaterStorage.get_classname()
@@ -245,7 +244,7 @@ class L2HeatSmartController(cp.Component):
 
     def get_default_connections_from_controller_l1_generic_runtime(self):
         """Get default connections from controller l1 generic runtime."""
-        log.information("setting default connections in l2 smart controller")
+
         connections = []
         l1_classname = (
             controller_l1_generic_runtime.L1GenericRuntimeController.get_classname()

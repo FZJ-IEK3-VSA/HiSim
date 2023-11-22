@@ -9,7 +9,6 @@ from dataclasses_json import dataclass_json
 from hisim import utils
 from hisim.component import ConfigBase
 from hisim import component as cp
-from hisim import log
 from hisim.components import controller_l2_generic_heat_clever_simple
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
@@ -173,7 +172,7 @@ class L1GenericRuntimeController(cp.Component):
         self,
     ) -> List[cp.ComponentConnection]:
         """Makes default connections to l2 smart controllers."""
-        log.information("setting default connections in l1 generic runtime controller")
+
         connections = []
         controller_classname = (
             controller_l2_generic_heat_clever_simple.L2HeatSmartController.get_classname()

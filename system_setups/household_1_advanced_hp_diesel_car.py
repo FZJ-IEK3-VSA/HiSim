@@ -29,7 +29,6 @@ from hisim.components import electricity_meter
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.system_setup_configuration import SystemSetupConfigBase
 from hisim import utils
-from hisim import loadtypes as lt
 
 from system_setups.modular_example import cleanup_old_lpg_requests
 
@@ -94,7 +93,7 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
             building_type="blub",
             number_of_apartments=int(my_building_information.number_of_apartments),
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-                url="http://134.94.131.167:443/api/v1/profilerequest",
+                url="http://134.94.131.109:5000/api/v1/profilerequest",
                 api_key="OrjpZY93BcNWw8lKaMp0BEchbCc",
                 household=Households.CHR01_Couple_both_at_Work,
                 energy_intensity=EnergyIntensityType.EnergySaving,
@@ -351,104 +350,20 @@ def setup_function(
     )
 
     # =================================================================================================================================
-    # Connect Component Inputs with Outputs
-
-    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
-    my_building.connect_input(
-        my_building.ThermalPowerDelivered,
-        my_heat_distribution.component_name,
-        my_heat_distribution.ThermalPowerDelivered,
-    )
-
-    my_heat_pump_controller.connect_only_predefined_connections(
-        my_weather, my_simple_hot_water_storage, my_heat_distribution_controller
-    )
-
-    my_heat_pump.connect_only_predefined_connections(
-        my_heat_pump_controller, my_weather, my_simple_hot_water_storage
-    )
-
-    my_heat_distribution_controller.connect_only_predefined_connections(
-        my_weather, my_building, my_simple_hot_water_storage
-    )
-
-    my_heat_distribution.connect_only_predefined_connections(
-        my_heat_distribution_controller, my_building, my_simple_hot_water_storage
-    )
-
-    my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterTemperatureFromHeatDistribution,
-        my_heat_distribution.component_name,
-        my_heat_distribution.WaterTemperatureOutput,
-    )
-
-    my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterTemperatureFromHeatGenerator,
-        my_heat_pump.component_name,
-        my_heat_pump.TemperatureOutput,
-    )
-
-    my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterMassFlowRateFromHeatGenerator,
-        my_heat_pump.component_name,
-        my_heat_pump.MassFlowOutput,
-    )
-
-    # connect DHW
-    my_domnestic_hot_water_storage.connect_only_predefined_connections(
-        my_occupancy, my_domnestic_hot_water_heatpump
-    )
-
-    my_domnestic_hot_water_heatpump_controller.connect_only_predefined_connections(
-        my_domnestic_hot_water_storage
-    )
-
-    my_domnestic_hot_water_heatpump.connect_only_predefined_connections(
-        my_weather, my_domnestic_hot_water_heatpump_controller
-    )
-
-    # -----------------------------------------------------------------------------------------------------------------
-    # connect Electricity Meter
-    my_electricity_meter.add_component_input_and_connect(
-        source_object_name=my_occupancy.component_name,
-        source_component_output=my_occupancy.ElectricityOutput,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-        source_weight=999,
-    )
-
-    my_electricity_meter.add_component_input_and_connect(
-        source_object_name=my_domnestic_hot_water_heatpump.component_name,
-        source_component_output=my_domnestic_hot_water_heatpump.ElectricityOutput,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-        source_weight=999,
-    )
-
-    my_electricity_meter.add_component_input_and_connect(
-        source_object_name=my_heat_pump.component_name,
-        source_component_output=my_heat_pump.ElectricalInputPower,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-        source_weight=999,
-    )
-
-    # =================================================================================================================================
     # Add Components to Simulation Parameters
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_weather)
-    my_sim.add_component(my_building)
-    my_sim.add_component(my_heat_pump)
-    my_sim.add_component(my_heat_pump_controller)
-    my_sim.add_component(my_heat_distribution)
-    my_sim.add_component(my_heat_distribution_controller)
-    my_sim.add_component(my_simple_hot_water_storage)
-    my_sim.add_component(my_domnestic_hot_water_storage)
-    my_sim.add_component(my_domnestic_hot_water_heatpump_controller)
-    my_sim.add_component(my_domnestic_hot_water_heatpump)
-    my_sim.add_component(my_electricity_meter)
+    my_sim.add_component(my_building, connect_automatically=True)
+    my_sim.add_component(my_heat_pump, connect_automatically=True)
+    my_sim.add_component(my_heat_pump_controller, connect_automatically=True)
+    my_sim.add_component(my_heat_distribution, connect_automatically=True)
+    my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
+    my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)
+    my_sim.add_component(my_domnestic_hot_water_storage, connect_automatically=True)
+    my_sim.add_component(
+        my_domnestic_hot_water_heatpump_controller, connect_automatically=True
+    )
+    my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
+    my_sim.add_component(my_electricity_meter, connect_automatically=True)
     for my_car in my_cars:
         my_sim.add_component(my_car)

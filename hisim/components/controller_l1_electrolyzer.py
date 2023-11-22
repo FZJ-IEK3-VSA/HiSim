@@ -11,7 +11,6 @@ from dataclasses_json import dataclass_json
 from hisim import utils
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim import log
 from hisim.components import generic_hydrogen_storage
 from hisim.simulationparameters import SimulationParameters
 
@@ -161,9 +160,7 @@ class L1GenericElectrolyzerController(cp.Component):
 
     def get_default_connections_from_h2_storage(self):
         """Sets default connections for the hydrogen storage in the electrolyzer controller."""
-        log.information(
-            "setting default connections in electrolyzer controller"
-        )
+
         connections = []
         h2_storage_classname = (
             generic_hydrogen_storage.GenericHydrogenStorage.get_classname()

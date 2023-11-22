@@ -423,12 +423,13 @@ class Building(cp.Component):
         self.add_default_connections(self.get_default_connections_from_weather())
         self.add_default_connections(self.get_default_connections_from_occupancy())
         self.add_default_connections(self.get_default_connections_from_utsp())
+        self.add_default_connections(self.get_default_connections_from_hds())
 
     def get_default_connections_from_weather(
         self,
     ):
         """Get weather default connnections."""
-        log.information("setting default connections in building")
+
         connections = []
         weather_classname = Weather.get_classname()
         connections.append(
@@ -493,7 +494,7 @@ class Building(cp.Component):
         self,
     ):
         """Get occupancy default connections."""
-        log.information("setting default connections in building")
+
         connections = []
         occupancy_classname = Occupancy.get_classname()
         connections.append(
@@ -516,7 +517,7 @@ class Building(cp.Component):
         self,
     ):
         """Get UTSP default connections."""
-        log.information("setting default connections in building")
+
         connections = []
         utsp_classname = UtspLpgConnector.get_classname()
         connections.append(
@@ -531,6 +532,23 @@ class Building(cp.Component):
                 Building.HeatingByDevices,
                 utsp_classname,
                 UtspLpgConnector.HeatingByDevices,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_hds(
+        self,
+    ):
+        """Get heat distribution default connections."""
+
+        from hisim.components.heat_distribution_system import HeatDistribution  # pylint: disable=import-outside-toplevel
+        connections = []
+        hds_classname = HeatDistribution.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                Building.ThermalPowerDelivered,
+                hds_classname,
+                HeatDistribution.ThermalPowerDelivered,
             )
         )
         return connections

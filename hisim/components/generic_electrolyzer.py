@@ -11,7 +11,6 @@ from dataclasses_json import dataclass_json
 
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim import log
 from hisim.components import controller_l1_electrolyzer
 from hisim.simulationparameters import SimulationParameters
 
@@ -153,7 +152,7 @@ class GenericElectrolyzer(cp.Component):
         self,
     ) -> List[cp.ComponentConnection]:
         """Sets default connections of the controller in the Electroylzer."""
-        log.information("setting default connections in generic electrolyzer")
+
         connections: List[cp.ComponentConnection] = []
         controller_classname = controller_l1_electrolyzer.L1GenericElectrolyzerController.get_classname()
         connections.append(

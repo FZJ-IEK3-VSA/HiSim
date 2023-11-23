@@ -1,5 +1,6 @@
 """Electricity meter module should replace the sumbuilder. """
 # clean
+import importlib
 from dataclasses import dataclass
 from typing import List
 
@@ -255,15 +256,17 @@ class ElectricityMeter(DynamicComponent):
     ):
         """Get generic heat pump default connections."""
 
-        from hisim.components.generic_heat_pump import GenericHeatPump  # pylint: disable=import-outside-toplevel
-
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.generic_heat_pump"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "GenericHeatPump")
         dynamic_connections = []
-        generic_heat_pump_class_name = GenericHeatPump.get_classname()
+        generic_heat_pump_class_name = component_class.get_classname()
         dynamic_connections.append(
             DynamicComponentConnection(
-                source_component_class=GenericHeatPump,
+                source_component_class=component_class,
                 source_class_name=generic_heat_pump_class_name,
-                source_component_field_name=GenericHeatPump.ElectricityOutput,
+                source_component_field_name=component_class.ElectricityOutput,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],

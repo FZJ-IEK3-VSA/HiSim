@@ -12,7 +12,7 @@ The buffer is controlled accoring to four modes:
     (c) full power when building temperature is below lower target,
     (d) off when temperature is higher than upper target.
 """
-
+import importlib
 from dataclasses import dataclass
 
 # Owned
@@ -22,7 +22,6 @@ from dataclasses_json import dataclass_json
 
 from hisim import utils
 from hisim import component as cp
-from hisim.components import generic_hot_water_storage_modular
 from hisim.components.building import Building
 from hisim.components import controller_l2_energy_management_system
 from hisim.loadtypes import LoadTypes, Units
@@ -223,16 +222,19 @@ class L1BuildingHeatController(cp.Component):
 
     def get_default_connections_from_hot_water_storage(self):
         """Sets default connections for the buffer."""
-
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.generic_hot_water_storage_modular"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "HotWaterStorage")
         connections = []
         boiler_classname = (
-            generic_hot_water_storage_modular.HotWaterStorage.get_classname()
+            component_class.get_classname()
         )
         connections.append(
             cp.ComponentConnection(
                 L1BuildingHeatController.BufferTemperature,
                 boiler_classname,
-                generic_hot_water_storage_modular.HotWaterStorage.TemperatureMean,
+                component_class.TemperatureMean,
             )
         )
         return connections

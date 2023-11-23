@@ -87,7 +87,7 @@ def setup_function(
         api_key=api_key,
         household=household,
         energy_intensity=energy_intensity,
-        result_path=result_path,
+        result_dir_path=result_path,
         travel_route_set=travel_route_set,
         transportation_device_set=transportation_device_set,
         charging_station_set=charging_station_set,

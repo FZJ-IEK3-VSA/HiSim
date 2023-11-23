@@ -12,7 +12,7 @@ from hisim.hisim_main import main
 from hisim.system_setup_starter import make_system_setup
 
 
-@pytest.mark.base
+@pytest.mark.utsp
 def test_system_setup_starter():
     """Run a simulation from JSON."""
 
@@ -80,7 +80,7 @@ def test_system_setup_starter():
     shutil.rmtree(result_directory)
 
 
-@pytest.mark.base
+@pytest.mark.utsp
 def test_system_setup_starter_scaling():
     """Run a simulation from JSON."""
 

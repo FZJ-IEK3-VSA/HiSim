@@ -18,7 +18,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import log
 
 
-@pytest.mark.base
+@pytest.mark.utsp
 def test_occupancy_scaling_with_utsp():
     """Test for testing if the scaling with the lpg utsp connector works when calculating several households."""
 
@@ -60,6 +60,7 @@ def test_occupancy_scaling_with_utsp():
     np.testing.assert_allclose(electricity_consumption_two, 2 * electricity_consumption_one, rtol=0.01)
     np.testing.assert_allclose(water_consumption_two, 2 * water_consumption_one, rtol=0.01)
 
+
 def initialize_lpg_utsp_connector_and_return_results(
     households: Union[JsonReference, List[JsonReference]]
 ) -> Tuple[
@@ -93,7 +94,7 @@ def initialize_lpg_utsp_connector_and_return_results(
         url=url,
         api_key=api_key,
         household=households,
-        result_path=result_path,
+        result_dir_path=result_path,
         travel_route_set=travel_route_set,
         transportation_device_set=transportation_device_set,
         charging_station_set=charging_station_set,

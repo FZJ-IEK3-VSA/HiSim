@@ -84,7 +84,9 @@ def setup_function(
     my_sim.add_component(my_building)
 
     # Build PV
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_pv_system()
+    my_photovoltaic_system_config = (
+        generic_pv_system.PVSystemConfig.get_default_pv_system()
+    )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,

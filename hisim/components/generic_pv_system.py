@@ -794,26 +794,63 @@ class PVSystem(cp.Component):
                 )
 
                 x_simplephotovoltaictwo = []
+                x_energies_in_watt_hour = []
+                x_cumulative_energies_in_watt_hour = []
+                cumulative_energy_in_watt_hour = 0
                 for i in range(self.my_simulation_parameters.timesteps):
-                    x_simplephotovoltaictwo.append(
-                        self.simphotovoltaic_two(
-                            dni_extra=dni_extra[i],
-                            dni=dni[i],
-                            dhi=dhi[i],
-                            ghi=ghi[i],
-                            azimuth=azimuth[i],
-                            apparent_zenith=apparent_zenith[i],
-                            temperature=temperature[i],
-                            wind_speed=wind_speed[i],
-                            surface_azimuth=self.pvconfig.azimuth,
-                            surface_tilt=self.pvconfig.tilt,
-                        )
+
+                    # calculate outputs
+                    ac_power_ratio = self.simphotovoltaic_two(
+                        dni_extra=dni_extra[i],
+                        dni=dni[i],
+                        dhi=dhi[i],
+                        ghi=ghi[i],
+                        azimuth=azimuth[i],
+                        apparent_zenith=apparent_zenith[i],
+                        temperature=temperature[i],
+                        wind_speed=wind_speed[i],
+                        surface_azimuth=self.pvconfig.azimuth,
+                        surface_tilt=self.pvconfig.tilt,
+                    )
+                    energy_in_watt_hour = (
+                        ac_power_ratio
+                        * self.pvconfig.power_in_watt
+                        * self.my_simulation_parameters.seconds_per_timestep
+                        / 3600
+                    )
+                    cumulative_energy_in_watt_hour = (
+                        cumulative_energy_in_watt_hour + energy_in_watt_hour
+                    )
+
+                    # append lists
+                    x_simplephotovoltaictwo.append(ac_power_ratio)
+                    x_energies_in_watt_hour.append(energy_in_watt_hour)
+                    x_cumulative_energies_in_watt_hour.append(
+                        cumulative_energy_in_watt_hour
                     )
 
                 self.ac_power_ratios_for_all_timesteps = x_simplephotovoltaictwo
-                # here only caching of pv electricity power output
+
+                self.energy_in_watt_hour_for_all_timesteps = x_energies_in_watt_hour
+
+                self.cumulative_energy_in_watt_hour_for_all_timesteps = (
+                    x_cumulative_energies_in_watt_hour
+                )
+
+                # cache predictive control results
+                dict_with_results = {
+                    "output_power": self.ac_power_ratios_for_all_timesteps,
+                    "output_energy": self.energy_in_watt_hour_for_all_timesteps,
+                    "output_cumulative_energy": self.cumulative_energy_in_watt_hour_for_all_timesteps,
+                }
+
                 database = pd.DataFrame(
-                    self.ac_power_ratios_for_all_timesteps, columns=["output_power"]
+                    dict_with_results,
+                    columns=[
+                        "output_power",
+                        "output_energy",
+                        "output_cumulative_energy",
+                    ],
                 )
 
                 database.to_csv(self.cache_filepath, sep=",", decimal=".", index=False)

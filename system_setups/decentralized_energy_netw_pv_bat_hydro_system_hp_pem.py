@@ -179,7 +179,9 @@ def setup_function(
         config=my_weather_config, my_simulation_parameters=my_simulation_parameters
     )
 
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_pv_system()
+    my_photovoltaic_system_config = (
+        generic_pv_system.PVSystemConfig.get_default_pv_system()
+    )
     my_photovoltaic_system_config.power_in_watt = pv_power
     my_photovoltaic_system_config.time = time
     my_photovoltaic_system_config.co2_footprint = pv_co2_footprint

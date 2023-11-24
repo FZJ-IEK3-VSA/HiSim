@@ -80,7 +80,7 @@ def log(prio: int, message: str, logging_message_path: str = r"../logs/") -> Non
 
 def log_profile_file(message: str, logging_message_path: str = r"../logs/") -> None:
     """ Write log message to logfile. """
-    
+
     if not os.path.exists(logging_message_path):
         os.makedirs(logging_message_path)
 

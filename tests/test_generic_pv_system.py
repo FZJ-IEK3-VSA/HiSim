@@ -6,7 +6,7 @@ from hisim import component
 from hisim.components import weather
 from hisim.components import generic_pv_system
 from hisim import simulator as sim
-
+from hisim import log
 
 @pytest.mark.base
 def test_photovoltaic():
@@ -14,7 +14,7 @@ def test_photovoltaic():
     # Sets inputs
     # weather_location = "Aachen"
     seconds_per_timestep = 60
-    power = 10
+    power_in_watt = 10 * 1e3
 
     repo = sim_repository.SimRepository()
 
@@ -35,7 +35,7 @@ def test_photovoltaic():
     my_weather.set_sim_repo(repo)
     my_weather.i_prepare_simulation()
     my_pvs_config = generic_pv_system.PVSystem.get_default_config()
-    my_pvs_config.power = power
+    my_pvs_config.power_in_watt = power_in_watt
     my_pvs = generic_pv_system.PVSystem(
         config=my_pvs_config, my_simulation_parameters=mysim
     )
@@ -60,12 +60,11 @@ def test_photovoltaic():
     timestep = 655
     my_weather.i_simulate(timestep, stsv, False)
     my_pvs.i_simulate(timestep, stsv, False)
-    print("output ", stsv.values[my_pvs.electricity_output_channel.global_index]
-        ) 
+    log.information("pv electricity output [W]: " + str(stsv.values[my_pvs.electricity_output_channel.global_index]))
     assert (
         abs(
-            0.4532226665022684
+            0.4532226665022684 * 1e3
             - stsv.values[my_pvs.electricity_output_channel.global_index]
         )
-        < 0.05
+        < 0.05 * 1e3
     )

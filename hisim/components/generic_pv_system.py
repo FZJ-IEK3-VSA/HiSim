@@ -793,14 +793,16 @@ class PVSystem(cp.Component):
                     key=SingletonDictKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST
                 )
 
-                x_simplephotovoltaictwo = []
+                x_simplephotovoltaic = []
                 x_energies_in_watt_hour = []
                 x_cumulative_energies_in_watt_hour = []
                 cumulative_energy_in_watt_hour = 0
                 for i in range(self.my_simulation_parameters.timesteps):
 
                     # calculate outputs
-                    ac_power_ratio = self.simphotovoltaic_two(
+                    
+                    ac_power_ratio = self.simphotovoltaicfast(
+                        temperature_model=self.temperature_model_parameters,
                         dni_extra=dni_extra[i],
                         dni=dni[i],
                         dhi=dhi[i],
@@ -812,6 +814,18 @@ class PVSystem(cp.Component):
                         surface_azimuth=self.pvconfig.azimuth,
                         surface_tilt=self.pvconfig.tilt,
                     )
+                    # ac_power_ratio = self.simphotovoltaic_two(
+                    #     dni_extra=dni_extra[i],
+                    #     dni=dni[i],
+                    #     dhi=dhi[i],
+                    #     ghi=ghi[i],
+                    #     azimuth=azimuth[i],
+                    #     apparent_zenith=apparent_zenith[i],
+                    #     temperature=temperature[i],
+                    #     wind_speed=wind_speed[i],
+                    #     surface_azimuth=self.pvconfig.azimuth,
+                    #     surface_tilt=self.pvconfig.tilt,
+                    # )
                     energy_in_watt_hour = (
                         ac_power_ratio
                         * self.pvconfig.power_in_watt
@@ -823,13 +837,13 @@ class PVSystem(cp.Component):
                     )
 
                     # append lists
-                    x_simplephotovoltaictwo.append(ac_power_ratio)
+                    x_simplephotovoltaic.append(ac_power_ratio)
                     x_energies_in_watt_hour.append(energy_in_watt_hour)
                     x_cumulative_energies_in_watt_hour.append(
                         cumulative_energy_in_watt_hour
                     )
 
-                self.ac_power_ratios_for_all_timesteps = x_simplephotovoltaictwo
+                self.ac_power_ratios_for_all_timesteps = x_simplephotovoltaic
 
                 self.energy_in_watt_hour_for_all_timesteps = x_energies_in_watt_hour
 

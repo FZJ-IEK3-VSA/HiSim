@@ -254,6 +254,9 @@ def air_conditioned_house(
     my_photovoltaic_system_config.source_weight = pv_source_weight
     my_photovoltaic_system_config.pv_co2_footprint = pv_co2_footprint
     my_photovoltaic_system_config.pv_cost = pv_cost
+    my_photovoltaic_system_config.predictive=predictive
+    my_photovoltaic_system_config.prediction_horizon=prediction_horizon
+    my_photovoltaic_system_config.predictive_control=predictive_control
 
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,

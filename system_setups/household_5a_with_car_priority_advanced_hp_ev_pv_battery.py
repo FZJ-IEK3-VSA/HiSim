@@ -166,7 +166,7 @@ class HouseholdAdvancedHpEvPvBatteryConfig(SystemSetupConfigBase):
             ),
             electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
             advanced_battery_config=advanced_battery_bslib.BatteryConfig.get_scaled_battery(
-                total_pv_power_in_watt_peak=pv_config.power
+                total_pv_power_in_watt_peak=pv_config.power_in_watt
             ),
             electricity_controller_config=(
                 controller_l2_energy_management_system.EMSConfig.get_default_config_ems()

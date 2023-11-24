@@ -127,7 +127,7 @@ def setup_function(
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig(
         time=time,
         location="Aachen",
-        power=power,
+        power_in_watt=power,
         load_module_data=load_module_data,
         module_name=module_name,
         integrate_inverter=integrate_inverter,

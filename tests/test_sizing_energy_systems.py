@@ -200,7 +200,7 @@ def simulation_for_one_timestep(
 
     # Set Battery
     my_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
-        total_pv_power_in_watt_peak=my_pv_config.power
+        total_pv_power_in_watt_peak=my_pv_config.power_in_watt
     )
 
     # Set DHW Heat Pump Modular
@@ -214,7 +214,7 @@ def simulation_for_one_timestep(
     )
 
     # Energy system sizes
-    pv_power_in_watt = my_pv_config.power
+    pv_power_in_watt = my_pv_config.power_in_watt
     hplib_thermal_power_in_watt = my_hplib_config.set_thermal_output_power_in_watt
     simple_hot_water_storage_size_in_liter = (
         my_simple_hot_water_storage_config.volume_heating_water_storage_in_liter

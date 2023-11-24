@@ -800,7 +800,6 @@ class PVSystem(cp.Component):
                 for i in range(self.my_simulation_parameters.timesteps):
 
                     # calculate outputs
-                    
                     ac_power_ratio = self.simphotovoltaicfast(
                         temperature_model=self.temperature_model_parameters,
                         dni_extra=dni_extra[i],

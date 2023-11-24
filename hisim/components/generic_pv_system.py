@@ -48,6 +48,20 @@ https://github.com/FZJ-IEK3-VSA/tsib
 """
 
 
+class PVLibModuleAndInverterEnum(enum.Enum):
+
+    """Class to determine what pvlib database for phtotovoltaic modules and inverters should be used.
+
+    https://pvlib-python.readthedocs.io/en/v0.9.0/generated/pvlib.pvsystem.retrieve_sam.html.
+    """
+
+    SANDIA_MODULE_DATABASE = 1
+    SANDIA_INVERTER_DATABASE = 2
+    CEC_MODULE_DATABASE = 3
+    CEC_INVERTER_DATABASE = 4
+    ANTON_DRIESSE_INVERTER_DATABASE = 5
+
+
 @dataclass
 class PVState:
 
@@ -79,8 +93,8 @@ class PVSystemConfig(ConfigBase):
     module_name: str
     integrate_inverter: bool
     inverter_name: str
-    module_database: Any
-    inverter_database: Any
+    module_database: PVLibModuleAndInverterEnum
+    inverter_database: PVLibModuleAndInverterEnum
     power_in_watt: float
     azimuth: float
     tilt: float
@@ -135,6 +149,7 @@ class PVSystemConfig(ConfigBase):
         rooftop_area_in_m2: float,
         share_of_maximum_pv_power: float = 1.0,
         module_name: str = "Hanwha HSL60P6-PA-4-250T [2013]",
+        module_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
         load_module_data: bool = False,
     ) -> "PVSystemConfig":
         """Gets a default PV system with scaling according to rooftop area."""
@@ -142,6 +157,7 @@ class PVSystemConfig(ConfigBase):
             rooftop_area_in_m2=rooftop_area_in_m2,
             share_of_maximum_pv_power=share_of_maximum_pv_power,
             module_name=module_name,
+            module_database=module_database,
         )
         return PVSystemConfig(
             time=2019,
@@ -150,7 +166,7 @@ class PVSystemConfig(ConfigBase):
             module_name=module_name,
             integrate_inverter=True,
             inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
-            module_database=PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
+            module_database=module_database,
             inverter_database=PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,
             name="PVSystem",
             azimuth=180,
@@ -174,18 +190,25 @@ class PVSystemConfig(ConfigBase):
     def size_pv_system(
         cls,
         rooftop_area_in_m2: float,
-        share_of_maximum_pv_power: float = 1.0,
-        module_name: str = "Hanwha HSL60P6-PA-4-250T [2013]",
+        share_of_maximum_pv_power: float,
+        module_name: str,
+        module_database: PVLibModuleAndInverterEnum,
     ) -> float:
         """Size the pv system according to the rooftop type and the share of the maximum pv power that should be used."""
 
         # get area and power of module
-        if module_name == "Hanwha HSL60P6-PA-4-250T [2013]":
+        if (
+            module_name == "Hanwha HSL60P6-PA-4-250T [2013]"
+            and module_database == PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE
+        ):
             module_area_in_m2 = 1.65
             module_power_in_watt = 250
             # this is equal to an efficiency of 15,15%
 
-        elif module_name == "Trina Solar TSM-410DE09":
+        elif (
+            module_name == "Trina Solar TSM-410DE09"
+            and module_database == PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE
+        ):
             module_area_in_m2 = 1.91
             module_power_in_watt = 410
             # this is equal to an efficiency of 21,47%
@@ -194,7 +217,7 @@ class PVSystemConfig(ConfigBase):
         # https://www.ess-kempfle.de/ratgeber/ertrag/pv-ertrag/#:~:text=So%20berechnen%20Sie%20den%20Wirkungsgrad,liegt%20bei%201.000%20W%2Fm%C2%B2.
         else:
             raise ValueError(
-                "Module name not given in this function. Please check or add your module information."
+                f"Module name or module database {module_name} {module_database} not given in this function. Please check or add your module information."
             )
 
         # scale rooftop area with limiting factor due to shading and obstacles like chimneys etc.
@@ -495,11 +518,13 @@ class PVSystem(cp.Component):
             and len(self.ac_power_ratio_for_all_timesteps_from_cache)
             == self.data_length
         ):
+
             stsv.set_output_value(
                 self.electricity_output_channel,
                 self.ac_power_ratio_for_all_timesteps_from_cache[timestep]
                 * self.pvconfig.power_in_watt,
             )
+
         if (
             hasattr(self, "cumulative_energy_in_watt_hour_for_all_timesteps_from_cache")
             and len(self.cumulative_energy_in_watt_hour_for_all_timesteps_from_cache)
@@ -511,6 +536,7 @@ class PVSystem(cp.Component):
                     timestep
                 ],
             )
+
         if (
             hasattr(self, "energy_in_watt_hour_for_all_timesteps_from_cache")
             and len(self.energy_in_watt_hour_for_all_timesteps_from_cache)
@@ -533,21 +559,8 @@ class PVSystem(cp.Component):
             wind_speed = stsv.get_input_value(self.wind_speed_channel)
             apparent_zenith = stsv.get_input_value(self.apparent_zenith_channel)
 
-            # ac_power_ratio = self.simphotovoltaicfast(
-            #     temperature_model=self.temperature_model_parameters,
-            #     dni_extra=dni_extra,
-            #     dni=dni,
-            #     dhi=dhi,
-            #     ghi=ghi,
-            #     azimuth=azimuth,
-            #     apparent_zenith=apparent_zenith,
-            #     temperature=temperature,
-            #     wind_speed=wind_speed,
-            #     surface_azimuth=self.pvconfig.azimuth,
-            #     surface_tilt=self.pvconfig.tilt,
-            # )
-
-            ac_power_ratio = self.simphotovoltaic_two(
+            ac_power_ratio = self.simphotovoltaicfast(
+                temperature_model=self.temperature_model_parameters,
                 dni_extra=dni_extra,
                 dni=dni,
                 dhi=dhi,
@@ -559,6 +572,19 @@ class PVSystem(cp.Component):
                 surface_azimuth=self.pvconfig.azimuth,
                 surface_tilt=self.pvconfig.tilt,
             )
+
+            # ac_power_ratio = self.simphotovoltaic_two(
+            #     dni_extra=dni_extra,
+            #     dni=dni,
+            #     dhi=dhi,
+            #     ghi=ghi,
+            #     azimuth=azimuth,
+            #     apparent_zenith=apparent_zenith,
+            #     temperature=temperature,
+            #     wind_speed=wind_speed,
+            #     surface_azimuth=self.pvconfig.azimuth,
+            #     surface_tilt=self.pvconfig.tilt,
+            # )
 
             ac_power_in_watt = ac_power_ratio * self.pvconfig.power_in_watt
 
@@ -725,6 +751,20 @@ class PVSystem(cp.Component):
                     "Please check in your system setup if the weather component was added to the simulator before the pv system."
                 )
 
+            # read module from pvlib database online or read from csv files in hisim/inputs/photovoltaic/data_processed
+            self.module = self.get_modules_from_database(
+                module_database=self.pvconfig.module_database,
+                load_module_data=self.pvconfig.load_module_data,
+                module_name=self.pvconfig.module_name,
+            )
+
+            # read inverter from pvlib database online or read from csv files in hisim/inputs/photovoltaic/data_processed
+            self.inverter = self.get_inverters_from_database(
+                inverter_database=self.pvconfig.inverter_database,
+                load_module_data=self.pvconfig.load_module_data,
+                inverter_name=self.pvconfig.inverter_name,
+            )
+
             # when predictive control is activated, the PV simulation is run beforhand to make forecasting easier
             if self.pvconfig.predictive_control:
                 # get yearly weather data from dictionary
@@ -771,7 +811,7 @@ class PVSystem(cp.Component):
                     )
 
                 self.ac_power_ratios_for_all_timesteps = x_simplephotovoltaictwo
-
+                # here only caching of pv electricity power output
                 database = pd.DataFrame(
                     self.ac_power_ratios_for_all_timesteps, columns=["output_power"]
                 )
@@ -801,20 +841,6 @@ class PVSystem(cp.Component):
                 key=SingletonDictKeyEnum.PVFORECASTYEARLY, entry=pv_forecast_yearly
             )
 
-        # read module from pvlib database online or read from csv files in hisim/inputs/photovoltaic/data_processed
-        self.module = self.get_modules_from_database(
-            module_database=self.pvconfig.module_database,
-            load_module_data=self.pvconfig.load_module_data,
-            module_name=self.pvconfig.module_name,
-        )
-
-        # read inverter from pvlib database online or read from csv files in hisim/inputs/photovoltaic/data_processed
-        self.inverter = self.get_inverters_from_database(
-            inverter_database=self.pvconfig.inverter_database,
-            load_module_data=self.pvconfig.load_module_data,
-            inverter_name=self.pvconfig.inverter_name,
-        )
-
     def interpolate(self, pd_database: Any, year: Any) -> Any:
         """Interpolates."""
         lastday = pd.Series(
@@ -835,7 +861,7 @@ class PVSystem(cp.Component):
     ) -> Any:
         """Get modules from pvlib module database."""
 
-        # get modules from pvlib database online (TODO: test if this works)
+        # get modules from pvlib database online (TODO: test if this works, it has not been fully tested yet)
         if load_module_data is True:
 
             if module_database == PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE:
@@ -863,7 +889,8 @@ class PVSystem(cp.Component):
                     os.path.join(utils.HISIMPATH["photovoltaic"]["cec_modules"])
                 )
                 log.warning(
-                    "You can import cec modules but the pvlib calculations only work with the sandia modules unfortunately."
+                    "You can import pv cec modules but the pvlib calculations (simphotovoltaic_two) only work with the sandia modules unfortunately. "
+                    + "You can use the method simphotovoltaic_fast as approximation, it is independent of the module and inverter data."
                 )
             else:
                 raise KeyError(
@@ -1163,17 +1190,3 @@ class PVSystem(cp.Component):
         if math.isnan(pv_dc):
             pv_dc = 0
         return pv_dc
-
-
-class PVLibModuleAndInverterEnum(enum.Enum):
-
-    """Class to determine what pvlib database for phtotovoltaic modules and inverters should be used.
-
-    https://pvlib-python.readthedocs.io/en/v0.9.0/generated/pvlib.pvsystem.retrieve_sam.html.
-    """
-
-    SANDIA_MODULE_DATABASE = 1
-    SANDIA_INVERTER_DATABASE = 2
-    CEC_MODULE_DATABASE = 3
-    CEC_INVERTER_DATABASE = 4
-    ANTON_DRIESSE_INVERTER_DATABASE = 5

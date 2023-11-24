@@ -40,6 +40,7 @@ The module contains the following classes:
 # clean
 
 # Generic/Built-in
+import importlib
 from typing import List, Any, Optional, Tuple
 from functools import lru_cache
 import math
@@ -217,12 +218,7 @@ class Building(cp.Component):
         """Construct all the neccessary attributes."""
         self.buildingconfig = config
 
-        # # dynamic
-        # self.my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
-        # self.my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
         super().__init__(
-            # my_component_inputs=self.my_component_inputs,
-            # my_component_outputs=self.my_component_outputs,
             name=self.buildingconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
@@ -541,14 +537,17 @@ class Building(cp.Component):
     ):
         """Get heat distribution default connections."""
 
-        from hisim.components.heat_distribution_system import HeatDistribution  # pylint: disable=import-outside-toplevel
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.heat_distribution_system"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "HeatDistribution")
         connections = []
-        hds_classname = HeatDistribution.get_classname()
+        hds_classname = component_class.get_classname()
         connections.append(
             cp.ComponentConnection(
                 Building.ThermalPowerDelivered,
                 hds_classname,
-                HeatDistribution.ThermalPowerDelivered,
+                component_class.ThermalPowerDelivered,
             )
         )
         return connections

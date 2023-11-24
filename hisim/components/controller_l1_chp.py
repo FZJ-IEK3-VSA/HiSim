@@ -8,6 +8,7 @@ CHP is controlled by both (i) thermal demand and (ii) electricity demand - it is
 """
 
 # Owned
+import importlib
 from dataclasses import dataclass
 from typing import List
 from dataclasses_json import dataclass_json
@@ -16,11 +17,6 @@ from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import utils
 from hisim.component import ConfigBase
-from hisim.components import (
-    building,
-    generic_hot_water_storage_modular,
-    generic_hydrogen_storage,
-)
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 
@@ -329,46 +325,55 @@ class L1CHPController(cp.Component):
 
     def get_default_connections_generic_hot_water_storage_modular(self):
         """Sets default connections for the boiler."""
-
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.generic_hot_water_storage_modular"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "HotWaterStorage")
         connections = []
         boiler_classname = (
-            generic_hot_water_storage_modular.HotWaterStorage.get_classname()
+            component_class.get_classname()
         )
         connections.append(
             cp.ComponentConnection(
                 L1CHPController.HotWaterStorageTemperature,
                 boiler_classname,
-                generic_hot_water_storage_modular.HotWaterStorage.TemperatureMean,
+                component_class.TemperatureMean,
             )
         )
         return connections
 
     def get_default_connections_from_building(self):
         """Sets default connections for the boiler."""
-
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.building"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "Building")
         connections = []
-        building_classname = building.Building.get_classname()
+        building_classname = component_class.get_classname()
         connections.append(
             cp.ComponentConnection(
                 L1CHPController.BuildingTemperature,
                 building_classname,
-                building.Building.TemperatureMeanThermalMass,
+                component_class.TemperatureMeanThermalMass,
             )
         )
         return connections
 
     def get_default_connections_from_h2_storage(self):
         """Sets default connections for the hydrogen storage."""
-
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.generic_hydrogen_storage"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "GenericHydrogenStorage")
         connections = []
         h2_storage_classname = (
-            generic_hydrogen_storage.GenericHydrogenStorage.get_classname()
+            component_class.get_classname()
         )
         connections.append(
             cp.ComponentConnection(
                 L1CHPController.HydrogenSOC,
                 h2_storage_classname,
-                generic_hydrogen_storage.GenericHydrogenStorage.HydrogenSOC,
+                component_class.HydrogenSOC,
             )
         )
         return connections

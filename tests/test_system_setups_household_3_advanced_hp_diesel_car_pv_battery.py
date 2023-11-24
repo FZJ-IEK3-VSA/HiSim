@@ -11,7 +11,8 @@ from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
 
 
-@pytest.mark.system_setups
+# @pytest.mark.system_setups
+@pytest.mark.utsp
 @utils.measure_execution_time
 def test_basic_household():
     """Single day."""

@@ -9,7 +9,8 @@ from hisim import log
 from hisim import utils
 
 
-@pytest.mark.system_setups
+# @pytest.mark.system_setups
+@pytest.mark.utsp
 @utils.measure_execution_time
 def test_household_with_heatpump_and_pv():
     """Single day."""

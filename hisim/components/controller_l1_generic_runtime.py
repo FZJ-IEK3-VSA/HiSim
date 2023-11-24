@@ -1,6 +1,7 @@
 """ Generic runtime controller. """
 # -*- coding: utf-8 -*-
 # clean
+import importlib
 from dataclasses import dataclass
 from typing import Any, List
 
@@ -9,7 +10,6 @@ from dataclasses_json import dataclass_json
 from hisim import utils
 from hisim.component import ConfigBase
 from hisim import component as cp
-from hisim.components import controller_l2_generic_heat_clever_simple
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 
@@ -173,15 +173,19 @@ class L1GenericRuntimeController(cp.Component):
     ) -> List[cp.ComponentConnection]:
         """Makes default connections to l2 smart controllers."""
 
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.controller_l2_generic_heat_clever_simple"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "L2HeatSmartController")
         connections = []
         controller_classname = (
-            controller_l2_generic_heat_clever_simple.L2HeatSmartController.get_classname()
+            component_class.get_classname()
         )
         connections.append(
             cp.ComponentConnection(
                 L1GenericRuntimeController.L2DeviceSignal,
                 controller_classname,
-                controller_l2_generic_heat_clever_simple.L2HeatSmartController.L2DeviceSignal,
+                component_class.L2DeviceSignal,
             )
         )
         return connections

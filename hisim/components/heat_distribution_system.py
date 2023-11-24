@@ -1,6 +1,6 @@
 """Heat Distribution Module."""
 # clean
-
+import importlib
 from enum import IntEnum
 from typing import List, Any, Optional, Tuple
 from dataclasses import dataclass
@@ -292,14 +292,17 @@ class HeatDistribution(cp.Component):
         self,
     ):
         """Get simple hot water storage default connections."""
-
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.simple_hot_water_storage"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "SimpleHotWaterStorage")
         connections = []
-        hws_classname = SimpleHotWaterStorage.get_classname()
+        hws_classname = component_class.get_classname()
         connections.append(
             cp.ComponentConnection(
                 HeatDistribution.WaterTemperatureInput,
                 hws_classname,
-                SimpleHotWaterStorage.WaterTemperatureToHeatDistribution,
+                component_class.WaterTemperatureToHeatDistribution,
             )
         )
         return connections

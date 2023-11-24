@@ -8,6 +8,7 @@ from hisim.components import generic_pv_system
 from hisim import simulator as sim
 from hisim import log
 
+
 @pytest.mark.base
 def test_photovoltaic():
     """Test generic pv system."""

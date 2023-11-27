@@ -559,8 +559,7 @@ class PVSystem(cp.Component):
             wind_speed = stsv.get_input_value(self.wind_speed_channel)
             apparent_zenith = stsv.get_input_value(self.apparent_zenith_channel)
 
-            ac_power_ratio = self.simphotovoltaicfast(
-                temperature_model=self.temperature_model_parameters,
+            ac_power_ratio = self.simphotovoltaic_two(
                 dni_extra=dni_extra,
                 dni=dni,
                 dhi=dhi,
@@ -572,19 +571,6 @@ class PVSystem(cp.Component):
                 surface_azimuth=self.pvconfig.azimuth,
                 surface_tilt=self.pvconfig.tilt,
             )
-
-            # ac_power_ratio = self.simphotovoltaic_two(
-            #     dni_extra=dni_extra,
-            #     dni=dni,
-            #     dhi=dhi,
-            #     ghi=ghi,
-            #     azimuth=azimuth,
-            #     apparent_zenith=apparent_zenith,
-            #     temperature=temperature,
-            #     wind_speed=wind_speed,
-            #     surface_azimuth=self.pvconfig.azimuth,
-            #     surface_tilt=self.pvconfig.tilt,
-            # )
 
             ac_power_in_watt = ac_power_ratio * self.pvconfig.power_in_watt
 
@@ -800,8 +786,8 @@ class PVSystem(cp.Component):
                 for i in range(self.my_simulation_parameters.timesteps):
 
                     # calculate outputs
-                    ac_power_ratio = self.simphotovoltaicfast(
-                        temperature_model=self.temperature_model_parameters,
+
+                    ac_power_ratio = self.simphotovoltaic_two(
                         dni_extra=dni_extra[i],
                         dni=dni[i],
                         dhi=dhi[i],
@@ -813,18 +799,7 @@ class PVSystem(cp.Component):
                         surface_azimuth=self.pvconfig.azimuth,
                         surface_tilt=self.pvconfig.tilt,
                     )
-                    # ac_power_ratio = self.simphotovoltaic_two(
-                    #     dni_extra=dni_extra[i],
-                    #     dni=dni[i],
-                    #     dhi=dhi[i],
-                    #     ghi=ghi[i],
-                    #     azimuth=azimuth[i],
-                    #     apparent_zenith=apparent_zenith[i],
-                    #     temperature=temperature[i],
-                    #     wind_speed=wind_speed[i],
-                    #     surface_azimuth=self.pvconfig.azimuth,
-                    #     surface_tilt=self.pvconfig.tilt,
-                    # )
+
                     energy_in_watt_hour = (
                         ac_power_ratio
                         * self.pvconfig.power_in_watt
@@ -939,8 +914,7 @@ class PVSystem(cp.Component):
                     os.path.join(utils.HISIMPATH["photovoltaic"]["cec_modules"])
                 )
                 log.warning(
-                    "You can import pv cec modules but the pvlib calculations (simphotovoltaic_two) only work with the sandia modules unfortunately. "
-                    + "You can use the method simphotovoltaic_fast as approximation, it is independent of the module and inverter data."
+                    "You can import pv cec modules but the pvlib calculations (simphotovoltaic_two) only work with the sandia modules unfortunately."
                 )
             else:
                 raise KeyError(
@@ -1160,83 +1134,3 @@ class PVSystem(cp.Component):
             ac_power_ratio = 0.0
 
         return ac_power_ratio
-
-    def simphotovoltaicfast(
-        self,
-        temperature_model: Any,
-        dni_extra: Any,
-        dni: Any,
-        dhi: Any,
-        ghi: Any,
-        azimuth: Any,
-        apparent_zenith: Any,
-        temperature: Any,
-        wind_speed: Any,
-        surface_azimuth: float,
-        surface_tilt: float,
-    ) -> Any:
-        """Simulates a defined PV array with the Sandia PV Array Performance Model.
-
-        The implementation is done in accordance with following tutorial:
-        https://github.com/pvlib/pvlib-python/blob/master/docs/tutorials/tmy_to_power.ipynb
-
-        Parameters
-        ----------
-        surface_tilt: int or float, optional (default:30)
-            Tilt angle of the array in degree.
-        surface_azimuth: int or float, optional (default:180)
-            Azimuth angle of the array in degree. 180 degree means south,
-            90 degree east and 270 west.
-        losses: float, optional (default: 0.1)
-            Losses due to soiling, mismatch, diode connections, dc wiring etc.
-        apparent_zenith: Any
-            Apparent zenith.
-        azimuth: int, float
-            Azimuth.
-        dni: Any
-            direct normal irradiance.
-        ghi: Any
-            global horizontal irradiance.
-        dhi: Any
-            direct horizontal irradiance.
-        dni_extra: Any
-            direct normal irradiance extra.
-        temperature: Any
-            tempertaure.
-        temperature_model: Any
-            temperature model.
-        wind_speed: Any
-            wind_speed.
-
-        Returns
-        -------
-        pv_dc: Any
-            pv_dc
-
-        """
-
-        poa_irrad = pvlib.irradiance.get_total_irradiance(
-            surface_tilt,
-            surface_azimuth,
-            apparent_zenith,
-            azimuth,
-            dni,
-            ghi,
-            dhi,
-            dni_extra,
-        )
-
-        pvtemps = pvlib.temperature.sapm_cell(
-            poa_irrad["poa_global"], temperature, wind_speed, **temperature_model
-        )
-
-        pv_dc = pvlib.pvsystem.pvwatts_dc(
-            poa_irrad["poa_global"],
-            temp_cell=pvtemps,
-            pdc0=1,
-            gamma_pdc=-0.002,
-            temp_ref=25.0,
-        )
-        if math.isnan(pv_dc):
-            pv_dc = 0
-        return pv_dc

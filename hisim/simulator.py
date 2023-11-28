@@ -591,7 +591,7 @@ class Simulator:
                 + "Please check if a connection is needed and if yes, create the missing default connection in your component."
             )
 
-    def put_log_files_into_result_path(self, result_directory: str):
+    def put_log_files_into_result_path(self, result_directory: str) -> None:
         """Put logging files from /logs path into result path."""
 
         default_logging_path = r"../logs/"

@@ -16,9 +16,11 @@ def main(
     my_module_config_path: Optional[str] = None,
 ) -> None:
     """Core function."""
-    # before starting, delete old logging files
-    for file in os.listdir(r"../logs"):
-        os.remove(os.path.join(r"../logs", file))
+    # before starting, delete old logging files if path and logging files exist
+    logging_default_path = r"../logs"
+    if os.path.exists(logging_default_path) and os.listdir(logging_default_path) != []: 
+        for file in os.listdir():
+            os.remove(os.path.join(r"../logs", file))
 
     function_in_module = "setup_function"
     log.information("#################################")

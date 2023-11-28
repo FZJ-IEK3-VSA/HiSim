@@ -602,4 +602,6 @@ class Simulator:
 
         # move log files to result path
         for file in os.listdir(default_logging_path):
-            os.rename(os.path.join(default_logging_path, file), os.path.join(result_directory, file))
+            # if logging file is not yet in result directory, move it from default directory /logs to result directory
+            if not os.path.isfile(os.path.join(result_directory, file)):
+                os.rename(os.path.join(default_logging_path, file), os.path.join(result_directory, file))

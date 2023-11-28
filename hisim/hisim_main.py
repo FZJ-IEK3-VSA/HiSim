@@ -18,9 +18,10 @@ def main(
     """Core function."""
     # before starting, delete old logging files if path and logging files exist
     logging_default_path = log.LOGGING_DEFAULT_PATH
-    if os.path.exists(logging_default_path) and os.listdir(logging_default_path) != []:
-        for file in os.listdir():
-            os.remove(os.path.join(logging_default_path, file))
+    if os.listdir(logging_default_path) != []:
+        for file in os.listdir(logging_default_path):
+            if os.path.exists(os.path.join(logging_default_path, file)):
+                os.remove(os.path.join(logging_default_path, file))
 
     function_in_module = "setup_function"
     log.information("#################################")

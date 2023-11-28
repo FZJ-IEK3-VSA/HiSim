@@ -1,14 +1,18 @@
 """ Main module for HiSim: Starts the Simulator. """
 # clean
 import importlib
+import os
 import sys
 from datetime import datetime
-import os
 from typing import Optional
-from hisim import log
+
+from dotenv import load_dotenv
+
 import hisim.simulator as sim
+from hisim import log
 from hisim.simulationparameters import SimulationParameters
 
+load_dotenv()
 
 def main(
     path_to_module: str,

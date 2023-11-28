@@ -16,6 +16,10 @@ def main(
     my_module_config_path: Optional[str] = None,
 ) -> None:
     """Core function."""
+    # before starting, delete old logging files
+    for file in os.listdir(r"../logs"):
+        os.remove(os.path.join(r"../logs", file))
+
     function_in_module = "setup_function"
     log.information("#################################")
     log.information(
@@ -69,6 +73,7 @@ def main(
 
     # Perform simulation throughout the defined timeline
     my_sim.run_all_timesteps()
+
     log.information("#################################")
     endtime = datetime.now()
     starting_date_time_str = endtime.strftime("%d-%b-%Y %H:%M:%S")
@@ -77,6 +82,9 @@ def main(
     log.profile("duration: " + str((endtime - starttime).total_seconds()))
     log.information("#################################")
     log.information("")
+
+    # At the end put new logging files into result directory
+    my_sim.put_log_files_into_result_path(result_directory=my_sim._simulation_parameters.result_directory)
 
 
 if __name__ == "__main__":

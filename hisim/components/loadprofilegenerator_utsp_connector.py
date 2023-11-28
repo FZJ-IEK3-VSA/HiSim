@@ -502,6 +502,8 @@ class UtspLpgConnector(cp.Component):
                     sum(x) for x in zip(*value_dict["number_of_residents"])
                 ]
 
+                self.max_hot_water_demand = max(self.water_consumption)
+
             if not cache_complete:
 
                 (

@@ -5,7 +5,7 @@ import graphviz
 os.chdir('C://Users//Standard//Desktop//hisim//HiSim//')
 sys.path.append("C://Users//Standard//Desktop//hisim//HiSim//examples")
 sys.path.append("C://Users//Standard//Desktop//hisim//HiSim//")
-import Cell4LifeSzenario1
+import Cell4LifeSzenario1a
 from hisim.result_path_provider import ResultPathProviderSingleton
 sys.path.append("C://Users//Standard//Desktop//hisim//HiSim//hisim//postprocessing//")
 os.chdir("C://Users//Standard//Desktop//hisim//HiSim//hisim//postprocessing//")
@@ -62,7 +62,7 @@ for BatterieFaktor in BatterieFaktorList:
             param_df.to_csv("examples/params_to_loop.csv", sep=",", index= False)
             
                     
-            input_variablen = Cell4LifeSzenario1.InputParameter()
+            input_variablen = Cell4LifeSzenario1a.InputParameter()
             charging_rate = input_variablen["p_el_elektrolyzer"]["value"] / (3600*40000) #umrechnung von Watt [=Joule/Sekunde, Leistung) p_el in  kg/s H2
             power_demand_charging_h2storage = charging_rate * input_variablen["h_fuel"]["value"] * 3.6e3 * 1000 * input_variablen["h2storage_energy_for_charge_based_on_massflow_h_fuel"]["value"]/100 # electricity power_demand of hydrogen storage for compression of H2 in Watt;
             inverte_power_demand_min = power_demand_charging_h2storage  + input_variablen["p_el_elektrolyzer"]["value"]
@@ -77,7 +77,7 @@ for BatterieFaktor in BatterieFaktorList:
 
             param_df.to_csv("examples/params_to_loop.csv", sep=",", index= False)
             #del param_df
-            sys.argv = ["hisim_main.py", "examples/Cell4LifeSzenario1.py", "Cell4Life"]
+            sys.argv = ["hisim_main.py", "examples/Cell4LifeSzenario1a.py", "Cell4Life"]
 
             with open("C:/Users/Standard/Desktop/hisim/HiSim/hisim/hisim_main.py") as f:        #with --> Handler--> mach etwas mit ... führe es aus...mache es wieder zu -> with kümmert sich um das :)
                 exec(f.read())
@@ -104,7 +104,7 @@ for BatterieFaktor in BatterieFaktorList:
             
             
             #Save all Data in the created excel files
-            input_variablen = Cell4LifeSzenario1.InputParameter()
+            input_variablen = Cell4LifeSzenario1a.InputParameter()
             Cell4Life_Postprocessing.saveInputdata(input_variablen)
             #Cell4Life_Postprocessing.saveexcelforevaluations(input_variablen, excelfilepathallresults1, excel_filename1)
             Cell4Life_Postprocessing.save_data_in_excel_for_economic_assessment(input_variablen, excelfilepathresults, excel_filename2)

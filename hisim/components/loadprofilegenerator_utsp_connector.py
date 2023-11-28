@@ -71,8 +71,8 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
 
         config = UtspLpgConnectorConfig(
             name="UTSPConnector",
-            url="http://134.94.131.109:5000/api/v1/profilerequest",
-            api_key="OrjpZY93BcNWw8lKaMp0BEchbCc",
+            url=os.getenv("UTSP_URL"),
+            api_key=os.getenv("UTSP_API_KEY"),
             household=Households.CHR01_Couple_both_at_Work,
             result_dir_path=utils.HISIMPATH["utsp_results"],
             energy_intensity=EnergyIntensityType.EnergySaving,

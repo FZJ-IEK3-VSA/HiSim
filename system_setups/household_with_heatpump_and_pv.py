@@ -1,5 +1,6 @@
 """  Household system setup with PV system and heatpump. """
 # clean
+from os import getenv
 from typing import Optional, Any
 from dataclasses import dataclass
 from pathlib import Path
@@ -61,8 +62,8 @@ class HouseholdPVConfig:
             building_type="blub",
             household_type=Households.CHR01_Couple_both_at_Work,
             energy_intensity=EnergyIntensityType.EnergySaving,
-            lpg_url="http://134.94.131.109:5000/api/v1/profilerequest",
-            api_key="OrjpZY93BcNWw8lKaMp0BEchbCc",
+            lpg_url=getenv("UTSP_URL"),
+            api_key=getenv("UTSP_API_KEY"),
             simulation_parameters=SimulationParameters.one_day_only(2022),
             result_path="mypath",
             travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,

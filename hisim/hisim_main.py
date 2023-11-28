@@ -17,10 +17,10 @@ def main(
 ) -> None:
     """Core function."""
     # before starting, delete old logging files if path and logging files exist
-    logging_default_path = r"../logs"
-    if os.path.exists(logging_default_path) and os.listdir(logging_default_path) != []: 
+    logging_default_path = log.LOGGING_DEFAULT_PATH
+    if os.path.exists(logging_default_path) and os.listdir(logging_default_path) != []:
         for file in os.listdir():
-            os.remove(os.path.join(r"../logs", file))
+            os.remove(os.path.join(logging_default_path, file))
 
     function_in_module = "setup_function"
     log.information("#################################")
@@ -86,7 +86,7 @@ def main(
     log.information("")
 
     # At the end put new logging files into result directory
-    my_sim.put_log_files_into_result_path(result_directory=my_sim._simulation_parameters.result_directory)
+    my_sim.put_log_files_into_result_path()
 
 
 if __name__ == "__main__":

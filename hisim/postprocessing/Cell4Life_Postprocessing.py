@@ -158,7 +158,19 @@ def makeacopyofevaluationfile(copytopath, filepath, name):
 
 
 def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresults, excel_filename):
-    
+    print("------------------------------------------------------------------------------")
+    print("------------------------------------------------------------------------------")
+    print("------------------------------------------------------------------------------")
+    print("------------------------------------------------------------------------------")
+    print("Parametervariation Runde: ", str(input_variablen["PreResultNumber"]["value"]))
+    print("------------------------------------------------------------------------------")
+    print("Parametervariation---Batteriekapazität: ", str(input_variablen["battery_capacity"]["value"]), "  &  Brennstoffzellenleistung: ",input_variablen["fuel_cell_power"]["value"])
+    print("Simulation mit Parametern abgeschlossen - Ergebnisse werden im ökonomischen Einzelfall-Bewertungstool gespeichert")
+    print("------------------------------------------------------------------------------")
+    print("------------------------------------------------------------------------------")
+    print("------------------------------------------------------------------------------")
+    print("------------------------------------------------------------------------------")
+
     PreResultNumber = input_variablen["PreResultNumber"]["value"]
     #----Save all Input Data in a .txt ----
     path = ResultPathProviderSingleton().get_result_directory_name() 
@@ -289,6 +301,10 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
 
     # Lade Daten aus dem ersten CSV-Datei "Electricity TO or FROM Grid Ergebnisse" (Spalte 1 und Spalte 2) und füge sie zur Liste hinzu
     csv_datei1 = os.path.join(path, 'ElectricityToOrFromGrid_L2EMSElectricityController.csv')
+    if not os.path.exists(csv_datei1):
+        csv_datei1 = os.path.join(path, 'ElectricityToOrFromGrid_my_electricity_controller.csv')
+
+
     with open(csv_datei1, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
         # for row in csvreader:
@@ -359,6 +375,10 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
 
     # Load 9. CSV-Datei "TotalElectricityConsumption_L2EMSElectricityController.csv" (only second column) und add it to the list --> IS NOT THE TOTAL CONSUMPTION (based on a comparison and validation done by 4ward)
     csv_datei9 = os.path.join(path, 'TotalElectricityConsumption_L2EMSElectricityController.csv')
+    
+    if not os.path.exists(csv_datei9):
+        csv_datei9 = os.path.join(path, 'TotalElectricityConsumption_my_electricity_controller.csv')
+
     with open(csv_datei9, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
         for row in csvreader:

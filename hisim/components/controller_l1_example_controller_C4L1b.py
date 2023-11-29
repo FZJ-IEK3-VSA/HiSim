@@ -66,8 +66,11 @@ class SimpleController(Component):
     
     #Output to Battery
     BatteryLoadingPower = "BatteryLoadingPower" #W
-  
+    
 
+    #Outputs
+    ElectricityToOrFromGrid = "ElectricityToOrFromGrid"
+    TotalElectricityConsumption = "TotalElectricityConsumption"
 
 
 
@@ -84,7 +87,7 @@ class SimpleController(Component):
 
         #INPUTS
         #csv Input Electricity Consumption
-        self.input1: ComponentInput = self.add_input(
+        self.General_ElectricityConsumptiomInput: ComponentInput = self.add_input(
             self.component_name,
             SimpleController.General_ElectricityConsumptiom,
             lt.LoadTypes.ELECTRICITY,
@@ -93,7 +96,7 @@ class SimpleController(Component):
         )
 
         #Electrolyzer Electricity Consumption 
-        self.input2: ComponentInput = self.add_input(
+        self.Electrolyzer_ElectricityConsumptionInput: ComponentInput = self.add_input(
             self.component_name,
             SimpleController.Electrolyzer_ElectricityConsumption,
             lt.LoadTypes.ELECTRICITY,
@@ -102,7 +105,7 @@ class SimpleController(Component):
         )
 
         #H2 Storage Electricity Consumption 
-        self.input3: ComponentInput = self.add_input(
+        self.H2Storage_ElectricityConsumptionInput: ComponentInput = self.add_input(
             self.component_name,
             SimpleController.H2Storage_ElectricityConsumption,
             lt.LoadTypes.ELECTRICITY,
@@ -110,8 +113,8 @@ class SimpleController(Component):
             True,
         )
 
-        #H2 Storage Electricity Consumption 
-        self.input4: ComponentInput = self.add_input(
+        #Photovoltaik Delivery
+        self.General_PhotovoltaicDeliveryInput: ComponentInput = self.add_input(
             self.component_name,
             SimpleController.General_PhotovoltaicDelivery,
             lt.LoadTypes.ELECTRICITY,
@@ -120,8 +123,8 @@ class SimpleController(Component):
         )
 
 
-        #H2 Storage Electricity Consumption 
-        self.input5: ComponentInput = self.add_input(
+        #CHP/Fuel Cell Electricity Delviery 
+        self.CHP_ElectricityDeliveryInput: ComponentInput = self.add_input(
             self.component_name,
             SimpleController.CHP_ElectricityDelivery,
             lt.LoadTypes.ELECTRICITY,
@@ -170,6 +173,24 @@ class SimpleController(Component):
             output_description=f"here a description for {self.BatteryLoadingPower} will follow.",
         )
 
+               
+        self.electricity_to_or_from_gridOutput: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricityToOrFromGrid,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.ElectricityToOrFromGrid} will follow.",
+        )
+
+        self.total_electricity_consumptionOutput: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.TotalElectricityConsumption,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.TotalElectricityConsumption} will follow.",
+        )
 
  
         self.state = 0
@@ -270,14 +291,34 @@ class SimpleController(Component):
         if force_convergence:
             return
         
+        #From differenct Components
+        General_ElectricityConsumptiom = stsv.get_input_value(self.General_ElectricityConsumptiomInput)
+        Electrolyzer_ElectricityConsumption = stsv.get_input_value(self.Electrolyzer_ElectricityConsumptionInput)
+        H2Storage_ElectricityConsumption = stsv.get_input_value(self.H2Storage_ElectricityConsumptionInput)
+        General_PhotovoltaicDelivery = stsv.get_input_value(self.General_PhotovoltaicDeliveryInput)
+        CHP_ElectricityDelivery = stsv.get_input_value(self.CHP_ElectricityDeliveryInput)
+
+
         #Loading Input Data from Battery 
         BatteryStateofCharge = stsv.get_input_value(self.BatteryStateofChargeInput)
-        BatteryAcBatteryPowe = stsv.get_input_value(self.BatteryAcBatteryPowerInput)
+        BatteryAcBatteryPower = stsv.get_input_value(self.BatteryAcBatteryPowerInput)
         BatteryDcBatteryPower = stsv.get_input_value(self.BatteryDcBatteryPowerInput)
 
         ac_battery_power_in_watt = 0
         stsv.set_output_value(self.BatteryLoadingPowerOutput, ac_battery_power_in_watt)
+        
 
+        total_electricity_production = General_PhotovoltaicDelivery + CHP_ElectricityDelivery
+        total_electricity_consumption = General_ElectricityConsumptiom + Electrolyzer_ElectricityConsumption + H2Storage_ElectricityConsumption
+
+        electricity_to_grid = total_electricity_production - total_electricity_consumption
+        
+        stsv.set_output_value(self.electricity_to_or_from_gridOutput, electricity_to_grid)
+        
+        #gehört noch integriert
+        stsv.set_output_value(self.total_electricity_consumptionOutput, total_electricity_consumption)
+        
+        
         #percent = stsv.get_input_value(self.input1)
         
         
@@ -287,3 +328,7 @@ class SimpleController(Component):
         # if percent > 0.99:
         #     self.state = 0
         #stsv.set_output_value(self.output1, self.state)
+    
+    def write_to_report(self):
+        """Writes the information of the current component to the report."""
+        return self.config.get_string_dict()

@@ -23,12 +23,13 @@ import math
 
  """
 
-#FuelCellPowerW_list = [200000]  #Electricity Power of Fuel Cell Power in Watt
-#BatteryCapkWh_list = [0]     #Total Capacity of Battery in kWh
+FuelCellPowerW_list = [200000]  #Electricity Power of Fuel Cell Power in Watt
+BatteryCapkWh_list = [0]     #Total Capacity of Battery in kWh
+Inverter_Ratio_list = [0.5]
+BatterieFaktorList = [4]
 
-
-FuelCellPowerW_list = [200000, 100000, 50000, 25000, 12500]  #Electricity Power of Fuel Cell Power in Watt
-Inverter_Ratio_list = [0.5, 0.333, 0.25, 0.2,0.1666] #Means: Inverter_power_demand  = Battery capacity multiplied with a factor of the list; Battery Capacity = BatterieFaktor * (electrolyzer_energy + h2 storage)
+#FuelCellPowerW_list = [200000, 100000, 50000, 25000, 12500]  #Electricity Power of Fuel Cell Power in Watt
+#Inverter_Ratio_list = [0.5, 0.333, 0.25, 0.2,0.1666] #Means: Inverter_power_demand  = Battery capacity multiplied with a factor of the list; Battery Capacity = BatterieFaktor * (electrolyzer_energy + h2 storage)
 
 FuelCellPowerWUnit = "W"
 BatteryCapkWhUnit = "kWh"
@@ -38,7 +39,7 @@ Inverter_RatioUnit = "-"
 # PreResultNumberUnit = "-"
 
 #BatterieFaktorList = [4,5,6,7,8]
-BatterieFaktorList = [6,7,8,]
+#BatterieFaktorList = [6,7,8,]
 
 for BatterieFaktor in BatterieFaktorList:
 
@@ -116,7 +117,7 @@ for BatterieFaktor in BatterieFaktorList:
 
        
 
-print("---Parametervariation abgeschlossen---")
+print("---Parametervariation 1B abgeschlossen---")
 
 
 

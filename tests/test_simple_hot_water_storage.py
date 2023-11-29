@@ -42,15 +42,7 @@ def simulate_simple_water_storage(
     hws_name = "SimpleHeatWaterStorage"
     volume_heating_water_storage_in_liter = 100
 
-    SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATINGDISTRIBUTIONSYSTEM,
-        entry=0.787,
-    )
-    water_mass_flow_rate_from_heat_distribution_system = (
-        SingletonSimRepository().get_entry(
-            key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATINGDISTRIBUTIONSYSTEM
-        )
-    )
+    water_mass_flow_rate_from_heat_distribution_system = 0.787
     # ===================================================================================================================
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = (
@@ -63,6 +55,7 @@ def simulate_simple_water_storage(
             cost=volume_heating_water_storage_in_liter * 14.51,
             lifetime=100,
             maintenance_cost_as_percentage_of_investment=0.0,
+            water_mass_flow_rate_from_hds_in_kg_per_second=water_mass_flow_rate_from_heat_distribution_system
         )
     )
     my_simple_heat_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(

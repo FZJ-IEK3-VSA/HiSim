@@ -114,17 +114,18 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
     my_building_information = building.BuildingInformation(config=my_building_config)
 
-    temperature_spread_in_celsius_of_heat_distribution_system = 7.0
-
     # Build Heat Distribution System
+    my_hds_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt)
+    my_hds_controller_information = heat_distribution_system.HeatDistributionControllerInformation(config=my_hds_controller_config)
+
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig(
         name=hds_name,
         co2_footprint=0,
         cost=8000,
         lifetime=50,
         maintenance_cost_as_percentage_of_investment=0.01,
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-        temperature_spread_in_celsius=temperature_spread_in_celsius_of_heat_distribution_system,
+        temperature_spread_in_celsius=my_hds_controller_information.temperature_spread_in_celsius,
+        water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second
     )
 
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(

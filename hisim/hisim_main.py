@@ -14,6 +14,7 @@ from hisim.simulationparameters import SimulationParameters
 
 load_dotenv()
 
+
 def main(
     path_to_module: str,
     my_simulation_parameters: Optional[SimulationParameters] = None,

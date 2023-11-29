@@ -96,15 +96,15 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
     set_cooling_temperature_for_building_in_celsius: float
 
     @classmethod
-    def get_default_heat_distribution_controller_config(cls):
+    def get_default_heat_distribution_controller_config(cls, set_heating_temperature_for_building_in_celsius: float, set_cooling_temperature_for_building_in_celsius: float):
         """Gets a default HeatDistribution Controller."""
         return HeatDistributionControllerConfig(
             name="HeatDistributionController",
             heating_system=HeatDistributionSystemType.FLOORHEATING,
             set_heating_threshold_outside_temperature_in_celsius=16.0,
             heating_reference_temperature_in_celsius=-14.0,
-            set_heating_temperature_for_building_in_celsius=19,
-            set_cooling_temperature_for_building_in_celsius=24,
+            set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
+            set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
         )
 
 

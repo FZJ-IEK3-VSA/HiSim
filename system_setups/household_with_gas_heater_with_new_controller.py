@@ -81,22 +81,6 @@ def setup_function(
         )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
-    # Build heat Distribution System Controller
-    hdscontroller_config = (
-        heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
-    )
-    my_heat_distribution_controller = (
-        heat_distribution_system.HeatDistributionController(
-            config=hdscontroller_config,
-            my_simulation_parameters=my_simulation_parameters,
-        )
-    )
-    my_hds_controller_information = (
-        heat_distribution_system.HeatDistributionControllerInformation(
-            config=hdscontroller_config
-        )
-    )
-
     # Build Occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
         url=url,
@@ -123,15 +107,28 @@ def setup_function(
     )
 
     # Build Building
-    my_building_config = building.BuildingConfig.get_default_german_single_family_home(
-        set_cooling_temperature_in_celsius=hdscontroller_config.set_cooling_temperature_for_building_in_celsius,
-        set_heating_temperature_in_celsius=hdscontroller_config.set_heating_temperature_for_building_in_celsius,
-    )
+    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
     my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
+    # Build Heat Distribution Controller
+    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
+        set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
+        set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
+    )
 
+    my_heat_distribution_controller = (
+        heat_distribution_system.HeatDistributionController(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_heat_distribution_controller_config,
+        )
+    )
+    my_hds_controller_information = (
+        heat_distribution_system.HeatDistributionControllerInformation(
+            config=my_heat_distribution_controller_config
+        )
+    )
     # Build Gas Heater Controller
     my_gasheater_controller_config = (
         controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config.get_default_generic_gas_heater_controller_config()

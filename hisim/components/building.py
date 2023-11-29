@@ -1970,6 +1970,10 @@ class BuildingInformation:
         self.get_building()
         self.build()
 
+        # get set temperatures for building
+        self.set_heating_temperature_for_building_in_celsius = self.buildingconfig.set_heating_temperature_in_celsius
+        self.set_cooling_temperature_for_building_in_celsius = self.buildingconfig.set_cooling_temperature_in_celsius
+
     def get_building(
         self,
     ):

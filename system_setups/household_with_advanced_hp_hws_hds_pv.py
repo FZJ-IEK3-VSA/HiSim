@@ -68,8 +68,7 @@ def setup_function(
     set_heating_threshold_outside_temperature_for_heat_distribution_system_in_celsius = (
         16.0
     )
-    set_heating_temperature_for_building_in_celsius = 19.0
-    set_cooling_temperature_for_building_in_celsius = 24.0
+
     heating_system = heat_distribution_system.HeatDistributionSystemType.FLOORHEATING
 
     # =================================================================================================================================
@@ -77,35 +76,14 @@ def setup_function(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
+        my_simulation_parameters = SimulationParameters.one_day_only_with_all_options(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
-    # Build Heat Distribution Controller
-    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=heat_distribution_system.HeatDistributionControllerConfig(
-            name=hds_controller_name,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_distribution_system_in_celsius,
-            set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
-            set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
-            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-            heating_system=heating_system,
-        ),
-    )
-
-    my_heat_distribution_controller_information = (
-        heat_distribution_system.HeatDistributionControllerInformation(
-            config=my_heat_distribution_controller.hsd_controller_config
-        )
-    )
-
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home(
-        set_cooling_temperature_in_celsius=my_heat_distribution_controller_information.set_cooling_temperature_for_building_in_celsius,
-        set_heating_temperature_in_celsius=my_heat_distribution_controller_information.set_heating_temperature_for_building_in_celsius,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
     my_building_information = building.BuildingInformation(config=my_building_config)
@@ -144,6 +122,24 @@ def setup_function(
         config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
     )
 
+    # Build Heat Distribution Controller
+    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=heat_distribution_system.HeatDistributionControllerConfig(
+            name=hds_controller_name,
+            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_distribution_system_in_celsius,
+            set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
+            set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+            heating_system=heating_system,
+        ),
+    )
+
+    my_heat_distribution_controller_information = (
+        heat_distribution_system.HeatDistributionControllerInformation(
+            config=my_heat_distribution_controller.hsd_controller_config
+        )
+    )
     # Build Heat Pump Controller
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
         config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config(

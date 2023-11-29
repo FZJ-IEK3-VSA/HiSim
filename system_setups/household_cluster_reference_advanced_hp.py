@@ -190,28 +190,8 @@ def setup_function(
     # =================================================================================================================================
     # Build Basic Components
 
-    # Build Heat Distribution Controller
-    my_heat_distribution_controller_config = (
-        heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
-    )
-    my_heat_distribution_controller_config.heating_reference_temperature_in_celsius = (
-        heating_reference_temperature_in_celsius
-    )
-    my_heat_distribution_controller = (
-        heat_distribution_system.HeatDistributionController(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_heat_distribution_controller_config,
-        )
-    )
-    my_hds_controller_information = (
-        heat_distribution_system.HeatDistributionControllerInformation(
-            config=my_heat_distribution_controller_config
-        )
-    )
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home(
-        set_cooling_temperature_in_celsius=my_heat_distribution_controller_config.set_cooling_temperature_for_building_in_celsius,
-        set_heating_temperature_in_celsius=my_heat_distribution_controller_config.set_heating_temperature_for_building_in_celsius,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
     my_building_config.building_code = building_code
@@ -248,6 +228,25 @@ def setup_function(
     # =================================================================================================================================
     # Build Energy System Components
 
+    # Build Heat Distribution Controller
+    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
+        set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
+        set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
+    )
+    my_heat_distribution_controller_config.heating_reference_temperature_in_celsius = (
+        heating_reference_temperature_in_celsius
+    )
+    my_heat_distribution_controller = (
+        heat_distribution_system.HeatDistributionController(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_heat_distribution_controller_config,
+        )
+    )
+    my_hds_controller_information = (
+        heat_distribution_system.HeatDistributionControllerInformation(
+            config=my_heat_distribution_controller_config
+        )
+    )
     # Build Heat Pump Controller
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
         config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config(

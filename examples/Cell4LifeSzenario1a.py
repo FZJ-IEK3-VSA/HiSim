@@ -341,7 +341,7 @@ def Cell4Life(
     my_chp.connect_only_predefined_connections(my_chp_controller)
 
 
-
+    my_h2storage.connect_only_predefined_connections(my_electrolyzer)
 
         #******************************************************************
         # Add Components to Simulation Parameters

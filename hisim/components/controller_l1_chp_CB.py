@@ -416,7 +416,9 @@ class L1CHPController(cp.Component):
             # mandatory on, minimum runtime not reached
             print("Colum 417 in controller_l1_chp_CB.py--> there was a minimum chp activation time given but function is not working")
             exit()
+            
             return
+        
         if (
             self.state.on_off == 0
             and self.state.deactivation_time_step

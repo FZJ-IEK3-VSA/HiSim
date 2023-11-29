@@ -8,7 +8,7 @@ from dataclass_wizard import JSONWizard
 from typing_extensions import Self
 
 from hisim import log, utils
-from hisim.components import building
+from hisim.components import building, heat_distribution_system
 
 
 @dataclass
@@ -33,9 +33,26 @@ class SystemSetupConfigBase(JSONWizard):
         else:
             building_config = None
 
+        # Read heat distribution controller config
+        hds_controller_config_dict = module_config_dict.pop(
+            "heat_distribution_controller_config", {}
+        )
+        if hds_controller_config_dict:
+            log.information("Using `heat_distribution_controller_config` for scaling.")
+            heat_distribution_controller_config = (
+                heat_distribution_system.HeatDistributionControllerConfig.from_dict(
+                    hds_controller_config_dict
+                )
+            )
+        else:
+            heat_distribution_controller_config = None
+
         # Load (scaled) default values for system setup configuration
-        if building_config:
-            my_config = cls.get_scaled_default(building_config)
+        if building_config and heat_distribution_controller_config:
+            my_config = cls.get_scaled_default(
+                building_config=building_config,
+                heat_distribution_controller_config=heat_distribution_controller_config,
+            )
         else:
             my_config = cls.get_default()
 
@@ -57,6 +74,10 @@ class SystemSetupConfigBase(JSONWizard):
         raise NotImplementedError
 
     @classmethod
-    def get_scaled_default(cls, building_config: building.BuildingConfig) -> Self:
+    def get_scaled_default(
+        cls,
+        building_config: building.BuildingConfig,
+        heat_distribution_controller_config: heat_distribution_system.HeatDistributionControllerConfig,
+    ) -> Self:
         """Get scaled default."""
         raise NotImplementedError

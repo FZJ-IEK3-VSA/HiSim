@@ -51,7 +51,7 @@ class BuildingPVWeatherConfig(ConfigBase):
     building_code: str
     conditioned_floor_area_in_m2: float
     number_of_dwellings_per_building: int
-    lpg_households: Union[List[str]]
+    lpg_households: List[str]
 
     @classmethod
     def get_default(cls):
@@ -197,14 +197,22 @@ def setup_function(
     my_heat_distribution_controller_config.heating_reference_temperature_in_celsius = (
         heating_reference_temperature_in_celsius
     )
-    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_heat_distribution_controller_config,
+    my_heat_distribution_controller = (
+        heat_distribution_system.HeatDistributionController(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_heat_distribution_controller_config,
+        )
+    )
+    my_hds_controller_information = (
+        heat_distribution_system.HeatDistributionControllerInformation(
+            config=my_heat_distribution_controller_config
+        )
     )
     # Build Building
-    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
-    my_building_config.heating_reference_temperature_in_celsius = (
-        heating_reference_temperature_in_celsius
+    my_building_config = building.BuildingConfig.get_default_german_single_family_home(
+        set_cooling_temperature_in_celsius=my_heat_distribution_controller_config.set_cooling_temperature_for_building_in_celsius,
+        set_heating_temperature_in_celsius=my_heat_distribution_controller_config.set_heating_temperature_for_building_in_celsius,
+        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
     my_building_config.building_code = building_code
     my_building_config.total_base_area_in_m2 = total_base_area_in_m2
@@ -248,6 +256,7 @@ def setup_function(
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_pump_in_celsius,
             set_cooling_threshold_outside_temperature_in_celsius=set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius,
             temperature_offset_for_state_conditions_in_celsius=temperature_offset_for_state_conditions_in_celsius,
+            heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )
@@ -263,12 +272,14 @@ def setup_function(
     )
 
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
-        config=my_heat_pump_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_pump_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+        temperature_spread_in_celsius=my_hds_controller_information.temperature_spread_in_celsius,
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config,
@@ -277,7 +288,9 @@ def setup_function(
 
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+        max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
+        temperature_spread_heat_distribution_system_in_celsius=my_hds_controller_information.temperature_spread_in_celsius,
+        heating_system_name=my_heat_pump.component_name,
     )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
@@ -305,9 +318,11 @@ def setup_function(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 
-    my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_dhw_heatpump_controller_config,
+    my_domnestic_hot_water_heatpump_controller = (
+        controller_l1_heatpump.L1HeatPumpController(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_dhw_heatpump_controller_config,
+        )
     )
 
     my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(

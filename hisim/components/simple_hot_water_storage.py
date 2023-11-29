@@ -79,19 +79,46 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
 
     @classmethod
     def get_scaled_hot_water_storage(
-        cls, heating_load_of_building_in_watt: float
+        cls,
+        max_thermal_power_in_watt_of_heating_system: float,
+        temperature_spread_heat_distribution_system_in_celsius: float = 7.0,
+        heating_system_name: str = "AdvancedHeatPumpHPLib",
     ) -> "SimpleHotWaterStorageConfig":
-        """Gets a default storage with scaling according to heating load of the building."""
+        """Gets a default storage with scaling according to heating load of the building.
 
-        set_thermal_output_power_in_watt = heating_load_of_building_in_watt
+        The information for scaling the buffer storage is taken from the heating system guidelines from Buderus:
+        https://www.baunetzwissen.de/heizung/fachwissen/speicher/dimensionierung-von-pufferspeichern-161296
 
-        # https://www.baunetzwissen.de/heizung/fachwissen/speicher/dimensionierung-von-pufferspeichern-161296
-        # approx. 60l per kW power of heating system
-        # here we say power heating system should correspond to heating load of building
-        # (see also https://www.sciencedirect.com/science/article/pii/S2352152X2201533X?via%3Dihub)
-        volume_heating_water_storage_in_liter: float = (
-            set_thermal_output_power_in_watt * 1e-3 * 60
-        )
+        - If the heating system is a heat pump -> use formular:
+        buffer storage size [m3] =
+        (max. thermal power of heat pump [kW]* bridging time [h])
+        /
+        (spec. heat capacity water [Wh/(kg*K)]* temperature difference flow-return [K])
+        with bridging time = 1h
+        You can also check the paper:
+        https://www.sciencedirect.com/science/article/pii/S2352152X2201533X?via%3Dihub.
+
+        - If the heating system is something else (e.g. gasheater, ...), use approximation: 60l per kW thermal power.
+        """
+
+        # if the used heating system is a heat pump use formular
+        if "HeatPump" in heating_system_name:
+
+            volume_heating_water_storage_in_liter: float = (
+                max_thermal_power_in_watt_of_heating_system
+                * 1e-3
+                / (
+                    PhysicsConfig.water_specific_heat_capacity_in_watthour_per_kilogramm_per_kelvin
+                    * temperature_spread_heat_distribution_system_in_celsius
+                )
+            ) * 1000  # 1m3 = 1000l
+
+        # otherwise use approximation: 60l per kw thermal power
+        else:
+            volume_heating_water_storage_in_liter = (
+                max_thermal_power_in_watt_of_heating_system * 1e3 * 60
+            )
+
         config = SimpleHotWaterStorageConfig(
             name="SimpleHotWaterStorage",
             volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
@@ -301,11 +328,17 @@ class SimpleHotWaterStorage(cp.Component):
             lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.StandbyHeatLoss} will follow.",
         )
-        self.add_default_connections(self.get_default_connections_from_heat_distribution_system())
-        self.add_default_connections(self.get_default_connections_from_advanced_heat_pump())
+        self.add_default_connections(
+            self.get_default_connections_from_heat_distribution_system()
+        )
+        self.add_default_connections(
+            self.get_default_connections_from_advanced_heat_pump()
+        )
         self.add_default_connections(self.get_default_connections_from_gasheater())
 
-    def get_default_connections_from_heat_distribution_system(self) -> List[cp.ComponentConnection]:
+    def get_default_connections_from_heat_distribution_system(
+        self,
+    ) -> List[cp.ComponentConnection]:
         """Get heat distribution default connections."""
 
         # use importlib for importing the other component in order to avoid circular-import errors
@@ -323,7 +356,9 @@ class SimpleHotWaterStorage(cp.Component):
         )
         return connections
 
-    def get_default_connections_from_advanced_heat_pump(self) -> List[cp.ComponentConnection]:
+    def get_default_connections_from_advanced_heat_pump(
+        self,
+    ) -> List[cp.ComponentConnection]:
         """Get advanced het pump default connections."""
 
         # use importlib for importing the other component in order to avoid circular-import errors

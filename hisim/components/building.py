@@ -91,22 +91,29 @@ class BuildingConfig(cp.ConfigBase):
     total_base_area_in_m2: Optional[float]
     number_of_apartments: Optional[float]
     predictive: bool
+    set_heating_temperature_in_celsius: float
+    set_cooling_temperature_in_celsius: float
 
     @classmethod
     def get_default_german_single_family_home(
         cls,
+        set_heating_temperature_in_celsius: float = 19.0,
+        set_cooling_temperature_in_celsius: float = 24.0,
+        heating_reference_temperature_in_celsius: float = -14.0,
     ) -> Any:
         """Get a default Building."""
         config = BuildingConfig(
             name="Building",
             building_code="DE.N.SFH.05.Gen.ReEx.001.002",
             building_heat_capacity_class="medium",
-            initial_internal_temperature_in_celsius=23,
-            heating_reference_temperature_in_celsius=-14,
+            initial_internal_temperature_in_celsius=23.0,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
             absolute_conditioned_floor_area_in_m2=121.2,
             total_base_area_in_m2=None,
             number_of_apartments=None,
             predictive=False,
+            set_heating_temperature_in_celsius=set_heating_temperature_in_celsius,
+            set_cooling_temperature_in_celsius=set_cooling_temperature_in_celsius,
         )
         return config
 
@@ -227,8 +234,12 @@ class Building(cp.Component):
         # =================================================================================================================================
         # Initialization of variables
 
-        self.set_heating_temperature_in_celsius: float = 19
-        self.set_cooling_temperature_in_celsius: float = 24
+        self.set_heating_temperature_in_celsius = (
+            self.buildingconfig.set_heating_temperature_in_celsius
+        )
+        self.set_cooling_temperature_in_celsius = (
+            self.buildingconfig.set_cooling_temperature_in_celsius
+        )
 
         (self.is_in_cache, self.cache_file_path,) = utils.get_cache_file(
             self.component_name,
@@ -841,9 +852,6 @@ class Building(cp.Component):
             self.thermal_conductance_by_ventilation_in_watt_per_kelvin,
         ) = self.get_conductances()
 
-        # Get set temperatures for heating and cooling
-        self.get_set_temperatures_for_heating_and_cooling()
-
         # send building parameters 5r1c to PID controller and to the MPC controller to generate an equivalent state space model
         # state space represntation is used for tuning of the pid and as a prediction model in the model predictive controller
         SingletonSimRepository().set_entry(
@@ -873,44 +881,6 @@ class Building(cp.Component):
 
         # Get windows
         self.windows, self.total_scaled_windows_area = self.get_windows()
-
-    def get_set_temperatures_for_heating_and_cooling(self):
-        """Get set temperatures for heating and cooling.
-
-        Either import from SingletonSimRepository or use default values.
-        """
-
-        if SingletonSimRepository().exist_entry(
-            key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING
-        ):
-            self.set_heating_temperature_in_celsius = (
-                SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING
-                )
-            )
-        else:
-            self.set_heating_temperature_in_celsius = (
-                self.set_heating_temperature_in_celsius
-            )
-            log.warning(
-                f"Default temperature threshold for heating in building is used, which is {self.set_heating_temperature_in_celsius} °C."
-            )
-
-        if SingletonSimRepository().exist_entry(
-            key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING
-        ):
-            self.set_cooling_temperature_in_celsius = (
-                SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING
-                )
-            )
-        else:
-            self.set_cooling_temperature_in_celsius = (
-                self.set_cooling_temperature_in_celsius
-            )
-            log.warning(
-                f"Default temperature thresholds for cooling in building is used, which is {self.set_cooling_temperature_in_celsius} °C."
-            )
 
     def get_windows(
         self,
@@ -2106,11 +2076,13 @@ class BuildingInformation:
         )
 
         # Get number of apartments
-        self.number_of_apartments = int(self.get_number_of_apartments(
-            conditioned_floor_area_in_m2=self.scaled_conditioned_floor_area_in_m2,
-            scaling_factor=scaling_factor,
-            buildingdata=self.buildingdata,
-        ))
+        self.number_of_apartments = int(
+            self.get_number_of_apartments(
+                conditioned_floor_area_in_m2=self.scaled_conditioned_floor_area_in_m2,
+                scaling_factor=scaling_factor,
+                buildingdata=self.buildingdata,
+            )
+        )
 
         # Get heating load of building
         self.max_thermal_building_demand_in_watt = self.calc_max_thermal_building_demand(

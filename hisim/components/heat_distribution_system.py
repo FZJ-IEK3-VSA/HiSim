@@ -29,7 +29,7 @@ __email__ = "k.rieck@fz-juelich.de"
 __status__ = ""
 
 
-class HeatingSystemType(IntEnum):
+class HeatDistributionSystemType(IntEnum):
 
     """Set Heating System Types."""
 
@@ -50,6 +50,7 @@ class HeatDistributionConfig(cp.ConfigBase):
 
     name: str
     heating_load_of_building_in_watt: float
+    temperature_spread_in_celsius: float
     #: CO2 footprint of investment in kg
     co2_footprint: float
     #: cost for investment in Euro
@@ -61,12 +62,13 @@ class HeatDistributionConfig(cp.ConfigBase):
 
     @classmethod
     def get_default_heatdistributionsystem_config(
-        cls, heating_load_of_building_in_watt: float
+        cls, heating_load_of_building_in_watt: float, temperature_spread_in_celsius: float
     ) -> Any:
         """Get a default heat distribution system config."""
         config = HeatDistributionConfig(
             name="HeatDistributionSystem",
             heating_load_of_building_in_watt=heating_load_of_building_in_watt,
+            temperature_spread_in_celsius=temperature_spread_in_celsius,
             co2_footprint=0,  # Todo: check value
             cost=8000,  # SOURCE: https://www.hausjournal.net/heizungsrohre-verlegen-kosten  # Todo: use price per m2 in system_setups instead
             lifetime=50,  # SOURCE: VDI2067-1
@@ -87,7 +89,7 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
         return HeatDistributionController.get_full_classname()
 
     name: str
-    heating_system: HeatingSystemType
+    heating_system: HeatDistributionSystemType
     set_heating_threshold_outside_temperature_in_celsius: Optional[float]
     heating_reference_temperature_in_celsius: float
     set_heating_temperature_for_building_in_celsius: float
@@ -98,7 +100,7 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
         """Gets a default HeatDistribution Controller."""
         return HeatDistributionControllerConfig(
             name="HeatDistributionController",
-            heating_system=HeatingSystemType.FLOORHEATING,
+            heating_system=HeatDistributionSystemType.FLOORHEATING,
             set_heating_threshold_outside_temperature_in_celsius=16.0,
             heating_reference_temperature_in_celsius=-14.0,
             set_heating_temperature_for_building_in_celsius=19,
@@ -158,25 +160,13 @@ class HeatDistribution(cp.Component):
 
         self.thermal_power_delivered_in_watt: float = 0.0
         self.water_temperature_output_in_celsius: float = 21
-        self.delta_temperature_in_celsius: float = 1.0
+        self.temperature_spread_in_celsius = self.heat_distribution_system_config.temperature_spread_in_celsius
 
         self.max_thermal_building_demand_in_watt = (
             self.heat_distribution_system_config.heating_load_of_building_in_watt
         )
 
-        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.HEATINGSYSTEM):
-            self.heating_system = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.HEATINGSYSTEM
-            )
-
-        else:
-            raise KeyError(
-                "Key for heating system was not found in the singleton sim repository."
-                + "This might be because the heat distribution system controller was not initialized before the heat distribution system."
-                + "Please check the order of the initialization of the components in your system setup."
-            )
-
-        self.build(heating_system=self.heating_system)
+        self.build()
 
         self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second = (
             self.calc_heating_distribution_system_water_mass_flow_rate(
@@ -309,7 +299,6 @@ class HeatDistribution(cp.Component):
 
     def build(
         self,
-        heating_system: HeatingSystemType,
     ) -> None:
         """Build function.
 
@@ -318,14 +307,6 @@ class HeatDistribution(cp.Component):
         self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = (
             PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
         )
-        # choose delta T depending on the chosen heating system
-        # DIN/TS 18599-12: 2021-04, p.238
-        if heating_system == HeatingSystemType.FLOORHEATING:
-            self.delta_temperature_in_celsius = 7
-        elif heating_system == HeatingSystemType.RADIATOR:
-            self.delta_temperature_in_celsius = 15
-        else:
-            raise ValueError("unknown heating system.")
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -423,7 +404,7 @@ class HeatDistribution(cp.Component):
             max_thermal_building_demand_in_watt
             / (
                 specific_heat_capacity_of_water_in_joule_per_kg_per_celsius
-                * self.delta_temperature_in_celsius
+                * self.temperature_spread_in_celsius
             )
         )
         return heating_distribution_system_water_mass_flow_in_kg_per_second
@@ -562,30 +543,21 @@ class HeatDistributionController(cp.Component):
         )
         self.state_controller: int = 0
         self.building_temperature_modifier: float = 0
-
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING,
-            entry=self.hsd_controller_config.set_heating_temperature_for_building_in_celsius,
-        )
-
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING,
-            entry=self.hsd_controller_config.set_cooling_temperature_for_building_in_celsius,
-        )
-
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.HEATINGSYSTEM,
-            entry=self.hsd_controller_config.heating_system,
+        my_heat_distribution_controller_information = HeatDistributionControllerInformation(
+            config=self.hsd_controller_config
         )
 
         self.build(
-            set_heating_threshold_temperature_in_celsius=self.hsd_controller_config.set_heating_threshold_outside_temperature_in_celsius,
-            heating_reference_temperature_in_celsius=self.hsd_controller_config.heating_reference_temperature_in_celsius,
-            heating_system_type=self.hsd_controller_config.heating_system,
-        )
-        self.prepare_calc_heating_dist_temperature(
-            set_room_temperature_for_building_in_celsius=self.hsd_controller_config.set_heating_temperature_for_building_in_celsius,
-            factor_of_oversizing_of_heat_distribution_system=1.0,
+            set_heating_threshold_temperature_in_celsius=my_heat_distribution_controller_information.set_heating_threshold_temperature_in_celsius,
+            heating_reference_temperature_in_celsius=my_heat_distribution_controller_information.heating_reference_temperature_in_celsius,
+            heat_distribution_system_type=my_heat_distribution_controller_information.heat_distribution_system_type,
+            max_flow_temperature_in_celsius=my_heat_distribution_controller_information.max_flow_temperature_in_celsius,
+            max_return_temperature_in_celsius=my_heat_distribution_controller_information.max_return_temperature_in_celsius,
+            min_flow_temperature_in_celsius=my_heat_distribution_controller_information.min_flow_temperature_in_celsius,
+            min_return_temperature_in_celsius=my_heat_distribution_controller_information.min_return_temperature_in_celsius,
+            factor_of_oversizing_of_heat_distribution_system=my_heat_distribution_controller_information.factor_of_oversizing_of_heat_distribution_system,
+            exponent_factor_of_heating_distribution_system=my_heat_distribution_controller_information.exponent_factor_of_heating_distribution_system,
+            set_room_temperature_for_building_in_celsius=my_heat_distribution_controller_information.set_room_temperature_for_building_in_celsius,
         )
 
         # Inputs
@@ -697,7 +669,14 @@ class HeatDistributionController(cp.Component):
         self,
         set_heating_threshold_temperature_in_celsius: Optional[float],
         heating_reference_temperature_in_celsius: float,
-        heating_system_type: HeatingSystemType,
+        heat_distribution_system_type: HeatDistributionSystemType,
+        max_flow_temperature_in_celsius: float,
+        min_flow_temperature_in_celsius: float,
+        max_return_temperature_in_celsius: float,
+        min_return_temperature_in_celsius: float,
+        factor_of_oversizing_of_heat_distribution_system: float,
+        exponent_factor_of_heating_distribution_system: float,
+        set_room_temperature_for_building_in_celsius: float,
     ) -> None:
         """Build function.
 
@@ -710,7 +689,21 @@ class HeatDistributionController(cp.Component):
         self.heating_reference_temperature_in_celsius = (
             heating_reference_temperature_in_celsius
         )
-        self.heating_system_type = heating_system_type
+        self.heat_distribution_system_type = heat_distribution_system_type
+
+        self.max_flow_temperature_in_celsius = max_flow_temperature_in_celsius
+        self.min_flow_temperature_in_celsius = min_flow_temperature_in_celsius
+        self.max_return_temperature_in_celsius = max_return_temperature_in_celsius
+        self.min_return_temperature_in_celsius = min_return_temperature_in_celsius
+        self.factor_of_oversizing_of_heat_distribution_system = (
+            factor_of_oversizing_of_heat_distribution_system
+        )
+        self.exponent_factor_of_heating_distribution_system = (
+            exponent_factor_of_heating_distribution_system
+        )
+        self.set_room_temperature_for_building_in_celsius = (
+            set_room_temperature_for_building_in_celsius
+        )
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -848,50 +841,6 @@ class HeatDistributionController(cp.Component):
 
         return heating_mode
 
-    def prepare_calc_heating_dist_temperature(
-        self,
-        set_room_temperature_for_building_in_celsius: float = 20.0,
-        factor_of_oversizing_of_heat_distribution_system: float = 1.0,
-    ) -> None:
-        """Function to set several input parameters for functions regarding the heating system.
-
-        This function is taken from the HeatingSystem class of hplib and slightly adapted here.
-        """
-
-        self.set_room_temperature_for_building_in_celsius = (
-            set_room_temperature_for_building_in_celsius
-        )
-        if self.heating_system_type == HeatingSystemType.FLOORHEATING:
-            list_of_maximum_flow_and_return_temperatures_in_celsius = [35, 28]
-            exponent_factor_of_heating_distribution_system = 1.1
-
-        elif self.heating_system_type == HeatingSystemType.RADIATOR:
-            list_of_maximum_flow_and_return_temperatures_in_celsius = [70, 55]
-            exponent_factor_of_heating_distribution_system = 1.3
-        else:
-            raise ValueError(
-                "Heating System Type not defined here. Check your heat distribution controller config or your Heating System Type class."
-            )
-
-        self.max_flow_temperature_in_celsius = (
-            list_of_maximum_flow_and_return_temperatures_in_celsius[0]
-        )
-        self.min_flow_temperature_in_celsius = (
-            set_room_temperature_for_building_in_celsius
-        )
-        self.max_return_temperature_in_celsius = (
-            list_of_maximum_flow_and_return_temperatures_in_celsius[1]
-        )
-        self.min_return_temperature_in_celsius = (
-            set_room_temperature_for_building_in_celsius
-        )
-        self.factor_of_oversizing_of_heat_distribution_system = (
-            factor_of_oversizing_of_heat_distribution_system
-        )
-        self.exponent_factor_of_heating_distribution_system = (
-            exponent_factor_of_heating_distribution_system
-        )
-
     def calc_heat_distribution_flow_and_return_temperatures(
         self, daily_avg_outside_temperature_in_celsius: float
     ) -> List[float]:
@@ -984,3 +933,104 @@ class HeatDistributionController(cp.Component):
         ]
 
         return list_of_heating_flow_and_return_temperature_in_celsius
+
+
+@dataclass_json
+@dataclass
+class HeatDistributionControllerInformation:
+
+    """Class for collecting important heat distribution parameters to pass to other components."""
+
+    def __init__(self, config: HeatDistributionControllerConfig):
+        """Initialize the class."""
+
+        self.hds_controller_config = config
+
+        self.build(
+            set_heating_threshold_temperature_in_celsius=self.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius,
+            heating_reference_temperature_in_celsius=self.hds_controller_config.heating_reference_temperature_in_celsius,
+            heat_distribution_system_type=self.hds_controller_config.heating_system,
+            set_heating_temperature_for_building_in_celsius=self.hds_controller_config.set_heating_temperature_for_building_in_celsius,
+            set_cooling_temperature_for_building_in_celsius=self.hds_controller_config.set_cooling_temperature_for_building_in_celsius,
+        )
+        self.prepare_calc_heating_dist_temperature(
+            set_room_temperature_for_building_in_celsius=self.hds_controller_config.set_heating_temperature_for_building_in_celsius,
+            factor_of_oversizing_of_heat_distribution_system=1.0,
+        )
+
+    def build(
+        self,
+        set_heating_threshold_temperature_in_celsius: Optional[float],
+        heating_reference_temperature_in_celsius: float,
+        heat_distribution_system_type: HeatDistributionSystemType,
+        set_heating_temperature_for_building_in_celsius: float,
+        set_cooling_temperature_for_building_in_celsius: float,
+    ) -> None:
+        """Build function.
+
+        The function sets important constants and parameters for the calculations.
+        """
+        # Configuration
+        self.set_heating_threshold_temperature_in_celsius = (
+            set_heating_threshold_temperature_in_celsius
+        )
+        self.heating_reference_temperature_in_celsius = (
+            heating_reference_temperature_in_celsius
+        )
+        self.heat_distribution_system_type = heat_distribution_system_type
+
+        self.set_heating_temperature_for_building_in_celsius = (
+            set_heating_temperature_for_building_in_celsius
+        )
+        self.set_cooling_temperature_for_building_in_celsius = (
+            set_cooling_temperature_for_building_in_celsius
+        )
+
+    def prepare_calc_heating_dist_temperature(
+        self,
+        set_room_temperature_for_building_in_celsius: float = 20.0,
+        factor_of_oversizing_of_heat_distribution_system: float = 1.0,
+    ) -> None:
+        """Function to set several input parameters for functions regarding the heating system.
+
+        This function is taken from the HeatingSystem class of hplib and slightly adapted here.
+        """
+
+        self.set_room_temperature_for_building_in_celsius = (
+            set_room_temperature_for_building_in_celsius
+        )
+        if self.heat_distribution_system_type == HeatDistributionSystemType.FLOORHEATING:
+            list_of_maximum_flow_and_return_temperatures_in_celsius = [35, 28]
+            exponent_factor_of_heating_distribution_system = 1.1
+
+        elif self.heat_distribution_system_type == HeatDistributionSystemType.RADIATOR:
+            list_of_maximum_flow_and_return_temperatures_in_celsius = [70, 55]
+            exponent_factor_of_heating_distribution_system = 1.3
+        else:
+            raise ValueError(
+                "Heating System Type not defined here. Check your heat distribution controller config or your Heating System Type class."
+            )
+
+        self.max_flow_temperature_in_celsius = (
+            list_of_maximum_flow_and_return_temperatures_in_celsius[0]
+        )
+        self.min_flow_temperature_in_celsius = (
+            set_room_temperature_for_building_in_celsius
+        )
+        self.max_return_temperature_in_celsius = (
+            list_of_maximum_flow_and_return_temperatures_in_celsius[1]
+        )
+        self.min_return_temperature_in_celsius = (
+            set_room_temperature_for_building_in_celsius
+        )
+        self.factor_of_oversizing_of_heat_distribution_system = (
+            factor_of_oversizing_of_heat_distribution_system
+        )
+        self.exponent_factor_of_heating_distribution_system = (
+            exponent_factor_of_heating_distribution_system
+        )
+
+        self.temperature_spread_in_celsius = (
+            self.max_flow_temperature_in_celsius
+            - self.max_return_temperature_in_celsius
+        )

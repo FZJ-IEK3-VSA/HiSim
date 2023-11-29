@@ -28,8 +28,7 @@ from hisim.component import (
 from hisim.components import weather, simple_hot_water_storage, heat_distribution_system
 from hisim.loadtypes import LoadTypes, Units, InandOutputType
 from hisim.simulationparameters import SimulationParameters
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
-from hisim.components.heat_distribution_system import HeatingSystemType
+from hisim.components.heat_distribution_system import HeatDistributionSystemType
 
 
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
@@ -629,9 +628,10 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
     set_heating_threshold_outside_temperature_in_celsius: Optional[float]
     set_cooling_threshold_outside_temperature_in_celsius: Optional[float]
     temperature_offset_for_state_conditions_in_celsius: float
+    heat_distribution_system_type: Any
 
     @classmethod
-    def get_default_generic_heat_pump_controller_config(cls):
+    def get_default_generic_heat_pump_controller_config(cls, heat_distribution_system_type: Any) -> "HeatPumpHplibControllerL1Config":
         """Gets a default Generic Heat Pump Controller."""
         return HeatPumpHplibControllerL1Config(
             name="HeatPumpController",
@@ -639,6 +639,7 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
             set_heating_threshold_outside_temperature_in_celsius=16.0,
             set_cooling_threshold_outside_temperature_in_celsius=20.0,
             temperature_offset_for_state_conditions_in_celsius=5.0,
+            heat_distribution_system_type=heat_distribution_system_type
         )
 
 
@@ -695,16 +696,7 @@ class HeatPumpHplibController(Component):
             my_config=config,
         )
 
-        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.HEATINGSYSTEM):
-            self.heating_system = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.HEATINGSYSTEM
-            )
-        else:
-            raise KeyError(
-                "Keys for heating system was not found in the singleton sim repository."
-                + "This might be because the heat distribution system  was not initialized before the advanced hplib controller."
-                + "Please check the order of the initialization of the components in your system setup."
-            )
+        self.heat_distribution_system_type = self.heatpump_controller_config.heat_distribution_system_type
         self.build(
             mode=self.heatpump_controller_config.mode,
             temperature_offset_for_state_conditions_in_celsius=self.heatpump_controller_config.temperature_offset_for_state_conditions_in_celsius,
@@ -896,7 +888,7 @@ class HeatPumpHplibController(Component):
 
             # mode 2 is regulated controller (meaning heating, cooling, off). this is only possible if heating system is floor heating
             elif (
-                self.mode == 2 and self.heating_system == HeatingSystemType.FLOORHEATING
+                self.mode == 2 and self.heat_distribution_system_type == HeatDistributionSystemType.FLOORHEATING
             ):
                 # turning heat pump cooling mode off when the average daily outside temperature is below a certain threshold
                 summer_cooling_mode = self.summer_cooling_condition(

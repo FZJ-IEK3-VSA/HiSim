@@ -219,7 +219,8 @@ def air_conditioned_house(
         building_heat_capacity_class=building_class,
         initial_internal_temperature_in_celsius=initial_temperature,
         heating_reference_temperature_in_celsius=heating_reference_temperature,
-        #
+        set_heating_temperature_in_celsius=min_comfort_temp,
+        set_cooling_temperature_in_celsius=max_comfort_temp,
         absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
         total_base_area_in_m2=total_base_area_in_m2,
         number_of_apartments=number_of_apartments,

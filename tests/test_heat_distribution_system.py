@@ -108,15 +108,13 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
 
     # Set Heat Distribution System
     hds_name = "HeatDistributionSystem"
-    heating_system = heat_distribution_system.HeatingSystemType.FLOORHEATING
+    heating_system = heat_distribution_system.HeatDistributionSystemType.FLOORHEATING
 
     # ===================================================================================================================
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
     my_building_information = building.BuildingInformation(config=my_building_config)
 
-    SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.HEATINGSYSTEM, entry=heating_system
-    )
+    temperature_spread_in_celsius_of_heat_distribution_system = 7.0
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig(
@@ -126,6 +124,7 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
         lifetime=50,
         maintenance_cost_as_percentage_of_investment=0.01,
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+        temperature_spread_in_celsius=temperature_spread_in_celsius_of_heat_distribution_system,
     )
 
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(

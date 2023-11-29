@@ -6,7 +6,6 @@ from hisim import component as cp
 from hisim.components import simple_hot_water_storage
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from tests import functions_for_testing as fft
 
 
@@ -45,18 +44,16 @@ def simulate_simple_water_storage(
     water_mass_flow_rate_from_heat_distribution_system = 0.787
     # ===================================================================================================================
     # Build Heat Water Storage
-    my_simple_heat_water_storage_config = (
-        simple_hot_water_storage.SimpleHotWaterStorageConfig(
-            name=hws_name,
-            volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
-            temperature_loss_in_celsius_per_hour=0.0,
-            heat_exchanger_is_present=False,
-            co2_footprint=100,
-            cost=volume_heating_water_storage_in_liter * 14.51,
-            lifetime=100,
-            maintenance_cost_as_percentage_of_investment=0.0,
-            water_mass_flow_rate_from_hds_in_kg_per_second=water_mass_flow_rate_from_heat_distribution_system
-        )
+    my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig(
+        name=hws_name,
+        volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
+        temperature_loss_in_celsius_per_hour=0.0,
+        heat_exchanger_is_present=False,
+        co2_footprint=100,
+        cost=volume_heating_water_storage_in_liter * 14.51,
+        lifetime=100,
+        maintenance_cost_as_percentage_of_investment=0.0,
+        water_mass_flow_rate_from_hds_in_kg_per_second=water_mass_flow_rate_from_heat_distribution_system,
     )
     my_simple_heat_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,

@@ -165,6 +165,7 @@ system_setups/ac_results_5b
 system_setups/network_t1.png
 system_setups/*jpg
 system_setups/*.png
+system_setups/component_connections.json
 hisim/inputs/cfg.json
 cfg.json
 tests/cfg.json

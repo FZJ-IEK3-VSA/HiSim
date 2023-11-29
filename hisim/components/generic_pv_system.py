@@ -275,8 +275,6 @@ class PVSystem(cp.Component):
 
     # Outputs
     ElectricityOutput = "ElectricityOutput"
-    CumulativeEnergy = "CumulativeEnergy"
-    Energy = "Energy"
 
     # Similar components to connect to:
     # 1. Weather
@@ -287,12 +285,8 @@ class PVSystem(cp.Component):
         """Initialize the class."""
         self.my_simulation_parameters = my_simulation_parameters
         self.pvconfig = config
-        self.ac_power_ratios_for_all_timesteps: List = []
-        self.energy_in_watt_hour_for_all_timesteps: List = []
-        self.cumulative_energy_in_watt_hour_for_all_timesteps: List = []
-        self.ac_power_ratio_for_all_timesteps_from_cache: Any
-        self.energy_in_watt_hour_for_all_timesteps_from_cache: Any
-        self.cumulative_energy_in_watt_hour_for_all_timesteps_from_cache: Any
+        self.ac_power_ratios_for_all_timesteps_data: List = []
+        self.ac_power_ratios_for_all_timesteps_output: List = []
         self.cache_filepath: str
         self.modules: Any
         self.inverter: Any
@@ -381,22 +375,6 @@ class PVSystem(cp.Component):
             unit=lt.Units.WATT,
             postprocessing_flag=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
             output_description=f"here a description for PV {self.ElectricityOutput} will follow.",
-        )
-
-        self.cumulative_energy_output_channel: cp.ComponentOutput = self.add_output(
-            object_name=self.component_name,
-            field_name=self.CumulativeEnergy,
-            load_type=lt.LoadTypes.ELECTRICITY,
-            unit=lt.Units.WATT_HOUR,
-            output_description=f"here a description for PV {self.CumulativeEnergy} will follow.",
-        )
-
-        self.energy_output_channel: cp.ComponentOutput = self.add_output(
-            object_name=self.component_name,
-            field_name=self.Energy,
-            load_type=lt.LoadTypes.ELECTRICITY,
-            unit=lt.Units.WATT_HOUR,
-            output_description=f"here a description for PV {self.Energy} will follow.",
         )
 
         self.add_default_connections(self.get_default_connections_from_weather())
@@ -514,37 +492,14 @@ class PVSystem(cp.Component):
 
         # check if results could be found in cache and if the lists have the right length
         if (
-            hasattr(self, "ac_power_ratio_for_all_timesteps_from_cache")
-            and len(self.ac_power_ratio_for_all_timesteps_from_cache)
-            == self.data_length
+            hasattr(self, "ac_power_ratios_for_all_timesteps_output")
+            and len(self.ac_power_ratios_for_all_timesteps_output) == self.data_length
         ):
 
             stsv.set_output_value(
                 self.electricity_output_channel,
-                self.ac_power_ratio_for_all_timesteps_from_cache[timestep]
+                self.ac_power_ratios_for_all_timesteps_output[timestep]
                 * self.pvconfig.power_in_watt,
-            )
-
-        if (
-            hasattr(self, "cumulative_energy_in_watt_hour_for_all_timesteps_from_cache")
-            and len(self.cumulative_energy_in_watt_hour_for_all_timesteps_from_cache)
-            == self.data_length
-        ):
-            stsv.set_output_value(
-                self.cumulative_energy_output_channel,
-                self.cumulative_energy_in_watt_hour_for_all_timesteps_from_cache[
-                    timestep
-                ],
-            )
-
-        if (
-            hasattr(self, "energy_in_watt_hour_for_all_timesteps_from_cache")
-            and len(self.energy_in_watt_hour_for_all_timesteps_from_cache)
-            == self.data_length
-        ):
-            stsv.set_output_value(
-                self.energy_output_channel,
-                self.energy_in_watt_hour_for_all_timesteps_from_cache[timestep],
             )
 
         # calculate pv system outputs with pvlib
@@ -574,56 +529,28 @@ class PVSystem(cp.Component):
 
             ac_power_in_watt = ac_power_ratio * self.pvconfig.power_in_watt
 
-            ac_energy_in_watt_hour = (
-                ac_power_in_watt
-                * self.my_simulation_parameters.seconds_per_timestep
-                / 3600
-            )
-
-            cumulative_energy_in_watt_hour = (
-                self.state.cumulative_energy_in_watt_hour + ac_energy_in_watt_hour
-            )
-
             # if you wanted to access the temperature forecast from the weather component:
             # val = self.simulation_repository.get_entry(Weather.Weather_Temperature_Forecast_24h)
 
             stsv.set_output_value(self.electricity_output_channel, ac_power_in_watt)
-            stsv.set_output_value(
-                self.cumulative_energy_output_channel, cumulative_energy_in_watt_hour
-            )
-            stsv.set_output_value(self.energy_output_channel, ac_energy_in_watt_hour)
 
             # cache results at the end of the simulation
-            self.ac_power_ratios_for_all_timesteps[timestep] = ac_power_ratio
-            self.cumulative_energy_in_watt_hour_for_all_timesteps[
-                timestep
-            ] = cumulative_energy_in_watt_hour
-
-            self.energy_in_watt_hour_for_all_timesteps[
-                timestep
-            ] = ac_energy_in_watt_hour
+            self.ac_power_ratios_for_all_timesteps_data[timestep] = ac_power_ratio
 
             if timestep + 1 == self.data_length:
 
                 dict_with_results = {
-                    "output_power": self.ac_power_ratios_for_all_timesteps,
-                    "output_energy": self.energy_in_watt_hour_for_all_timesteps,
-                    "output_cumulative_energy": self.cumulative_energy_in_watt_hour_for_all_timesteps,
+                    "output_power": self.ac_power_ratios_for_all_timesteps_data,
                 }
 
                 database = pd.DataFrame(
                     dict_with_results,
                     columns=[
                         "output_power",
-                        "output_energy",
-                        "output_cumulative_energy",
                     ],
                 )
 
                 database.to_csv(self.cache_filepath, sep=",", decimal=".", index=False)
-
-            # write state
-            self.state.cumulative_energy_in_watt_hour = cumulative_energy_in_watt_hour
 
         if (
             self.pvconfig.predictive_control
@@ -634,10 +561,15 @@ class PVSystem(cp.Component):
                 + self.pvconfig.prediction_horizon
                 / self.my_simulation_parameters.seconds_per_timestep
             )
-            if last_forecast_timestep > len(self.ac_power_ratios_for_all_timesteps):
-                last_forecast_timestep = len(self.ac_power_ratios_for_all_timesteps)
+            if last_forecast_timestep > len(
+                self.ac_power_ratios_for_all_timesteps_output
+            ):
+                last_forecast_timestep = len(
+                    self.ac_power_ratios_for_all_timesteps_output
+                )
             pvforecast = [
-                self.ac_power_ratios_for_all_timesteps[t] * self.pvconfig.power_in_watt
+                self.ac_power_ratios_for_all_timesteps_output[t]
+                * self.pvconfig.power_in_watt
                 for t in range(timestep, last_forecast_timestep)
             ]
             self.simulation_repository.set_dynamic_entry(
@@ -678,11 +610,11 @@ class PVSystem(cp.Component):
 
     def i_save_state(self) -> None:
         """Saves the state."""
-        self.previous_state = self.state.self_copy()
+        pass
 
     def i_restore_state(self) -> None:
         """Restores the state."""
-        self.state = self.previous_state.self_copy()
+        pass
 
     def write_to_report(self):
         """Write to the report."""
@@ -701,30 +633,19 @@ class PVSystem(cp.Component):
 
         if file_exists:
             log.information("Get PV results from cache.")
-
-            self.ac_power_ratio_for_all_timesteps_from_cache = pd.read_csv(
+            self.ac_power_ratios_for_all_timesteps_output = pd.read_csv(
                 self.cache_filepath, sep=",", decimal="."
             )["output_power"].tolist()
 
-            self.energy_in_watt_hour_for_all_timesteps_from_cache = pd.read_csv(
-                self.cache_filepath, sep=",", decimal="."
-            )["output_energy"].tolist()
-
-            self.cumulative_energy_in_watt_hour_for_all_timesteps_from_cache = (
-                pd.read_csv(self.cache_filepath, sep=",", decimal=".")[
-                    "output_cumulative_energy"
-                ].tolist()
-            )
-
             if (
-                len(self.ac_power_ratio_for_all_timesteps_from_cache)
+                len(self.ac_power_ratios_for_all_timesteps_output)
                 != self.my_simulation_parameters.timesteps
             ):
                 raise Exception(
                     "Reading the cached PV values seems to have failed. Expected "
                     + str(self.my_simulation_parameters.timesteps)
                     + " values, but got "
-                    + str(len(self.ac_power_ratio_for_all_timesteps_from_cache))
+                    + str(len(self.ac_power_ratios_for_all_timesteps_output))
                 )
         else:
             if self.simulation_repository.exist_entry("weather_location"):
@@ -780,13 +701,9 @@ class PVSystem(cp.Component):
                 )
 
                 x_simplephotovoltaic = []
-                x_energies_in_watt_hour = []
-                x_cumulative_energies_in_watt_hour = []
-                cumulative_energy_in_watt_hour = 0
                 for i in range(self.my_simulation_parameters.timesteps):
 
                     # calculate outputs
-
                     ac_power_ratio = self.simphotovoltaic_two(
                         dni_extra=dni_extra[i],
                         dni=dni[i],
@@ -800,44 +717,22 @@ class PVSystem(cp.Component):
                         surface_tilt=self.pvconfig.tilt,
                     )
 
-                    energy_in_watt_hour = (
-                        ac_power_ratio
-                        * self.pvconfig.power_in_watt
-                        * self.my_simulation_parameters.seconds_per_timestep
-                        / 3600
-                    )
-                    cumulative_energy_in_watt_hour = (
-                        cumulative_energy_in_watt_hour + energy_in_watt_hour
-                    )
-
                     # append lists
                     x_simplephotovoltaic.append(ac_power_ratio)
-                    x_energies_in_watt_hour.append(energy_in_watt_hour)
-                    x_cumulative_energies_in_watt_hour.append(
-                        cumulative_energy_in_watt_hour
-                    )
 
-                self.ac_power_ratios_for_all_timesteps = x_simplephotovoltaic
-
-                self.energy_in_watt_hour_for_all_timesteps = x_energies_in_watt_hour
-
-                self.cumulative_energy_in_watt_hour_for_all_timesteps = (
-                    x_cumulative_energies_in_watt_hour
+                self.ac_power_ratios_for_all_timesteps_output = (
+                    x_simplephotovoltaic
                 )
 
                 # cache predictive control results
                 dict_with_results = {
-                    "output_power": self.ac_power_ratios_for_all_timesteps,
-                    "output_energy": self.energy_in_watt_hour_for_all_timesteps,
-                    "output_cumulative_energy": self.cumulative_energy_in_watt_hour_for_all_timesteps,
+                    "output_power": self.ac_power_ratios_for_all_timesteps_output,
                 }
 
                 database = pd.DataFrame(
                     dict_with_results,
                     columns=[
                         "output_power",
-                        "output_energy",
-                        "output_cumulative_energy",
                     ],
                 )
 
@@ -845,21 +740,15 @@ class PVSystem(cp.Component):
 
             else:
                 # create empty result lists as a preparation for caching in i_simulate
-                self.ac_power_ratios_for_all_timesteps = [
-                    0
-                ] * self.my_simulation_parameters.timesteps
 
-                self.cumulative_energy_in_watt_hour_for_all_timesteps = [
-                    0
-                ] * self.my_simulation_parameters.timesteps
-
-                self.energy_in_watt_hour_for_all_timesteps = [
+                self.ac_power_ratios_for_all_timesteps_data = [
                     0
                 ] * self.my_simulation_parameters.timesteps
 
         if self.pvconfig.predictive:
             pv_forecast_yearly = [
-                self.ac_power_ratios_for_all_timesteps[t] * self.pvconfig.power_in_watt
+                self.ac_power_ratios_for_all_timesteps_output[t]
+                * self.pvconfig.power_in_watt
                 for t in range(self.my_simulation_parameters.timesteps)
             ]
             SingletonSimRepository().set_entry(

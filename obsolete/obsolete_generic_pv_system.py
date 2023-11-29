@@ -5,7 +5,6 @@ import math
 import pvlib
 
 def simphotovoltaicfast(
-    self,
     temperature_model: Any,
     dni_extra: Any,
     dni: Any,

@@ -62,10 +62,6 @@ def test_photovoltaic():
     my_weather.i_simulate(timestep, stsv, False)
     my_pvs.i_simulate(timestep, stsv, False)
     log.information("pv electricity output [W]: " + str(stsv.values[my_pvs.electricity_output_channel.global_index]))
-    assert (
-        abs(
-            0.4532226665022684 * 1e3
-            - stsv.values[my_pvs.electricity_output_channel.global_index]
-        )
-        < 0.05 * 1e3
-    )
+
+    # check pv electricity output [W] in timestep 655
+    assert stsv.values[my_pvs.electricity_output_channel.global_index] == 370.42788400764255

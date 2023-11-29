@@ -13,7 +13,6 @@ from hisim.components.building import Building
 from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
 from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
 from hisim import utils
@@ -49,8 +48,8 @@ class HeatDistributionConfig(cp.ConfigBase):
         return HeatDistribution.get_full_classname()
 
     name: str
-    heating_load_of_building_in_watt: float
     temperature_spread_in_celsius: float
+    water_mass_flow_rate_in_kg_per_second: float
     #: CO2 footprint of investment in kg
     co2_footprint: float
     #: cost for investment in Euro
@@ -62,13 +61,15 @@ class HeatDistributionConfig(cp.ConfigBase):
 
     @classmethod
     def get_default_heatdistributionsystem_config(
-        cls, heating_load_of_building_in_watt: float, temperature_spread_in_celsius: float
+        cls,
+        temperature_spread_in_celsius: float,
+        water_mass_flow_rate_in_kg_per_second: float,
     ) -> Any:
         """Get a default heat distribution system config."""
         config = HeatDistributionConfig(
             name="HeatDistributionSystem",
-            heating_load_of_building_in_watt=heating_load_of_building_in_watt,
             temperature_spread_in_celsius=temperature_spread_in_celsius,
+            water_mass_flow_rate_in_kg_per_second=water_mass_flow_rate_in_kg_per_second,
             co2_footprint=0,  # Todo: check value
             cost=8000,  # SOURCE: https://www.hausjournal.net/heizungsrohre-verlegen-kosten  # Todo: use price per m2 in system_setups instead
             lifetime=50,  # SOURCE: VDI2067-1
@@ -94,9 +95,15 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
     heating_reference_temperature_in_celsius: float
     set_heating_temperature_for_building_in_celsius: float
     set_cooling_temperature_for_building_in_celsius: float
+    heating_load_of_building_in_watt: float
 
     @classmethod
-    def get_default_heat_distribution_controller_config(cls, set_heating_temperature_for_building_in_celsius: float, set_cooling_temperature_for_building_in_celsius: float):
+    def get_default_heat_distribution_controller_config(
+        cls,
+        heating_load_of_building_in_watt: float,
+        set_heating_temperature_for_building_in_celsius: float,
+        set_cooling_temperature_for_building_in_celsius: float,
+    ) -> "HeatDistributionControllerConfig":
         """Gets a default HeatDistribution Controller."""
         return HeatDistributionControllerConfig(
             name="HeatDistributionController",
@@ -105,6 +112,7 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
             heating_reference_temperature_in_celsius=-14.0,
             set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
             set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
+            heating_load_of_building_in_watt=heating_load_of_building_in_watt,
         )
 
 
@@ -160,24 +168,15 @@ class HeatDistribution(cp.Component):
 
         self.thermal_power_delivered_in_watt: float = 0.0
         self.water_temperature_output_in_celsius: float = 21
-        self.temperature_spread_in_celsius = self.heat_distribution_system_config.temperature_spread_in_celsius
+        self.temperature_spread_in_celsius = (
+            self.heat_distribution_system_config.temperature_spread_in_celsius
+        )
 
-        self.max_thermal_building_demand_in_watt = (
-            self.heat_distribution_system_config.heating_load_of_building_in_watt
+        self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second = (
+            self.heat_distribution_system_config.water_mass_flow_rate_in_kg_per_second
         )
 
         self.build()
-
-        self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second = (
-            self.calc_heating_distribution_system_water_mass_flow_rate(
-                self.max_thermal_building_demand_in_watt
-            )
-        )
-
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATINGDISTRIBUTIONSYSTEM,
-            entry=self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second,
-        )
 
         self.state: HeatDistributionSystemState = HeatDistributionSystemState(
             water_output_temperature_in_celsius=21, thermal_power_delivered_in_watt=0
@@ -391,24 +390,6 @@ class HeatDistribution(cp.Component):
             self.thermal_power_delivered_in_watt
         )
 
-    def calc_heating_distribution_system_water_mass_flow_rate(
-        self,
-        max_thermal_building_demand_in_watt: float,
-    ) -> Any:
-        """Calculate water mass flow between heating distribution system and hot water storage."""
-        specific_heat_capacity_of_water_in_joule_per_kg_per_celsius = (
-            PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
-        )
-
-        heating_distribution_system_water_mass_flow_in_kg_per_second = (
-            max_thermal_building_demand_in_watt
-            / (
-                specific_heat_capacity_of_water_in_joule_per_kg_per_celsius
-                * self.temperature_spread_in_celsius
-            )
-        )
-        return heating_distribution_system_water_mass_flow_in_kg_per_second
-
     def determine_water_temperature_output_after_heat_exchange_with_building_and_effective_thermal_power(
         self,
         water_mass_flow_in_kg_per_second: float,
@@ -543,8 +524,8 @@ class HeatDistributionController(cp.Component):
         )
         self.state_controller: int = 0
         self.building_temperature_modifier: float = 0
-        my_heat_distribution_controller_information = HeatDistributionControllerInformation(
-            config=self.hsd_controller_config
+        my_heat_distribution_controller_information = (
+            HeatDistributionControllerInformation(config=self.hsd_controller_config)
         )
 
         self.build(
@@ -958,6 +939,10 @@ class HeatDistributionControllerInformation:
             factor_of_oversizing_of_heat_distribution_system=1.0,
         )
 
+        self.water_mass_flow_rate_in_kp_per_second = self.calc_heating_distribution_system_water_mass_flow_rate(
+            max_thermal_building_demand_in_watt=self.hds_controller_config.heating_load_of_building_in_watt
+        )
+
     def build(
         self,
         set_heating_threshold_temperature_in_celsius: Optional[float],
@@ -999,7 +984,10 @@ class HeatDistributionControllerInformation:
         self.set_room_temperature_for_building_in_celsius = (
             set_room_temperature_for_building_in_celsius
         )
-        if self.heat_distribution_system_type == HeatDistributionSystemType.FLOORHEATING:
+        if (
+            self.heat_distribution_system_type
+            == HeatDistributionSystemType.FLOORHEATING
+        ):
             list_of_maximum_flow_and_return_temperatures_in_celsius = [35, 28]
             exponent_factor_of_heating_distribution_system = 1.1
 
@@ -1034,3 +1022,21 @@ class HeatDistributionControllerInformation:
             self.max_flow_temperature_in_celsius
             - self.max_return_temperature_in_celsius
         )
+
+    def calc_heating_distribution_system_water_mass_flow_rate(
+        self,
+        max_thermal_building_demand_in_watt: float,
+    ) -> Any:
+        """Calculate water mass flow between heating distribution system and hot water storage."""
+        specific_heat_capacity_of_water_in_joule_per_kg_per_celsius = (
+            PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+        )
+
+        heating_distribution_system_water_mass_flow_in_kg_per_second = (
+            max_thermal_building_demand_in_watt
+            / (
+                specific_heat_capacity_of_water_in_joule_per_kg_per_celsius
+                * self.temperature_spread_in_celsius
+            )
+        )
+        return heating_distribution_system_water_mass_flow_in_kg_per_second

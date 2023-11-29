@@ -8,7 +8,7 @@ from dataclass_wizard import JSONWizard
 from typing_extensions import Self
 
 from hisim import log, utils
-from hisim.components import building, heat_distribution_system
+from hisim.components import building
 
 
 @dataclass

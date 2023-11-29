@@ -113,6 +113,7 @@ def setup_function(
     my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
         set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
         set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
     )
 
     my_heat_distribution_controller = (
@@ -139,8 +140,8 @@ def setup_function(
     )
 
     hds_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         temperature_spread_in_celsius=my_hds_controller_information.temperature_spread_in_celsius,
+        water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
     )
 
     # Build Heat Distribution System

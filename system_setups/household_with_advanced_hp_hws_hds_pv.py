@@ -132,10 +132,11 @@ def setup_function(
             set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
             heating_system=heating_system,
+            heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         ),
     )
 
-    my_heat_distribution_controller_information = (
+    my_hds_controller_information = (
         heat_distribution_system.HeatDistributionControllerInformation(
             config=my_heat_distribution_controller.hsd_controller_config
         )
@@ -148,7 +149,7 @@ def setup_function(
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_pump_in_celsius,
             set_cooling_threshold_outside_temperature_in_celsius=set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius,
             temperature_offset_for_state_conditions_in_celsius=temperature_offset_for_state_conditions_in_celsius,
-            heat_distribution_system_type=my_heat_distribution_controller_information.heat_distribution_system_type,
+            heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )
@@ -170,8 +171,8 @@ def setup_function(
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-        temperature_spread_in_celsius=my_heat_distribution_controller_information.temperature_spread_in_celsius,
+        temperature_spread_in_celsius=my_hds_controller_information.temperature_spread_in_celsius,
+        water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config,
@@ -182,7 +183,8 @@ def setup_function(
     my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_heat_pump_config.set_thermal_output_power_in_watt,
         heating_system_name=my_heat_pump.component_name,
-        temperature_spread_heat_distribution_system_in_celsius=my_heat_distribution_controller_information.temperature_spread_in_celsius,
+        temperature_spread_heat_distribution_system_in_celsius=my_hds_controller_information.temperature_spread_in_celsius,
+        water_mass_flow_rate_from_hds_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
     )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,

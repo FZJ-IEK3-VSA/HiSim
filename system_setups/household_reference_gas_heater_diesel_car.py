@@ -77,6 +77,7 @@ class ReferenceHouseholdConfig(SystemSetupConfigBase):
         hds_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
             set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
             set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
+            heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         )
         my_hds_controller_information = (
             heat_distribution_system.HeatDistributionControllerInformation(
@@ -107,8 +108,8 @@ class ReferenceHouseholdConfig(SystemSetupConfigBase):
             hds_controller_config=hds_controller_config,
             hds_config=(
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
                     temperature_spread_in_celsius=my_hds_controller_information.temperature_spread_in_celsius,
+                    water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
                 )
             ),
             gasheater_controller_config=(
@@ -123,6 +124,7 @@ class ReferenceHouseholdConfig(SystemSetupConfigBase):
                 simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
                     max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
                     heating_system_name="GasHeater",
+                    water_mass_flow_rate_from_hds_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
                 )
             ),
             dhw_heatpump_config=(

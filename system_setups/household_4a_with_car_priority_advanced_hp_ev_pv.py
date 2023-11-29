@@ -93,6 +93,7 @@ class HouseholdAdvancedHPEvPvConfig(SystemSetupConfigBase):
         hds_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
             set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
             set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
+            heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         )
         my_hds_controller_information = (
             heat_distribution_system.HeatDistributionControllerInformation(
@@ -131,8 +132,8 @@ class HouseholdAdvancedHPEvPvConfig(SystemSetupConfigBase):
             hds_controller_config=hds_controller_config,
             hds_config=(
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
                     temperature_spread_in_celsius=my_hds_controller_information.temperature_spread_in_celsius,
+                    water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
                 )
             ),
             hp_controller_config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(
@@ -148,6 +149,7 @@ class HouseholdAdvancedHPEvPvConfig(SystemSetupConfigBase):
                     max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
                     temperature_spread_heat_distribution_system_in_celsius=my_hds_controller_information.temperature_spread_in_celsius,
                     heating_system_name="AdvancedHeatPumpHPLib",
+                    water_mass_flow_rate_from_hds_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
                 )
             ),
             dhw_heatpump_config=(

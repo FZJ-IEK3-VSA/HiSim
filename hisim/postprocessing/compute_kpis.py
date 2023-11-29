@@ -37,8 +37,7 @@ def building_temperature_control(
         if "Building" in wrapped_component.my_component.component_name:
             set_heating_temperature_in_celsius = getattr(wrapped_component.my_component, "set_heating_temperature_in_celsius")
             set_cooling_temperature_in_celsius = getattr(wrapped_component.my_component, "set_cooling_temperature_in_celsius")
-        else:
-            raise KeyError("Building component was not found in wrapped components which is why this function can not be executed.")
+            break
 
     for column in results.columns:
 
@@ -82,6 +81,7 @@ def building_temperature_control(
             # get also max and min indoor air temperature
             min_temperature_reached_in_celsius = float(min(results[column].values))
             max_temperature_reached_in_celsius = float(max(results[column].values))
+            break
 
     return (
         set_heating_temperature_in_celsius,

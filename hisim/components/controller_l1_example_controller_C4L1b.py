@@ -260,8 +260,12 @@ class SimpleController(Component):
     def i_restore_state(self) -> None:
         self.state = self.previous_state
 
+    def i_prepare_simulation(self) -> None:
+        """Prepares the simulation."""
+        pass
+
     def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
+        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
         if force_convergence:
             return
@@ -271,14 +275,15 @@ class SimpleController(Component):
         BatteryAcBatteryPowe = stsv.get_input_value(self.BatteryAcBatteryPowerInput)
         BatteryDcBatteryPower = stsv.get_input_value(self.BatteryDcBatteryPowerInput)
 
+        ac_battery_power_in_watt = 0
         stsv.set_output_value(self.BatteryLoadingPowerOutput, ac_battery_power_in_watt)
 
-        percent = stsv.get_input_value(self.input1)
+        #percent = stsv.get_input_value(self.input1)
         
         
         
-        if percent < 0.4:
-            self.state = 1
-        if percent > 0.99:
-            self.state = 0
-        stsv.set_output_value(self.output1, self.state)
+        # if percent < 0.4:
+        #     self.state = 1
+        # if percent > 0.99:
+        #     self.state = 0
+        #stsv.set_output_value(self.output1, self.state)

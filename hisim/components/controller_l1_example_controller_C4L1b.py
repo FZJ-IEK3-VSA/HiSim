@@ -294,14 +294,22 @@ class SimpleController(Component):
     ) -> None:
         if force_convergence:
             return
+
+        #From differenct Components
+        General_ElectricityConsumptiom = stsv.get_input_value(self.General_ElectricityConsumptiomInput)
+        Electrolyzer_ElectricityConsumption = stsv.get_input_value(self.Electrolyzer_ElectricityConsumptionInput)
+        H2Storage_ElectricityConsumption = stsv.get_input_value(self.H2Storage_ElectricityConsumptionInput)
+        General_PhotovoltaicDelivery = stsv.get_input_value(self.General_PhotovoltaicDeliveryInput)
+        CHP_ElectricityDelivery = stsv.get_input_value(self.CHP_ElectricityDeliveryInput)
+
         
         if self.config.szenario == '1a':
-            #From differenct Components
-            General_ElectricityConsumptiom = stsv.get_input_value(self.General_ElectricityConsumptiomInput)
-            Electrolyzer_ElectricityConsumption = stsv.get_input_value(self.Electrolyzer_ElectricityConsumptionInput)
-            H2Storage_ElectricityConsumption = stsv.get_input_value(self.H2Storage_ElectricityConsumptionInput)
-            General_PhotovoltaicDelivery = stsv.get_input_value(self.General_PhotovoltaicDeliveryInput)
-            CHP_ElectricityDelivery = stsv.get_input_value(self.CHP_ElectricityDeliveryInput)
+            # #From differenct Components
+            # General_ElectricityConsumptiom = stsv.get_input_value(self.General_ElectricityConsumptiomInput)
+            # Electrolyzer_ElectricityConsumption = stsv.get_input_value(self.Electrolyzer_ElectricityConsumptionInput)
+            # H2Storage_ElectricityConsumption = stsv.get_input_value(self.H2Storage_ElectricityConsumptionInput)
+            # General_PhotovoltaicDelivery = stsv.get_input_value(self.General_PhotovoltaicDeliveryInput)
+            # CHP_ElectricityDelivery = stsv.get_input_value(self.CHP_ElectricityDeliveryInput)
             
             #Production and consumption without Battery
             total_electricity_production = General_PhotovoltaicDelivery + CHP_ElectricityDelivery
@@ -310,17 +318,82 @@ class SimpleController(Component):
             
             #Integration of Battery
             stsv.set_output_value(self.BatteryLoadingPowerWishOutput, electricity_to__or_from_battery_Wish)
-            BatteryStateofCharge = stsv.get_input_value(self.BatteryStateofChargeInput)
+            #BatteryStateofCharge = stsv.get_input_value(self.BatteryStateofChargeInput)
             BatteryAcBatteryPower = stsv.get_input_value(self.BatteryAcBatteryPowerInput)
-            BatteryDcBatteryPower = stsv.get_input_value(self.BatteryDcBatteryPowerInput)
+            #BatteryDcBatteryPower = stsv.get_input_value(self.BatteryDcBatteryPowerInput)
 
 
-            electricity_to__or_from_grid = total_electricity_production - total_electricity_consumption - BatteryAcBatteryPower
-            stsv.set_output_value(self.electricity_to_or_from_gridOutput, electricity_to__or_from_grid)
+            electricity_to_or_from_grid = total_electricity_production - total_electricity_consumption - BatteryAcBatteryPower
+            stsv.set_output_value(self.electricity_to_or_from_gridOutput, electricity_to_or_from_grid)
             stsv.set_output_value(self.total_electricity_consumptionOutput, total_electricity_consumption)
         
         
+        if self.config.szenario == '1b':
+            #Abzug aller Stromproduktionen und Verbräuche
 
+            
+            
+            #Elektrolysebetrieb
+            if Electrolyzer_ElectricityConsumption > 0 and CHP_ElectricityDelivery == 0:  ##Sind wir im Electrolysebetrieb? Wenn ja, dann...
+                
+                Estatus_house = General_PhotovoltaicDelivery - General_ElectricityConsumptiom ##Decke zuerst mit der PV den Strombedarf des Hauses
+                electricity_electH2stor_consumption_system = Electrolyzer_ElectricityConsumption + H2Storage_ElectricityConsumption ##Rechne den Gesamtstrombedarf des Elektrolyseur + Wasserstoffspeichers zusammen
+        
+                if Estatus_house > 0: #Wenn nach Abzug des Hausstrombedarfs von der PV noch ein PV Strom übrig ist.....
+                                    
+                    status_batteryWish = Estatus_house - electricity_electH2stor_consumption_system #Brauche ich Energie von der Batterie, oder kann ich dieser welche zukommen lassen?          
+                    
+                    stsv.set_output_value(self.BatteryLoadingPowerWishOutput, status_batteryWish) 
+                    BatteryAcBatteryPower = stsv.get_input_value(self.BatteryAcBatteryPowerInput) #Falls ich Energie von der Batterie brauche, wieviel kann mir diese liefern?
+                    
+                    Estatus_system = Estatus_house - electricity_electH2stor_consumption_system - BatteryAcBatteryPower #Strombedarf vom Netz ergibt sich aus PV Produktion + Batteriezuschuss - Verbrauch Elektrolyseur - Verbrauch Wasserstoffspeicher
+                    
+                    ##Wenn Batterie Strom zur Deckung liefert, darf kein Strom ins Netz gehen!!!! ÜBERPRÜFEN NOTWENDIG !!!!
+                    
+                    electricity_to_or_from_grid = Estatus_system
+
+                
+                elif Estatus_house <= 0: #Es ist kein PV Strom mehr übrig UND der Hausstrombedarf ist eventuell auch nicht gedeckt
+                    
+                    status_batteryWish = -electricity_electH2stor_consumption_system #Überprüfen ob Batterie den Stromverbrauch Elektrolyseur + Wasserstoffspeicher decken kann?
+                    stsv.set_output_value(self.BatteryLoadingPowerWishOutput, status_batteryWish)
+                    BatteryAcBatteryPower = stsv.get_input_value(self.BatteryAcBatteryPowerInput) #Falls ich Energie von der Batterie brauche, wieviel kann mir diese liefern?
+
+
+                    electricity_to_or_from_grid = Estatus_house - electricity_electH2stor_consumption_system - BatteryAcBatteryPower 
+                else:
+                    print("ERROR IM ENERGYMANAGEMENT-SYSTEM")
+                    breakpoint()
+            
+            #Brennstoffzellenbetrieb
+            if Electrolyzer_ElectricityConsumption == 0 and CHP_ElectricityDelivery >= 0:  ##Sind wir im Electrolysebetrieb? Wenn ja, dann...
+                print(timestep)
+                Estatus_house = General_PhotovoltaicDelivery - General_ElectricityConsumptiom ##Decke zuerst mit der PV den Strombedarf des Hauses // 
+                part_pv_to_grid = 0
+                if Estatus_house > 0: #Ist ein Überschussstrom vom PV Strom nach Abzug des Strombederafs des Hauses noch vorhanden?
+                    part_pv_to_grid = Estatus_house #WEnn ja, dieser Überschussstrom geht ins Netz....
+                    Estatus_house = 0 #Haustrombedarf ist damit auch auf jeden Fall gedeckt....
+                
+                #Zählen wir den restlichen Hausstrombedarf mit dem Bedarf für den Wasserstoffspeicher zusammen und schauen, wieviel uns die Brennstoffzelle liefert!
+                status_batteryWish = Estatus_house - H2Storage_ElectricityConsumption + CHP_ElectricityDelivery
+                stsv.set_output_value(self.BatteryLoadingPowerWishOutput, status_batteryWish)
+                BatteryAcBatteryPower = stsv.get_input_value(self.BatteryAcBatteryPowerInput) #Falls ich Energie von der Batterie brauche, wieviel kann mir diese liefern?
+                # if BatteryAcBatteryPower < 0:
+                #     breakpoint()
+                Estatus_total = Estatus_house - H2Storage_ElectricityConsumption + CHP_ElectricityDelivery - BatteryAcBatteryPower
+                
+                if Estatus_total > 0 and part_pv_to_grid <= 0:
+                    breakpoint()
+                electricity_to_or_from_grid = Estatus_total + part_pv_to_grid
+
+            if Electrolyzer_ElectricityConsumption == 0 and CHP_ElectricityDelivery == 0:
+                print(timestep)
+
+            
+            stsv.set_output_value(self.electricity_to_or_from_gridOutput, electricity_to_or_from_grid)
+    
+    
+    
     
     def write_to_report(self):
         """Writes the information of the current component to the report."""

@@ -20,13 +20,13 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.components import static_electrolyzer, generic_hydrogen_storage, csvloader_electricityconsumption, csvloader_photovoltaic, generic_CHP
 
 
-__authors__ = "Vitor Hugo Bellotto Zago"
+__authors__ = "Christof Bernsteiner"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
 __license__ = "MIT"
 __version__ = "0.1"
-__maintainer__ = "Vitor Hugo Bellotto Zago"
-__email__ = "vitor.zago@rwth-aachen.de"
+__maintainer__ = "-"
+__email__ = "christof.bernsteiner@4wardenergy.at"
 __status__ = "development"
 
 
@@ -36,6 +36,7 @@ class SimpleControllerConfig(ConfigBase):
     """Config class."""
 
     name: str
+    szenario: str
 
     @classmethod
     def get_main_classname(cls):
@@ -45,7 +46,10 @@ class SimpleControllerConfig(ConfigBase):
     @classmethod
     def get_default_config(cls) -> Any:
         """Returns default config."""
-        config = SimpleControllerConfig(name="SimpleController")
+        
+        
+        config = SimpleControllerConfig(name="SimpleController",szenario="necessary_to_choose")
+
         return config
 
 
@@ -65,7 +69,7 @@ class SimpleController(Component):
     BatteryDcBatteryPower = "Dc Battery Power" #W  
     
     #Output to Battery
-    BatteryLoadingPower = "BatteryLoadingPower" #W
+    BatteryLoadingPowerWish = "BatteryLoadingPower" #W
     
 
     #Outputs
@@ -161,16 +165,16 @@ class SimpleController(Component):
 
         #OUTPUTS
         # Define component outputs
-        self.BatteryLoadingPowerOutput: ComponentOutput = self.add_output(
+        self.BatteryLoadingPowerWishOutput: ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.BatteryLoadingPower,
+            field_name=self.BatteryLoadingPowerWish,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
             postprocessing_flag=[
                 InandOutputType.CHARGE_DISCHARGE,
                 ComponentType.BATTERY,
             ],
-            output_description=f"here a description for {self.BatteryLoadingPower} will follow.",
+            output_description=f"here a description for {self.BatteryLoadingPowerWish} will follow.",
         )
 
                
@@ -291,43 +295,32 @@ class SimpleController(Component):
         if force_convergence:
             return
         
-        #From differenct Components
-        General_ElectricityConsumptiom = stsv.get_input_value(self.General_ElectricityConsumptiomInput)
-        Electrolyzer_ElectricityConsumption = stsv.get_input_value(self.Electrolyzer_ElectricityConsumptionInput)
-        H2Storage_ElectricityConsumption = stsv.get_input_value(self.H2Storage_ElectricityConsumptionInput)
-        General_PhotovoltaicDelivery = stsv.get_input_value(self.General_PhotovoltaicDeliveryInput)
-        CHP_ElectricityDelivery = stsv.get_input_value(self.CHP_ElectricityDeliveryInput)
+        if self.config.szenario == '1a':
+            #From differenct Components
+            General_ElectricityConsumptiom = stsv.get_input_value(self.General_ElectricityConsumptiomInput)
+            Electrolyzer_ElectricityConsumption = stsv.get_input_value(self.Electrolyzer_ElectricityConsumptionInput)
+            H2Storage_ElectricityConsumption = stsv.get_input_value(self.H2Storage_ElectricityConsumptionInput)
+            General_PhotovoltaicDelivery = stsv.get_input_value(self.General_PhotovoltaicDeliveryInput)
+            CHP_ElectricityDelivery = stsv.get_input_value(self.CHP_ElectricityDeliveryInput)
+            
+            #Production and consumption without Battery
+            total_electricity_production = General_PhotovoltaicDelivery + CHP_ElectricityDelivery
+            total_electricity_consumption = General_ElectricityConsumptiom + Electrolyzer_ElectricityConsumption + H2Storage_ElectricityConsumption
+            electricity_to__or_from_battery_Wish = total_electricity_production - total_electricity_consumption
+            
+            #Integration of Battery
+            stsv.set_output_value(self.BatteryLoadingPowerWishOutput, electricity_to__or_from_battery_Wish)
+            BatteryStateofCharge = stsv.get_input_value(self.BatteryStateofChargeInput)
+            BatteryAcBatteryPower = stsv.get_input_value(self.BatteryAcBatteryPowerInput)
+            BatteryDcBatteryPower = stsv.get_input_value(self.BatteryDcBatteryPowerInput)
 
 
-        #Loading Input Data from Battery 
-        BatteryStateofCharge = stsv.get_input_value(self.BatteryStateofChargeInput)
-        BatteryAcBatteryPower = stsv.get_input_value(self.BatteryAcBatteryPowerInput)
-        BatteryDcBatteryPower = stsv.get_input_value(self.BatteryDcBatteryPowerInput)
-
-        ac_battery_power_in_watt = 0
-        stsv.set_output_value(self.BatteryLoadingPowerOutput, ac_battery_power_in_watt)
+            electricity_to__or_from_grid = total_electricity_production - total_electricity_consumption - BatteryAcBatteryPower
+            stsv.set_output_value(self.electricity_to_or_from_gridOutput, electricity_to__or_from_grid)
+            stsv.set_output_value(self.total_electricity_consumptionOutput, total_electricity_consumption)
+        
         
 
-        total_electricity_production = General_PhotovoltaicDelivery + CHP_ElectricityDelivery
-        total_electricity_consumption = General_ElectricityConsumptiom + Electrolyzer_ElectricityConsumption + H2Storage_ElectricityConsumption
-
-        electricity_to_grid = total_electricity_production - total_electricity_consumption
-        
-        stsv.set_output_value(self.electricity_to_or_from_gridOutput, electricity_to_grid)
-        
-        #gehört noch integriert
-        stsv.set_output_value(self.total_electricity_consumptionOutput, total_electricity_consumption)
-        
-        
-        #percent = stsv.get_input_value(self.input1)
-        
-        
-        
-        # if percent < 0.4:
-        #     self.state = 1
-        # if percent > 0.99:
-        #     self.state = 0
-        #stsv.set_output_value(self.output1, self.state)
     
     def write_to_report(self):
         """Writes the information of the current component to the report."""

@@ -102,7 +102,7 @@ class Battery(Component):
     """
 
     # Inputs
-    LoadingPowerInput = "LoadingPowerInput"  # W <-- "Aufnahme des Stroms der geladen werden sollte"
+    LoadingPowerInput = "LoadingPowerInput"  # W
 
     # Outputs
     AcBatteryPower = "AcBatteryPower"  # W

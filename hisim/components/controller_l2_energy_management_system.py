@@ -390,17 +390,17 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             self.total_electricity_consumption_channel,
             self.state.consumption_uncontrolled + self.state.consumption_ems_controlled,
         )
-        ##Debugging Help
-        if timestep == 0 or 5 or 10 or 15 or 20:
-            if self.n == 0:
-                self.Werteliste =  (["| ", timestep, electricity_to_grid, flexible_electricity, self.state.production, self.state.consumption_uncontrolled, self.state.consumption_ems_controlled])
-                self.n += 1
-            elif self.n > 0:        
-                 self.n += 1
-                 self.Werteliste.append(["| ", timestep, electricity_to_grid, flexible_electricity, self.state.production, self.state.consumption_uncontrolled, self.state.consumption_ems_controlled])
+        # ##Debugging Help
+        # if timestep == 0 or 5 or 10 or 15 or 20:
+        #     if self.n == 0:
+        #         self.Werteliste =  (["| ", timestep, electricity_to_grid, flexible_electricity, self.state.production, self.state.consumption_uncontrolled, self.state.consumption_ems_controlled])
+        #         self.n += 1
+        #     elif self.n > 0:        
+        #          self.n += 1
+        #          self.Werteliste.append(["| ", timestep, electricity_to_grid, flexible_electricity, self.state.production, self.state.consumption_uncontrolled, self.state.consumption_ems_controlled])
                     
-        if timestep > 20:
-            breakpoint
+        # if timestep > 20:
+        #     breakpoint
 
         if flexible_electricity > 0:
             stsv.set_output_value(

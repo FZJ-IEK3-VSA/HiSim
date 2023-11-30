@@ -33,13 +33,15 @@ from hisim.components.example_transformer import (
 )
 from hisim.components.sumbuilder import SumBuilderForTwoInputs, SumBuilderConfig
 from hisim.components.csvloader import CSVLoader, CSVLoaderConfig
+from hisim.components.csvloader_electricityconsumption import CSVLoader_electricityconsumption, CSVLoader_electricityconsumptionConfig
+from hisim.components.csvloader_photovoltaic import CSVLoader_photovoltaic, CSVLoader_photovoltaicConfig
 from hisim.components import electricity_meter
 from hisim.components import advanced_battery_bslib
 from hisim.components import generic_pv_system
 from hisim.components import (controller_l1_electrolyzer, generic_electrolyzer, generic_hydrogen_storage)
 from hisim.components import static_electrolyzer
 from hisim.components import (controller_l1_chp_CB, generic_CHP) 
-from hisim.components import controller_l2_energy_management_system
+from hisim.components import controller_l1_example_controller_C4L1b
 from hisim.modular_household import component_connections
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim import loadtypes
@@ -72,7 +74,7 @@ def Cell4Life(
 
 
     # Build Results Path
-    name = "S" + str(input_variablen["PreResultNumber"]["value"])+"_BCap._" + str(math.ceil(input_variablen["battery_capacity"]["value"])) + "kWh_Inv_" + str(math.ceil(input_variablen["battery_inverter_power"]["value"]/1000)) + "kW_FCPow_" + str(math.ceil(input_variablen["fuel_cell_power"]["value"]/1000)) +"kW"
+    name = "VII_" + input_variablen["szenario"]["value"] +  "_S" + str(input_variablen["PreResultNumber"]["value"])+"_BCap._" + str(math.ceil(input_variablen["battery_capacity"]["value"])) + "kWh_Inv_" + str(math.ceil(input_variablen["battery_inverter_power"]["value"]/1000)) + "kW_FCPow_" + str(math.ceil(input_variablen["fuel_cell_power"]["value"]/1000)) +"kW"
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory = "C://Users//Standard//Desktop//hisim//C4LResults",
         model_name= name,
@@ -95,13 +97,19 @@ def Cell4Life(
             #******************************************************************
     
     #Loading Electricity consumption in W per m2 NGF****
-    my_electricityconsumptionConfig = CSVLoaderConfig("Current total", "Current needed", "01Simulation.csv", 1, loadtypes.LoadTypes.ELECTRICITY, loadtypes.Units.WATT, "Strom", ";", "," ,input_variablen["NGFm2"]["value"], "CurrentConspumtioninWperm2NGF")
-    my_electricityconsumption = CSVLoader(my_electricityconsumptionConfig, my_simulation_parameters)
+    #my_electricityconsumptionConfig = CSVLoaderConfig("Current total", "Current needed", "01Simulation.csv", 1, loadtypes.LoadTypes.ELECTRICITY, loadtypes.Units.WATT, "Strom", ";", "," ,input_variablen["NGFm2"]["value"], "CurrentConspumtioninWperm2NGF")
+    #my_electricityconsumption = CSVLoader(my_electricityconsumptionConfig, my_simulation_parameters)
        
+    my_electricityconsumptionConfig = CSVLoader_electricityconsumptionConfig("Current total", "Current needed", "01Simulation.csv", 1, loadtypes.LoadTypes.ELECTRICITY, loadtypes.Units.WATT, "Strom", ";", "," ,input_variablen["NGFm2"]["value"], "CurrentConspumtioninWperm2NGF")
+    my_electricityconsumption = CSVLoader_electricityconsumption(my_electricityconsumptionConfig, my_simulation_parameters)
+
     #******************************************************************   
     #Loading Photovoltaic System  (PV Output transformed from kW in Watt)
-    my_photovoltaic_systemConfig = CSVLoaderConfig("PV", "PVComponent", "01Simulation.csv", 6, loadtypes.LoadTypes.ELECTRICITY, loadtypes.Units.WATT, "Photovoltaik", ";", ",",1000*input_variablen["PV_Faktor"]["value"], "OutputPVinW")
-    my_photovoltaic_system = CSVLoader(my_photovoltaic_systemConfig, my_simulation_parameters)
+    #my_photovoltaic_systemConfig = CSVLoaderConfig("PV", "PVComponent", "01Simulation.csv", 6, loadtypes.LoadTypes.ELECTRICITY, loadtypes.Units.WATT, "Photovoltaik", ";", ",",1000*input_variablen["PV_Faktor"]["value"], "OutputPVinW")
+    #my_photovoltaic_system = CSVLoader(my_photovoltaic_systemConfig, my_simulation_parameters)
+
+    my_photovoltaic_systemConfig = CSVLoader_photovoltaicConfig("PV", "PVComponent", "01Simulation.csv", 6, loadtypes.LoadTypes.ELECTRICITY, loadtypes.Units.WATT, "Photovoltaik", ";", ",",1000*input_variablen["PV_Faktor"]["value"], "OutputPVinW")
+    my_photovoltaic_system = CSVLoader_photovoltaic(my_photovoltaic_systemConfig, my_simulation_parameters)
   
     #******************************************************************   
     #Loading heat demand (warm water)
@@ -144,14 +152,14 @@ def Cell4Life(
     #Build EMS****
     #First Controller
     my_electricity_controller_config = (
-        controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
+       controller_l1_example_controller_C4L1b.SimpleControllerConfig.get_default_config()
     )
     my_electricity_controller = (
-        controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_electricity_controller_config,
-        )
+        controller_l1_example_controller_C4L1b.SimpleController(
+           name = "my_electricity_controller", my_simulation_parameters=my_simulation_parameters, config=my_electricity_controller_config)
     )
+    my_electricity_controller.config.szenario = input_variablen["szenario"]["value"]
+
 
     #******************************************************************   
     #Build Battery****
@@ -159,7 +167,6 @@ def Cell4Life(
     my_advanced_battery_config.custom_battery_capacity_generic_in_kilowatt_hour = input_variablen["battery_capacity"]["value"]
     my_advanced_battery_config.custom_pv_inverter_power_generic_in_watt = input_variablen["battery_inverter_power"]["value"]
     my_advanced_battery_config.source_weight = input_variablen["init_source_weight_battery"]["value"]
-    
     my_advanced_battery = advanced_battery_bslib.Battery(my_simulation_parameters=my_simulation_parameters, config=my_advanced_battery_config)
 
     #******************************************************************
@@ -231,117 +238,48 @@ def Cell4Life(
             #****Connect Component Inputs with Outputs****
             #******************************************************************
 
-    #****Connect EMS****
-    my_electricity_controller.add_component_input_and_connect(
-        source_component_class=my_electricityconsumption,
-        source_component_output=my_electricityconsumption.Output1,
-        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
-        source_unit=loadtypes.Units.WATT,
-        source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-        source_weight=999,
-    )
-
-    my_electricity_controller.add_component_input_and_connect(
-        source_component_class=my_electrolyzer,
-        source_component_output=my_electrolyzer.ElectricityConsumption,
-        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
-        source_unit=loadtypes.Units.WATT,
-        source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-        source_weight=999,
-    )
-
-    
-    my_electricity_controller.add_component_input_and_connect(
-        source_component_class=my_h2storage,
-        source_component_output=my_h2storage.ElectricityConsumption,
-        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
-        source_unit=loadtypes.Units.WATT,
-        source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-        source_weight=999,
-    )
-    
-
-    my_electricity_controller.add_component_input_and_connect(
-        source_component_class=my_photovoltaic_system,
-        source_component_output=my_photovoltaic_system.Output1,
-        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
-        source_unit=loadtypes.Units.WATT,
-        source_tags=[loadtypes.InandOutputType.ELECTRICITY_PRODUCTION],
-        source_weight=999,
-    )
-
-    my_electricity_controller.add_component_input_and_connect(
-        source_component_class=my_advanced_battery,
-        source_component_output=my_advanced_battery.AcBatteryPower,
-        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
-        source_unit=loadtypes.Units.WATT,
-        source_tags=[loadtypes.ComponentType.BATTERY, loadtypes.InandOutputType.ELECTRICITY_REAL],
-        source_weight=my_advanced_battery.source_weight,
-    )
 
 
-    my_electricity_controller.add_component_input_and_connect(
-        source_component_class=my_chp,
-        source_component_output="ElectricityOutput",
-        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
-        source_unit=loadtypes.Units.WATT,
-        source_tags=[loadtypes.ComponentType.CHP, loadtypes.InandOutputType.ELECTRICITY_PRODUCTION],
-        source_weight=my_chp.config.source_weight,
-    )
-
-    #Electricity to battery or from battery
-    electricity_to_or_from_battery_target = (
-        my_electricity_controller.add_component_output(
-            source_output_name=loadtypes.InandOutputType.ELECTRICITY_TARGET,
-            source_tags=[
-                loadtypes.ComponentType.BATTERY,
-                loadtypes.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_weight=my_advanced_battery.source_weight,
-            source_load_type=loadtypes.LoadTypes.ELECTRICITY,
-            source_unit=loadtypes.Units.WATT,
-            output_description="Target electricity for Battery Control. ",
-        )
-    )
-
-       
-
-    ems_target_electricity = my_electricity_controller.add_component_output(
-        source_output_name=loadtypes.InandOutputType.ELECTRICITY_TARGET,
-        source_tags=[
-                loadtypes.ComponentType.CHP,
-                loadtypes.InandOutputType.ELECTRICITY_TARGET,
-            ],
-        source_weight=my_chp.config.source_weight,
-        source_load_type=loadtypes.LoadTypes.ELECTRICITY,
-        source_unit=loadtypes.Units.WATT,
-        output_description="Target electricity for CHP. ",
-        )
-
-
-
-    #Connect Battery****
-    my_advanced_battery.connect_dynamic_input(
-        input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
-        src_object=electricity_to_or_from_battery_target,
-    )
-
-   
-    #Connect Fuel Cell
-    my_chp_controller.connect_dynamic_input(
-            input_fieldname=my_chp_controller.ElectricityTarget,
-            src_object=ems_target_electricity,
-        )
-
-     
     my_h2storage.connect_only_predefined_connections(my_electrolyzer)
     my_h2storage.connect_only_predefined_connections(my_chp)
     my_chp_controller.connect_only_predefined_connections(my_h2storage)
     my_electrolyzer.connect_only_predefined_connections(my_h2storage)
     my_chp.connect_only_predefined_connections(my_chp_controller)
 
+    my_electricity_controller.connect_only_predefined_connections(my_h2storage)
+    my_electricity_controller.connect_only_predefined_connections(my_electrolyzer)
+    my_electricity_controller.connect_only_predefined_connections(my_electricityconsumption)
+    my_electricity_controller.connect_only_predefined_connections(my_photovoltaic_system)
+    my_electricity_controller.connect_only_predefined_connections(my_chp)
+    
 
-    my_h2storage.connect_only_predefined_connections(my_electrolyzer)
+    #battery input connection
+    my_electricity_controller.connect_input(
+        input_fieldname=my_electricity_controller.BatteryStateOfCharge,
+        src_object_name=my_advanced_battery.component_name,
+        src_field_name=my_advanced_battery.StateOfCharge,
+    )
+
+        
+    my_electricity_controller.connect_input(
+        input_fieldname=my_electricity_controller.BatteryAcBatteryPower,
+        src_object_name=my_advanced_battery.component_name,
+        src_field_name=my_advanced_battery.AcBatteryPower,
+    )
+
+    my_electricity_controller.connect_input(
+        input_fieldname=my_electricity_controller.BatteryDcBatteryPower,
+        src_object_name=my_advanced_battery.component_name,
+        src_field_name=my_advanced_battery.DcBatteryPower,
+    )
+
+    my_advanced_battery.connect_input(
+        input_fieldname=my_advanced_battery.LoadingPowerInput,
+        src_object_name=my_electricity_controller.component_name,
+        src_field_name=my_electricity_controller.BatteryLoadingPowerWish,
+    )
+
+
 
         #******************************************************************
         # Add Components to Simulation Parameters
@@ -407,17 +345,19 @@ def InputParameter():
     
     #Loading of variation parameters
     param_df = pd.read_csv("examples/params_to_loop.csv")
+    
     PreResultNumber  = param_df["PreResultNumber"][0]
     FuelCellPowerW = param_df["FuelCellPowerW"][0]
     BatteryCapkWh = param_df["BatteryCapkWh"][0]
     Inverter_Ratio = param_df["Inverter_Ratio"][0]
-            
+
     PreResultNumberUnit = param_df["PreResultNumberUnit"][0]
     FuelCellPowerWUnit = param_df["FuelCellPowerWUnit"][0]
     BatteryCapkWhUnit = param_df["BatteryCapkWhUnit"][0]
     Inverter_RatioUnit = param_df["Inverter_RatioUnit"][0]
 
-
+    szenario = param_df["szenario"][0]
+    szenarioUnit = param_df["szenarioUnit"][0]
     #Variation Parameters:
     battery_capacity: Optional[float] = BatteryCapkWh   #Total Capacity of Battery in kWh
     battery_capacityUnit = BatteryCapkWhUnit
@@ -623,6 +563,11 @@ def InputParameter():
         "Inverter_Ratio": {
             "value": Inverter_Ratio,
             "unit": Inverter_RatioUnit,
+        },
+
+        "szenario": {
+            "value": szenario,
+            "unit": szenarioUnit,
         },
         
     }

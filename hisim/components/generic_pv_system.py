@@ -62,20 +62,6 @@ class PVLibModuleAndInverterEnum(enum.Enum):
     ANTON_DRIESSE_INVERTER_DATABASE = 5
 
 
-@dataclass
-class PVState:
-
-    """PVState class."""
-
-    cumulative_energy_in_watt_hour: float
-
-    def self_copy(self):
-        """Copy the PV State."""
-        return PVState(
-            self.cumulative_energy_in_watt_hour,
-        )
-
-
 @dataclass_json
 @dataclass
 class PVSystemConfig(ConfigBase):
@@ -299,14 +285,14 @@ class PVSystem(cp.Component):
                 "open_rack_glass_glass"
             ]
         )
-        self.state: PVState = PVState(cumulative_energy_in_watt_hour=0.0)
-        self.previous_state = self.state.self_copy()
-
         super().__init__(
             self.pvconfig.name + "_w" + str(self.pvconfig.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
         )
+        log.information("PV lib version " + str(pvlib.__version__))
+        if pvlib.__version__ != "0.9.3":
+            raise ValueError(f"PV lib version should be 0.9.3 but its {pvlib.__version__}")
 
         self.t_out_channel: cp.ComponentInput = self.add_input(
             self.component_name,

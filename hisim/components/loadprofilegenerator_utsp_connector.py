@@ -485,24 +485,24 @@ class UtspLpgConnector(cp.Component):
                     value_dict["water_consumption"].append(water_consumption)
                     value_dict["number_of_residents"].append(number_of_residents)
 
-                # get sums from result lists
-                self.electricity_consumption = [
-                    sum(x) for x in zip(*value_dict["electricity_consumption"])
-                ]
-                self.heating_by_residents = [
-                    sum(x) for x in zip(*value_dict["heating_by_residents"])
-                ]
-                self.water_consumption = [
-                    sum(x) for x in zip(*value_dict["water_consumption"])
-                ]
-                self.heating_by_devices = [
-                    sum(x) for x in zip(*value_dict["heating_by_devices"])
-                ]
-                self.number_of_residents = [
-                    sum(x) for x in zip(*value_dict["number_of_residents"])
-                ]
+                    # get sums from result lists
+                    self.electricity_consumption = [
+                        sum(x) for x in zip(*value_dict["electricity_consumption"])
+                    ]
+                    self.heating_by_residents = [
+                        sum(x) for x in zip(*value_dict["heating_by_residents"])
+                    ]
+                    self.water_consumption = [
+                        sum(x) for x in zip(*value_dict["water_consumption"])
+                    ]
+                    self.heating_by_devices = [
+                        sum(x) for x in zip(*value_dict["heating_by_devices"])
+                    ]
+                    self.number_of_residents = [
+                        sum(x) for x in zip(*value_dict["number_of_residents"])
+                    ]
 
-                self.max_hot_water_demand = max(self.water_consumption)
+                    self.max_hot_water_demand = max(self.water_consumption)
 
             if not cache_complete:
 

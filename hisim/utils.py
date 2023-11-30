@@ -48,7 +48,7 @@ HISIMPATH: Dict[str, Any] = {
         hisim_abs_path, "inputs", "cache", "cache_indices.json"
     ),
     "cfg": os.path.join(hisim_abs_path, "inputs", "cfg.json"),
-    "utsp_results": os.path.join(hisim_results, "lpg_utsp_results"),
+    "utsp_results": os.path.join(hisim_results, "Results"),
     "utsp_example_results": os.path.join(
         hisim_inputs, "LPGResults_for_tests", "Results"
     ),

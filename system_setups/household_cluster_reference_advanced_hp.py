@@ -233,10 +233,9 @@ def setup_function(
         set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
         set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
     )
-    my_heat_distribution_controller_config.heating_reference_temperature_in_celsius = (
-        heating_reference_temperature_in_celsius
-    )
+
     my_heat_distribution_controller = (
         heat_distribution_system.HeatDistributionController(
             my_simulation_parameters=my_simulation_parameters,
@@ -263,13 +262,11 @@ def setup_function(
 
     # Build Heat Pump
     my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
     )
     my_heat_pump_config.group_id = group_id
     my_heat_pump_config.flow_temperature_in_celsius = flow_temperature_in_celsius
-    my_heat_pump_config.heating_reference_temperature_in_celsius = (
-        heating_reference_temperature_in_celsius
-    )
 
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
         config=my_heat_pump_config,

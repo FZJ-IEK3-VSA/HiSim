@@ -162,7 +162,6 @@ def setup_function(
     my_heat_pump_config.group_id = group_id
     my_heat_pump_config.flow_temperature_in_celsius = flow_temperature_in_celsius
 
-
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
         config=my_heat_pump_config,
         my_simulation_parameters=my_simulation_parameters,

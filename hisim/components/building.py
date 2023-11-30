@@ -1975,8 +1975,6 @@ class BuildingInformation:
         self.set_cooling_temperature_for_building_in_celsius = self.buildingconfig.set_cooling_temperature_in_celsius
         self.heating_reference_temperature_in_celsius = self.buildingconfig.heating_reference_temperature_in_celsius
 
-        
-
     def get_building(
         self,
     ):

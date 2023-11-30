@@ -99,7 +99,7 @@ class BuildingConfig(cp.ConfigBase):
         cls,
         set_heating_temperature_in_celsius: float = 19.0,
         set_cooling_temperature_in_celsius: float = 24.0,
-        heating_reference_temperature_in_celsius: float = -14.0,
+        heating_reference_temperature_in_celsius: float = -7.0,
     ) -> Any:
         """Get a default Building."""
         config = BuildingConfig(
@@ -1973,6 +1973,9 @@ class BuildingInformation:
         # get set temperatures for building
         self.set_heating_temperature_for_building_in_celsius = self.buildingconfig.set_heating_temperature_in_celsius
         self.set_cooling_temperature_for_building_in_celsius = self.buildingconfig.set_cooling_temperature_in_celsius
+        self.heating_reference_temperature_in_celsius = self.buildingconfig.heating_reference_temperature_in_celsius
+
+        
 
     def get_building(
         self,

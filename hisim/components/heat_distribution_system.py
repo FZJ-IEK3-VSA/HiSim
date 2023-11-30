@@ -103,13 +103,14 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
         heating_load_of_building_in_watt: float,
         set_heating_temperature_for_building_in_celsius: float,
         set_cooling_temperature_for_building_in_celsius: float,
+        heating_reference_temperature_in_celsius: float = -7.0,
     ) -> "HeatDistributionControllerConfig":
         """Gets a default HeatDistribution Controller."""
         return HeatDistributionControllerConfig(
             name="HeatDistributionController",
             heating_system=HeatDistributionSystemType.FLOORHEATING,
             set_heating_threshold_outside_temperature_in_celsius=16.0,
-            heating_reference_temperature_in_celsius=-14.0,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
             set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
             set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
             heating_load_of_building_in_watt=heating_load_of_building_in_watt,

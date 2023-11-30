@@ -79,13 +79,14 @@ class HouseholdAdvancedHPDieselCarPVConfig(SystemSetupConfigBase):
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0
 
         building_config = (
-            building.BuildingConfig.get_default_german_single_family_home()
+            building.BuildingConfig.get_default_german_single_family_home(heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius)
         )
         my_building_information = building.BuildingInformation(config=building_config)
         hds_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
             set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
             set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
             heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
         )
         my_hds_controller_information = (
             heat_distribution_system.HeatDistributionControllerInformation(
@@ -132,7 +133,8 @@ class HouseholdAdvancedHPDieselCarPVConfig(SystemSetupConfigBase):
             ),
             hp_config=(
                 advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+                    heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
                 )
             ),
             simple_hot_water_storage_config=(
@@ -183,17 +185,6 @@ class HouseholdAdvancedHPDieselCarPVConfig(SystemSetupConfigBase):
         )
         household_config.hp_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
             set_heating_threshold_outside_temperature_in_celsius
-        )
-
-        # set same heating reference temperature
-        household_config.hds_controller_config.heating_reference_temperature_in_celsius = (
-            heating_reference_temperature_in_celsius
-        )
-        household_config.hp_config.heating_reference_temperature_in_celsius = (
-            heating_reference_temperature_in_celsius
-        )
-        household_config.building_config.heating_reference_temperature_in_celsius = (
-            heating_reference_temperature_in_celsius
         )
 
         household_config.hp_config.flow_temperature_in_celsius = 21  # Todo: check value

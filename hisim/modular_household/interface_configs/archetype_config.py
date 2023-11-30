@@ -1,12 +1,14 @@
 """Archetype config module."""
 
 # -*- coding: utf-8 -*-
-from typing import Optional
 from dataclasses import dataclass, field
+from os import getenv
+from typing import Optional
+
 from dataclasses_json import dataclass_json
+from utspclient.helpers.lpgdata import TravelRouteSets
 from utspclient.helpers.lpgpythonbindings import JsonReference
-from utspclient.helpers.lpgdata import (
-    TravelRouteSets)
+
 from hisim.loadtypes import HeatingSystems
 
 
@@ -45,9 +47,9 @@ class ArcheTypeConfig:
     mobility_distance: Optional[JsonReference] = field(
         default_factory=lambda: TravelRouteSets.Travel_Route_Set_for_15km_Commuting_Distance)  # type: ignore
     #: url of the UTSP
-    url: str = "http://134.94.131.109:5000/api/v1/profilerequest"
+    url: str = getenv("UTSP_URL", "")
     #: passwort to connect to the UTSP
-    api_key: str = "OrjpZY93BcNWw8lKaMp0BEchbCc"
+    api_key: str = getenv("UTSP_API_KEY", "")
 
 
 # def create_archetype_config_file() -> None:

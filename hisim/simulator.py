@@ -244,8 +244,10 @@ class Simulator:
         # Tests if wrapper has any components at all
         if len(self.wrapped_components) == 0:
             raise ValueError("Not a single component was defined. Quitting.")
+
         # call again because it might not have gotten executed depending on how it's called.
         self.prepare_simulation_directory()
+
         flagfile = os.path.join(
             self._simulation_parameters.result_directory, "finished.flag"
         )
@@ -588,3 +590,18 @@ class Simulator:
                 f"Automatic connection does not work for {target_component.component_name} because no default connections were found. "
                 + "Please check if a connection is needed and if yes, create the missing default connection in your component."
             )
+
+    def put_log_files_into_result_path(self) -> None:
+        """Put logging files from /logs path into result path."""
+
+        default_logging_path = log.LOGGING_DEFAULT_PATH
+        result_directory = self._simulation_parameters.result_directory
+
+        if os.path.exists(result_directory) is False:
+            raise NameError(f"The result directory {result_directory} could not be found.")
+
+        # move log files to result path
+        for file in os.listdir(default_logging_path):
+            # if logging file is not yet in result directory, move it from default directory /logs to result directory
+            if not os.path.isfile(os.path.join(result_directory, file)):
+                os.rename(os.path.join(default_logging_path, file), os.path.join(result_directory, file))

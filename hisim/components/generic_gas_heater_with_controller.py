@@ -185,6 +185,7 @@ class GasHeaterWithController(cp.Component):
             self.ControlSignalfromHeaterToDistribution,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
+            output_description=f"here a description for {self.ControlSignalfromHeaterToDistribution} will follow.",
         )
         self.heated_water_temperature_boiler_output_channel: ComponentOutput = (
             self.add_output(
@@ -192,6 +193,7 @@ class GasHeaterWithController(cp.Component):
                 self.HeatedWaterTemperatureBoilerOutput,
                 lt.LoadTypes.WATER,
                 lt.Units.CELSIUS,
+                output_description=f"here a description for {self.HeatedWaterTemperatureBoilerOutput} will follow.",
             )
         )
 
@@ -201,6 +203,7 @@ class GasHeaterWithController(cp.Component):
                 self.MeanWaterTemperatureBoilerOutput,
                 lt.LoadTypes.WATER,
                 lt.Units.CELSIUS,
+                output_description=f"here a description for {self.MeanWaterTemperatureBoilerOutput} will follow.",
             )
         )
 
@@ -209,6 +212,7 @@ class GasHeaterWithController(cp.Component):
             self.GasPower,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
+            output_description=f"here a description for {self.GasPower} will follow.",
         )
 
         self.max_mass_flow_channel: cp.ComponentOutput = self.add_output(
@@ -216,6 +220,7 @@ class GasHeaterWithController(cp.Component):
             self.MaxMassFlow,
             lt.LoadTypes.WARM_WATER,
             lt.Units.KG_PER_SEC,
+            output_description=f"here a description for {self.MaxMassFlow} will follow.",
         )
 
         self.add_default_connections(
@@ -422,7 +427,8 @@ class GasHeaterController(cp.Component):
             True,
         )
         self.state_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.State, lt.LoadTypes.ANY, lt.Units.ANY
+            self.component_name, self.State, lt.LoadTypes.ANY, lt.Units.ANY,
+            output_description=f"here a description for {self.State} will follow.",
         )
         self.controller_gas_valve_mode: str = "close"
         self.previous_controller_gas_valve_mode: str = "close"

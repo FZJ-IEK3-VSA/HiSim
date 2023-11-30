@@ -1,4 +1,6 @@
 """  Household system setup with gas heater. """
+# NOTE: This setup does not work with the current version of HiSim!
+
 # clean
 from typing import Optional, Any
 from pathlib import Path

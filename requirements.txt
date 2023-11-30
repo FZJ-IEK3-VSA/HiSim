@@ -3,7 +3,7 @@ pandas
 matplotlib
 seaborn
 reportlab
-pvlib
+pvlib==0.10.2
 openpyxl
 pytest
 sphinx

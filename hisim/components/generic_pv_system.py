@@ -290,9 +290,6 @@ class PVSystem(cp.Component):
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
         )
-        log.information("PV lib version " + str(pvlib.__version__))
-        if pvlib.__version__ != "0.9.3":
-            raise ValueError(f"PV lib version should be 0.9.3 but its {pvlib.__version__}")
 
         self.t_out_channel: cp.ComponentInput = self.add_input(
             self.component_name,

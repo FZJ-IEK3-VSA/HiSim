@@ -64,4 +64,4 @@ def test_photovoltaic():
     log.information("pv electricity output [W]: " + str(stsv.values[my_pvs.electricity_output_channel.global_index]))
 
     # check pv electricity output [W] in timestep 655
-    assert stsv.values[my_pvs.electricity_output_channel.global_index] == 370.42788400764255
+    assert stsv.values[my_pvs.electricity_output_channel.global_index] == 334.8800144821672

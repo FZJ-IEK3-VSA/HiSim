@@ -48,7 +48,7 @@ class HeatDistributionConfig(cp.ConfigBase):
         return HeatDistribution.get_full_classname()
 
     name: str
-    temperature_spread_in_celsius: float
+    temperature_difference_between_flow_and_return_in_celsius: float
     water_mass_flow_rate_in_kg_per_second: float
     #: CO2 footprint of investment in kg
     co2_footprint: float
@@ -62,13 +62,13 @@ class HeatDistributionConfig(cp.ConfigBase):
     @classmethod
     def get_default_heatdistributionsystem_config(
         cls,
-        temperature_spread_in_celsius: float,
+        temperature_difference_between_flow_and_return_in_celsius: float,
         water_mass_flow_rate_in_kg_per_second: float,
     ) -> Any:
         """Get a default heat distribution system config."""
         config = HeatDistributionConfig(
             name="HeatDistributionSystem",
-            temperature_spread_in_celsius=temperature_spread_in_celsius,
+            temperature_difference_between_flow_and_return_in_celsius=temperature_difference_between_flow_and_return_in_celsius,
             water_mass_flow_rate_in_kg_per_second=water_mass_flow_rate_in_kg_per_second,
             co2_footprint=0,  # Todo: check value
             cost=8000,  # SOURCE: https://www.hausjournal.net/heizungsrohre-verlegen-kosten  # Todo: use price per m2 in system_setups instead
@@ -168,8 +168,8 @@ class HeatDistribution(cp.Component):
 
         self.thermal_power_delivered_in_watt: float = 0.0
         self.water_temperature_output_in_celsius: float = 21
-        self.temperature_spread_in_celsius = (
-            self.heat_distribution_system_config.temperature_spread_in_celsius
+        self.temperature_difference_between_flow_and_return_in_celsius = (
+            self.heat_distribution_system_config.temperature_difference_between_flow_and_return_in_celsius
         )
 
         self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second = (
@@ -1018,7 +1018,7 @@ class HeatDistributionControllerInformation:
             exponent_factor_of_heating_distribution_system
         )
 
-        self.temperature_spread_in_celsius = (
+        self.temperature_difference_between_flow_and_return_in_celsius = (
             self.max_flow_temperature_in_celsius
             - self.max_return_temperature_in_celsius
         )
@@ -1036,7 +1036,7 @@ class HeatDistributionControllerInformation:
             max_thermal_building_demand_in_watt
             / (
                 specific_heat_capacity_of_water_in_joule_per_kg_per_celsius
-                * self.temperature_spread_in_celsius
+                * self.temperature_difference_between_flow_and_return_in_celsius
             )
         )
         return heating_distribution_system_water_mass_flow_in_kg_per_second

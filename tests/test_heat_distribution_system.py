@@ -130,7 +130,7 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
         cost=8000,
         lifetime=50,
         maintenance_cost_as_percentage_of_investment=0.01,
-        temperature_spread_in_celsius=my_hds_controller_information.temperature_spread_in_celsius,
+        temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
         water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
     )
 

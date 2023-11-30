@@ -84,7 +84,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         cls,
         max_thermal_power_in_watt_of_heating_system: float,
         water_mass_flow_rate_from_hds_in_kg_per_second: float,
-        temperature_spread_heat_distribution_system_in_celsius: float = 7.0,
+        temperature_difference_between_flow_and_return_in_celsius: float = 7.0,
         heating_system_name: str = "AdvancedHeatPumpHPLib",
     ) -> "SimpleHotWaterStorageConfig":
         """Gets a default storage with scaling according to heating load of the building.
@@ -112,7 +112,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
                 * 1e-3
                 / (
                     PhysicsConfig.water_specific_heat_capacity_in_watthour_per_kilogramm_per_kelvin
-                    * temperature_spread_heat_distribution_system_in_celsius
+                    * temperature_difference_between_flow_and_return_in_celsius
                 )
             ) * 1000  # 1m3 = 1000l
 

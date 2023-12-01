@@ -31,6 +31,9 @@ from hisim import log
 from system_setups.household_cluster_reference_advanced_hp import (
     BuildingPVWeatherConfig,
 )
+from system_setups.household_cluster_reference_advanced_hp import (
+    BuildingPVWeatherConfig,
+)
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"

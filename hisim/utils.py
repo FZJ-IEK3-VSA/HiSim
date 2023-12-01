@@ -48,7 +48,7 @@ HISIMPATH: Dict[str, Any] = {
         hisim_abs_path, "inputs", "cache", "cache_indices.json"
     ),
     "cfg": os.path.join(hisim_abs_path, "inputs", "cfg.json"),
-    "utsp_results": os.path.join(hisim_results, "lpg_ustp_results"),
+    "utsp_results": os.path.join(hisim_results, "Results"),
     "utsp_example_results": os.path.join(
         hisim_inputs, "LPGResults_for_tests", "Results"
     ),
@@ -157,11 +157,20 @@ HISIMPATH: Dict[str, Any] = {
         },
     },
     "photovoltaic": {
-        "modules": os.path.join(
+        "sandia_modules_new": os.path.join(
+            hisim_inputs, "photovoltaic", "data_processed", "sandia_modules_new.csv"
+        ),
+        "sandia_modules": os.path.join(
             hisim_inputs, "photovoltaic", "data_processed", "sandia_modules.csv"
         ),
-        "inverters": os.path.join(
+        "sandia_inverters": os.path.join(
             hisim_inputs, "photovoltaic", "data_processed", "sandia_inverters.csv"
+        ),
+        "cec_modules": os.path.join(
+            hisim_inputs, "photovoltaic", "data_processed", "cec_modules.csv"
+        ),
+        "cec_inverters": os.path.join(
+            hisim_inputs, "photovoltaic", "data_processed", "cec_inverters.csv"
         ),
     },
     "chp_system": os.path.join(hisim_inputs, "chp_system"),

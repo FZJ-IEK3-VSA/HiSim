@@ -52,25 +52,6 @@ def test_house_with_pyam(
     year = 2021
     seconds_per_timestep = 60 * 60
 
-    # Set Weather
-    location = "Aachen"
-
-    # Set Photovoltaic System
-    time = 2019
-    power = 10e3
-    load_module_data = False
-    module_name = "Hanwha_HSL60P6_PA_4_250T__2013_"
-    integrate_inverter = True
-    inverter_name = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_"
-    name = "PVSystem"
-    azimuth = 180
-    tilt = 30
-    source_weight = -1
-    pv_co2_footprint = power * 1e-3 * 130.7
-    pv_cost = power * 1e-3 * 535.81
-    pv_maintenance_cost_as_percentage_of_investment = 0.01
-    pv_lifetime = 25
-
     # Set Heat Pump Controller
     temperature_air_heating_in_celsius = 19.0
     temperature_air_cooling_in_celsius = 24.0
@@ -137,25 +118,8 @@ def test_house_with_pyam(
     )
 
     # Build PV
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig(
-        time=time,
-        location=location,
-        power=power,
-        load_module_data=load_module_data,
-        module_name=module_name,
-        integrate_inverter=integrate_inverter,
-        tilt=tilt,
-        azimuth=azimuth,
-        inverter_name=inverter_name,
-        source_weight=source_weight,
-        name=name,
-        co2_footprint=pv_co2_footprint,
-        cost=pv_cost,
-        maintenance_cost_as_percentage_of_investment=pv_maintenance_cost_as_percentage_of_investment,
-        lifetime=pv_lifetime,
-        prediction_horizon=None,
-        predictive=False,
-        predictive_control=False,
+    my_photovoltaic_system_config = (
+        generic_pv_system.PVSystemConfig.get_default_pv_system()
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,

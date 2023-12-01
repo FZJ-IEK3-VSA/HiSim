@@ -689,6 +689,7 @@ class MpcController(cp.Component):
         self.pv_forecast_24h_1min = self.pv_forecast_yearly[
             start_horizon: start_horizon + self.prediction_horizon
         ]
+
         self.price_purchase_forecast_24h_1min = SingletonSimRepository().get_entry(
             key=SingletonDictKeyEnum.PRICEPURCHASEFORECAST24H
         )
@@ -711,6 +712,8 @@ class MpcController(cp.Component):
         ]
         pv_forecast_24h = self.pv_forecast_24h_1min[0::sampling_rate]
 
+        # only take positive values from PV, otherwise mpc will have an ill-posed problem which will raise errors
+        pv_forecast_24h = [max(0, value) for value in pv_forecast_24h]
         return (
             temperature_forecast_24h,
             phi_ia_forecast_24h,

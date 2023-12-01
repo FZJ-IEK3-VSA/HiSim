@@ -1,5 +1,6 @@
 """Test for running multiple requests with lpg utsp connector and scaling up the results."""
 
+from os import getenv
 from typing import Union, List, Tuple, Any
 import pytest
 import numpy as np
@@ -54,11 +55,21 @@ def test_occupancy_scaling_with_utsp():
     )
 
     # now test if results are doubled when occupancy is initialzed with 2 households
-    np.testing.assert_allclose(number_of_residents_two, 2 * number_of_residents_one, rtol=0.01)
-    np.testing.assert_allclose(heating_by_residents_two, 2 * heating_by_residents_one, rtol=0.01)
-    np.testing.assert_allclose(heating_by_devices_two, 2 * heating_by_devices_one, rtol=0.01)
-    np.testing.assert_allclose(electricity_consumption_two, 2 * electricity_consumption_one, rtol=0.01)
-    np.testing.assert_allclose(water_consumption_two, 2 * water_consumption_one, rtol=0.01)
+    np.testing.assert_allclose(
+        number_of_residents_two, 2 * number_of_residents_one, rtol=0.01
+    )
+    np.testing.assert_allclose(
+        heating_by_residents_two, 2 * heating_by_residents_one, rtol=0.01
+    )
+    np.testing.assert_allclose(
+        heating_by_devices_two, 2 * heating_by_devices_one, rtol=0.01
+    )
+    np.testing.assert_allclose(
+        electricity_consumption_two, 2 * electricity_consumption_one, rtol=0.01
+    )
+    np.testing.assert_allclose(
+        water_consumption_two, 2 * water_consumption_one, rtol=0.01
+    )
 
 
 def initialize_lpg_utsp_connector_and_return_results(
@@ -76,8 +87,8 @@ def initialize_lpg_utsp_connector_and_return_results(
     seconds_per_timestep = 60
 
     # Set Occupancy
-    url = "http://134.94.131.109:5000/api/v1/profilerequest"
-    api_key = "OrjpZY93BcNWw8lKaMp0BEchbCc"
+    url = getenv("UTSP_URL", "")
+    api_key = getenv("UTSP_API_KEY", "")
     result_path = "lpg_utsp_scaling_test"
     travel_route_set = TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance
     transportation_device_set = TransportationDeviceSets.Bus_and_one_30_km_h_Car

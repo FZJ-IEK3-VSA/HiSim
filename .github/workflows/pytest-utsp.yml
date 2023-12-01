@@ -11,7 +11,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v2
     - name: Set up Python 3.10
@@ -27,6 +26,9 @@ jobs:
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
         pip install -e .
     - name: Test with pytest
+      env:
+        UTSP_URL: ${{ secrets.UTSP_URL }}
+        UTSP_API_KEY: ${{ secrets.UTSP_API_KEY }}
       working-directory: ./tests/
       run: |
         pytest -m "utsp" --durations=0

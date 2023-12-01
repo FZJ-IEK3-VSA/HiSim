@@ -28,7 +28,9 @@ from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDict
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim import log
-from system_setups.household_cluster_reference_advanced_hp import BuildingPVWeatherConfig
+from system_setups.household_cluster_reference_advanced_hp import (
+    BuildingPVWeatherConfig,
+)
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -289,7 +291,7 @@ def setup_function(
     # Build Battery
     my_advanced_battery_config = (
         advanced_battery_bslib.BatteryConfig.get_scaled_battery(
-            total_pv_power_in_watt_peak=my_photovoltaic_system_config.power
+            total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt
         )
     )
     my_advanced_battery = advanced_battery_bslib.Battery(

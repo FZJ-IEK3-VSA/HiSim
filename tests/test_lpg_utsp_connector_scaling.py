@@ -54,11 +54,21 @@ def test_occupancy_scaling_with_utsp():
     )
 
     # now test if results are doubled when occupancy is initialzed with 2 households
-    np.testing.assert_allclose(number_of_residents_two, 2 * number_of_residents_one, rtol=0.01)
-    np.testing.assert_allclose(heating_by_residents_two, 2 * heating_by_residents_one, rtol=0.01)
-    np.testing.assert_allclose(heating_by_devices_two, 2 * heating_by_devices_one, rtol=0.01)
-    np.testing.assert_allclose(electricity_consumption_two, 2 * electricity_consumption_one, rtol=0.01)
-    np.testing.assert_allclose(water_consumption_two, 2 * water_consumption_one, rtol=0.01)
+    np.testing.assert_allclose(
+        number_of_residents_two, 2 * number_of_residents_one, rtol=0.01
+    )
+    np.testing.assert_allclose(
+        heating_by_residents_two, 2 * heating_by_residents_one, rtol=0.01
+    )
+    np.testing.assert_allclose(
+        heating_by_devices_two, 2 * heating_by_devices_one, rtol=0.01
+    )
+    np.testing.assert_allclose(
+        electricity_consumption_two, 2 * electricity_consumption_one, rtol=0.01
+    )
+    np.testing.assert_allclose(
+        water_consumption_two, 2 * water_consumption_one, rtol=0.01
+    )
 
 
 def initialize_lpg_utsp_connector_and_return_results(

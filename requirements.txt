@@ -3,7 +3,7 @@ pandas
 matplotlib
 seaborn
 reportlab
-pvlib
+pvlib==0.10.2
 openpyxl
 pytest
 sphinx
@@ -23,3 +23,4 @@ casadi
 plotly
 ordered_set
 typing_extensions
+python-dotenv

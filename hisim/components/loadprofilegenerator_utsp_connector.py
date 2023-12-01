@@ -71,8 +71,8 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
 
         config = UtspLpgConnectorConfig(
             name="UTSPConnector",
-            url="http://134.94.131.109:5000/api/v1/profilerequest",
-            api_key="OrjpZY93BcNWw8lKaMp0BEchbCc",
+            url=os.getenv("UTSP_URL", ""),
+            api_key=os.getenv("UTSP_API_KEY", ""),
             household=Households.CHR01_Couple_both_at_Work,
             result_dir_path=utils.HISIMPATH["utsp_results"],
             energy_intensity=EnergyIntensityType.EnergySaving,
@@ -485,22 +485,24 @@ class UtspLpgConnector(cp.Component):
                     value_dict["water_consumption"].append(water_consumption)
                     value_dict["number_of_residents"].append(number_of_residents)
 
-                # get sums from result lists
-                self.electricity_consumption = [
-                    sum(x) for x in zip(*value_dict["electricity_consumption"])
-                ]
-                self.heating_by_residents = [
-                    sum(x) for x in zip(*value_dict["heating_by_residents"])
-                ]
-                self.water_consumption = [
-                    sum(x) for x in zip(*value_dict["water_consumption"])
-                ]
-                self.heating_by_devices = [
-                    sum(x) for x in zip(*value_dict["heating_by_devices"])
-                ]
-                self.number_of_residents = [
-                    sum(x) for x in zip(*value_dict["number_of_residents"])
-                ]
+                    # get sums from result lists
+                    self.electricity_consumption = [
+                        sum(x) for x in zip(*value_dict["electricity_consumption"])
+                    ]
+                    self.heating_by_residents = [
+                        sum(x) for x in zip(*value_dict["heating_by_residents"])
+                    ]
+                    self.water_consumption = [
+                        sum(x) for x in zip(*value_dict["water_consumption"])
+                    ]
+                    self.heating_by_devices = [
+                        sum(x) for x in zip(*value_dict["heating_by_devices"])
+                    ]
+                    self.number_of_residents = [
+                        sum(x) for x in zip(*value_dict["number_of_residents"])
+                    ]
+
+                    self.max_hot_water_demand = max(self.water_consumption)
 
             if not cache_complete:
 

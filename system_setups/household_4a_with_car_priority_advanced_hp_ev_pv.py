@@ -3,7 +3,7 @@
 # clean
 
 from typing import List, Optional, Any
-from os import listdir
+from os import listdir, getenv
 from pathlib import Path
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -113,8 +113,8 @@ class HouseholdAdvancedHPEvPvConfig(SystemSetupConfigBase):
             # simulation_parameters=SimulationParameters.one_day_only(2022),
             # total_base_area_in_m2=121.2,
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-                url="http://134.94.131.109:5000/api/v1/profilerequest",
-                api_key="OrjpZY93BcNWw8lKaMp0BEchbCc",
+                url=getenv("UTSP_URL", ""),
+                api_key=getenv("UTSP_API_KEY", ""),
                 household=Households.CHR01_Couple_both_at_Work,
                 energy_intensity=EnergyIntensityType.EnergySaving,
                 result_dir_path=utils.HISIMPATH["results"],

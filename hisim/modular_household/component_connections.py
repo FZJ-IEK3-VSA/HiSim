@@ -80,7 +80,7 @@ def configure_pv_system(
     """
     if pv_peak_power is not None:
         my_pv_system_config = generic_pv_system.PVSystem.get_default_config(
-            power=pv_peak_power, source_weight=count,
+            power_in_watt=pv_peak_power, source_weight=count,
         )
     else:
         my_pv_system_config = generic_pv_system.PVSystem.get_default_config(

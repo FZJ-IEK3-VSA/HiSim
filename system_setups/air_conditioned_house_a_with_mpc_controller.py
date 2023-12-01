@@ -137,7 +137,7 @@ def air_conditioned_house(
     time = 2019
     power = 4e3
     load_module_data = False
-    module_name = "Hanwha_HSL60P6_PA_4_250T__2013_"
+    module_name = "Hanwha HSL60P6-PA-4-250T [2013]"
     integrate_inverter = True
     inverter_name = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_"
     name = "PVSystem"
@@ -262,10 +262,12 @@ def air_conditioned_house(
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig(
         time=time,
         location=location,
-        power=power,
+        power_in_watt=power,
         load_module_data=load_module_data,
         module_name=module_name,
         integrate_inverter=integrate_inverter,
+        module_database=generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
+        inverter_database=generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,
         tilt=tilt,
         azimuth=azimuth,
         inverter_name=inverter_name,

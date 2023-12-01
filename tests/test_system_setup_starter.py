@@ -34,6 +34,8 @@ def test_system_setup_starter():
             "total_base_area_in_m2": None,
             "number_of_apartments": 1,
             "predictive": False,
+            "set_heating_temperature_in_celsius": 19.0,
+            "set_cooling_temperature_in_celsius": 24.0,
         },
         "system_setup_config": {
             # "some_subconf": {
@@ -102,6 +104,8 @@ def test_system_setup_starter_scaling():
             "total_base_area_in_m2": None,
             "number_of_apartments": 1,
             "predictive": False,
+            "set_heating_temperature_in_celsius": 19.0,
+            "set_cooling_temperature_in_celsius": 24.0,
         },
     }
 

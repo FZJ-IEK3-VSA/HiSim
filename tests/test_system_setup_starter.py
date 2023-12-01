@@ -137,7 +137,7 @@ def test_system_setup_starter_scaling():
         webtool_kpis = json.load(file)
     assert (
         webtool_kpis["capexDict"]["column 1"]["HeatPumpHPLib [Investment in EUR] "]
-        == 4.09
+        == 3.32
     )
 
     # Remove result directory

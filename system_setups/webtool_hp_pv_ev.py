@@ -348,14 +348,14 @@ def setup_function(
         config=my_config.electricity_meter_config,
     )
     """
-    Build energy management system 
+    Build energy management system
     """
     my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
         my_simulation_parameters=my_simulation_parameters,
         config=my_config.electricity_controller_config,
     )
     """
-    Connect electric vehicles 
+    Connect electric vehicles
     """
     for car, car_battery, car_battery_controller in zip(my_cars, my_car_batteries, my_car_battery_controllers):
         car_battery_controller.connect_only_predefined_connections(car)

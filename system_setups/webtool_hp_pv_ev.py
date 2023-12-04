@@ -13,8 +13,8 @@ from utspclient.helpers.lpgdata import (
     TravelRouteSets,
 )
 
-from hisim import utils
 from hisim import loadtypes as lt
+from hisim import utils
 from hisim.components import (
     advanced_ev_battery_bslib,
     advanced_heat_pump_hplib,
@@ -33,6 +33,7 @@ from hisim.components import (
     weather,
 )
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
+from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
 from hisim.system_setup_configuration import SystemSetupConfigBase
 from system_setups.modular_example import cleanup_old_lpg_requests
@@ -131,9 +132,7 @@ class WebtoolHpPvEvConfig(SystemSetupConfigBase):
                 number_of_apartments=int(my_building_information.number_of_apartments)
             ),
             electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
-            electricity_controller_config=(
-                controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
-            ),
+            electricity_controller_config=(controller_l2_energy_management_system.EMSConfig.get_default_config_ems()),
             car_config=generic_car.CarConfig.get_default_ev_config(),
             car_battery_config=advanced_ev_battery_bslib.CarBatteryConfig.get_default_config(),
             car_battery_controller_config=(
@@ -199,8 +198,6 @@ def setup_function(
     """
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.january_only_with_all_options(year=2021, seconds_per_timestep=60)
-        from hisim.postprocessingoptions import PostProcessingOptions
-
         my_simulation_parameters.post_processing_options = [
             PostProcessingOptions.COMPUTE_CAPEX,
             PostProcessingOptions.COMPUTE_OPEX,
@@ -353,18 +350,14 @@ def setup_function(
     """
     Build energy management system 
     """
-    my_electricity_controller = (
-        controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_config.electricity_controller_config,
-        )
+    my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.electricity_controller_config,
     )
     """
     Connect electric vehicles 
     """
-    for car, car_battery, car_battery_controller in zip(
-        my_cars, my_car_batteries, my_car_battery_controllers
-    ):
+    for car, car_battery, car_battery_controller in zip(my_cars, my_car_batteries, my_car_battery_controllers):
         car_battery_controller.connect_only_predefined_connections(car)
         car_battery_controller.connect_only_predefined_connections(car_battery)
         car_battery.connect_only_predefined_connections(car_battery_controller)

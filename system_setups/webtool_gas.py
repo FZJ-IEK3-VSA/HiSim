@@ -59,7 +59,6 @@ class WebtoolGas(SystemSetupConfigBase):
     dhw_storage_config: generic_hot_water_storage_modular.StorageConfig
     electricity_meter_config: electricity_meter.ElectricityMeterConfig
 
-
     @classmethod
     def get_default(cls) -> "WebtoolGas":
         """Get default WebtoolGas."""

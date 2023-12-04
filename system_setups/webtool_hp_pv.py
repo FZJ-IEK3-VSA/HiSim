@@ -28,6 +28,7 @@ from hisim.components import (
     weather,
 )
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
+from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
 from hisim.system_setup_configuration import SystemSetupConfigBase
 from system_setups.modular_example import cleanup_old_lpg_requests
@@ -176,8 +177,6 @@ def setup_function(
     """
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.january_only_with_all_options(year=2021, seconds_per_timestep=60)
-        from hisim.postprocessingoptions import PostProcessingOptions
-
         my_simulation_parameters.post_processing_options = [
             PostProcessingOptions.COMPUTE_CAPEX,
             PostProcessingOptions.COMPUTE_OPEX,

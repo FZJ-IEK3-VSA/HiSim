@@ -1,6 +1,5 @@
 """Test for running multiple requests with lpg utsp connector and scaling up the results."""
 
-from os import getenv
 from typing import Union, List, Tuple, Any
 import pytest
 import numpy as np
@@ -16,6 +15,7 @@ from tests import functions_for_testing as fft
 from hisim import component
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.simulationparameters import SimulationParameters
+from hisim.utils import get_environment_variable
 from hisim import log
 
 
@@ -87,8 +87,8 @@ def initialize_lpg_utsp_connector_and_return_results(
     seconds_per_timestep = 60
 
     # Set Occupancy
-    url = getenv("UTSP_URL", "")
-    api_key = getenv("UTSP_API_KEY", "")
+    url = get_environment_variable("UTSP_URL")
+    api_key = get_environment_variable("UTSP_API_KEY")
     result_path = "lpg_utsp_scaling_test"
     travel_route_set = TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance
     transportation_device_set = TransportationDeviceSets.Bus_and_one_30_km_h_Car

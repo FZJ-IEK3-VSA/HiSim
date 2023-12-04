@@ -2,7 +2,6 @@
 
 # -*- coding: utf-8 -*-
 from dataclasses import dataclass, field
-from os import getenv
 from typing import Optional
 
 from dataclasses_json import dataclass_json
@@ -10,6 +9,7 @@ from utspclient.helpers.lpgdata import TravelRouteSets
 from utspclient.helpers.lpgpythonbindings import JsonReference
 
 from hisim.loadtypes import HeatingSystems
+from hisim.utils import get_environment_variable
 
 
 @dataclass_json
@@ -47,9 +47,9 @@ class ArcheTypeConfig:
     mobility_distance: Optional[JsonReference] = field(
         default_factory=lambda: TravelRouteSets.Travel_Route_Set_for_15km_Commuting_Distance)  # type: ignore
     #: url of the UTSP
-    url: str = getenv("UTSP_URL", "")
+    url: str = get_environment_variable("UTSP_URL")
     #: passwort to connect to the UTSP
-    api_key: str = getenv("UTSP_API_KEY", "")
+    api_key: str = get_environment_variable("UTSP_API_KEY")
 
 
 # def create_archetype_config_file() -> None:

@@ -21,13 +21,13 @@ from hisim.components import (
     electricity_meter,
     generic_heat_pump_modular,
     generic_hot_water_storage_modular,
+    generic_pv_system,
     heat_distribution_system,
     loadprofilegenerator_utsp_connector,
     simple_hot_water_storage,
     weather,
 )
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
-from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
 from hisim.system_setup_configuration import SystemSetupConfigBase
 from system_setups.modular_example import cleanup_old_lpg_requests
@@ -42,9 +42,9 @@ __status__ = "development"
 
 
 @dataclass
-class WebtoolHPConfig(SystemSetupConfigBase):
+class WebtoolHpPvConfig(SystemSetupConfigBase):
 
-    """Configuration with advanced heat pump."""
+    """Configuration with advanced heat pump and PV."""
 
     building_type: str
     number_of_apartments: int
@@ -54,6 +54,7 @@ class WebtoolHPConfig(SystemSetupConfigBase):
     hds_config: heat_distribution_system.HeatDistributionConfig
     hp_controller_config: advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config
     hp_config: advanced_heat_pump_hplib.HeatPumpHplibConfig
+    pv_config: generic_pv_system.PVSystemConfig
     simple_hot_water_storage_config: simple_hot_water_storage.SimpleHotWaterStorageConfig
     dhw_heatpump_config: generic_heat_pump_modular.HeatPumpConfig
     dhw_heatpump_controller_config: controller_l1_heatpump.L1HeatPumpConfig
@@ -61,23 +62,22 @@ class WebtoolHPConfig(SystemSetupConfigBase):
     electricity_meter_config: electricity_meter.ElectricityMeterConfig
 
     @classmethod
-    def get_default(cls) -> "WebtoolHPConfig":
-        """Get default WebtoolAdvancedHPConfig."""
+    def get_default(cls) -> "WebtoolHpPvConfig":
+        """Get default WebtoolAdvancedHPPVConfig."""
         building_config = building.BuildingConfig.get_default_german_single_family_home()
         household_config = cls.get_scaled_default(building_config)
         return household_config
 
     @classmethod
-    def get_scaled_default(cls, building_config: building.BuildingConfig) -> "WebtoolHPConfig":
-        """Get scaled default WebtoolAdvancedHPConfig."""
+    def get_scaled_default(cls, building_config: building.BuildingConfig) -> "WebtoolHpPvConfig":
+        """Get scaled default WebtoolAdvancedHPPVConfig."""
 
         # TODO: Check if the adjustments to the temperatures can be replaced by default values.
         heating_reference_temperature_in_celsius: float = -7
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0
-
         my_building_information = building.BuildingInformation(config=building_config)
-
-        household_config = WebtoolHPConfig(
+        pv_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2)
+        household_config = WebtoolHpPvConfig(
             building_type="blub",
             number_of_apartments=int(my_building_information.number_of_apartments),
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
@@ -94,6 +94,7 @@ class WebtoolHPConfig(SystemSetupConfigBase):
                 profile_with_washing_machine_and_dishwasher=True,
                 predictive_control=False,
             ),
+            pv_config=pv_config,
             building_config=building_config,
             hds_controller_config=(heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()),
             hds_config=(
@@ -161,23 +162,26 @@ def setup_function(
         - Heat Distribution System Controller
         - Simple Hot Water Storage
         - DHW (Heatpump, Heatpumpcontroller, Storage)
+        - PV
     """
 
     if Path(utils.HISIMPATH["utsp_results"]).exists():
         cleanup_old_lpg_requests()
     if my_sim.my_module_config_path:
-        my_config = WebtoolHPConfig.load_from_json(my_sim.my_module_config_path)
+        my_config = WebtoolHpPvConfig.load_from_json(my_sim.my_module_config_path)
     else:
-        my_config = WebtoolHPConfig.get_default()
+        my_config = WebtoolHpPvConfig.get_default()
     """
     Set Simulation Parameters
     """
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.january_only_with_all_options(year=2021, seconds_per_timestep=60)
+        from hisim.postprocessingoptions import PostProcessingOptions
+
         my_simulation_parameters.post_processing_options = [
-            PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT,
-            PostProcessingOptions.COMPUTE_OPEX,
             PostProcessingOptions.COMPUTE_CAPEX,
+            PostProcessingOptions.COMPUTE_OPEX,
+            PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT,
             PostProcessingOptions.MAKE_RESULT_JSON_WITH_KPI_FOR_WEBTOOL,
         ]
     my_sim.set_simulation_parameters(my_simulation_parameters)
@@ -198,6 +202,13 @@ def setup_function(
     """
     my_weather = weather.Weather(
         config=weather.WeatherConfig.get_default(weather.LocationEnum.AACHEN),
+        my_simulation_parameters=my_simulation_parameters,
+    )
+    """
+    Build PV
+    """
+    my_photovoltaic_system = generic_pv_system.PVSystem(
+        config=my_config.pv_config,
         my_simulation_parameters=my_simulation_parameters,
     )
     """
@@ -276,6 +287,7 @@ def setup_function(
     """
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_weather)
+    my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
     my_sim.add_component(my_building, connect_automatically=True)
     my_sim.add_component(my_heat_pump, connect_automatically=True)
     my_sim.add_component(my_heat_pump_controller, connect_automatically=True)

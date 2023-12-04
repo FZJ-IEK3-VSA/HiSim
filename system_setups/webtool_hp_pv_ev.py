@@ -1,9 +1,9 @@
 """  Household system setup with advanced heat pump for webtool. """
 
 from dataclasses import dataclass
-from os import getenv
+from os import listdir
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,
@@ -14,11 +14,16 @@ from utspclient.helpers.lpgdata import (
 )
 
 from hisim import utils
+from hisim import loadtypes as lt
 from hisim.components import (
+    advanced_ev_battery_bslib,
     advanced_heat_pump_hplib,
     building,
+    controller_l1_generic_ev_charge,
     controller_l1_heatpump,
+    controller_l2_energy_management_system,
     electricity_meter,
+    generic_car,
     generic_heat_pump_modular,
     generic_hot_water_storage_modular,
     generic_pv_system,
@@ -42,7 +47,7 @@ __status__ = "development"
 
 
 @dataclass
-class WebtoolHPPVConfig(SystemSetupConfigBase):
+class WebtoolHpPvEvConfig(SystemSetupConfigBase):
 
     """Configuration with advanced heat pump and PV."""
 
@@ -60,35 +65,42 @@ class WebtoolHPPVConfig(SystemSetupConfigBase):
     dhw_heatpump_controller_config: controller_l1_heatpump.L1HeatPumpConfig
     dhw_storage_config: generic_hot_water_storage_modular.StorageConfig
     electricity_meter_config: electricity_meter.ElectricityMeterConfig
+    electricity_controller_config: controller_l2_energy_management_system.EMSConfig
+    car_config: generic_car.CarConfig
+    car_battery_config: advanced_ev_battery_bslib.CarBatteryConfig
+    car_battery_controller_config: controller_l1_generic_ev_charge.ChargingStationConfig
 
     @classmethod
-    def get_default(cls) -> "WebtoolHPPVConfig":
+    def get_default(cls) -> "WebtoolHpPvEvConfig":
         """Get default WebtoolAdvancedHPPVConfig."""
         building_config = building.BuildingConfig.get_default_german_single_family_home()
         household_config = cls.get_scaled_default(building_config)
         return household_config
 
     @classmethod
-    def get_scaled_default(cls, building_config: building.BuildingConfig) -> "WebtoolHPPVConfig":
+    def get_scaled_default(cls, building_config: building.BuildingConfig) -> "WebtoolHpPvEvConfig":
         """Get scaled default WebtoolAdvancedHPPVConfig."""
 
         # TODO: Check if the adjustments to the temperatures can be replaced by default values.
         heating_reference_temperature_in_celsius: float = -7
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0
+        charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
+        charging_power = float((charging_station_set.Name or "").split("with ")[1].split(" kW")[0])
+
         my_building_information = building.BuildingInformation(config=building_config)
         pv_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2)
-        household_config = WebtoolHPPVConfig(
+        household_config = WebtoolHpPvEvConfig(
             building_type="blub",
             number_of_apartments=int(my_building_information.number_of_apartments),
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-                url=getenv("UTSP_URL", ""),
-                api_key=getenv("UTSP_API_KEY", ""),
+                url=utils.get_environment_variable("UTSP_URL"),
+                api_key=utils.get_environment_variable("UTSP_API_KEY"),
                 household=Households.CHR01_Couple_both_at_Work,
                 energy_intensity=EnergyIntensityType.EnergySaving,
                 result_dir_path=utils.HISIMPATH["results"],
                 travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
                 transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
-                charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
+                charging_station_set=charging_station_set,
                 name="UTSPConnector",
                 consumption=0.0,
                 profile_with_washing_machine_and_dishwasher=True,
@@ -119,6 +131,14 @@ class WebtoolHPPVConfig(SystemSetupConfigBase):
                 number_of_apartments=int(my_building_information.number_of_apartments)
             ),
             electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
+            electricity_controller_config=(
+                controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
+            ),
+            car_config=generic_car.CarConfig.get_default_ev_config(),
+            car_battery_config=advanced_ev_battery_bslib.CarBatteryConfig.get_default_config(),
+            car_battery_controller_config=(
+                controller_l1_generic_ev_charge.ChargingStationConfig.get_default_config(charging_station_set=charging_station_set)
+            ),
         )
 
         # adjust HeatPump
@@ -138,6 +158,9 @@ class WebtoolHPPVConfig(SystemSetupConfigBase):
         household_config.hp_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
         household_config.building_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
         household_config.hp_config.flow_temperature_in_celsius = 21  # Todo: check value
+        # set charging power from battery and controller to same value, to reduce error in simulation of battery
+        household_config.car_battery_config.p_inv_custom = charging_power * 1e3
+        household_config.car_battery_controller_config.battery_set = 1.0
         return household_config
 
 
@@ -168,9 +191,9 @@ def setup_function(
     if Path(utils.HISIMPATH["utsp_results"]).exists():
         cleanup_old_lpg_requests()
     if my_sim.my_module_config_path:
-        my_config = WebtoolHPPVConfig.load_from_json(my_sim.my_module_config_path)
+        my_config = WebtoolHpPvEvConfig.load_from_json(my_sim.my_module_config_path)
     else:
-        my_config = WebtoolHPPVConfig.get_default()
+        my_config = WebtoolHpPvEvConfig.get_default()
     """
     Set Simulation Parameters
     """
@@ -276,12 +299,134 @@ def setup_function(
         config=my_dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
     )
     """
+    Build electric vehicles
+    """
+    filepaths = listdir(utils.HISIMPATH["utsp_results"])
+    filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
+    names = [elem.partition(",")[0].partition(".")[2] for elem in filepaths_location]
+    # TODO: check source weight in case of 2 vehicles
+    my_car_config = my_config.car_config
+    my_car_config.name = "ElectricCar"
+    # create all cars
+    my_cars: List[generic_car.Car] = []
+    for car in names:
+        # TODO: check car name in case of 1 vehicle
+        my_car_config.name = car
+        my_cars.append(
+            generic_car.Car(
+                my_simulation_parameters=my_simulation_parameters,
+                config=my_car_config,
+                occupancy_config=my_occupancy_config,
+            )
+        )
+    """
+    Build electric vehicle batteries
+    """
+    my_car_batteries: List[advanced_ev_battery_bslib.CarBattery] = []
+    my_car_battery_controllers: List[controller_l1_generic_ev_charge.L1Controller] = []
+    car_number = 1
+    for car in my_cars:
+        my_car_battery_config = my_config.car_battery_config
+        my_car_battery_config.source_weight = car.config.source_weight
+        my_car_battery_config.name = f"CarBattery_{car_number}"
+        my_car_battery = advanced_ev_battery_bslib.CarBattery(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_car_battery_config,
+        )
+        my_car_batteries.append(my_car_battery)
+        my_car_battery_controller_config = my_config.car_battery_controller_config
+        my_car_battery_controller_config.source_weight = car.config.source_weight
+        my_car_battery_controller_config.name = f"L1EVChargeControl_{car_number}"
+        my_car_battery_controller = controller_l1_generic_ev_charge.L1Controller(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_car_battery_controller_config,
+        )
+        my_car_battery_controllers.append(my_car_battery_controller)
+        car_number += 1
+    """
     Build Electricity Meter
     """
     my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,
         config=my_config.electricity_meter_config,
     )
+    """
+    Build energy management system 
+    """
+    my_electricity_controller = (
+        controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_config.electricity_controller_config,
+        )
+    )
+    """
+    Connect electric vehicles 
+    """
+    for car, car_battery, car_battery_controller in zip(
+        my_cars, my_car_batteries, my_car_battery_controllers
+    ):
+        car_battery_controller.connect_only_predefined_connections(car)
+        car_battery_controller.connect_only_predefined_connections(car_battery)
+        car_battery.connect_only_predefined_connections(car_battery_controller)
+
+        my_electricity_controller.add_component_input_and_connect(
+            source_object_name=car_battery_controller.component_name,
+            source_component_output=car_battery_controller.BatteryChargingPowerToEMS,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            source_tags=[
+                lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+            ],
+            source_weight=999,
+        )
+    """
+    Connect EMS
+    """
+    my_electricity_controller.add_component_input_and_connect(
+        source_object_name=my_occupancy.component_name,
+        source_component_output=my_occupancy.ElectricityOutput,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+        source_weight=999,
+    )
+    # connect EMS with DHW
+    my_electricity_controller.add_component_input_and_connect(
+        source_object_name=my_domnestic_hot_water_heatpump.component_name,
+        source_component_output=my_domnestic_hot_water_heatpump.ElectricityOutput,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+        source_weight=999,
+    )
+    # connect EMS with Heatpump
+    my_electricity_controller.add_component_input_and_connect(
+        source_object_name=my_heat_pump.component_name,
+        source_component_output=my_heat_pump.ElectricalInputPower,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+        source_weight=999,
+    )
+    # connect EMS with PV
+    my_electricity_controller.add_component_input_and_connect(
+        source_object_name=my_photovoltaic_system.component_name,
+        source_component_output=my_photovoltaic_system.ElectricityOutput,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
+        source_weight=999,
+    )
+    # connect Electricity Meter
+    my_electricity_meter.add_component_input_and_connect(
+        source_object_name=my_electricity_controller.component_name,
+        source_component_output=my_electricity_controller.ElectricityToOrFromGrid,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
+        source_weight=999,
+    )
+
     """
     Add Components to Simulation Parameters
     """
@@ -297,4 +442,11 @@ def setup_function(
     my_sim.add_component(my_domnestic_hot_water_storage, connect_automatically=True)
     my_sim.add_component(my_domnestic_hot_water_heatpump_controller, connect_automatically=True)
     my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
-    my_sim.add_component(my_electricity_meter, connect_automatically=True)
+    my_sim.add_component(my_electricity_meter)
+    my_sim.add_component(my_electricity_controller)
+    for car in my_cars:
+        my_sim.add_component(car)
+    for car_battery in my_car_batteries:
+        my_sim.add_component(car_battery)
+    for car_battery_controller in my_car_battery_controllers:
+        my_sim.add_component(car_battery_controller)

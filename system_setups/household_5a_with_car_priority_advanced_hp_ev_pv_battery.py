@@ -5,7 +5,7 @@
 from typing import List, Optional, Any
 from pathlib import Path
 from dataclasses import dataclass
-from os import getenv, listdir
+from os import listdir
 from dataclasses_json import dataclass_json
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,

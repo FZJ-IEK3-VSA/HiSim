@@ -491,11 +491,14 @@ def set_attributes_of_dataclass_from_dict(dataclass_, dict_, nested=None):
                     in `{dataclass_.__class__.__name__}`."""
                 )
 
-def get_environment_variable(key: str, default: Optional[str] = None ) -> str:
+
+def get_environment_variable(key: str, default: Optional[str] = None) -> str:
     """Get environment variable. Raise error if variable not found."""
-    value=os.getenv(key, default)
+    value = os.getenv(key, default)
     if not value:
-        raise ValueError(f"""Could not determine value of environment variable: {key}.
+        raise ValueError(
+            f"""Could not determine value of environment variable: {key}.
                          Make sure to set it in an `.env` file inside the HiSim root folder
-                         or somewhere within your system environment.""")
+                         or somewhere within your system environment."""
+        )
     return value

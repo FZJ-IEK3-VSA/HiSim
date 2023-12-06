@@ -432,7 +432,7 @@ class L1CHPController(cp.Component):
 
 
         if self.config.forcedrunning:
-            if (timestep >= self.config.on_off_SOEC*24) and (timestep <= self.config.off_on_SOEC*24):
+            if (timestep >= self.config.on_off_SOEC) and (timestep <= self.config.off_on_SOEC):
                 self.state.activate(timestep)
                 
             else:

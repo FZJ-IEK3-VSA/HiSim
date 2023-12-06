@@ -10,6 +10,7 @@ from hisim.result_path_provider import ResultPathProviderSingleton
 sys.path.append("C://Users//Standard//Desktop//hisim//HiSim//hisim//postprocessing//")
 os.chdir("C://Users//Standard//Desktop//hisim//HiSim//hisim//postprocessing//")
 import Cell4Life_Postprocessing
+import Cell4Life_ControllExcelSheet
 os.chdir('C://Users//Standard//Desktop//hisim//HiSim//')
 import math
 
@@ -24,14 +25,14 @@ import math
  """
 
 
-szenario = "1b" 
+szenario = "1a" 
 szenarioUnit = "-"
 
 
-FuelCellPowerW_list = [501]  #Electricity Power of Fuel Cell Power in Watt
-BatteryCapkWh_list = [200]     #Total Capacity of Battery in kWh
-Inverter_Ratio_list = [0.1]
-BatterieFaktorList = [0.0000001]
+FuelCellPowerW_list = [50000]  #Electricity Power of Fuel Cell Power in Watt
+BatteryCapkWh_list = [100]     #Total Capacity of Battery in kWh
+Inverter_Ratio_list = [1]
+BatterieFaktorList = [100]
 
 #FuelCellPowerW_list = [200000, 100000, 50000, 25000, 12500]  #Electricity Power of Fuel Cell Power in Watt
 #Inverter_Ratio_list = [0.5, 0.333, 0.25, 0.2,0.1666] #Means: Inverter_power_demand  = Battery capacity multiplied with a factor of the list; Battery Capacity = BatterieFaktor * (electrolyzer_energy + h2 storage)
@@ -101,23 +102,38 @@ for BatterieFaktor in BatterieFaktorList:
                 copytopath1= pathbase
                 excelfilepathallresults1, excel_filename1 = Cell4Life_Postprocessing.makeacopyofevaluationfile(copytopath1, filepath1, name1)
 
+            #For economic assessment, create a copy of original excel file
             copyfrompath = 'C://Users//Standard//Desktop//hisim//C4LResults//results//'
-            name2 = 'Sim_Oek_Assessment_v6'
+            name2 = 'Sim_Oek_Assessment_v7'
             filepath2 = copyfrompath + 'OriginalExcelFile//' + name2 + '.xlsx'
             copytopath2 = ResultPathProviderSingleton().get_result_directory_name()
             copytopath2 = copytopath2 + '//'
             
             name2 = 'S'+ str(PreResultNumber) + '_Oek_Assessment'
-            excelfilepathresults, excel_filename2 = Cell4Life_Postprocessing.makeacopyofevaluationfile(copytopath2, filepath2, name2)
-            del copytopath2, filepath2, name2,
+            excelfilepathresults2, excel_filename2 = Cell4Life_Postprocessing.makeacopyofevaluationfile(copytopath2, filepath2, name2)
+            del copytopath2, filepath2, name2
+
+            #For Excel Controll File, create a copy of original excel file
+            copyfrompath = 'C://Users//Standard//Desktop//hisim//C4LResults//results//'
+            name3 = 'ControllFileData-plotting'
+            filepath3 = copyfrompath + 'OriginalExcelFile//' + name3 + '.xlsx'
+            copytopath3 = ResultPathProviderSingleton().get_result_directory_name()
+            copytopath3 = copytopath3 + '//'
+            
+            name3 = 'ControllFileData'
+            excelfilepathresults3, excel_filename3 = Cell4Life_Postprocessing.makeacopyofevaluationfile(copytopath3, filepath3, name3)
+            del copytopath3, filepath3, name3
+            
             
             
             #Save all Data in the created excel files
             input_variablen = Cell4LifeSzenariovII.InputParameter()
             Cell4Life_Postprocessing.saveInputdata(input_variablen)
             #Cell4Life_Postprocessing.saveexcelforevaluations(input_variablen, excelfilepathallresults1, excel_filename1)
-            Cell4Life_Postprocessing.save_data_in_excel_for_economic_assessment(input_variablen, excelfilepathresults, excel_filename2)
-            del excelfilepathresults
+            Cell4Life_Postprocessing.save_data_in_excel_for_economic_assessment(input_variablen, excelfilepathresults2)
+            Cell4Life_ControllExcelSheet.ControllSheetExcel(excelfilepathresults3)
+
+            del excelfilepathresults2, excelfilepathresults3
             finishtext = "---Parametervariation  --vII: " + input_variablen["szenario"]["value"] + "--  abgeschlossen---"
 
             del input_variablen

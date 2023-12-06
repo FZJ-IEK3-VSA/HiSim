@@ -157,7 +157,7 @@ def makeacopyofevaluationfile(copytopath, filepath, name):
 
 
 
-def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresults, excel_filename):
+def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresults):
     print("------------------------------------------------------------------------------")
     print("------------------------------------------------------------------------------")
     print("------------------------------------------------------------------------------")
@@ -174,9 +174,6 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
     PreResultNumber = input_variablen["PreResultNumber"]["value"]
     #----Save all Input Data in a .txt ----
     path = ResultPathProviderSingleton().get_result_directory_name() 
-    #name = f"//S{PreResultNumber}EconomicAssessment.xlsx"
-    #path = path + name
-    #del name
     workbook = openpyxl.load_workbook(excelfilepathresults)
     
     #----------------------------------------------   
@@ -298,11 +295,14 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
     Data7 = []
     Data8 = []
     Data9 = []
+    Data10 = []
+    Data11 = []
+
 
     # Lade Daten aus dem ersten CSV-Datei "Electricity TO or FROM Grid Ergebnisse" (Spalte 1 und Spalte 2) und füge sie zur Liste hinzu
     csv_datei1 = os.path.join(path, 'ElectricityToOrFromGrid_L2EMSElectricityController.csv')
     if not os.path.exists(csv_datei1):
-        csv_datei1 = os.path.join(path, 'ElectricityToOrFromGrid_my_electricity_controller.csv')
+        csv_datei1 = os.path.join(path, 'ElectricityToOrFromGrid_Elect_Controller.csv')
 
 
     with open(csv_datei1, 'r') as csvfile:
@@ -374,18 +374,32 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
             Data8.append(row[1])
 
     # Load 9. CSV-Datei "TotalElectricityConsumption_L2EMSElectricityController.csv" (only second column) und add it to the list --> IS NOT THE TOTAL CONSUMPTION (based on a comparison and validation done by 4ward)
-    csv_datei9 = os.path.join(path, 'TotalElectricityConsumption_L2EMSElectricityController.csv')
+    csv_datei9 = os.path.join(path, 'TotalElectricityConsumption_Elect_Controller..csv')
     
     if not os.path.exists(csv_datei9):
-        csv_datei9 = os.path.join(path, 'TotalElectricityConsumption_my_electricity_controller.csv')
+        csv_datei9 = os.path.join(path, 'TotalElectricityConsumption_Elect_Controller.csv')
 
     with open(csv_datei9, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
         for row in csvreader:
-            Data9.append(row[1])      
+            Data9.append(row[1])
+
+    # Load data from "from CHP to house" (column 2) and add the collected data to list
+    csv_datei10 = os.path.join(path, 'QuantitiyShare_electricity_from_CHP_to_house_Elect_Controller.csv')
+    with open(csv_datei10, 'r') as csvfile:
+        csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        for row in csvreader:
+            Data10.append(row[1])
+
+    # Load data from "from Battery to house" (column 2) and add the collected data to list
+    csv_datei11 = os.path.join(path, 'QuantitiyShare_electricity_from_Battery_to_house_Elect_Controller.csv')
+    with open(csv_datei11, 'r') as csvfile:
+        csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        for row in csvreader:
+            Data11.append(row[1])      
 
     #Zusammenfuehren der Daten
-    zusammengefuegte_daten = [(x[0], x[1], x[2], Data2[i], Data3[i], Data4[i], Data5[i], Data6[i], Data7[i], Data8[i], Data9[i]) for i, x in enumerate(zusammengefuegte_daten)]
+    zusammengefuegte_daten = [(x[0], x[1], x[2], Data2[i], Data3[i], Data4[i], Data5[i], Data6[i], Data7[i], Data8[i], Data9[i], Data10[i], Data11[i]) for i, x in enumerate(zusammengefuegte_daten)]
 
     
 
@@ -406,3 +420,5 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
             zelle.value = wert
 
     workbook.save(excelfilepathresults)
+
+

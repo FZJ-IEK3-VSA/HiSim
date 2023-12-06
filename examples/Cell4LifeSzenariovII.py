@@ -41,7 +41,7 @@ from hisim.components import generic_pv_system
 from hisim.components import (controller_l1_electrolyzer, generic_electrolyzer, generic_hydrogen_storage)
 from hisim.components import static_electrolyzer
 from hisim.components import (controller_l1_chp_CB, generic_CHP) 
-from hisim.components import controller_l1_example_controller_C4L1b
+from hisim.components import controller_l1_example_controller_C4L_1a_1b
 from hisim.modular_household import component_connections
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim import loadtypes
@@ -87,9 +87,9 @@ def Cell4Life(
     # Postprocessing Options****
     
     my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.EXPORT_TO_CSV)
-    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PLOT_LINE)
+    #my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PLOT_LINE)
     #my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.MAKE_NETWORK_CHARTS)
-    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PLOT_CARPET)
+    #my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PLOT_CARPET)
     
   
             #******************************************************************
@@ -152,11 +152,11 @@ def Cell4Life(
     #Build EMS****
     #First Controller
     my_electricity_controller_config = (
-       controller_l1_example_controller_C4L1b.SimpleControllerConfig.get_default_config()
+       controller_l1_example_controller_C4L_1a_1b.SimpleControllerConfig.get_default_config()
     )
     my_electricity_controller = (
-        controller_l1_example_controller_C4L1b.SimpleController(
-           name = "my_electricity_controller", my_simulation_parameters=my_simulation_parameters, config=my_electricity_controller_config)
+        controller_l1_example_controller_C4L_1a_1b.SimpleController(
+           name = "Elect_Controller", my_simulation_parameters=my_simulation_parameters, config=my_electricity_controller_config)
     )
     my_electricity_controller.config.szenario = input_variablen["szenario"]["value"]
 
@@ -335,8 +335,8 @@ def InputParameter():
         min_operation_time_in_seconds_chp = 0 #It is not working well so let it be "0"
         min_resting_time_in_seconds_chp = 0 # This does not work well so let it be 0
         h2_soc_lower_threshold_chp = 0 # Minimum state of charge to start operating the fuel cell in %
-        on_off_SOEC = 183 #Day: Turn off Electrolyzer and turn on Fuel Cell // Variable name should be read: turn SOEC from "on" to "off" // Day Depends on starting date: e.g. day 10 of the year 2021 is 10. Januar if the simulation year starts with 1st Jannuar;
-        off_on_SOEC = 500 #Day: Turn on Electrolyzer and turn off on Fuel Cell
+        on_off_SOEC = 183 #timestep: Turn off Electrolyzer and turn on Fuel Cell // Variable name should be read: turn SOEC from "on" to "off" // Day Depends on starting date: e.g. timestep of the year 2021 is 10. Januar if the simulation year starts with 1st Jannuar;
+        off_on_SOEC = 500 #timestep: Turn on Electrolyzer and turn off on Fuel Cell
 
     Integration of csvload 
     ##Loading of Project Data
@@ -418,14 +418,14 @@ def InputParameter():
     h_fuel = 33.3 #heatng value ("Heizwert/Brennwert") of the choosen fuel in kWh/kg; upper value for H2 = 39,39 kWh/kg (3.939e4 Wh/kg); lower value for H2 = 33,3 
     h_fuelUnit = "kWh/kg"
     
-    on_off_SOEC = 183 #Day: Turn off Electrolyzer and turn on Fuel Cell // Variable name should be read: turn SOEC from "on" to "off" // Day Depends on starting date: e.g. day 10 of the year 2021 is 10. Januar if the simulation year starts with 1st Jannuar;
-    on_off_SOECUnit = "days (counting: day one in Input Data = 1 ||Day: Turn off Electrolyzer and turn on Fuel Cell)"
+    on_off_SOEC = 4391 #timestep: Turn off Electrolyzer and turn on Fuel Cell // Variable name should be read: turn SOEC from "on" to "off" // timestep Depends on starting date: e.g. timestep 10 of the year 2021 is 10. Januar if the simulation year starts with 1st Jannuar;
+    on_off_SOECUnit = "timesteps (Turn off Electrolyzer and turn on Fuel Cell)"
     
-    off_on_SOEC = 500 #Day: Turn on Electrolyzer and turn off on Fuel Cell
-    off_on_SOECUnit = "days (counting: day one in Input Data = 1 ||Day: Turn on Electrolyzer and turn off on Fuel Cell"
+    off_on_SOEC = 100000 #timestep: Turn on Electrolyzer and turn off on Fuel Cell
+    off_on_SOECUnit = "timesteps (Turn on Electrolyzer and turn off on Fuel Cell"
     
     #h2_storage_capacity_max = 50000  #Maximum of hydrogen storage in kg
-    h2_storage_capacity_max = p_el_elektrolyzer / (3600*40000) *3600 * 24 * (on_off_SOEC +1) #Storage Capacity based on Electrolyzer Production Rate
+    h2_storage_capacity_max = p_el_elektrolyzer / (3600*40000) *3600 * (on_off_SOEC+96) #Storage Capacity based on Electrolyzer Production Rate --> + some storage capacity of 96 hours more
     
     
     h2_storage_capacity_maxUnit = "kg"

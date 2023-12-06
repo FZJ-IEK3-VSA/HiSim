@@ -71,8 +71,8 @@ class StaticElectrolyzerConfig(cp.ConfigBase):
             loadtype=loadtypes.LoadTypes.HEATING,
             unit=loadtypes.Units.WATT,
             output_description = "Electrolyzer E-Consumption",
-            on_off_SOEC = 0,  #Tag Abschalten des Elektrolyseurs und dafür Einschalten der Brennstoffzelle
-            off_on_SOEC = 0,  #Tag Einschalten des Elektrolyseurs und dafür Ausschalten der Brennstoffzelle
+            on_off_SOEC = 0,  #Timestep Abschalten des Elektrolyseurs und dafür Einschalten der Brennstoffzelle
+            off_on_SOEC = 0,  #Timestep Einschalten des Elektrolyseurs und dafür Ausschalten der Brennstoffzelle
             h2_soc_upper_threshold_electrolyzer = 100,
         )
         return config
@@ -243,7 +243,7 @@ class StaticElectrolyzer(cp.Component):
 
             
             if not hydrogen_soc_ok: 
-                calc_electrolyzer = ((timestep >= self.config.on_off_SOEC*24) and (timestep <= self.config.off_on_SOEC*24))        
+                calc_electrolyzer = ((timestep >= self.config.on_off_SOEC) and (timestep <= self.config.off_on_SOEC))        
                 
                 if calc_electrolyzer:
                     stsv.set_output_value(self.hydrogen_output_channel, 0)

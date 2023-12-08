@@ -420,6 +420,7 @@ class Weather(Component):
     Azimuth = "Azimuth"
     ApparentZenith = "ApparentZenith"
     WindSpeed = "WindSpeed"
+    Pressure = "Pressure"
     Weather_Temperature_Forecast_24h = "Weather_Temperature_Forecast_24h"
     DailyAverageOutsideTemperatures = "DailyAverageOutsideTemperatures"
 
@@ -523,6 +524,14 @@ class Weather(Component):
             output_description=f"here a description for {self.WindSpeed} will follow.",
         )
 
+        self.pressure_output: ComponentOutput = self.add_output(
+            self.component_name,
+            self.Pressure,
+            lt.LoadTypes.ANY,
+            lt.Units.HEKTOPASCAL,
+            output_description=f"here a description for {self.WindSpeed} will follow.",
+        )
+
         self.daily_average_outside_temperature_output: ComponentOutput = self.add_output(
             self.component_name,
             self.DailyAverageOutsideTemperatures,
@@ -537,6 +546,7 @@ class Weather(Component):
         self.altitude_list: List[float]
         self.azimuth_list: List[float]
         self.wind_speed_list: List[float]
+        self.pressure_list: List[float]
         self.ghi_list: List[float]
         self.apparent_zenith_list: List[float]
         self.dhi_list: List[float]
@@ -578,6 +588,7 @@ class Weather(Component):
         stsv.set_output_value(self.altitude_output, self.altitude_list[timestep])
         stsv.set_output_value(self.azimuth_output, self.azimuth_list[timestep])
         stsv.set_output_value(self.wind_speed_output, self.wind_speed_list[timestep])
+        stsv.set_output_value(self.pressure_output, self.pressure_list[timestep])
         stsv.set_output_value(
             self.apparent_zenith_output, self.apparent_zenith_list[timestep]
         )
@@ -634,6 +645,7 @@ class Weather(Component):
             self.azimuth_list = my_weather["azimuth"].tolist()
             self.apparent_zenith_list = my_weather["apparent_zenith"].tolist()
             self.wind_speed_list = my_weather["Wspd"].tolist()
+            self.pressure_list = my_weather["Pressure"].tolist()
         else:
             tmy_data = read_test_reference_year_data(
                 weatherconfig=self.weather_config,
@@ -658,6 +670,8 @@ class Weather(Component):
                     .asfreq()
                     .interpolate(method="linear")
                 )
+                pressure = (tmy_data["Pressure"].resample("1T").asfreq() .interpolate(method="linear")
+                )
             else:
                 dni = self.interpolate(
                     tmy_data["DNI"], self.my_simulation_parameters.year
@@ -674,6 +688,9 @@ class Weather(Component):
                 wind_speed = self.interpolate(
                     tmy_data["Wspd"], self.my_simulation_parameters.year
                 )
+                pressure = self.interpolate(
+                    tmy_data["Pressure"], self.my_simulation_parameters.year
+                            )
             # calculate extra terrestrial radiation- n eeded for perez array diffuse irradiance models
             dni_extra = pd.Series(pvlib.irradiance.get_extra_radiation(dni.index), index=dni.index)  # type: ignore
 
@@ -725,6 +742,9 @@ class Weather(Component):
                 self.wind_speed_list = (
                     wind_speed.resample(str(seconds_per_timestep) + "S").mean().tolist()
                 )
+                self.pressure_list = (
+                    pressure.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                )
             else:
                 self.temperature_list = temperature.tolist()
                 self.dry_bulb_list = temperature.to_list()
@@ -742,6 +762,7 @@ class Weather(Component):
                 self.wind_speed_list = (
                     wind_speed.resample(str(seconds_per_timestep) + "S").mean().tolist()
                 )
+                self.pressure_list = pressure.tolist()
 
             solardata = [
                 self.dni_list,
@@ -753,6 +774,7 @@ class Weather(Component):
                 self.apparent_zenith_list,
                 self.dry_bulb_list,
                 self.wind_speed_list,
+                self.pressure_list,
                 self.dniextra_list,
                 self.daily_average_outside_temperature_list_in_celsius,
             ]
@@ -769,6 +791,7 @@ class Weather(Component):
                     "apparent_zenith",
                     "DryBulb",
                     "Wspd",
+                    "Pressure",
                     "DNIextra",
                     "t_out_daily_average",
                 ],
@@ -808,6 +831,10 @@ class Weather(Component):
             SingletonSimRepository().set_entry(
                 key=SingletonDictKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST,
                 entry=self.wind_speed_list,
+            )
+            SingletonSimRepository().set_entry(
+                key=SingletonDictKeyEnum.WEATHERPRESSUREYEARLYFORECAST,
+                entry=self.pressure_list,
             )
             SingletonSimRepository().set_entry(
                 key=SingletonDictKeyEnum.WEATHERALTITUDEYEARLYFORECAST,

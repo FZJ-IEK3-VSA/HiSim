@@ -86,6 +86,7 @@ class LoadTypes(str, enum.Enum):
 
     # Substance
     GAS = "Gas"
+    AIR = "Air"
     HYDROGEN = "Hydrogen"
     OXYGEN = "Oxygen"
     WATER = "Water"
@@ -146,6 +147,11 @@ class Units(str, enum.Enum):
 
     # Degrees
     DEGREES = "Degrees"
+
+    # Pressure
+    BAR = "bar"
+    PA = "Pa"
+    HEKTOPASCAL ="hPa"
 
     # Time
     SECONDS = "s"

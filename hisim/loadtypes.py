@@ -82,6 +82,7 @@ class LoadTypes(str, enum.Enum):
 
     VOLUME = "Volume"
     TEMPERATURE = "Temperature"
+    PRESSURE = "Pressure"
     TIME = "Time"
 
     # Substance
@@ -150,7 +151,7 @@ class Units(str, enum.Enum):
 
     # Pressure
     BAR = "bar"
-    PA = "Pa"
+    PASCAL = "Pa"
     HEKTOPASCAL ="hPa"
 
     # Time
@@ -173,6 +174,7 @@ class ComponentType(str, enum.Enum):
     """Component types for use in dynamic controllers."""
 
     PV = "PV"
+    WINDTURBINE = "Windturbine"
     SMART_DEVICE = "SmartDevice"
     SURPLUS_CONTROLLER = "SurplusController"
     PREDICTIVE_CONTROLLER = "PredictiveControllerforSmartDevices"

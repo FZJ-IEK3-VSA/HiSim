@@ -527,9 +527,9 @@ class Weather(Component):
         self.pressure_output: ComponentOutput = self.add_output(
             self.component_name,
             self.Pressure,
-            lt.LoadTypes.ANY,
-            lt.Units.HEKTOPASCAL,
-            output_description=f"here a description for {self.WindSpeed} will follow.",
+            lt.LoadTypes.PRESSURE,
+            lt.Units.HEKTOPASCAL,       # in try(dwd) unit: hPa, in nsrdb unit: mbar = hPa
+            output_description=f"here a description for {self.Pressure} will follow.",
         )
 
         self.daily_average_outside_temperature_output: ComponentOutput = self.add_output(

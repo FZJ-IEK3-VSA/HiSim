@@ -588,7 +588,7 @@ class Weather(Component):
         stsv.set_output_value(self.altitude_output, self.altitude_list[timestep])
         stsv.set_output_value(self.azimuth_output, self.azimuth_list[timestep])
         stsv.set_output_value(self.wind_speed_output, self.wind_speed_list[timestep])
-        stsv.set_output_value(self.pressure_output, self.pressure_list[timestep])
+        stsv.set_output_value(self.pressure_output, self.pressure_list[timestep]*100)   #*100 umrechnung von hPA bzw mbar in PA
         stsv.set_output_value(
             self.apparent_zenith_output, self.apparent_zenith_list[timestep]
         )

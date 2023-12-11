@@ -2207,7 +2207,6 @@ class BuildingInformation:
         """
 
         if self.buildingconfig.number_of_apartments is not None:
-            print("number of apart not none")
             number_of_apartments_origin = self.buildingconfig.number_of_apartments
 
             if number_of_apartments_origin == 0:

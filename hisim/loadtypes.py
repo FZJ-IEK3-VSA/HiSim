@@ -152,7 +152,6 @@ class Units(str, enum.Enum):
     # Pressure
     BAR = "bar"
     PASCAL = "Pa"
-    HEKTOPASCAL ="hPa"
 
     # Time
     SECONDS = "s"

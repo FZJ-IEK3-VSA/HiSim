@@ -798,7 +798,7 @@ class PVSystem(cp.Component):
 
             # transform column object types to numeric types
             for column in module.columns:
-                module.loc[:,column] = pd.to_numeric(module.loc[:, column], errors="coerce")
+                module.loc[:, column] = pd.to_numeric(module.loc[:, column], errors="coerce")
 
             # transform module dataframe to dict
             module = module.to_dict(orient="records")[0]

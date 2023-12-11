@@ -125,9 +125,7 @@ def get_heatpump_cycles(
 
 def get_electricity_to_and_from_grid_from_electricty_meter(
     wrapped_components: List[ComponentWrapper],
-    results: pd.DataFrame = None,
-
-    ) -> float:
+    ) -> Tuple[float, float]:
     """Get the electricity injected into the grid or taken from grid measured by the electricity meter."""
     # go through all wrapped components and try to find electricity meter
     for wrapped_component in wrapped_components:

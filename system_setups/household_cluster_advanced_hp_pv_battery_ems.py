@@ -31,9 +31,6 @@ from hisim import log
 from system_setups.household_cluster_reference_advanced_hp import (
     BuildingPVWeatherConfig,
 )
-from system_setups.household_cluster_reference_advanced_hp import (
-    BuildingPVWeatherConfig,
-)
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -289,14 +286,14 @@ def setup_function(
         config=my_electricity_controller_config,
     )
 
-    # # Build Battery
-    # my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
-    #     total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt
-    # )
-    # my_advanced_battery = advanced_battery_bslib.Battery(
-    #     my_simulation_parameters=my_simulation_parameters,
-    #     config=my_advanced_battery_config,
-    # )
+    # Build Battery
+    my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
+        total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt
+    )
+    my_advanced_battery = advanced_battery_bslib.Battery(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_advanced_battery_config,
+    )
 
     # Build DHW (this is taken from household_3_advanced_hp_diesel-car_pv_battery.py)
     my_dhw_heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
@@ -482,21 +479,21 @@ def setup_function(
             output_description="Target electricity for Heating Heat Pump. ",
         )
 
-    # electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
-    #     source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-    #     source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-    #     source_weight=3,
-    #     source_load_type=lt.LoadTypes.ELECTRICITY,
-    #     source_unit=lt.Units.WATT,
-    #     output_description="Target electricity for Battery Control. ",
-    # )
+    electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
+        source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
+        source_weight=3,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        output_description="Target electricity for Battery Control. ",
+    )
 
-    # # -----------------------------------------------------------------------------------------------------------------
-    # # Connect Battery
-    # my_advanced_battery.connect_dynamic_input(
-    #     input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
-    #     src_object=electricity_to_or_from_battery_target,
-    # )
+    # -----------------------------------------------------------------------------------------------------------------
+    # Connect Battery
+    my_advanced_battery.connect_dynamic_input(
+        input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
+        src_object=electricity_to_or_from_battery_target,
+    )
 
     # -----------------------------------------------------------------------------------------------------------------
     # Connect Electricity Meter
@@ -527,7 +524,7 @@ def setup_function(
     )
     my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
     my_sim.add_component(my_electricity_meter)
-    # my_sim.add_component(my_advanced_battery)
+    my_sim.add_component(my_advanced_battery)
     my_sim.add_component(
         my_electricity_controller, connect_automatically=connect_automatically
     )
@@ -543,7 +540,7 @@ def setup_function(
 
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
-            entry=f"without_surplus_without_batt_all_options_{hash_number}",
+            entry=f"without_surplus_all_options_{hash_number}",
         )
 
     # if config_filename is not given, make result path with index enumeration
@@ -555,7 +552,7 @@ def setup_function(
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
         model_name=my_sim.module_filename,
-        variant_name="without_surplus_without_batt__all_options_",
+        variant_name="without_surplus_all_options_",
         hash_number=hash_number,
         sorting_option=sorting_option,
         sampling_mode=sampling_mode,

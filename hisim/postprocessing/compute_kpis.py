@@ -123,20 +123,20 @@ def get_heatpump_cycles(
 
     return number_of_cycles
 
-def get_electricity_to_and_from_grid_from_electricty_meter(
-    wrapped_components: List[ComponentWrapper],
-    ) -> Tuple[float, float]:
+
+def get_electricity_to_and_from_grid_from_electricty_meter(wrapped_components: List[ComponentWrapper]) -> Tuple[float, float]:
     """Get the electricity injected into the grid or taken from grid measured by the electricity meter."""
     # go through all wrapped components and try to find electricity meter
     for wrapped_component in wrapped_components:
         if "ElectricityMeter" in wrapped_component.my_component.component_name:
 
-            total_energy_from_grid_in_kWh = wrapped_component.my_component.config.total_energy_from_grid_in_kwh
-            total_energy_to_grid_in_kWh = wrapped_component.my_component.config.total_energy_to_grid_in_kwh
+            total_energy_from_grid_in_kwh = wrapped_component.my_component.config.total_energy_from_grid_in_kwh
+            total_energy_to_grid_in_kwh = wrapped_component.my_component.config.total_energy_to_grid_in_kwh
 
             break
 
-    return total_energy_to_grid_in_kWh, total_energy_from_grid_in_kWh
+    return total_energy_to_grid_in_kwh, total_energy_from_grid_in_kwh
+
 
 def read_in_fuel_costs() -> pd.DataFrame:
     """Reads data for costs and co2 emissions of fuels from csv."""
@@ -612,7 +612,7 @@ def compute_kpis(
 
     # get cycle numbers of heatpump
     number_of_cycles = get_heatpump_cycles(results=results)
-    
+
     # get electricity from and to grid from electricity meter
     (total_energy_to_grid_in_kwh, total_energy_from_grid_in_kwh) = get_electricity_to_and_from_grid_from_electricty_meter(wrapped_components=components)
 

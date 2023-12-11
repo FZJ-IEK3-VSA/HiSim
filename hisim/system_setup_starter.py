@@ -111,6 +111,7 @@ if __name__ == "__main__":
         RESULT_DIRECTORY = sys.argv[2]
     else:
         log.information("HiSim from JSON received too many arguments.")
+        RESULT_DIRECTORY = ""
         sys.exit(1)
 
     log.information(f"Reading parameters from {PARAMETERS_JSON_FILE}.")

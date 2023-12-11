@@ -528,7 +528,7 @@ class Weather(Component):
             self.component_name,
             self.Pressure,
             lt.LoadTypes.PRESSURE,
-            lt.Units.HEKTOPASCAL,       # in try(dwd) unit: hPa, in nsrdb unit: mbar = hPa
+            lt.Units.PASCAL,
             output_description=f"here a description for {self.Pressure} will follow.",
         )
 

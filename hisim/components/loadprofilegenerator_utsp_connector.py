@@ -10,7 +10,7 @@ import json
 import os
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Any, Union
-
+import copy
 import pandas as pd
 from dataclasses_json import dataclass_json
 
@@ -644,12 +644,15 @@ class UtspLpgConnector(cp.Component):
 
         # config household is list of jsonreferences
         if isinstance(self.utsp_config.household, List):
+            # get specific guid list in order to prevent duplicated requests
+            guid_list = self.vary_guids_for_lpg_utsp_requests_if_config_household_is_a_list_and_contains_duplicated_household_types()
 
-            for household in self.utsp_config.household:
+            for index, household in enumerate(self.utsp_config.household):
 
                 # make new config object with only one household in order to find local cache in cache_dir_path
                 new_config_object = self.utsp_config
                 new_config_object.household = household
+                new_config_object.guid = guid_list[index]
 
                 file_exists, cache_filepath = utils.get_cache_file(
                     component_key=self.component_name
@@ -677,6 +680,27 @@ class UtspLpgConnector(cp.Component):
             list_of_file_exists_and_cache_files.append([file_exists, cache_filepath])
 
         return list_of_file_exists_and_cache_files
+
+    def vary_guids_for_lpg_utsp_requests_if_config_household_is_a_list_and_contains_duplicated_household_types(self) -> List[str]:
+        """In case the lpg_utsp_connector config is given a list of households, it will be checked if the list contains any duplicates.
+
+        If so, for each duplicate the guid will be varied to make sure that each lpg request delivers a unique profile.
+        """
+        # check if household is list and return guid list
+        if isinstance(self.utsp_config.household, List):
+            copied_households = copy.deepcopy(self.utsp_config.household)
+            guid_list = []
+
+            for household in self.utsp_config.household:
+
+                number_of_duplicated_households = copied_households.count(household)
+                if number_of_duplicated_households == 1:
+                    guid_list.append(str(1))
+                elif number_of_duplicated_households > 1:
+                    guid_list.append(str(number_of_duplicated_households))
+                    copied_households.remove(household)
+
+        return guid_list
 
     def calculate_one_lpg_request(
         self, simulation_config: HouseCreationAndCalculationJob, guid: str

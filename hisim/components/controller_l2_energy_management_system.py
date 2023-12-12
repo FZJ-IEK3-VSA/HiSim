@@ -353,7 +353,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.HEAT_PUMP_DHW, lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-                source_weight=999,
+                source_weight=1,
             )
         )
         return dynamic_connections
@@ -375,7 +375,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.ELECTRICITY_REAL],
-                source_weight=999,
+                source_weight=2,
             )
         )
         return dynamic_connections
@@ -397,7 +397,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_REAL],
-                source_weight=999,
+                source_weight=3,
             )
         )
         return dynamic_connections

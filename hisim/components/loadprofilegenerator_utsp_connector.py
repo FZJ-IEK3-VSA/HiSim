@@ -729,17 +729,24 @@ class UtspLpgConnector(cp.Component):
             self.utsp_config.url, request, self.utsp_config.api_key
         )
 
+        # decode required result files
         electricity_file = result.data[electricity].decode()
         warm_water_file = result.data[warm_water].decode()
         inner_device_heat_gains_file = result.data[inner_device_heat_gains].decode()
         high_activity_file = result.data[high_activity].decode()
         low_activity_file = result.data[low_activity].decode()
-        flexibility_file = result.data[flexibility].decode()
 
-        # Save flexibility and transportation files
         saved_files: List[str] = []
-        path = self.save_result_file(name=flexibility, content=flexibility_file)
-        saved_files.append(path)
+        # try to decode and save optional flexibility result files if available
+        try:
+            flexibility_file = result.data[flexibility].decode()
+            # Save flexibility
+            path = self.save_result_file(name=flexibility, content=flexibility_file)
+            saved_files.append(path)
+        except Exception:
+            pass
+
+        # decode and save transportation files
         for filename in itertools.chain(
             car_states.keys(), car_locations.keys(), driving_distances.keys()
         ):
@@ -802,7 +809,6 @@ class UtspLpgConnector(cp.Component):
         inner_device_heat_gains_file: List = []
         high_activity_file: List = []
         low_activity_file: List = []
-        flexibility_file: List = []
         saved_files: List = []
 
         for result in results:
@@ -819,14 +825,20 @@ class UtspLpgConnector(cp.Component):
             ].decode()
             high_activity_file_one_result = result.data[high_activity].decode()
             low_activity_file_one_result = result.data[low_activity].decode()
-            flexibility_file_one_result = result.data[flexibility].decode()
 
-            # Save flexibility and transportation files
             saved_files_one_result: List = []
-            path = self.save_result_file(
+            # try to decode and save optional flexibility result files if available
+            try:
+                flexibility_file_one_result = result.data[flexibility].decode()
+                # Save flexibility
+                path = self.save_result_file(
                 name=flexibility, content=flexibility_file_one_result
-            )
-            saved_files_one_result.append(path)
+                )
+                saved_files_one_result.append(path)
+            except Exception:
+                pass
+
+            # decode and save transportation files
             for filename in itertools.chain(
                 car_states.keys(), car_locations.keys(), driving_distances.keys()
             ):
@@ -842,7 +854,6 @@ class UtspLpgConnector(cp.Component):
             inner_device_heat_gains_file.append(inner_device_heat_gains_file_one_result)
             high_activity_file.append(high_activity_file_one_result)
             low_activity_file.append(low_activity_file_one_result)
-            flexibility_file.append(flexibility_file_one_result)
             saved_files.append(saved_files_one_result)
 
         return (
@@ -909,9 +920,10 @@ class UtspLpgConnector(cp.Component):
                 inner_device_heat_gains,
                 high_activity,
                 low_activity,
-                flexibility,
             ]
         }
+        optional_files = {
+            flexibility: datastructures.ResultFileRequirement.OPTIONAL}
         # Define transportation result files
         car_states = result_file_filters.LPGFilters.all_car_states_optional()
         car_locations = result_file_filters.LPGFilters.all_car_locations_optional()
@@ -920,6 +932,7 @@ class UtspLpgConnector(cp.Component):
         )
         result_files: Dict[str, Optional[datastructures.ResultFileRequirement]] = {
             **required_files,
+            **optional_files,
             **car_states,
             **car_locations,
             **driving_distances,

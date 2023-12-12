@@ -642,8 +642,8 @@ class UtspLpgConnector(cp.Component):
         else:
             cache_dir_path = self.utsp_config.cache_dir_path
 
-        # config household is list of jsonreferences
-        if isinstance(self.utsp_config.household, List):
+        # config household is list of jsonreferences and no other guid than default is given ("")
+        if isinstance(self.utsp_config.household, List) and self.utsp_config.guid == "":
             # get specific guid list in order to prevent duplicated requests
             guid_list = self.vary_guids_for_lpg_utsp_requests_if_config_household_is_a_list_and_contains_duplicated_household_types()
 
@@ -655,9 +655,7 @@ class UtspLpgConnector(cp.Component):
                 new_config_object.guid = guid_list[index]
 
                 file_exists, cache_filepath = utils.get_cache_file(
-                    component_key=self.component_name
-                    + "_"
-                    + str(new_config_object.household),
+                    component_key=self.component_name,
                     parameter_class=new_config_object,
                     my_simulation_parameters=self.my_simulation_parameters,
                     cache_dir_path=cache_dir_path,
@@ -670,9 +668,7 @@ class UtspLpgConnector(cp.Component):
         else:
 
             file_exists, cache_filepath = utils.get_cache_file(
-                component_key=self.component_name
-                + "_"
-                + str(self.utsp_config.household),
+                component_key=self.component_name,
                 parameter_class=self.utsp_config,
                 my_simulation_parameters=self.my_simulation_parameters,
                 cache_dir_path=cache_dir_path,

@@ -45,8 +45,8 @@ def test_occupancy_scaling_with_utsp():
     household_list = [
         Households.CHR02_Couple_30_64_age_with_work,
         Households.CHR02_Couple_30_64_age_with_work,
-        Households.CHR02_Couple_30_64_age_with_work,
-        Households.CHR02_Couple_30_64_age_with_work,
+        # Households.CHR02_Couple_30_64_age_with_work,
+        # Households.CHR02_Couple_30_64_age_with_work,
     ]
     (
         number_of_residents_two,
@@ -100,6 +100,7 @@ def initialize_lpg_utsp_connector_and_return_results(
     transportation_device_set = TransportationDeviceSets.Bus_and_one_30_km_h_Car
     charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
     energy_intensity = EnergyIntensityType.EnergySaving
+    guid = "guid should not be varied automatically"
 
     # Build Simu Params
     my_simulation_parameters = SimulationParameters.full_year(
@@ -120,6 +121,7 @@ def initialize_lpg_utsp_connector_and_return_results(
         profile_with_washing_machine_and_dishwasher=True,
         predictive_control=False,
         energy_intensity=energy_intensity,
+        guid=guid
     )
 
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
@@ -134,7 +136,7 @@ def initialize_lpg_utsp_connector_and_return_results(
 
     my_occupancy.i_simulate(0, stsv, False)
 
-    timestep = 10
+    timestep = 0
     my_occupancy.i_simulate(timestep, stsv, False)
     number_of_residents = stsv.values[
         my_occupancy.number_of_residents_channel.global_index
@@ -148,9 +150,10 @@ def initialize_lpg_utsp_connector_and_return_results(
     electricity_consumption = stsv.values[
         my_occupancy.electricity_output_channel.global_index
     ]
-    print(electricity_consumption)
+
     water_consumption = stsv.values[my_occupancy.water_consumption_channel.global_index]
 
+    print(number_of_residents, heating_by_residents, heating_by_devices, electricity_consumption)
     return (
         number_of_residents,
         heating_by_residents,

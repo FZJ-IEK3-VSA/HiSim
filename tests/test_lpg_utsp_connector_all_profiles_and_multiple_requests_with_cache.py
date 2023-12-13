@@ -8,10 +8,14 @@ all lpg household profiles and do calculation with it.
 # import pytest
 # from utspclient.helpers.lpgdata import Households
 # from utspclient.helpers.lpgpythonbindings import JsonReference
+# from dotenv import load_dotenv
+
 # from tests import functions_for_testing as fft
 # from hisim import component
 # from hisim.components import loadprofilegenerator_utsp_connector
 # from hisim.simulationparameters import SimulationParameters
+
+# load_dotenv()
 
 
 # def initialize_lpg_utsp_connector_and_cache_results_if_not_already_done(
@@ -25,6 +29,7 @@ all lpg household profiles and do calculation with it.
 #     my_occupancy_config = (
 #         loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
 #     )
+
 #     my_occupancy_config.cache_dir_path = cache_dir_path
 #     my_occupancy_config.household = household
 

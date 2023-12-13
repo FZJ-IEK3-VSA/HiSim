@@ -22,7 +22,7 @@ def test_system_setup_starter():
             "start_date": "2021-01-01T00:00:00",
             "end_date": "2021-01-02T00:00:00",
             "seconds_per_timestep": 900,
-            "post_processing_options": [13, 19, 20, 22],
+            "post_processing_options": [18, 19, 20, 22],
         },
         "building_config": {
             "name": "Building",
@@ -92,7 +92,7 @@ def test_system_setup_starter_scaling():
             "start_date": "2021-01-01T00:00:00",
             "end_date": "2021-01-02T00:00:00",
             "seconds_per_timestep": 900,
-            "post_processing_options": [13, 19, 20, 22],
+            "post_processing_options": [18, 19, 20, 22],
         },
         "building_config": {
             "name": "Building",

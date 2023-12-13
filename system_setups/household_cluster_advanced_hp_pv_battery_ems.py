@@ -93,7 +93,7 @@ def setup_function(
     seconds_per_timestep = 60
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(
+        my_simulation_parameters = SimulationParameters.one_day_only_with_all_options(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         my_simulation_parameters.post_processing_options.append(
@@ -111,7 +111,12 @@ def setup_function(
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER
         )
+
     my_sim.set_simulation_parameters(my_simulation_parameters)
+
+    # Set ems strategies
+    surplus_control: bool = False  # strategy 2: storage temperature modifier
+    surplus_control_building_temperature_modifier: bool = False  # strategy 3: building temperature modifier
 
     # Set Photovoltaic System
     azimuth = my_config.pv_azimuth
@@ -204,10 +209,8 @@ def setup_function(
     )
 
     # Build PV
-    my_photovoltaic_system_config = (
-        generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-            rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
-        )
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
+        rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
     )
     my_photovoltaic_system_config.azimuth = azimuth
     my_photovoltaic_system_config.tilt = tilt
@@ -258,8 +261,7 @@ def setup_function(
     my_heat_pump_config.flow_temperature_in_celsius = flow_temperature_in_celsius
 
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
-        config=my_heat_pump_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_pump_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Distribution System
@@ -288,18 +290,14 @@ def setup_function(
     my_electricity_controller_config = (
         controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
     )
-    my_electricity_controller = (
-        controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_electricity_controller_config,
-        )
+    my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_electricity_controller_config,
     )
 
     # Build Battery
-    my_advanced_battery_config = (
-        advanced_battery_bslib.BatteryConfig.get_scaled_battery(
-            total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt
-        )
+    my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
+        total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt
     )
     my_advanced_battery = advanced_battery_bslib.Battery(
         my_simulation_parameters=my_simulation_parameters,
@@ -327,11 +325,9 @@ def setup_function(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 
-    my_domnestic_hot_water_heatpump_controller = (
-        controller_l1_heatpump.L1HeatPumpController(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_dhw_heatpump_controller_config,
-        )
+    my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_dhw_heatpump_controller_config,
     )
 
     my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
@@ -347,33 +343,98 @@ def setup_function(
     # -----------------------------------------------------------------------------------------------------------------
     # Add outputs to EMS
 
-    my_electricity_controller.add_component_output(
-        source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-        source_tags=[
-            lt.ComponentType.HEAT_PUMP_DHW,
-            lt.InandOutputType.ELECTRICITY_TARGET,
-        ],
-        # source_weight=my_domnestic_hot_water_heatpump.config.source_weight,
-        source_weight=1,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        output_description="Target electricity for dhw heat pump.",
-    )
+    if surplus_control:
+        connect_automatically = False
+        # connect EMS with PV
+        my_electricity_controller.add_component_input_and_connect(
+            source_object_name=my_photovoltaic_system.component_name,
+            source_component_output=my_photovoltaic_system.ElectricityOutput,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
+            source_weight=999,
+        )
+        my_electricity_controller.add_component_input_and_connect(
+            source_object_name=my_occupancy.component_name,
+            source_component_output=my_occupancy.ElectricityOutput,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+            source_weight=999,
+        )
 
-    my_electricity_controller.add_component_output(
-        source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-        source_tags=[
-            lt.ComponentType.HEAT_PUMP_BUILDING,
-            lt.InandOutputType.ELECTRICITY_TARGET,
-        ],
-        source_weight=2,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        output_description="Target electricity for Heating Heat Pump. ",
-    )
+        # connect EMS with DHW
+        my_domnestic_hot_water_heatpump_controller.connect_input(
+            my_domnestic_hot_water_heatpump_controller.StorageTemperatureModifier,
+            my_electricity_controller.component_name,
+            my_electricity_controller.StorageTemperatureModifier,
+        )
+        my_electricity_controller.add_component_input_and_connect(
+            source_object_name=my_domnestic_hot_water_heatpump.component_name,
+            source_component_output=my_domnestic_hot_water_heatpump.ElectricityOutput,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            source_tags=[
+                lt.ComponentType.HEAT_PUMP_DHW,
+                lt.InandOutputType.ELECTRICITY_REAL,
+            ],
+            source_weight=1,
+        )
 
-    electricity_to_or_from_battery_target = (
         my_electricity_controller.add_component_output(
+            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+            source_tags=[
+                lt.ComponentType.HEAT_PUMP_DHW,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_weight=1,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for dhw heat pump.",
+        )
+
+        # connect EMS with Heatpump
+        my_heat_pump_controller.connect_input(
+            my_heat_pump_controller.SimpleHotWaterStorageTemperatureModifier,
+            my_electricity_controller.component_name,
+            my_electricity_controller.SimpleHotWaterStorageTemperatureModifier,
+        )
+
+        my_electricity_controller.add_component_input_and_connect(
+            source_object_name=my_heat_pump.component_name,
+            source_component_output=my_heat_pump.ElectricalInputPower,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            source_tags=[
+                lt.ComponentType.HEAT_PUMP_BUILDING,
+                lt.InandOutputType.ELECTRICITY_REAL,
+            ],
+            source_weight=2,
+        )
+
+        my_electricity_controller.add_component_output(
+            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+            source_tags=[
+                lt.ComponentType.HEAT_PUMP_BUILDING,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_weight=2,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for Heat Pump. ",
+        )
+
+        # connect EMS with Battery
+        my_electricity_controller.add_component_input_and_connect(
+            source_object_name=my_advanced_battery.component_name,
+            source_component_output=my_advanced_battery.AcBatteryPower,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_REAL],
+            source_weight=3,
+        )
+
+        electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
             source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
             source_tags=[
                 lt.ComponentType.BATTERY,
@@ -384,7 +445,57 @@ def setup_function(
             source_unit=lt.Units.WATT,
             output_description="Target electricity for Battery Control. ",
         )
-    )
+
+        # connect EMS BuildingTemperatureModifier with set_heating_temperature_for_building_in_celsius
+        if surplus_control_building_temperature_modifier:
+            my_heat_distribution_controller.connect_input(
+                my_heat_distribution_controller.BuildingTemperatureModifier,
+                my_electricity_controller.component_name,
+                my_electricity_controller.BuildingTemperatureModifier,
+            )
+            my_building.connect_input(
+                my_building.BuildingTemperatureModifier,
+                my_electricity_controller.component_name,
+                my_electricity_controller.BuildingTemperatureModifier,
+            )
+
+    else:
+        connect_automatically = True
+        # without surplus control
+        # use only default connections of ems and add outputs
+        my_electricity_controller.add_component_output(
+            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+            source_tags=[
+                lt.ComponentType.HEAT_PUMP_DHW,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            # source_weight=my_domnestic_hot_water_heatpump.config.source_weight,
+            source_weight=999,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for dhw heat pump.",
+        )
+
+        my_electricity_controller.add_component_output(
+            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+            source_tags=[
+                lt.ComponentType.HEAT_PUMP_BUILDING,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_weight=999,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for Heating Heat Pump. ",
+        )
+
+        electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
+            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+            source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
+            source_weight=999,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for Battery Control. ",
+        )
 
     # -----------------------------------------------------------------------------------------------------------------
     # Connect Battery
@@ -423,7 +534,9 @@ def setup_function(
     my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
     my_sim.add_component(my_electricity_meter)
     my_sim.add_component(my_advanced_battery)
-    my_sim.add_component(my_electricity_controller, connect_automatically=True)
+    my_sim.add_component(
+        my_electricity_controller, connect_automatically=connect_automatically
+    )
 
     # Set Results Path
     # if config_filename is given, get hash number and sampling mode for result path
@@ -436,12 +549,9 @@ def setup_function(
 
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
-            entry=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_{hash_number}",
+            entry=f"surplus_{surplus_control}_all_options_{hash_number}",
         )
-        log.information(
-            "Singleton Scenario is set "
-            + f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_{hash_number}"
-        )
+
     # if config_filename is not given, make result path with index enumeration
     else:
         hash_number = None
@@ -451,7 +561,7 @@ def setup_function(
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
         model_name=my_sim.module_filename,
-        variant_name=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s",
+        variant_name=f"surplus_{surplus_control}_all_options_",
         hash_number=hash_number,
         sorting_option=sorting_option,
         sampling_mode=sampling_mode,

@@ -160,18 +160,7 @@ class PostProcessor:
                 "Making PDF report and writing simulation parameters to report took "
                 + f"{duration:1.2f}s."
             )
-        if PostProcessingOptions.COMPUTE_OPEX in ppdt.post_processing_options:
-            log.information(
-                "Computing and writing operational costs and C02 emissions produced in operation to report."
-            )
-            start = timer()
-            self.compute_and_write_opex_costs_to_report(ppdt, report)
-            end = timer()
-            duration = end - start
-            log.information(
-                "Computing and writing operational costs and C02 emissions produced in operation to report took "
-                + f"{duration:1.2f}s."
-            )
+
         if (
             PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT
             in ppdt.post_processing_options
@@ -208,6 +197,18 @@ class PostProcessor:
             duration = end - start
             log.information(
                 "Writing network charts toreport took " + f"{duration:1.2f}s."
+            )
+        if PostProcessingOptions.COMPUTE_OPEX in ppdt.post_processing_options:
+            log.information(
+                "Computing and writing operational costs and C02 emissions produced in operation to report."
+            )
+            start = timer()
+            self.compute_and_write_opex_costs_to_report(ppdt, report)
+            end = timer()
+            duration = end - start
+            log.information(
+                "Computing and writing operational costs and C02 emissions produced in operation to report took "
+                + f"{duration:1.2f}s."
             )
         if PostProcessingOptions.COMPUTE_CAPEX in ppdt.post_processing_options:
             log.information(

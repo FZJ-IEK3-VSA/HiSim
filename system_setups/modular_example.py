@@ -231,6 +231,8 @@ def setup_function(
         total_base_area_in_m2=None,
         number_of_apartments=None,
         predictive=False,
+        set_heating_temperature_in_celsius=19.0,
+        set_cooling_temperature_in_celsius=24.0,
     )
     my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(

@@ -63,8 +63,6 @@
 #     return component_class_children, component_file_children, component_module
 
 
-
-
 # class JsonExecutor:
 #
 #     """ Executes a Jsonfile as a simulation. """
@@ -114,66 +112,66 @@
 #         return component_class_children, component_file_children, component_module
 
 
-    # def add_component(self, full_class_path: str, my_sim: Simulator, number_of_comp: str, electricity_output: Any = None) -> None:
-    #     """ Adds and initializes a component.
-    #
-    #     # Save parameters of class
-    #     # Retrieve class signature
-    #     path_to_components = dirname(__file__) + "/components"
-    #     list_of_all_components= glob.glob(join(path_to_components, "*.py"))
-    #     stripped_list_of_all_components=[]
-    #     seperater="HiSim"
-    #     for component_path in list_of_all_components:
-    #         stripped = component_path.split(seperater, 1)[1]
-    #         stripped = stripped.replace("/", ".")
-    #         stripped = stripped.replace(".py", "")
-    #         stripped_list_of_all_components.append(stripped)
-    #     """
-    #
-    #     clsmembers: List[Any] = []
-    #     full_instance_path = full_class_path + number_of_comp
-    #     clsmembers = self.get_class_members_for_components(clsmembers, full_class_path)
-    #
-    #     component_class_config_to_add, component_class_to_add, signature_component = self.initialize_component_classes(
-    #         clsmembers, full_class_path)
-    #
-    #     # Find if it has SimulationParameters and pass value
-    #     for parameter_name in signature_component.parameters:
-    #         if (
-    #             # double check in case the type annotation is missing
-    #             signature_component.parameters[parameter_name].annotation
-    #             == component.SimulationParameters
-    #             or parameter_name == "my_simulation_parameters"
-    #         ):
-    #             self.cfg["Components"][full_instance_path][
-    #                 parameter_name
-    #             ] = my_sim._simulation_parameters  # noqa: protected-access
-    #     try:
-    #
-    #         # self.cfg["Components"][comp].__delitem__("my_simulation_parameters")
-    #         config_class = component_class_config_to_add.from_dict(
-    #             self.cfg["Components"][full_instance_path]
-    #         )
-    #         self._components.append(
-    #             component_class_to_add(
-    #                 config=config_class,
-    #                 my_simulation_parameters=self.my_simulation_parameters,
-    #             )
-    #         )
-    #
-    #     except Exception as my_exception:  # noqa: broad-except
-    #         log.debug(
-    #             f"Adding Component {full_instance_path} resulted in a failure"
-    #         )
-    #         log.debug(f"Might be Missing :   {component_class_to_add} ")
-    #         log.debug("Please, investigate implementation mistakes in this Component.")
-    #         log.error(str(my_exception))
-    #         sys.exit(1)
-    #     # Add last listed component to Simulator object
-    #     my_sim.add_component(self._components[-1])
-    #     if electricity_output is not None:
-    #         pass
-    #         # ToDo: Implement electricity sum here.
+# def add_component(self, full_class_path: str, my_sim: Simulator, number_of_comp: str, electricity_output: Any = None) -> None:
+#     """ Adds and initializes a component.
+#
+#     # Save parameters of class
+#     # Retrieve class signature
+#     path_to_components = dirname(__file__) + "/components"
+#     list_of_all_components= glob.glob(join(path_to_components, "*.py"))
+#     stripped_list_of_all_components=[]
+#     seperater="HiSim"
+#     for component_path in list_of_all_components:
+#         stripped = component_path.split(seperater, 1)[1]
+#         stripped = stripped.replace("/", ".")
+#         stripped = stripped.replace(".py", "")
+#         stripped_list_of_all_components.append(stripped)
+#     """
+#
+#     clsmembers: List[Any] = []
+#     full_instance_path = full_class_path + number_of_comp
+#     clsmembers = self.get_class_members_for_components(clsmembers, full_class_path)
+#
+#     component_class_config_to_add, component_class_to_add, signature_component = self.initialize_component_classes(
+#         clsmembers, full_class_path)
+#
+#     # Find if it has SimulationParameters and pass value
+#     for parameter_name in signature_component.parameters:
+#         if (
+#             # double check in case the type annotation is missing
+#             signature_component.parameters[parameter_name].annotation
+#             == component.SimulationParameters
+#             or parameter_name == "my_simulation_parameters"
+#         ):
+#             self.cfg["Components"][full_instance_path][
+#                 parameter_name
+#             ] = my_sim._simulation_parameters  # noqa: protected-access
+#     try:
+#
+#         # self.cfg["Components"][comp].__delitem__("my_simulation_parameters")
+#         config_class = component_class_config_to_add.from_dict(
+#             self.cfg["Components"][full_instance_path]
+#         )
+#         self._components.append(
+#             component_class_to_add(
+#                 config=config_class,
+#                 my_simulation_parameters=self.my_simulation_parameters,
+#             )
+#         )
+#
+#     except Exception as my_exception:  # noqa: broad-except
+#         log.debug(
+#             f"Adding Component {full_instance_path} resulted in a failure"
+#         )
+#         log.debug(f"Might be Missing :   {component_class_to_add} ")
+#         log.debug("Please, investigate implementation mistakes in this Component.")
+#         log.error(str(my_exception))
+#         sys.exit(1)
+#     # Add last listed component to Simulator object
+#     my_sim.add_component(self._components[-1])
+#     if electricity_output is not None:
+#         pass
+#         # ToDo: Implement electricity sum here.
 
 #     def build(self, my_sim: Simulator) -> None:
 #         """ Builds the parameters. """

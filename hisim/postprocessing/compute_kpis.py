@@ -17,11 +17,10 @@ from hisim.component_wrapper import ComponentWrapper
 from hisim.components import generic_hot_water_storage_modular
 from hisim import log
 from hisim.postprocessing.investment_cost_co2 import compute_investment_cost
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 
 def building_temperature_control(
-    results: pd.DataFrame, seconds_per_timestep: int
+    results: pd.DataFrame, seconds_per_timestep: int, components: List[ComponentWrapper]
 ) -> Tuple[Any, Any, float, float, float, float]:
     """Check the building indoor air temperature.
 
@@ -32,26 +31,17 @@ def building_temperature_control(
 
     temperature_difference_of_building_being_below_heating_set_temperature = 0
     temperature_difference_of_building_being_below_cooling_set_temperature = 0
+
+    # get set temperatures
+    for wrapped_component in components:
+        if "Building" in wrapped_component.my_component.component_name:
+            set_heating_temperature_in_celsius = getattr(wrapped_component.my_component, "set_heating_temperature_in_celsius")
+            set_cooling_temperature_in_celsius = getattr(wrapped_component.my_component, "set_cooling_temperature_in_celsius")
+            break
+
     for column in results.columns:
 
         if "TemperatureIndoorAir" in column.split(sep=" "):
-
-            if SingletonSimRepository().exist_entry(
-                key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING
-            ) and SingletonSimRepository().exist_entry(
-                key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING
-            ):
-                set_heating_temperature_in_celsius = SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.SETHEATINGTEMPERATUREFORBUILDING
-                )
-                set_cooling_temperature_in_celsius = SingletonSimRepository().get_entry(
-                    key=SingletonDictKeyEnum.SETCOOLINGTEMPERATUREFORBUILDING
-                )
-
-            else:
-                # take set heating and cooling default temperatures from building component otherwise
-                set_heating_temperature_in_celsius = 19.0
-                set_cooling_temperature_in_celsius = 24.0
 
             for temperature in results[column].values:
 
@@ -91,6 +81,7 @@ def building_temperature_control(
             # get also max and min indoor air temperature
             min_temperature_reached_in_celsius = float(min(results[column].values))
             max_temperature_reached_in_celsius = float(max(results[column].values))
+            break
 
     return (
         set_heating_temperature_in_celsius,
@@ -607,7 +598,7 @@ def compute_kpis(
         min_temperature_reached_in_celsius,
         max_temperature_reached_in_celsius,
     ) = building_temperature_control(
-        results=results, seconds_per_timestep=simulation_parameters.seconds_per_timestep
+        results=results, seconds_per_timestep=simulation_parameters.seconds_per_timestep, components=components
     )
 
     # get cycle numbers of heatpump

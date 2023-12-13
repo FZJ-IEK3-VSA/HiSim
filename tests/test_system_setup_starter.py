@@ -29,11 +29,13 @@ def test_system_setup_starter():
             "building_code": "DE.N.SFH.05.Gen.ReEx.001.002",
             "building_heat_capacity_class": "medium",
             "initial_internal_temperature_in_celsius": 23,
-            "heating_reference_temperature_in_celsius": -14,
+            "heating_reference_temperature_in_celsius": -7.0,
             "absolute_conditioned_floor_area_in_m2": 121.2,
             "total_base_area_in_m2": None,
             "number_of_apartments": 1,
             "predictive": False,
+            "set_heating_temperature_in_celsius": 19.0,
+            "set_cooling_temperature_in_celsius": 24.0,
         },
         "system_setup_config": {
             # "some_subconf": {
@@ -97,11 +99,13 @@ def test_system_setup_starter_scaling():
             "building_code": "DE.N.SFH.05.Gen.ReEx.001.002",
             "building_heat_capacity_class": "medium",
             "initial_internal_temperature_in_celsius": 23,
-            "heating_reference_temperature_in_celsius": -14,
+            "heating_reference_temperature_in_celsius": -7.0,
             "absolute_conditioned_floor_area_in_m2": 121.2,
             "total_base_area_in_m2": None,
             "number_of_apartments": 1,
             "predictive": False,
+            "set_heating_temperature_in_celsius": 19.0,
+            "set_cooling_temperature_in_celsius": 24.0,
         },
     }
 
@@ -133,7 +137,7 @@ def test_system_setup_starter_scaling():
         webtool_kpis = json.load(file)
     assert (
         webtool_kpis["capexDict"]["column 1"]["HeatPumpHPLib [Investment in EUR] "]
-        == 4.09
+        == 3.32
     )
 
     # Remove result directory

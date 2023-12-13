@@ -53,7 +53,9 @@ class GenericHeatPumpConfigNew(cp.ConfigBase):
     heating_load_of_building_in_watt: float
 
     @classmethod
-    def get_default_generic_heat_pump_config(cls, heating_load_of_building_in_watt: float):
+    def get_default_generic_heat_pump_config(
+        cls, heating_load_of_building_in_watt: float
+    ):
         """Gets a default Generic Heat Pump."""
         return GenericHeatPumpConfigNew(
             name="HeatPump",
@@ -61,7 +63,7 @@ class GenericHeatPumpConfigNew(cp.ConfigBase):
             manufacturer="Viessmann Werke GmbH & Co KG",
             min_operation_time_in_seconds=60 * 60,
             min_idle_time_in_seconds=15 * 60,
-            heating_load_of_building_in_watt=heating_load_of_building_in_watt
+            heating_load_of_building_in_watt=heating_load_of_building_in_watt,
         )
 
 
@@ -228,8 +230,9 @@ class GenericHeatPumpNew(cp.Component):
 
         self.state_from_heat_pump_controller: float = 0
 
-
-        self.max_thermal_building_demand_in_watt = self.heatpump_config.heating_load_of_building_in_watt
+        self.max_thermal_building_demand_in_watt = (
+            self.heatpump_config.heating_load_of_building_in_watt
+        )
         self.heatpump_water_mass_flow_rate_in_kg_per_second = self.calc_heat_pump_water_mass_flow_rate(
             max_thermal_building_demand_in_watt=self.max_thermal_building_demand_in_watt
         )
@@ -506,7 +509,8 @@ class GenericHeatPumpNew(cp.Component):
                 self.cooling_channel, self.state.cooling_power_in_watt
             )
             stsv.set_output_value(
-                self.electricity_output_channel, self.state.electricity_input_in_watt,
+                self.electricity_output_channel,
+                self.state.electricity_input_in_watt,
             )
             stsv.set_output_value(self.number_of_cycles_channel, self.number_of_cycles)
             stsv.set_output_value(
@@ -581,7 +585,8 @@ class GenericHeatPumpNew(cp.Component):
         return heated_water_temperature_in_celsius
 
     def calc_heat_pump_water_mass_flow_rate(
-        self, max_thermal_building_demand_in_watt: float,
+        self,
+        max_thermal_building_demand_in_watt: float,
     ) -> Any:
         """Calculate water mass flow between heat pump and hot water storage."""
         self.specific_heat_capacity_of_water_in_joule_per_kg_per_celsius = float(
@@ -736,8 +741,8 @@ class HeatPumpControllerNew(cp.Component):
         else:
             # Retrieves inputs
 
-            self.water_temperature_input_from_heat_water_storage_in_celsius = stsv.get_input_value(
-                self.water_temperature_input_channel
+            self.water_temperature_input_from_heat_water_storage_in_celsius = (
+                stsv.get_input_value(self.water_temperature_input_channel)
             )
 
             electricity_input = stsv.get_input_value(self.electricity_input_channel)
@@ -761,7 +766,10 @@ class HeatPumpControllerNew(cp.Component):
 
             stsv.set_output_value(self.state_channel, state)
 
-    def conditions(self, water_temperature_input_in_celsius: float,) -> None:
+    def conditions(
+        self,
+        water_temperature_input_in_celsius: float,
+    ) -> None:
         """Set conditions for the heat pump controller mode."""
 
         maximum_heating_set_temperature = (

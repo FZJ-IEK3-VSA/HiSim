@@ -93,30 +93,30 @@ def setup_function(
     seconds_per_timestep = 60
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only_with_all_options(
+        my_simulation_parameters = SimulationParameters.full_year_all_options(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_OPEX
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_CAPEX
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER
-        )
+        # my_simulation_parameters.post_processing_options.append(
+        #     PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
+        # )
+        # my_simulation_parameters.post_processing_options.append(
+        #     PostProcessingOptions.COMPUTE_OPEX
+        # )
+        # my_simulation_parameters.post_processing_options.append(
+        #     PostProcessingOptions.COMPUTE_CAPEX
+        # )
+        # my_simulation_parameters.post_processing_options.append(
+        #     PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
+        # )
+        # my_simulation_parameters.post_processing_options.append(
+        #     PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER
+        # )
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Set ems strategies
-    surplus_control: bool = False  # strategy 2: storage temperature modifier
-    surplus_control_building_temperature_modifier: bool = False  # strategy 3: building temperature modifier
+    surplus_control: bool = True  # strategy 2: storage temperature modifier
+    surplus_control_building_temperature_modifier: bool = True  # strategy 3: building temperature modifier
 
     # Set Photovoltaic System
     azimuth = my_config.pv_azimuth
@@ -470,7 +470,7 @@ def setup_function(
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
             # source_weight=my_domnestic_hot_water_heatpump.config.source_weight,
-            source_weight=999,
+            source_weight=1,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for dhw heat pump.",
@@ -482,7 +482,7 @@ def setup_function(
                 lt.ComponentType.HEAT_PUMP_BUILDING,
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
-            source_weight=999,
+            source_weight=2,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for Heating Heat Pump. ",
@@ -491,7 +491,7 @@ def setup_function(
         electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
             source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
             source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-            source_weight=999,
+            source_weight=3,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for Battery Control. ",
@@ -549,7 +549,7 @@ def setup_function(
 
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
-            entry=f"surplus_{surplus_control}_all_options_{hash_number}",
+            entry=f"surplus_storage_modifier_{surplus_control}_building_modifier_{surplus_control_building_temperature_modifier}_{hash_number}",
         )
 
     # if config_filename is not given, make result path with index enumeration
@@ -561,7 +561,7 @@ def setup_function(
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
         model_name=my_sim.module_filename,
-        variant_name=f"surplus_{surplus_control}_all_options_",
+        variant_name=f"surplus_storage_modifier_{surplus_control}_building_modifier_{surplus_control_building_temperature_modifier}_",
         hash_number=hash_number,
         sorting_option=sorting_option,
         sampling_mode=sampling_mode,

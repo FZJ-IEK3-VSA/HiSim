@@ -119,24 +119,24 @@ def setup_function(
     seconds_per_timestep = 60
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(
+        my_simulation_parameters = SimulationParameters.full_year_all_options(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_OPEX
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_CAPEX
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER
-        )
+        # my_simulation_parameters.post_processing_options.append(
+        #     PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
+        # )
+        # my_simulation_parameters.post_processing_options.append(
+        #     PostProcessingOptions.COMPUTE_OPEX
+        # )
+        # my_simulation_parameters.post_processing_options.append(
+        #     PostProcessingOptions.COMPUTE_CAPEX
+        # )
+        # my_simulation_parameters.post_processing_options.append(
+        #     PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
+        # )
+        # my_simulation_parameters.post_processing_options.append(
+        #     PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER
+        # )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Set Building (scale building according to total base area and not absolute floor area)
@@ -360,12 +360,9 @@ def setup_function(
 
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
-            entry=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_{hash_number}",
+            entry=f"ref_{hash_number}",
         )
-        log.information(
-            "Singleton Scenario is set "
-            + f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_{hash_number}"
-        )
+
     # if config_filename is not given, make result path with index enumeration
     else:
         hash_number = None
@@ -375,7 +372,7 @@ def setup_function(
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
         model_name=my_sim.module_filename,
-        variant_name=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s",
+        variant_name="ref_",
         hash_number=hash_number,
         sorting_option=sorting_option,
         sampling_mode=sampling_mode,

@@ -1,6 +1,7 @@
 """Data Collection for Scenario Comparison with Pyam."""
 # clean
 import glob
+import datetime
 import os
 from typing import Dict, Any, Optional, List, Tuple
 import json
@@ -39,12 +40,11 @@ class PyamDataCollector:
 
         log.information(f"Checking results from folder: {result_folder}")
 
-        # self.clean_result_directory_from_unfinished_results(result_path=result_folder)
+        self.clean_result_directory_from_unfinished_results(result_path=result_folder)
 
         list_with_pyam_data_folders = self.get_list_of_all_relevant_pyam_data_folders(
             result_path=result_folder
         )
-        print("lsit with pyam folders", list_with_pyam_data_folders)
 
         if data_processing_mode == PyamDataProcessingModeEnum.PROCESS_ALL_DATA:
 
@@ -153,9 +153,18 @@ class PyamDataCollector:
 
     def clean_result_directory_from_unfinished_results(
         self, result_path: str
-    ) -> None:  # TODO: add functionality
+    ) -> None:
         """When a result folder does not contain the finished_flag, it will be removed from the system_setups/result folder."""
-        pass
+        list_of_unfinished_folders = []
+        with open(os.path.join(self.pyam_data_folder, "failed_simualtions.txt"), "a", encoding="utf-8") as file:
+            file.write(str(datetime.datetime.now()) + "\n")
+            file.write("Failed simulations found in the following folders: \n")
+            for folder in os.listdir(result_path):
+                if not os.path.exists(os.path.join(result_path, folder, "finished.flag")):
+                    file.write(os.path.join(result_path, folder) + "\n")
+                    list_of_unfinished_folders.append(os.path.join(result_path, folder))
+                    shutil.rmtree(os.path.join(result_path, folder))
+            file.write(f"Total number of failed simulations in path {result_path}: {len(list_of_unfinished_folders)}" + "\n" + "\n")
 
     def get_list_of_all_relevant_pyam_data_folders(self, result_path: str) -> List[str]:
         """Get a list of all pyam data folders which you want to analyze."""
@@ -177,11 +186,11 @@ class PyamDataCollector:
             + list_of_paths_second_order
             + list_of_paths_third_order
         )
-        print("list with all paths to check for pyam data", list_with_all_paths_to_check)
+        print("len of list with all paths to check for pyam data", len(list_with_all_paths_to_check))
         list_with_no_duplicates = self.go_through_all_pyam_data_folders_and_check_if_module_configs_are_double_somewhere(
             list_of_pyam_folder_paths_to_check=list_with_all_paths_to_check
         )
-        print("list with all paths to check for pyam data after double check", list_with_no_duplicates)
+        print("len of list with all paths to check for pyam data after double check", len(list_with_no_duplicates))
 
         return list_with_no_duplicates
 

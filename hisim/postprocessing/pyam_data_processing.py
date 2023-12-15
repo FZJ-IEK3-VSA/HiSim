@@ -12,8 +12,8 @@ import numpy as np
 import pyam
 import pandas as pd
 import matplotlib.pyplot as plt
-import plotly
-from html2image import Html2Image
+# import plotly
+# from html2image import Html2Image
 from ordered_set import OrderedSet
 import seaborn as sns
 
@@ -37,7 +37,6 @@ class PyAmChartGenerator:
         data_processing_mode: Any,
         time_resolution_of_data_set: Any,
         variables_to_check: Optional[List[str]] = None,
-        # list_of_scenarios_to_check: Optional[List[str]] = None,
         dict_of_scenarios_to_check: Optional[Dict[str, List[str]]] = None,
     ) -> None:
         """Initialize the class."""
@@ -128,7 +127,7 @@ class PyAmChartGenerator:
         )
         log.information(f"Data folder path: {self.folder_path}")
         self.hisim_chartbase = ChartFontsAndSize()
-        self.hisim_chartbase.figsize = (8, 6)
+        self.hisim_chartbase.figsize = (10, 6)
         self.hisim_chartbase.dpi = 100
 
         if variables_to_check != [] and variables_to_check is not None:
@@ -147,16 +146,13 @@ class PyAmChartGenerator:
             log.information("key for scenario one " + key_for_scenario_one)
             log.information("key for current scenario " + key_for_current_scenario)
 
-            # try:
-
             self.make_plots_with_specific_kind_of_data(
                 time_resolution_of_data_set=time_resolution_of_data_set,
                 pyam_dataframe=pandas_dataframe,
                 simulation_duration_key=simulation_duration_to_check,
                 variables_to_check=variables_to_check,
             )
-            # except Exception:
-            #     log.information("Something went wrong while plotting.")
+
         else:
             log.information(
                 "Variable list for data is not given and will not be plotted or anaylzed."
@@ -166,7 +162,6 @@ class PyAmChartGenerator:
         self,
         folder_path: str,
         time_resolution_of_data_set: Any,
-        # list_of_scenarios_to_check: Optional[List[str]],
         dict_of_scenarios_to_check: Optional[Dict[str, List[str]]],
         variables_to_check: List[str],
     ) -> Tuple[pd.DataFrame, str, str, List[str]]:
@@ -278,24 +273,18 @@ class PyAmChartGenerator:
             if os.path.exists(self.plot_path_complete) is False:
                 os.makedirs(self.plot_path_complete)
 
-            # # filter data according to variable
-            # filtered_data = self.filter_pyam_dataframe(
-            #     pyam_dataframe=pyam_dataframe,
-            #     filter_model=None,
-            #     filter_scenario=None,
-            #     filter_region=None,
-            #     filter_variables=variable_to_check,
-            #     filter_unit=None,
-            #     filter_year=None,
-            # )
             filtered_data = self.filter_pandas_dataframe(
                 dataframe=pyam_dataframe, variable_to_check=variable_to_check
             )
 
-            # determine whether you want to compare one variable for different scenarios or different variables for one scenario
-            # comparion_mode = self.decide_for_scenario_or_variable_comparison(
-            #     filtered_data=filtered_data
-            # )
+            try:
+                unit = filtered_data.unit.values[0]
+            except Exception:
+                if "Temperature deviation" in variable_to_check:
+                    print(filtered_data)
+                    unit = "°C*h"
+                else:
+                    unit = "-"
 
             if time_resolution_of_data_set == PyamDataTypeEnum.YEARLY:
                 kind_of_data_set = "yearly"
@@ -308,20 +297,20 @@ class PyAmChartGenerator:
                     path_to_save=self.plot_path_complete,
                     kind_of_data_set=kind_of_data_set,
                 )
+                print("unit", unit)
+                # try:
+                #     self.make_box_plot_for_pandas_dataframe(
+                #         filtered_data=filtered_data, title=self.path_addition,
+                #     )
 
-                try:
-                    self.make_box_plot_for_pandas_dataframe(
-                        filtered_data=filtered_data, title=self.path_addition,
-                    )
-
-                except Exception:
-                    log.information("boxplot went wrong")
-                try:
-                    self.make_bar_plot_for_pandas_dataframe(
-                        filtered_data=filtered_data, title=self.path_addition,
-                    )
-                except Exception:
-                    log.information("barplot went wrong")
+                # except Exception:
+                #     log.information("Boxplot went wrong")
+                # try:
+                self.make_bar_plot_for_pandas_dataframe(
+                    filtered_data=filtered_data, title=self.path_addition, unit=unit
+                )
+                # except Exception:
+                #     log.information("Barplot went wrong")
 
                 # if (
                 #     variable_to_check
@@ -535,6 +524,7 @@ class PyAmChartGenerator:
         self,
         filtered_data: pd.DataFrame,
         title: str,
+        unit: str,
         alternative_bar_labels: Optional[List[str]] = None,
     ) -> None:
         """Make bar plot."""
@@ -546,16 +536,6 @@ class PyAmChartGenerator:
 
         y_data = []
         bar_labels = []
-
-        # for scenario in filtered_data.scenario:
-
-        #     filtered_data_per_scenario = filtered_data.loc[
-        #         filtered_data["scenario"] == scenario
-        #     ]
-        #     value = float(filtered_data_per_scenario["value"])
-
-        #     y_data.append(value)
-        #     bar_labels.append(scenario)
 
         for scenario in list(OrderedSet(list(filtered_data.scenario))):
             filtered_data_per_scenario = filtered_data.loc[
@@ -578,7 +558,7 @@ class PyAmChartGenerator:
         a_x.bar(x_data, y_data, label=bar_labels, color=colors)
 
         y_tick_labels, unit, y_tick_locations = self.set_axis_scale(
-            a_x, x_or_y="y", unit=filtered_data.unit.values[0],
+            a_x, x_or_y="y", unit=unit,
         )
         plt.yticks(
             ticks=y_tick_locations,
@@ -595,7 +575,7 @@ class PyAmChartGenerator:
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
 
-        plt.legend(bbox_to_anchor=(1, 1), loc="upper left")
+        # plt.legend(bbox_to_anchor=(1, 1), loc="upper left")
 
         a_x.xaxis.set_tick_params(labelbottom=False)
         a_x.set_xticks([])
@@ -618,7 +598,7 @@ class PyAmChartGenerator:
         if scenario_set is None:
             scenario_set = list(OrderedSet(filtered_data.scenario))
 
-        sns.boxplot(data=filtered_data, x="scenario", y="value")  #
+        sns.boxplot(data=filtered_data, x="scenario", y="value")
         y_tick_labels, unit, y_tick_locations = self.set_axis_scale(
             a_x, x_or_y="y", unit=filtered_data.unit.values[0]
         )
@@ -638,35 +618,10 @@ class PyAmChartGenerator:
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
         a_x.xaxis.set_tick_params(labelbottom=False)
         a_x.set_xticks([])
-        plt.legend(scenario_set, bbox_to_anchor=(1, 1), loc="upper left")
+        # plt.legend(scenario_set, bbox_to_anchor=(1, 1), loc="upper left")
         fig.savefig(
             os.path.join(self.plot_path_complete, "box_plot.png"), bbox_inches="tight"
         )
-        plt.close()
-
-    def make_pie_plot_for_pyam_dataframe(
-        self, filtered_data: pyam.IamDataFrame, comparison_mode: str, title: str,
-    ) -> None:
-        """Make pie plot."""
-        log.information("Make pie plot.")
-
-        fig, a_x = plt.subplots(
-            figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
-        )
-        filtered_data.plot.pie(
-            ax=a_x,
-            value="value",
-            category=comparison_mode,
-            title=title,
-            legend=True,
-            labels=None,
-        )
-
-        plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
-        fig.subplots_adjust(right=0.75, left=0.3)
-        plt.tight_layout()
-
-        fig.savefig(os.path.join(self.plot_path_complete, "pie_plot.png"))
         plt.close()
 
     def make_scatter_plot_for_pyam_dataframe(
@@ -716,11 +671,11 @@ class PyAmChartGenerator:
             fontsize=self.hisim_chartbase.fontsize_ticks,
         )
         plt.ylabel(
-            ylabel=y_data.rsplit("|", maxsplit=1)[-1],  # + f" [{scale}°C]",
+            ylabel=y_data.rsplit("|", maxsplit=1)[-1],
             fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
-            xlabel=x_data.rsplit("|", maxsplit=1)[-1],  # + f" [{scale}°C]",
+            xlabel=x_data.rsplit("|", maxsplit=1)[-1],
             fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
@@ -729,98 +684,63 @@ class PyAmChartGenerator:
         fig.savefig(os.path.join(self.plot_path_complete, "scatter_plot.png"))
         plt.close()
 
-    def make_sankey_plot_for_pyam_dataframe(
-        self,
-        pyam_dataframe: pyam.IamDataFrame,
-        filter_model: Optional[str],
-        filter_scenario: Optional[str],
-        filter_variables: Optional[str],
-        filter_region: Optional[str],
-        filter_unit: Optional[str],
-        filter_year: Optional[str],
-    ) -> None:
-        """Make sankey plot."""
-        log.information("Make sankey plot.")
+    # def make_sankey_plot_for_pyam_dataframe(
+    #     self,
+    #     pyam_dataframe: pyam.IamDataFrame,
+    #     filter_model: Optional[str],
+    #     filter_scenario: Optional[str],
+    #     filter_variables: Optional[str],
+    #     filter_region: Optional[str],
+    #     filter_unit: Optional[str],
+    #     filter_year: Optional[str],
+    # ) -> None:
+    #     """Make sankey plot."""
+    #     log.information("Make sankey plot.")
 
-        filtered_data = self.filter_pyam_dataframe(
-            pyam_dataframe=pyam_dataframe,
-            filter_model=filter_model,
-            filter_scenario=filter_scenario,
-            filter_region=filter_region,
-            filter_variables=filter_variables,
-            filter_unit=filter_unit,
-            filter_year=filter_year,
-        )
+    #     filtered_data = self.filter_pyam_dataframe(
+    #         pyam_dataframe=pyam_dataframe,
+    #         filter_model=filter_model,
+    #         filter_scenario=filter_scenario,
+    #         filter_region=filter_region,
+    #         filter_variables=filter_variables,
+    #         filter_unit=filter_unit,
+    #         filter_year=filter_year,
+    #     )
 
-        sankey_mapping = {
-            "ElectrcityGridBaseLoad|Electricity|ElectricityOutput": (
-                "PV",
-                "Occupancy",
-            ),
-            "PVSystemw-|Electricity|ElectricityOutput": ("PV", "Grid"),
-            "Occupancy|Electricity|ElectricityOutput": ("Grid", "Occupancy"),
-        }
-        fig = filtered_data.plot.sankey(mapping=sankey_mapping)
+    #     sankey_mapping = {
+    #         "ElectrcityGridBaseLoad|Electricity|ElectricityOutput": (
+    #             "PV",
+    #             "Occupancy",
+    #         ),
+    #         "PVSystemw-|Electricity|ElectricityOutput": ("PV", "Grid"),
+    #         "Occupancy|Electricity|ElectricityOutput": ("Grid", "Occupancy"),
+    #     }
+    #     fig = filtered_data.plot.sankey(mapping=sankey_mapping)
 
-        # save figure as html first
-        plotly.offline.plot(
-            fig,
-            filename=os.path.join(self.plot_path_complete, "sankey_plot.html"),
-            auto_open=False,
-        )
+    #     # save figure as html first
+    #     plotly.offline.plot(
+    #         fig,
+    #         filename=os.path.join(self.plot_path_complete, "sankey_plot.html"),
+    #         auto_open=False,
+    #     )
 
-        # convert html file to png
-        hti = Html2Image()
-        with open(
-            os.path.join(self.plot_path_complete, "sankey_plot.html"), encoding="utf8",
-        ) as file:
-            hti.screenshot(
-                file.read(), save_as="sankey_plot.png",
-            )
+    #     # convert html file to png
+    #     hti = Html2Image()
+    #     with open(
+    #         os.path.join(self.plot_path_complete, "sankey_plot.html"), encoding="utf8",
+    #     ) as file:
+    #         hti.screenshot(
+    #             file.read(), save_as="sankey_plot.png",
+    #         )
 
-        # change directory of sankey output file
-        try:
-            os.rename(
-                "sankey_plot.png",
-                os.path.join(self.plot_path_complete, "sankey_plot.png"),
-            )
-        except Exception as exc:
-            raise Exception("Cannot save current sankey. Try again.") from exc
-
-    def make_stack_plot_for_pyam_dataframe(
-        self,
-        filtered_data: pyam.IamDataFrame,
-        # comparison_mode: str,
-        title: str,
-    ) -> None:
-        """Make stack plot."""
-        log.information("Make stack plot.")
-
-        fig, a_x = plt.subplots(
-            figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
-        )
-        filtered_data.plot.stack(titel=title)
-
-        y_tick_labels, unit, y_tick_locations = self.set_axis_scale(
-            a_x, x_or_y="y", unit=filtered_data.unit[0]
-        )
-        plt.yticks(
-            ticks=y_tick_locations,
-            labels=y_tick_labels,
-            fontsize=self.hisim_chartbase.fontsize_ticks,
-        )
-        plt.ylabel(
-            ylabel=f"{unit}", fontsize=self.hisim_chartbase.fontsize_label,
-        )
-        plt.xlabel(
-            xlabel=filtered_data.time_col.capitalize(),
-            fontsize=self.hisim_chartbase.fontsize_label,
-        )
-        plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
-        plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
-
-        fig.subplots_adjust(right=0.55)
-        fig.savefig(os.path.join(self.plot_path_complete, "stack_plot.png"))
+    #     # change directory of sankey output file
+    #     try:
+    #         os.rename(
+    #             "sankey_plot.png",
+    #             os.path.join(self.plot_path_complete, "sankey_plot.png"),
+    #         )
+    #     except Exception as exc:
+    #         raise Exception("Cannot save current sankey. Try again.") from exc
 
     def set_axis_scale(
         self, a_x: Any, x_or_y: Any, unit: Any
@@ -844,11 +764,6 @@ class PyAmChartGenerator:
 
         if unit not in ["-", "%"]:
 
-            # if k already in unit, remove k first and then scale
-            if unit in ["kg", "kWh", "kg/s", "kW"]:
-                tick_values = tick_values * 1e3
-                unit = unit.strip("k")
-
             if max_scale >= 1e12:
                 new_tick_values = tick_values * 1e-12
                 scale = "T"
@@ -868,6 +783,12 @@ class PyAmChartGenerator:
         tick_locations = tick_values
         tick_labels = np.round(new_tick_values, 1)
         unit = f"{scale}{unit}"
+
+        # if k already in unit, remove k and replace with "M"
+        if unit in ["kkWh", "kkW"]:
+            unit = "M" + unit[2:]
+        elif unit in ["kkg", "kkg/s"]:
+            unit = "t" + unit[3:]
 
         return tick_labels, unit, tick_locations
 
@@ -930,8 +851,15 @@ class PyAmChartGenerator:
         self, dataframe: pd.DataFrame, variable_to_check: str
     ) -> pd.DataFrame:
         """Filter pandas dataframe according to variable."""
-
-        return dataframe.loc[dataframe["variable"] == variable_to_check]
+        filtered_dataframe = dataframe.loc[dataframe["variable"] == variable_to_check]
+        if filtered_dataframe.empty:
+            print(
+                f"The dataframe contains the following variables: {set(list(dataframe.variable))}"
+            )
+            raise ValueError(
+                f"The filtered dataframe is empty. The dataframe did not contain the variable {variable_to_check}. Check the list above."
+            )
+        return filtered_dataframe
 
     def decide_for_scenario_or_variable_comparison(
         self, filtered_data: pyam.IamDataFrame
@@ -967,9 +895,7 @@ class PyAmChartGenerator:
     def check_if_scenario_exists_and_filter_dataframe_for_scenarios(
         self,
         data_frame: pd.DataFrame,
-        dict_of_scenarios_to_check: Dict[
-            str, List[str]
-        ],  # list_of_scenarios_to_check: List[str]
+        dict_of_scenarios_to_check: Dict[str, List[str]],
     ) -> pd.DataFrame:
         """Check if scenario exists and filter dataframe for scenario."""
         for (list_of_scenarios_to_check,) in dict_of_scenarios_to_check.values():
@@ -1266,24 +1192,16 @@ class FilterClass:
         # system_setups for variables to check (check names of your variables before your evaluation, if they are correct)
         # kpi data has no time series, so only choose when you analyze yearly data
         kpi_data = [
-            "Consumption",
-            # "Production",
-            # "Self-consumption",
-            # "Injection",
-            # "Self-consumption rate",
-            # "Cost for energy use",
-            # "CO2 emitted due energy use",
-            # "Battery losses",
-            # "Autarky rate",
+            "Production",
             "Investment costs for equipment per simulated period",
             "CO2 footprint for equipment per simulated period",
             "System operational costs for simulated period",
             "System operational emissions for simulated period",
             "Total costs for simulated period",
             "Total emissions for simulated period",
-            "Temperature deviation of building indoor air temperature being below set temperature 19 °C",
+            "Temperature deviation of building indoor air temperature being below set temperature 19.0 °C",
             "Minimum building indoor air temperature reached",
-            "Temperature deviation of building indoor air temperature being above set temperature 24 °C",
+            "Temperature deviation of building indoor air temperature being above set temperature 24.0 °C",
             "Maximum building indoor air temperature reached",
             "Number of heat pump cycles",
             "Total energy from electricity grid",

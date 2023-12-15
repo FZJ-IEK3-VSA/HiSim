@@ -7,6 +7,7 @@ import os
 from typing import Dict, Any, Tuple, Optional, List
 import string
 import copy
+import warnings
 import numpy as np
 import pyam
 import pandas as pd
@@ -41,6 +42,8 @@ class PyAmChartGenerator:
     ) -> None:
         """Initialize the class."""
 
+        warnings.filterwarnings("ignore")
+
         self.datetime_string = datetime.datetime.now().strftime("%Y%m%d_%H%M")
 
         if data_processing_mode == PyamDataProcessingModeEnum.PROCESS_ALL_DATA:
@@ -68,13 +71,6 @@ class PyAmChartGenerator:
         ):
             data_path_strip = "data_with_different_pv_powers"
             result_path_strip = "results_different_pv_powers"
-
-        elif (
-            data_processing_mode
-            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_SIZES
-        ):  # TODO: this is not implemented in generic pv system config
-            data_path_strip = "data_with_different_pv_sizes"
-            result_path_strip = "results_different_pv_sizes"
 
         elif (
             data_processing_mode
@@ -132,7 +128,8 @@ class PyAmChartGenerator:
         )
         log.information(f"Data folder path: {self.folder_path}")
         self.hisim_chartbase = ChartFontsAndSize()
-        self.hisim_chartbase.figsize = (10, 8)
+        self.hisim_chartbase.figsize = (8, 6)
+        self.hisim_chartbase.dpi = 100
 
         if variables_to_check != [] and variables_to_check is not None:
             # read data, sort data according to scenarios if wanted, and create pandas dataframe
@@ -147,19 +144,19 @@ class PyAmChartGenerator:
                 dict_of_scenarios_to_check=dict_of_scenarios_to_check,
                 variables_to_check=variables_to_check,
             )
-            log.information("key for scneario one " + key_for_scenario_one)
+            log.information("key for scenario one " + key_for_scenario_one)
             log.information("key for current scenario " + key_for_current_scenario)
 
-            try:
+            # try:
 
-                self.make_plots_with_specific_kind_of_data(
-                    time_resolution_of_data_set=time_resolution_of_data_set,
-                    pyam_dataframe=pandas_dataframe,
-                    simulation_duration_key=simulation_duration_to_check,
-                    variables_to_check=variables_to_check,
-                )
-            except Exception:
-                log.information("Something went wrong while plotting.")
+            self.make_plots_with_specific_kind_of_data(
+                time_resolution_of_data_set=time_resolution_of_data_set,
+                pyam_dataframe=pandas_dataframe,
+                simulation_duration_key=simulation_duration_to_check,
+                variables_to_check=variables_to_check,
+            )
+            # except Exception:
+            #     log.information("Something went wrong while plotting.")
         else:
             log.information(
                 "Variable list for data is not given and will not be plotted or anaylzed."
@@ -312,21 +309,19 @@ class PyAmChartGenerator:
                     kind_of_data_set=kind_of_data_set,
                 )
 
-                # try:
-                self.make_box_plot_for_pandas_dataframe(
-                    filtered_data=filtered_data,
-                    title=self.path_addition,
-                )
-                # self.make_pie_plot_for_pyam_dataframe(
-                #     filtered_data=filtered_data,
-                #     comparison_mode=comparion_mode,
-                #     title=self.path_addition,
-                # )
+                try:
+                    self.make_box_plot_for_pandas_dataframe(
+                        filtered_data=filtered_data, title=self.path_addition,
+                    )
 
-                self.make_bar_plot_for_pandas_dataframe(
-                    filtered_data=filtered_data,
-                    title=self.path_addition,
-                )
+                except Exception:
+                    log.information("boxplot went wrong")
+                try:
+                    self.make_bar_plot_for_pandas_dataframe(
+                        filtered_data=filtered_data, title=self.path_addition,
+                    )
+                except Exception:
+                    log.information("barplot went wrong")
 
                 # if (
                 #     variable_to_check
@@ -487,12 +482,10 @@ class PyAmChartGenerator:
         )
 
         plt.ylabel(
-            ylabel=f"{unit}",
-            fontsize=self.hisim_chartbase.fontsize_label,
+            ylabel=f"{unit}", fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
-            xlabel=year,
-            fontsize=self.hisim_chartbase.fontsize_label,
+            xlabel=year, fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
@@ -505,10 +498,7 @@ class PyAmChartGenerator:
         plt.close()
 
     def make_line_plot_with_filling_for_pyam_dataframe(
-        self,
-        filtered_data: pyam.IamDataFrame,
-        comparison_mode: str,
-        title: str,
+        self, filtered_data: pyam.IamDataFrame, comparison_mode: str, title: str,
     ) -> None:
         """Make line plot with filling."""
         log.information("Make line plot with filling.")
@@ -518,10 +508,7 @@ class PyAmChartGenerator:
         )
 
         filtered_data.plot(
-            ax=a_x,
-            color=comparison_mode,
-            title=title,
-            fill_between=True,
+            ax=a_x, color=comparison_mode, title=title, fill_between=True,
         )
 
         y_tick_labels, unit, y_tick_locations = self.set_axis_scale(
@@ -533,12 +520,10 @@ class PyAmChartGenerator:
             fontsize=self.hisim_chartbase.fontsize_ticks,
         )
         plt.ylabel(
-            ylabel=f"{unit}",
-            fontsize=self.hisim_chartbase.fontsize_label,
+            ylabel=f"{unit}", fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
-            xlabel="Time",
-            fontsize=self.hisim_chartbase.fontsize_label,
+            xlabel="Time", fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
@@ -593,9 +578,7 @@ class PyAmChartGenerator:
         a_x.bar(x_data, y_data, label=bar_labels, color=colors)
 
         y_tick_labels, unit, y_tick_locations = self.set_axis_scale(
-            a_x,
-            x_or_y="y",
-            unit=filtered_data.unit.values[0],
+            a_x, x_or_y="y", unit=filtered_data.unit.values[0],
         )
         plt.yticks(
             ticks=y_tick_locations,
@@ -603,8 +586,7 @@ class PyAmChartGenerator:
             fontsize=self.hisim_chartbase.fontsize_ticks,
         )
         plt.ylabel(
-            ylabel=f"{unit}",
-            fontsize=self.hisim_chartbase.fontsize_label,
+            ylabel=f"{unit}", fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
             xlabel=filtered_data.year.values[0],
@@ -646,8 +628,7 @@ class PyAmChartGenerator:
             fontsize=self.hisim_chartbase.fontsize_ticks,
         )
         plt.ylabel(
-            ylabel=f"{unit}",
-            fontsize=self.hisim_chartbase.fontsize_label,
+            ylabel=f"{unit}", fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
             xlabel=filtered_data.year.values[0],
@@ -664,10 +645,7 @@ class PyAmChartGenerator:
         plt.close()
 
     def make_pie_plot_for_pyam_dataframe(
-        self,
-        filtered_data: pyam.IamDataFrame,
-        comparison_mode: str,
-        title: str,
+        self, filtered_data: pyam.IamDataFrame, comparison_mode: str, title: str,
     ) -> None:
         """Make pie plot."""
         log.information("Make pie plot.")
@@ -723,9 +701,7 @@ class PyAmChartGenerator:
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
         filtered_data.plot.scatter(
-            ax=a_x,
-            x=x_data,
-            y=y_data,
+            ax=a_x, x=x_data, y=y_data,
         )
 
         (
@@ -796,12 +772,10 @@ class PyAmChartGenerator:
         # convert html file to png
         hti = Html2Image()
         with open(
-            os.path.join(self.plot_path_complete, "sankey_plot.html"),
-            encoding="utf8",
+            os.path.join(self.plot_path_complete, "sankey_plot.html"), encoding="utf8",
         ) as file:
             hti.screenshot(
-                file.read(),
-                save_as="sankey_plot.png",
+                file.read(), save_as="sankey_plot.png",
             )
 
         # change directory of sankey output file
@@ -836,8 +810,7 @@ class PyAmChartGenerator:
             fontsize=self.hisim_chartbase.fontsize_ticks,
         )
         plt.ylabel(
-            ylabel=f"{unit}",
-            fontsize=self.hisim_chartbase.fontsize_label,
+            ylabel=f"{unit}", fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
             xlabel=filtered_data.time_col.capitalize(),
@@ -977,10 +950,7 @@ class PyAmChartGenerator:
         return comparison_mode
 
     def get_statistics_of_data_and_write_to_excel(
-        self,
-        filtered_data: pd.DataFrame,
-        path_to_save: str,
-        kind_of_data_set: str,
+        self, filtered_data: pd.DataFrame, path_to_save: str, kind_of_data_set: str,
     ) -> None:
         """Use pandas describe method to get statistical values of certain data."""
         # create a excel writer object
@@ -1189,12 +1159,10 @@ class PyAmChartGenerator:
 
                 if share_of_maximum_pv_power == 0.0:
 
-                    df_for_one_scenario_and_for_one_share = (
-                        df_for_one_building_code.loc[
-                            df_for_one_building_code.share_of_maximum_pv_power
-                            == share_of_maximum_pv_power
-                        ]
-                    )
+                    df_for_one_scenario_and_for_one_share = df_for_one_building_code.loc[
+                        df_for_one_building_code.share_of_maximum_pv_power
+                        == share_of_maximum_pv_power
+                    ]
 
                     # df_demand_values = df_for_one_scenario_for_zero_pv_share.loc[df_for_one_scenario_for_zero_pv_share.value < 0]
                     # reference_value_for_electricity_demand = np.mean(
@@ -1212,12 +1180,10 @@ class PyAmChartGenerator:
 
                 elif share_of_maximum_pv_power != 0.0:
 
-                    df_for_one_scenario_and_for_one_share = (
-                        df_for_one_building_code.loc[
-                            df_for_one_building_code.share_of_maximum_pv_power
-                            == share_of_maximum_pv_power
-                        ]
-                    )
+                    df_for_one_scenario_and_for_one_share = df_for_one_building_code.loc[
+                        df_for_one_building_code.share_of_maximum_pv_power
+                        == share_of_maximum_pv_power
+                    ]
 
                     # df_demand_values = df_for_one_scenario_for_nonzero_pv_share.loc[df_for_one_scenario_for_nonzero_pv_share.value < 0]
                     value_for_electricity_demand = (
@@ -1321,7 +1287,7 @@ class FilterClass:
             "Maximum building indoor air temperature reached",
             "Number of heat pump cycles",
             "Total energy from electricity grid",
-            "Total energy to electricity grid"
+            "Total energy to electricity grid",
         ]
 
         electricity_data = [
@@ -1331,7 +1297,7 @@ class FilterClass:
             "ElectricityMeter|Electricity|ElectricityFromGrid",
             "ElectricityMeter|Electricity|ElectricityAvailable",
             "ElectricityMeter|Electricity|ElectricityConsumption",
-            "ElectricityMeter|Electricity|ElectricityProduction"
+            "ElectricityMeter|Electricity|ElectricityProduction",
         ]
 
         occuancy_consumption = [

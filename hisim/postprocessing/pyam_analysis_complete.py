@@ -18,7 +18,6 @@ class PyamDataAnalysis:
         time_resolution_of_data_set: Any,
         data_processing_mode: Any,
         variables_to_check: List[str],
-        # list_of_scenarios_to_check: Optional[List[str]] = None,
         dict_with_scenarios_to_check: Optional[Dict[str, List[str]]] = None,
     ) -> None:
         """Initialize the class."""
@@ -30,14 +29,13 @@ class PyamDataAnalysis:
             time_resolution_of_data_set=time_resolution_of_data_set,
             simulation_duration_to_check=simulation_duration_to_check,
         )
-        pyam_data_processing.PyAmChartGenerator(
-            simulation_duration_to_check=simulation_duration_to_check,
-            time_resolution_of_data_set=time_resolution_of_data_set,
-            data_processing_mode=data_processing_mode,
-            variables_to_check=variables_to_check,
-            # list_of_scenarios_to_check=list_of_scenarios_to_check,
-            dict_of_scenarios_to_check=dict_with_scenarios_to_check,
-        )
+        # pyam_data_processing.PyAmChartGenerator(
+        #     simulation_duration_to_check=simulation_duration_to_check,
+        #     time_resolution_of_data_set=time_resolution_of_data_set,
+        #     data_processing_mode=data_processing_mode,
+        #     variables_to_check=variables_to_check,
+        #     dict_of_scenarios_to_check=dict_with_scenarios_to_check,
+        # )
 
 
 def main():
@@ -50,20 +48,13 @@ def main():
     cluster_storage_path = "/fast/home/k-rieck/"
 
     folder_from_which_data_will_be_collected = os.path.join(
-        cluster_storage_path,
-        # "repositories/HiSim/system_setups/results/household_cluster_reference_advanced_hp/german_tabula_buildings_20230919_1905"
-        # "repositories/HiSim/system_setups/results/household_cluster_test_advanced_hp/hplib_configs_20230915_1122",
-        "repositories/HiSim/system_setups/results/household_cluster_advanced_hp_pv_battery_ems/monte_carlo_20231115_0921",
+        cluster_storage_path, "repositories/HiSim/system_setups/results/",
     )
 
-    # folder_from_which_data_will_be_collected = (
-    #     r"C:\Users\k.rieck\Cluster_stuff_copied\system_setups_results"
-    # )
     path_to_default_config = os.path.join(
         cluster_storage_path,
         "jobs_hisim/cluster-hisim-paper/job_array_for_hisim_mass_simus/default_building_pv_config.json",
     )
-    # path_to_default_config = r"C:\Users\k.rieck\Cluster_stuff_copied\job_array_for_hisim_mass_simu_one\default_building_pv_config.json"
 
     simulation_duration_to_check = str(365)
 
@@ -72,9 +63,7 @@ def main():
     )
 
     filterclass = pyam_data_processing.FilterClass()
-    list_with_variables_to_check = (
-        filterclass.kpi_data + filterclass.electricity_data
-    )
+    list_with_variables_to_check = filterclass.kpi_data + filterclass.electricity_data
 
     # list_of_scenarios_to_check = filterclass.building_type
 
@@ -101,7 +90,6 @@ def main():
         simulation_duration_to_check=simulation_duration_to_check,
         data_processing_mode=data_processing_mode,
         variables_to_check=list_with_variables_to_check,
-        # list_of_scenarios_to_check=list_of_scenarios_to_check,
         dict_with_scenarios_to_check=dict_with_scenarios_to_check,
     )
 

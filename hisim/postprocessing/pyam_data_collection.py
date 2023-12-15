@@ -32,7 +32,11 @@ class PyamDataCollector:
         """Initialize the class."""
         result_folder = folder_from_which_data_will_be_collected
         self.pyam_data_folder = os.path.join(
-            os.pardir, os.pardir, "system_setups", "results_for_scenario_comparison", "data"
+            os.pardir,
+            os.pardir,
+            "system_setups",
+            "results_for_scenario_comparison",
+            "data",
         )
 
         # in each system_setups/results folder should be one system setup that was executed with the default config
@@ -151,20 +155,43 @@ class PyamDataCollector:
 
         print("\n")
 
-    def clean_result_directory_from_unfinished_results(
-        self, result_path: str
-    ) -> None:
+    def clean_result_directory_from_unfinished_results(self, result_path: str) -> None:
         """When a result folder does not contain the finished_flag, it will be removed from the system_setups/result folder."""
         list_of_unfinished_folders = []
-        with open(os.path.join(self.pyam_data_folder, "failed_simualtions.txt"), "a", encoding="utf-8") as file:
+        with open(
+            os.path.join(self.pyam_data_folder, "failed_simualtions.txt"),
+            "a",
+            encoding="utf-8",
+        ) as file:
             file.write(str(datetime.datetime.now()) + "\n")
             file.write("Failed simulations found in the following folders: \n")
             for folder in os.listdir(result_path):
-                if not os.path.exists(os.path.join(result_path, folder, "finished.flag")):
+                if not os.path.exists(
+                    os.path.join(result_path, folder, "finished.flag")
+                ):
                     file.write(os.path.join(result_path, folder) + "\n")
                     list_of_unfinished_folders.append(os.path.join(result_path, folder))
-                    shutil.rmtree(os.path.join(result_path, folder))
-            file.write(f"Total number of failed simulations in path {result_path}: {len(list_of_unfinished_folders)}" + "\n" + "\n")
+                    # do not remove folders yet, be careful about this
+
+                    # shutil.rmtree(os.path.join(result_path, folder))
+            file.write(
+                f"Total number of failed simulations in path {result_path}: {len(list_of_unfinished_folders)}"
+                + "\n"
+                + "\n"
+            )
+
+        print(
+            f"The following folders in the path {result_path} do not contain the finished flag: {list_of_unfinished_folders}. "
+        )
+        answer = input("Do you want to delete them?")
+        if answer.upper() in ["Y", "YES"]:
+            for folder in list_of_unfinished_folders:
+                shutil.rmtree(os.path.join(result_path, folder))
+            print("All folders with failed simulations deleted.")
+        elif answer.upper() in ["N", "NO"]:
+            print("The folders won't be deleted.")
+        else:
+            print("The answer must be yes or no.")
 
     def get_list_of_all_relevant_pyam_data_folders(self, result_path: str) -> List[str]:
         """Get a list of all pyam data folders which you want to analyze."""
@@ -186,11 +213,17 @@ class PyamDataCollector:
             + list_of_paths_second_order
             + list_of_paths_third_order
         )
-        print("len of list with all paths to check for pyam data", len(list_with_all_paths_to_check))
+        print(
+            "len of list with all paths to check for pyam data",
+            len(list_with_all_paths_to_check),
+        )
         list_with_no_duplicates = self.go_through_all_pyam_data_folders_and_check_if_module_configs_are_double_somewhere(
             list_of_pyam_folder_paths_to_check=list_with_all_paths_to_check
         )
-        print("len of list with all paths to check for pyam data after double check", len(list_with_no_duplicates))
+        print(
+            "len of list with all paths to check for pyam data after double check",
+            len(list_with_no_duplicates),
+        )
 
         return list_with_no_duplicates
 
@@ -225,9 +258,7 @@ class PyamDataCollector:
         return all_csv_files
 
     def make_dictionaries_with_simulation_duration_keys(
-        self,
-        simulation_duration_to_check: str,
-        all_csv_files: List[str],
+        self, simulation_duration_to_check: str, all_csv_files: List[str],
     ) -> Dict:
         """Make dictionaries containing csv files of hourly or yearly data and according to the simulation duration of the data."""
 
@@ -623,7 +654,11 @@ class PyamDataCollector:
                             {"model": config_dict["pyamDataInformation"].get("model")}
                         )
                         my_module_config_dict.update(
-                            {"model": config_dict["pyamDataInformation"].get("scenario")}
+                            {
+                                "model": config_dict["pyamDataInformation"].get(
+                                    "scenario"
+                                )
+                            }
                         )
 
                         # prevent to add modules with same module config and same simulation duration twice

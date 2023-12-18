@@ -26,7 +26,10 @@ def main(
     if os.path.exists(logging_default_path) and os.listdir(logging_default_path) != []:
         for file in os.listdir(logging_default_path):
             if os.path.exists(os.path.join(logging_default_path, file)):
-                os.remove(os.path.join(logging_default_path, file))
+                try:
+                    os.remove(os.path.join(logging_default_path, file))
+                except Exception:
+                    log.information("Logging default file could not be removed. This can occur when more than one simulation run simultaneously.")
 
     function_in_module = "setup_function"
     log.information("#################################")

@@ -135,6 +135,9 @@ def setup_function(
             PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
         )
         my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.MAKE_RESULT_JSON_WITH_KPI_FOR_WEBTOOL
+        )
+        my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER
         )
     my_sim.set_simulation_parameters(my_simulation_parameters)

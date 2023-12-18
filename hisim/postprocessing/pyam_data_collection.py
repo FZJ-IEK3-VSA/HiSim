@@ -171,9 +171,6 @@ class PyamDataCollector:
                 ):
                     file.write(os.path.join(result_path, folder) + "\n")
                     list_of_unfinished_folders.append(os.path.join(result_path, folder))
-                    # do not remove folders yet, be careful about this
-
-                    # shutil.rmtree(os.path.join(result_path, folder))
             file.write(
                 f"Total number of failed simulations in path {result_path}: {len(list_of_unfinished_folders)}"
                 + "\n"

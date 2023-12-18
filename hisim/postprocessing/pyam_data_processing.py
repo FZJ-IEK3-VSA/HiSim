@@ -12,6 +12,7 @@ import numpy as np
 import pyam
 import pandas as pd
 import matplotlib.pyplot as plt
+
 # import plotly
 # from html2image import Html2Image
 from ordered_set import OrderedSet
@@ -273,15 +274,15 @@ class PyAmChartGenerator:
             if os.path.exists(self.plot_path_complete) is False:
                 os.makedirs(self.plot_path_complete)
 
+            # filter the dataframe according to variable
             filtered_data = self.filter_pandas_dataframe(
                 dataframe=pyam_dataframe, variable_to_check=variable_to_check
             )
-
+            # get unit of variable
             try:
                 unit = filtered_data.unit.values[0]
             except Exception:
                 if "Temperature deviation" in variable_to_check:
-                    print(filtered_data)
                     unit = "°C*h"
                 else:
                     unit = "-"
@@ -297,7 +298,7 @@ class PyAmChartGenerator:
                     path_to_save=self.plot_path_complete,
                     kind_of_data_set=kind_of_data_set,
                 )
-                print("unit", unit)
+
                 # try:
                 #     self.make_box_plot_for_pandas_dataframe(
                 #         filtered_data=filtered_data, title=self.path_addition,
@@ -305,13 +306,13 @@ class PyAmChartGenerator:
 
                 # except Exception:
                 #     log.information("Boxplot went wrong")
-                # try:
+
                 self.make_bar_plot_for_pandas_dataframe(
                     filtered_data=filtered_data, title=self.path_addition, unit=unit
                 )
-                # except Exception:
-                #     log.information("Barplot went wrong")
-
+                self.make_histogram_plot_for_pandas_dataframe(
+                    filtered_data=filtered_data, title=self.path_addition, unit=unit
+                )
                 # if (
                 #     variable_to_check
                 #     == "ElectricityMeter|Electricity|ElectricityToOrFromGrid"
@@ -624,65 +625,116 @@ class PyAmChartGenerator:
         )
         plt.close()
 
-    def make_scatter_plot_for_pyam_dataframe(
+    def make_histogram_plot_for_pandas_dataframe(
         self,
-        pyam_dataframe: pyam.IamDataFrame,
-        filter_model: Optional[str],
-        filter_scenario: Optional[str],
-        filter_variables: Optional[str],
-        filter_region: Optional[str],
-        filter_unit: Optional[str],
-        filter_year: Optional[str],
+        filtered_data: pd.DataFrame,
         title: str,
-        x_data_variable: str,
-        y_data_variable: str,
+        unit: str,
+        scenario_set: Optional[List[str]] = None,
     ) -> None:
-        """Make scatter plot."""
-        log.information("Make scatter plot.")
+        """Make histogram plot."""
+        log.information("Make histogram plot.")
 
-        filtered_data = self.filter_pyam_dataframe(
-            pyam_dataframe=pyam_dataframe,
-            filter_model=filter_model,
-            filter_scenario=filter_scenario,
-            filter_region=filter_region,
-            filter_variables=filter_variables,
-            filter_unit=filter_unit,
-            filter_year=filter_year,
-        )
-
-        x_data = x_data_variable
-        y_data = y_data_variable
         fig, a_x = plt.subplots(
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
-        filtered_data.plot.scatter(
-            ax=a_x, x=x_data, y=y_data,
+        if scenario_set is None:
+            scenario_set = list(OrderedSet(filtered_data.scenario))
+
+        plt.hist(x=np.array(filtered_data.value.values), bins="auto")
+
+        # x_tick_labels, unit, x_tick_locations = self.set_axis_scale(
+        #     a_x, x_or_y="x", unit=unit
+        # )
+        x_tick_locations = range(
+            0,
+            int(max(filtered_data.value.values)),
+            round(int(max(filtered_data.value.values) / 10), 0),
         )
-
-        (
-            y_tick_labels,
-            unit,  # pylint: disable=unused-variable
-            y_tick_locations,
-        ) = self.set_axis_scale(a_x, x_or_y="y", unit=filtered_data.unit[0])
-
-        plt.yticks(
-            ticks=y_tick_locations,
-            labels=y_tick_labels,
+        plt.xticks(
+            ticks=x_tick_locations,
+            # labels=x_tick_labels,
+            rotation=45,
             fontsize=self.hisim_chartbase.fontsize_ticks,
+            rotation_mode="anchor",
+            ha="right",
         )
+
         plt.ylabel(
-            ylabel=y_data.rsplit("|", maxsplit=1)[-1],
-            fontsize=self.hisim_chartbase.fontsize_label,
+            ylabel="Count", fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
-            xlabel=x_data.rsplit("|", maxsplit=1)[-1],
-            fontsize=self.hisim_chartbase.fontsize_label,
+            xlabel=f"{unit}", fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
 
-        fig.savefig(os.path.join(self.plot_path_complete, "scatter_plot.png"))
+        # plt.legend(scenario_set, bbox_to_anchor=(1, 1), loc="upper left")
+        fig.savefig(
+            os.path.join(self.plot_path_complete, "histogram_plot.png"),
+            bbox_inches="tight",
+        )
         plt.close()
+
+    # def make_scatter_plot_for_pyam_dataframe(
+    #     self,
+    #     pyam_dataframe: pyam.IamDataFrame,
+    #     filter_model: Optional[str],
+    #     filter_scenario: Optional[str],
+    #     filter_variables: Optional[str],
+    #     filter_region: Optional[str],
+    #     filter_unit: Optional[str],
+    #     filter_year: Optional[str],
+    #     title: str,
+    #     x_data_variable: str,
+    #     y_data_variable: str,
+    # ) -> None:
+    #     """Make scatter plot."""
+    #     log.information("Make scatter plot.")
+
+    #     filtered_data = self.filter_pyam_dataframe(
+    #         pyam_dataframe=pyam_dataframe,
+    #         filter_model=filter_model,
+    #         filter_scenario=filter_scenario,
+    #         filter_region=filter_region,
+    #         filter_variables=filter_variables,
+    #         filter_unit=filter_unit,
+    #         filter_year=filter_year,
+    #     )
+
+    #     x_data = x_data_variable
+    #     y_data = y_data_variable
+    #     fig, a_x = plt.subplots(
+    #         figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
+    #     )
+    #     filtered_data.plot.scatter(
+    #         ax=a_x, x=x_data, y=y_data,
+    #     )
+
+    #     (
+    #         y_tick_labels,
+    #         unit,  # pylint: disable=unused-variable
+    #         y_tick_locations,
+    #     ) = self.set_axis_scale(a_x, x_or_y="y", unit=filtered_data.unit[0])
+
+    #     plt.yticks(
+    #         ticks=y_tick_locations,
+    #         labels=y_tick_labels,
+    #         fontsize=self.hisim_chartbase.fontsize_ticks,
+    #     )
+    #     plt.ylabel(
+    #         ylabel=y_data.rsplit("|", maxsplit=1)[-1],
+    #         fontsize=self.hisim_chartbase.fontsize_label,
+    #     )
+    #     plt.xlabel(
+    #         xlabel=x_data.rsplit("|", maxsplit=1)[-1],
+    #         fontsize=self.hisim_chartbase.fontsize_label,
+    #     )
+    #     plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
+    #     plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
+
+    #     fig.savefig(os.path.join(self.plot_path_complete, "scatter_plot.png"))
+    #     plt.close()
 
     # def make_sankey_plot_for_pyam_dataframe(
     #     self,
@@ -792,60 +844,60 @@ class PyAmChartGenerator:
 
         return tick_labels, unit, tick_locations
 
-    def filter_pyam_dataframe(
-        self,
-        pyam_dataframe: pyam.IamDataFrame,
-        filter_model: Optional[str],
-        filter_scenario: Optional[str],
-        filter_variables: Optional[str],
-        filter_region: Optional[str],
-        filter_unit: Optional[str],
-        filter_year: Optional[str],
-    ) -> pyam.IamDataFrame:
-        """Filter the pyam dataframe for the plots.
+    # def filter_pyam_dataframe(
+    #     self,
+    #     pyam_dataframe: pyam.IamDataFrame,
+    #     filter_model: Optional[str],
+    #     filter_scenario: Optional[str],
+    #     filter_variables: Optional[str],
+    #     filter_region: Optional[str],
+    #     filter_unit: Optional[str],
+    #     filter_year: Optional[str],
+    # ) -> pyam.IamDataFrame:
+    #     """Filter the pyam dataframe for the plots.
 
-        If the value is None, it will be ignored.
-        """
+    #     If the value is None, it will be ignored.
+    #     """
 
-        filtered_data = pyam_dataframe
+    #     filtered_data = pyam_dataframe
 
-        if filter_model is not None:
-            if filter_model not in filtered_data.model:
-                raise ValueError(
-                    f"Model {filter_model} not found in the pyam dataframe."
-                )
-            filtered_data = filtered_data.filter(model=filter_model)
+    #     if filter_model is not None:
+    #         if filter_model not in filtered_data.model:
+    #             raise ValueError(
+    #                 f"Model {filter_model} not found in the pyam dataframe."
+    #             )
+    #         filtered_data = filtered_data.filter(model=filter_model)
 
-        if filter_scenario is not None:
-            if filter_scenario not in filtered_data.scenario:
-                raise ValueError(
-                    f"Scenario {filter_scenario} not found in the pyam dataframe."
-                )
-            filtered_data = filtered_data.filter(scenario=filter_scenario)
+    #     if filter_scenario is not None:
+    #         if filter_scenario not in filtered_data.scenario:
+    #             raise ValueError(
+    #                 f"Scenario {filter_scenario} not found in the pyam dataframe."
+    #             )
+    #         filtered_data = filtered_data.filter(scenario=filter_scenario)
 
-        if filter_variables is not None:
-            # if filter_variables not in filtered_data.variable:
-            #     raise ValueError(f"Variable {filter_variables} not found in the pyam dataframe.")
-            filtered_data = filtered_data.filter(variable=filter_variables)
-        if filter_region is not None:
-            if filter_region not in filtered_data.region:
-                raise ValueError(
-                    f"Region {filter_region} not found in the pyam dataframe."
-                )
-            filtered_data = filtered_data.filter(region=filter_region)
-        if filter_unit is not None:
-            if filter_unit not in filtered_data.unit:
-                raise ValueError(f"Unit {filter_unit} not found in the pyam dataframe.")
-            filtered_data = filtered_data.filter(unit=filter_unit)
-        if filter_year is not None:
-            if (
-                filtered_data.time_domain == "year"
-                and filter_year not in filtered_data["year"]
-            ):
-                raise ValueError(f"Year {filter_year} not found in the pyam dataframe.")
-            filtered_data = filtered_data.filter(year=filter_year)
+    #     if filter_variables is not None:
+    #         # if filter_variables not in filtered_data.variable:
+    #         #     raise ValueError(f"Variable {filter_variables} not found in the pyam dataframe.")
+    #         filtered_data = filtered_data.filter(variable=filter_variables)
+    #     if filter_region is not None:
+    #         if filter_region not in filtered_data.region:
+    #             raise ValueError(
+    #                 f"Region {filter_region} not found in the pyam dataframe."
+    #             )
+    #         filtered_data = filtered_data.filter(region=filter_region)
+    #     if filter_unit is not None:
+    #         if filter_unit not in filtered_data.unit:
+    #             raise ValueError(f"Unit {filter_unit} not found in the pyam dataframe.")
+    #         filtered_data = filtered_data.filter(unit=filter_unit)
+    #     if filter_year is not None:
+    #         if (
+    #             filtered_data.time_domain == "year"
+    #             and filter_year not in filtered_data["year"]
+    #         ):
+    #             raise ValueError(f"Year {filter_year} not found in the pyam dataframe.")
+    #         filtered_data = filtered_data.filter(year=filter_year)
 
-        return filtered_data
+    #     return filtered_data
 
     def filter_pandas_dataframe(
         self, dataframe: pd.DataFrame, variable_to_check: str

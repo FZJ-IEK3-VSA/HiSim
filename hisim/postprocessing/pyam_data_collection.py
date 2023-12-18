@@ -46,8 +46,26 @@ class PyamDataCollector:
 
         self.clean_result_directory_from_unfinished_results(result_path=result_folder)
 
-        list_with_pyam_data_folders = self.get_list_of_all_relevant_pyam_data_folders(
+        list_with_all_paths_to_check = self.get_list_of_all_relevant_pyam_data_folders(
             result_path=result_folder
+        )
+        print(
+            "len of list with all paths to containing pyam data ",
+            len(list_with_all_paths_to_check),
+        )
+        list_with_all_paths_to_check_after_filtering = self.filter_results_that_failed_to_heat_or_cool_building_sufficiently(
+            list_of_result_path_that_contain_pyam_data=list_with_all_paths_to_check
+        )
+        print(
+            "len of list with all paths after filtering ",
+            len(list_with_all_paths_to_check),
+        )
+        list_with_pyam_data_folders = self.go_through_all_pyam_data_folders_and_check_if_module_configs_are_double_somewhere(
+            list_of_pyam_folder_paths_to_check=list_with_all_paths_to_check_after_filtering
+        )
+        print(
+            "len of list with all paths after double checking for duplicates ",
+            len(list_with_pyam_data_folders),
         )
 
         if data_processing_mode == PyamDataProcessingModeEnum.PROCESS_ALL_DATA:
@@ -190,9 +208,166 @@ class PyamDataCollector:
         else:
             print("The answer must be yes or no.")
 
+    def filter_results_that_failed_to_heat_or_cool_building_sufficiently(
+        self, list_of_result_path_that_contain_pyam_data: List[str]
+    ) -> List[str]:
+        """When a result shows too high or too low building temperatures, it will be filtered and removed from further analysis."""
+        list_of_unsuccessful_folders = []
+        with open(
+            os.path.join(
+                self.pyam_data_folder,
+                "succeeded_simulations_that_showed_too_high_or_too_low_building_temps.txt",
+            ),
+            "a",
+            encoding="utf-8",
+        ) as file:
+            file.write(str(datetime.datetime.now()) + "\n")
+            file.write(
+                "Simulations with unsuccessful heating or cooling found in the following folders: \n"
+            )
+            file.write(
+                "Building is too...,"
+                "set temperature heating [°C],"
+                "set temperature cooling [°C],"
+                "min building air temperature [°C],"
+                "max building air temperature [°C],"
+                "temp deviation below set heating [°C*h],"
+                "temp deviation above set cooling [°C*h], folder \n"
+            )
+            for folder in list_of_result_path_that_contain_pyam_data:
+                pyam_data_information = os.path.join(
+                    folder, "data_information_for_pyam.json"
+                )
+                main_folder = os.path.normpath(folder + os.sep + os.pardir)
+                webtool_kpis_file = os.path.join(main_folder, "webtool_kpis.json")
+
+                # get set temperatures used in the simulation
+                if os.path.exists(pyam_data_information):
+                    with open(
+                        pyam_data_information, "r", encoding="utf-8"
+                    ) as data_info_file:
+                        json_file = json.load(data_info_file)
+                        component_entries = json_file["componentEntries"]
+                        for component in component_entries:
+                            if "Building" in component["componentName"]:
+                                set_heating_temperature = float(
+                                    component["configuration"].get(
+                                        "set_heating_temperature_in_celsius"
+                                    )
+                                )
+                                set_cooling_temperature = float(
+                                    component["configuration"].get(
+                                        "set_cooling_temperature_in_celsius"
+                                    )
+                                )
+                                break
+                else:
+                    raise FileNotFoundError(
+                        f"The file {pyam_data_information} could not be found. "
+                    )
+
+                # open the webtool kpis and check if building got too hot or too cold
+                if os.path.exists(webtool_kpis_file):
+
+                    with open(webtool_kpis_file, "r", encoding="utf-8") as kpi_file:
+                        json_file = json.load(kpi_file)
+                        kpi_data = json_file["kpiDict"]
+                        # check if min and max temperatures are too low or too high
+                        min_temperature = float(
+                            kpi_data.get(
+                                "Minimum building indoor air temperature reached [\u00b0C] "
+                            )
+                        )
+                        max_temperature = float(
+                            kpi_data.get(
+                                "Maximum building indoor air temperature reached [\u00b0C] "
+                            )
+                        )
+                        temp_deviation_below_set = kpi_data.get(
+                            "Temperature deviation of building indoor air temperature being below set temperature 19.0 \u00b0C [\u00b0C*h] "
+                        )
+                        temp_deviation_above_set = kpi_data.get(
+                            "Temperature deviation of building indoor air temperature being above set temperature 24.0 \u00b0C [\u00b0C*h] "
+                        )
+                        if (
+                            min_temperature <= set_heating_temperature - 5.0
+                            and max_temperature >= set_cooling_temperature + 5.0
+                        ):
+                            file.write(
+                                "too cold and too warm,"
+                                f"{set_heating_temperature},"
+                                f"{set_cooling_temperature},"
+                                f"{min_temperature},"
+                                f"{max_temperature},"
+                                f"{temp_deviation_below_set},"
+                                f"{temp_deviation_above_set}, {folder}" + "\n"
+                            )
+                            list_of_unsuccessful_folders.append(folder)
+                        elif (
+                            min_temperature <= set_heating_temperature - 5.0
+                            and max_temperature < set_cooling_temperature + 5.0
+                        ):
+                            file.write(
+                                "too cold,"
+                                f"{set_heating_temperature},"
+                                f"{set_cooling_temperature},"
+                                f"{min_temperature},"
+                                f"{max_temperature},"
+                                f"{temp_deviation_below_set},"
+                                f"{temp_deviation_above_set}, {folder}" + "\n"
+                            )
+                            list_of_unsuccessful_folders.append(folder)
+                        elif (
+                            min_temperature > set_heating_temperature - 5.0
+                            and max_temperature >= set_cooling_temperature + 5.0
+                        ):
+                            file.write(
+                                "too warm,"
+                                f"{set_heating_temperature},"
+                                f"{set_cooling_temperature},"
+                                f"{min_temperature},"
+                                f"{max_temperature},"
+                                f"{temp_deviation_below_set},"
+                                f"{temp_deviation_above_set}, {folder}" + "\n"
+                            )
+                            list_of_unsuccessful_folders.append(folder)
+                else:
+                    raise FileNotFoundError(
+                        f"The file {webtool_kpis_file} could not be found. "
+                    )
+
+            file.write(
+                f"Total number of simulations that have building temperatures way below or above set temperatures: {len(list_of_unsuccessful_folders)}"
+                + "\n"
+                + "\n"
+            )
+
+        print(
+            f"Total number of simulations that have building temperatures way below or above set temperatures: {len(list_of_unsuccessful_folders)}"
+        )
+
+        # ask if these simulation results should be analyzed
+        answer = input(
+            "Do you want to take these simulation results into account for further analysis?"
+        )
+        if answer.upper() in ["N", "NO"]:
+            for folder in list_of_unsuccessful_folders:
+                list_of_result_path_that_contain_pyam_data.remove(folder)
+            print(
+                "The folders with too low or too high building temperatures will be discarded from the further analysis."
+            )
+        elif answer.upper() in ["Y", "YES"]:
+            print(
+                "The folders with too low or too high building temperatures will be kept for the further analysis."
+            )
+        else:
+            print("The answer must be yes or no.")
+
+        return list_of_result_path_that_contain_pyam_data
+
     def get_list_of_all_relevant_pyam_data_folders(self, result_path: str) -> List[str]:
         """Get a list of all pyam data folders which you want to analyze."""
-        print("result path", result_path)
+
         # choose which path to check
         path_to_check = os.path.join(result_path, "**", "pyam_data")
 
@@ -210,19 +385,8 @@ class PyamDataCollector:
             + list_of_paths_second_order
             + list_of_paths_third_order
         )
-        print(
-            "len of list with all paths to check for pyam data",
-            len(list_with_all_paths_to_check),
-        )
-        list_with_no_duplicates = self.go_through_all_pyam_data_folders_and_check_if_module_configs_are_double_somewhere(
-            list_of_pyam_folder_paths_to_check=list_with_all_paths_to_check
-        )
-        print(
-            "len of list with all paths to check for pyam data after double check",
-            len(list_with_no_duplicates),
-        )
 
-        return list_with_no_duplicates
+        return list_with_all_paths_to_check
 
     def import_data_from_file(
         self, paths_to_check: List[str], analyze_yearly_or_hourly_data: Any
@@ -665,14 +829,26 @@ class PyamDataCollector:
                                 os.path.join(folder)
                             )
 
-            # delete folders which have doubled results from system_setups/results directory
+            # get folders with duplicates
+            list_with_duplicates = []
             if folder not in list_of_pyam_folders_which_have_only_unique_configs:
-                # remove whole result folder from result directory
                 whole_parent_folder = os.path.abspath(os.path.join(folder, os.pardir))
-                log.information(
-                    f"The result folder {whole_parent_folder} will be removed because these results are already existing."
-                )
-                shutil.rmtree(whole_parent_folder, ignore_errors=True)
+                list_with_duplicates.append(whole_parent_folder)
+
+        print(
+            f"The following folders seem to be duplicated: {list_with_duplicates}. Number: {len(list_with_duplicates)}."
+        )
+        # if list is not empty
+        if list_with_duplicates:
+            answer = input("Do you want to delete the duplicated folders?")
+            if answer.upper() in ["Y", "YES"]:
+                for folder in list_with_duplicates:
+                    shutil.rmtree(folder, ignore_errors=True)
+                print("All folders with duplicated results are deleted.")
+            elif answer.upper() in ["N", "NO"]:
+                print("These folders won't be deleted.")
+            else:
+                print("The answer must be yes or no.")
 
         return list_of_pyam_folders_which_have_only_unique_configs
 

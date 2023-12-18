@@ -49,6 +49,7 @@ class PyamDataCollector:
         list_with_all_paths_to_check = self.get_list_of_all_relevant_pyam_data_folders(
             result_path=result_folder
         )
+
         print(
             "len of list with all paths to containing pyam data ",
             len(list_with_all_paths_to_check),
@@ -183,6 +184,7 @@ class PyamDataCollector:
         ) as file:
             file.write(str(datetime.datetime.now()) + "\n")
             file.write("Failed simulations found in the following folders: \n")
+
             for folder in os.listdir(result_path):
                 if not os.path.exists(
                     os.path.join(result_path, folder, "finished.flag")
@@ -196,17 +198,19 @@ class PyamDataCollector:
             )
 
         print(
-            f"The following folders in the path {result_path} do not contain the finished flag: {list_of_unfinished_folders}. "
+            f"The following result folders do not contain the finished flag: {list_of_unfinished_folders} Number: {len(list_of_unfinished_folders)}. "
         )
-        answer = input("Do you want to delete them?")
-        if answer.upper() in ["Y", "YES"]:
-            for folder in list_of_unfinished_folders:
-                shutil.rmtree(os.path.join(result_path, folder))
-            print("All folders with failed simulations deleted.")
-        elif answer.upper() in ["N", "NO"]:
-            print("The folders won't be deleted.")
-        else:
-            print("The answer must be yes or no.")
+        # if list of unfinished folders is not empty
+        if list_of_unfinished_folders:
+            answer = input("Do you want to delete them?")
+            if answer.upper() in ["Y", "YES"]:
+                for folder in list_of_unfinished_folders:
+                    shutil.rmtree(os.path.join(result_path, folder))
+                print("All folders with failed simulations deleted.")
+            elif answer.upper() in ["N", "NO"]:
+                print("The folders won't be deleted.")
+            else:
+                print("The answer must be yes or no.")
 
     def filter_results_that_failed_to_heat_or_cool_building_sufficiently(
         self, list_of_result_path_that_contain_pyam_data: List[str]

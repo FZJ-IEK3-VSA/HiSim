@@ -44,30 +44,7 @@ class PyamDataCollector:
 
         log.information(f"Checking results from folder: {result_folder}")
 
-        self.clean_result_directory_from_unfinished_results(result_path=result_folder)
-
-        list_with_all_paths_to_check = self.get_list_of_all_relevant_pyam_data_folders(
-            result_path=result_folder
-        )
-
-        print(
-            "len of list with all paths to containing pyam data ",
-            len(list_with_all_paths_to_check),
-        )
-        list_with_all_paths_to_check_after_filtering = self.filter_results_that_failed_to_heat_or_cool_building_sufficiently(
-            list_of_result_path_that_contain_pyam_data=list_with_all_paths_to_check
-        )
-        print(
-            "len of list with all paths after filtering ",
-            len(list_with_all_paths_to_check),
-        )
-        list_with_pyam_data_folders = self.go_through_all_pyam_data_folders_and_check_if_module_configs_are_double_somewhere(
-            list_of_pyam_folder_paths_to_check=list_with_all_paths_to_check_after_filtering
-        )
-        print(
-            "len of list with all paths after double checking for duplicates ",
-            len(list_with_pyam_data_folders),
-        )
+        list_with_pyam_data_folders = self.get_only_useful_data(result_path=result_folder) 
 
         if data_processing_mode == PyamDataProcessingModeEnum.PROCESS_ALL_DATA:
 
@@ -173,6 +150,38 @@ class PyamDataCollector:
         )
 
         print("\n")
+
+    def get_only_useful_data(self, result_path: str) -> List[str]:
+        """Go through all result folders and filter only useful data and write unuseful data into txt file."""
+
+        # go through result path and if the dirs do not contain finished.flag ask for deletion
+        self.clean_result_directory_from_unfinished_results(result_path=result_path)
+
+        # get result folders with pyam data folder
+        list_with_all_paths_to_check = self.get_list_of_all_relevant_pyam_data_folders(
+            result_path=result_path
+        )
+        print(
+            "len of list with all paths to containing pyam data ",
+            len(list_with_all_paths_to_check),
+        )
+        # filter out results that had buildings that were too hot or too cold
+        list_with_all_paths_to_check_after_filtering = self.filter_results_that_failed_to_heat_or_cool_building_sufficiently(
+            list_of_result_path_that_contain_pyam_data=list_with_all_paths_to_check
+        )
+        print(
+            "len of list with all paths after filtering ",
+            len(list_with_all_paths_to_check),
+        )
+        # check if duplicates are existing and ask for deletion
+        list_with_pyam_data_folders = self.go_through_all_pyam_data_folders_and_check_if_module_configs_are_double_somewhere(
+            list_of_pyam_folder_paths_to_check=list_with_all_paths_to_check_after_filtering
+        )
+        print(
+            "len of list with all paths after double checking for duplicates ",
+            len(list_with_pyam_data_folders),
+        )
+        return list_with_pyam_data_folders
 
     def clean_result_directory_from_unfinished_results(self, result_path: str) -> None:
         """When a result folder does not contain the finished_flag, it will be removed from the system_setups/result folder."""

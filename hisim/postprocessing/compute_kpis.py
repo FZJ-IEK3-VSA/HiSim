@@ -19,9 +19,9 @@ from hisim import log
 from hisim.postprocessing.investment_cost_co2 import compute_investment_cost
 
 
-def building_temperature_control(
+def building_temperature_control_and_heating_load(
     results: pd.DataFrame, seconds_per_timestep: int, components: List[ComponentWrapper]
-) -> Tuple[Any, Any, float, float, float, float]:
+) -> Tuple[Any, Any, float, float, float, float, float]:
     """Check the building indoor air temperature.
 
     Check for all timesteps and count the
@@ -37,6 +37,8 @@ def building_temperature_control(
         if "Building" in wrapped_component.my_component.component_name:
             set_heating_temperature_in_celsius = getattr(wrapped_component.my_component, "set_heating_temperature_in_celsius")
             set_cooling_temperature_in_celsius = getattr(wrapped_component.my_component, "set_cooling_temperature_in_celsius")
+            # get heating load and heating ref temperature
+            heating_load_in_watt = getattr(wrapped_component.my_component, "my_building_information").max_thermal_building_demand_in_watt
             break
 
     for column in results.columns:
@@ -90,6 +92,7 @@ def building_temperature_control(
         temperature_hours_of_building_being_above_cooling_set_temperature,
         min_temperature_reached_in_celsius,
         max_temperature_reached_in_celsius,
+        heating_load_in_watt
     )
 
 
@@ -597,7 +600,8 @@ def compute_kpis(
         temperature_in_hours_of_building_being_above_cooling_set_temperature,
         min_temperature_reached_in_celsius,
         max_temperature_reached_in_celsius,
-    ) = building_temperature_control(
+        heating_load_in_watt,
+    ) = building_temperature_control_and_heating_load(
         results=results, seconds_per_timestep=simulation_parameters.seconds_per_timestep, components=components
     )
 
@@ -710,6 +714,13 @@ def compute_kpis(
             "Maximum building indoor air temperature reached:",
             f"{(max_temperature_reached_in_celsius):3.0f}",
             "°C",
+        ]
+    )
+    table.append(
+        [
+            "Building heating load:",
+            f"{(heating_load_in_watt):3.0f}",
+            "W",
         ]
     )
 

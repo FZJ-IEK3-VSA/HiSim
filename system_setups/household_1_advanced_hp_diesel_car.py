@@ -64,9 +64,13 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
     @classmethod
     def get_default(cls) -> "HouseholdAdvancedHPDieselCarConfig":
         """Get default HouseholdAdvancedHPDieselCarConfig."""
+
+        heating_reference_temperature_in_celsius: float = -7
+
         building_config = (
-            building.BuildingConfig.get_default_german_single_family_home()
+            building.BuildingConfig.get_default_german_single_family_home(heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius)
         )
+
         household_config = cls.get_scaled_default(building_config)
 
         household_config.hp_config.set_thermal_output_power_in_watt = (
@@ -80,15 +84,26 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
 
     @classmethod
     def get_scaled_default(
-        cls, building_config: building.BuildingConfig
+        cls,
+        building_config: building.BuildingConfig,
     ) -> "HouseholdAdvancedHPDieselCarConfig":
         """Get scaled default HouseholdAdvancedHPDieselCarConfig."""
 
-        heating_reference_temperature_in_celsius: float = -7
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0
 
         my_building_information = building.BuildingInformation(config=building_config)
 
+        hds_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
+            set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
+            set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
+            heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+            heating_reference_temperature_in_celsius=my_building_information.heating_reference_temperature_in_celsius
+        )
+        my_hds_controller_information = (
+            heat_distribution_system.HeatDistributionControllerInformation(
+                config=hds_controller_config
+            )
+        )
         household_config = HouseholdAdvancedHPDieselCarConfig(
             building_type="blub",
             number_of_apartments=int(my_building_information.number_of_apartments),
@@ -107,20 +122,25 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
                 predictive_control=False,
             ),
             building_config=building_config,
-            hds_controller_config=(
-                heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
-            ),
+            hds_controller_config=hds_controller_config,
             hds_config=(
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+                    temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
+                    water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
                 )
             ),
-            hp_controller_config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(),
+            hp_controller_config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(
+                heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
+            ),
             hp_config=advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-                heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+                heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+                heating_reference_temperature_in_celsius=my_building_information.heating_reference_temperature_in_celsius
             ),
             simple_hot_water_storage_config=simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-                heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+                max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
+                temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
+                heating_system_name="AdvancedHeatPumpHPLib",
+                water_mass_flow_rate_from_hds_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
             ),
             dhw_heatpump_config=generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
                 number_of_apartments=int(my_building_information.number_of_apartments)
@@ -153,17 +173,6 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
         )
         household_config.hp_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
             set_heating_threshold_outside_temperature_in_celsius
-        )
-
-        # set same heating reference temperature
-        household_config.hds_controller_config.heating_reference_temperature_in_celsius = (
-            heating_reference_temperature_in_celsius
-        )
-        household_config.hp_config.heating_reference_temperature_in_celsius = (
-            heating_reference_temperature_in_celsius
-        )
-        household_config.building_config.heating_reference_temperature_in_celsius = (
-            heating_reference_temperature_in_celsius
         )
 
         household_config.hp_config.flow_temperature_in_celsius = 21  # Todo: check value

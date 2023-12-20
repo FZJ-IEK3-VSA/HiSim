@@ -184,6 +184,8 @@ def setup_function(
             total_base_area_in_m2=None,
             number_of_apartments=number_of_apartments,
             predictive=False,
+            set_heating_temperature_in_celsius=19.0,
+            set_cooling_temperature_in_celsius=24.0,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )

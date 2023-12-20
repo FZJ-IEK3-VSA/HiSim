@@ -1309,12 +1309,10 @@ class FilterClass:
             # "CO2 emitted due energy use",
             # "Battery losses",
             # "Autarky rate",
-            # "Annual investment cost for equipment (old version)",
-            # "Annual CO2 Footprint for equipment (old version)",
-            # "Investment cost for equipment per simulated period",
-            # "CO2 footprint for equipment per simulated period",
-            # "System operational Cost for simulated period",
-            # "System operational Emissions for simulated period",
+            "Investment costs for equipment per simulated period",
+            "CO2 footprint for equipment per simulated period",
+            "System operational costs for simulated period",
+            "System operational emissions for simulated period",
             "Total costs for simulated period",
             "Total emissions for simulated period",
             "Temperature deviation of building indoor air temperature being below set temperature 19 °C",
@@ -1322,16 +1320,18 @@ class FilterClass:
             "Temperature deviation of building indoor air temperature being above set temperature 24 °C",
             "Maximum building indoor air temperature reached",
             "Number of heat pump cycles",
+            "Total energy from electricity grid",
+            "Total energy to electricity grid"
         ]
 
         electricity_data = [
             # "L2EMSElectricityController|Electricity|ElectricityToOrFromGrid",
             # "PVSystem_w0|Electricity|ElectricityOutput", # check if pv was used or not
-            # "ElectricityMeter|Electricity|ElectricityToGrid",
+            "ElectricityMeter|Electricity|ElectricityToGrid",
             "ElectricityMeter|Electricity|ElectricityFromGrid",
-            # "ElectricityMeter|Electricity|ElectricityAvailable",
-            # "ElectricityMeter|Electricity|ElectricityConsumption",
-            # "ElectricityMeter|Electricity|ElectricityProduction"
+            "ElectricityMeter|Electricity|ElectricityAvailable",
+            "ElectricityMeter|Electricity|ElectricityConsumption",
+            "ElectricityMeter|Electricity|ElectricityProduction"
         ]
 
         occuancy_consumption = [

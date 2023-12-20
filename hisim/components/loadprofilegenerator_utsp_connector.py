@@ -10,7 +10,7 @@ import json
 import os
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Any, Union
-
+import copy
 import pandas as pd
 from dataclasses_json import dataclass_json
 
@@ -642,19 +642,20 @@ class UtspLpgConnector(cp.Component):
         else:
             cache_dir_path = self.utsp_config.cache_dir_path
 
-        # config household is list of jsonreferences
-        if isinstance(self.utsp_config.household, List):
+        # config household is list of jsonreferences and no other guid than default is given ("")
+        if isinstance(self.utsp_config.household, List) and self.utsp_config.guid == "":
+            # get specific guid list in order to prevent duplicated requests
+            guid_list = self.vary_guids_for_lpg_utsp_requests_if_config_household_is_a_list_and_contains_duplicated_household_types()
 
-            for household in self.utsp_config.household:
+            for index, household in enumerate(self.utsp_config.household):
 
                 # make new config object with only one household in order to find local cache in cache_dir_path
                 new_config_object = self.utsp_config
                 new_config_object.household = household
+                new_config_object.guid = guid_list[index]
 
                 file_exists, cache_filepath = utils.get_cache_file(
-                    component_key=self.component_name
-                    + "_"
-                    + str(new_config_object.household),
+                    component_key=self.component_name,
                     parameter_class=new_config_object,
                     my_simulation_parameters=self.my_simulation_parameters,
                     cache_dir_path=cache_dir_path,
@@ -667,9 +668,7 @@ class UtspLpgConnector(cp.Component):
         else:
 
             file_exists, cache_filepath = utils.get_cache_file(
-                component_key=self.component_name
-                + "_"
-                + str(self.utsp_config.household),
+                component_key=self.component_name,
                 parameter_class=self.utsp_config,
                 my_simulation_parameters=self.my_simulation_parameters,
                 cache_dir_path=cache_dir_path,
@@ -677,6 +676,27 @@ class UtspLpgConnector(cp.Component):
             list_of_file_exists_and_cache_files.append([file_exists, cache_filepath])
 
         return list_of_file_exists_and_cache_files
+
+    def vary_guids_for_lpg_utsp_requests_if_config_household_is_a_list_and_contains_duplicated_household_types(self) -> List[str]:
+        """In case the lpg_utsp_connector config is given a list of households, it will be checked if the list contains any duplicates.
+
+        If so, for each duplicate the guid will be varied to make sure that each lpg request delivers a unique profile.
+        """
+        # check if household is list and return guid list
+        if isinstance(self.utsp_config.household, List):
+            copied_households = copy.deepcopy(self.utsp_config.household)
+            guid_list = []
+
+            for household in self.utsp_config.household:
+
+                number_of_duplicated_households = copied_households.count(household)
+                if number_of_duplicated_households == 1:
+                    guid_list.append(str(1))
+                elif number_of_duplicated_households > 1:
+                    guid_list.append(str(number_of_duplicated_households))
+                    copied_households.remove(household)
+
+        return guid_list
 
     def calculate_one_lpg_request(
         self, simulation_config: HouseCreationAndCalculationJob, guid: str
@@ -709,17 +729,24 @@ class UtspLpgConnector(cp.Component):
             self.utsp_config.url, request, self.utsp_config.api_key
         )
 
+        # decode required result files
         electricity_file = result.data[electricity].decode()
         warm_water_file = result.data[warm_water].decode()
         inner_device_heat_gains_file = result.data[inner_device_heat_gains].decode()
         high_activity_file = result.data[high_activity].decode()
         low_activity_file = result.data[low_activity].decode()
-        flexibility_file = result.data[flexibility].decode()
 
-        # Save flexibility and transportation files
         saved_files: List[str] = []
-        path = self.save_result_file(name=flexibility, content=flexibility_file)
-        saved_files.append(path)
+        # try to decode and save optional flexibility result files if available
+        try:
+            flexibility_file = result.data[flexibility].decode()
+            # Save flexibility
+            path = self.save_result_file(name=flexibility, content=flexibility_file)
+            saved_files.append(path)
+        except Exception:
+            pass
+
+        # decode and save transportation files
         for filename in itertools.chain(
             car_states.keys(), car_locations.keys(), driving_distances.keys()
         ):
@@ -782,7 +809,6 @@ class UtspLpgConnector(cp.Component):
         inner_device_heat_gains_file: List = []
         high_activity_file: List = []
         low_activity_file: List = []
-        flexibility_file: List = []
         saved_files: List = []
 
         for result in results:
@@ -799,14 +825,20 @@ class UtspLpgConnector(cp.Component):
             ].decode()
             high_activity_file_one_result = result.data[high_activity].decode()
             low_activity_file_one_result = result.data[low_activity].decode()
-            flexibility_file_one_result = result.data[flexibility].decode()
 
-            # Save flexibility and transportation files
             saved_files_one_result: List = []
-            path = self.save_result_file(
+            # try to decode and save optional flexibility result files if available
+            try:
+                flexibility_file_one_result = result.data[flexibility].decode()
+                # Save flexibility
+                path = self.save_result_file(
                 name=flexibility, content=flexibility_file_one_result
-            )
-            saved_files_one_result.append(path)
+                )
+                saved_files_one_result.append(path)
+            except Exception:
+                pass
+
+            # decode and save transportation files
             for filename in itertools.chain(
                 car_states.keys(), car_locations.keys(), driving_distances.keys()
             ):
@@ -822,7 +854,6 @@ class UtspLpgConnector(cp.Component):
             inner_device_heat_gains_file.append(inner_device_heat_gains_file_one_result)
             high_activity_file.append(high_activity_file_one_result)
             low_activity_file.append(low_activity_file_one_result)
-            flexibility_file.append(flexibility_file_one_result)
             saved_files.append(saved_files_one_result)
 
         return (
@@ -889,9 +920,10 @@ class UtspLpgConnector(cp.Component):
                 inner_device_heat_gains,
                 high_activity,
                 low_activity,
-                flexibility,
             ]
         }
+        optional_files = {
+            flexibility: datastructures.ResultFileRequirement.OPTIONAL}
         # Define transportation result files
         car_states = result_file_filters.LPGFilters.all_car_states_optional()
         car_locations = result_file_filters.LPGFilters.all_car_locations_optional()
@@ -900,6 +932,7 @@ class UtspLpgConnector(cp.Component):
         )
         result_files: Dict[str, Optional[datastructures.ResultFileRequirement]] = {
             **required_files,
+            **optional_files,
             **car_states,
             **car_locations,
             **driving_distances,

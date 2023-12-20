@@ -48,6 +48,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
     volume_heating_water_storage_in_liter: float
     temperature_loss_in_celsius_per_hour: float
     heat_exchanger_is_present: bool
+    water_mass_flow_rate_from_hds_in_kg_per_second: float
     #: CO2 footprint of investment in kg
     co2_footprint: float
     #: cost for investment in Euro
@@ -59,13 +60,14 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
 
     @classmethod
     def get_default_simplehotwaterstorage_config(
-        cls,
+        cls, water_mass_flow_rate_from_hds_in_kg_per_second: float
     ) -> "SimpleHotWaterStorageConfig":
         """Get a default simplehotwaterstorage config."""
         volume_heating_water_storage_in_liter: float = 500
         config = SimpleHotWaterStorageConfig(
             name="SimpleHotWaterStorage",
             volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
+            water_mass_flow_rate_from_hds_in_kg_per_second=water_mass_flow_rate_from_hds_in_kg_per_second,
             # https://www.energieverbraucher.de/de/heizungsspeicher__2102/#:~:text=Ein%20Speicher%20k%C3%BChlt%20t%C3%A4glich%20etwa,heutigen%20Energiepreisen%20t%C3%A4glich%2020%20Cent.
             temperature_loss_in_celsius_per_hour=0.125,  # is the same as 3°C/day (see link)
             heat_exchanger_is_present=True,  # until now stratified mode is causing problems, so heat exchanger mode is recommended
@@ -79,21 +81,50 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
 
     @classmethod
     def get_scaled_hot_water_storage(
-        cls, heating_load_of_building_in_watt: float
+        cls,
+        max_thermal_power_in_watt_of_heating_system: float,
+        water_mass_flow_rate_from_hds_in_kg_per_second: float,
+        temperature_difference_between_flow_and_return_in_celsius: float = 7.0,
+        heating_system_name: str = "AdvancedHeatPumpHPLib",
     ) -> "SimpleHotWaterStorageConfig":
-        """Gets a default storage with scaling according to heating load of the building."""
+        """Gets a default storage with scaling according to heating load of the building.
 
-        set_thermal_output_power_in_watt = heating_load_of_building_in_watt
+        The information for scaling the buffer storage is taken from the heating system guidelines from Buderus:
+        https://www.baunetzwissen.de/heizung/fachwissen/speicher/dimensionierung-von-pufferspeichern-161296
 
-        # https://www.baunetzwissen.de/heizung/fachwissen/speicher/dimensionierung-von-pufferspeichern-161296
-        # approx. 60l per kW power of heating system
-        # here we say power heating system should correspond to heating load of building
-        # (see also https://www.sciencedirect.com/science/article/pii/S2352152X2201533X?via%3Dihub)
-        volume_heating_water_storage_in_liter: float = (
-            set_thermal_output_power_in_watt * 1e-3 * 60
-        )
+        - If the heating system is a heat pump -> use formular:
+        buffer storage size [m3] =
+        (max. thermal power of heat pump [kW]* bridging time [h])
+        /
+        (spec. heat capacity water [Wh/(kg*K)]* temperature difference flow-return [K])
+        with bridging time = 1h
+        You can also check the paper:
+        https://www.sciencedirect.com/science/article/pii/S2352152X2201533X?via%3Dihub.
+
+        - If the heating system is something else (e.g. gasheater, ...), use approximation: 60l per kW thermal power.
+        """
+
+        # if the used heating system is a heat pump use formular
+        if "HeatPump" in heating_system_name:
+
+            volume_heating_water_storage_in_liter: float = (
+                max_thermal_power_in_watt_of_heating_system
+                * 1e-3
+                / (
+                    PhysicsConfig.water_specific_heat_capacity_in_watthour_per_kilogramm_per_kelvin
+                    * temperature_difference_between_flow_and_return_in_celsius
+                )
+            ) * 1000  # 1m3 = 1000l
+
+        # otherwise use approximation: 60l per kw thermal power
+        else:
+            volume_heating_water_storage_in_liter = (
+                max_thermal_power_in_watt_of_heating_system * 1e3 * 60
+            )
+
         config = SimpleHotWaterStorageConfig(
             name="SimpleHotWaterStorage",
+            water_mass_flow_rate_from_hds_in_kg_per_second=water_mass_flow_rate_from_hds_in_kg_per_second,
             volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
             # https://www.energieverbraucher.de/de/heizungsspeicher__2102/#:~:text=Ein%20Speicher%20k%C3%BChlt%20t%C3%A4glich%20etwa,heutigen%20Energiepreisen%20t%C3%A4glich%2020%20Cent.
             temperature_loss_in_celsius_per_hour=0.125,  # is the same as 3°C/day (see link)
@@ -172,18 +203,8 @@ class SimpleHotWaterStorage(cp.Component):
 
         self.mean_water_temperature_in_water_storage_in_celsius: float = 21
 
-        if SingletonSimRepository().exist_entry(
-            key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATINGDISTRIBUTIONSYSTEM
-        ):
-            self.water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATINGDISTRIBUTIONSYSTEM
-            )
-        else:
-            raise KeyError(
-                "Keys for water mass flow rate of heating distribution system was not found in the singleton sim repository."
-                + "This might be because the heating_distribution_system was not initialized before the simple hot water storage."
-                + "Please check the order of the initialization of the components in your system setup."
-            )
+        self.water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second = self.waterstorageconfig.water_mass_flow_rate_from_hds_in_kg_per_second
+
         if SingletonSimRepository().exist_entry(
             key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR
         ):
@@ -301,11 +322,17 @@ class SimpleHotWaterStorage(cp.Component):
             lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.StandbyHeatLoss} will follow.",
         )
-        self.add_default_connections(self.get_default_connections_from_heat_distribution_system())
-        self.add_default_connections(self.get_default_connections_from_advanced_heat_pump())
+        self.add_default_connections(
+            self.get_default_connections_from_heat_distribution_system()
+        )
+        self.add_default_connections(
+            self.get_default_connections_from_advanced_heat_pump()
+        )
         self.add_default_connections(self.get_default_connections_from_gasheater())
 
-    def get_default_connections_from_heat_distribution_system(self) -> List[cp.ComponentConnection]:
+    def get_default_connections_from_heat_distribution_system(
+        self,
+    ) -> List[cp.ComponentConnection]:
         """Get heat distribution default connections."""
 
         # use importlib for importing the other component in order to avoid circular-import errors
@@ -323,7 +350,9 @@ class SimpleHotWaterStorage(cp.Component):
         )
         return connections
 
-    def get_default_connections_from_advanced_heat_pump(self) -> List[cp.ComponentConnection]:
+    def get_default_connections_from_advanced_heat_pump(
+        self,
+    ) -> List[cp.ComponentConnection]:
         """Get advanced het pump default connections."""
 
         # use importlib for importing the other component in order to avoid circular-import errors

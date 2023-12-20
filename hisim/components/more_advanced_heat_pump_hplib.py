@@ -8,6 +8,8 @@ priority on dhw, if there is a demand from both in one timestep
 
 preparation on district heating for water/water heatpumps
 
+don't work with regulated generic hp group --> todo
+
 """
 from typing import Any, List, Optional, Tuple, Dict
 import hashlib
@@ -172,9 +174,9 @@ class HeatPumpHplib(Component):
     TimeOn = "TimeOn"  # s
     TimeOff = "TimeOff"  # s
     ThermalPowerFromEnvironment = "ThermalPowerInputFromEnvironment"   #W
-    mdotWaterPrimaryDHNet = "MassflowHXBuildingDHNnet"                  # kg/s
-    WaterTemperatureHXIn = "TemperatureFromDHWNetInHX"          # °C
-    WaterTemperatureHXOut = "TemperatureToDHWNetOutHX"          # °C
+    mdotWaterPrimaryDHNet = "MassflowPrimary"                  # kg/s
+    WaterTemperatureHXIn = "TemperaturePrimaryIn"          # °C
+    WaterTemperatureHXOut = "TemperaturePrimaryOut"          # °C
 
 
 

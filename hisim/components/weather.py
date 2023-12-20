@@ -1080,10 +1080,8 @@ def read_dwd_data(filepath: str, year: int) -> pd.DataFrame:
                 "WR": "Wdir",
             }
         )
-        print("test")
         # calculate direct normal
         data["DNI"] = calculate_direct_normal_radiation(data["B"], lon, lat)
-        print(data)
     return data
 
 
@@ -1128,7 +1126,9 @@ def read_nsrdb_15min_data(filepath: str, year: int) -> pd.DataFrame:
     return data
 
 def read_dwd_simulation_data_10min(filepath: str, year: int) -> pd.DataFrame:
-    """Reads a set of OWN DWD data in 10 min resolution."""
+    """Reads a set of OWN DWD data in 10 min resolution.
+     Einbindung von "wetterdienst" repository folgt!
+     https://github.com/earthobservations/wetterdienst/tree/main """
     data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0,1])
     # get data
     data.index = pd.date_range(

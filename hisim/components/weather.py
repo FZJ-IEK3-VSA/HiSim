@@ -1080,10 +1080,8 @@ def read_dwd_data(filepath: str, year: int) -> pd.DataFrame:
                 "WR": "Wdir",
             }
         )
-
         # calculate direct normal
         data["DNI"] = calculate_direct_normal_radiation(data["B"], lon, lat)
-        print(data)
     return data
 
 

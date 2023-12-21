@@ -32,7 +32,6 @@ from hisim.loadtypes import LoadTypes, Units, InandOutputType
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
 from hisim import log
-from hisim.components import generic_hot_water_storage_modular
 from hisim.components.configuration import PhysicsConfig
 
 __authors__ = "Jonas Hoppe"
@@ -78,19 +77,22 @@ class HeatPumpHplibConfig(ConfigBase):
     consumption: float
 
     @classmethod
-    def get_default_generic_advanced_hp_lib(cls) -> "HeatPumpHplibConfig":
+    def get_default_generic_advanced_hp_lib(
+        cls,
+        set_thermal_output_power_in_watt: float = 8000,
+        heating_reference_temperature_in_celsius: float = -7.0,
+    ) -> "HeatPumpHplibConfig":
         """Gets a default HPLib Heat Pump.
 
         see default values for air/water hp on:
         https://github.com/FZJ-IEK3-VSA/hplib/blob/main/hplib/hplib.py l.135 "fit_p_th_ref.
         """
-        set_thermal_output_power_in_watt: float = 8000
         return HeatPumpHplibConfig(
             name="AdvancedHeatPumpHPLib",
             model="Generic",
             heat_source="air",
             group_id=4,
-            heating_reference_temperature_in_celsius=-7,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
             flow_temperature_in_celsius=52,
             set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
             cycling_mode=True,
@@ -110,7 +112,9 @@ class HeatPumpHplibConfig(ConfigBase):
 
     @classmethod
     def get_scaled_advanced_hp_lib(
-        cls, heating_load_of_building_in_watt: float
+        cls,
+        heating_load_of_building_in_watt: float,
+        heating_reference_temperature_in_celsius: float = -7.0,
     ) -> "HeatPumpHplibConfig":
         """Gets a default heat pump with scaling according to heating load of the building."""
 
@@ -119,13 +123,15 @@ class HeatPumpHplibConfig(ConfigBase):
         return HeatPumpHplibConfig(
             name="AdvancedHeatPumpHPLib",
             model="Generic",
+            heat_source="air",
             group_id=4,
-            heating_reference_temperature_in_celsius=-7,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
             flow_temperature_in_celsius=52,
             set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
             cycling_mode=True,
             minimum_running_time_in_seconds=600,
             minimum_idle_time_in_seconds=600,
+            hx_building_temp_diff=2,
             co2_footprint=set_thermal_output_power_in_watt
             * 1e-3
             * 165.84,  # value from emission_factros_and_costs_devices.csv

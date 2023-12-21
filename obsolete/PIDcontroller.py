@@ -76,7 +76,7 @@ class PIDControllerOne(cp.Component):
         super().__init__(
             name=self.pid_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
-            my_config=config
+            my_config=config,
         )
         self.build()
         # --------------------------------------------------

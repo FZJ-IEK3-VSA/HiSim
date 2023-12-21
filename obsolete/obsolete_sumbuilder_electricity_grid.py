@@ -11,6 +11,7 @@ from hisim import utils
 from hisim.component import Component
 from hisim.simulationparameters import SimulationParameters
 
+
 @dataclass_json
 @dataclass
 class ElectricityGridConfig(cp.ConfigBase):

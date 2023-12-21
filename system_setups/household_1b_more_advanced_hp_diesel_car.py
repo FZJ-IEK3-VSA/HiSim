@@ -31,19 +31,19 @@ from hisim import loadtypes as lt
 
 from system_setups.modular_example import cleanup_old_lpg_requests
 
-__authors__ = ["Markus Blasberg", "Kevin Knosala"]
-__copyright__ = "Copyright 2023, FZJ-IEK-3"
-__credits__ = ["Noah Pflugradt"]
-__license__ = "MIT"
-__version__ = "1.0"
-__maintainer__ = "Markus Blasberg"
-__status__ = "development"
+__authors__ = ["Jonas Hoppe"]
+__copyright__ = ""
+__credits__ = [""]
+__license__ = ""
+__version__ = ""
+__maintainer__ = ""
+__status__ = ""
 
 
 @dataclass
-class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
+class HouseholdMoreAdvancedHPDieselCarConfig(SystemSetupConfigBase):
 
-    """Configuration for with advanced heat pump and diesel car."""
+    """Configuration for with more advanced heat pump and diesel car."""
 
     building_type: str
     number_of_apartments: int
@@ -60,8 +60,8 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
     electricity_meter_config: electricity_meter.ElectricityMeterConfig
 
     @classmethod
-    def get_default(cls) -> "HouseholdAdvancedHPDieselCarConfig":
-        """Get default HouseholdAdvancedHPDieselCarConfig."""
+    def get_default(cls) -> "HouseholdMoreAdvancedHPDieselCarConfig":
+        """Get default HouseholdMoreAdvancedHPDieselCarConfig."""
 
         heating_reference_temperature_in_celsius: float = -7
 
@@ -84,8 +84,8 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
     def get_scaled_default(
         cls,
         building_config: building.BuildingConfig,
-    ) -> "HouseholdAdvancedHPDieselCarConfig":
-        """Get scaled default HouseholdAdvancedHPDieselCarConfig."""
+    ) -> "HouseholdMoreAdvancedHPDieselCarConfig":
+        """Get scaled default HouseholdMoreAdvancedHPDieselCarConfig."""
 
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0
 
@@ -102,7 +102,7 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
                 config=hds_controller_config
             )
         )
-        household_config = HouseholdAdvancedHPDieselCarConfig(
+        household_config = HouseholdMoreAdvancedHPDieselCarConfig(
             building_type="blub",
             number_of_apartments=int(my_building_information.number_of_apartments),
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
@@ -149,7 +149,8 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
         )
 
         # adjust HeatPump
-        household_config.hp_config.group_id = 1  # use modulating heatpump as default
+       # household_config.hp_config.group_id = 1  # use modulating heatpump as default
+        household_config.hp_config.model = "WPL 25 A"  # Stiebel WP --> hplib_database_ALL
         household_config.hp_controller_config.mode = (
             2  # use heating and cooling as default
         )
@@ -177,7 +178,7 @@ def setup_function(
     my_sim: Any,
     my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
-    """System setup with advanced hp and diesel car.
+    """System setup with more advanced hp and diesel car.
 
     This setup function emulates a household with some basic components. Here the residents have their
     electricity and heating needs covered by a the advanced heat pump.
@@ -204,11 +205,11 @@ def setup_function(
         cleanup_old_lpg_requests()
 
     if my_sim.my_module_config_path:
-        my_config = HouseholdAdvancedHPDieselCarConfig.load_from_json(
+        my_config = HouseholdMoreAdvancedHPDieselCarConfig.load_from_json(
             my_sim.my_module_config_path
         )
     else:
-        my_config = HouseholdAdvancedHPDieselCarConfig.get_default()
+        my_config = HouseholdMoreAdvancedHPDieselCarConfig.get_default()
 
     # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
     # my_config_json = my_config.to_json()
@@ -228,8 +229,8 @@ def setup_function(
     # Build Simulation Parameters
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year_all_options(
-            year=year, seconds_per_timestep=seconds_per_timestep
-        )
+            year=year, seconds_per_timestep=seconds_per_timestep)
+
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build heat Distribution System Controller
@@ -443,10 +444,3 @@ def setup_function(
         my_sim.add_component(my_car)
 
 
-import hisim.hisim_main
-
-def sim():
-    hisim.hisim_main.main("household_1b_more_advanced_hp_diesel_car.py")
-
-
-sim()

@@ -636,7 +636,7 @@ class HeatPumpHplib(Component):
         # OnOffSwitch
         if on_off == 1:
             # Calulate outputs for heating mode
-            results = self.get_cached_results_or_run_hplib_simulation( #hpl.simulate(
+            results = hpl.simulate(
                 t_in_primary=t_in_primary,
                 t_in_secondary=t_in_secondary_hot_water,
                 parameters=self.parameters,
@@ -659,7 +659,7 @@ class HeatPumpHplib(Component):
 
         elif on_off == 2:                                  # Calculate outputs for dhw mode
             if const_thermal_power_truefalse_DHW == False:    # False=modulation
-                results = self.get_cached_results_or_run_hplib_simulation( #hpl.simulate(
+                results = hpl.simulate(
                     t_in_primary=t_in_primary,
                     t_in_secondary=t_in_secondary_dhw,
                     parameters=self.parameters,
@@ -682,7 +682,7 @@ class HeatPumpHplib(Component):
              #   print("t_out_WP_dhw  " + str(t_out_dhw))
 
             elif const_thermal_power_truefalse_DHW == True:             # True = constante thermische Leistung
-                results = self.get_cached_results_or_run_hplib_simulation( #hpl.simulate(
+                results = hpl.simulate(
                     t_in_primary=t_in_primary,
                     t_in_secondary=t_in_secondary_dhw,
                     parameters=self.parameters,
@@ -706,7 +706,7 @@ class HeatPumpHplib(Component):
 
         elif on_off == -1:
             # Calulate outputs for cooling mode
-            results = self.get_cached_results_or_run_hplib_simulation( #hpl.simulate(
+            results = hpl.simulate(
                 t_in_primary=t_in_primary,
                 t_in_secondary=t_in_secondary_hot_water,
                 parameters=self.parameters,

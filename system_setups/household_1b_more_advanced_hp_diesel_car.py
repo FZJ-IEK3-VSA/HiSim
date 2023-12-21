@@ -27,6 +27,7 @@ from hisim.components import electricity_meter
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.system_setup_configuration import SystemSetupConfigBase
 from hisim import utils
+from hisim import loadtypes as lt
 
 from system_setups.modular_example import cleanup_old_lpg_requests
 
@@ -331,13 +332,31 @@ def setup_function(
     )
 
     # =================================================================================================================================
+    # =================================================================================================================================
     # Connect Components
+    my_building.connect_only_predefined_connections(my_weather)
+    my_building.connect_only_predefined_connections(my_occupancy)
 
+    my_building.connect_input(
+        my_building.ThermalPowerDelivered,
+        my_heat_distribution.component_name,
+        my_heat_distribution.ThermalPowerDelivered,
+    )
+
+    #################################
+    my_heat_distribution_controller.connect_only_predefined_connections(
+        my_weather, my_building, my_hot_water_storage
+    )
+
+    my_heat_distribution.connect_only_predefined_connections(
+        my_building, my_heat_distribution_controller, my_hot_water_storage)
+
+    #################################
     my_heatpump.connect_only_predefined_connections(
         my_heatpump_controller_hotWater, my_heatpump_controller_dhw, my_weather, my_hot_water_storage,
         my_dhw_storage)
 
-    # Verknüpfung mit Luft als Umgebungswärmeqzuelle
+    # Verknüpfung mit Luft als Umgebungswärmequelle
     if my_heatpump.parameters['Group'].iloc[0] == 1.0 or my_heatpump.parameters['Group'].iloc[
         0] == 4.0:
         my_heatpump.connect_input(
@@ -349,39 +368,77 @@ def setup_function(
         raise KeyError(
             "Wasser oder Sole als primäres Wärmeträgermedium muss über extra Wärmenetz-Modell noch bereitgestellt werden")
 
-    my_dhw_storage.connect_input(
-        my_dhw_storage.ThermalPowerDelivered,
-        my_heatpump.component_name,
-        my_heatpump.ThermalOutputPowerDHW,
-    )
-    my_hot_water_storage.connect_input(
-        my_hot_water_storage.WaterMassFlowRateFromHeatGenerator,
-        my_heatpump.component_name,
-        my_heatpump.MassFlowOutputHotWater,
-    )
-    my_hot_water_storage.connect_input(
-        my_hot_water_storage.WaterTemperatureFromHeatGenerator,
-        my_heatpump.component_name,
-        my_heatpump.TemperatureOutputHotWater,
-    )
+        # todo: Water and Brine Connection
+
     my_heatpump_controller_hotWater.connect_only_predefined_connections(my_heat_distribution_controller,
                                                                         my_weather,
                                                                         my_hot_water_storage)
 
     my_heatpump_controller_dhw.connect_only_predefined_connections(my_dhw_storage)
+
+    #################################
+    my_hot_water_storage.connect_input(
+        my_hot_water_storage.WaterTemperatureFromHeatDistribution,
+        my_heat_distribution.component_name,
+        my_heat_distribution.WaterTemperatureOutput,
+    )
+
+    my_hot_water_storage.connect_input(
+        my_hot_water_storage.WaterTemperatureFromHeatGenerator,
+        my_heatpump.component_name,
+        my_heatpump.TemperatureOutputHotWater,
+    )
+
+    my_hot_water_storage.connect_input(
+        my_hot_water_storage.WaterMassFlowRateFromHeatGenerator,
+        my_heatpump.component_name,
+        my_heatpump.MassFlowOutputHotWater,
+    )
+
+    #################################
+
+    my_dhw_storage.connect_only_predefined_connections(my_occupancy)
+    my_dhw_storage.connect_input(
+        my_dhw_storage.ThermalPowerDelivered,
+        my_heatpump.component_name,
+        my_heatpump.ThermalOutputPowerDHW,
+    )
+
+    ################################
+
+    my_electricity_meter.add_component_input_and_connect(
+        source_object_name=my_occupancy.component_name,
+        source_component_output=my_occupancy.ElectricityOutput,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+        source_weight=999,
+    )
+
+    my_electricity_meter.add_component_input_and_connect(
+        source_object_name=my_heatpump.component_name,
+        source_component_output=my_heatpump.ElectricalInputPowerGesamt,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[
+            lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+        ],
+        source_weight=999,
+    )
+
     # =================================================================================================================================
     # Add Components to Simulation Parameters
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_weather)
-    my_sim.add_component(my_building, connect_automatically=True)
+    my_sim.add_component(my_building)
     my_sim.add_component(my_heatpump)
     my_sim.add_component(my_heatpump_controller_hotWater)
     my_sim.add_component(my_heatpump_controller_dhw)
-    my_sim.add_component(my_heat_distribution, connect_automatically=True)
-    my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
-    my_sim.add_component(my_hot_water_storage, connect_automatically=True)
-    my_sim.add_component(my_dhw_storage, connect_automatically=True)
-    my_sim.add_component(my_electricity_meter, connect_automatically=True)
+    my_sim.add_component(my_heat_distribution)
+    my_sim.add_component(my_heat_distribution_controller)
+    my_sim.add_component(my_hot_water_storage)
+    my_sim.add_component(my_dhw_storage)
+    my_sim.add_component(my_electricity_meter)
     for my_car in my_cars:
         my_sim.add_component(my_car)
 

@@ -247,7 +247,7 @@ class L1HeatPumpController(cp.Component):
             Units.CELSIUS,
             mandatory=False,
         )
-    
+
         self.add_default_connections(
             self.get_default_connections_generic_hot_water_storage_modular()
         )

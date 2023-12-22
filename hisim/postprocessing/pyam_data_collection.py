@@ -44,7 +44,7 @@ class PyamDataCollector:
 
         log.information(f"Checking results from folder: {result_folder}")
 
-        list_with_pyam_data_folders = self.get_only_useful_data(result_path=result_folder) 
+        list_with_pyam_data_folders = self.get_only_useful_data(result_path=result_folder)
 
         if data_processing_mode == PyamDataProcessingModeEnum.PROCESS_ALL_DATA:
 

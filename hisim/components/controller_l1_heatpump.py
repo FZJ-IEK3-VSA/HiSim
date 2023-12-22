@@ -248,6 +248,7 @@ class L1HeatPumpController(cp.Component):
             mandatory=False,
         )
 
+        
         self.add_default_connections(
             self.get_default_connections_generic_hot_water_storage_modular()
         )

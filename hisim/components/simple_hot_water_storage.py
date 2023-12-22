@@ -656,7 +656,7 @@ class SimpleHotWaterStorage(cp.Component):
         self.storage_surface_in_m2 = self.calculate_surface_area_of_storage(
             storage_volume_in_liter=self.waterstorageconfig.volume_heating_water_storage_in_liter,
         )
-        print("hws heat transfer coeff und of", self.heat_transfer_coefficient_in_watt_per_m2_per_kelvin, self.storage_surface_in_m2)
+
         # the ambient temperature is here assumed as the basement temperature which is all year 17°C, this is where the water storage is located
         self.ambient_temperature_in_celsius = 17.0
 
@@ -760,26 +760,6 @@ class SimpleHotWaterStorage(cp.Component):
 
         return water_temperature_output_in_celsius
 
-    # def calculate_temperature_loss(
-    #     self,
-    #     mean_water_temperature_in_water_storage_in_celsius: float,
-    #     seconds_per_timestep: float,
-    #     temperature_loss_in_celsius_per_hour: float,
-    # ) -> float:
-    #     """Calculate temperature loss in celsius per timestep."""
-
-    #     # make heat loss for mean storage temperature every timestep but only until min temp of 17°C is reached (approx. basement temperature)
-    #     # this is of course just an approximation. the real heat loss depends on water temp, outside temp, isolation and volume
-
-    #     if mean_water_temperature_in_water_storage_in_celsius >= 17.0:
-    #         temperature_loss_in_celsius_per_timestep = (
-    #             temperature_loss_in_celsius_per_hour / (3600 / seconds_per_timestep)
-    #         )
-    #     else:
-    #         temperature_loss_in_celsius_per_timestep = 0
-
-    #     return temperature_loss_in_celsius_per_timestep
-
     def calculate_heat_loss_and_temperature_loss(
         self,
         storage_surface_in_m2: float,
@@ -799,14 +779,14 @@ class SimpleHotWaterStorage(cp.Component):
         )
 
         # basis here: Q = m * cw * delta temperature, temperature loss is another term for delta temperature here
-        temperature_loss_in_celsius_per_hour = heat_loss_in_watt / (
+        temperature_loss_of_water_in_celsius_per_hour = heat_loss_in_watt / (
             self.specific_heat_capacity_of_water_in_watthour_per_kilogram_per_celsius
             * mass_in_storage_in_kg
         )
 
         # transform from °C/h to °C/timestep
         temperature_loss_in_celsius_per_timestep = (
-            temperature_loss_in_celsius_per_hour / (3600 / seconds_per_timestep)
+            temperature_loss_of_water_in_celsius_per_hour / (3600 / seconds_per_timestep)
         )
 
         return heat_loss_in_watt, temperature_loss_in_celsius_per_timestep
@@ -824,7 +804,6 @@ class SimpleHotWaterStorage(cp.Component):
         """
 
         # loss = heat coeff * surface * delta temperature
-
         heat_loss_in_watt = (
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin
             * storage_surface_in_m2

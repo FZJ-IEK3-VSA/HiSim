@@ -161,12 +161,12 @@ class HeatPumpConfig(cp.ConfigBase):
 
     @classmethod
     def get_scaled_waterheating_to_number_of_apartments(
-        cls, number_of_apartments: float
+        cls, number_of_apartments: float, default_power_in_watt: float = 3000
     ) -> "HeatPumpConfig":
         """Gets a default heat pump with scaling according to number of apartments."""
 
         # scale with number of apartments
-        power_th_in_watt: float = 3000 * number_of_apartments
+        power_th_in_watt: float = default_power_in_watt * number_of_apartments
         config = HeatPumpConfig(
             name="DHWHeatPump",
             source_weight=1,

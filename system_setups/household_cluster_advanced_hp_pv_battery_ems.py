@@ -309,7 +309,7 @@ def setup_function(
 
     # Build DHW (this is taken from household_3_advanced_hp_diesel-car_pv_battery.py)
     my_dhw_heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
-        number_of_apartments=my_building_information.number_of_apartments
+        number_of_apartments=my_building_information.number_of_apartments, default_power_in_watt=6000
     )
 
     my_dhw_heatpump_controller_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
@@ -317,7 +317,7 @@ def setup_function(
     )
 
     my_dhw_storage_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
-        number_of_apartments=my_building_information.number_of_apartments
+        number_of_apartments=my_building_information.number_of_apartments, default_volume_in_liter=450
     )
     my_dhw_storage_config.compute_default_cycle(
         temperature_difference_in_kelvin=my_dhw_heatpump_controller_config.t_max_heating_in_celsius
@@ -328,9 +328,11 @@ def setup_function(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 
-    my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_dhw_heatpump_controller_config,
+    my_domnestic_hot_water_heatpump_controller = (
+        controller_l1_heatpump.L1HeatPumpController(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_dhw_heatpump_controller_config,
+        )
     )
 
     my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(

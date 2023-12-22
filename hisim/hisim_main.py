@@ -1,5 +1,6 @@
 """ Main module for HiSim: Starts the Simulator. """
 # clean
+import warnings
 import importlib
 import os
 import sys
@@ -21,6 +22,8 @@ def main(
     my_module_config_path: Optional[str] = None,
 ) -> None:
     """Core function."""
+    # filter warnings due to pvlib, pvlib generates warnings during simulation within pvlib package
+    warnings.filterwarnings('ignore')
     # before starting, delete old logging files if path and logging files exist
     logging_default_path = log.LOGGING_DEFAULT_PATH
     if os.path.exists(logging_default_path) and os.listdir(logging_default_path) != []:

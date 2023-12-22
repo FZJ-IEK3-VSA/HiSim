@@ -26,3 +26,4 @@ def test_basic_household():
     mysimpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
     hisim_main.main(path, mysimpar)
     log.information(os.getcwd())
+

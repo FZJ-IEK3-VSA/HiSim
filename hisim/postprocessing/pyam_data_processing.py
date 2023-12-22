@@ -635,7 +635,7 @@ class PyAmChartGenerator:
         """Make histogram plot."""
         log.information("Make histogram plot.")
 
-        fig = plt.subplots(
+        fig, a_x = plt.subplots(  # pylint: disable=unused-variable
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
         if scenario_set is None:

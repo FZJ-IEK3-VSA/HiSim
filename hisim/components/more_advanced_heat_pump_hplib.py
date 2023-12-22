@@ -334,7 +334,6 @@ class HeatPumpHplib(Component):
             field_name=self.ThermalOutputPowerGesamt,
             load_type=LoadTypes.HEATING,
             unit=Units.WATT,
-            postprocessing_flag=postprocessing_flag,
             output_description="Thermal output power for whole HP in Watt",
         )
 
@@ -343,7 +342,6 @@ class HeatPumpHplib(Component):
             field_name=self.ElectricalInputPowerHotWater,
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
-            postprocessing_flag=postprocessing_flag,
             output_description="Electricity input power for Hot Water in Watt",
         )
 
@@ -352,7 +350,6 @@ class HeatPumpHplib(Component):
             field_name=self.ElectricalInputPowerDHW,
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
-            postprocessing_flag=postprocessing_flag,
             output_description="Electricity input power for DHW in Watt",
         )
 

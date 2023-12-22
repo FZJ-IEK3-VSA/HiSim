@@ -184,7 +184,7 @@ def setup_function(
     temperature_offset_for_state_conditions_in_celsius = 5.0
 
     # Set Heat Pump
-    group_id: int = 1 # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
+    group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
     heating_reference_temperature_in_celsius: float = (
         -7
     )  # t_in #TODO: get real heating ref temps according to location

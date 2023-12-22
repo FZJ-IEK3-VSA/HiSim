@@ -635,7 +635,7 @@ class PyAmChartGenerator:
         """Make histogram plot."""
         log.information("Make histogram plot.")
 
-        fig, a_x = plt.subplots(
+        fig = plt.subplots(
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
         if scenario_set is None:
@@ -643,9 +643,6 @@ class PyAmChartGenerator:
 
         plt.hist(x=np.array(filtered_data.value.values), bins="auto")
 
-        # x_tick_labels, unit, x_tick_locations = self.set_axis_scale(
-        #     a_x, x_or_y="x", unit=unit
-        # )
         x_tick_locations = range(
             0,
             int(max(filtered_data.value.values)),
@@ -653,7 +650,6 @@ class PyAmChartGenerator:
         )
         plt.xticks(
             ticks=x_tick_locations,
-            # labels=x_tick_labels,
             rotation=45,
             fontsize=self.hisim_chartbase.fontsize_ticks,
             rotation_mode="anchor",

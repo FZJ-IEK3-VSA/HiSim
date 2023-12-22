@@ -22,13 +22,13 @@ class PyamDataAnalysis:
     ) -> None:
         """Initialize the class."""
 
-        # pyam_data_collection.PyamDataCollector(
-        #     data_processing_mode=data_processing_mode,
-        #     folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
-        #     path_to_default_config=path_to_default_config,
-        #     time_resolution_of_data_set=time_resolution_of_data_set,
-        #     simulation_duration_to_check=simulation_duration_to_check,
-        # )
+        pyam_data_collection.PyamDataCollector(
+            data_processing_mode=data_processing_mode,
+            folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
+            path_to_default_config=path_to_default_config,
+            time_resolution_of_data_set=time_resolution_of_data_set,
+            simulation_duration_to_check=simulation_duration_to_check,
+        )
         pyam_data_processing.PyAmChartGenerator(
             simulation_duration_to_check=simulation_duration_to_check,
             time_resolution_of_data_set=time_resolution_of_data_set,
@@ -48,14 +48,13 @@ def main():
     cluster_storage_path = "/fast/home/k-rieck/"
 
     folder_from_which_data_will_be_collected = os.path.join(
-        cluster_storage_path, "repositories/HiSim/system_setups/results/",
+        cluster_storage_path, "repositories/HiSim/system_setups/results/household_cluster_advanced_hp_pv_battery_ems/monte_carlo_20231115_0921/",
     )
 
     path_to_default_config = os.path.join(
         cluster_storage_path,
         "jobs_hisim/cluster-hisim-paper/job_array_for_hisim_mass_simus/default_building_pv_config.json",
     )
-
     simulation_duration_to_check = str(365)
 
     data_processing_mode = (
@@ -78,8 +77,6 @@ def main():
     #     ]
     # }
     dict_with_scenarios_to_check = None
-
-    # list_of_scenarios_to_check = ["DE.N.SFH.05.Gen.ReEx.001.002","DE.N.TH.05.Gen.ReEx.001.002","DE.N.MFH.05.Gen.ReEx.001.002","DE.N.AB.05.Gen.ReEx.001.002"]
 
     # -------------------------------------------------------------------------------------------------------------------------------------
 

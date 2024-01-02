@@ -199,9 +199,6 @@ class SimpleHotWaterStorage(cp.Component):
         # Initialization of variables
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
         self.waterstorageconfig = config
-        self.temperature_loss_in_celsius_per_hour = (
-            self.waterstorageconfig.temperature_loss_in_celsius_per_hour
-        )
 
         self.mean_water_temperature_in_water_storage_in_celsius: float = 21
 

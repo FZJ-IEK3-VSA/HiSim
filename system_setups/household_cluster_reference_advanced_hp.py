@@ -175,6 +175,14 @@ def setup_function(
     # =================================================================================================================================
     # Set Fix System Parameters
 
+    # for unrefurbished buildings scale hp power up
+    if "001.001" in my_config.building_code:
+        hp_power_factor = 2.8 ** 3  # 21,95
+    elif "001.002" in my_config.building_code:
+        hp_power_factor = 2.8 ** 2  # 7,84
+    else:
+        hp_power_factor = 1
+
     # Set Heat Pump Controller
     hp_controller_mode = (
         2  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
@@ -237,19 +245,15 @@ def setup_function(
         set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
         set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
+        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
 
-    my_heat_distribution_controller = (
-        heat_distribution_system.HeatDistributionController(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_heat_distribution_controller_config,
-        )
+    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_distribution_controller_config,
     )
-    my_hds_controller_information = (
-        heat_distribution_system.HeatDistributionControllerInformation(
-            config=my_heat_distribution_controller_config
-        )
+    my_hds_controller_information = heat_distribution_system.HeatDistributionControllerInformation(
+        config=my_heat_distribution_controller_config
     )
     # Build Heat Pump Controller
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
@@ -266,15 +270,15 @@ def setup_function(
 
     # Build Heat Pump
     my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
+        heating_load_of_building_in_watt=hp_power_factor
+        * my_building_information.max_thermal_building_demand_in_watt,
+        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
     my_heat_pump_config.group_id = group_id
     my_heat_pump_config.flow_temperature_in_celsius = flow_temperature_in_celsius
 
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
-        config=my_heat_pump_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_pump_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Distribution System
@@ -300,7 +304,8 @@ def setup_function(
 
     # Build DHW (this is taken from household_3_advanced_hp_diesel-car_pv_battery.py)
     my_dhw_heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
-        number_of_apartments=my_building_information.number_of_apartments, default_power_in_watt=6000
+        number_of_apartments=my_building_information.number_of_apartments,
+        default_power_in_watt=6000,
     )
 
     my_dhw_heatpump_controller_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
@@ -308,7 +313,8 @@ def setup_function(
     )
 
     my_dhw_storage_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
-        number_of_apartments=my_building_information.number_of_apartments, default_volume_in_liter=450
+        number_of_apartments=my_building_information.number_of_apartments,
+        default_volume_in_liter=450,
     )
     my_dhw_storage_config.compute_default_cycle(
         temperature_difference_in_kelvin=my_dhw_heatpump_controller_config.t_max_heating_in_celsius
@@ -319,11 +325,9 @@ def setup_function(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 
-    my_domnestic_hot_water_heatpump_controller = (
-        controller_l1_heatpump.L1HeatPumpController(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_dhw_heatpump_controller_config,
-        )
+    my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_dhw_heatpump_controller_config,
     )
 
     my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
@@ -364,7 +368,7 @@ def setup_function(
 
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
-            entry=f"ref_{hash_number}",
+            entry=f"ref_hp_power_factor_{hp_power_factor}_{hash_number}",
         )
 
     # if config_filename is not given, make result path with index enumeration
@@ -376,7 +380,7 @@ def setup_function(
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
         model_name=my_sim.module_filename,
-        variant_name="ref_",
+        variant_name=f"ref_hp_power_factor_{hp_power_factor}_",
         hash_number=hash_number,
         sorting_option=sorting_option,
         sampling_mode=sampling_mode,

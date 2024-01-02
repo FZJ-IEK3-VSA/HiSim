@@ -158,14 +158,6 @@ def setup_function(
     # =================================================================================================================================
     # Set Fix System Parameters
 
-    # for unrefurbished buildings scale hp power up
-    if "001.001" in my_config.building_code:
-        hp_power_factor = 2.8 ** 3  # 21,95
-    elif "001.002" in my_config.building_code:
-        hp_power_factor = 2.8 ** 2  # 7,84
-    else:
-        hp_power_factor = 1
-
     # Set Heat Pump Controller
     hp_controller_mode = (
         2  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
@@ -261,9 +253,9 @@ def setup_function(
 
     # Build Heat Pump
     my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=hp_power_factor
-        * my_building_information.max_thermal_building_demand_in_watt,
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+        building_code=my_building_information.buildingcode
     )
     my_heat_pump_config.group_id = group_id
     my_heat_pump_config.flow_temperature_in_celsius = flow_temperature_in_celsius
@@ -562,7 +554,7 @@ def setup_function(
 
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
-            entry=f"surplus_modifier_hp_power_factor_{hp_power_factor}_{hash_number}",
+            entry=f"surplus_modifier_{hash_number}",
         )
 
     # if config_filename is not given, make result path with index enumeration
@@ -574,7 +566,7 @@ def setup_function(
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
         model_name=my_sim.module_filename,
-        variant_name=f"surplus_modifier_hp_power_factor_{hp_power_factor}_",
+        variant_name="surplus_modifier_",
         hash_number=hash_number,
         sorting_option=sorting_option,
         sampling_mode=sampling_mode,

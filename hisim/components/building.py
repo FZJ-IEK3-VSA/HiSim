@@ -215,6 +215,7 @@ class Building(cp.Component):
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
     HeatFluxWallNode = "HeatFluxWallNode"
     HeatFluxThermalMassNode = "HeatFluxThermalMassNode"
+    OpenWindow = "OpenWindow"
 
     @utils.measure_execution_time
     def __init__(
@@ -240,6 +241,7 @@ class Building(cp.Component):
         self.set_cooling_temperature_in_celsius = (
             self.buildingconfig.set_cooling_temperature_in_celsius
         )
+        self.window_open: int = 0
 
         (self.is_in_cache, self.cache_file_path,) = utils.get_cache_file(
             self.component_name,
@@ -423,6 +425,13 @@ class Building(cp.Component):
             lt.Units.WATT,
             output_description=f"here a description for {self.HeatFluxWallNode} will follow.",
         )
+        self.open_window_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.OpenWindow,
+            lt.LoadTypes.ON_OFF,
+            lt.Units.TIMESTEPS,
+            output_description=f"here a description for {self.OpenWindow} will follow.",
+        )
 
         # =================================================================================================================================
         # Add and get default connections
@@ -592,9 +601,9 @@ class Building(cp.Component):
             self.occupancy_heat_gain_channel
         )
 
-        internal_heat_gains_through_devices_in_watt = stsv.get_input_value(
-            self.device_heat_gain_channel
-        )
+        internal_heat_gains_through_devices_in_watt = 0.0  # stsv.get_input_value(
+        #     self.device_heat_gain_channel
+        # )
 
         temperature_outside_in_celsius = stsv.get_input_value(
             self.temperature_outside_channel
@@ -656,6 +665,13 @@ class Building(cp.Component):
             thermal_mass_average_bulk_temperature_in_celsius
         )
 
+        # if indoor temperature is too high make complete air exchange by opening the windows until outdoor temperature or 20 is reached
+        if self.set_cooling_temperature_in_celsius < indoor_air_temperature_in_celsius and temperature_outside_in_celsius < indoor_air_temperature_in_celsius:
+            indoor_air_temperature_in_celsius = max(20, temperature_outside_in_celsius)
+            self.window_open = 1
+        else:
+            self.window_open = 0
+
         # increase set_heating_temperature when connected to EnergyManagementSystem and surplus electricity available
         set_heating_temperature_modified_in_celsius = (
             self.set_heating_temperature_in_celsius + building_temperature_modifier
@@ -679,6 +695,7 @@ class Building(cp.Component):
             self.internal_surface_temperature_channel,
             internal_surface_temperature_in_celsius,
         )
+
         stsv.set_output_value(
             self.indoor_air_temperature_channel,
             indoor_air_temperature_in_celsius,
@@ -708,6 +725,10 @@ class Building(cp.Component):
         stsv.set_output_value(
             self.heat_flow_rates_to_internal_surface_node_channel,
             heat_flux_internal_room_surface_in_watt,
+        )
+        stsv.set_output_value(
+            self.open_window_channel,
+            self.window_open,
         )
 
         # Saves solar gains cache

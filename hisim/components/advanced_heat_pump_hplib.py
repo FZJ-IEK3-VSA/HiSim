@@ -124,7 +124,8 @@ class HeatPumpHplibConfig(ConfigBase):
         else:
             hp_power_factor = 1
 
-        set_thermal_output_power_in_watt = hp_power_factor * heating_load_of_building_in_watt
+        # minimum 3 kW heat pump power
+        set_thermal_output_power_in_watt = max(hp_power_factor * heating_load_of_building_in_watt, 3000)
 
         return HeatPumpHplibConfig(
             name="AdvancedHeatPumpHPLib",

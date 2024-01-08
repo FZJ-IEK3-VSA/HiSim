@@ -47,8 +47,11 @@ def main():
 
     cluster_storage_path = "/fast/home/k-rieck/"
 
+    # folder_from_which_data_will_be_collected = os.path.join(
+    #     cluster_storage_path, "repositories/HiSim/system_setups/results/household_cluster_reference_advanced_hp/monte_carlo_20231115_0921/",
+    # )
     folder_from_which_data_will_be_collected = os.path.join(
-        cluster_storage_path, "repositories/HiSim/system_setups/results/household_cluster_advanced_hp_pv_battery_ems/monte_carlo_20231115_0921/",
+        cluster_storage_path, "repositories/HiSim/system_setups/results/",
     )
 
     path_to_default_config = os.path.join(
@@ -58,25 +61,27 @@ def main():
     simulation_duration_to_check = str(365)
 
     data_processing_mode = (
-        pyam_data_collection.PyamDataProcessingModeEnum.PROCESS_ALL_DATA
+        pyam_data_collection.PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
     )
 
     filterclass = pyam_data_processing.FilterClass()
-    list_with_variables_to_check = filterclass.kpi_data
-
-    # list_of_scenarios_to_check = filterclass.building_type
+    list_with_variables_to_check = filterclass.electricity_data + filterclass.kpi_data
 
     # TODO: filter several scenario parameters (eg pv and building code together) not working yet, need to be fixed
     # dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share,"building_code": ["DE.N.SFH.05.Gen.ReEx.001.002"]}
     # dict_with_scenarios_to_check = {
     #     "building_code": [
-    #         "DE.N.SFH.05.Gen.ReEx.001.002",
-    #         "DE.N.TH.05.Gen.ReEx.001.002",
-    #         "DE.N.MFH.05.Gen.ReEx.001.002",
-    #         "DE.N.AB.05.Gen.ReEx.001.002",
+    #         "DE.N.SFH.",
+    #         "DE.N.TH.",
+    #         "DE.N.MFH",
+    #         "DE.N.AB",
     #     ]
     # }
-    dict_with_scenarios_to_check = None
+    dict_with_scenarios_to_check = {
+        "building_code": filterclass.building_refurbishment_state
+    }
+    # dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share}
+    # dict_with_scenarios_to_check = None
 
     # -------------------------------------------------------------------------------------------------------------------------------------
 

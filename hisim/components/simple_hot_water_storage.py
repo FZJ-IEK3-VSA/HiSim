@@ -86,6 +86,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         water_mass_flow_rate_from_hds_in_kg_per_second: float,
         temperature_difference_between_flow_and_return_in_celsius: float = 7.0,
         heating_system_name: str = "AdvancedHeatPumpHPLib",
+        number_of_apartments: int = 1,
     ) -> "SimpleHotWaterStorageConfig":
         """Gets a default storage with scaling according to heating load of the building.
 
@@ -122,10 +123,10 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
                 max_thermal_power_in_watt_of_heating_system * 1e3 * 60
             )
 
-        # minimum storage volume of 4000 l if heating power too low
-        if max_thermal_power_in_watt_of_heating_system <= 3000:
+        # minimum storage volume of 3000 l per dwelling if heating power too low
+        if max_thermal_power_in_watt_of_heating_system <= 3000 * number_of_apartments:
             volume_heating_water_storage_in_liter = max(
-                3000, volume_heating_water_storage_in_liter
+                3000 * number_of_apartments, volume_heating_water_storage_in_liter
             )
 
         config = SimpleHotWaterStorageConfig(

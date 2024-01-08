@@ -54,19 +54,13 @@ class PyamDataCollector:
             data_processing_mode
             == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_SIZES
         ):
-            parameter_key = "total_base_area_in_m2"
+            parameter_key = "conditioned_floor_area_in_m2"
 
         elif (
             data_processing_mode
             == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
         ):
             parameter_key = "building_code"
-
-        elif (
-            data_processing_mode
-            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_POWERS
-        ):
-            parameter_key = "pv_power"
 
         elif (
             data_processing_mode
@@ -82,21 +76,15 @@ class PyamDataCollector:
 
         elif (
             data_processing_mode
-            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_DELTA_T_IN_HP_CONTROLLER
-        ):
-            parameter_key = "delta_T"
-
-        elif (
-            data_processing_mode
-            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_HOT_WATER_STORAGE_SIZES
-        ):
-            parameter_key = "hot_water_storage_size_in_liter"
-
-        elif (
-            data_processing_mode
             == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_SHARE_OF_MAXIMUM_PV
         ):
             parameter_key = "share_of_maximum_pv_power"
+        
+        elif (
+            data_processing_mode
+            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_NUMBER_OF_DWELLINGS
+        ):
+            parameter_key = "number_of_dwellings_per_building"
 
         else:
             raise ValueError(
@@ -129,6 +117,9 @@ class PyamDataCollector:
                 default_config_dict=default_config_dict,
                 parameter_key=parameter_key,
             )
+
+        if not list_with_csv_files:
+            raise ValueError("list_with_csv_files is empty")
 
         all_csv_files = self.import_data_from_file(
             paths_to_check=list_with_csv_files,
@@ -209,17 +200,18 @@ class PyamDataCollector:
         print(
             f"The following result folders do not contain the finished flag: {list_of_unfinished_folders} Number: {len(list_of_unfinished_folders)}. "
         )
-        # if list of unfinished folders is not empty
-        if list_of_unfinished_folders:
-            answer = input("Do you want to delete them?")
-            if answer.upper() in ["Y", "YES"]:
-                for folder in list_of_unfinished_folders:
-                    shutil.rmtree(os.path.join(result_path, folder))
-                print("All folders with failed simulations deleted.")
-            elif answer.upper() in ["N", "NO"]:
-                print("The folders won't be deleted.")
-            else:
-                print("The answer must be yes or no.")
+
+        # # if list of unfinished folders is not empty
+        # if list_of_unfinished_folders:
+        #     answer = input("Do you want to delete them?")
+        #     if answer.upper() in ["Y", "YES"]:
+        #         for folder in list_of_unfinished_folders:
+        #             shutil.rmtree(os.path.join(result_path, folder))
+        #         print("All folders with failed simulations deleted.")
+        #     elif answer.upper() in ["N", "NO"]:
+        #         print("The folders won't be deleted.")
+        #     else:
+        #         print("The answer must be yes or no.")
 
     def filter_results_that_failed_to_heat_or_cool_building_sufficiently(
         self, list_of_result_path_that_contain_pyam_data: List[str]
@@ -494,6 +486,7 @@ class PyamDataCollector:
 
         # get parameter key values from scenario name
         values = []
+
         for scenario in dataframe["scenario"]:
             scenario_name_splitted = scenario.split("_")
             try:
@@ -538,6 +531,9 @@ class PyamDataCollector:
         simulation_duration_key = list(dict_of_csv_to_read.keys())[0]
         csv_data_list = dict_of_csv_to_read[simulation_duration_key]
 
+        if csv_data_list == []:
+            raise ValueError("csv_data_list is empty.")
+
         for csv_file in csv_data_list:
 
             dataframe = pd.read_csv(csv_file)
@@ -563,7 +559,7 @@ class PyamDataCollector:
                     parameter_key is not None
                     and list_with_parameter_key_values is not None
                     and list_with_parameter_key_values != []
-                ):
+                ): 
                     # rename scenario adding paramter key, value pair
                     dataframe[
                         "scenario"
@@ -573,6 +569,7 @@ class PyamDataCollector:
                         list_with_parameter_values=list_with_parameter_key_values,
                         index=index,
                     )
+
                 else:
                     # rename scenario adding an index
                     dataframe[
@@ -586,6 +583,8 @@ class PyamDataCollector:
             index = index + 1
 
         # sort dataframe
+        if appended_dataframe.empty:
+            raise ValueError("The appended dataframe is empty")
         appended_dataframe = self.sort_dataframe_according_to_scenario_values(
             dataframe=appended_dataframe
         )
@@ -672,6 +671,14 @@ class PyamDataCollector:
                 with open(os.path.join(path_to_pyam_data_folder, file), "r", encoding="utf-8") as openfile:  # type: ignore
                     config_dict = json.load(openfile)
                     my_module_config_dict = config_dict["myModuleConfig"]
+                    scenario_name = config_dict["systemName"]
+
+                    # for paper: reference scenario without use of pv should have a share of maximum pv power of 0
+                    if "ref_" in scenario_name:
+                        try:
+                            my_module_config_dict["share_of_maximum_pv_power"] = 0
+                        except Exception:
+                            raise KeyError("The key share of maximum pv power does not exist in the module dict. Unable this function if it not needed.")
 
         # check if module config and default config have any keys in common
         if len(set(default_config_dict).intersection(my_module_config_dict)) == 0:
@@ -691,12 +698,12 @@ class PyamDataCollector:
         # for each parameter different than the default config parameter, get the respective path to the folder
         # and also create a dict with the parameter, value pairs
 
-        if my_module_config_dict[parameter_key] != default_config_dict[parameter_key]:
+        #if my_module_config_dict[parameter_key] != default_config_dict[parameter_key]:
 
-            list_with_csv_files.append(path_to_pyam_data_folder)
-            list_with_parameter_key_values.append(my_module_config_dict[parameter_key])
+        list_with_csv_files.append(path_to_pyam_data_folder)
+        list_with_parameter_key_values.append(my_module_config_dict[parameter_key])
 
-            list_with_module_configs.append(my_module_config_dict)
+        list_with_module_configs.append(my_module_config_dict)
 
         # add to each item in the dict also the default system setup if the default system setup exists
 
@@ -784,6 +791,7 @@ class PyamDataCollector:
                     list_with_module_configs=list_with_module_configs,
                     parameter_key=parameter_key,
                 )
+    
 
         return (
             list_with_csv_files,
@@ -889,10 +897,8 @@ class PyamDataProcessingModeEnum(enum.Enum):
     PROCESS_ALL_DATA = 1
     PROCESS_FOR_DIFFERENT_BUILDING_CODES = 2
     PROCESS_FOR_DIFFERENT_BUILDING_SIZES = 3
-    PROCESS_FOR_DIFFERENT_PV_POWERS = 4
-    PROCESS_FOR_DIFFERENT_PV_SIZES = 5
-    PROCESS_FOR_DIFFERENT_PV_AZIMUTH_ANGLES = 6
-    PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES = 7
-    PROCESS_FOR_DIFFERENT_DELTA_T_IN_HP_CONTROLLER = 8
-    PROCESS_FOR_DIFFERENT_HOT_WATER_STORAGE_SIZES = 9
-    PROCESS_FOR_DIFFERENT_SHARE_OF_MAXIMUM_PV = 10
+    PROCESS_FOR_DIFFERENT_PV_SIZES = 4
+    PROCESS_FOR_DIFFERENT_PV_AZIMUTH_ANGLES = 5
+    PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES = 6
+    PROCESS_FOR_DIFFERENT_SHARE_OF_MAXIMUM_PV = 7
+    PROCESS_FOR_DIFFERENT_NUMBER_OF_DWELLINGS = 8

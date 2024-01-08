@@ -110,6 +110,7 @@ class HeatPumpHplibConfig(ConfigBase):
         heating_load_of_building_in_watt: float,
         heating_reference_temperature_in_celsius: float = -7.0,
         building_code: str = "001.003",
+        number_of_apartments: int = 1
     ) -> "HeatPumpHplibConfig":
         """Gets a default heat pump with scaling according to heating load of the building."""
 
@@ -125,7 +126,7 @@ class HeatPumpHplibConfig(ConfigBase):
             hp_power_factor = 1
 
         # minimum 3 kW heat pump power
-        set_thermal_output_power_in_watt = max(hp_power_factor * heating_load_of_building_in_watt, 3000)
+        set_thermal_output_power_in_watt = max(hp_power_factor * heating_load_of_building_in_watt, 3000 * number_of_apartments)
 
         return HeatPumpHplibConfig(
             name="AdvancedHeatPumpHPLib",

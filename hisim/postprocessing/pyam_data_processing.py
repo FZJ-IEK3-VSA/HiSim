@@ -45,11 +45,12 @@ class PyAmChartGenerator:
         warnings.filterwarnings("ignore")
 
         self.datetime_string = datetime.datetime.now().strftime("%Y%m%d_%H%M")
-
+        self.show_plot_legend: bool = True
         if data_processing_mode == PyamDataProcessingModeEnum.PROCESS_ALL_DATA:
 
             data_path_strip = "data_with_all_parameters"
             result_path_strip = "results_for_all_parameters"
+            self.show_plot_legend = False
 
         elif (
             data_processing_mode
@@ -62,15 +63,8 @@ class PyAmChartGenerator:
             data_processing_mode
             == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_SIZES
         ):
-            data_path_strip = "data_with_different_total_base_area_in_m2s"
-            result_path_strip = "results_different_total_base_area_in_m2s"
-
-        elif (
-            data_processing_mode
-            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_POWERS
-        ):
-            data_path_strip = "data_with_different_pv_powers"
-            result_path_strip = "results_different_pv_powers"
+            data_path_strip = "data_with_different_conditioned_floor_area_in_m2s"
+            result_path_strip = "results_different_conditioned_floor_area_in_m2s"
 
         elif (
             data_processing_mode
@@ -88,24 +82,17 @@ class PyAmChartGenerator:
 
         elif (
             data_processing_mode
-            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_DELTA_T_IN_HP_CONTROLLER
-        ):
-            data_path_strip = "data_with_different_delta_Ts"
-            result_path_strip = "results_different_delta_Ts"
-
-        elif (
-            data_processing_mode
-            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_HOT_WATER_STORAGE_SIZES
-        ):
-            data_path_strip = "data_with_different_hot_water_storage_size_in_liters"
-            result_path_strip = "results_different_hot_water_storage_size_in_liters"
-
-        elif (
-            data_processing_mode
             == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_SHARE_OF_MAXIMUM_PV
         ):
             data_path_strip = "data_with_different_share_of_maximum_pv_powers"
             result_path_strip = "results_different_share_of_maximum_pv_powers"
+        
+        elif (
+            data_processing_mode
+            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_NUMBER_OF_DWELLINGS
+        ):
+            data_path_strip = "data_with_different_number_of_dwellings_per_buildings"
+            result_path_strip = "results_different_number_of_dwellings_per_buildings"
 
         else:
             raise ValueError("PyamDataProcessingMode not known.")
@@ -195,23 +182,12 @@ class PyAmChartGenerator:
         key_for_scenario_one = ""
         key_for_current_scenario = ""
 
-        # filter scenarios
-        # if (
-        #     list_of_scenarios_to_check is not None
-        #     and list_of_scenarios_to_check != []
-        # ):
-
-        #     file_df = self.check_if_scenario_exists_and_filter_dataframe_for_scenarios(
-        #         data_frame=file_df,
-        #         list_of_scenarios_to_check=list_of_scenarios_to_check,
-        #     )
-
         # make rel electricity calculation before sorting and renaming
 
-        if "ElectricityMeter|Electricity|ElectricityToOrFromGrid" in variables_to_check:
+        if "ElectricityMeter|Electricity|ElectricityFromGrid" in variables_to_check:
+            print("relative electricity demand will be calculated.")
 
             file_df = self.calculate_relative_electricity_demand(dataframe=file_df)
-            # file_df = file_df.reset_index()
             variables_to_check.append("Relative Electricity Demand")
 
         if dict_of_scenarios_to_check is not None and dict_of_scenarios_to_check != {}:
@@ -222,7 +198,6 @@ class PyAmChartGenerator:
                 key_for_current_scenario,
             ) = self.check_if_scenario_exists_and_filter_dataframe_for_scenarios_dict(
                 data_frame=file_df,
-                # list_of_scenarios_to_check=list_of_scenarios_to_check,
                 dict_of_scenarios_to_check=dict_of_scenarios_to_check,
             )
 
@@ -313,60 +288,7 @@ class PyAmChartGenerator:
                 self.make_histogram_plot_for_pandas_dataframe(
                     filtered_data=filtered_data, title=self.path_addition, unit=unit
                 )
-                # if (
-                #     variable_to_check
-                #     == "ElectricityMeter|Electricity|ElectricityToOrFromGrid"
-                # ):
 
-                #     filtered_data = self.calculate_relative_electricity_demand(
-                #         dataframe=filtered_data
-                #     )
-                #     scenario_set = []
-
-                #     for scenario in filtered_data.scenario.values:
-
-                #         share_of_pv_power = filtered_data.loc[
-                #             filtered_data.scenario == scenario
-                #         ].share_of_maximum_pv_power.values[-1]
-                #         scenario_for_boxplot = (
-                #             f"{scenario}_pv_share_{share_of_pv_power}"
-                #         )
-                #         scenario_set.append(scenario_for_boxplot)
-                #     scenario_set = list(OrderedSet(scenario_set))
-
-                #     self.path_addition = filtered_data.variable.values[0]
-                #     self.plot_path_complete = os.path.join(
-                #         self.path_for_plots, self.path_addition
-                #     )
-                #     if os.path.exists(self.plot_path_complete) is False:
-                #         os.makedirs(self.plot_path_complete)
-
-                #     self.make_box_plot_for_pandas_dataframe(
-                #         filtered_data=filtered_data,
-                #         title=self.path_addition,
-                #         scenario_set=scenario_set,
-                #     )
-                #     self.make_bar_plot_for_pandas_dataframe(
-                #         filtered_data=filtered_data,
-                #         title=self.path_addition,
-                #         alternative_bar_labels=scenario_set,
-                #     )
-
-                # except Exception:
-                #     log.information(f"{variable_to_check} could not be plotted.")
-
-                # self.make_scatter_plot_for_pyam_dataframe(
-                #     pyam_dataframe=pyam_dataframe,
-                #     filter_model=None,
-                #     filter_scenario=None,
-                #     filter_variables=None,
-                #     title="HP vs Outside Temperatures",
-                #     filter_region=None,
-                #     filter_unit=None,
-                #     filter_year=None,
-                #     x_data_variable="Weather|Temperature|DailyAverageOutsideTemperatures",
-                #     y_data_variable="HeatPumpHPLib|Heating|ThermalOutputPower",
-                # )
 
             elif time_resolution_of_data_set in (
                 PyamDataTypeEnum.HOURLY,
@@ -576,7 +498,8 @@ class PyAmChartGenerator:
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
 
-        # plt.legend(bbox_to_anchor=(1, 1), loc="upper left")
+        if self.show_plot_legend:
+            plt.legend(bbox_to_anchor=(1, 1), loc="upper left")
 
         a_x.xaxis.set_tick_params(labelbottom=False)
         a_x.set_xticks([])
@@ -619,7 +542,10 @@ class PyAmChartGenerator:
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
         a_x.xaxis.set_tick_params(labelbottom=False)
         a_x.set_xticks([])
-        # plt.legend(scenario_set, bbox_to_anchor=(1, 1), loc="upper left")
+        print(self.show_plot_legend)
+        if self.show_plot_legend:
+            plt.legend(scenario_set, bbox_to_anchor=(1, 1), loc="upper left")
+
         fig.savefig(
             os.path.join(self.plot_path_complete, "box_plot.png"), bbox_inches="tight"
         )
@@ -643,11 +569,14 @@ class PyAmChartGenerator:
 
         plt.hist(x=np.array(filtered_data.value.values), bins="auto")
 
-        x_tick_locations = range(
-            0,
-            int(max(filtered_data.value.values)),
-            round(int(max(filtered_data.value.values) / 10), 0),
-        )
+        if max(filtered_data.value.values) != 0:
+            x_tick_locations = range(
+                0,
+                int(max(filtered_data.value.values)),
+                round(int(max(filtered_data.value.values) / 10), 0),
+            )
+        else: 
+            x_tick_locations = None
         plt.xticks(
             ticks=x_tick_locations,
             rotation=45,
@@ -672,65 +601,6 @@ class PyAmChartGenerator:
         )
         plt.close()
 
-    # def make_scatter_plot_for_pyam_dataframe(
-    #     self,
-    #     pyam_dataframe: pyam.IamDataFrame,
-    #     filter_model: Optional[str],
-    #     filter_scenario: Optional[str],
-    #     filter_variables: Optional[str],
-    #     filter_region: Optional[str],
-    #     filter_unit: Optional[str],
-    #     filter_year: Optional[str],
-    #     title: str,
-    #     x_data_variable: str,
-    #     y_data_variable: str,
-    # ) -> None:
-    #     """Make scatter plot."""
-    #     log.information("Make scatter plot.")
-
-    #     filtered_data = self.filter_pyam_dataframe(
-    #         pyam_dataframe=pyam_dataframe,
-    #         filter_model=filter_model,
-    #         filter_scenario=filter_scenario,
-    #         filter_region=filter_region,
-    #         filter_variables=filter_variables,
-    #         filter_unit=filter_unit,
-    #         filter_year=filter_year,
-    #     )
-
-    #     x_data = x_data_variable
-    #     y_data = y_data_variable
-    #     fig, a_x = plt.subplots(
-    #         figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
-    #     )
-    #     filtered_data.plot.scatter(
-    #         ax=a_x, x=x_data, y=y_data,
-    #     )
-
-    #     (
-    #         y_tick_labels,
-    #         unit,  # pylint: disable=unused-variable
-    #         y_tick_locations,
-    #     ) = self.set_axis_scale(a_x, x_or_y="y", unit=filtered_data.unit[0])
-
-    #     plt.yticks(
-    #         ticks=y_tick_locations,
-    #         labels=y_tick_labels,
-    #         fontsize=self.hisim_chartbase.fontsize_ticks,
-    #     )
-    #     plt.ylabel(
-    #         ylabel=y_data.rsplit("|", maxsplit=1)[-1],
-    #         fontsize=self.hisim_chartbase.fontsize_label,
-    #     )
-    #     plt.xlabel(
-    #         xlabel=x_data.rsplit("|", maxsplit=1)[-1],
-    #         fontsize=self.hisim_chartbase.fontsize_label,
-    #     )
-    #     plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
-    #     plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
-
-    #     fig.savefig(os.path.join(self.plot_path_complete, "scatter_plot.png"))
-    #     plt.close()
 
     # def make_sankey_plot_for_pyam_dataframe(
     #     self,
@@ -840,61 +710,6 @@ class PyAmChartGenerator:
 
         return tick_labels, unit, tick_locations
 
-    # def filter_pyam_dataframe(
-    #     self,
-    #     pyam_dataframe: pyam.IamDataFrame,
-    #     filter_model: Optional[str],
-    #     filter_scenario: Optional[str],
-    #     filter_variables: Optional[str],
-    #     filter_region: Optional[str],
-    #     filter_unit: Optional[str],
-    #     filter_year: Optional[str],
-    # ) -> pyam.IamDataFrame:
-    #     """Filter the pyam dataframe for the plots.
-
-    #     If the value is None, it will be ignored.
-    #     """
-
-    #     filtered_data = pyam_dataframe
-
-    #     if filter_model is not None:
-    #         if filter_model not in filtered_data.model:
-    #             raise ValueError(
-    #                 f"Model {filter_model} not found in the pyam dataframe."
-    #             )
-    #         filtered_data = filtered_data.filter(model=filter_model)
-
-    #     if filter_scenario is not None:
-    #         if filter_scenario not in filtered_data.scenario:
-    #             raise ValueError(
-    #                 f"Scenario {filter_scenario} not found in the pyam dataframe."
-    #             )
-    #         filtered_data = filtered_data.filter(scenario=filter_scenario)
-
-    #     if filter_variables is not None:
-    #         # if filter_variables not in filtered_data.variable:
-    #         #     raise ValueError(f"Variable {filter_variables} not found in the pyam dataframe.")
-    #         filtered_data = filtered_data.filter(variable=filter_variables)
-    #     if filter_region is not None:
-    #         if filter_region not in filtered_data.region:
-    #             raise ValueError(
-    #                 f"Region {filter_region} not found in the pyam dataframe."
-    #             )
-    #         filtered_data = filtered_data.filter(region=filter_region)
-    #     if filter_unit is not None:
-    #         if filter_unit not in filtered_data.unit:
-    #             raise ValueError(f"Unit {filter_unit} not found in the pyam dataframe.")
-    #         filtered_data = filtered_data.filter(unit=filter_unit)
-    #     if filter_year is not None:
-    #         if (
-    #             filtered_data.time_domain == "year"
-    #             and filter_year not in filtered_data["year"]
-    #         ):
-    #             raise ValueError(f"Year {filter_year} not found in the pyam dataframe.")
-    #         filtered_data = filtered_data.filter(year=filter_year)
-
-    #     return filtered_data
-
     def filter_pandas_dataframe(
         self, dataframe: pd.DataFrame, variable_to_check: str
     ) -> pd.DataFrame:
@@ -996,18 +811,18 @@ class PyAmChartGenerator:
         data_frame: pd.DataFrame,
         dict_of_scenarios_to_check: Dict[
             str, List[str]
-        ],  # list_of_scenarios_to_check: List[str]
+        ],
     ) -> Tuple[pd.DataFrame, str, str]:
         """Check if scenario exists and filter dataframe for scenario."""
 
-        concat_df = data_frame  # copy.deepcopy(data_frame)
+        concat_df = data_frame
         filter_level_index = 0
         for (
             scenario_to_check_key,
             list_of_scenarios_to_check,
         ) in dict_of_scenarios_to_check.items():
 
-            concat_df = self.check_for_one_scenario(
+            concat_df = self.aggregate_all_values_for_one_scenario(
                 dataframe=concat_df,
                 list_of_scenarios_to_check=list_of_scenarios_to_check,
                 column_name_to_check=scenario_to_check_key,
@@ -1035,7 +850,7 @@ class PyAmChartGenerator:
                 key_for_current_scenario = ""
         return concat_df, key_for_scenario_one, key_for_current_scenario
 
-    def check_for_one_scenario(
+    def aggregate_all_values_for_one_scenario(
         self,
         dataframe: pd.DataFrame,
         list_of_scenarios_to_check: List,
@@ -1045,7 +860,9 @@ class PyAmChartGenerator:
         """Check for one scenario."""
 
         aggregated_scenario_dict: Dict = {key: [] for key in list_of_scenarios_to_check}
+        print("aggregated scenario dict", aggregated_scenario_dict)
         for scenario_to_check in list_of_scenarios_to_check:
+            print("scenario to check", scenario_to_check)
             for value in dataframe[column_name_to_check].values:
                 if (
                     isinstance(scenario_to_check, str)
@@ -1062,7 +879,6 @@ class PyAmChartGenerator:
                     aggregated_scenario_dict[scenario_to_check].append(value)
 
         concat_df = pd.DataFrame()
-        # new_df = copy.deepcopy(dataframe)
         # only take rows from dataframe which are in selected scenarios
         for (
             key_scenario_to_check,
@@ -1073,9 +889,6 @@ class PyAmChartGenerator:
                 dataframe[column_name_to_check].isin(given_list_of_values)
             ]
 
-            # df_filtered_for_specific_scenarios.loc[df_filtered_for_specific_scenarios["scenario"]] = [
-            #     key_scenario_to_check
-            # ] * len(df_filtered_for_specific_scenarios["scenario"])
             df_filtered_for_specific_scenarios.loc[
                 :, "scenario"
             ] = key_scenario_to_check
@@ -1083,7 +896,8 @@ class PyAmChartGenerator:
             concat_df = pd.concat(
                 [concat_df, df_filtered_for_specific_scenarios], ignore_index=True
             )
-            concat_df[f"scenario_{filter_level_index}"] = dataframe.loc[:, "scenario"]
+            print(dataframe.loc[:, "scenario"])
+           # concat_df[f"scenario_{filter_level_index}"] = dataframe.loc[:, "scenario"]
 
             del df_filtered_for_specific_scenarios
 
@@ -1094,18 +908,18 @@ class PyAmChartGenerator:
     ) -> pd.DataFrame:
         """Calculate relative electricity demand."""
 
-        # look for ElectricityMeter|Electricity|ElectrcityToOrFromGrid output
+        # look for ElectricityMeter|Electricity|ElectrcityFromGrid output
         if (
-            "ElectricityMeter|Electricity|ElectricityToOrFromGrid"
+            "ElectricityMeter|Electricity|ElectricityFromGrid"
             not in dataframe.variable.values
         ):
             raise ValueError(
-                "ElectricityMeter|Electricity|ElectricityToOrFromGrid was not found in variables."
+                "ElectricityMeter|Electricity|ElectricityFromGrid was not found in variables."
             )
 
         # filter again just to be shure
         filtered_data = dataframe.loc[
-            dataframe.variable == "ElectricityMeter|Electricity|ElectricityToOrFromGrid"
+            dataframe.variable == "ElectricityMeter|Electricity|ElectricityFromGrid"
         ]
 
         if "share_of_maximum_pv_power" not in filtered_data.columns:
@@ -1115,73 +929,98 @@ class PyAmChartGenerator:
         # sort df accrofing to share of pv
         filtered_data = filtered_data.sort_values("share_of_maximum_pv_power")
 
-        # # iterate over all new scenarios
-        # for scenario in filtered_data.scenario.values:
+        # iterate over all scenarios
+        for scenario in list(set(filtered_data.scenario.values)):
 
-        # iterate over all building codes
-        for building_code in filtered_data.building_code.values:
-            # data for this building code
+            if "share_of_maximum_pv_power" not in scenario:
 
-            df_for_one_building_code = filtered_data.loc[
-                filtered_data.building_code == building_code
-            ]
+                df_for_one_scenario = filtered_data.loc[
+                    filtered_data.scenario == scenario
+                ]
 
-            # get reference value (when share of pv power is zero)
-            for (
-                share_of_maximum_pv_power
-            ) in df_for_one_building_code.share_of_maximum_pv_power.values:
+                df_for_one_scenario_and_for_share_zero = df_for_one_scenario.loc[
+                            df_for_one_scenario.share_of_maximum_pv_power
+                            == 0
+                        ]
 
-                if share_of_maximum_pv_power == 0.0:
-
-                    df_for_one_scenario_and_for_one_share = df_for_one_building_code.loc[
-                        df_for_one_building_code.share_of_maximum_pv_power
-                        == share_of_maximum_pv_power
-                    ]
-
-                    # df_demand_values = df_for_one_scenario_for_zero_pv_share.loc[df_for_one_scenario_for_zero_pv_share.value < 0]
-                    # reference_value_for_electricity_demand = np.mean(
-                    #     df_for_one_scenario_for_zero_pv_share.value.values
-                    # )
-                    reference_value_for_electricity_demand = (
-                        df_for_one_scenario_and_for_one_share.value.values
-                    )
-                    value_for_electricity_demand = 0
-
-                    # new_df_only_with_relative_electricity_demand = copy.deepcopy(df_for_one_scenario_and_for_one_share)
-                    # new_df_only_with_relative_electricity_demand["variable"] = ["Relative Electricity Demand"]
-                    # new_df_only_with_relative_electricity_demand["unit"] = ["%"]
-                    # new_df_only_with_relative_electricity_demand["value"] = 1
-
-                elif share_of_maximum_pv_power != 0.0:
-
-                    df_for_one_scenario_and_for_one_share = df_for_one_building_code.loc[
-                        df_for_one_building_code.share_of_maximum_pv_power
-                        == share_of_maximum_pv_power
-                    ]
-
-                    # df_demand_values = df_for_one_scenario_for_nonzero_pv_share.loc[df_for_one_scenario_for_nonzero_pv_share.value < 0]
-                    value_for_electricity_demand = (
-                        df_for_one_scenario_and_for_one_share.value.values
-                    )
-
-                # calculate reference electricity demand for each scenario and share of pv power
-                relative_electricity_demand = (
-                    1
-                    - (
-                        (
-                            reference_value_for_electricity_demand
-                            - value_for_electricity_demand
-                        )
-                        / reference_value_for_electricity_demand
-                    )
-                ) * 100
-
-                # make little df with new variable and value
-
-                new_df_only_with_relative_electricity_demand = copy.deepcopy(
-                    df_for_one_scenario_and_for_one_share
+                reference_value_for_electricity_demand = (
+                    df_for_one_scenario_and_for_share_zero.value.values
                 )
-                #
+                relative_electricity_demand = [0] * len(reference_value_for_electricity_demand)
+
+                # get reference value (when share of pv power is zero)
+                for (
+                    share_of_maximum_pv_power
+                ) in list(set(df_for_one_scenario.share_of_maximum_pv_power.values)):
+                    
+                    if share_of_maximum_pv_power != 0:
+
+                        df_for_one_scenario_and_for_one_share = df_for_one_scenario.loc[
+                            df_for_one_scenario.share_of_maximum_pv_power
+                            == share_of_maximum_pv_power
+                        ]
+    
+                        value_for_electricity_demand = (
+                            df_for_one_scenario_and_for_one_share.value.values
+                        )
+                        
+                        # calculate reference electricity demand for each scenario and share of pv power
+                        relative_electricity_demand = value_for_electricity_demand / reference_value_for_electricity_demand * 100
+
+                        new_df_only_with_relative_electricity_demand = copy.deepcopy(df_for_one_scenario_and_for_one_share)
+                        new_df_only_with_relative_electricity_demand.loc[
+                            :, "variable"
+                        ] = "Relative Electricity Demand"
+                        new_df_only_with_relative_electricity_demand.loc[:, "unit"] = "%"
+                        new_df_only_with_relative_electricity_demand.loc[
+                            :, "value"
+                        ] = relative_electricity_demand
+
+                        del df_for_one_scenario_and_for_one_share
+ 
+                        dataframe = pd.concat(
+                            [dataframe, new_df_only_with_relative_electricity_demand]
+                        )
+                        del dataframe["Unnamed: 0"]
+                        del new_df_only_with_relative_electricity_demand
+
+            else:
+
+                df_for_one_scenario = filtered_data.loc[
+                    filtered_data.scenario == scenario
+                ]
+                share_of_maximum_pv_power = df_for_one_scenario["share_of_maximum_pv_power"].values[0]
+
+                if share_of_maximum_pv_power == 0:
+
+                    relative_electricity_demand = [0] * len(df_for_one_scenario)
+
+                else:
+
+                    value_for_electricity_demand = (
+                        df_for_one_scenario.value.values
+                    )
+                    df_for_one_scenario_and_for_share_zero = filtered_data.loc[
+                                filtered_data.share_of_maximum_pv_power
+                                == 0
+                            ]
+                    reference_value_for_electricity_demand = (
+                        df_for_one_scenario_and_for_share_zero.value.values
+                    )
+                    
+                    # calculate reference electricity demand for each scenario and share of pv power
+                    relative_electricity_demand = (
+                        1
+                        - (
+                            (
+                                reference_value_for_electricity_demand
+                                - value_for_electricity_demand
+                            )
+                            / reference_value_for_electricity_demand
+                        )
+                    ) * 100
+
+                new_df_only_with_relative_electricity_demand = copy.deepcopy(df_for_one_scenario)
                 new_df_only_with_relative_electricity_demand.loc[
                     :, "variable"
                 ] = "Relative Electricity Demand"
@@ -1190,26 +1029,14 @@ class PyAmChartGenerator:
                     :, "value"
                 ] = relative_electricity_demand
 
-                del df_for_one_scenario_and_for_one_share
-
+                del df_for_one_scenario
+                    
                 dataframe = pd.concat(
                     [dataframe, new_df_only_with_relative_electricity_demand]
                 )
 
                 del dataframe["Unnamed: 0"]
                 del new_df_only_with_relative_electricity_demand
-
-        # write everything in df with new column and return df
-        # new_df_only_with_relative_electricity_demand = copy.deepcopy(filtered_data)
-        # new_df_only_with_relative_electricity_demand["variable"] = [
-        #     "Relative Electricity Demand"
-        # ] * len(filtered_data.variable.values)
-        # new_df_only_with_relative_electricity_demand["unit"] = ["%"] * len(
-        #     filtered_data.variable.values
-        # )
-        # new_df_only_with_relative_electricity_demand[
-        #     "value"
-        # ] = list_with_relative_electricity_demands
 
         return dataframe
 

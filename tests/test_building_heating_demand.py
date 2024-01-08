@@ -99,10 +99,6 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
         set_cooling_temperature_in_celsius=set_cooling_temperature_for_building_in_celsius,
         set_heating_temperature_in_celsius=set_heating_temperature_for_building_in_celsius
     )
-    # here no open windows are allowed because this can interfere with the idealized electric heater calculation
-    # whose provided heat is precisely adjsted to calculated building indoor temperature. Opening the window changes the
-    # indoor air temperature
-    my_building_config.enable_opening_windows = False
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )

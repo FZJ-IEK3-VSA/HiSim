@@ -115,7 +115,7 @@ class BuildingConfig(cp.ConfigBase):
             predictive=False,
             set_heating_temperature_in_celsius=set_heating_temperature_in_celsius,
             set_cooling_temperature_in_celsius=set_cooling_temperature_in_celsius,
-            enable_opening_windows=True
+            enable_opening_windows=False
         )
         return config
 

@@ -157,6 +157,7 @@ def air_conditioned_house(
     absolute_conditioned_floor_area_in_m2 = None
     total_base_area_in_m2 = None
     number_of_apartments = None
+    enable_opening_windows: bool = False
 
     # Set on/off controller #onoff
     # t_air_heating = min_comfort_temp
@@ -225,6 +226,7 @@ def air_conditioned_house(
         total_base_area_in_m2=total_base_area_in_m2,
         number_of_apartments=number_of_apartments,
         predictive=predictive,
+        enable_opening_windows=enable_opening_windows
     )
     my_building = building.Building(
         config=my_building_config,

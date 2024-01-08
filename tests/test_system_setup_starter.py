@@ -107,6 +107,7 @@ def test_system_setup_starter_scaling():
             "predictive": False,
             "set_heating_temperature_in_celsius": 19.0,
             "set_cooling_temperature_in_celsius": 24.0,
+            "enable_opening_windows": False
         },
     }
 

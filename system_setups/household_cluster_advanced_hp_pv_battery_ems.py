@@ -186,6 +186,7 @@ def setup_function(
         absolute_conditioned_floor_area_in_m2
     )
     my_building_config.number_of_apartments = number_of_apartments
+    my_building_config.enable_opening_windows = True
     my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
@@ -255,7 +256,8 @@ def setup_function(
     my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-        building_code=my_building_information.buildingcode
+        building_code=my_building_information.buildingcode,
+        number_of_apartments=my_config.number_of_dwellings_per_building
     )
     my_heat_pump_config.group_id = group_id
     my_heat_pump_config.flow_temperature_in_celsius = flow_temperature_in_celsius
@@ -280,6 +282,7 @@ def setup_function(
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
         heating_system_name=my_heat_pump.component_name,
         water_mass_flow_rate_from_hds_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+        number_of_apartments=my_config.number_of_dwellings_per_building
     )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
@@ -563,8 +566,16 @@ def setup_function(
         sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION
         sampling_mode = None
 
+    # ResultPathProviderSingleton().set_important_result_path_information(
+    #     module_directory=my_sim.module_directory,
+    #     model_name=my_sim.module_filename,
+    #     variant_name="surplus_modifier_",
+    #     hash_number=hash_number,
+    #     sorting_option=sorting_option,
+    #     sampling_mode=sampling_mode,
+    # )
     ResultPathProviderSingleton().set_important_result_path_information(
-        module_directory=my_sim.module_directory,
+        module_directory=r"/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/hisim_results",
         model_name=my_sim.module_filename,
         variant_name="surplus_modifier_",
         hash_number=hash_number,

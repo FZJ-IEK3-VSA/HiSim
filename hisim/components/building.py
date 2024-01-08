@@ -93,6 +93,7 @@ class BuildingConfig(cp.ConfigBase):
     predictive: bool
     set_heating_temperature_in_celsius: float
     set_cooling_temperature_in_celsius: float
+    enable_opening_windows: bool
 
     @classmethod
     def get_default_german_single_family_home(
@@ -114,6 +115,7 @@ class BuildingConfig(cp.ConfigBase):
             predictive=False,
             set_heating_temperature_in_celsius=set_heating_temperature_in_celsius,
             set_cooling_temperature_in_celsius=set_cooling_temperature_in_celsius,
+            enable_opening_windows=True
         )
         return config
 
@@ -665,9 +667,9 @@ class Building(cp.Component):
             thermal_mass_average_bulk_temperature_in_celsius
         )
 
-        # if indoor temperature is too high make complete air exchange by opening the windows until outdoor temperature or 20 is reached
-        if self.set_cooling_temperature_in_celsius < indoor_air_temperature_in_celsius and temperature_outside_in_celsius < indoor_air_temperature_in_celsius:
-            indoor_air_temperature_in_celsius = max(20, temperature_outside_in_celsius)
+        # if indoor temperature is too high make complete air exchange by opening the windows until outdoor temperature or set_heating_temperature + 1°C is reached
+        if self.buildingconfig.enable_opening_windows is True and self.set_heating_temperature_in_celsius + 1.0 < self.set_cooling_temperature_in_celsius < indoor_air_temperature_in_celsius and temperature_outside_in_celsius < indoor_air_temperature_in_celsius:
+            indoor_air_temperature_in_celsius = max(self.set_heating_temperature_in_celsius + 1.0, temperature_outside_in_celsius)
             self.window_open = 1
         else:
             self.window_open = 0

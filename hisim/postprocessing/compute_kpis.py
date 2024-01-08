@@ -35,10 +35,16 @@ def building_temperature_control_and_heating_load(
     # get set temperatures
     for wrapped_component in components:
         if "Building" in wrapped_component.my_component.component_name:
-            set_heating_temperature_in_celsius = getattr(wrapped_component.my_component, "set_heating_temperature_in_celsius")
-            set_cooling_temperature_in_celsius = getattr(wrapped_component.my_component, "set_cooling_temperature_in_celsius")
+            set_heating_temperature_in_celsius = getattr(
+                wrapped_component.my_component, "set_heating_temperature_in_celsius"
+            )
+            set_cooling_temperature_in_celsius = getattr(
+                wrapped_component.my_component, "set_cooling_temperature_in_celsius"
+            )
             # get heating load and heating ref temperature
-            heating_load_in_watt = getattr(wrapped_component.my_component, "my_building_information").max_thermal_building_demand_in_watt
+            heating_load_in_watt = getattr(
+                wrapped_component.my_component, "my_building_information"
+            ).max_thermal_building_demand_in_watt
             break
 
     for column in results.columns:
@@ -92,13 +98,11 @@ def building_temperature_control_and_heating_load(
         temperature_hours_of_building_being_above_cooling_set_temperature,
         min_temperature_reached_in_celsius,
         max_temperature_reached_in_celsius,
-        heating_load_in_watt
+        heating_load_in_watt,
     )
 
 
-def get_heatpump_cycles(
-    results: pd.DataFrame,
-) -> float:
+def get_heatpump_cycles(results: pd.DataFrame,) -> float:
     """Get the number of cycles of the heat pump for the simulated period."""
     number_of_cycles = 0
     for column in results.columns:
@@ -118,14 +122,20 @@ def get_heatpump_cycles(
     return number_of_cycles
 
 
-def get_electricity_to_and_from_grid_from_electricty_meter(wrapped_components: List[ComponentWrapper]) -> Tuple[float, float]:
+def get_electricity_to_and_from_grid_from_electricty_meter(
+    wrapped_components: List[ComponentWrapper],
+) -> Tuple[float, float]:
     """Get the electricity injected into the grid or taken from grid measured by the electricity meter."""
     # go through all wrapped components and try to find electricity meter
     for wrapped_component in wrapped_components:
         if "ElectricityMeter" in wrapped_component.my_component.component_name:
 
-            total_energy_from_grid_in_kwh = wrapped_component.my_component.config.total_energy_from_grid_in_kwh
-            total_energy_to_grid_in_kwh = wrapped_component.my_component.config.total_energy_to_grid_in_kwh
+            total_energy_from_grid_in_kwh = (
+                wrapped_component.my_component.config.total_energy_from_grid_in_kwh
+            )
+            total_energy_to_grid_in_kwh = (
+                wrapped_component.my_component.config.total_energy_to_grid_in_kwh
+            )
 
             break
 
@@ -602,14 +612,21 @@ def compute_kpis(
         max_temperature_reached_in_celsius,
         heating_load_in_watt,
     ) = building_temperature_control_and_heating_load(
-        results=results, seconds_per_timestep=simulation_parameters.seconds_per_timestep, components=components
+        results=results,
+        seconds_per_timestep=simulation_parameters.seconds_per_timestep,
+        components=components,
     )
 
     # get cycle numbers of heatpump
     number_of_cycles = get_heatpump_cycles(results=results)
 
     # get electricity from and to grid from electricity meter
-    (total_energy_to_grid_in_kwh, total_energy_from_grid_in_kwh) = get_electricity_to_and_from_grid_from_electricty_meter(wrapped_components=components)
+    (
+        total_energy_to_grid_in_kwh,
+        total_energy_from_grid_in_kwh,
+    ) = get_electricity_to_and_from_grid_from_electricty_meter(
+        wrapped_components=components
+    )
 
     # initialize table for report
     table: List = []
@@ -717,17 +734,25 @@ def compute_kpis(
         ]
     )
     table.append(
-        [
-            "Building heating load:",
-            f"{(heating_load_in_watt):3.0f}",
-            "W",
-        ]
+        ["Building heating load:", f"{(heating_load_in_watt):3.0f}", "W"]
     )
 
     table.append(["Number of heat pump cycles:", f"{number_of_cycles:3.0f}", "-"])
 
-    table.append(["Total energy from electricity grid:", f"{total_energy_from_grid_in_kwh:3.0f}", "kWh"])
-    table.append(["Total energy to electricity grid:", f"{total_energy_to_grid_in_kwh:3.0f}", "kWh"])
+    table.append(
+        [
+            "Total energy from electricity grid:",
+            f"{total_energy_from_grid_in_kwh:3.0f}",
+            "kWh",
+        ]
+    )
+    table.append(
+        [
+            "Total energy to electricity grid:",
+            f"{total_energy_to_grid_in_kwh:3.0f}",
+            "kWh",
+        ]
+    )
 
     # initialize json interface to pass kpi's to building_sizer
     kpi_config = KPIConfig(

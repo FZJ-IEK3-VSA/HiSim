@@ -566,16 +566,8 @@ def setup_function(
         sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION
         sampling_mode = None
 
-    # ResultPathProviderSingleton().set_important_result_path_information(
-    #     module_directory=my_sim.module_directory,
-    #     model_name=my_sim.module_filename,
-    #     variant_name="surplus_modifier_",
-    #     hash_number=hash_number,
-    #     sorting_option=sorting_option,
-    #     sampling_mode=sampling_mode,
-    # )
     ResultPathProviderSingleton().set_important_result_path_information(
-        module_directory=r"/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/hisim_results",
+        module_directory=my_sim.module_directory,  # r"/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/hisim_results",
         model_name=my_sim.module_filename,
         variant_name="surplus_modifier_",
         hash_number=hash_number,

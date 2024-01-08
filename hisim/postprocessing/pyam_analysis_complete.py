@@ -46,10 +46,13 @@ def main():
     time_resolution_of_data_set = pyam_data_collection.PyamDataTypeEnum.YEARLY
 
     cluster_storage_path = "/fast/home/k-rieck/"
+    # cluster_storage_path = "/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/hisim_results/results/"
 
-    # folder_from_which_data_will_be_collected = os.path.join(
-    #     cluster_storage_path, "repositories/HiSim/system_setups/results/household_cluster_reference_advanced_hp/monte_carlo_20231115_0921/",
-    # )
+    folder_from_which_data_will_be_collected = os.path.join(
+        cluster_storage_path,
+        "household_cluster_advanced_hp_pv_battery_ems/monte_carlo_20240108_0935",
+    )
+
     folder_from_which_data_will_be_collected = os.path.join(
         cluster_storage_path, "repositories/HiSim/system_setups/results/",
     )

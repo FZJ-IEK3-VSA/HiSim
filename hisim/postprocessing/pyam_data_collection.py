@@ -44,7 +44,9 @@ class PyamDataCollector:
 
         log.information(f"Checking results from folder: {result_folder}")
 
-        list_with_pyam_data_folders = self.get_only_useful_data(result_path=result_folder)
+        list_with_pyam_data_folders = self.get_only_useful_data(
+            result_path=result_folder
+        )
 
         if data_processing_mode == PyamDataProcessingModeEnum.PROCESS_ALL_DATA:
 
@@ -79,7 +81,7 @@ class PyamDataCollector:
             == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_SHARE_OF_MAXIMUM_PV
         ):
             parameter_key = "share_of_maximum_pv_power"
-        
+
         elif (
             data_processing_mode
             == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_NUMBER_OF_DWELLINGS
@@ -559,7 +561,7 @@ class PyamDataCollector:
                     parameter_key is not None
                     and list_with_parameter_key_values is not None
                     and list_with_parameter_key_values != []
-                ): 
+                ):
                     # rename scenario adding paramter key, value pair
                     dataframe[
                         "scenario"
@@ -677,8 +679,10 @@ class PyamDataCollector:
                     if "ref_" in scenario_name:
                         try:
                             my_module_config_dict["share_of_maximum_pv_power"] = 0
-                        except Exception:
-                            raise KeyError("The key share of maximum pv power does not exist in the module dict. Unable this function if it not needed.")
+                        except Exception as ecx:
+                            raise KeyError(
+                                "The key share of maximum pv power does not exist in the module dict. Unable this function if it not needed."
+                            ) from ecx
 
         # check if module config and default config have any keys in common
         if len(set(default_config_dict).intersection(my_module_config_dict)) == 0:
@@ -698,7 +702,7 @@ class PyamDataCollector:
         # for each parameter different than the default config parameter, get the respective path to the folder
         # and also create a dict with the parameter, value pairs
 
-        #if my_module_config_dict[parameter_key] != default_config_dict[parameter_key]:
+        # if my_module_config_dict[parameter_key] != default_config_dict[parameter_key]:
 
         list_with_csv_files.append(path_to_pyam_data_folder)
         list_with_parameter_key_values.append(my_module_config_dict[parameter_key])
@@ -791,7 +795,6 @@ class PyamDataCollector:
                     list_with_module_configs=list_with_module_configs,
                     parameter_key=parameter_key,
                 )
-    
 
         return (
             list_with_csv_files,

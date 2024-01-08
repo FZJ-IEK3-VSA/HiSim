@@ -86,7 +86,7 @@ class PyAmChartGenerator:
         ):
             data_path_strip = "data_with_different_share_of_maximum_pv_powers"
             result_path_strip = "results_different_share_of_maximum_pv_powers"
-        
+
         elif (
             data_processing_mode
             == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_NUMBER_OF_DWELLINGS
@@ -288,7 +288,6 @@ class PyAmChartGenerator:
                 self.make_histogram_plot_for_pandas_dataframe(
                     filtered_data=filtered_data, title=self.path_addition, unit=unit
                 )
-
 
             elif time_resolution_of_data_set in (
                 PyamDataTypeEnum.HOURLY,
@@ -575,7 +574,7 @@ class PyAmChartGenerator:
                 int(max(filtered_data.value.values)),
                 round(int(max(filtered_data.value.values) / 10), 0),
             )
-        else: 
+        else:
             x_tick_locations = None
         plt.xticks(
             ticks=x_tick_locations,
@@ -600,7 +599,6 @@ class PyAmChartGenerator:
             bbox_inches="tight",
         )
         plt.close()
-
 
     # def make_sankey_plot_for_pyam_dataframe(
     #     self,
@@ -809,9 +807,7 @@ class PyAmChartGenerator:
     def check_if_scenario_exists_and_filter_dataframe_for_scenarios_dict(
         self,
         data_frame: pd.DataFrame,
-        dict_of_scenarios_to_check: Dict[
-            str, List[str]
-        ],
+        dict_of_scenarios_to_check: Dict[str, List[str]],
     ) -> Tuple[pd.DataFrame, str, str]:
         """Check if scenario exists and filter dataframe for scenario."""
 
@@ -826,7 +822,7 @@ class PyAmChartGenerator:
                 dataframe=concat_df,
                 list_of_scenarios_to_check=list_of_scenarios_to_check,
                 column_name_to_check=scenario_to_check_key,
-                filter_level_index=filter_level_index,
+                # filter_level_index=filter_level_index,
             )
 
             filter_level_index = filter_level_index + 1
@@ -855,7 +851,7 @@ class PyAmChartGenerator:
         dataframe: pd.DataFrame,
         list_of_scenarios_to_check: List,
         column_name_to_check: str,
-        filter_level_index: int,
+        # filter_level_index: int,
     ) -> pd.DataFrame:
         """Check for one scenario."""
 
@@ -897,7 +893,7 @@ class PyAmChartGenerator:
                 [concat_df, df_filtered_for_specific_scenarios], ignore_index=True
             )
             print(dataframe.loc[:, "scenario"])
-           # concat_df[f"scenario_{filter_level_index}"] = dataframe.loc[:, "scenario"]
+            # concat_df[f"scenario_{filter_level_index}"] = dataframe.loc[:, "scenario"]
 
             del df_filtered_for_specific_scenarios
 
@@ -939,45 +935,54 @@ class PyAmChartGenerator:
                 ]
 
                 df_for_one_scenario_and_for_share_zero = df_for_one_scenario.loc[
-                            df_for_one_scenario.share_of_maximum_pv_power
-                            == 0
-                        ]
+                    df_for_one_scenario.share_of_maximum_pv_power == 0
+                ]
 
                 reference_value_for_electricity_demand = (
                     df_for_one_scenario_and_for_share_zero.value.values
                 )
-                relative_electricity_demand = [0] * len(reference_value_for_electricity_demand)
+                relative_electricity_demand = [0] * len(
+                    reference_value_for_electricity_demand
+                )
 
                 # get reference value (when share of pv power is zero)
-                for (
-                    share_of_maximum_pv_power
-                ) in list(set(df_for_one_scenario.share_of_maximum_pv_power.values)):
-                    
+                for share_of_maximum_pv_power in list(
+                    set(df_for_one_scenario.share_of_maximum_pv_power.values)
+                ):
+
                     if share_of_maximum_pv_power != 0:
 
                         df_for_one_scenario_and_for_one_share = df_for_one_scenario.loc[
                             df_for_one_scenario.share_of_maximum_pv_power
                             == share_of_maximum_pv_power
                         ]
-    
+
                         value_for_electricity_demand = (
                             df_for_one_scenario_and_for_one_share.value.values
                         )
-                        
-                        # calculate reference electricity demand for each scenario and share of pv power
-                        relative_electricity_demand = value_for_electricity_demand / reference_value_for_electricity_demand * 100
 
-                        new_df_only_with_relative_electricity_demand = copy.deepcopy(df_for_one_scenario_and_for_one_share)
+                        # calculate reference electricity demand for each scenario and share of pv power
+                        relative_electricity_demand = (
+                            value_for_electricity_demand
+                            / reference_value_for_electricity_demand
+                            * 100
+                        )
+
+                        new_df_only_with_relative_electricity_demand = copy.deepcopy(
+                            df_for_one_scenario_and_for_one_share
+                        )
                         new_df_only_with_relative_electricity_demand.loc[
                             :, "variable"
                         ] = "Relative Electricity Demand"
-                        new_df_only_with_relative_electricity_demand.loc[:, "unit"] = "%"
+                        new_df_only_with_relative_electricity_demand.loc[
+                            :, "unit"
+                        ] = "%"
                         new_df_only_with_relative_electricity_demand.loc[
                             :, "value"
                         ] = relative_electricity_demand
 
                         del df_for_one_scenario_and_for_one_share
- 
+
                         dataframe = pd.concat(
                             [dataframe, new_df_only_with_relative_electricity_demand]
                         )
@@ -989,7 +994,9 @@ class PyAmChartGenerator:
                 df_for_one_scenario = filtered_data.loc[
                     filtered_data.scenario == scenario
                 ]
-                share_of_maximum_pv_power = df_for_one_scenario["share_of_maximum_pv_power"].values[0]
+                share_of_maximum_pv_power = df_for_one_scenario[
+                    "share_of_maximum_pv_power"
+                ].values[0]
 
                 if share_of_maximum_pv_power == 0:
 
@@ -997,17 +1004,14 @@ class PyAmChartGenerator:
 
                 else:
 
-                    value_for_electricity_demand = (
-                        df_for_one_scenario.value.values
-                    )
+                    value_for_electricity_demand = df_for_one_scenario.value.values
                     df_for_one_scenario_and_for_share_zero = filtered_data.loc[
-                                filtered_data.share_of_maximum_pv_power
-                                == 0
-                            ]
+                        filtered_data.share_of_maximum_pv_power == 0
+                    ]
                     reference_value_for_electricity_demand = (
                         df_for_one_scenario_and_for_share_zero.value.values
                     )
-                    
+
                     # calculate reference electricity demand for each scenario and share of pv power
                     relative_electricity_demand = (
                         1
@@ -1020,7 +1024,9 @@ class PyAmChartGenerator:
                         )
                     ) * 100
 
-                new_df_only_with_relative_electricity_demand = copy.deepcopy(df_for_one_scenario)
+                new_df_only_with_relative_electricity_demand = copy.deepcopy(
+                    df_for_one_scenario
+                )
                 new_df_only_with_relative_electricity_demand.loc[
                     :, "variable"
                 ] = "Relative Electricity Demand"
@@ -1030,7 +1036,7 @@ class PyAmChartGenerator:
                 ] = relative_electricity_demand
 
                 del df_for_one_scenario
-                    
+
                 dataframe = pd.concat(
                     [dataframe, new_df_only_with_relative_electricity_demand]
                 )

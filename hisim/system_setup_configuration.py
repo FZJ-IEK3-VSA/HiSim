@@ -35,7 +35,9 @@ class SystemSetupConfigBase(JSONWizard):
 
         # Load (scaled) default values for system setup configuration
         if building_config:
-            my_config = cls.get_scaled_default(building_config)
+            my_config = cls.get_scaled_default(
+                building_config=building_config,
+            )
         else:
             my_config = cls.get_default()
 
@@ -57,6 +59,9 @@ class SystemSetupConfigBase(JSONWizard):
         raise NotImplementedError
 
     @classmethod
-    def get_scaled_default(cls, building_config: building.BuildingConfig) -> Self:
+    def get_scaled_default(
+        cls,
+        building_config: building.BuildingConfig,
+    ) -> Self:
         """Get scaled default."""
         raise NotImplementedError

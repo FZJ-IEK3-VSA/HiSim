@@ -77,6 +77,8 @@ def setup_function(
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
+    my_building_information = building.BuildingInformation(config=my_building_config)
+
     # Build Occupancy
     my_occupancy_config = (
         loadprofilegenerator_connector.OccupancyConfig.get_default_chr01_couple_both_at_work()
@@ -118,18 +120,36 @@ def setup_function(
 
     # Build Heat Pump
     my_heat_pump = generic_heat_pump_for_house_with_hds.GenericHeatPumpNew(
-        config=generic_heat_pump_for_house_with_hds.GenericHeatPumpConfigNew.get_default_generic_heat_pump_config(heating_load_of_building_in_watt=my_building.my_building_information.max_thermal_building_demand_in_watt),
+        config=generic_heat_pump_for_house_with_hds.GenericHeatPumpConfigNew.get_default_generic_heat_pump_config(
+            heating_load_of_building_in_watt=my_building.my_building_information.max_thermal_building_demand_in_watt
+        ),
         my_simulation_parameters=my_simulation_parameters,
     )
+
+    my_hds_controller_config = (
+        heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
+            set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
+            set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
+            heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+        ),
+    )
     # Build Heat Distribution Controller
-    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(),
+    my_heat_distribution_controller = (
+        heat_distribution_system.HeatDistributionController(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_hds_controller_config,
+        )
+    )
+    my_hds_controller_information = (
+        heat_distribution_system.HeatDistributionControllerInformation(
+            config=my_hds_controller_config
+        )
     )
 
     # Build Heat Distribution System
-    my_heat_distribution_system_config = (
-        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(heating_load_of_building_in_watt=my_building.my_building_information.max_thermal_building_demand_in_watt)
+    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+        temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
+        water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
     )
 
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
@@ -138,8 +158,8 @@ def setup_function(
     )
 
     # Build Heat Water Storage
-    my_simple_heat_water_storage_config = (
-        simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
+    my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config(
+        water_mass_flow_rate_from_hds_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second
     )
 
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(

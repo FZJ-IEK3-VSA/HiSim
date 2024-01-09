@@ -7,7 +7,6 @@ from hisim.components import heat_distribution_system, building
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from tests import functions_for_testing as fft
 
 
@@ -108,24 +107,31 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
 
     # Set Heat Distribution System
     hds_name = "HeatDistributionSystem"
-    heating_system = heat_distribution_system.HeatingSystemType.FLOORHEATING
 
     # ===================================================================================================================
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
     my_building_information = building.BuildingInformation(config=my_building_config)
 
-    SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.HEATINGSYSTEM, entry=heating_system
+    # Build Heat Distribution System
+    my_hds_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
+        set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
+        set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+    )
+    my_hds_controller_information = (
+        heat_distribution_system.HeatDistributionControllerInformation(
+            config=my_hds_controller_config
+        )
     )
 
-    # Build Heat Distribution System
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig(
         name=hds_name,
         co2_footprint=0,
         cost=8000,
         lifetime=50,
         maintenance_cost_as_percentage_of_investment=0.01,
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+        temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
+        water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
     )
 
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
@@ -198,8 +204,8 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
     stsv.values[state_from_hds_controller.global_index] = 1
     stsv.values[residence_temperature_indoor_air.global_index] = 19
     timestep = 300
-    water_mass_flow_of_hds_in_kg_per_second = SingletonSimRepository().get_entry(
-        key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATINGDISTRIBUTIONSYSTEM
+    water_mass_flow_of_hds_in_kg_per_second = (
+        my_hds_controller_information.water_mass_flow_rate_in_kp_per_second
     )
     # Simulate
 

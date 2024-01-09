@@ -44,6 +44,7 @@ class PyamDataCollector:
         list_with_pyam_data_folders = self.get_list_of_all_relevant_pyam_data_folders(
             result_path=result_folder
         )
+        print("lsit with pyam folders", list_with_pyam_data_folders)
 
         if data_processing_mode == PyamDataProcessingModeEnum.PROCESS_ALL_DATA:
 
@@ -158,7 +159,7 @@ class PyamDataCollector:
 
     def get_list_of_all_relevant_pyam_data_folders(self, result_path: str) -> List[str]:
         """Get a list of all pyam data folders which you want to analyze."""
-
+        print("result path", result_path)
         # choose which path to check
         path_to_check = os.path.join(result_path, "**", "pyam_data")
 
@@ -176,10 +177,11 @@ class PyamDataCollector:
             + list_of_paths_second_order
             + list_of_paths_third_order
         )
-
+        print("list with all paths to check for pyam data", list_with_all_paths_to_check)
         list_with_no_duplicates = self.go_through_all_pyam_data_folders_and_check_if_module_configs_are_double_somewhere(
             list_of_pyam_folder_paths_to_check=list_with_all_paths_to_check
         )
+        print("list with all paths to check for pyam data after double check", list_with_no_duplicates)
 
         return list_with_no_duplicates
 
@@ -610,6 +612,9 @@ class PyamDataCollector:
                         )
                         my_module_config_dict.update(
                             {"model": config_dict["pyamDataInformation"].get("model")}
+                        )
+                        my_module_config_dict.update(
+                            {"model": config_dict["pyamDataInformation"].get("scenario")}
                         )
 
                         # prevent to add modules with same module config and same simulation duration twice

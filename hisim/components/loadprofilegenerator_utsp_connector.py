@@ -9,7 +9,7 @@ import itertools
 import json
 import os
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple, Any, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 import copy
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -71,8 +71,8 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
 
         config = UtspLpgConnectorConfig(
             name="UTSPConnector",
-            url=os.getenv("UTSP_URL", ""),
-            api_key=os.getenv("UTSP_API_KEY", ""),
+            url=utils.get_environment_variable("UTSP_URL"),
+            api_key=utils.get_environment_variable("UTSP_API_KEY"),
             household=Households.CHR01_Couple_both_at_Work,
             result_dir_path=utils.HISIMPATH["utsp_results"],
             energy_intensity=EnergyIntensityType.EnergySaving,

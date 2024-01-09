@@ -45,7 +45,7 @@ def main():
 
     # Inputs for pyam analysis
     # -------------------------------------------------------------------------------------------------------------------------------------
-    time_resolution_of_data_set = pyam_data_collection.PyamDataTypeEnum.MONTHLY
+    time_resolution_of_data_set = pyam_data_collection.PyamDataTypeEnum.YEARLY
 
     cluster_storage_path = "/fast/home/k-rieck/"
 
@@ -53,8 +53,9 @@ def main():
         cluster_storage_path,
         # "repositories/HiSim/system_setups/results/household_cluster_reference_advanced_hp/german_tabula_buildings_20230919_1905"
         # "repositories/HiSim/system_setups/results/household_cluster_test_advanced_hp/hplib_configs_20230915_1122",
-        "repositories/HiSim/system_setups/results/comparison_ref_and_pv_case",
+        "repositories/HiSim/system_setups/results/household_cluster_advanced_hp_pv_battery_ems/monte_carlo_20231115_0921",
     )
+
     # folder_from_which_data_will_be_collected = (
     #     r"C:\Users\k.rieck\Cluster_stuff_copied\system_setups_results"
     # )
@@ -67,26 +68,27 @@ def main():
     simulation_duration_to_check = str(365)
 
     data_processing_mode = (
-        pyam_data_collection.PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
+        pyam_data_collection.PyamDataProcessingModeEnum.PROCESS_ALL_DATA
     )
 
     filterclass = pyam_data_processing.FilterClass()
     list_with_variables_to_check = (
-        filterclass.heating_demand + filterclass.electricity_data
+        filterclass.kpi_data + filterclass.electricity_data
     )
 
     # list_of_scenarios_to_check = filterclass.building_type
 
     # TODO: filter several scenario parameters (eg pv and building code together) not working yet, need to be fixed
     # dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share,"building_code": ["DE.N.SFH.05.Gen.ReEx.001.002"]}
-    dict_with_scenarios_to_check = {
-        "building_code": [
-            "DE.N.SFH.05.Gen.ReEx.001.002",
-            "DE.N.TH.05.Gen.ReEx.001.002",
-            "DE.N.MFH.05.Gen.ReEx.001.002",
-            "DE.N.AB.05.Gen.ReEx.001.002",
-        ]
-    }
+    # dict_with_scenarios_to_check = {
+    #     "building_code": [
+    #         "DE.N.SFH.05.Gen.ReEx.001.002",
+    #         "DE.N.TH.05.Gen.ReEx.001.002",
+    #         "DE.N.MFH.05.Gen.ReEx.001.002",
+    #         "DE.N.AB.05.Gen.ReEx.001.002",
+    #     ]
+    # }
+    dict_with_scenarios_to_check = None
 
     # list_of_scenarios_to_check = ["DE.N.SFH.05.Gen.ReEx.001.002","DE.N.TH.05.Gen.ReEx.001.002","DE.N.MFH.05.Gen.ReEx.001.002","DE.N.AB.05.Gen.ReEx.001.002"]
 

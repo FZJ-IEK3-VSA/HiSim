@@ -139,7 +139,7 @@ class HeatingComponentInBuilding(dynamic_component.DynamicComponent):
             my_component_outputs=self.my_component_outputs,
             name=self.heatingcomponentconfig.name,
             my_simulation_parameters=my_simulation_parameters,
-            my_config=config
+            my_config=config,
         )
 
         # =================================================================================================================================
@@ -149,8 +149,10 @@ class HeatingComponentInBuilding(dynamic_component.DynamicComponent):
         self.test_new_temperature_in_celsius: float
         self.build()
 
-        self.state: Test_BuildingControllerState = Test_BuildingControllerState(temperature_building_target_in_celsius=self.temperature_building_target_in_celsius,
-        level_of_utilization=self.level_of_utilization)
+        self.state: Test_BuildingControllerState = Test_BuildingControllerState(
+            temperature_building_target_in_celsius=self.temperature_building_target_in_celsius,
+            level_of_utilization=self.level_of_utilization,
+        )
         self.previous_state = self.state.clone()
 
         # =================================================================================================================================
@@ -191,10 +193,16 @@ class HeatingComponentInBuilding(dynamic_component.DynamicComponent):
             if force_convergence:
                 return
 
-            thermal_power_delivered_in_watt = stsv.get_input_value(self.thermal_power_delivered_channel)
-            mass_input_in_kilogram_per_second = stsv.get_input_value(self.mass_input_channel)
+            thermal_power_delivered_in_watt = stsv.get_input_value(
+                self.thermal_power_delivered_channel
+            )
+            mass_input_in_kilogram_per_second = stsv.get_input_value(
+                self.mass_input_channel
+            )
 
-            temperature_input_in_celsius = stsv.get_input_value(self.temperature_input_channel)
+            temperature_input_in_celsius = stsv.get_input_value(
+                self.temperature_input_channel
+            )
 
             if thermal_power_delivered_in_watt > 0 and (
                 mass_input_in_kilogram_per_second == 0
@@ -253,7 +261,9 @@ class HeatingComponentInBuilding(dynamic_component.DynamicComponent):
 
         # Only with HeatPump
         elif self.thermal_power_delivered_channel.source_output is not None:
-            thermal_power_delivered_in_watt = stsv.get_input_value(self.thermal_power_delivered_channel)
+            thermal_power_delivered_in_watt = stsv.get_input_value(
+                self.thermal_power_delivered_channel
+            )
         # else:
         #     thermal_power_delivered_in_watt = sum(
         #         self.get_dynamic_inputs(tags=[lt.InandOutputType.HEAT_TO_BUILDING])
@@ -331,7 +341,7 @@ class Test_BuildingController(cp.Component):
         super().__init__(
             name="BuildingController",
             my_simulation_parameters=my_simulation_parameters,
-            my_config=config
+            my_config=config,
         )
         self.minimal_building_temperature_in_celsius = (
             config.minimal_building_temperature_in_celsius

@@ -259,11 +259,13 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         )
 
         self.add_dynamic_default_connections(self.get_default_connections_from_occupancy())
+        self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())
         self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
         self.add_dynamic_default_connections(self.get_default_connections_from_dhw_heat_pump())
         self.add_dynamic_default_connections(
             self.get_default_connections_from_advanced_heat_pump()
         )
+        self.add_dynamic_default_connections(self.get_default_connections_from_advanced_battery())
 
     def get_default_connections_from_occupancy(
         self,
@@ -279,6 +281,28 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 source_component_class=Occupancy,
                 source_class_name=occupancy_class_name,
                 source_component_field_name=Occupancy.ElectricityOutput,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+                source_weight=999,
+            )
+        )
+        return dynamic_connections
+
+    def get_default_connections_from_utsp_occupancy(
+        self,
+    ):
+        """Get utsp occupancy default connections."""
+
+        from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector  # pylint: disable=import-outside-toplevel
+
+        dynamic_connections = []
+        occupancy_class_name = UtspLpgConnector.get_classname()
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=UtspLpgConnector,
+                source_class_name=occupancy_class_name,
+                source_component_field_name=UtspLpgConnector.ElectricityOutput,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],

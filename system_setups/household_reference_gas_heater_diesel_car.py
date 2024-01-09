@@ -70,11 +70,21 @@ class ReferenceHouseholdConfig(SystemSetupConfigBase):
 
         heating_reference_temperature_in_celsius: float = -7
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0
-
         building_config = (
-            building.BuildingConfig.get_default_german_single_family_home()
+            building.BuildingConfig.get_default_german_single_family_home(heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius)
         )
         my_building_information = building.BuildingInformation(config=building_config)
+        hds_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
+            set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
+            set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
+            heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
+        )
+        my_hds_controller_information = (
+            heat_distribution_system.HeatDistributionControllerInformation(
+                config=hds_controller_config
+            )
+        )
 
         household_config = ReferenceHouseholdConfig(
             building_type="blub",
@@ -96,12 +106,11 @@ class ReferenceHouseholdConfig(SystemSetupConfigBase):
                 predictive_control=False,
             ),
             building_config=building_config,
-            hds_controller_config=(
-                heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
-            ),
+            hds_controller_config=hds_controller_config,
             hds_config=(
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+                    temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
+                    water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
                 )
             ),
             gasheater_controller_config=(
@@ -114,7 +123,9 @@ class ReferenceHouseholdConfig(SystemSetupConfigBase):
             ),
             simple_hot_water_storage_config=(
                 simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+                    max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
+                    heating_system_name="GasHeater",
+                    water_mass_flow_rate_from_hds_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
                 )
             ),
             dhw_heatpump_config=(
@@ -140,14 +151,6 @@ class ReferenceHouseholdConfig(SystemSetupConfigBase):
         )
         household_config.gasheater_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
             set_heating_threshold_outside_temperature_in_celsius
-        )
-
-        # set same heating reference temperature
-        household_config.hds_controller_config.heating_reference_temperature_in_celsius = (
-            heating_reference_temperature_in_celsius
-        )
-        household_config.building_config.heating_reference_temperature_in_celsius = (
-            heating_reference_temperature_in_celsius
         )
 
         # set dhw storage volume, because default(volume = 230) leads to an error

@@ -11,12 +11,16 @@ from utspclient.helpers.lpgdata import (
     EnergyIntensityType,
 )
 from utspclient.helpers.lpgpythonbindings import JsonReference
+from dotenv import load_dotenv
 from tests import functions_for_testing as fft
 from hisim import component
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.simulationparameters import SimulationParameters
 from hisim.utils import get_environment_variable
 from hisim import log
+
+
+load_dotenv()
 
 
 @pytest.mark.utsp
@@ -41,6 +45,8 @@ def test_occupancy_scaling_with_utsp():
     household_list = [
         Households.CHR02_Couple_30_64_age_with_work,
         Households.CHR02_Couple_30_64_age_with_work,
+        # Households.CHR02_Couple_30_64_age_with_work,
+        # Households.CHR02_Couple_30_64_age_with_work,
     ]
     (
         number_of_residents_two,
@@ -51,24 +57,24 @@ def test_occupancy_scaling_with_utsp():
     ) = initialize_lpg_utsp_connector_and_return_results(households=household_list)
 
     log.information(
-        "number of residents in 2 households " + str(number_of_residents_two)
+        f"number of residents in {len(household_list)} households " + str(number_of_residents_two)
     )
 
     # now test if results are doubled when occupancy is initialzed with 2 households
     np.testing.assert_allclose(
-        number_of_residents_two, 2 * number_of_residents_one, rtol=0.01
+        number_of_residents_two, len(household_list) * number_of_residents_one, rtol=0.01
     )
     np.testing.assert_allclose(
-        heating_by_residents_two, 2 * heating_by_residents_one, rtol=0.01
+        heating_by_residents_two, len(household_list) * heating_by_residents_one, rtol=0.01
     )
     np.testing.assert_allclose(
-        heating_by_devices_two, 2 * heating_by_devices_one, rtol=0.01
+        heating_by_devices_two, len(household_list) * heating_by_devices_one, rtol=0.01
     )
     np.testing.assert_allclose(
-        electricity_consumption_two, 2 * electricity_consumption_one, rtol=0.01
+        electricity_consumption_two, len(household_list) * electricity_consumption_one, rtol=0.01
     )
     np.testing.assert_allclose(
-        water_consumption_two, 2 * water_consumption_one, rtol=0.01
+        water_consumption_two, len(household_list) * water_consumption_one, rtol=0.01
     )
 
 
@@ -94,11 +100,13 @@ def initialize_lpg_utsp_connector_and_return_results(
     transportation_device_set = TransportationDeviceSets.Bus_and_one_30_km_h_Car
     charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
     energy_intensity = EnergyIntensityType.EnergySaving
+    guid = "guid should not be varied automatically"
 
     # Build Simu Params
     my_simulation_parameters = SimulationParameters.full_year(
         year=year, seconds_per_timestep=seconds_per_timestep
     )
+
     # Build occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
         name="UTSPConnector",
@@ -113,6 +121,7 @@ def initialize_lpg_utsp_connector_and_return_results(
         profile_with_washing_machine_and_dishwasher=True,
         predictive_control=False,
         energy_intensity=energy_intensity,
+        guid=guid
     )
 
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
@@ -127,7 +136,7 @@ def initialize_lpg_utsp_connector_and_return_results(
 
     my_occupancy.i_simulate(0, stsv, False)
 
-    timestep = 10
+    timestep = 0
     my_occupancy.i_simulate(timestep, stsv, False)
     number_of_residents = stsv.values[
         my_occupancy.number_of_residents_channel.global_index
@@ -141,9 +150,10 @@ def initialize_lpg_utsp_connector_and_return_results(
     electricity_consumption = stsv.values[
         my_occupancy.electricity_output_channel.global_index
     ]
-    print(electricity_consumption)
+
     water_consumption = stsv.values[my_occupancy.water_consumption_channel.global_index]
 
+    print(number_of_residents, heating_by_residents, heating_by_devices, electricity_consumption)
     return (
         number_of_residents,
         heating_by_residents,

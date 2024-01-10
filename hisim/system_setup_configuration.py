@@ -2,6 +2,7 @@
 
 # clean
 
+from typing import Any
 import json
 from dataclasses import dataclass
 from dataclass_wizard import JSONWizard
@@ -25,7 +26,7 @@ class SystemSetupConfigBase(JSONWizard):
         with open(module_config_path, "r", encoding="utf8") as file:
             module_config_dict = json.loads(file.read())
 
-        # Read building config
+        # Read building config overwrites. It is used to scale the system setup.
         building_config_dict = module_config_dict.pop("building_config", {})
         if building_config_dict:
             log.information("Using `building_config` for scaling.")
@@ -33,15 +34,25 @@ class SystemSetupConfigBase(JSONWizard):
         else:
             building_config = None
 
-        # Load (scaled) default values for system setup configuration
+        # Load option overwrites.
+        options_dict = module_config_dict.pop("options", {})
+        options = cls.get_default_options()
+        if options_dict:
+            log.information("Using `options`.")
+            utils.set_attributes_of_dataclass_from_dict(options, options_dict)
+
+        # Load (scaled) default values for system setup configuration.
+        if options_dict and not building_config:
+            raise ValueError("Options for default setup not yet implemented.")
         if building_config:
             my_config = cls.get_scaled_default(
                 building_config=building_config,
+                options=options
             )
         else:
             my_config = cls.get_default()
 
-        # Read setup config
+        # Read setup config overwrites
         setup_config_dict = module_config_dict.pop("system_setup_config", {})
         if setup_config_dict:
             log.information("Using `system_setup_config` to overwrite defaults.")
@@ -54,6 +65,11 @@ class SystemSetupConfigBase(JSONWizard):
         return my_config
 
     @classmethod
+    def get_default_options(cls) -> Any:
+        """Get default options."""
+        raise NotImplementedError
+
+    @classmethod
     def get_default(cls) -> Self:
         """Get default."""
         raise NotImplementedError
@@ -62,6 +78,7 @@ class SystemSetupConfigBase(JSONWizard):
     def get_scaled_default(
         cls,
         building_config: building.BuildingConfig,
+        options: Any
     ) -> Self:
         """Get scaled default."""
         raise NotImplementedError

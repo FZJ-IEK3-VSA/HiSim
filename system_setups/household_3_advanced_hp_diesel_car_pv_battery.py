@@ -5,7 +5,7 @@
 from typing import List, Optional, Any
 from pathlib import Path
 from dataclasses import dataclass
-from os import getenv, listdir
+from os import listdir
 from dataclasses_json import dataclass_json
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,
@@ -109,8 +109,8 @@ class HouseholdAdvancedHPDieselCarPVBatteryConfig(SystemSetupConfigBase):
             # simulation_parameters=SimulationParameters.one_day_only(2022),
             # total_base_area_in_m2=121.2,
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-                url=getenv("UTSP_URL", ""),
-                api_key=getenv("UTSP_API_KEY", ""),
+                url=utils.get_environment_variable("UTSP_URL"),
+                api_key=utils.get_environment_variable("UTSP_API_KEY"),
                 household=Households.CHR01_Couple_both_at_Work,
                 energy_intensity=EnergyIntensityType.EnergySaving,
                 result_dir_path=utils.HISIMPATH["results"],

@@ -5,7 +5,7 @@
 from typing import List, Optional, Any
 from pathlib import Path
 from dataclasses import dataclass
-from os import getenv, listdir
+from os import listdir
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,
     Households,
@@ -108,8 +108,8 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
             building_type="blub",
             number_of_apartments=int(my_building_information.number_of_apartments),
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-                url=getenv("UTSP_URL", ""),
-                api_key=getenv("UTSP_API_KEY", ""),
+                url=utils.get_environment_variable("UTSP_URL"),
+                api_key=utils.get_environment_variable("UTSP_API_KEY"),
                 household=Households.CHR01_Couple_both_at_Work,
                 energy_intensity=EnergyIntensityType.EnergySaving,
                 result_dir_path=utils.HISIMPATH["results"],

@@ -109,7 +109,7 @@ class WindturbineConfig(ConfigBase):
             power_output_model="power_curve", #power_curve','power_coefficient_curve'
             density_correction=False,
             obstacle_height=0,
-            hellman_exp=None,  #This parameter is only used if the parameter `wind_speed_model` is 'hellman'.
+            hellman_exp=0,  #This parameter is only used if the parameter `wind_speed_model` is 'hellman'.
 
             source_weight=999,
             co2_footprint=0,

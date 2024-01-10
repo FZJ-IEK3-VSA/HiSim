@@ -15,7 +15,7 @@ def test_windturbine():
     # Sets inputs
     # weather_location = "Aachen"
     seconds_per_timestep = 60
-    turbine_type="V126/3300"        #Vestas - V126-3.3 MW
+    turbine_type = "V126/3300"  # Vestas - V126-3.3 MW
 
     repo = sim_repository.SimRepository()
 
@@ -51,13 +51,13 @@ def test_windturbine():
     my_windturbine.wind_speed_channel.source_output = my_weather.wind_speed_output
     my_windturbine.pressure_channel.source_output = my_weather.pressure_output
 
-
     fft.add_global_index_of_components([my_weather, my_windturbine])
 
     timestep = 55535
     my_weather.i_simulate(timestep, stsv, False)
     my_windturbine.i_simulate(timestep, stsv, False)
-    log.information("windturbine electricity output [W]: " + str(stsv.values[my_windturbine.electricity_output_channel.global_index]))
+    log.information("windturbine electricity output [W]: " + str(
+        stsv.values[my_windturbine.electricity_output_channel.global_index]))
 
     # check windturbine electricity output [W] in timestep 55535
     assert stsv.values[my_windturbine.electricity_output_channel.global_index] == 18816.25770544808

@@ -21,6 +21,7 @@ class Options:
 
 @dataclass
 class ModularHouseholdConfig(SystemSetupConfigBase):
+
     """Modular Household Config class."""
 
     # configuration of the technological equipment of the household

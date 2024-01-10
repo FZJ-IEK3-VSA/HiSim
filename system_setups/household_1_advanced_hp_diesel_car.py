@@ -5,7 +5,7 @@
 from typing import List, Optional, Any
 from pathlib import Path
 from dataclasses import dataclass
-from os import getenv, listdir
+from os import listdir
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,
     Households,
@@ -31,7 +31,6 @@ from hisim.system_setup_configuration import SystemSetupConfigBase
 from hisim import utils
 
 from system_setups.modular_example import cleanup_old_lpg_requests
-import datetime
 
 __authors__ = ["Markus Blasberg", "Kevin Knosala"]
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
@@ -109,8 +108,8 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
             building_type="blub",
             number_of_apartments=int(my_building_information.number_of_apartments),
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-                url="http://134.94.131.167:443/api/v1/profilerequest",
-                api_key="OrjpZY93BcNWw8lKaMp0BEchbCc",
+                url=utils.get_environment_variable("UTSP_URL"),
+                api_key=utils.get_environment_variable("UTSP_API_KEY"),
                 household=Households.CHR01_Couple_both_at_Work,
                 energy_intensity=EnergyIntensityType.EnergySaving,
                 result_dir_path=utils.HISIMPATH["results"],
@@ -157,12 +156,7 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
         )
 
         # adjust HeatPump
-       # household_config.hp_config.group_id = 1  # use modulating heatpump as default
-        household_config.hp_config.model = "WPL 25 A"       #Stiebel WP --> hplib_database_ALL
-
-        household_config.dhw_heatpump_config.manufacturer = "Stiebel Eltron"
-        household_config.dhw_heatpump_config.device_name = "WPL 25"
-
+        household_config.hp_config.group_id = 1  # use modulating heatpump as default
         household_config.hp_controller_config.mode = (
             2  # use heating and cooling as default
         )
@@ -241,8 +235,8 @@ def setup_function(
     # Build Simulation Parameters
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year_all_options(
-            year=year, seconds_per_timestep=seconds_per_timestep)
-
+            year=year, seconds_per_timestep=seconds_per_timestep
+        )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build heat Distribution System Controller
@@ -382,4 +376,3 @@ def setup_function(
     my_sim.add_component(my_electricity_meter, connect_automatically=True)
     for my_car in my_cars:
         my_sim.add_component(my_car)
-

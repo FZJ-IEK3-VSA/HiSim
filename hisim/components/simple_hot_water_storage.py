@@ -320,7 +320,7 @@ class SimpleHotWaterStorage(cp.Component):
             self.component_name,
             self.StandbyHeatLoss,
             lt.LoadTypes.HEATING,
-            lt.Units.WATT_HOUR,
+            lt.Units.WATT,
             output_description=f"here a description for {self.StandbyHeatLoss} will follow.",
         )
         self.add_default_connections(
@@ -504,12 +504,6 @@ class SimpleHotWaterStorage(cp.Component):
             water_temperature_in_celsius=water_temperature_from_heat_distribution_system_in_celsius,
         )
 
-        # heat loss in storage in Wh
-        # ------------------------------
-        stand_by_heat_loss_in_watt_hour_per_timestep = (
-            self.state.heat_loss_in_watt * self.seconds_per_timestep / 3600
-        )
-
         # calc water temperatures
         # ------------------------------
 
@@ -607,7 +601,7 @@ class SimpleHotWaterStorage(cp.Component):
 
         stsv.set_output_value(
             self.stand_by_heat_loss_channel,
-            stand_by_heat_loss_in_watt_hour_per_timestep,
+            self.state.heat_loss_in_watt,
         )
 
         # Set state -------------------------------------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 {
-  "path_to_module": "../../system_setups/household_gas_heater.py",
+  "path_to_module": "../system_setups/household_gas_heater.py",
   "simulation_parameters": {
     "start_date": "2021-01-01T00:00:00",
     "end_date": "2021-01-02T00:00:00",

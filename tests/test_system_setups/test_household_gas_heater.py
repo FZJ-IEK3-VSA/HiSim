@@ -27,13 +27,13 @@ def test_household_gas_heater_main():
 @utils.measure_execution_time
 def test_household_gas_heater_system_setup_starter():
     """Execute setup with hisim system setup starter."""
-    config_json = "configs/household_gas_heater.json"
-    result_directory = "results/test_household_gas_heater_with_system_setup_starter"
+    config_json = "test_system_setups/configs/household_gas_heater.json"
+    result_directory = "test_system_setups/results/test_household_gas_heater_with_system_setup_starter"
     if Path(result_directory).is_dir():
         shutil.rmtree(result_directory)
     Path(result_directory).mkdir(parents=True, exist_ok=True)
 
-    subprocess.check_output(["python", "../../hisim/system_setup_starter.py", config_json, result_directory])
+    subprocess.check_output(["python", "../hisim/system_setup_starter.py", config_json, result_directory])
 
     assert Path(result_directory).joinpath("finished.flag").is_file()
 

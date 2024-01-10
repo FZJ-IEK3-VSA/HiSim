@@ -9,7 +9,7 @@ import os
 from functools import wraps
 from functools import reduce as freduce
 from timeit import default_timer as timer
-from typing import Any, Dict, Tuple, List
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 import psutil
@@ -490,3 +490,15 @@ def set_attributes_of_dataclass_from_dict(dataclass_, dict_, nested=None):
                     f"""Attribute `{attribute}` from JSON cannot be found
                     in `{dataclass_.__class__.__name__}`."""
                 )
+
+
+def get_environment_variable(key: str, default: Optional[str] = None) -> str:
+    """Get environment variable. Raise error if variable not found."""
+    value = os.getenv(key, default)
+    if not value:
+        raise ValueError(
+            f"""Could not determine value of environment variable: {key}.
+                         Make sure to set it in an `.env` file inside the HiSim root folder
+                         or somewhere within your system environment."""
+        )
+    return value

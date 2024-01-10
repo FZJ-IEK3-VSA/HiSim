@@ -70,6 +70,15 @@ After setting up the virtual environment, install the package to your local libr
 pip install -e .
 ```
 
+Optional: Set environment variables
+-----------------------
+Certain components might access APIs to retrieve data. In order to use them, you need to set the url and key as environment variables. This can be done with an `.env` file wihtin the HiSim root folder or with system tools. The environment variables are:
+
+```
+UTSP_URL
+UTSP_API_KEY
+```
+
 Run Simple System Setups
 -----------------------
 Run the python interpreter in the `HiSim/system_setups` directory with the following command:

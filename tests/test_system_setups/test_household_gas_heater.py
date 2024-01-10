@@ -15,7 +15,7 @@ from hisim.postprocessingoptions import PostProcessingOptions
 def test_household_gas_heater_main():
     """Execute setup with default values with hisim main."""
 
-    path = "../../system_setups/household_gas_heater.py"
+    path = "../system_setups/household_gas_heater.py"
 
     mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
     mysimpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)

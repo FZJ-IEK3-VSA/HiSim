@@ -265,7 +265,6 @@ def setup_function(
     my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-        building_code=my_building_information.buildingcode,
         number_of_apartments=my_config.number_of_dwellings_per_building
     )
     my_heat_pump_config.group_id = group_id
@@ -290,7 +289,6 @@ def setup_function(
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
         heating_system_name=my_heat_pump.component_name,
         water_mass_flow_rate_from_hds_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
-        number_of_apartments=my_config.number_of_dwellings_per_building
     )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,

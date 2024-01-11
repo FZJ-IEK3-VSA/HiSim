@@ -122,6 +122,59 @@ def get_heatpump_cycles(results: pd.DataFrame,) -> float:
     return number_of_cycles
 
 
+def get_heat_pump_seasonal_performance_factor(
+    results: pd.DataFrame, seconds_per_timestep: int
+) -> float:
+    """Get SPF from heat pump over simulated period.
+
+    Transform thermal and electrical power from heat pump in energies.
+    """
+    thermal_output_energy_in_watt_hour = 0.0
+    electrical_energy_in_watt_hour = 1.0
+    for column in results.columns:
+
+        if "ThermalOutputPower" in column.split(sep=" "):
+            # take only output values for heating
+            thermal_output_power_values_in_watt = [
+                value for value in results[column].values if value > 0.0
+            ]
+            # get energy from power
+            thermal_output_energy_in_watt_hour = (
+                sum(thermal_output_power_values_in_watt) * seconds_per_timestep / 3600
+            )
+        if "ElectricalInputPower" in column.split(sep=" "):
+            # get electrical energie values
+            electrical_energy_in_watt_hour = (
+                sum(results[column].values) * seconds_per_timestep / 3600
+            )
+
+    # calculate SPF
+    spf = thermal_output_energy_in_watt_hour / electrical_energy_in_watt_hour
+    return spf
+
+
+def get_heat_pump_kpis(
+    results: pd.DataFrame, seconds_per_timestep: int, components: List[ComponentWrapper]
+) -> Tuple[float, float]:
+    """Get some KPIs from Heat Pump."""
+    number_of_cycles = 0.0
+    spf = 0.0
+    # check if Heat Pump was used in components
+    for wrapped_component in components:
+        if "HeatPump" in wrapped_component.my_component.component_name:
+            # get number of heat pump cycles over simulated period
+            number_of_cycles = get_heatpump_cycles(results=results)
+            # get SPF
+            spf = get_heat_pump_seasonal_performance_factor(
+                results=results, seconds_per_timestep=seconds_per_timestep
+            )
+        # heat pump was not used
+        else:
+            pass
+
+    return number_of_cycles, spf
+
+
 def get_electricity_to_and_from_grid_from_electricty_meter(
     wrapped_components: List[ComponentWrapper],
 ) -> Tuple[float, float]:
@@ -618,7 +671,11 @@ def compute_kpis(
     )
 
     # get cycle numbers of heatpump
-    number_of_cycles = get_heatpump_cycles(results=results)
+    number_of_cycles, spf = get_heat_pump_kpis(
+        results=results,
+        seconds_per_timestep=simulation_parameters.seconds_per_timestep,
+        components=components,
+    )
 
     # get electricity from and to grid from electricity meter
     (
@@ -738,7 +795,7 @@ def compute_kpis(
     )
 
     table.append(["Number of heat pump cycles:", f"{number_of_cycles:3.0f}", "-"])
-
+    table.append(["Seasonal performance factor of heat pump:", f"{spf:3.0f}", "-"])
     table.append(
         [
             "Total energy from electricity grid:",

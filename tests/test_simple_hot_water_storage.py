@@ -47,7 +47,7 @@ def simulate_simple_water_storage(
     my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig(
         name=hws_name,
         volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
-        temperature_loss_in_celsius_per_hour=0.0,
+        heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,
         heat_exchanger_is_present=False,
         co2_footprint=100,
         cost=volume_heating_water_storage_in_liter * 14.51,

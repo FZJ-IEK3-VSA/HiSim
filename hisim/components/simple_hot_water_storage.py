@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 import pandas as pd
-
+import numpy as np
 import hisim.component as cp
 from hisim.component import (
     SingleTimeStepValues,
@@ -46,8 +46,10 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
 
     name: str
     volume_heating_water_storage_in_liter: float
-    temperature_loss_in_celsius_per_hour: float
+    heat_transfer_coefficient_in_watt_per_m2_per_kelvin: float
     heat_exchanger_is_present: bool
+    # it should be checked how much energy the storage lost during the simulated period (see guidelines below, p.2, accepted loss in kWh/days)
+    # https://www.bdh-industrie.de/fileadmin/user_upload/ISH2019/Infoblaetter/Infoblatt_Nr_74_Energetische_Bewertung_Warmwasserspeicher.pdf
     water_mass_flow_rate_from_hds_in_kg_per_second: float
     #: CO2 footprint of investment in kg
     co2_footprint: float
@@ -68,8 +70,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
             name="SimpleHotWaterStorage",
             volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
             water_mass_flow_rate_from_hds_in_kg_per_second=water_mass_flow_rate_from_hds_in_kg_per_second,
-            # https://www.energieverbraucher.de/de/heizungsspeicher__2102/#:~:text=Ein%20Speicher%20k%C3%BChlt%20t%C3%A4glich%20etwa,heutigen%20Energiepreisen%20t%C3%A4glich%2020%20Cent.
-            temperature_loss_in_celsius_per_hour=0.125,  # is the same as 3°C/day (see link)
+            heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,
             heat_exchanger_is_present=True,  # until now stratified mode is causing problems, so heat exchanger mode is recommended
             co2_footprint=100,  # Todo: check value
             cost=volume_heating_water_storage_in_liter
@@ -133,8 +134,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
             name="SimpleHotWaterStorage",
             water_mass_flow_rate_from_hds_in_kg_per_second=water_mass_flow_rate_from_hds_in_kg_per_second,
             volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
-            # https://www.energieverbraucher.de/de/heizungsspeicher__2102/#:~:text=Ein%20Speicher%20k%C3%BChlt%20t%C3%A4glich%20etwa,heutigen%20Energiepreisen%20t%C3%A4glich%2020%20Cent.
-            temperature_loss_in_celsius_per_hour=0.125,  # is the same as 3°C/day (see link)
+            heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,
             heat_exchanger_is_present=True,  # until now stratified mode is causing problems, so heat exchanger mode is recommended
             co2_footprint=100,  # Todo: check value
             cost=volume_heating_water_storage_in_liter
@@ -150,14 +150,16 @@ class SimpleHotWaterStorageState:
 
     """SimpleHotWaterStorageState class."""
 
-    mean_water_temperature_in_celsius: float = 25
-    temperature_loss_in_celsius_per_timestep: float = 0
+    mean_water_temperature_in_celsius: float = 25.0
+    temperature_loss_in_celsius_per_timestep: float = 0.0
+    heat_loss_in_watt: float = 0.0
 
     def self_copy(self):
         """Copy the Simple Hot Water Storage State."""
         return SimpleHotWaterStorageState(
             self.mean_water_temperature_in_celsius,
             self.temperature_loss_in_celsius_per_timestep,
+            self.heat_loss_in_watt,
         )
 
 
@@ -204,9 +206,6 @@ class SimpleHotWaterStorage(cp.Component):
         # Initialization of variables
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
         self.waterstorageconfig = config
-        self.temperature_loss_in_celsius_per_hour = (
-            self.waterstorageconfig.temperature_loss_in_celsius_per_hour
-        )
 
         self.mean_water_temperature_in_water_storage_in_celsius: float = 21
 
@@ -328,7 +327,7 @@ class SimpleHotWaterStorage(cp.Component):
             self.component_name,
             self.StandbyHeatLoss,
             lt.LoadTypes.HEATING,
-            lt.Units.WATT_HOUR,
+            lt.Units.WATT,
             output_description=f"here a description for {self.StandbyHeatLoss} will follow.",
         )
         self.add_default_connections(
@@ -508,13 +507,6 @@ class SimpleHotWaterStorage(cp.Component):
             water_temperature_in_celsius=water_temperature_from_heat_distribution_system_in_celsius,
         )
 
-        # calc heat loss in storage
-        # ------------------------------
-        stand_by_heat_loss_in_watt_hour_per_timestep = self.calculate_stand_by_heat_loss(
-            temperature_loss_in_celsius_per_timestep=self.state.temperature_loss_in_celsius_per_timestep,
-            water_mass_in_storage_in_kg=self.water_mass_in_storage_in_kg,
-        )
-
         # calc water temperatures
         # ------------------------------
 
@@ -612,16 +604,24 @@ class SimpleHotWaterStorage(cp.Component):
 
         stsv.set_output_value(
             self.stand_by_heat_loss_channel,
-            stand_by_heat_loss_in_watt_hour_per_timestep,
+            self.state.heat_loss_in_watt,
         )
 
         # Set state -------------------------------------------------------------------------------------------------------
 
-        self.state.temperature_loss_in_celsius_per_timestep = self.calculate_temperature_loss(
-            mean_water_temperature_in_water_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
+        # calc heat loss in W and the temperature loss
+        (
+            self.state.heat_loss_in_watt,
+            self.state.temperature_loss_in_celsius_per_timestep,
+        ) = self.calculate_heat_loss_and_temperature_loss(
+            storage_surface_in_m2=self.storage_surface_in_m2,
             seconds_per_timestep=self.seconds_per_timestep,
-            temperature_loss_in_celsius_per_hour=self.temperature_loss_in_celsius_per_hour,
+            mean_water_temperature_in_water_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
+            heat_transfer_coefficient_in_watt_per_m2_per_kelvin=self.heat_transfer_coefficient_in_watt_per_m2_per_kelvin,
+            mass_in_storage_in_kg=self.water_mass_in_storage_in_kg,
+            ambient_temperature_in_celsius=self.ambient_temperature_in_celsius,
         )
+
         self.state.mean_water_temperature_in_celsius = (
             self.mean_water_temperature_in_water_storage_in_celsius
             - self.state.temperature_loss_in_celsius_per_timestep
@@ -635,12 +635,25 @@ class SimpleHotWaterStorage(cp.Component):
         self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = (
             PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
         )
+        self.specific_heat_capacity_of_water_in_watthour_per_kilogram_per_celsius = (
+            PhysicsConfig.water_specific_heat_capacity_in_watthour_per_kilogramm_per_kelvin
+        )
         # https://www.internetchemie.info/chemie-lexikon/daten/w/wasser-dichtetabelle.php
         self.density_water_at_40_degree_celsius_in_kg_per_liter = 0.992
+
+        # physical parameters of storage
         self.water_mass_in_storage_in_kg = (
             self.density_water_at_40_degree_celsius_in_kg_per_liter
             * self.waterstorageconfig.volume_heating_water_storage_in_liter
         )
+        self.heat_transfer_coefficient_in_watt_per_m2_per_kelvin = self.config.heat_transfer_coefficient_in_watt_per_m2_per_kelvin
+        self.storage_surface_in_m2 = self.calculate_surface_area_of_storage(
+            storage_volume_in_liter=self.waterstorageconfig.volume_heating_water_storage_in_liter,
+        )
+
+        # the ambient temperature is here assumed as the basement temperature which is all year 17°C, this is where the water storage is located
+        self.ambient_temperature_in_celsius = 17.0
+
         self.heat_exchanger_is_present = heat_exchanger_is_present
         # if heat exchanger is present, the heat is perfectly exchanged so the water output temperature corresponds to the mean temperature
         if self.heat_exchanger_is_present is True:
@@ -741,25 +754,80 @@ class SimpleHotWaterStorage(cp.Component):
 
         return water_temperature_output_in_celsius
 
-    def calculate_temperature_loss(
+    def calculate_heat_loss_and_temperature_loss(
         self,
-        mean_water_temperature_in_water_storage_in_celsius: float,
+        storage_surface_in_m2: float,
         seconds_per_timestep: float,
-        temperature_loss_in_celsius_per_hour: float,
-    ) -> float:
+        mean_water_temperature_in_water_storage_in_celsius: float,
+        heat_transfer_coefficient_in_watt_per_m2_per_kelvin: float,
+        ambient_temperature_in_celsius: float,
+        mass_in_storage_in_kg: float,
+    ) -> Tuple[float, float]:
         """Calculate temperature loss in celsius per timestep."""
 
-        # make heat loss for mean storage temperature every timestep but only until min temp of 17°C is reached (approx. basement temperature)
-        # this is of course just an approximation. the real heat loss depends on water temp, outside temp, isolation and volume
+        heat_loss_in_watt = self.calculate_heat_loss_in_watt(
+            mean_temperature_in_storage_in_celsius=mean_water_temperature_in_water_storage_in_celsius,
+            storage_surface_in_m2=storage_surface_in_m2,
+            heat_transfer_coefficient_in_watt_per_m2_per_kelvin=heat_transfer_coefficient_in_watt_per_m2_per_kelvin,
+            ambient_temperature_in_celsius=ambient_temperature_in_celsius,
+        )
 
-        if mean_water_temperature_in_water_storage_in_celsius >= 17.0:
-            temperature_loss_in_celsius_per_timestep = (
-                temperature_loss_in_celsius_per_hour / (3600 / seconds_per_timestep)
-            )
-        else:
-            temperature_loss_in_celsius_per_timestep = 0
+        # basis here: Q = m * cw * delta temperature, temperature loss is another term for delta temperature here
+        temperature_loss_of_water_in_celsius_per_hour = heat_loss_in_watt / (
+            self.specific_heat_capacity_of_water_in_watthour_per_kilogram_per_celsius
+            * mass_in_storage_in_kg
+        )
 
-        return temperature_loss_in_celsius_per_timestep
+        # transform from °C/h to °C/timestep
+        temperature_loss_in_celsius_per_timestep = (
+            temperature_loss_of_water_in_celsius_per_hour / (3600 / seconds_per_timestep)
+        )
+
+        return heat_loss_in_watt, temperature_loss_in_celsius_per_timestep
+
+    def calculate_heat_loss_in_watt(
+        self,
+        storage_surface_in_m2: float,
+        mean_temperature_in_storage_in_celsius: float,
+        heat_transfer_coefficient_in_watt_per_m2_per_kelvin: float,
+        ambient_temperature_in_celsius: float,
+    ) -> float:
+        """Calculate the current heat loss.
+
+        It is dependent on storage surface area and current water temperature as well as heat transfer coefficient and ambient temperature.
+        """
+
+        # loss = heat coeff * surface * delta temperature
+        heat_loss_in_watt = (
+            heat_transfer_coefficient_in_watt_per_m2_per_kelvin
+            * storage_surface_in_m2
+            * (mean_temperature_in_storage_in_celsius - ambient_temperature_in_celsius)
+        )
+        return heat_loss_in_watt
+
+    def calculate_surface_area_of_storage(
+        self, storage_volume_in_liter: float
+    ) -> float:
+        """Calculate the surface area of the storage which is assumed to be a cylinder."""
+
+        storage_volume_in_m3 = storage_volume_in_liter * 1e-3
+        # volume = r^2 * pi * h = r^2 * pi * 4r = 4 * r^3 * pi
+        radius_of_storage_in_m = (storage_volume_in_m3 / (4 * np.pi)) ** (
+            1 / 3
+        )
+
+        # lateral surface = 2 * pi * r * h (h=4*r here)
+        lateral_surface_in_m2 = (
+            2 * radius_of_storage_in_m * np.pi * (4 * radius_of_storage_in_m)
+        )
+        # circle surface
+        circle_surface_in_m2 = np.pi * radius_of_storage_in_m**2
+
+        # total storage surface
+        # cylinder surface area = lateral surface +  2 * circle surface
+        storage_surface_in_m2 = lateral_surface_in_m2 + 2 * circle_surface_in_m2
+
+        return float(storage_surface_in_m2)
 
     #########################################################################################################################################################
 
@@ -809,21 +877,6 @@ class SimpleHotWaterStorage(cp.Component):
         )
 
         return thermal_energy_difference_in_watt_hour
-
-    def calculate_stand_by_heat_loss(
-        self,
-        temperature_loss_in_celsius_per_timestep: float,
-        water_mass_in_storage_in_kg: float,
-    ) -> float:
-        """Calculate stand by heat loss of the storage."""
-        heat_loss_in_watt_hour_per_timestep = (
-            water_mass_in_storage_in_kg
-            * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
-            / 3600
-            * temperature_loss_in_celsius_per_timestep
-        )
-
-        return heat_loss_in_watt_hour_per_timestep
 
     @staticmethod
     def get_cost_capex(

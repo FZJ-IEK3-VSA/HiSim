@@ -251,7 +251,6 @@ class L1HeatPumpController(cp.Component):
         self.add_default_connections(
             self.get_default_connections_generic_hot_water_storage_modular()
         )
-        self.add_default_connections(self.get_default_connections_from_building())
 
     def get_default_connections_generic_hot_water_storage_modular(self):
         """Sets default connections for the boiler."""
@@ -269,23 +268,6 @@ class L1HeatPumpController(cp.Component):
                 L1HeatPumpController.StorageTemperature,
                 boiler_classname,
                 component_class.TemperatureMean,
-            )
-        )
-        return connections
-
-    def get_default_connections_from_building(self):
-        """Sets default connections for the boiler."""
-        # use importlib for importing the other component in order to avoid circular-import errors
-        component_module_name = "hisim.components.building"
-        component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "Building")
-        connections = []
-        building_classname = component_class.get_classname()
-        connections.append(
-            cp.ComponentConnection(
-                L1HeatPumpController.StorageTemperature,
-                building_classname,
-                component_class.TemperatureMeanThermalMass,
             )
         )
         return connections

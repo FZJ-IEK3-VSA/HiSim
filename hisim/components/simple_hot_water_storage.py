@@ -432,10 +432,8 @@ class SimpleHotWaterStorage(cp.Component):
 
         state_controller = stsv.get_input_value(self.state_channel)
 
-        water_temperature_from_heat_distribution_system_in_celsius = (
-            stsv.get_input_value(
-                self.water_temperature_heat_distribution_system_input_channel
-            )
+        water_temperature_from_heat_distribution_system_in_celsius = stsv.get_input_value(
+            self.water_temperature_heat_distribution_system_input_channel
         )
         water_temperature_from_heat_generator_in_celsius = stsv.get_input_value(
             self.water_temperature_heat_generator_input_channel
@@ -450,10 +448,8 @@ class SimpleHotWaterStorage(cp.Component):
                 self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo
             )
         else:
-            water_mass_flow_rate_from_heat_generator_in_kg_per_second = (
-                stsv.get_input_value(
-                    self.water_mass_flow_rate_heat_generator_input_channel
-                )
+            water_mass_flow_rate_from_heat_generator_in_kg_per_second = stsv.get_input_value(
+                self.water_mass_flow_rate_heat_generator_input_channel
             )
 
         # Water Temperature Limit Check  --------------------------------------------------------------------------------------------------------
@@ -883,16 +879,12 @@ class SimpleHotWaterStorage(cp.Component):
         return config.cost, config.co2_footprint, config.lifetime
 
     def get_cost_opex(
-        self,
-        all_outputs: List,
-        postprocessing_results: pd.DataFrame,
+        self, all_outputs: List, postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         # pylint: disable=unused-argument
         """Calculate OPEX costs, consisting of maintenance costs for Heat Distribution System."""
         opex_cost_data_class = OpexCostDataClass(
-            opex_cost=self.calc_maintenance_cost(),
-            co2_footprint=0,
-            consumption=0,
+            opex_cost=self.calc_maintenance_cost(), co2_footprint=0, consumption=0,
         )
 
         return opex_cost_data_class
@@ -912,9 +904,7 @@ class SimpleHotWaterStorageControllerConfig(cp.ConfigBase):
     name: str
 
     @classmethod
-    def get_default_simplehotwaterstoragecontroller_config(
-        cls,
-    ) -> Any:
+    def get_default_simplehotwaterstoragecontroller_config(cls,) -> Any:
         """Get a default simplehotwaterstorage controller config."""
         config = SimpleHotWaterStorageControllerConfig(
             name="SimpleHotWaterStorageController",
@@ -1021,10 +1011,8 @@ class SimpleHotWaterStorageController(cp.Component):
                     self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo
                 )
             else:
-                water_mass_flow_rate_from_heat_generator_in_kg_per_second = (
-                    stsv.get_input_value(
-                        self.water_mass_flow_rate_heat_generator_input_channel
-                    )
+                water_mass_flow_rate_from_heat_generator_in_kg_per_second = stsv.get_input_value(
+                    self.water_mass_flow_rate_heat_generator_input_channel
                 )
 
             self.conditions_on_off(
@@ -1042,8 +1030,7 @@ class SimpleHotWaterStorageController(cp.Component):
             stsv.set_output_value(self.state_channel, state)
 
     def conditions_on_off(
-        self,
-        water_mass_flow_rate_from_heat_generator_in_kg_per_second: float,
+        self, water_mass_flow_rate_from_heat_generator_in_kg_per_second: float,
     ) -> None:
         """Set conditions for the simple hot water storage controller mode."""
 

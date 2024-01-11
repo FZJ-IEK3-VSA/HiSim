@@ -1,6 +1,7 @@
 """Data Collection for Scenario Comparison with Pyam."""
 # clean
 import glob
+import datetime
 import os
 from typing import Dict, Any, Optional, List, Tuple
 import json
@@ -31,7 +32,11 @@ class PyamDataCollector:
         """Initialize the class."""
         result_folder = folder_from_which_data_will_be_collected
         self.pyam_data_folder = os.path.join(
-            os.pardir, os.pardir, "system_setups", "results_for_scenario_comparison", "data"
+            os.pardir,
+            os.pardir,
+            "system_setups",
+            "results_for_scenario_comparison",
+            "data",
         )
 
         # in each system_setups/results folder should be one system setup that was executed with the default config
@@ -39,12 +44,9 @@ class PyamDataCollector:
 
         log.information(f"Checking results from folder: {result_folder}")
 
-        # self.clean_result_directory_from_unfinished_results(result_path=result_folder)
-
-        list_with_pyam_data_folders = self.get_list_of_all_relevant_pyam_data_folders(
+        list_with_pyam_data_folders = self.get_only_useful_data(
             result_path=result_folder
         )
-        print("lsit with pyam folders", list_with_pyam_data_folders)
 
         if data_processing_mode == PyamDataProcessingModeEnum.PROCESS_ALL_DATA:
 
@@ -54,19 +56,13 @@ class PyamDataCollector:
             data_processing_mode
             == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_SIZES
         ):
-            parameter_key = "total_base_area_in_m2"
+            parameter_key = "conditioned_floor_area_in_m2"
 
         elif (
             data_processing_mode
             == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
         ):
             parameter_key = "building_code"
-
-        elif (
-            data_processing_mode
-            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_POWERS
-        ):
-            parameter_key = "pv_power"
 
         elif (
             data_processing_mode
@@ -82,21 +78,15 @@ class PyamDataCollector:
 
         elif (
             data_processing_mode
-            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_DELTA_T_IN_HP_CONTROLLER
-        ):
-            parameter_key = "delta_T"
-
-        elif (
-            data_processing_mode
-            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_HOT_WATER_STORAGE_SIZES
-        ):
-            parameter_key = "hot_water_storage_size_in_liter"
-
-        elif (
-            data_processing_mode
             == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_SHARE_OF_MAXIMUM_PV
         ):
             parameter_key = "share_of_maximum_pv_power"
+
+        elif (
+            data_processing_mode
+            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_NUMBER_OF_DWELLINGS
+        ):
+            parameter_key = "number_of_dwellings_per_building"
 
         else:
             raise ValueError(
@@ -130,6 +120,9 @@ class PyamDataCollector:
                 parameter_key=parameter_key,
             )
 
+        if not list_with_csv_files:
+            raise ValueError("list_with_csv_files is empty")
+
         all_csv_files = self.import_data_from_file(
             paths_to_check=list_with_csv_files,
             analyze_yearly_or_hourly_data=time_resolution_of_data_set,
@@ -151,15 +144,237 @@ class PyamDataCollector:
 
         print("\n")
 
-    def clean_result_directory_from_unfinished_results(
-        self, result_path: str
-    ) -> None:  # TODO: add functionality
+    def get_only_useful_data(self, result_path: str) -> List[str]:
+        """Go through all result folders and filter only useful data and write unuseful data into txt file."""
+
+        # go through result path and if the dirs do not contain finished.flag ask for deletion
+        self.clean_result_directory_from_unfinished_results(result_path=result_path)
+
+        # get result folders with pyam data folder
+        list_with_all_paths_to_check = self.get_list_of_all_relevant_pyam_data_folders(
+            result_path=result_path
+        )
+        print(
+            "len of list with all paths to containing pyam data ",
+            len(list_with_all_paths_to_check),
+        )
+        # filter out results that had buildings that were too hot or too cold
+        list_with_all_paths_to_check_after_filtering = self.filter_results_that_failed_to_heat_or_cool_building_sufficiently(
+            list_of_result_path_that_contain_pyam_data=list_with_all_paths_to_check
+        )
+        print(
+            "len of list with all paths after filtering ",
+            len(list_with_all_paths_to_check),
+        )
+        # check if duplicates are existing and ask for deletion
+        list_with_pyam_data_folders = self.go_through_all_pyam_data_folders_and_check_if_module_configs_are_double_somewhere(
+            list_of_pyam_folder_paths_to_check=list_with_all_paths_to_check_after_filtering
+        )
+        print(
+            "len of list with all paths after double checking for duplicates ",
+            len(list_with_pyam_data_folders),
+        )
+        return list_with_pyam_data_folders
+
+    def clean_result_directory_from_unfinished_results(self, result_path: str) -> None:
         """When a result folder does not contain the finished_flag, it will be removed from the system_setups/result folder."""
-        pass
+        list_of_unfinished_folders = []
+        with open(
+            os.path.join(self.pyam_data_folder, "failed_simualtions.txt"),
+            "a",
+            encoding="utf-8",
+        ) as file:
+            file.write(str(datetime.datetime.now()) + "\n")
+            file.write("Failed simulations found in the following folders: \n")
+
+            for folder in os.listdir(result_path):
+                if not os.path.exists(
+                    os.path.join(result_path, folder, "finished.flag")
+                ):
+                    file.write(os.path.join(result_path, folder) + "\n")
+                    list_of_unfinished_folders.append(os.path.join(result_path, folder))
+            file.write(
+                f"Total number of failed simulations in path {result_path}: {len(list_of_unfinished_folders)}"
+                + "\n"
+                + "\n"
+            )
+
+        print(
+            f"The following result folders do not contain the finished flag: {list_of_unfinished_folders} Number: {len(list_of_unfinished_folders)}. "
+        )
+
+        # # if list of unfinished folders is not empty
+        # if list_of_unfinished_folders:
+        #     answer = input("Do you want to delete them?")
+        #     if answer.upper() in ["Y", "YES"]:
+        #         for folder in list_of_unfinished_folders:
+        #             shutil.rmtree(os.path.join(result_path, folder))
+        #         print("All folders with failed simulations deleted.")
+        #     elif answer.upper() in ["N", "NO"]:
+        #         print("The folders won't be deleted.")
+        #     else:
+        #         print("The answer must be yes or no.")
+
+    def filter_results_that_failed_to_heat_or_cool_building_sufficiently(
+        self, list_of_result_path_that_contain_pyam_data: List[str]
+    ) -> List[str]:
+        """When a result shows too high or too low building temperatures, it will be filtered and removed from further analysis."""
+        list_of_unsuccessful_folders = []
+        with open(
+            os.path.join(
+                self.pyam_data_folder,
+                "succeeded_simulations_that_showed_too_high_or_too_low_building_temps.txt",
+            ),
+            "a",
+            encoding="utf-8",
+        ) as file:
+            file.write(str(datetime.datetime.now()) + "\n")
+            file.write(
+                "Simulations with unsuccessful heating or cooling found in the following folders: \n"
+            )
+            file.write(
+                "Building is too...,"
+                "set temperature heating [°C],"
+                "set temperature cooling [°C],"
+                "min building air temperature [°C],"
+                "max building air temperature [°C],"
+                "temp deviation below set heating [°C*h],"
+                "temp deviation above set cooling [°C*h], folder \n"
+            )
+            for folder in list_of_result_path_that_contain_pyam_data:
+                pyam_data_information = os.path.join(
+                    folder, "data_information_for_pyam.json"
+                )
+                main_folder = os.path.normpath(folder + os.sep + os.pardir)
+                webtool_kpis_file = os.path.join(main_folder, "webtool_kpis.json")
+
+                # get set temperatures used in the simulation
+                if os.path.exists(pyam_data_information):
+                    with open(
+                        pyam_data_information, "r", encoding="utf-8"
+                    ) as data_info_file:
+                        json_file = json.load(data_info_file)
+                        component_entries = json_file["componentEntries"]
+                        for component in component_entries:
+                            if "Building" in component["componentName"]:
+                                set_heating_temperature = float(
+                                    component["configuration"].get(
+                                        "set_heating_temperature_in_celsius"
+                                    )
+                                )
+                                set_cooling_temperature = float(
+                                    component["configuration"].get(
+                                        "set_cooling_temperature_in_celsius"
+                                    )
+                                )
+                                break
+                else:
+                    raise FileNotFoundError(
+                        f"The file {pyam_data_information} could not be found. "
+                    )
+
+                # open the webtool kpis and check if building got too hot or too cold
+                if os.path.exists(webtool_kpis_file):
+
+                    with open(webtool_kpis_file, "r", encoding="utf-8") as kpi_file:
+                        json_file = json.load(kpi_file)
+                        kpi_data = json_file["kpiDict"]
+                        # check if min and max temperatures are too low or too high
+                        min_temperature = float(
+                            kpi_data.get(
+                                "Minimum building indoor air temperature reached [\u00b0C] "
+                            )
+                        )
+                        max_temperature = float(
+                            kpi_data.get(
+                                "Maximum building indoor air temperature reached [\u00b0C] "
+                            )
+                        )
+                        temp_deviation_below_set = kpi_data.get(
+                            "Temperature deviation of building indoor air temperature being below set temperature 19.0 \u00b0C [\u00b0C*h] "
+                        )
+                        temp_deviation_above_set = kpi_data.get(
+                            "Temperature deviation of building indoor air temperature being above set temperature 24.0 \u00b0C [\u00b0C*h] "
+                        )
+                        if (
+                            min_temperature <= set_heating_temperature - 5.0
+                            and max_temperature >= set_cooling_temperature + 5.0
+                        ):
+                            file.write(
+                                "too cold and too warm,"
+                                f"{set_heating_temperature},"
+                                f"{set_cooling_temperature},"
+                                f"{min_temperature},"
+                                f"{max_temperature},"
+                                f"{temp_deviation_below_set},"
+                                f"{temp_deviation_above_set}, {folder}" + "\n"
+                            )
+                            list_of_unsuccessful_folders.append(folder)
+                        elif (
+                            min_temperature <= set_heating_temperature - 5.0
+                            and max_temperature < set_cooling_temperature + 5.0
+                        ):
+                            file.write(
+                                "too cold,"
+                                f"{set_heating_temperature},"
+                                f"{set_cooling_temperature},"
+                                f"{min_temperature},"
+                                f"{max_temperature},"
+                                f"{temp_deviation_below_set},"
+                                f"{temp_deviation_above_set}, {folder}" + "\n"
+                            )
+                            list_of_unsuccessful_folders.append(folder)
+                        elif (
+                            min_temperature > set_heating_temperature - 5.0
+                            and max_temperature >= set_cooling_temperature + 5.0
+                        ):
+                            file.write(
+                                "too warm,"
+                                f"{set_heating_temperature},"
+                                f"{set_cooling_temperature},"
+                                f"{min_temperature},"
+                                f"{max_temperature},"
+                                f"{temp_deviation_below_set},"
+                                f"{temp_deviation_above_set}, {folder}" + "\n"
+                            )
+                            list_of_unsuccessful_folders.append(folder)
+                else:
+                    raise FileNotFoundError(
+                        f"The file {webtool_kpis_file} could not be found. "
+                    )
+
+            file.write(
+                f"Total number of simulations that have building temperatures way below or above set temperatures: {len(list_of_unsuccessful_folders)}"
+                + "\n"
+                + "\n"
+            )
+
+        print(
+            f"Total number of simulations that have building temperatures way below or above set temperatures: {len(list_of_unsuccessful_folders)}"
+        )
+
+        # ask if these simulation results should be analyzed
+        answer = input(
+            "Do you want to take these simulation results into account for further analysis?"
+        )
+        if answer.upper() in ["N", "NO"]:
+            for folder in list_of_unsuccessful_folders:
+                list_of_result_path_that_contain_pyam_data.remove(folder)
+            print(
+                "The folders with too low or too high building temperatures will be discarded from the further analysis."
+            )
+        elif answer.upper() in ["Y", "YES"]:
+            print(
+                "The folders with too low or too high building temperatures will be kept for the further analysis."
+            )
+        else:
+            print("The answer must be yes or no.")
+
+        return list_of_result_path_that_contain_pyam_data
 
     def get_list_of_all_relevant_pyam_data_folders(self, result_path: str) -> List[str]:
         """Get a list of all pyam data folders which you want to analyze."""
-        print("result path", result_path)
+
         # choose which path to check
         path_to_check = os.path.join(result_path, "**", "pyam_data")
 
@@ -177,13 +392,8 @@ class PyamDataCollector:
             + list_of_paths_second_order
             + list_of_paths_third_order
         )
-        print("list with all paths to check for pyam data", list_with_all_paths_to_check)
-        list_with_no_duplicates = self.go_through_all_pyam_data_folders_and_check_if_module_configs_are_double_somewhere(
-            list_of_pyam_folder_paths_to_check=list_with_all_paths_to_check
-        )
-        print("list with all paths to check for pyam data after double check", list_with_no_duplicates)
 
-        return list_with_no_duplicates
+        return list_with_all_paths_to_check
 
     def import_data_from_file(
         self, paths_to_check: List[str], analyze_yearly_or_hourly_data: Any
@@ -216,9 +426,7 @@ class PyamDataCollector:
         return all_csv_files
 
     def make_dictionaries_with_simulation_duration_keys(
-        self,
-        simulation_duration_to_check: str,
-        all_csv_files: List[str],
+        self, simulation_duration_to_check: str, all_csv_files: List[str],
     ) -> Dict:
         """Make dictionaries containing csv files of hourly or yearly data and according to the simulation duration of the data."""
 
@@ -280,6 +488,7 @@ class PyamDataCollector:
 
         # get parameter key values from scenario name
         values = []
+
         for scenario in dataframe["scenario"]:
             scenario_name_splitted = scenario.split("_")
             try:
@@ -324,6 +533,9 @@ class PyamDataCollector:
         simulation_duration_key = list(dict_of_csv_to_read.keys())[0]
         csv_data_list = dict_of_csv_to_read[simulation_duration_key]
 
+        if csv_data_list == []:
+            raise ValueError("csv_data_list is empty.")
+
         for csv_file in csv_data_list:
 
             dataframe = pd.read_csv(csv_file)
@@ -359,6 +571,7 @@ class PyamDataCollector:
                         list_with_parameter_values=list_with_parameter_key_values,
                         index=index,
                     )
+
                 else:
                     # rename scenario adding an index
                     dataframe[
@@ -372,6 +585,8 @@ class PyamDataCollector:
             index = index + 1
 
         # sort dataframe
+        if appended_dataframe.empty:
+            raise ValueError("The appended dataframe is empty")
         appended_dataframe = self.sort_dataframe_according_to_scenario_values(
             dataframe=appended_dataframe
         )
@@ -458,6 +673,16 @@ class PyamDataCollector:
                 with open(os.path.join(path_to_pyam_data_folder, file), "r", encoding="utf-8") as openfile:  # type: ignore
                     config_dict = json.load(openfile)
                     my_module_config_dict = config_dict["myModuleConfig"]
+                    scenario_name = config_dict["systemName"]
+
+                    # for paper: reference scenario without use of pv should have a share of maximum pv power of 0
+                    if "ref_" in scenario_name:
+                        try:
+                            my_module_config_dict["share_of_maximum_pv_power"] = 0
+                        except Exception as ecx:
+                            raise KeyError(
+                                "The key share of maximum pv power does not exist in the module dict. Unable this function if it not needed."
+                            ) from ecx
 
         # check if module config and default config have any keys in common
         if len(set(default_config_dict).intersection(my_module_config_dict)) == 0:
@@ -477,12 +702,12 @@ class PyamDataCollector:
         # for each parameter different than the default config parameter, get the respective path to the folder
         # and also create a dict with the parameter, value pairs
 
-        if my_module_config_dict[parameter_key] != default_config_dict[parameter_key]:
+        # if my_module_config_dict[parameter_key] != default_config_dict[parameter_key]:
 
-            list_with_csv_files.append(path_to_pyam_data_folder)
-            list_with_parameter_key_values.append(my_module_config_dict[parameter_key])
+        list_with_csv_files.append(path_to_pyam_data_folder)
+        list_with_parameter_key_values.append(my_module_config_dict[parameter_key])
 
-            list_with_module_configs.append(my_module_config_dict)
+        list_with_module_configs.append(my_module_config_dict)
 
         # add to each item in the dict also the default system setup if the default system setup exists
 
@@ -614,7 +839,11 @@ class PyamDataCollector:
                             {"model": config_dict["pyamDataInformation"].get("model")}
                         )
                         my_module_config_dict.update(
-                            {"model": config_dict["pyamDataInformation"].get("scenario")}
+                            {
+                                "model": config_dict["pyamDataInformation"].get(
+                                    "scenario"
+                                )
+                            }
                         )
 
                         # prevent to add modules with same module config and same simulation duration twice
@@ -624,14 +853,26 @@ class PyamDataCollector:
                                 os.path.join(folder)
                             )
 
-            # delete folders which have doubled results from system_setups/results directory
+            # get folders with duplicates
+            list_with_duplicates = []
             if folder not in list_of_pyam_folders_which_have_only_unique_configs:
-                # remove whole result folder from result directory
                 whole_parent_folder = os.path.abspath(os.path.join(folder, os.pardir))
-                log.information(
-                    f"The result folder {whole_parent_folder} will be removed because these results are already existing."
-                )
-                shutil.rmtree(whole_parent_folder, ignore_errors=True)
+                list_with_duplicates.append(whole_parent_folder)
+
+        print(
+            f"The following folders seem to be duplicated: {list_with_duplicates}. Number: {len(list_with_duplicates)}."
+        )
+        # if list is not empty
+        if list_with_duplicates:
+            answer = input("Do you want to delete the duplicated folders?")
+            if answer.upper() in ["Y", "YES"]:
+                for folder in list_with_duplicates:
+                    shutil.rmtree(folder, ignore_errors=True)
+                print("All folders with duplicated results are deleted.")
+            elif answer.upper() in ["N", "NO"]:
+                print("These folders won't be deleted.")
+            else:
+                print("The answer must be yes or no.")
 
         return list_of_pyam_folders_which_have_only_unique_configs
 
@@ -659,10 +900,8 @@ class PyamDataProcessingModeEnum(enum.Enum):
     PROCESS_ALL_DATA = 1
     PROCESS_FOR_DIFFERENT_BUILDING_CODES = 2
     PROCESS_FOR_DIFFERENT_BUILDING_SIZES = 3
-    PROCESS_FOR_DIFFERENT_PV_POWERS = 4
-    PROCESS_FOR_DIFFERENT_PV_SIZES = 5
-    PROCESS_FOR_DIFFERENT_PV_AZIMUTH_ANGLES = 6
-    PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES = 7
-    PROCESS_FOR_DIFFERENT_DELTA_T_IN_HP_CONTROLLER = 8
-    PROCESS_FOR_DIFFERENT_HOT_WATER_STORAGE_SIZES = 9
-    PROCESS_FOR_DIFFERENT_SHARE_OF_MAXIMUM_PV = 10
+    PROCESS_FOR_DIFFERENT_PV_SIZES = 4
+    PROCESS_FOR_DIFFERENT_PV_AZIMUTH_ANGLES = 5
+    PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES = 6
+    PROCESS_FOR_DIFFERENT_SHARE_OF_MAXIMUM_PV = 7
+    PROCESS_FOR_DIFFERENT_NUMBER_OF_DWELLINGS = 8

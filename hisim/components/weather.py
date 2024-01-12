@@ -45,7 +45,6 @@ class WeatherDataSourceEnum(Enum):
     DWD = 1
     NSRDB = 2
     NSRDB_15MIN = 3
-    OWN_DWD_10MIN = 4
 
 
 class LocationEnum(Enum):
@@ -421,7 +420,6 @@ class Weather(Component):
     Azimuth = "Azimuth"
     ApparentZenith = "ApparentZenith"
     WindSpeed = "WindSpeed"
-    Pressure = "Pressure"
     Weather_Temperature_Forecast_24h = "Weather_Temperature_Forecast_24h"
     DailyAverageOutsideTemperatures = "DailyAverageOutsideTemperatures"
 
@@ -525,14 +523,6 @@ class Weather(Component):
             output_description=f"here a description for {self.WindSpeed} will follow.",
         )
 
-        self.pressure_output: ComponentOutput = self.add_output(
-            self.component_name,
-            self.Pressure,
-            lt.LoadTypes.PRESSURE,
-            lt.Units.PASCAL,
-            output_description=f"here a description for {self.Pressure} will follow.",
-        )
-
         self.daily_average_outside_temperature_output: ComponentOutput = self.add_output(
             self.component_name,
             self.DailyAverageOutsideTemperatures,
@@ -547,7 +537,6 @@ class Weather(Component):
         self.altitude_list: List[float]
         self.azimuth_list: List[float]
         self.wind_speed_list: List[float]
-        self.pressure_list: List[float]
         self.ghi_list: List[float]
         self.apparent_zenith_list: List[float]
         self.dhi_list: List[float]
@@ -589,7 +578,6 @@ class Weather(Component):
         stsv.set_output_value(self.altitude_output, self.altitude_list[timestep])
         stsv.set_output_value(self.azimuth_output, self.azimuth_list[timestep])
         stsv.set_output_value(self.wind_speed_output, self.wind_speed_list[timestep])
-        stsv.set_output_value(self.pressure_output, self.pressure_list[timestep]*100)   #*100 umrechnung von hPA bzw mbar in PA
         stsv.set_output_value(
             self.apparent_zenith_output, self.apparent_zenith_list[timestep]
         )
@@ -646,7 +634,6 @@ class Weather(Component):
             self.azimuth_list = my_weather["azimuth"].tolist()
             self.apparent_zenith_list = my_weather["apparent_zenith"].tolist()
             self.wind_speed_list = my_weather["Wspd"].tolist()
-            self.pressure_list = my_weather["Pressure"].tolist()
         else:
             tmy_data = read_test_reference_year_data(
                 weatherconfig=self.weather_config,
@@ -671,30 +658,6 @@ class Weather(Component):
                     .asfreq()
                     .interpolate(method="linear")
                 )
-                pressure = (tmy_data["Pressure"].resample("1T").asfreq() .interpolate(method="linear")
-                )
-
-            elif self.weather_config.data_source == WeatherDataSourceEnum.OWN_DWD_10MIN:
-                dni = (
-                    tmy_data["DNI"].resample("1T").asfreq().interpolate(method="linear")
-                )
-                temperature = (
-                    tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")
-                )
-                dhi = (
-                    tmy_data["DHI"].resample("1T").asfreq().interpolate(method="linear")
-                )
-                ghi = (
-                    tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")
-                )
-                wind_speed = (
-                    tmy_data["Wspd"]
-                    .resample("1T")
-                    .asfreq()
-                    .interpolate(method="linear")
-                )
-                pressure = (tmy_data["Pressure"].resample("1T").asfreq().interpolate(method="linear")
-                            )
             else:
                 dni = self.interpolate(
                     tmy_data["DNI"], self.my_simulation_parameters.year
@@ -711,9 +674,6 @@ class Weather(Component):
                 wind_speed = self.interpolate(
                     tmy_data["Wspd"], self.my_simulation_parameters.year
                 )
-                pressure = self.interpolate(
-                    tmy_data["Pressure"], self.my_simulation_parameters.year
-                            )
             # calculate extra terrestrial radiation- n eeded for perez array diffuse irradiance models
             dni_extra = pd.Series(pvlib.irradiance.get_extra_radiation(dni.index), index=dni.index)  # type: ignore
 
@@ -765,9 +725,6 @@ class Weather(Component):
                 self.wind_speed_list = (
                     wind_speed.resample(str(seconds_per_timestep) + "S").mean().tolist()
                 )
-                self.pressure_list = (
-                    pressure.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                )
             else:
                 self.temperature_list = temperature.tolist()
                 self.dry_bulb_list = temperature.to_list()
@@ -785,7 +742,6 @@ class Weather(Component):
                 self.wind_speed_list = (
                     wind_speed.resample(str(seconds_per_timestep) + "S").mean().tolist()
                 )
-                self.pressure_list = pressure.tolist()
 
             solardata = [
                 self.dni_list,
@@ -797,7 +753,6 @@ class Weather(Component):
                 self.apparent_zenith_list,
                 self.dry_bulb_list,
                 self.wind_speed_list,
-                self.pressure_list,
                 self.dniextra_list,
                 self.daily_average_outside_temperature_list_in_celsius,
             ]
@@ -814,7 +769,6 @@ class Weather(Component):
                     "apparent_zenith",
                     "DryBulb",
                     "Wspd",
-                    "Pressure",
                     "DNIextra",
                     "t_out_daily_average",
                 ],
@@ -854,10 +808,6 @@ class Weather(Component):
             SingletonSimRepository().set_entry(
                 key=SingletonDictKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST,
                 entry=self.wind_speed_list,
-            )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERPRESSUREYEARLYFORECAST,
-                entry=self.pressure_list,
             )
             SingletonSimRepository().set_entry(
                 key=SingletonDictKeyEnum.WEATHERALTITUDEYEARLYFORECAST,
@@ -1006,17 +956,6 @@ def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Any:
                     lon = float(row[6])
                 elif i > 1:
                     break
-
-    elif source_enum == WeatherDataSourceEnum.OWN_DWD_10MIN:
-        with open(filepath, encoding="utf-8") as csvfile:
-            spamreader = csv.reader(csvfile)
-            for i, row in enumerate(spamreader):
-                if i == 1:
-                    location_name = row[0]
-                    lat = float(row[1])
-                    lon = float(row[2])
-                elif i > 1:
-                    break
     else:
         # get the geoposition
         with open(filepath + ".dat", encoding="utf-8") as file_stream:
@@ -1041,8 +980,6 @@ def read_test_reference_year_data(weatherconfig: WeatherConfig, year: int) -> An
         data = read_dwd_data(filepath, year)
     elif weatherconfig.data_source == WeatherDataSourceEnum.NSRDB_15MIN:
         data = read_nsrdb_15min_data(filepath, year)
-    elif weatherconfig.data_source == WeatherDataSourceEnum.OWN_DWD_10MIN:
-        data = read_dwd_simulation_data_10min(filepath, year)
 
     return data
 
@@ -1080,6 +1017,7 @@ def read_dwd_data(filepath: str, year: int) -> pd.DataFrame:
                 "WR": "Wdir",
             }
         )
+
         # calculate direct normal
         data["DNI"] = calculate_direct_normal_radiation(data["B"], lon, lat)
     return data
@@ -1125,29 +1063,6 @@ def read_nsrdb_15min_data(filepath: str, year: int) -> pd.DataFrame:
     )
     return data
 
-def read_dwd_simulation_data_10min(filepath: str, year: int) -> pd.DataFrame:
-    """Reads a set of OWN DWD data in 10 min resolution."""
-    data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0,1])
-    # get data
-    data.index = pd.date_range(
-        f"{year}-01-01 00:00:00", periods=24 * 6 * 365, freq="600S", tz="UTC"
-    )
-    data = data.rename(
-        columns={
-            "diffuse_irradiation": "DHI",
-            "temperature": "T",
-            "wind_speed": "Wspd",
-            "month": "Month",
-            "day": "Day",
-            "hour": "Hour",
-            "minute": "Minutes",
-            "pressure": "Pressure",
-            "wind_direction": "Wdir",
-            "global_irradiation": "GHI"
-        }
-    )
-    data["DNI"] = data["GHI"] - data["DHI"]
-    return data
 
 def calculate_direct_normal_radiation(
     direct_horizontal_irradation: pd.Series,

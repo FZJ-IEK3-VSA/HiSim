@@ -726,7 +726,7 @@ class UtspLpgConnector(cp.Component):
 
         # Request the time series
         result = client.request_time_series_and_wait_for_delivery(
-            self.utsp_config.url, request, self.utsp_config.api_key
+            self.utsp_config.url, request, self.utsp_config.api_key, timeout=100
         )
 
         # decode required result files

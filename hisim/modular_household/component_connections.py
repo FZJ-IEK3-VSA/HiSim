@@ -697,7 +697,12 @@ def configure_heating(
     my_heater_controller_l1 = controller_l1_heatpump.L1HeatPumpController(
         my_simulation_parameters=my_simulation_parameters, config=heater_l1_config
     )
-    my_heater_controller_l1.connect_only_predefined_connections(my_building)
+    # connect building manually
+    my_heater_controller_l1.connect_input(
+        input_fieldname=my_heater_controller_l1.StorageTemperature,
+        src_object_name=my_building.component_name,
+        src_field_name=my_building.TemperatureMeanThermalMass
+    )
     my_sim.add_component(my_heater_controller_l1)
 
     my_heater = generic_heat_source.HeatSource(

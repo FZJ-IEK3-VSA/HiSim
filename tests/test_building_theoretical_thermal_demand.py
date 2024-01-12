@@ -111,6 +111,7 @@ def test_house_with_idealized_electric_heater_for_heating_test(
 
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
+
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )

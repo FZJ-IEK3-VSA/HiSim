@@ -242,7 +242,9 @@ class PostProcessor:
             occupancy_config = None
             for elem in ppdt.wrapped_components:
                 if isinstance(elem.my_component, building.Building):
-                    building_data = elem.my_component.my_building_information.buildingdata
+                    building_data = (
+                        elem.my_component.my_building_information.buildingdata
+                    )
                 elif isinstance(
                     elem.my_component, loadprofilegenerator_connector.Occupancy
                 ):
@@ -502,9 +504,7 @@ class PostProcessor:
         simulation_parameters_list = ppdt.simulation_parameters.get_unique_key_as_list()
         lines += simulation_parameters_list
         self.write_new_chapter_with_text_content_to_report(
-            report=report,
-            lines=lines,
-            headline=". Simulation Parameters",
+            report=report, lines=lines, headline=". Simulation Parameters",
         )
 
     def write_components_to_report(
@@ -621,9 +621,7 @@ class PostProcessor:
         for output in ppdt.all_outputs:
             all_output_names.append(output.full_name + " [" + output.unit + "]")
         self.write_new_chapter_with_text_content_to_report(
-            report=report,
-            lines=all_output_names,
-            headline=". All Outputs",
+            report=report, lines=all_output_names, headline=". All Outputs",
         )
 
     def write_network_charts_to_report(
@@ -941,14 +939,17 @@ class PostProcessor:
             )
         )
 
-    def write_component_configurations_to_json(self, ppdt: PostProcessingDataTransfer) -> None:
+    def write_component_configurations_to_json(
+        self, ppdt: PostProcessingDataTransfer
+    ) -> None:
         """Collect all component configurations and write into JSON file in result directory."""
         json_generator_config = JsonConfigurationGenerator(name="my_system")
         for component in ppdt.wrapped_components:
             json_generator_config.add_component(config=component.my_component.config)
         json_generator_config.save_to_json(
             filename=os.path.join(
-                ppdt.simulation_parameters.result_directory, "component_configurations.json"
+                ppdt.simulation_parameters.result_directory,
+                "component_configurations.json",
             )
         )
 
@@ -1051,8 +1052,7 @@ class PostProcessor:
         )
 
         dataframe.to_csv(
-            path_or_buf=filename,
-            index=None,
+            path_or_buf=filename, index=None,
         )  # type: ignore
 
     def write_kpis_for_webtool_to_json_file(

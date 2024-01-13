@@ -149,8 +149,7 @@ class HouseholdMoreAdvancedHPDieselCarConfig(SystemSetupConfigBase):
         )
 
         # adjust HeatPump
-       # household_config.hp_config.group_id = 1  # use modulating heatpump as default
-        household_config.hp_config.model = "WPL 25 A"  # Stiebel WP --> hplib_database_ALL
+        household_config.hp_config.group_id = 1  # use modulating heatpump as default
         household_config.hp_controller_config.mode = (
             2  # use heating and cooling as default
         )

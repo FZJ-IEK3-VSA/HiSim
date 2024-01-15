@@ -172,7 +172,7 @@ def Cell4Life(
         my_electricity_controller.config.szenario = input_variablen["szenario"]["value"]   
     else:
         print("Die Zeichenkette ist nicht '1a' oder '1b'.")
-        print("Programm wird beendet.")
+        print("Programm wird beendet. ")
         sys.exit()
 
 

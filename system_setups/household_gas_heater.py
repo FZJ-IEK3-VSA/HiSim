@@ -28,7 +28,6 @@ from hisim.components import generic_hot_water_storage_modular
 from hisim.components import electricity_meter
 from hisim import utils
 
-from system_setups.modular_example import cleanup_old_lpg_requests
 
 __authors__ = ["Kevin Knosala", "Markus Blasberg"]
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
@@ -185,11 +184,6 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
 
 def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:  # noqa: too-many-statements
     """Generates a household with gas heater."""
-
-    # cleanup old lpg requests, mandatory to change number of cars
-    # Todo: change cleanup-function if result_path from occupancy is not utils.HISIMPATH["results"]
-    if Path(utils.HISIMPATH["utsp_results"]).exists():
-        cleanup_old_lpg_requests()
 
     """
     Load system setup parameters from json or take defaults.

@@ -2,8 +2,8 @@
 import os
 import shutil
 from pathlib import Path
-import pytest
 import json
+import pytest
 
 from hisim import utils, hisim_main, log
 from hisim.simulationparameters import SimulationParameters
@@ -105,7 +105,7 @@ def test_household_gas_heater_system_setup_starter_pv():
     run_system(my_config_json, MY_RESULT_DIRECTORY)
 
     # Check if PV has been build and is connected.
-    with open(Path(MY_RESULT_DIRECTORY).joinpath("component_connections.json"), mode="r") as file:
+    with open(Path(MY_RESULT_DIRECTORY).joinpath("component_connections.json"), mode="r", encoding="utf-8") as file:
         connections_list = json.load(file)
     pv_con_dict = {"From": {"Component": "PVSystem_w0", "Field": "ElectricityOutput"}, "To": {"Component": "ElectricityMeter", "Field": "Input0"}}
     assert any(connection == pv_con_dict for connection in connections_list)

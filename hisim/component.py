@@ -301,9 +301,9 @@ class Component:
         }
 
         if os.path.exists(file_name):
-            with open(file_name, mode="r+") as file:
+            with open(file_name, mode="r+", encoding="utf-8") as file:
                 file.seek(os.stat(file_name).st_size - 1)
-                file.write(",{}]".format(json.dumps(dict_with_connection_information)))
+                file.write(f",{json.dumps(dict_with_connection_information)}]")
         else:
             with open(file_name, "a", encoding="utf-8") as file:
                 json.dump([dict_with_connection_information], file)

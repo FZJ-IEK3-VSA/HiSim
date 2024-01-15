@@ -42,7 +42,7 @@ __status__ = "development"
 
 
 @dataclass
-class Options:
+class HouseholdAdvancedHPDieselCarOptions:
 
     """ Set options for the system setup."""
 
@@ -72,7 +72,7 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
     @classmethod
     def get_default_options(cls):
         """Get default options."""
-        return Options()
+        return HouseholdAdvancedHPDieselCarOptions()
 
     @classmethod
     def get_default(cls) -> "HouseholdAdvancedHPDieselCarConfig":
@@ -99,7 +99,7 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
     def get_scaled_default(
         cls,
         building_config: building.BuildingConfig,
-        options: Options = Options()
+        options: HouseholdAdvancedHPDieselCarOptions = HouseholdAdvancedHPDieselCarOptions()
     ) -> "HouseholdAdvancedHPDieselCarConfig":
         """Get scaled default HouseholdAdvancedHPDieselCarConfig."""
 

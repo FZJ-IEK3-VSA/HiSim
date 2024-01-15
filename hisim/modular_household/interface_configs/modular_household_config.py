@@ -12,7 +12,7 @@ from hisim.system_setup_configuration import SystemSetupConfigBase
 
 
 @dataclass
-class Options:
+class ModularHouseholdOptions:
 
     """ Set options for the system setup."""
 

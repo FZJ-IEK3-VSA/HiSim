@@ -24,6 +24,7 @@ from hisim.components import generic_car
 from hisim.components import generic_heat_pump_modular
 from hisim.components import controller_l1_heatpump
 from hisim.components import generic_hot_water_storage_modular
+from hisim.components import generic_pv_system
 from hisim.components import electricity_meter
 from hisim import utils
 
@@ -38,12 +39,12 @@ __status__ = "development"
 
 
 @dataclass
-class Options:
+class HouseholdGasHeaterOptions:
 
     """Set options for the system setup."""
 
-    # photovoltaic: bool = False
-    car: bool = True
+    photovoltaic: bool = False
+    diesel_car: bool = False
 
 
 @dataclass_json
@@ -55,7 +56,7 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
     building_type: str
     number_of_apartments: int
 
-    options: Options
+    options: HouseholdGasHeaterOptions
     building_config: building.BuildingConfig
 
     occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig
@@ -69,22 +70,24 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
     dhw_storage_config: generic_hot_water_storage_modular.StorageConfig
     electricity_meter_config: electricity_meter.ElectricityMeterConfig
 
+    # Optional components
+    pv_config: Optional[generic_pv_system.PVSystemConfig]
     car_config: Optional[generic_car.CarConfig]
 
     @classmethod
     def get_default_options(cls):
         """Get default options."""
-        return Options()
+        return HouseholdGasHeaterOptions()
 
     @classmethod
     def get_default(cls) -> "HouseholdGasHeaterConfig":
         """Get default HouseholdGasHeaterConfig."""
         building_config = building.BuildingConfig.get_default_german_single_family_home()
-        household_config = cls.get_scaled_default(building_config, options=Options())
+        household_config = cls.get_scaled_default(building_config, options=HouseholdGasHeaterOptions())
         return household_config
 
     @classmethod
-    def get_scaled_default(cls, building_config: building.BuildingConfig, options: Options = Options()) -> "HouseholdGasHeaterConfig":
+    def get_scaled_default(cls, building_config: building.BuildingConfig, options: HouseholdGasHeaterOptions = HouseholdGasHeaterOptions()) -> "HouseholdGasHeaterConfig":
         """Get scaled HouseholdGasHeaterConfig.
 
         - Simulation Parameters
@@ -129,6 +132,7 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
                 profile_with_washing_machine_and_dishwasher=True,
                 predictive_control=False,
             ),
+            pv_config=generic_pv_system.PVSystemConfig.get_scaled_pv_system(rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2),
             options=options,
             building_config=building_config,
             hds_controller_config=hds_controller_config,
@@ -166,7 +170,7 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
                     number_of_apartments=my_building_information.number_of_apartments
                 )
             ),
-            car_config=generic_car.CarConfig.get_default_diesel_config() if options.car else None,
+            car_config=generic_car.CarConfig.get_default_diesel_config() if options.diesel_car else None,
             electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
         )
 
@@ -217,6 +221,12 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     # Weather
     my_weather = weather.Weather(
         config=weather.WeatherConfig.get_default(weather.LocationEnum.AACHEN),
+        my_simulation_parameters=my_simulation_parameters,
+    )
+
+    # Photovoltaic
+    my_photovoltaic_system = generic_pv_system.PVSystem(
+        config=my_config.pv_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 
@@ -301,6 +311,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     # Add Components to Simulation Parameters
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_weather)
+    my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
     my_sim.add_component(my_building, connect_automatically=True)
     my_sim.add_component(my_gas_heater, connect_automatically=True)
     my_sim.add_component(my_gas_heater_controller, connect_automatically=True)
@@ -312,6 +323,6 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     my_sim.add_component(my_domestic_hot_water_heatpump, connect_automatically=True)
     my_sim.add_component(my_electricity_meter, connect_automatically=True)
 
-    if my_config.options.car:
+    if my_config.options.diesel_car:
         for my_car in my_cars:
             my_sim.add_component(my_car)

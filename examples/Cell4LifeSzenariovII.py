@@ -151,14 +151,29 @@ def Cell4Life(
     #******************************************************************
     #Build EMS****
     #First Controller
-    my_electricity_controller_config = (
-       controller_l1_example_controller_C4L_1a_1b.SimpleControllerConfig.get_default_config()
-    )
-    my_electricity_controller = (
-        controller_l1_example_controller_C4L_1a_1b.SimpleController(
-           name = "Elect_Controller", my_simulation_parameters=my_simulation_parameters, config=my_electricity_controller_config)
-    )
-    my_electricity_controller.config.szenario = input_variablen["szenario"]["value"]
+
+    if input_variablen["szenario"]["value"] == "1a" or input_variablen["szenario"]["value"] == "1b": 
+        my_electricity_controller_config = (
+        controller_l1_example_controller_C4L_1a_1b.SimpleControllerConfig.get_default_config()
+        )
+        my_electricity_controller = (
+            controller_l1_example_controller_C4L_1a_1b.SimpleController(
+            name = "Elect_Controller", my_simulation_parameters=my_simulation_parameters, config=my_electricity_controller_config)
+        )
+        my_electricity_controller.config.szenario = input_variablen["szenario"]["value"]
+    elif input_variablen["szenario"]["value"] == "2a": 
+        my_electricity_controller_config = (
+        controller_l1_example_controller_C4L_2a.SimpleControllerConfig.get_default_config()
+        )
+        my_electricity_controller = (
+            controller_l1_example_controller_C4L_2a.SimpleController(
+            name = "Elect_Controller", my_simulation_parameters=my_simulation_parameters, config=my_electricity_controller_config)
+        )
+        my_electricity_controller.config.szenario = input_variablen["szenario"]["value"]   
+    else:
+        print("Die Zeichenkette ist nicht '1a' oder '1b'.")
+        print("Programm wird beendet.")
+        sys.exit()
 
 
     #******************************************************************   

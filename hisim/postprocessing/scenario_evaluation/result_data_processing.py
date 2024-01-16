@@ -9,7 +9,6 @@ import string
 import copy
 import warnings
 import numpy as np
-import pyam
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -829,7 +828,6 @@ class ScenarioChartGenerator:
                 f"The filtered dataframe is empty. The dataframe did not contain the variable {variable_to_check}. Check the list above."
             )
         return filtered_dataframe
-
 
     def get_statistics_of_data_and_write_to_excel(
         self, filtered_data: pd.DataFrame, path_to_save: str, kind_of_data_set: str,

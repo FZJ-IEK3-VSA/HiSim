@@ -25,3 +25,6 @@ ordered_set
 typing_extensions
 python-dotenv
 windpowerlib
+wetterdienst
+cdsapi
+xarray

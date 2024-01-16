@@ -30,23 +30,21 @@ __email__ = ""
 __status__ = ""
 
 
-
 """
 Based on: https://github.com/wind-python/windpowerlib/tree/dev
 Use of windpowerlib for calculation of electrical output power
 
 """
 
-#todo: predictiv controll ?
-#todo: wirkungsgrad einbringen?? ggf über bib direkt?
-
+# todo: predictiv controll ?
+# todo: wirkungsgrad einbringen?? ggf über bib direkt?
 
 
 @dataclass_json
 @dataclass
 class WindturbineConfig(ConfigBase):
 
-    """PVSystemConfig class."""
+    """Windturbine Configclass."""
 
     @classmethod
     def get_main_classname(cls):
@@ -54,28 +52,32 @@ class WindturbineConfig(ConfigBase):
         return Windturbine.get_full_classname()
 
     name: str
-    #Typename of the wind turbine.
+    # Typename of the wind turbine.
     turbine_type: str
-    #Hub height of the wind turbine in m.
-    hub_height:Optional[float]
-    #The nominal output of the wind turbine in W
+    # Hub height of the wind turbine in m.
+    hub_height: Optional[float]
+    # The nominal output of the wind turbine in W
     nominal_power: Optional[float]
     # Diameter of the rotor in m
-    rotor_diameter:Optional[float]
-    #Power coefficient curve of the wind turbine
+    rotor_diameter: Optional[float]
+    # Power coefficient curve of the wind turbine
     power_coefficient_curve: None
-    #Power curve of the wind turbine.
+    # Power curve of the wind turbine.
     power_curve: None
-    #Defines which model is used to calculate the wind speed at hub height
+    # Defines which model is used to calculate the wind speed at hub height
     wind_speed_model: str
-    #Defines which model is used to calculate the temperature of air at hub height
+    # Defines which model is used to calculate the temperature of air at hub height
     temperature_model: str
-    #Defines which model is used to calculate the density of air at hub height.
+    # Defines which model is used to calculate the density of air at hub height.
     density_model: str
-    #Defines which model is used to calculate the turbine power output.
+    # Defines which model is used to calculate the turbine power output.
     power_output_model: str
     density_correction: bool
     obstacle_height: float
+    measuring_height_wind_speed: float
+    measuring_height_temperature: float
+    measuring_height_pressure: float
+    measuring_height_roughness_length: float
     hellman_exp: float
 
     source_weight: int
@@ -102,15 +104,17 @@ class WindturbineConfig(ConfigBase):
             rotor_diameter=126,
             power_coefficient_curve=None,
             power_curve=None,
-
-            wind_speed_model="logarithmic",#'logarithmic' ,'hellman', 'interpolation_extrapolation' , 'log_interpolation_extrapolation'
-            temperature_model="linear_gradient",  #'linear_gradient','interpolation_extrapolation'
-            density_model="barometric",    #'barometric','ideal_gas','interpolation_extrapolation'
-            power_output_model="power_curve", #power_curve','power_coefficient_curve'
+            wind_speed_model="logarithmic",  # 'logarithmic' ,'hellman', 'interpolation_extrapolation' , 'log_interpolation_extrapolation'
+            temperature_model="linear_gradient",  # 'linear_gradient','interpolation_extrapolation'
+            density_model="barometric",  # 'barometric','ideal_gas','interpolation_extrapolation'
+            power_output_model="power_curve",  # power_curve','power_coefficient_curve'
             density_correction=False,
             obstacle_height=0,
-            hellman_exp=0,  #This parameter is only used if the parameter `wind_speed_model` is 'hellman'.
-
+            measuring_height_wind_speed=10,
+            measuring_height_temperature=2,
+            measuring_height_pressure=125,
+            measuring_height_roughness_length=0,
+            hellman_exp=0,  # This parameter is only used if the parameter `wind_speed_model` is 'hellman'.
             source_weight=999,
             co2_footprint=0,
             cost=0,
@@ -124,16 +128,15 @@ class WindturbineConfig(ConfigBase):
 
 class Windturbine(cp.Component):
 
-
+    """windturbine calculates electrical output power based on windturbine type and weather data."""
 
     # Inputs
     TemperatureOutside = "TemperatureOutside"
     WindSpeed = "WindSpeed"
-    Pressure ="Pressure"
+    Pressure = "Pressure"
 
     # Outputs
     ElectricityOutput = "ElectricityOutput"
-
 
     @utils.measure_execution_time
     def __init__(
@@ -143,7 +146,9 @@ class Windturbine(cp.Component):
         self.windturbineconfig = config
 
         super().__init__(
-            self.windturbineconfig.name + "_w" + str(self.windturbineconfig.source_weight),
+            self.windturbineconfig.name
+            + "_w"
+            + str(self.windturbineconfig.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
         )
@@ -161,10 +166,13 @@ class Windturbine(cp.Component):
         self.power_output_model = self.windturbineconfig.power_output_model
         self.density_correction = self.windturbineconfig.density_correction
         self.obstacle_height = self.windturbineconfig.obstacle_height
+        self.measuring_height_wind_speed = self.windturbineconfig.measuring_height_wind_speed
+        self.measuring_height_temperature = self.windturbineconfig.measuring_height_temperature
+        self.measuring_height_pressure = self.windturbineconfig.measuring_height_pressure
+        self.measuring_height_roughness_length = self.windturbineconfig.measuring_height_roughness_length
         self.hellman_exp = self.windturbineconfig.hellman_exp
 
-
-        #Inistialisieren Windkraftanlage
+        # Inistialisieren Windkraftanlage
         self.windturbine_module = WindTurbine(
             hub_height=self.hub_height,
             nominal_power=self.nominal_power,
@@ -172,20 +180,20 @@ class Windturbine(cp.Component):
             power_curve=self.power_curve,
             power_coefficient_curve=self.power_coefficient_curve,
             rotor_diameter=self.rotor_diameter,
-            turbine_type=self.turbine_type, )
+            turbine_type=self.turbine_type,
+        )
 
-        #Berechnungsmethoden Winddaten
+        # Berechnungsmethoden Winddaten
         self.calculation_setup = ModelChain(
-                  power_plant= self.windturbine_module,
-                  wind_speed_model=self.wind_speed_model,
-                  temperature_model=self.temperature_model,
-                  density_model=self.density_model,
-                  power_output_model=self.power_output_model,
-                  density_correction=self.density_correction,
-                  obstacle_height=self.obstacle_height,
-                  hellman_exp=self.hellman_exp,
-                  )
-
+            power_plant=self.windturbine_module,
+            wind_speed_model=self.wind_speed_model,
+            temperature_model=self.temperature_model,
+            density_model=self.density_model,
+            power_output_model=self.power_output_model,
+            density_correction=self.density_correction,
+            obstacle_height=self.obstacle_height,
+            hellman_exp=self.hellman_exp,
+        )
 
         self.t_out_channel: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -224,7 +232,6 @@ class Windturbine(cp.Component):
 
         self.add_default_connections(self.get_default_connections_from_weather())
 
-
     def get_default_connections_from_weather(self):
         """Get default connections from weather."""
 
@@ -250,7 +257,6 @@ class Windturbine(cp.Component):
             )
         )
         return connections
-
 
     def i_save_state(self) -> None:
         """Saves the state."""
@@ -279,38 +285,51 @@ class Windturbine(cp.Component):
         """Simulate the component."""
 
         wind_speed_10m_in_m_per_sec = stsv.get_input_value(self.wind_speed_channel)
-        temperature_2m_in_GradC = stsv.get_input_value(self.t_out_channel)
-        pressure_standorthoehe_in_Pa =  stsv.get_input_value(self.pressure_channel)
+        temperature_2m_in_celsius = stsv.get_input_value(self.t_out_channel)
+        pressure_standorthoehe_in_pascal = stsv.get_input_value(self.pressure_channel)
 
-        temperature_2m_in_K = temperature_2m_in_GradC + 273.15
+        temperature_2m_in_kelvin = temperature_2m_in_celsius + 273.15
 
-        roughness_length_in_m=0.15
+        roughness_length_in_m = 0.15
 
+        data = [
+            [
+                wind_speed_10m_in_m_per_sec,
+                temperature_2m_in_kelvin,
+                pressure_standorthoehe_in_pascal,
+                roughness_length_in_m,
+            ]
+        ]
 
-        data = [[wind_speed_10m_in_m_per_sec, temperature_2m_in_K, pressure_standorthoehe_in_Pa, roughness_length_in_m]]
+        # height of measuring points
+        columns = [
+            np.array(["wind_speed", "temperature", "pressure", "roughness_length"]),
+            np.array([self.measuring_height_wind_speed, self.measuring_height_temperature, self.measuring_height_pressure, self.measuring_height_roughness_length]),
+        ]
 
-        columns = [np.array(['wind_speed', 'temperature', 'pressure', 'roughness_length']),
-                    np.array([10, 2, 125,0])]      #höhe der Messstellen --> Aus Wetterdaten
+        weather_df = pd.DataFrame(
+            data, columns=columns
+        )  # dataframe, due to package windpowerlib only work with it
 
-
-        weather_df = pd.DataFrame(data, columns=columns)        #dataframe, due to package windpowerlib only work with it
-
-        #calculation of windturbine power
-        windturbine_power=self.calculation_setup.run_model(weather_df)
+        # calculation of windturbine power
+        windturbine_power = self.calculation_setup.run_model(weather_df)
 
         # write power output time series to WindTurbine object
-        windturbine_power.power_output=windturbine_power.power_output
+        windturbine_power.power_output = windturbine_power.power_output
 
-        power_output_windturbine_in_W=windturbine_power.power_output
+        power_output_windturbine_in_watt = windturbine_power.power_output
 
-        df_electric_power_output_windturbine_in_W = pd.DataFrame(power_output_windturbine_in_W)
+        df_electric_power_output_windturbine_in_watt = pd.DataFrame(
+            power_output_windturbine_in_watt
+        )
 
-        electric_power_output_windturbine_in_W = df_electric_power_output_windturbine_in_W.iloc[0].iloc[0]
+        electric_power_output_windturbine_in_watt = (
+            df_electric_power_output_windturbine_in_watt.iloc[0].iloc[0]
+        )
 
-
-        stsv.set_output_value(self.electricity_output_channel, electric_power_output_windturbine_in_W)
-
-
+        stsv.set_output_value(
+            self.electricity_output_channel, electric_power_output_windturbine_in_watt
+        )
 
     @staticmethod
     def get_cost_capex(config: WindturbineConfig) -> Tuple[float, float, float]:
@@ -329,8 +348,4 @@ class Windturbine(cp.Component):
             co2_footprint=0,
             consumption=0,
         )
-
         return opex_cost_data_class
-
-
-

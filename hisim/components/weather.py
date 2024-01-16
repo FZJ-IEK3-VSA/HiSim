@@ -590,7 +590,9 @@ class Weather(Component):
         stsv.set_output_value(self.altitude_output, self.altitude_list[timestep])
         stsv.set_output_value(self.azimuth_output, self.azimuth_list[timestep])
         stsv.set_output_value(self.wind_speed_output, self.wind_speed_list[timestep])
-        stsv.set_output_value(self.pressure_output, self.pressure_list[timestep]*100)   #*100 umrechnung von hPA bzw mbar in PA
+        stsv.set_output_value(
+            self.pressure_output, self.pressure_list[timestep] * 100
+        )  # *100 umrechnung von hPA bzw mbar in PA
         stsv.set_output_value(
             self.apparent_zenith_output, self.apparent_zenith_list[timestep]
         )
@@ -673,7 +675,10 @@ class Weather(Component):
                     .interpolate(method="linear")
                 )
                 pressure = (
-                    tmy_data["Pressure"].resample("1T").asfreq() .interpolate(method="linear")
+                    tmy_data["Pressure"]
+                    .resample("1T")
+                    .asfreq()
+                    .interpolate(method="linear")
                 )
             elif self.weather_config.data_source == WeatherDataSourceEnum.DWD_10MIN:
                 dni = (
@@ -695,7 +700,10 @@ class Weather(Component):
                     .interpolate(method="linear")
                 )
                 pressure = (
-                    tmy_data["Pressure"].resample("1T").asfreq().interpolate(method="linear")
+                    tmy_data["Pressure"]
+                    .resample("1T")
+                    .asfreq()
+                    .interpolate(method="linear")
                 )
             elif self.weather_config.data_source == WeatherDataSourceEnum.ERA5:
                 dni = (
@@ -717,7 +725,10 @@ class Weather(Component):
                     .interpolate(method="linear")
                 )
                 pressure = (
-                    tmy_data["Pressure"].resample("1T").asfreq().interpolate(method="linear")
+                    tmy_data["Pressure"]
+                    .resample("1T")
+                    .asfreq()
+                    .interpolate(method="linear")
                 )
             else:
                 dni = self.interpolate(
@@ -737,7 +748,7 @@ class Weather(Component):
                 )
                 pressure = self.interpolate(
                     tmy_data["Pressure"], self.my_simulation_parameters.year
-                            )
+                )
             # calculate extra terrestrial radiation- n eeded for perez array diffuse irradiance models
             dni_extra = pd.Series(pvlib.irradiance.get_extra_radiation(dni.index), index=dni.index)  # type: ignore
 
@@ -1163,18 +1174,27 @@ def read_nsrdb_15min_data(filepath: str, year: int) -> pd.DataFrame:
     )
     return data
 
+
 def read_dwd_10min_data(filepath: str, year: int) -> pd.DataFrame:
     """Reads a set of DWD data in 10 min resolution.
-     todo: Einbindung von dwd-abruf über "wetterdienst" repository folgt!
-     https://github.com/earthobservations/wetterdienst/tree/main """
 
-    #get location
-    location = pd.read_csv(filepath, nrows=1, skiprows=1, header=None,names=pd.read_csv(filepath, nrows=1).columns)
+    todo: Einbindung von dwd-abruf über "wetterdienst" repository folgt!
+    https://github.com/earthobservations/wetterdienst/tree/main
+    """
+
+    # get location
+    location = pd.read_csv(
+        filepath,
+        nrows=1,
+        skiprows=1,
+        header=None,
+        names=pd.read_csv(filepath, nrows=1).columns,
+    )
     longitude = location["longitude"][0]
     latitude = location["latitude"][0]
 
     # get data
-    data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0,1])
+    data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
     data.index = pd.date_range(
         f"{year}-01-01 00:00:00", periods=24 * 6 * 365, freq="600S", tz="UTC"
     )
@@ -1189,27 +1209,38 @@ def read_dwd_10min_data(filepath: str, year: int) -> pd.DataFrame:
             "minute": "Minutes",
             "pressure": "Pressure",
             "wind_direction": "Wdir",
-            "global_irradiance": "GHI"
+            "global_irradiance": "GHI",
         }
     )
     # calculate direct normal
     data["direct_horizontal_irradiance"] = data["GHI"] - data["DHI"]
-    data["DNI"] = calculate_direct_normal_radiation(data["direct_horizontal_irradiance"], longitude, latitude)
+    data["DNI"] = calculate_direct_normal_radiation(
+        data["direct_horizontal_irradiance"], longitude, latitude
+    )
 
     return data
 
+
 def read_era5_data(filepath: str, year: int) -> pd.DataFrame:
     """Reads a set of era5 in 60 min resolution.
-     todo: Einbindung von "era5 abruf" repository folgt!
-     https://cds.climate.copernicus.eu/cdsapp#!/dataset/reanalysis-era5-single-levels?tab=overview """
 
-    #get location
-    location = pd.read_csv(filepath, nrows=1, skiprows=1, header=None,names=pd.read_csv(filepath, nrows=1).columns)
+    todo: Einbindung von "era5 abruf" repository folgt!
+    https://cds.climate.copernicus.eu/cdsapp#!/dataset/reanalysis-era5-single-levels?tab=overview
+    """
+
+    # get location
+    location = pd.read_csv(
+        filepath,
+        nrows=1,
+        skiprows=1,
+        header=None,
+        names=pd.read_csv(filepath, nrows=1).columns,
+    )
     longitude = location["longitude"][0]
     latitude = location["latitude"][0]
 
     # get data
-    data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0,1])
+    data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
     data.index = pd.date_range(
         f"{year}-01-01 00:00:00", periods=8760, freq="H", tz="UTC"
     )
@@ -1223,14 +1254,17 @@ def read_era5_data(filepath: str, year: int) -> pd.DataFrame:
             "pressure": "Pressure",
             "wind_direction": "Wdir",
             "wind_speed": "Wspd",
-            "global_irradiance": "GHI"
+            "global_irradiance": "GHI",
         }
     )
     # calculate direct normal
     data["DHI"] = data["GHI"] - data["direct_irradiance"]
-    data["DNI"] = calculate_direct_normal_radiation(data["direct_irradiance"], longitude, latitude)
+    data["DNI"] = calculate_direct_normal_radiation(
+        data["direct_irradiance"], longitude, latitude
+    )
 
     return data
+
 
 def calculate_direct_normal_radiation(
     direct_horizontal_irradation: pd.Series,

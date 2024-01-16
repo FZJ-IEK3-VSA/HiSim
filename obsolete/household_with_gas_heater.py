@@ -20,7 +20,7 @@ from hisim.components import controller_l1_heat_old
 from hisim.components import generic_heat_water_storage
 from hisim.components import building
 from hisim import log
-from system_setups.household_with_heatpump_and_pv import HouseholdPVConfig
+from obsolete.household_with_heatpump_and_pv import HouseholdPVConfig
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"

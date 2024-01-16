@@ -102,7 +102,7 @@ def setup_function(
         PostProcessingOptions.MAKE_NETWORK_CHARTS
     )
     my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
+        PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
     )
     my_simulation_parameters.post_processing_options.append(
         PostProcessingOptions.GENERATE_PDF_REPORT

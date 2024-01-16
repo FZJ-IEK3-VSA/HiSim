@@ -1,26 +1,18 @@
 """  Household system setup with gas heater. """
+# NOTE: This setup does not work with the current version of HiSim!
+
 # clean
 from typing import Optional, Any
 from pathlib import Path
 
-# from dataclasses import dataclass
-# from dataclasses_json import dataclass_json
-# from utspclient.helpers.lpgdata import (
-#     ChargingStationSets,
-#     Households,
-#     TransportationDeviceSets,
-#     TravelRouteSets,
-# )
-# from utspclient.helpers.lpgpythonbindings import JsonReference
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
-from hisim.components import generic_gas_heater
-from hisim.components import controller_l1_heat_old
-from hisim.components import generic_heat_water_storage
+from obsolete import generic_gas_heater_with_controller
+from hisim.components import heat_distribution_system
 from hisim.components import building
 from hisim import log
-from system_setups.household_with_heatpump_and_pv import HouseholdPVConfig
+from obsolete.household_with_heatpump_and_pv import HouseholdPVConfig
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -45,9 +37,9 @@ def setup_function(
         - Weather
         - Building
         - Gas Heater
-        - Heat Water Storage
-        - Heat Water Storage Controller
-        - Heat Controller
+        - Gas Heater Controller
+        - Heat Distribution System
+        - Heat Distribution System Controller
     """
 
     config_filename = "pv_hp_config.json"
@@ -65,10 +57,9 @@ def setup_function(
 
     # Set Simulation Parameters
     year = 2021
-    seconds_per_timestep = 60 * 15
+    seconds_per_timestep = 60
 
     # Set Occupancy
-    name = "UTSPConnector"
     url = my_config.lpg_url
     api_key = my_config.api_key
     household = my_config.household_type
@@ -90,7 +81,6 @@ def setup_function(
 
     # Build Occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-        name=name,
         url=url,
         api_key=api_key,
         household=household,
@@ -99,6 +89,7 @@ def setup_function(
         travel_route_set=travel_route_set,
         transportation_device_set=transportation_device_set,
         charging_station_set=charging_station_set,
+        name="UTSPConnector",
         consumption=0,
         profile_with_washing_machine_and_dishwasher=True,
         predictive_control=False,
@@ -115,106 +106,106 @@ def setup_function(
 
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
+
     my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
+    # Build Heat Distribution Controller
+    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
+        set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
+        set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+    )
+
+    my_heat_distribution_controller = (
+        heat_distribution_system.HeatDistributionController(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_heat_distribution_controller_config,
+        )
+    )
+    my_hds_controller_information = (
+        heat_distribution_system.HeatDistributionControllerInformation(
+            config=my_heat_distribution_controller_config
+        )
+    )
     # Build Gasheater
-    my_gasheater = generic_gas_heater.GasHeater(
-        config=generic_gas_heater.GenericGasHeaterConfig.get_default_gasheater_config(),
+    my_gasheater = generic_gas_heater_with_controller.GasHeaterWithController(
+        config=generic_gas_heater_with_controller.GenericGasHeaterWithControllerConfig.get_default_gasheater_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Heat Water Storage und Heat Water Storage Controller
-    my_heat_water_storage = generic_heat_water_storage.HeatStorage(
-        config=generic_heat_water_storage.HeatStorageConfig.get_default_heat_storage_config(),
-        my_simulation_parameters=my_simulation_parameters,
-    )
-    my_heat_water_storage_controller = generic_heat_water_storage.HeatStorageController(
-        config=generic_heat_water_storage.HeatStorageControllerConfig.get_default_heat_storage_controller_config(
-            heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
-        ),
+    # Build Gas Heater Controller
+    my_gasheater_controller = generic_gas_heater_with_controller.GasHeaterController(
+        config=generic_gas_heater_with_controller.GenericGasHeaterControllerConfig.get_default_controller_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Heat Controller
-    my_controller_heat = controller_l1_heat_old.ControllerHeat(
-        config=controller_l1_heat_old.ControllerHeatConfig.get_default_controller_heat_l1(),
-        my_simulation_parameters=my_simulation_parameters,
+    hds_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+        temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
+        water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+    )
+
+    # Build Heat Distribution System
+    my_heat_distribution = heat_distribution_system.HeatDistribution(
+        my_simulation_parameters=my_simulation_parameters, config=hds_config
     )
 
     # =================================================================================================================================
     # Connect Component Inputs with Outputs
 
-    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
-    my_building.connect_input(
-        my_building.ThermalPowerDelivered,
-        my_heat_water_storage.component_name,
-        my_heat_water_storage.RealHeatForBuilding,
-    )
-
     my_gasheater.connect_input(
-        my_gasheater.ControlSignal,
-        my_controller_heat.component_name,
-        my_controller_heat.ControlSignalGasHeater,
+        my_gasheater.CooledWaterTemperatureBoilerInput,
+        my_heat_distribution.component_name,
+        my_heat_distribution.WaterTemperatureOutput,
     )
     my_gasheater.connect_input(
-        my_gasheater.MassflowInputTemperature,
-        my_heat_water_storage.component_name,
-        my_heat_water_storage.WaterOutputStorageforHeaters,
-    )
-
-    my_heat_water_storage.connect_input(
-        my_heat_water_storage.ThermalInputPower1,
-        my_gasheater.component_name,
-        my_gasheater.ThermalOutputPower,
-    )
-    my_heat_water_storage.connect_input(
-        my_heat_water_storage.ControlSignalChooseStorage,
-        my_controller_heat.component_name,
-        my_controller_heat.ControlSignalChooseStorage,
-    )
-
-    my_heat_water_storage.connect_input(
-        my_heat_water_storage.ThermalDemandHeatingWater,
-        my_heat_water_storage_controller.component_name,
-        my_heat_water_storage_controller.RealThermalDemandHeatingWater,
-    )
-
-    my_heat_water_storage_controller.connect_input(
-        my_heat_water_storage_controller.TemperatureHeatingStorage,
-        my_heat_water_storage.component_name,
-        my_heat_water_storage.WaterOutputTemperatureHeatingWater,
-    )
-    my_heat_water_storage_controller.connect_input(
-        my_heat_water_storage_controller.BuildingTemperature,
+        my_gasheater.ReferenceMaxHeatBuildingDemand,
         my_building.component_name,
-        my_building.TemperatureIndoorAir,
+        my_building.ReferenceMaxHeatBuildingDemand,
     )
-    # my_heat_water_storage_controller.connect_input(
-    #     my_heat_water_storage_controller.ReferenceMaxHeatBuildingDemand,
-    #     my_building.component_name,
-    #     my_building.ReferenceMaxHeatBuildingDemand,
-    # )
 
-    my_controller_heat.connect_input(
-        my_controller_heat.StorageTemperatureHeatingWater,
-        my_heat_water_storage.component_name,
-        my_heat_water_storage.WaterOutputTemperatureHeatingWater,
+    my_gasheater.connect_input(
+        my_gasheater.InitialResidenceTemperature,
+        my_building.component_name,
+        my_building.InitialInternalTemperature,
     )
-    my_controller_heat.connect_input(
-        my_controller_heat.ResidenceTemperature,
+    my_gasheater.connect_input(
+        my_gasheater.ResidenceTemperature,
         my_building.component_name,
         my_building.TemperatureMeanThermalMass,
+    )
+
+    my_gasheater_controller.connect_input(
+        my_gasheater_controller.MeanWaterTemperatureGasHeaterControllerInput,
+        my_gasheater.component_name,
+        my_gasheater.MeanWaterTemperatureBoilerOutput,
+    )
+
+    my_heat_distribution.connect_input(
+        my_heat_distribution.WaterTemperatureInput,
+        my_gasheater.component_name,
+        my_gasheater.HeatedWaterTemperatureBoilerOutput,
+    )
+
+    my_heat_distribution.connect_input(
+        my_heat_distribution.MaxWaterMassFlowRate,
+        my_gasheater.component_name,
+        my_gasheater.MaxMassFlow,
+    )
+
+    my_heat_distribution_controller.connect_input(
+        my_heat_distribution_controller.ControlSignalFromHeater,
+        my_gasheater.component_name,
+        my_gasheater.ControlSignalfromHeaterToDistribution,
     )
 
     # =================================================================================================================================
     # Add Components to Simulation Parameters
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_weather)
-    my_sim.add_component(my_building)
-    my_sim.add_component(my_gasheater)
-
-    my_sim.add_component(my_heat_water_storage)
-    my_sim.add_component(my_heat_water_storage_controller)
-    my_sim.add_component(my_controller_heat)
+    my_sim.add_component(my_building, connect_automatically=True)
+    my_sim.add_component(my_gasheater, connect_automatically=True)
+    my_sim.add_component(my_gasheater_controller)
+    my_sim.add_component(my_heat_distribution, connect_automatically=True)
+    my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)

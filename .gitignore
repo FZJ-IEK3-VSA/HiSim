@@ -152,6 +152,7 @@ tests/results1
 tests/results_scaling/
 tests/lpg_utsp_scaling_test/
 tests/component_connections.json
+tests/test_system_setups/results/
 
 components_information.xlsx
 hisim/components_information.xlsx

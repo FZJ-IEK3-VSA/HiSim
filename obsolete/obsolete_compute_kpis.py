@@ -2,11 +2,32 @@
 
 """Postprocessing option computes overall consumption, production,self-consumption and injection as well as selfconsumption rate and autarky rate."""
 
+import os
+from typing import List, Tuple, Union, Any
+from pathlib import Path
 
-from hisim.loadtypes import ComponentType, InandOutputType
+import pandas as pd
+
+from hisim.component import ComponentOutput
+from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes
+from hisim.modular_household.interface_configs.kpi_config import KPIConfig
+from hisim.simulationparameters import SimulationParameters
+from hisim.utils import HISIMPATH
 from hisim.component_wrapper import ComponentWrapper
 
 from hisim import log
+from hisim.postprocessing.investment_cost_co2 import compute_investment_cost
+
+from hisim.components import generic_hot_water_storage_modular
+
+
+def compute_energy_from_power(
+    power_timeseries: pd.Series, timeresolution: int
+) -> float:
+    """Computes the energy from a power value."""
+    if power_timeseries.empty:
+        return 0.0
+    return float(power_timeseries.sum() * timeresolution / 3.6e6)
 
 def compute_hot_water_storage_losses_and_cycles(
     components: List[ComponentWrapper],

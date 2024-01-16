@@ -1,4 +1,4 @@
-"""Data Processing and Plotting for Scenario Comparison with Pyam."""
+"""Data Processing and Plotting for Scenario Comparison."""
 
 
 import glob
@@ -18,9 +18,9 @@ import matplotlib.pyplot as plt
 from ordered_set import OrderedSet
 import seaborn as sns
 
-from hisim.postprocessing.scenario_evaluation.pyam_data_collection import (
-    PyamDataTypeEnum,
-    PyamDataProcessingModeEnum,
+from hisim.postprocessing.scenario_evaluation.result_data_collection import (
+    ResultDataTypeEnum,
+    ResultDataProcessingModeEnum,
 )
 from hisim.postprocessing.chartbase import ChartFontsAndSize
 from hisim import log
@@ -28,9 +28,9 @@ from hisim import log
 # TODO: debugging needed
 
 
-class PyAmChartGenerator:
+class ScenarioChartGenerator:
 
-    """PyamChartGenerator class."""
+    """ScenarioChartGenerator class."""
 
     def __init__(
         self,
@@ -49,7 +49,7 @@ class PyAmChartGenerator:
 
         self.datetime_string = datetime.datetime.now().strftime("%Y%m%d_%H%M")
         self.show_plot_legend: bool = True
-        if data_processing_mode == PyamDataProcessingModeEnum.PROCESS_ALL_DATA:
+        if data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA:
 
             data_path_strip = "data_with_all_parameters"
             result_path_strip = "results_for_all_parameters"
@@ -57,42 +57,42 @@ class PyAmChartGenerator:
 
         elif (
             data_processing_mode
-            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
+            == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
         ):
             data_path_strip = "data_with_different_building_codes"
             result_path_strip = "results_different_building_codes"
 
         elif (
             data_processing_mode
-            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_SIZES
+            == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_SIZES
         ):
             data_path_strip = "data_with_different_conditioned_floor_area_in_m2s"
             result_path_strip = "results_different_conditioned_floor_area_in_m2s"
 
         elif (
             data_processing_mode
-            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_AZIMUTH_ANGLES
+            == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_AZIMUTH_ANGLES
         ):
             data_path_strip = "data_with_different_pv_azimuths"
             result_path_strip = "results_different_pv_azimuths"
 
         elif (
             data_processing_mode
-            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES
+            == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES
         ):
             data_path_strip = "data_with_different_pv_tilts"
             result_path_strip = "results_different_pv_tilts"
 
         elif (
             data_processing_mode
-            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_SHARE_OF_MAXIMUM_PV
+            == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_SHARE_OF_MAXIMUM_PV
         ):
             data_path_strip = "data_with_different_share_of_maximum_pv_powers"
             result_path_strip = "results_different_share_of_maximum_pv_powers"
 
         elif (
             data_processing_mode
-            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_NUMBER_OF_DWELLINGS
+            == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_NUMBER_OF_DWELLINGS
         ):
             data_path_strip = "data_with_different_number_of_dwellings_per_buildings"
             result_path_strip = "results_different_number_of_dwellings_per_buildings"
@@ -139,7 +139,7 @@ class PyAmChartGenerator:
 
             self.make_plots_with_specific_kind_of_data(
                 time_resolution_of_data_set=time_resolution_of_data_set,
-                pyam_dataframe=pandas_dataframe,
+                pandas_dataframe=pandas_dataframe,
                 simulation_duration_key=simulation_duration_to_check,
                 variables_to_check=variables_to_check,
             )
@@ -158,13 +158,13 @@ class PyAmChartGenerator:
     ) -> Tuple[pd.DataFrame, str, str, List[str]]:
         """Get csv data and create pyam dataframes."""
 
-        if time_resolution_of_data_set == PyamDataTypeEnum.HOURLY:
+        if time_resolution_of_data_set == ResultDataTypeEnum.HOURLY:
             kind_of_data_set = "hourly"
-        elif time_resolution_of_data_set == PyamDataTypeEnum.YEARLY:
+        elif time_resolution_of_data_set == ResultDataTypeEnum.YEARLY:
             kind_of_data_set = "yearly"
-        elif time_resolution_of_data_set == PyamDataTypeEnum.DAILY:
+        elif time_resolution_of_data_set == ResultDataTypeEnum.DAILY:
             kind_of_data_set = "daily"
-        elif time_resolution_of_data_set == PyamDataTypeEnum.MONTHLY:
+        elif time_resolution_of_data_set == ResultDataTypeEnum.MONTHLY:
             kind_of_data_set = "monthly"
         else:
             raise ValueError(
@@ -214,7 +214,7 @@ class PyAmChartGenerator:
     def make_plots_with_specific_kind_of_data(
         self,
         time_resolution_of_data_set: Any,
-        pyam_dataframe: pd.DataFrame,
+        pandas_dataframe: pd.DataFrame,
         simulation_duration_key: str,
         variables_to_check: List[str],
     ) -> None:
@@ -222,8 +222,8 @@ class PyAmChartGenerator:
 
         log.information(f"Simulation duration: {simulation_duration_key} days.")
 
-        if pyam_dataframe.empty:
-            raise ValueError("Pyam dataframe is empty.")
+        if pandas_dataframe.empty:
+            raise ValueError("Dataframe is empty.")
 
         sub_results_folder = f"simulation_duration_of_{simulation_duration_key}_days"
         sub_sub_results_folder = (
@@ -254,7 +254,7 @@ class PyAmChartGenerator:
 
             # filter the dataframe according to variable
             filtered_data = self.filter_pandas_dataframe(
-                dataframe=pyam_dataframe, variable_to_check=variable_to_check
+                dataframe=pandas_dataframe, variable_to_check=variable_to_check
             )
             # get unit of variable
             try:
@@ -265,7 +265,7 @@ class PyAmChartGenerator:
                 else:
                     unit = "-"
 
-            if time_resolution_of_data_set == PyamDataTypeEnum.YEARLY:
+            if time_resolution_of_data_set == ResultDataTypeEnum.YEARLY:
                 kind_of_data_set = "yearly"
 
                 # get statistical data
@@ -295,7 +295,7 @@ class PyAmChartGenerator:
 
                 try:
                     self.make_scatter_plot_for_pandas_dataframe(
-                        full_pandas_dataframe=pyam_dataframe,
+                        full_pandas_dataframe=pandas_dataframe,
                         filtered_data=filtered_data,
                         y_data_variable=self.path_addition,
                     )
@@ -314,18 +314,18 @@ class PyAmChartGenerator:
                     )
 
             elif time_resolution_of_data_set in (
-                PyamDataTypeEnum.HOURLY,
-                PyamDataTypeEnum.DAILY,
-                PyamDataTypeEnum.MONTHLY,
+                ResultDataTypeEnum.HOURLY,
+                ResultDataTypeEnum.DAILY,
+                ResultDataTypeEnum.MONTHLY,
             ):
 
-                if time_resolution_of_data_set == PyamDataTypeEnum.HOURLY:
+                if time_resolution_of_data_set == ResultDataTypeEnum.HOURLY:
                     kind_of_data_set = "hourly"
                     line_plot_marker_size = 2
-                elif time_resolution_of_data_set == PyamDataTypeEnum.DAILY:
+                elif time_resolution_of_data_set == ResultDataTypeEnum.DAILY:
                     kind_of_data_set = "daily"
                     line_plot_marker_size = 3
-                elif time_resolution_of_data_set == PyamDataTypeEnum.MONTHLY:
+                elif time_resolution_of_data_set == ResultDataTypeEnum.MONTHLY:
                     kind_of_data_set = "monthly"
                     line_plot_marker_size = 5
 
@@ -830,21 +830,6 @@ class PyAmChartGenerator:
             )
         return filtered_dataframe
 
-    def decide_for_scenario_or_variable_comparison(
-        self, filtered_data: pyam.IamDataFrame
-    ) -> str:
-        """Decide for each plot what will be compared, different scenarios or different variales."""
-
-        if len(filtered_data.scenario) == 1 and len(filtered_data.variable) > 1:
-            comparison_mode = "variable"
-        elif len(filtered_data.scenario) > 1 and len(filtered_data.variable) == 1:
-            comparison_mode = "scenario"
-        else:
-            raise ValueError(
-                f"No comparison mode could be determined. There are {len(filtered_data.scenario)} scenarios and {len(filtered_data.variable)} variables filtered."
-            )
-
-        return comparison_mode
 
     def get_statistics_of_data_and_write_to_excel(
         self, filtered_data: pd.DataFrame, path_to_save: str, kind_of_data_set: str,

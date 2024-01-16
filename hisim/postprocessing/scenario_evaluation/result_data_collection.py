@@ -1,4 +1,4 @@
-"""Data Collection for Scenario Comparison with Pyam."""
+"""Data Collection for Scenario Comparison."""
 # clean
 import glob
 import datetime
@@ -15,9 +15,9 @@ import ordered_set
 from hisim import log
 
 
-class PyamDataCollector:
+class ResultDataCollector:
 
-    """PyamDataCollector class which collects and concatenate the pyam data from the system_setups/results."""
+    """ResultDataCollector class which collects and concatenate the result data from the system_setups/results."""
 
     def __init__(
         self,
@@ -31,7 +31,7 @@ class PyamDataCollector:
     ) -> None:
         """Initialize the class."""
         result_folder = folder_from_which_data_will_be_collected
-        self.pyam_data_folder = os.path.join(
+        self.result_data_folder = os.path.join(
             result_folder,
             os.pardir,
             "results_for_scenario_comparison",
@@ -47,43 +47,43 @@ class PyamDataCollector:
             result_path=result_folder
         )
 
-        if data_processing_mode == PyamDataProcessingModeEnum.PROCESS_ALL_DATA:
+        if data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA:
 
             parameter_key = None
 
         elif (
             data_processing_mode
-            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_SIZES
+            == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_SIZES
         ):
             parameter_key = "conditioned_floor_area_in_m2"
 
         elif (
             data_processing_mode
-            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
+            == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
         ):
             parameter_key = "building_code"
 
         elif (
             data_processing_mode
-            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_AZIMUTH_ANGLES
+            == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_AZIMUTH_ANGLES
         ):
             parameter_key = "pv_azimuth"
 
         elif (
             data_processing_mode
-            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES
+            == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES
         ):
             parameter_key = "pv_tilt"
 
         elif (
             data_processing_mode
-            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_SHARE_OF_MAXIMUM_PV
+            == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_SHARE_OF_MAXIMUM_PV
         ):
             parameter_key = "share_of_maximum_pv_power"
 
         elif (
             data_processing_mode
-            == PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_NUMBER_OF_DWELLINGS
+            == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_NUMBER_OF_DWELLINGS
         ):
             parameter_key = "number_of_dwellings_per_building"
 
@@ -179,7 +179,7 @@ class PyamDataCollector:
         """When a result folder does not contain the finished_flag, it will be removed from the system_setups/result folder."""
         list_of_unfinished_folders = []
         with open(
-            os.path.join(self.pyam_data_folder, "failed_simualtions.txt"),
+            os.path.join(self.result_data_folder, "failed_simualtions.txt"),
             "a",
             encoding="utf-8",
         ) as file:
@@ -221,7 +221,7 @@ class PyamDataCollector:
         list_of_unsuccessful_folders = []
         with open(
             os.path.join(
-                self.pyam_data_folder,
+                self.result_data_folder,
                 "succeeded_simulations_that_showed_too_high_or_too_low_building_temps.txt",
             ),
             "a",
@@ -402,13 +402,13 @@ class PyamDataCollector:
 
         all_csv_files = []
 
-        if analyze_yearly_or_hourly_data == PyamDataTypeEnum.HOURLY:
+        if analyze_yearly_or_hourly_data == ResultDataTypeEnum.HOURLY:
             kind_of_data_set = "hourly"
-        elif analyze_yearly_or_hourly_data == PyamDataTypeEnum.YEARLY:
+        elif analyze_yearly_or_hourly_data == ResultDataTypeEnum.YEARLY:
             kind_of_data_set = "yearly"
-        elif analyze_yearly_or_hourly_data == PyamDataTypeEnum.DAILY:
+        elif analyze_yearly_or_hourly_data == ResultDataTypeEnum.DAILY:
             kind_of_data_set = "daily"
-        elif analyze_yearly_or_hourly_data == PyamDataTypeEnum.MONTHLY:
+        elif analyze_yearly_or_hourly_data == ResultDataTypeEnum.MONTHLY:
             kind_of_data_set = "monthly"
         else:
             raise ValueError(
@@ -591,7 +591,7 @@ class PyamDataCollector:
         )
 
         filename = self.store_pyam_data_with_the_right_name_and_in_the_right_path(
-            pyam_data_folder=self.pyam_data_folder,
+            result_data_folder=self.result_data_folder,
             simulation_duration_key=simulation_duration_key,
             time_resolution_of_data_set=time_resolution_of_data_set,
             parameter_key=parameter_key,
@@ -600,20 +600,20 @@ class PyamDataCollector:
 
     def store_pyam_data_with_the_right_name_and_in_the_right_path(
         self,
-        pyam_data_folder: str,
+        result_data_folder: str,
         simulation_duration_key: str,
         time_resolution_of_data_set: Any,
         parameter_key: Optional[str] = None,
     ) -> str:
         """Store csv files in the pyam data folder with the right filename and path."""
 
-        if time_resolution_of_data_set == PyamDataTypeEnum.HOURLY:
+        if time_resolution_of_data_set == ResultDataTypeEnum.HOURLY:
             kind_of_data_set = "hourly"
-        elif time_resolution_of_data_set == PyamDataTypeEnum.YEARLY:
+        elif time_resolution_of_data_set == ResultDataTypeEnum.YEARLY:
             kind_of_data_set = "yearly"
-        elif time_resolution_of_data_set == PyamDataTypeEnum.DAILY:
+        elif time_resolution_of_data_set == ResultDataTypeEnum.DAILY:
             kind_of_data_set = "daily"
-        elif time_resolution_of_data_set == PyamDataTypeEnum.MONTHLY:
+        elif time_resolution_of_data_set == ResultDataTypeEnum.MONTHLY:
             kind_of_data_set = "monthly"
         else:
             raise ValueError(
@@ -622,13 +622,13 @@ class PyamDataCollector:
 
         if parameter_key is not None:
             path_for_file = os.path.join(
-                pyam_data_folder,
+                result_data_folder,
                 f"data_with_different_{parameter_key}s",
                 f"simulation_duration_of_{simulation_duration_key}_days",
             )
         else:
             path_for_file = os.path.join(
-                pyam_data_folder,
+                result_data_folder,
                 "data_with_all_parameters",
                 f"simulation_duration_of_{simulation_duration_key}_days",
             )
@@ -877,7 +877,7 @@ class PyamDataCollector:
         return list_of_pyam_folders_which_have_only_unique_configs
 
 
-class PyamDataTypeEnum(enum.Enum):
+class ResultDataTypeEnum(enum.Enum):
 
     """PyamDataTypeEnum class.
 
@@ -890,7 +890,7 @@ class PyamDataTypeEnum(enum.Enum):
     YEARLY = "yearly"
 
 
-class PyamDataProcessingModeEnum(enum.Enum):
+class ResultDataProcessingModeEnum(enum.Enum):
 
     """PyamDataProcessingModeEnum class.
 

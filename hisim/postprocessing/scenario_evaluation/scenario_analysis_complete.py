@@ -1,14 +1,14 @@
-"""Data Collection for Scenario Comparison with Pyam."""
+"""Data Collection for Scenario Comparison."""
 # clean
 import time
 import os
 from typing import Any, List, Optional, Dict
-from hisim.postprocessing.scenario_evaluation import pyam_data_collection, pyam_data_processing
+from hisim.postprocessing.scenario_evaluation import result_data_collection, result_data_processing
 
 
-class PyamDataAnalysis:
+class ScenarioAnalysis:
 
-    """PyamDataAnalysis class which executes pyam data collection and processing."""
+    """ScenarioAnalysis class which executes pyam data collection and processing."""
 
     def __init__(
         self,
@@ -22,14 +22,14 @@ class PyamDataAnalysis:
     ) -> None:
         """Initialize the class."""
 
-        pyam_data_collection.PyamDataCollector(
+        result_data_collection.ResultDataCollector(
             data_processing_mode=data_processing_mode,
             folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
             path_to_default_config=path_to_default_config,
             time_resolution_of_data_set=time_resolution_of_data_set,
             simulation_duration_to_check=simulation_duration_to_check,
         )
-        pyam_data_processing.PyAmChartGenerator(
+        result_data_processing.ScenarioChartGenerator(
             simulation_duration_to_check=simulation_duration_to_check,
             time_resolution_of_data_set=time_resolution_of_data_set,
             data_processing_mode=data_processing_mode,
@@ -44,7 +44,7 @@ def main():
 
     # Inputs for pyam analysis
     # -------------------------------------------------------------------------------------------------------------------------------------
-    time_resolution_of_data_set = pyam_data_collection.PyamDataTypeEnum.YEARLY
+    time_resolution_of_data_set = result_data_collection.ResultDataTypeEnum.YEARLY
 
     cluster_storage_path = "/fast/home/k-rieck/"
     # cluster_storage_path = "/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/hisim_results/results/"
@@ -65,10 +65,10 @@ def main():
     simulation_duration_to_check = str(365)
 
     data_processing_mode = (
-        pyam_data_collection.PyamDataProcessingModeEnum.PROCESS_ALL_DATA
+        result_data_collection.ResultDataProcessingModeEnum.PROCESS_ALL_DATA
     )
 
-    filterclass = pyam_data_processing.FilterClass()
+    filterclass = result_data_processing.FilterClass()
     # list_with_variables_to_check = (
     #     filterclass.variables_for_debugging_purposes + filterclass.kpi_data
     # )
@@ -94,7 +94,7 @@ def main():
 
     # -------------------------------------------------------------------------------------------------------------------------------------
 
-    PyamDataAnalysis(
+    ScenarioAnalysis(
         folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
         time_resolution_of_data_set=time_resolution_of_data_set,
         path_to_default_config=path_to_default_config,

@@ -36,10 +36,10 @@ class ScenarioDataProcessing:
             kind_of_data_set = "monthly"
         else:
             raise ValueError(
-                "This kind of data was not found in the pyamdaacollectorenum class."
+                "This kind of data was not found in the datacollectorenum class."
             )
         log.information(
-            f"Read csv files and create one big pyam dataframe for {kind_of_data_set} data."
+            f"Read csv files and create one big dataframe for {kind_of_data_set} data."
         )
 
         for file in glob.glob(
@@ -140,7 +140,7 @@ class ScenarioDataProcessing:
             ) in aggregated_scenario_dict.items():
                 if given_scenario == []:
                     raise ValueError(
-                        f"Scenarios containing {key_scenario_to_check} were not found in the pyam dataframe."
+                        f"Scenarios containing {key_scenario_to_check} were not found in the dataframe."
                     )
 
             concat_df = pd.DataFrame()

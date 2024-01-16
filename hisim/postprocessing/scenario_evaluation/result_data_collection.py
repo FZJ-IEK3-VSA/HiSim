@@ -36,11 +36,11 @@ class ResultDataCollection:
         )
 
         # in each system_setups/results folder should be one system setup that was executed with the default config
-        self.path_of_pyam_results_executed_with_default_config: str = ""
+        self.path_of_scenario_data_executed_with_default_config: str = ""
 
         log.information(f"Checking results from folder: {result_folder}")
 
-        list_with_pyam_data_folders = self.get_only_useful_data(
+        list_with_result_data_folders = self.get_only_useful_data(
             result_path=result_folder
         )
 
@@ -86,7 +86,7 @@ class ResultDataCollection:
 
         else:
             raise ValueError(
-                "Analysis mode is not part of the PyamDataProcessingModeEnum class."
+                "Analysis mode is not part of the ResultDataProcessingModeEnum class."
             )
 
         log.information(f"Data Collection Mode is {data_processing_mode}")
@@ -96,11 +96,11 @@ class ResultDataCollection:
 
         if path_to_default_config is None:
             list_with_parameter_key_values = None
-            list_with_csv_files = list_with_pyam_data_folders
+            list_with_csv_files = list_with_result_data_folders
             list_with_module_config_dicts = None
 
         else:
-            # path to default config is given (which means there should be also a module config dict in the json file in the pyam folder which has read the config)
+            # path to default config is given (which means there should be also a module config dict in the json file in the result folder which has read the config)
 
             default_config_dict = self.get_default_config(
                 path_to_default_config=path_to_default_config
@@ -110,8 +110,8 @@ class ResultDataCollection:
                 list_with_csv_files,
                 list_with_parameter_key_values,
                 list_with_module_config_dicts,
-            ) = self.go_through_all_pyam_data_folders_and_collect_file_paths_according_to_parameters(
-                list_with_pyam_data_folders=list_with_pyam_data_folders,
+            ) = self.go_through_all_result_data_folders_and_collect_file_paths_according_to_parameters(
+                list_with_result_data_folders=list_with_result_data_folders,
                 default_config_dict=default_config_dict,
                 parameter_key=parameter_key,
             )
@@ -146,31 +146,31 @@ class ResultDataCollection:
         # go through result path and if the dirs do not contain finished.flag ask for deletion
         self.clean_result_directory_from_unfinished_results(result_path=result_path)
 
-        # get result folders with pyam data folder
-        list_with_all_paths_to_check = self.get_list_of_all_relevant_pyam_data_folders(
+        # get result folders with result data folder
+        list_with_all_paths_to_check = self.get_list_of_all_relevant_scenario_data_folders(
             result_path=result_path
         )
         print(
-            "len of list with all paths to containing pyam data ",
+            "len of list with all paths to containing result data ",
             len(list_with_all_paths_to_check),
         )
         # filter out results that had buildings that were too hot or too cold
         list_with_all_paths_to_check_after_filtering = self.filter_results_that_failed_to_heat_or_cool_building_sufficiently(
-            list_of_result_path_that_contain_pyam_data=list_with_all_paths_to_check
+            list_of_result_path_that_contain_scenario_data=list_with_all_paths_to_check
         )
         print(
             "len of list with all paths after filtering ",
             len(list_with_all_paths_to_check),
         )
         # check if duplicates are existing and ask for deletion
-        list_with_pyam_data_folders = self.go_through_all_pyam_data_folders_and_check_if_module_configs_are_double_somewhere(
-            list_of_pyam_folder_paths_to_check=list_with_all_paths_to_check_after_filtering
+        list_with_result_data_folders = self.go_through_all_scenario_data_folders_and_check_if_module_configs_are_double_somewhere(
+            list_of_result_folder_paths_to_check=list_with_all_paths_to_check_after_filtering
         )
         print(
             "len of list with all paths after double checking for duplicates ",
-            len(list_with_pyam_data_folders),
+            len(list_with_result_data_folders),
         )
-        return list_with_pyam_data_folders
+        return list_with_result_data_folders
 
     def clean_result_directory_from_unfinished_results(self, result_path: str) -> None:
         """When a result folder does not contain the finished_flag, it will be removed from the system_setups/result folder."""
@@ -212,7 +212,7 @@ class ResultDataCollection:
         #         print("The answer must be yes or no.")
 
     def filter_results_that_failed_to_heat_or_cool_building_sufficiently(
-        self, list_of_result_path_that_contain_pyam_data: List[str]
+        self, list_of_result_path_that_contain_scenario_data: List[str]
     ) -> List[str]:
         """When a result shows too high or too low building temperatures, it will be filtered and removed from further analysis."""
         list_of_unsuccessful_folders = []
@@ -237,17 +237,17 @@ class ResultDataCollection:
                 "temp deviation below set heating [°C*h],"
                 "temp deviation above set cooling [°C*h], folder \n"
             )
-            for folder in list_of_result_path_that_contain_pyam_data:
-                pyam_data_information = os.path.join(
-                    folder, "data_information_for_pyam.json"
+            for folder in list_of_result_path_that_contain_scenario_data:
+                scenario_data_information = os.path.join(
+                    folder, "data_information_for_scenario_evaluation.json"
                 )
                 main_folder = os.path.normpath(folder + os.sep + os.pardir)
                 webtool_kpis_file = os.path.join(main_folder, "webtool_kpis.json")
 
                 # get set temperatures used in the simulation
-                if os.path.exists(pyam_data_information):
+                if os.path.exists(scenario_data_information):
                     with open(
-                        pyam_data_information, "r", encoding="utf-8"
+                        scenario_data_information, "r", encoding="utf-8"
                     ) as data_info_file:
                         json_file = json.load(data_info_file)
                         component_entries = json_file["componentEntries"]
@@ -266,7 +266,7 @@ class ResultDataCollection:
                                 break
                 else:
                     raise FileNotFoundError(
-                        f"The file {pyam_data_information} could not be found. "
+                        f"The file {scenario_data_information} could not be found. "
                     )
 
                 # open the webtool kpis and check if building got too hot or too cold
@@ -355,7 +355,7 @@ class ResultDataCollection:
         )
         if answer.upper() in ["N", "NO"]:
             for folder in list_of_unsuccessful_folders:
-                list_of_result_path_that_contain_pyam_data.remove(folder)
+                list_of_result_path_that_contain_scenario_data.remove(folder)
             print(
                 "The folders with too low or too high building temperatures will be discarded from the further analysis."
             )
@@ -366,21 +366,21 @@ class ResultDataCollection:
         else:
             print("The answer must be yes or no.")
 
-        return list_of_result_path_that_contain_pyam_data
+        return list_of_result_path_that_contain_scenario_data
 
-    def get_list_of_all_relevant_pyam_data_folders(self, result_path: str) -> List[str]:
-        """Get a list of all pyam data folders which you want to analyze."""
+    def get_list_of_all_relevant_scenario_data_folders(self, result_path: str) -> List[str]:
+        """Get a list of all scenario data folders which you want to analyze."""
 
         # choose which path to check
-        path_to_check = os.path.join(result_path, "**", "pyam_data")
+        path_to_check = os.path.join(result_path, "**", "result_data_for_scenario_evaluation")
 
         list_of_paths_first_order = list(glob.glob(path_to_check))
 
-        # if in these paths no pyam data folder can be found check in subfolders for it
-        path_to_check = os.path.join(result_path, "**", "**", "pyam_data")  # type: ignore
+        # if in these paths no result data folder can be found check in subfolders for it
+        path_to_check = os.path.join(result_path, "**", "**", "result_data_for_scenario_evaluation")  # type: ignore
         list_of_paths_second_order = list(glob.glob(path_to_check))
 
-        path_to_check = os.path.join(result_path, "**", "**", "**", "pyam_data")  # type: ignore
+        path_to_check = os.path.join(result_path, "**", "**", "**", "result_data_for_scenario_evaluation")  # type: ignore
         list_of_paths_third_order = list(glob.glob(path_to_check))
 
         list_with_all_paths_to_check = (
@@ -395,7 +395,7 @@ class ResultDataCollection:
         self, paths_to_check: List[str], analyze_yearly_or_hourly_data: Any
     ) -> List:
         """Import data from result files."""
-        log.information("Importing pyam_data from csv files.")
+        log.information("Importing result_data_for_scenario_evaluation from csv files.")
 
         all_csv_files = []
 
@@ -409,7 +409,7 @@ class ResultDataCollection:
             kind_of_data_set = "monthly"
         else:
             raise ValueError(
-                "analyze_yearly_or_hourly_data was not found in the pyamdatacollectorenum class."
+                "analyze_yearly_or_hourly_data was not found in the datacollectorenum class."
             )
 
         for folder in paths_to_check:  # type: ignore
@@ -432,7 +432,6 @@ class ResultDataCollection:
 
         # open file config and check if they have wanted simulation duration
         for file in all_csv_files:
-
             parent_folder = os.path.abspath(os.path.join(file, os.pardir))  # type: ignore
             for file1 in os.listdir(parent_folder):
                 if ".json" in file1:
@@ -440,13 +439,16 @@ class ResultDataCollection:
                         os.path.join(parent_folder, file1), "r", encoding="utf-8"
                     ) as openfile:
                         json_file = json.load(openfile)
-                        simulation_duration = json_file["pyamDataInformation"].get(
+                        simulation_duration = json_file["scenarioDataInformation"].get(
                             "duration in days"
                         )
                         if int(simulation_duration_to_check) == int(
                             simulation_duration
                         ):
                             dict_of_csv_data[f"{simulation_duration}"].append(file)
+                        else:
+                            raise ValueError(f"The simulation_duration_to_check of {simulation_duration_to_check} is different,"
+                                             f"to the simulation duration of {simulation_duration} found in the scenario data information json in the result folders.")
 
         # raise error if dict is empty
         if bool(dict_of_csv_data) is False:
@@ -519,9 +521,9 @@ class ResultDataCollection:
         list_with_parameter_key_values: Optional[List[Any]] = None,
         list_with_module_config_dicts: Optional[List[Any]] = None,
     ) -> None:
-        """Read the csv files and generate the pyam dataframe."""
+        """Read the csv files and generate the result dataframe."""
         log.information(
-            f"Read csv files and generate pyam dataframes for {time_resolution_of_data_set}."
+            f"Read csv files and generate result dataframes for {time_resolution_of_data_set}."
         )
 
         appended_dataframe = pd.DataFrame()
@@ -587,7 +589,7 @@ class ResultDataCollection:
             dataframe=appended_dataframe
         )
 
-        filename = self.store_pyam_data_with_the_right_name_and_in_the_right_path(
+        filename = self.store_scenario_data_with_the_right_name_and_in_the_right_path(
             result_data_folder=self.result_data_folder,
             simulation_duration_key=simulation_duration_key,
             time_resolution_of_data_set=time_resolution_of_data_set,
@@ -595,14 +597,14 @@ class ResultDataCollection:
         )
         appended_dataframe.to_csv(filename)
 
-    def store_pyam_data_with_the_right_name_and_in_the_right_path(
+    def store_scenario_data_with_the_right_name_and_in_the_right_path(
         self,
         result_data_folder: str,
         simulation_duration_key: str,
         time_resolution_of_data_set: Any,
         parameter_key: Optional[str] = None,
     ) -> str:
-        """Store csv files in the pyam data folder with the right filename and path."""
+        """Store csv files in the result data folder with the right filename and path."""
 
         if time_resolution_of_data_set == ResultDataTypeEnum.HOURLY:
             kind_of_data_set = "hourly"
@@ -614,7 +616,7 @@ class ResultDataCollection:
             kind_of_data_set = "monthly"
         else:
             raise ValueError(
-                "This kind of data was not found in the pyamdatacollectorenum class."
+                "This kind of data was not found in the datacollectorenum class."
             )
 
         if parameter_key is not None:
@@ -631,11 +633,11 @@ class ResultDataCollection:
             )
         if os.path.exists(path_for_file) is False:
             os.makedirs(path_for_file)
-        log.information(f"Saving pyam dataframe in {path_for_file} folder")
+        log.information(f"Saving result dataframe in {path_for_file} folder")
 
         filename = os.path.join(
             path_for_file,
-            f"pyam_dataframe_for_{simulation_duration_key}_days_{kind_of_data_set}_data.csv",
+            f"result_dataframe_for_{simulation_duration_key}_days_{kind_of_data_set}_data.csv",
         )
 
         return filename
@@ -652,21 +654,21 @@ class ResultDataCollection:
 
         return default_config_dict
 
-    def read_pyam_data_json_config_and_compare_to_default_config(
+    def read_scenario_data_json_config_and_compare_to_default_config(
         self,
         default_config_dict: Dict[str, Any],
-        path_to_pyam_data_folder: str,
+        path_to_scenario_data_folder: str,
         list_with_csv_files: List[Any],
         list_with_parameter_key_values: List[Any],
         list_with_module_configs: List[Any],
         parameter_key: str,
     ) -> tuple[List[Any], List[Any], List[Any]]:
-        """Read json config in pyam_data folder and compare with default config."""
+        """Read json config in result_data_for_scenario_evaluation folder and compare with default config."""
 
-        for file in os.listdir(path_to_pyam_data_folder):
+        for file in os.listdir(path_to_scenario_data_folder):
 
             if ".json" in file:
-                with open(os.path.join(path_to_pyam_data_folder, file), "r", encoding="utf-8") as openfile:  # type: ignore
+                with open(os.path.join(path_to_scenario_data_folder, file), "r", encoding="utf-8") as openfile:  # type: ignore
                     config_dict = json.load(openfile)
                     my_module_config_dict = config_dict["myModuleConfig"]
                     scenario_name = config_dict["systemName"]
@@ -683,7 +685,8 @@ class ResultDataCollection:
         # check if module config and default config have any keys in common
         if len(set(default_config_dict).intersection(my_module_config_dict)) == 0:
             raise KeyError(
-                f"The module config of the folder {path_to_pyam_data_folder} should contain the keys of the default config, otherwise their values cannot be compared."
+                f"The module config of the folder {path_to_scenario_data_folder} should contain the keys of the default config,",
+                "otherwise their values cannot be compared."
             )
         # check if there is a module config which is equal to default config
 
@@ -691,8 +694,8 @@ class ResultDataCollection:
             item in my_module_config_dict.items()
             for item in default_config_dict.items()
         ):
-            self.path_of_pyam_results_executed_with_default_config = (
-                path_to_pyam_data_folder
+            self.path_of_scenario_data_executed_with_default_config = (
+                path_to_scenario_data_folder
             )
 
         # for each parameter different than the default config parameter, get the respective path to the folder
@@ -700,16 +703,16 @@ class ResultDataCollection:
 
         # if my_module_config_dict[parameter_key] != default_config_dict[parameter_key]:
 
-        list_with_csv_files.append(path_to_pyam_data_folder)
+        list_with_csv_files.append(path_to_scenario_data_folder)
         list_with_parameter_key_values.append(my_module_config_dict[parameter_key])
 
         list_with_module_configs.append(my_module_config_dict)
 
         # add to each item in the dict also the default system setup if the default system setup exists
 
-        if self.path_of_pyam_results_executed_with_default_config != "":
+        if self.path_of_scenario_data_executed_with_default_config != "":
             list_with_csv_files.append(
-                self.path_of_pyam_results_executed_with_default_config
+                self.path_of_scenario_data_executed_with_default_config
             )
             list_with_parameter_key_values.append(default_config_dict[parameter_key])
 
@@ -724,36 +727,37 @@ class ResultDataCollection:
     def read_module_config_if_exist_and_write_in_dataframe(
         self,
         default_config_dict: Dict[str, Any],
-        path_to_pyam_data_folder: str,
+        path_to_scenario_data_folder: str,
         list_with_module_configs: List[Any],
         list_with_csv_files: List[Any],
     ) -> Tuple[List, List]:
         """Read module config if possible and write to dataframe."""
 
-        for file in os.listdir(path_to_pyam_data_folder):
+        for file in os.listdir(path_to_scenario_data_folder):
 
             if ".json" in file:
-                with open(os.path.join(path_to_pyam_data_folder, file), "r", encoding="utf-8") as openfile:  # type: ignore
+                with open(os.path.join(path_to_scenario_data_folder, file), "r", encoding="utf-8") as openfile:  # type: ignore
                     config_dict = json.load(openfile)
                     my_module_config_dict = config_dict["myModuleConfig"]
 
         # check if module config and default config have any keys in common
         if len(set(default_config_dict).intersection(my_module_config_dict)) == 0:
             raise KeyError(
-                f"The module config of the folder {path_to_pyam_data_folder} should contain the keys of the default config, otherwise their values cannot be compared."
+                f"The module config of the folder {path_to_scenario_data_folder} should contain the keys of the default config,",
+                "otherwise their values cannot be compared."
             )
 
         list_with_module_configs.append(my_module_config_dict)
-        list_with_csv_files.append(path_to_pyam_data_folder)
+        list_with_csv_files.append(path_to_scenario_data_folder)
 
         return (
             list_with_module_configs,
             list_with_csv_files,
         )
 
-    def go_through_all_pyam_data_folders_and_collect_file_paths_according_to_parameters(
+    def go_through_all_result_data_folders_and_collect_file_paths_according_to_parameters(
         self,
-        list_with_pyam_data_folders: List[str],
+        list_with_result_data_folders: List[str],
         default_config_dict: Dict[str, Any],
         parameter_key: Optional[str],
     ) -> tuple[List[Any], List[Any], List[Any]]:
@@ -763,7 +767,7 @@ class ResultDataCollection:
         list_with_csv_files: List = []
         list_with_parameter_key_values: List = []
 
-        for folder in list_with_pyam_data_folders:  # type: ignore
+        for folder in list_with_result_data_folders:  # type: ignore
 
             if parameter_key is None:
                 (
@@ -771,7 +775,7 @@ class ResultDataCollection:
                     list_with_csv_files,
                 ) = self.read_module_config_if_exist_and_write_in_dataframe(
                     default_config_dict=default_config_dict,
-                    path_to_pyam_data_folder=folder,
+                    path_to_scenario_data_folder=folder,
                     list_with_module_configs=list_with_module_configs,
                     list_with_csv_files=list_with_csv_files,
                 )
@@ -783,9 +787,9 @@ class ResultDataCollection:
                     list_with_csv_files,
                     list_with_parameter_key_values,
                     list_with_module_configs,
-                ) = self.read_pyam_data_json_config_and_compare_to_default_config(
+                ) = self.read_scenario_data_json_config_and_compare_to_default_config(
                     default_config_dict=default_config_dict,
-                    path_to_pyam_data_folder=folder,
+                    path_to_scenario_data_folder=folder,
                     list_with_csv_files=list_with_csv_files,
                     list_with_parameter_key_values=list_with_parameter_key_values,
                     list_with_module_configs=list_with_module_configs,
@@ -811,14 +815,14 @@ class ResultDataCollection:
 
         return indices_of_duplicates
 
-    def go_through_all_pyam_data_folders_and_check_if_module_configs_are_double_somewhere(
-        self, list_of_pyam_folder_paths_to_check: List[str]
+    def go_through_all_scenario_data_folders_and_check_if_module_configs_are_double_somewhere(
+        self, list_of_result_folder_paths_to_check: List[str]
     ) -> List[Any]:
-        """Go through all pyam folders and remove the system_setups that are duplicated."""
+        """Go through all result folders and remove the system_setups that are duplicated."""
 
         list_of_all_module_configs = []
-        list_of_pyam_folders_which_have_only_unique_configs = []
-        for folder in list_of_pyam_folder_paths_to_check:
+        list_of_result_folders_which_have_only_unique_configs = []
+        for folder in list_of_result_folder_paths_to_check:
 
             for file in os.listdir(folder):
                 if ".json" in file:
@@ -828,16 +832,16 @@ class ResultDataCollection:
                         my_module_config_dict.update(
                             {
                                 "duration in days": config_dict[
-                                    "pyamDataInformation"
+                                    "scenarioDataInformation"
                                 ].get("duration in days")
                             }
                         )
                         my_module_config_dict.update(
-                            {"model": config_dict["pyamDataInformation"].get("model")}
+                            {"model": config_dict["scenarioDataInformation"].get("model")}
                         )
                         my_module_config_dict.update(
                             {
-                                "model": config_dict["pyamDataInformation"].get(
+                                "model": config_dict["scenarioDataInformation"].get(
                                     "scenario"
                                 )
                             }
@@ -846,13 +850,13 @@ class ResultDataCollection:
                         # prevent to add modules with same module config and same simulation duration twice
                         if my_module_config_dict not in list_of_all_module_configs:
                             list_of_all_module_configs.append(my_module_config_dict)
-                            list_of_pyam_folders_which_have_only_unique_configs.append(
+                            list_of_result_folders_which_have_only_unique_configs.append(
                                 os.path.join(folder)
                             )
 
             # get folders with duplicates
             list_with_duplicates = []
-            if folder not in list_of_pyam_folders_which_have_only_unique_configs:
+            if folder not in list_of_result_folders_which_have_only_unique_configs:
                 whole_parent_folder = os.path.abspath(os.path.join(folder, os.pardir))
                 list_with_duplicates.append(whole_parent_folder)
 
@@ -871,12 +875,12 @@ class ResultDataCollection:
             else:
                 print("The answer must be yes or no.")
 
-        return list_of_pyam_folders_which_have_only_unique_configs
+        return list_of_result_folders_which_have_only_unique_configs
 
 
 class ResultDataTypeEnum(enum.Enum):
 
-    """PyamDataTypeEnum class.
+    """ResultDataTypeEnum class.
 
     Here it is defined what kind of data you want to collect.
     """
@@ -889,7 +893,7 @@ class ResultDataTypeEnum(enum.Enum):
 
 class ResultDataProcessingModeEnum(enum.Enum):
 
-    """PyamDataProcessingModeEnum class.
+    """ResultDataProcessingModeEnum class.
 
     Here it is defined what kind of data processing you want to make.
     """

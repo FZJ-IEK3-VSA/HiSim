@@ -12,7 +12,7 @@ from hisim.postprocessing.scenario_evaluation import (
 
 class ScenarioAnalysis:
 
-    """ScenarioAnalysis class which executes pyam data collection and processing."""
+    """ScenarioAnalysis class which executes result data collection, processing and plotting."""
 
     def __init__(
         self,
@@ -44,9 +44,9 @@ class ScenarioAnalysis:
 
 
 def main():
-    """Main function to execute the pyam data analysis."""
+    """Main function to execute the scenario analysis."""
 
-    # Inputs for pyam analysis
+    # Inputs for scenario analysis
     # -------------------------------------------------------------------------------------------------------------------------------------
     time_resolution_of_data_set = result_data_collection.ResultDataTypeEnum.YEARLY
 

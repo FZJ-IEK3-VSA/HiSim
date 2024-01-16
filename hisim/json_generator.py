@@ -42,7 +42,7 @@ class ConfigFile(JSONWizard):
     component_entries: List[ComponentEntry] = field(default_factory=list)
     my_simulation_parameters: Optional[SimulationParameters] = None
     my_module_config: Optional[Dict[str, Any]] = None
-    pyam_data_information: Optional[Dict[str, Any]] = None
+    scenario_data_information: Optional[Dict[str, Any]] = None
 
 
 class JsonConfigurationGenerator:
@@ -65,11 +65,11 @@ class JsonConfigurationGenerator:
             config_dict = json.load(openfile)
         self.config_file.my_module_config = config_dict
 
-    def set_pyam_data_information_dict(
-        self, pyam_data_information_dict: Dict[str, Any]
+    def set_scenario_data_information_dict(
+        self, scenario_data_information_dict: Dict[str, Any]
     ) -> None:
-        """Sets some pyam information concerning the data."""
-        self.config_file.pyam_data_information = pyam_data_information_dict
+        """Sets some scenario information concerning the result data."""
+        self.config_file.scenario_data_information = scenario_data_information_dict
 
     def add_component(self, config: Type[ConfigBase]) -> ComponentEntry:
         """Adds a component and returns a component entry."""

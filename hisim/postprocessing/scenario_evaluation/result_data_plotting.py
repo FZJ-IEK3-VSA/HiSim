@@ -97,7 +97,7 @@ class ScenarioChartGeneration:
             result_path_strip = "results_different_number_of_dwellings_per_buildings"
 
         else:
-            raise ValueError("PyamDataProcessingMode not known.")
+            raise ValueError("DataProcessingMode not known.")
 
         self.data_folder_path = os.path.join(
             folder_from_which_data_will_be_collected,
@@ -164,7 +164,7 @@ class ScenarioChartGeneration:
 
         sub_results_folder = f"simulation_duration_of_{simulation_duration_key}_days"
         sub_sub_results_folder = (
-            f"pyam_results_{time_resolution_of_data_set.value}_{self.datetime_string}"
+            f"scenario_comparison_{time_resolution_of_data_set.value}_{self.datetime_string}"
         )
 
         self.path_for_plots = os.path.join(
@@ -296,7 +296,7 @@ class ScenarioChartGeneration:
 
             else:
                 raise ValueError(
-                    "This kind of data was not found in the pyamdatacollectorenum class."
+                    "This kind of data was not found in the datacollectorenum class."
                 )
 
     def make_line_plot_for_pandas_dataframe(

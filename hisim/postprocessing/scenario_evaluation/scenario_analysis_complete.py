@@ -3,7 +3,11 @@
 import time
 import os
 from typing import Any, List, Optional, Dict
-from hisim.postprocessing.scenario_evaluation import result_data_collection, result_data_processing
+from hisim.postprocessing.scenario_evaluation import (
+    result_data_collection,
+    result_data_processing,
+    result_data_plotting,
+)
 
 
 class ScenarioAnalysis:
@@ -29,13 +33,13 @@ class ScenarioAnalysis:
             time_resolution_of_data_set=time_resolution_of_data_set,
             simulation_duration_to_check=simulation_duration_to_check,
         )
-        result_data_processing.ScenarioChartGenerator(
+        result_data_plotting.ScenarioChartGenerator(
             simulation_duration_to_check=simulation_duration_to_check,
             time_resolution_of_data_set=time_resolution_of_data_set,
             data_processing_mode=data_processing_mode,
             variables_to_check=variables_to_check,
             dict_of_scenarios_to_check=dict_with_scenarios_to_check,
-            folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected
+            folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
         )
 
 
@@ -72,9 +76,7 @@ def main():
     # list_with_variables_to_check = (
     #     filterclass.variables_for_debugging_purposes + filterclass.kpi_data
     # )
-    list_with_variables_to_check = (
-        filterclass.electricity_data
-    )
+    list_with_variables_to_check = filterclass.electricity_data
 
     # TODO: filter several scenario parameters (eg pv and building code together) not working yet, need to be fixed
     # dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share,"building_code": ["DE.N.SFH.05.Gen.ReEx.001.002"]}

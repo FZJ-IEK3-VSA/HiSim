@@ -32,10 +32,7 @@ class ResultDataCollector:
         """Initialize the class."""
         result_folder = folder_from_which_data_will_be_collected
         self.result_data_folder = os.path.join(
-            result_folder,
-            os.pardir,
-            "results_for_scenario_comparison",
-            "data",
+            result_folder, os.pardir, "results_for_scenario_comparison", "data",
         )
 
         # in each system_setups/results folder should be one system setup that was executed with the default config

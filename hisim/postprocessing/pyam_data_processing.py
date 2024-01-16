@@ -691,7 +691,7 @@ class PyAmChartGenerator:
             s=scatter_plot_marker_size,
         )
 
-        y_tick_labels, unit, y_tick_locations = self.set_axis_scale(
+        y_tick_labels, y_unit, y_tick_locations = self.set_axis_scale(
             a_x, x_or_y="y", unit=y_data_unit
         )
         plt.yticks(
@@ -701,7 +701,7 @@ class PyAmChartGenerator:
         )
 
         plt.ylabel(
-            ylabel=f"{y_data_variable} [{y_data_unit}]",
+            ylabel=f"{y_data_variable} [{y_unit}]",
             fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(

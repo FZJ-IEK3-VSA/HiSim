@@ -1,6 +1,5 @@
 """Electricity meter module should replace the sumbuilder. """
 # clean
-import importlib
 from dataclasses import dataclass
 from typing import List
 
@@ -156,6 +155,7 @@ class ElectricityMeter(DynamicComponent):
         self.add_dynamic_default_connections(
             self.get_default_connections_from_advanced_heat_pump()
         )
+
     def get_default_connections_from_occupancy(
         self,
     ):

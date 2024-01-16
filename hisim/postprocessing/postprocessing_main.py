@@ -826,6 +826,14 @@ class PostProcessor:
             in ppdt.post_processing_options
         ):
             self.write_kpis_in_pyam_dict(
+                ppdt=ppdt, simple_dict_cumulative_data=simple_dict_hourly_data)
+            self.write_kpis_in_pyam_dict(
+                ppdt=ppdt, simple_dict_cumulative_data=simple_dict_daily_data
+            )
+            self.write_kpis_in_pyam_dict(
+                ppdt=ppdt, simple_dict_cumulative_data=simple_dict_monthly_data
+            )
+            self.write_kpis_in_pyam_dict(
                 ppdt=ppdt, simple_dict_cumulative_data=simple_dict_cumulative_data
             )
 
@@ -978,7 +986,10 @@ class PostProcessor:
                 simple_dict_cumulative_data["region"].append(self.region)
                 simple_dict_cumulative_data["variable"].append(variable_name)
                 simple_dict_cumulative_data["unit"].append(variable_unit)
-                simple_dict_cumulative_data["year"].append(self.year)
+                try:
+                    simple_dict_cumulative_data["year"].append(self.year)
+                except Exception:
+                    simple_dict_cumulative_data["time"].append(self.year)
                 simple_dict_cumulative_data["value"].append(variable_value)
 
     def get_variable_name_and_unit_from_ppdt_results_column(

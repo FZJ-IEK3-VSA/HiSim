@@ -64,11 +64,13 @@ def main():
     simulation_duration_to_check = str(365)
 
     data_processing_mode = (
-        pyam_data_collection.PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
+        pyam_data_collection.PyamDataProcessingModeEnum.PROCESS_ALL_DATA
     )
 
     filterclass = pyam_data_processing.FilterClass()
-    list_with_variables_to_check = filterclass.electricity_data + filterclass.kpi_data
+    list_with_variables_to_check = (
+        filterclass.variables_for_debugging_purposes + filterclass.kpi_data
+    )
 
     # TODO: filter several scenario parameters (eg pv and building code together) not working yet, need to be fixed
     # dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share,"building_code": ["DE.N.SFH.05.Gen.ReEx.001.002"]}
@@ -80,11 +82,11 @@ def main():
     #         "DE.N.AB",
     #     ]
     # }
-    dict_with_scenarios_to_check = {
-        "building_code": filterclass.building_refurbishment_state
-    }
+    # dict_with_scenarios_to_check = {
+    #     "building_code": filterclass.building_age
+    # }
     # dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share}
-    # dict_with_scenarios_to_check = None
+    dict_with_scenarios_to_check = None
 
     # -------------------------------------------------------------------------------------------------------------------------------------
 

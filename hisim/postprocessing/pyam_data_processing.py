@@ -182,13 +182,13 @@ class PyAmChartGenerator:
         key_for_scenario_one = ""
         key_for_current_scenario = ""
 
-        # make rel electricity calculation before sorting and renaming
+        # # make rel electricity calculation before sorting and renaming
 
-        if "ElectricityMeter|Electricity|ElectricityFromGrid" in variables_to_check:
-            print("relative electricity demand will be calculated.")
+        # if "ElectricityMeter|Electricity|ElectricityFromGrid" in variables_to_check:
+        #     print("relative electricity demand will be calculated.")
 
-            file_df = self.calculate_relative_electricity_demand(dataframe=file_df)
-            variables_to_check.append("Relative Electricity Demand")
+        #     file_df = self.calculate_relative_electricity_demand(dataframe=file_df)
+        #     variables_to_check.append("Relative Electricity Demand")
 
         if dict_of_scenarios_to_check is not None and dict_of_scenarios_to_check != {}:
 
@@ -274,20 +274,32 @@ class PyAmChartGenerator:
                     kind_of_data_set=kind_of_data_set,
                 )
 
-                # try:
-                #     self.make_box_plot_for_pandas_dataframe(
-                #         filtered_data=filtered_data, title=self.path_addition,
-                #     )
+                try:
+                    self.make_box_plot_for_pandas_dataframe(
+                        filtered_data=filtered_data, title=self.path_addition,
+                    )
+                except Exception:
+                    log.information(
+                        f"{variable_to_check} could not be plotted as box plot."
+                    )
 
-                # except Exception:
-                #     log.information("Boxplot went wrong")
+                try:
+                    self.make_bar_plot_for_pandas_dataframe(
+                        filtered_data=filtered_data, title=self.path_addition, unit=unit
+                    )
+                except Exception:
+                    log.information(
+                        f"{variable_to_check} could not be plotted as bar plot."
+                    )
 
-                self.make_bar_plot_for_pandas_dataframe(
-                    filtered_data=filtered_data, title=self.path_addition, unit=unit
-                )
-                self.make_histogram_plot_for_pandas_dataframe(
-                    filtered_data=filtered_data, title=self.path_addition, unit=unit
-                )
+                try:
+                    self.make_histogram_plot_for_pandas_dataframe(
+                        filtered_data=filtered_data, title=self.path_addition, unit=unit
+                    )
+                except Exception:
+                    log.information(
+                        f"{variable_to_check} could not be plotted as histogram."
+                    )
 
             elif time_resolution_of_data_set in (
                 PyamDataTypeEnum.HOURLY,
@@ -321,16 +333,20 @@ class PyAmChartGenerator:
                         title=self.path_addition,
                         line_plot_marker_size=line_plot_marker_size,
                     )
+                except Exception:
+                    log.information(
+                        f"{variable_to_check} could not be plotted as line plot."
+                    )
+                try:
 
-                # so far only working when scenarios_to_check are set
-                # self.make_line_plot_with_filling_for_pyam_dataframe(
-                #     filtered_data=filtered_data,
-                #     comparison_mode=comparion_mode,
-                #     title=self.path_addition,
-                # )
+                    self.make_box_plot_for_pandas_dataframe(
+                        filtered_data=filtered_data, title=self.path_addition
+                    )
 
                 except Exception:
-                    log.information(f"{variable_to_check} could not be plotted.")
+                    log.information(
+                        f"{variable_to_check} could not be plotted as box plot."
+                    )
 
             else:
                 raise ValueError(
@@ -401,45 +417,12 @@ class PyAmChartGenerator:
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
         a_x.tick_params(axis="x", labelrotation=45)
-        plt.legend(bbox_to_anchor=(1, 1), loc="upper left")
+        if self.show_plot_legend:
+            plt.legend(bbox_to_anchor=(1, 1), loc="upper left")
 
         fig.savefig(
             os.path.join(self.plot_path_complete, "line_plot.png"), bbox_inches="tight"
         )
-        plt.close()
-
-    def make_line_plot_with_filling_for_pyam_dataframe(
-        self, filtered_data: pyam.IamDataFrame, comparison_mode: str, title: str,
-    ) -> None:
-        """Make line plot with filling."""
-        log.information("Make line plot with filling.")
-
-        fig, a_x = plt.subplots(
-            figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
-        )
-
-        filtered_data.plot(
-            ax=a_x, color=comparison_mode, title=title, fill_between=True,
-        )
-
-        y_tick_labels, unit, y_tick_locations = self.set_axis_scale(
-            a_x, x_or_y="y", unit=filtered_data.unit[0]
-        )
-        plt.yticks(
-            ticks=y_tick_locations,
-            labels=y_tick_labels,
-            fontsize=self.hisim_chartbase.fontsize_ticks,
-        )
-        plt.ylabel(
-            ylabel=f"{unit}", fontsize=self.hisim_chartbase.fontsize_label,
-        )
-        plt.xlabel(
-            xlabel="Time", fontsize=self.hisim_chartbase.fontsize_label,
-        )
-        plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
-        plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
-
-        fig.savefig(os.path.join(self.plot_path_complete, "line_plot_with_filling.png"))
         plt.close()
 
     def make_bar_plot_for_pandas_dataframe(
@@ -522,6 +505,7 @@ class PyAmChartGenerator:
             scenario_set = list(OrderedSet(filtered_data.scenario))
 
         sns.boxplot(data=filtered_data, x="scenario", y="value")
+
         y_tick_labels, unit, y_tick_locations = self.set_axis_scale(
             a_x, x_or_y="y", unit=filtered_data.unit.values[0]
         )
@@ -533,15 +517,22 @@ class PyAmChartGenerator:
         plt.ylabel(
             ylabel=f"{unit}", fontsize=self.hisim_chartbase.fontsize_label,
         )
-        plt.xlabel(
-            xlabel=filtered_data.year.values[0],
-            fontsize=self.hisim_chartbase.fontsize_label,
-        )
+        try:
+            # this works for yearly data
+            plt.xlabel(
+                xlabel=filtered_data.year.values[0],
+                fontsize=self.hisim_chartbase.fontsize_label,
+            )
+        except Exception:
+            # take year from time colum
+            year = filtered_data.time.values[0].split("-")[0]
+            plt.xlabel(
+                xlabel=year, fontsize=self.hisim_chartbase.fontsize_label,
+            )
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
         a_x.xaxis.set_tick_params(labelbottom=False)
         a_x.set_xticks([])
-        print(self.show_plot_legend)
         if self.show_plot_legend:
             plt.legend(scenario_set, bbox_to_anchor=(1, 1), loc="upper left")
 
@@ -717,7 +708,8 @@ class PyAmChartGenerator:
             print(
                 f"The dataframe contains the following variables: {set(list(dataframe.variable))}"
             )
-            raise ValueError(
+            # raise ValueError(
+            print(
                 f"The filtered dataframe is empty. The dataframe did not contain the variable {variable_to_check}. Check the list above."
             )
         return filtered_dataframe
@@ -1059,6 +1051,7 @@ class FilterClass:
             self.electricity_data,
             self.occuancy_consumption,
             self.heating_demand,
+            self.variables_for_debugging_purposes,
         ) = self.get_variables_to_check()
         (
             self.building_type,
@@ -1074,6 +1067,7 @@ class FilterClass:
         # kpi data has no time series, so only choose when you analyze yearly data
         kpi_data = [
             "Production",
+            "Consumption",
             "Investment costs for equipment per simulated period",
             "CO2 footprint for equipment per simulated period",
             "System operational costs for simulated period",
@@ -1084,14 +1078,15 @@ class FilterClass:
             "Minimum building indoor air temperature reached",
             "Temperature deviation of building indoor air temperature being above set temperature 24.0 °C",
             "Maximum building indoor air temperature reached",
+            "Building heating load",
+            "Specific heating load",
             "Number of heat pump cycles",
+            "Seasonal performance factor of heat pump",
             "Total energy from electricity grid",
             "Total energy to electricity grid",
         ]
 
         electricity_data = [
-            # "L2EMSElectricityController|Electricity|ElectricityToOrFromGrid",
-            # "PVSystem_w0|Electricity|ElectricityOutput", # check if pv was used or not
             "ElectricityMeter|Electricity|ElectricityToGrid",
             "ElectricityMeter|Electricity|ElectricityFromGrid",
             "ElectricityMeter|Electricity|ElectricityAvailable",
@@ -1110,8 +1105,20 @@ class FilterClass:
             # "Building|Heating|TheoreticalThermalBuildingDemand",
             "Building|Temperature|TemperatureIndoorAir",
         ]
+        variables_for_debugging_purposes = [
+            "AdvancedHeatPumpHPLib|Heating|ThermalOutputPower",
+            "Building|Temperature|TemperatureIndoorAir",
+            "AdvancedHeatPumpHPLib|Any|COP",
+            "Battery_w1|Any|StateOfCharge",
+        ]
 
-        return kpi_data, electricity_data, occuancy_consumption, heating_demand
+        return (
+            kpi_data,
+            electricity_data,
+            occuancy_consumption,
+            heating_demand,
+            variables_for_debugging_purposes,
+        )
 
     def get_scenarios_to_check(self):
         """Get scenarios to check for scenario evaluation."""

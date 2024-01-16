@@ -21,7 +21,7 @@ from hisim.postprocessing.investment_cost_co2 import compute_investment_cost
 
 def building_temperature_control_and_heating_load(
     results: pd.DataFrame, seconds_per_timestep: int, components: List[ComponentWrapper]
-) -> Tuple[Any, Any, float, float, float, float, float]:
+) -> Tuple[Any, Any, float, float, float, float, float, float]:
     """Check the building indoor air temperature.
 
     Check for all timesteps and count the
@@ -45,6 +45,11 @@ def building_temperature_control_and_heating_load(
             heating_load_in_watt = getattr(
                 wrapped_component.my_component, "my_building_information"
             ).max_thermal_building_demand_in_watt
+            # get specific heating load
+            scaled_conditioned_floor_area_in_m2 = getattr(
+                wrapped_component.my_component, "my_building_information"
+            ).scaled_conditioned_floor_area_in_m2
+            specific_heating_load_in_watt_per_m2 = heating_load_in_watt / scaled_conditioned_floor_area_in_m2
             break
 
     for column in results.columns:
@@ -99,6 +104,7 @@ def building_temperature_control_and_heating_load(
         min_temperature_reached_in_celsius,
         max_temperature_reached_in_celsius,
         heating_load_in_watt,
+        specific_heating_load_in_watt_per_m2
     )
 
 
@@ -664,6 +670,7 @@ def compute_kpis(
         min_temperature_reached_in_celsius,
         max_temperature_reached_in_celsius,
         heating_load_in_watt,
+        specific_heating_load_in_watt_per_m2
     ) = building_temperature_control_and_heating_load(
         results=results,
         seconds_per_timestep=simulation_parameters.seconds_per_timestep,
@@ -792,6 +799,9 @@ def compute_kpis(
     )
     table.append(
         ["Building heating load:", f"{(heating_load_in_watt):3.0f}", "W"]
+    )
+    table.append(
+        ["Specific heating load:", f"{(specific_heating_load_in_watt_per_m2):3.0f}", "W"]
     )
 
     table.append(["Number of heat pump cycles:", f"{number_of_cycles:3.0f}", "-"])

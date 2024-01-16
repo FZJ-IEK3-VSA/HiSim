@@ -1,0 +1,1 @@
+{"startDate": "2021-01-01T00:00:00", "endDate": "2021-01-02T00:00:00", "secondsPerTimestep": 900, "postProcessingOptions": [18, 19, 20, 22], "loggingLevel": 3, "resultDirectory": "test_system_setups/results/test_household_heat_pump_with_system_setup_starter", "skipFinishedResults": false, "surplusControl": true}

@@ -1,4 +1,4 @@
-"""Data Processing and Plotting for Scenario Comparison."""
+"""Result Data Processing and Plotting for Scenario Comparison."""
 
 
 import glob

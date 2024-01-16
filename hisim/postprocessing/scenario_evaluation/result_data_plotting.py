@@ -26,9 +26,9 @@ from hisim.postprocessing.chartbase import ChartFontsAndSize
 from hisim import log
 
 
-class ScenarioChartGenerator:
+class ScenarioChartGeneration:
 
-    """ScenarioChartGenerator class."""
+    """ScenarioChartGeneration class."""
 
     def __init__(
         self,

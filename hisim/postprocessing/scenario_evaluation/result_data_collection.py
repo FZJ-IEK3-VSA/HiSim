@@ -15,9 +15,9 @@ import ordered_set
 from hisim import log
 
 
-class ResultDataCollector:
+class ResultDataCollection:
 
-    """ResultDataCollector class which collects and concatenate the result data from the system_setups/results."""
+    """ResultDataCollection class which collects and concatenate the result data from the system_setups/results."""
 
     def __init__(
         self,

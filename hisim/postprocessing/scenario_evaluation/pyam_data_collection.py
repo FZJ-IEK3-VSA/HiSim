@@ -25,16 +25,15 @@ class PyamDataCollector:
         simulation_duration_to_check: str,
         time_resolution_of_data_set: Any,
         folder_from_which_data_will_be_collected: str = os.path.join(
-            os.pardir, os.pardir, "system_setups", "results"
+            os.pardir, os.pardir, os.pardir, "system_setups", "results"
         ),
         path_to_default_config: Optional[str] = None,
     ) -> None:
         """Initialize the class."""
         result_folder = folder_from_which_data_will_be_collected
         self.pyam_data_folder = os.path.join(
+            result_folder,
             os.pardir,
-            os.pardir,
-            "system_setups",
             "results_for_scenario_comparison",
             "data",
         )
@@ -823,6 +822,7 @@ class PyamDataCollector:
         list_of_all_module_configs = []
         list_of_pyam_folders_which_have_only_unique_configs = []
         for folder in list_of_pyam_folder_paths_to_check:
+
             for file in os.listdir(folder):
                 if ".json" in file:
                     with open(os.path.join(folder, file), "r", encoding="utf-8") as openfile:  # type: ignore

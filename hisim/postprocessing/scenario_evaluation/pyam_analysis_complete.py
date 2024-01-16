@@ -3,7 +3,7 @@
 import time
 import os
 from typing import Any, List, Optional, Dict
-from hisim.postprocessing import pyam_data_collection, pyam_data_processing
+from hisim.postprocessing.scenario_evaluation import pyam_data_collection, pyam_data_processing
 
 
 class PyamDataAnalysis:
@@ -35,6 +35,7 @@ class PyamDataAnalysis:
             data_processing_mode=data_processing_mode,
             variables_to_check=variables_to_check,
             dict_of_scenarios_to_check=dict_with_scenarios_to_check,
+            folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected
         )
 
 
@@ -68,8 +69,11 @@ def main():
     )
 
     filterclass = pyam_data_processing.FilterClass()
+    # list_with_variables_to_check = (
+    #     filterclass.variables_for_debugging_purposes + filterclass.kpi_data
+    # )
     list_with_variables_to_check = (
-        filterclass.variables_for_debugging_purposes + filterclass.kpi_data
+        filterclass.electricity_data
     )
 
     # TODO: filter several scenario parameters (eg pv and building code together) not working yet, need to be fixed

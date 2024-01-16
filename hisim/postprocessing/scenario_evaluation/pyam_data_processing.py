@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 from ordered_set import OrderedSet
 import seaborn as sns
 
-from hisim.postprocessing.pyam_data_collection import (
+from hisim.postprocessing.scenario_evaluation.pyam_data_collection import (
     PyamDataTypeEnum,
     PyamDataProcessingModeEnum,
 )
@@ -39,6 +39,9 @@ class PyAmChartGenerator:
         time_resolution_of_data_set: Any,
         variables_to_check: Optional[List[str]] = None,
         dict_of_scenarios_to_check: Optional[Dict[str, List[str]]] = None,
+        folder_from_which_data_will_be_collected: str = os.path.join(
+            os.pardir, os.pardir, os.pardir, "system_setups", "results"
+        ),
     ) -> None:
         """Initialize the class."""
 
@@ -98,21 +101,21 @@ class PyAmChartGenerator:
             raise ValueError("PyamDataProcessingMode not known.")
 
         self.folder_path = os.path.join(
+            folder_from_which_data_will_be_collected,
             os.pardir,
-            os.pardir,
-            "system_setups",
             "results_for_scenario_comparison",
             "data",
             data_path_strip,
         )
+
         self.result_folder = os.path.join(
+            folder_from_which_data_will_be_collected,
             os.pardir,
-            os.pardir,
-            "system_setups",
             "results_for_scenario_comparison",
             "results",
             result_path_strip,
         )
+
         log.information(f"Data folder path: {self.folder_path}")
         self.hisim_chartbase = ChartFontsAndSize()
         self.hisim_chartbase.figsize = (10, 6)

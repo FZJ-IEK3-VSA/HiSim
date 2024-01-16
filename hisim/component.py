@@ -95,16 +95,7 @@ class ComponentOutput:  # noqa: too-few-public-methods
 
     def get_pretty_name(self):
         """Gets a pretty name for a component output."""
-        return (
-            self.component_name
-            + " - "
-            + self.display_name
-            + " ["
-            + self.load_type
-            + " - "
-            + self.unit
-            + "]"
-        )
+        return self.component_name + " - " + self.display_name + " [" + self.load_type + " - " + self.unit + "]"
 
 
 class ComponentInput:  # noqa: too-few-public-methods
@@ -160,9 +151,7 @@ class SingleTimeStepValues:
         """Sets a single output value in the single time step values array."""
         self.values[output.global_index] = value
 
-    def is_close_enough_to_previous(
-        self, previous_values: "SingleTimeStepValues"
-    ) -> bool:
+    def is_close_enough_to_previous(self, previous_values: "SingleTimeStepValues") -> bool:
         """Checks if the values are sufficiently similar to another array."""
         count = len(self.values)
         for i in range(count):
@@ -170,9 +159,7 @@ class SingleTimeStepValues:
                 return False
         return True
 
-    def get_differences_for_error_msg(
-        self, previous_values: Any, outputs: List[ComponentOutput]
-    ) -> str:
+    def get_differences_for_error_msg(self, previous_values: Any, outputs: List[ComponentOutput]) -> str:
         """Gets a pretty error message for the differences between two time steps."""
         count = len(self.values)
         error_msg = ""
@@ -235,26 +222,13 @@ class Component:
         component_name = connections[0].source_class_name
         for connection in connections:
             if connection.source_class_name != component_name:
-                raise ValueError(
-                    "Trying to add connections to different components in one go."
-                )
+                raise ValueError("Trying to add connections to different components in one go.")
         self.default_connections[component_name] = connections
-        log.trace(
-            "added default connections for connections from : "
-            + component_name
-            + "\n"
-            + str(self.default_connections)
-        )
+        log.trace("added default connections for connections from : " + component_name + "\n" + str(self.default_connections))
 
     def i_prepare_simulation(self) -> None:
         """Gets called before the simulation to prepare the calculation."""
-        raise NotImplementedError(
-            "Simulation preparation is missing for "
-            + self.component_name
-            + " ("
-            + self.get_full_classname()
-            + ")"
-        )
+        raise NotImplementedError("Simulation preparation is missing for " + self.component_name + " (" + self.get_full_classname() + ")")
 
     def set_sim_repo(self, simulation_repository: SimRepository) -> None:
         """Sets the SimRepository."""
@@ -287,9 +261,7 @@ class Component:
     ) -> ComponentOutput:
         """Adds an output definition."""
         if output_description is None:
-            raise ValueError(
-                "Missing an output description for " + object_name + " - " + field_name
-            )
+            raise ValueError("Missing an output description for " + object_name + " - " + field_name)
         log.debug("adding output: " + field_name + " to component " + object_name)
         outp = ComponentOutput(
             object_name,
@@ -303,9 +275,7 @@ class Component:
         self.outputs.append(outp)
         return outp
 
-    def connect_input(
-        self, input_fieldname: str, src_object_name: str, src_field_name: str
-    ) -> None:
+    def connect_input(self, input_fieldname: str, src_object_name: str, src_field_name: str) -> None:
         """Connecting an input to an output."""
         if len(self.inputs) == 0:
             raise ValueError("The component " + self.component_name + " has no inputs.")
@@ -315,41 +285,30 @@ class Component:
         for component_input in self.inputs:
             if component_input.field_name == input_fieldname:
                 if input_to_set is not None:
-                    raise ValueError(
-                        "The input "
-                        + input_fieldname
-                        + " of the component "
-                        + self.component_name
-                        + " was already set."
-                    )
+                    raise ValueError("The input " + input_fieldname + " of the component " + self.component_name + " was already set.")
                 input_to_set = component_input
         if input_to_set is None:
-            raise ValueError(
-                "The component "
-                + self.component_name
-                + " has no input with the name "
-                + input_fieldname
-            )
+            raise ValueError("The component " + self.component_name + " has no input with the name " + input_fieldname)
         input_to_set.src_object_name = src_object_name
         input_to_set.src_field_name = src_field_name
 
         # write input and output connection to json file
-        file_name = os.path.join(
-            self.my_simulation_parameters.result_directory, "component_connections.json"
-        )
+        file_name = os.path.join(self.my_simulation_parameters.result_directory, "component_connections.json")
 
         dict_with_connection_information = {
-            f"Component {input_to_set.component_name}": {
-                f" with Input {input_to_set.field_name}": f" is connected to Output: {input_to_set.src_object_name} - {input_to_set.src_field_name}"
-            }
+            "From": {"Component": input_to_set.src_object_name, "Field": input_to_set.src_field_name},
+            "To": {"Component": input_to_set.component_name, "Field": input_to_set.field_name},
         }
 
-        with open(file_name, "a", encoding="utf-8") as file:
-            json.dump(dict_with_connection_information, file, indent=2)
+        if os.path.exists(file_name):
+            with open(file_name, mode="r+", encoding="utf-8") as file:
+                file.seek(os.stat(file_name).st_size - 1)
+                file.write(f",{json.dumps(dict_with_connection_information)}]")
+        else:
+            with open(file_name, "a", encoding="utf-8") as file:
+                json.dump([dict_with_connection_information], file)
 
-    def connect_dynamic_input(
-        self, input_fieldname: str, src_object: ComponentOutput
-    ) -> None:
+    def connect_dynamic_input(self, input_fieldname: str, src_object: ComponentOutput) -> None:
         """For connecting an input to a dynamic output."""
         src_object_name = src_object.component_name
         src_field_name = src_object.field_name
@@ -363,23 +322,16 @@ class Component:
     def connect_only_predefined_connections(self, *source_components):
         """Wrapper for default connections and connect with connections list."""
         for source_component in source_components:
-
             connections = self.get_default_connections(source_component)
             self.connect_with_connections_list(connections)
 
-    def connect_with_connections_list(
-        self, connections: List[ComponentConnection]
-    ) -> None:
+    def connect_with_connections_list(self, connections: List[ComponentConnection]) -> None:
         """Connect all inputs based on a connections list."""
         for connection in connections:
             src_name: str = typing.cast(str, connection.source_instance_name)
-            self.connect_input(
-                connection.target_input_name, src_name, connection.source_output_name
-            )
+            self.connect_input(connection.target_input_name, src_name, connection.source_output_name)
 
-    def get_default_connections(
-        self, source_component: Component
-    ) -> List[ComponentConnection]:
+    def get_default_connections(self, source_component: Component) -> List[ComponentConnection]:
         """Gets the default connections for this component."""
         source_classname: str = source_component.get_classname()
         target_classname: str = self.get_classname()
@@ -408,9 +360,7 @@ class Component:
     def get_outputs(self) -> List[ComponentOutput]:
         """Delivers a list of outputs."""
         if len(self.outputs) == 0:
-            raise ValueError(
-                "Error: Component " + self.component_name + " has no outputs defined"
-            )
+            raise ValueError("Error: Component " + self.component_name + " has no outputs defined")
         return self.outputs
 
     def get_cost_opex(
@@ -441,10 +391,7 @@ class Component:
         maintenance_cost_per_simulated_period_in_euro: float = (
             self.config.maintenance_cost_as_percentage_of_investment
             * investment
-            * (
-                self.my_simulation_parameters.duration.total_seconds()
-                / seconds_per_year
-            )
+            * (self.my_simulation_parameters.duration.total_seconds() / seconds_per_year)
         )
         return maintenance_cost_per_simulated_period_in_euro
 
@@ -456,9 +403,7 @@ class Component:
         """Abstract. Restores the state of the component. Can be called many times while iterating."""
         raise NotImplementedError()
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Performs the actual calculation."""
         raise NotImplementedError()
 

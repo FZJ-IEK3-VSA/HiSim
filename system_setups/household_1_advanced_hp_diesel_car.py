@@ -42,6 +42,14 @@ __status__ = "development"
 
 
 @dataclass
+class HouseholdAdvancedHPDieselCarOptions:
+
+    """ Set options for the system setup."""
+
+    pass
+
+
+@dataclass
 class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
 
     """Configuration for with advanced heat pump and diesel car."""
@@ -60,6 +68,11 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
     dhw_storage_config: generic_hot_water_storage_modular.StorageConfig
     car_config: generic_car.CarConfig
     electricity_meter_config: electricity_meter.ElectricityMeterConfig
+
+    @classmethod
+    def get_default_options(cls):
+        """Get default options."""
+        return HouseholdAdvancedHPDieselCarOptions()
 
     @classmethod
     def get_default(cls) -> "HouseholdAdvancedHPDieselCarConfig":
@@ -86,6 +99,7 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
     def get_scaled_default(
         cls,
         building_config: building.BuildingConfig,
+        options: HouseholdAdvancedHPDieselCarOptions = HouseholdAdvancedHPDieselCarOptions()
     ) -> "HouseholdAdvancedHPDieselCarConfig":
         """Get scaled default HouseholdAdvancedHPDieselCarConfig."""
 

@@ -12,13 +12,21 @@ from hisim.system_setup_configuration import SystemSetupConfigBase
 
 
 @dataclass
+class ModularHouseholdOptions:
+
+    """ Set options for the system setup."""
+
+    pass
+
+
+@dataclass
 class ModularHouseholdConfig(SystemSetupConfigBase):
 
     """Modular Household Config class."""
 
-    #: configuration of the technological equipment of the household
+    # configuration of the technological equipment of the household
     system_config_: Optional[system_config.SystemConfig] = None
-    #: configuration of the framework of the household (climate, house type, mobility behaviour, heating system, etc. )
+    # configuration of the framework of the household (climate, house type, mobility behaviour, heating system, etc. )
     archetype_config_: Optional[archetype_config.ArcheTypeConfig] = None
 
     @classmethod
@@ -43,7 +51,8 @@ def read_in_configs(pathname: str) -> ModularHouseholdConfig:
     try:
         with open(pathname, encoding="utf8") as config_file:
             household_config_dict = json.load(config_file)  # type: ignore
-            household_config: ModularHouseholdConfig = ModularHouseholdConfig.from_dict(household_config_dict.get("system_setup_config"))  # type: ignore
+            household_config: ModularHouseholdConfig = ModularHouseholdConfig.from_dict(
+                household_config_dict.get("system_setup_config"))  # type: ignore
         log.information(f"Read modular household config from {pathname}")
         if (household_config.system_config_ is None) and (household_config.archetype_config_ is None):
             raise ValueError()

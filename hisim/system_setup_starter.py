@@ -1,11 +1,11 @@
 """Build and simulate a system setup for a specific system setup that is defined in a JSON file.
 
 Result files are stored in `/results`.
-See `tests/test_system_setup_starter.py` for an system setup.
+See `tests/test_system_setup_starter.py` for a system setup.
 
 Run `hisim/system_setup_starter.py <json-file>` to start a simulation.
 Required fields in the JSON file are: `path_to_module`, `function_in_module` and
-`simulation_parameters`. SimulationParameters from the system_setups is not used. Instead the
+`simulation_parameters`. SimulationParameters from the system_setups is not used. Instead, the
 parameters from the JSON are set.
 
 Optional field: `building_config`
@@ -16,7 +16,6 @@ Optional field: `system_setup_config`
 The values from `system_setup_config` overwrite specific values of the configuration object.
 Arguments that are not present keep the (scaled) default value.
 """
-# clean
 
 import json
 import datetime
@@ -28,13 +27,6 @@ from hisim import log
 from hisim.hisim_main import main
 from hisim.utils import set_attributes_of_dataclass_from_dict
 from hisim.simulator import SimulationParameters
-
-# System setups need to use `create_configuration()` and their config class needs to implement
-# `get_default()` to run with the system setup starter.
-SUPPORTED_MODULES = [
-    "system_setups.modular_example",
-    "system_setups.household_1_advanced_hp_diesel_car",
-]
 
 
 def make_system_setup(
@@ -52,18 +44,14 @@ def make_system_setup(
     _parameters_json = deepcopy(parameters_json)
     Path(result_directory).mkdir(parents=True, exist_ok=True)  # pylint: disable=unexpected-keyword-arg
     path_to_module = _parameters_json.pop("path_to_module")
-    setup_module_name = "system_setups." + path_to_module.split("/")[-1].replace(".py", "")
-    if setup_module_name not in SUPPORTED_MODULES:
-        raise NotImplementedError(
-            f"System setup starter can only be used with one of {', '.join(SUPPORTED_MODULES)}"
-        )
 
     simulation_parameters_dict = _parameters_json.pop("simulation_parameters")
     module_config_path = str(Path(result_directory).joinpath("module_config.json"))
     simulation_parameters_path = str(Path(result_directory).joinpath("simulation_parameters.json"))
+    options = _parameters_json.pop("options", {})
     building_config = _parameters_json.pop("building_config", {})
     system_setup_config = _parameters_json.pop("system_setup_config", {})
-    module_config_dict = {"building_config": building_config, "system_setup_config": system_setup_config}
+    module_config_dict = {"options": options, "building_config": building_config, "system_setup_config": system_setup_config}
 
     if _parameters_json:
         raise AttributeError(

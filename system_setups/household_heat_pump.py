@@ -110,18 +110,8 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
             - Simple Hot Water Storage
             - Car (Diesel or EV)
         """
-        heating_reference_temperature_in_celsius: float = -7.0
+
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0
-        # TODO: building config need heating ref temperature of -7 otherwise hp doesn't work
-        if (
-            heating_reference_temperature_in_celsius
-            != building_config.heating_reference_temperature_in_celsius
-        ):
-            raise ValueError(
-                "The heating reference temperatures set here and in the building config are not the same.",
-                "Please make sure that all values for heating_reference_temperatures are equal.",
-                "Ideally use -7.0 °C because lower heating_reference_temperatures create errors in the generic HPLib model.",
-            )
 
         my_building_information = building.BuildingInformation(config=building_config)
 
@@ -129,7 +119,7 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
             set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
             set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
             heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+            heating_reference_temperature_in_celsius=my_building_information.heating_reference_temperature_in_celsius,
         )
         my_hds_controller_information = (
             heat_distribution_system.HeatDistributionControllerInformation(
@@ -172,7 +162,7 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
             hp_config=(
                 advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
                     heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-                    heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+                    heating_reference_temperature_in_celsius=my_building_information.heating_reference_temperature_in_celsius,
                 )
             ),
             simple_hot_water_storage_config=(

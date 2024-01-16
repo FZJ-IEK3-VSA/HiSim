@@ -565,22 +565,6 @@ class PyAmChartGenerator:
 
         plt.hist(x=np.array(filtered_data.value.values), bins="auto")
 
-        if max(filtered_data.value.values) != 0:
-            x_tick_locations = range(
-                0,
-                int(max(filtered_data.value.values)),
-                round(int(max(filtered_data.value.values) / 10), 0),
-            )
-        else:
-            x_tick_locations = None
-        plt.xticks(
-            ticks=x_tick_locations,
-            rotation=45,
-            fontsize=self.hisim_chartbase.fontsize_ticks,
-            rotation_mode="anchor",
-            ha="right",
-        )
-
         plt.ylabel(
             ylabel="Count", fontsize=self.hisim_chartbase.fontsize_label,
         )
@@ -1198,7 +1182,7 @@ class FilterClass:
             "Production",
             "Consumption",
             "Self-consumption",
-            "Injection",
+            "Self-consumption rate",
             "Autarky rate",
             "Investment costs for equipment per simulated period",
             "CO2 footprint for equipment per simulated period",
@@ -1222,8 +1206,10 @@ class FilterClass:
             "ElectricityMeter|Electricity|ElectricityToGrid",
             "ElectricityMeter|Electricity|ElectricityFromGrid",
             "ElectricityMeter|Electricity|ElectricityAvailable",
-            "ElectricityMeter|Electricity|ElectricityConsumption",
-            "ElectricityMeter|Electricity|ElectricityProduction",
+            # if you analyze a house with ems the production and consumption values of the electricity meter are not representative
+            # use the ems production and consumption or the kpi values instead if needed
+            # "ElectricityMeter|Electricity|ElectricityConsumption",
+            # "ElectricityMeter|Electricity|ElectricityProduction",
         ]
 
         occuancy_consumption = [

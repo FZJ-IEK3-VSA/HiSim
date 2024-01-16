@@ -249,6 +249,7 @@ def compute_consumption_production(
                 in output.postprocessing_flag
             ):
                 consumption_ids.append(index)
+
             elif InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
                 if ComponentType.BATTERY in output.postprocessing_flag:
                     battery_charge_discharge_ids.append(index)

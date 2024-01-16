@@ -264,9 +264,7 @@ class PyAmChartGenerator:
 
             if time_resolution_of_data_set == PyamDataTypeEnum.YEARLY:
                 kind_of_data_set = "yearly"
-                log.information(
-                    f"Yearly Data Processing for Simulation Duration of {simulation_duration_key} Days:"
-                )
+
                 # get statistical data
                 self.get_statistics_of_data_and_write_to_excel(
                     filtered_data=filtered_data,
@@ -290,6 +288,17 @@ class PyAmChartGenerator:
                 except Exception:
                     log.information(
                         f"{variable_to_check} could not be plotted as bar plot."
+                    )
+
+                try:
+                    self.make_scatter_plot_for_pandas_dataframe(
+                        full_pandas_dataframe=pyam_dataframe,
+                        filtered_data=filtered_data,
+                        y_data_variable=self.path_addition,
+                    )
+                except Exception:
+                    log.information(
+                        f"{variable_to_check} could not be plotted as scatter plot."
                     )
 
                 try:
@@ -317,9 +326,6 @@ class PyAmChartGenerator:
                     kind_of_data_set = "monthly"
                     line_plot_marker_size = 5
 
-                log.information(
-                    f"{kind_of_data_set} Data Processing for Simulation Duration of {simulation_duration_key} Days:"
-                )
                 # get statistical data
                 self.get_statistics_of_data_and_write_to_excel(
                     filtered_data=filtered_data,
@@ -584,9 +590,132 @@ class PyAmChartGenerator:
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
 
-        # plt.legend(scenario_set, bbox_to_anchor=(1, 1), loc="upper left")
         fig.savefig(
             os.path.join(self.plot_path_complete, "histogram_plot.png"),
+            bbox_inches="tight",
+        )
+        plt.close()
+
+    def make_scatter_plot_for_pandas_dataframe(
+        self,
+        full_pandas_dataframe: pd.DataFrame,
+        filtered_data: pd.DataFrame,
+        y_data_variable: str,
+        x_data_variable: str = "Specific heating load",
+    ) -> None:
+        """Make scatter plot."""
+        log.information("Make scatter plot with data.")
+
+        fig, a_x = plt.subplots(
+            figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
+        )
+
+        # iterate over all scenarios
+        x_data_mean_value_list_for_all_scenarios = []
+        y_data_mean_value_list_for_all_scenarios = []
+        for scenario in list(OrderedSet(list(full_pandas_dataframe.scenario))):
+
+            full_data_per_scenario = full_pandas_dataframe.loc[
+                full_pandas_dataframe["scenario"] == scenario
+            ]
+            filtered_data_per_scenario = filtered_data.loc[
+                filtered_data["scenario"] == scenario
+            ]
+
+            # get x_data_list by filtering the df according to x_data_variable and then by taking values from "value" column
+            x_data_list = list(
+                full_data_per_scenario.loc[
+                    full_data_per_scenario["variable"] == x_data_variable
+                ]["value"].values
+            )
+            x_data_unit = full_data_per_scenario.loc[
+                full_data_per_scenario["variable"] == x_data_variable
+            ]["unit"].values[0]
+
+            # if x_data_list has more than 1 value (because more values for this scenario exist), then take mean value
+            if len(x_data_list) > 1:
+                # for each scenario take the mean value
+                x_data_mean_value_per_scenario = np.mean(x_data_list)
+            elif len(x_data_list) == 1:
+                x_data_mean_value_per_scenario = x_data_list[0]
+            else:
+                raise ValueError(
+                    "The x_data_list is empty. Probably the full dataframe did not contain the x_data_variable in the column variable."
+                )
+
+            # append to x_data_mean_value_list
+            x_data_mean_value_list_for_all_scenarios.append(
+                x_data_mean_value_per_scenario
+            )
+
+            # get y values from filtered data per scenario (already filtered according to variable to check and scenario)
+            y_data_list = list(filtered_data_per_scenario["value"].values)
+            y_data_unit = filtered_data_per_scenario["unit"].values[0]
+            # if y_data_list has more than 1 value (because more values for this scenario exist), then take mean value
+            if len(y_data_list) > 1:
+                # for each scenario take the mean value
+                y_data_mean_value_per_scenario = np.mean(y_data_list)
+            elif len(y_data_list) == 1:
+                y_data_mean_value_per_scenario = y_data_list[0]
+            else:
+                raise ValueError(
+                    "The y_data_list is empty. Something went wrong with the filtering in the functions before."
+                )
+
+            # append to y_data_mean_value_list
+            y_data_mean_value_list_for_all_scenarios.append(
+                y_data_mean_value_per_scenario
+            )
+
+        # identify marker size accroding to data length
+        data_length = len(x_data_mean_value_list_for_all_scenarios)
+        if data_length < 10:
+            scatter_plot_marker_size = 20
+        elif 10 < data_length < 50:
+            scatter_plot_marker_size = 16
+        elif 50 < data_length < 100:
+            scatter_plot_marker_size = 8
+        elif 100 < data_length < 300:
+            scatter_plot_marker_size = 6
+        elif 300 < data_length < 500:
+            scatter_plot_marker_size = 4
+        elif 500 < data_length < 1000:
+            scatter_plot_marker_size = 2
+        else:
+            scatter_plot_marker_size = 1
+
+        # make scatter plot
+        plt.scatter(
+            x_data_mean_value_list_for_all_scenarios,
+            y_data_mean_value_list_for_all_scenarios,
+            s=scatter_plot_marker_size,
+        )
+
+        y_tick_labels, unit, y_tick_locations = self.set_axis_scale(
+            a_x, x_or_y="y", unit=y_data_unit
+        )
+        plt.yticks(
+            ticks=y_tick_locations,
+            labels=y_tick_labels,
+            fontsize=self.hisim_chartbase.fontsize_ticks,
+        )
+
+        plt.ylabel(
+            ylabel=f"{y_data_variable} [{y_data_unit}]",
+            fontsize=self.hisim_chartbase.fontsize_label,
+        )
+        plt.xlabel(
+            xlabel=f"{x_data_variable} [{x_data_unit}]",
+            fontsize=self.hisim_chartbase.fontsize_label,
+        )
+
+        plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
+        a_x.tick_params(axis="x", labelrotation=45)
+        if self.show_plot_legend:
+            plt.legend(bbox_to_anchor=(1, 1), loc="upper left")
+
+        fig.savefig(
+            os.path.join(self.plot_path_complete, "scatter_plot.png"),
             bbox_inches="tight",
         )
         plt.close()
@@ -884,7 +1013,7 @@ class PyAmChartGenerator:
             concat_df = pd.concat(
                 [concat_df, df_filtered_for_specific_scenarios], ignore_index=True
             )
-            print(dataframe.loc[:, "scenario"])
+
             # concat_df[f"scenario_{filter_level_index}"] = dataframe.loc[:, "scenario"]
 
             del df_filtered_for_specific_scenarios
@@ -1068,6 +1197,9 @@ class FilterClass:
         kpi_data = [
             "Production",
             "Consumption",
+            "Self-consumption",
+            "Injection",
+            "Autarky rate",
             "Investment costs for equipment per simulated period",
             "CO2 footprint for equipment per simulated period",
             "System operational costs for simulated period",
@@ -1101,8 +1233,6 @@ class FilterClass:
 
         heating_demand = [
             "AdvancedHeatPumpHPLib|Heating|ThermalOutputPower",
-            # "HeatDistributionSystem|Heating|ThermalOutputPower",
-            # "Building|Heating|TheoreticalThermalBuildingDemand",
             "Building|Temperature|TemperatureIndoorAir",
         ]
         variables_for_debugging_purposes = [

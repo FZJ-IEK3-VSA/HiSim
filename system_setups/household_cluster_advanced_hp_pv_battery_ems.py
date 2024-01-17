@@ -97,7 +97,7 @@ def setup_function(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
+            PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
         )
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.COMPUTE_OPEX

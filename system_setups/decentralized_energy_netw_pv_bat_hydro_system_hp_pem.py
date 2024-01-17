@@ -101,7 +101,7 @@ def setup_function(
         PostProcessingOptions.COMPUTE_OPEX
     )
     my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
+        PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
     )
 
     """

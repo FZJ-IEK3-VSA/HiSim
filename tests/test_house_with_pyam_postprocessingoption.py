@@ -66,7 +66,7 @@ def test_house_with_pyam(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     my_simulation_parameters.post_processing_options.append(
-        postprocessingoptions.PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
+        postprocessingoptions.PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
     )
 
     # this part is copied from hisim_main

@@ -1,0 +1,542 @@
+"""Result Data Processing and Plotting for Scenario Comparison."""
+
+
+import glob
+import os
+from typing import Dict, Any, Tuple, Optional, List
+import copy
+import pandas as pd
+
+from hisim.postprocessing.scenario_evaluation.result_data_collection import (
+    ResultDataTypeEnum,
+)
+from hisim import log
+
+
+class ScenarioDataProcessing:
+
+    """ScenarioDataProcessing class."""
+
+    @staticmethod
+    def get_dataframe_and_create_pandas_dataframe_for_all_data(
+        data_folder_path: str,
+        time_resolution_of_data_set: Any,
+        dict_of_scenarios_to_check: Optional[Dict[str, List[str]]],
+        variables_to_check: List[str],
+    ) -> Tuple[pd.DataFrame, str, str, List[str]]:
+        """Get csv data and create dataframes with the filtered and procesed scenario data."""
+
+        if time_resolution_of_data_set == ResultDataTypeEnum.HOURLY:
+            kind_of_data_set = "hourly"
+        elif time_resolution_of_data_set == ResultDataTypeEnum.YEARLY:
+            kind_of_data_set = "yearly"
+        elif time_resolution_of_data_set == ResultDataTypeEnum.DAILY:
+            kind_of_data_set = "daily"
+        elif time_resolution_of_data_set == ResultDataTypeEnum.MONTHLY:
+            kind_of_data_set = "monthly"
+        else:
+            raise ValueError(
+                "This kind of data was not found in the datacollectorenum class."
+            )
+        log.information(
+            f"Read csv files and create one big dataframe for {kind_of_data_set} data."
+        )
+
+        for file in glob.glob(
+            os.path.join(data_folder_path, "**", f"*{kind_of_data_set}*.csv")
+        ):
+
+            file_df = pd.read_csv(filepath_or_buffer=file)
+
+        # if scenario values are no strings, transform them
+        file_df["scenario"] = file_df["scenario"].transform(str)
+        key_for_scenario_one = ""
+        key_for_current_scenario = ""
+
+        # # make rel electricity calculation before sorting and renaming
+
+        # if "ElectricityMeter|Electricity|ElectricityFromGrid" in variables_to_check:
+        #     print("relative electricity demand will be calculated.")
+
+        #     file_df = self.calculate_relative_electricity_demand(dataframe=file_df)
+        #     variables_to_check.append("Relative Electricity Demand")
+
+        if dict_of_scenarios_to_check is not None and dict_of_scenarios_to_check != {}:
+
+            (
+                file_df,
+                key_for_scenario_one,
+                key_for_current_scenario,
+            ) = ScenarioDataProcessing.check_if_scenario_exists_and_filter_dataframe_for_scenarios_dict(
+                data_frame=file_df,
+                dict_of_scenarios_to_check=dict_of_scenarios_to_check,
+            )
+
+        return (
+            file_df,
+            key_for_scenario_one,
+            key_for_current_scenario,
+            variables_to_check,
+        )
+
+    @staticmethod
+    def filter_pandas_dataframe(
+        dataframe: pd.DataFrame, variable_to_check: str
+    ) -> pd.DataFrame:
+        """Filter pandas dataframe according to variable."""
+        filtered_dataframe = dataframe.loc[dataframe["variable"] == variable_to_check]
+        if filtered_dataframe.empty:
+            print(
+                f"The dataframe contains the following variables: {set(list(dataframe.variable))}"
+            )
+            # raise ValueError(
+            print(
+                f"The filtered dataframe is empty. The dataframe did not contain the variable {variable_to_check}. Check the list above."
+            )
+        return filtered_dataframe
+
+    @staticmethod
+    def get_statistics_of_data_and_write_to_excel(
+        filtered_data: pd.DataFrame, path_to_save: str, kind_of_data_set: str,
+    ) -> None:
+        """Use pandas describe method to get statistical values of certain data."""
+        # create a excel writer object
+        with pd.ExcelWriter(  # pylint: disable=abstract-class-instantiated
+            path=os.path.join(path_to_save, f"{kind_of_data_set}_statistics.xlsx"),
+            mode="w",
+        ) as writer:
+
+            filtered_data.to_excel(excel_writer=writer, sheet_name="filtered data")
+            statistical_data = filtered_data.describe()
+
+            statistical_data.to_excel(excel_writer=writer, sheet_name="statistics")
+
+    @staticmethod
+    def check_if_scenario_exists_and_filter_dataframe_for_scenarios(
+        data_frame: pd.DataFrame, dict_of_scenarios_to_check: Dict[str, List[str]],
+    ) -> pd.DataFrame:
+        """Check if scenario exists and filter dataframe for scenario."""
+        for (list_of_scenarios_to_check,) in dict_of_scenarios_to_check.values():
+            aggregated_scenario_dict: Dict = {
+                key: [] for key in list_of_scenarios_to_check
+            }
+
+            for given_scenario in data_frame["scenario"]:
+                # string comparison
+
+                for scenario_to_check in list_of_scenarios_to_check:
+                    if (
+                        scenario_to_check in given_scenario
+                        and given_scenario
+                        not in aggregated_scenario_dict[scenario_to_check]
+                    ):
+                        aggregated_scenario_dict[scenario_to_check].append(
+                            given_scenario
+                        )
+            # raise error if dict is empty
+            for (
+                key_scenario_to_check,
+                given_scenario,
+            ) in aggregated_scenario_dict.items():
+                if given_scenario == []:
+                    raise ValueError(
+                        f"Scenarios containing {key_scenario_to_check} were not found in the dataframe."
+                    )
+
+            concat_df = pd.DataFrame()
+            # only take rows from dataframe which are in selected scenarios
+            for (
+                key_scenario_to_check,
+                given_scenario,
+            ) in aggregated_scenario_dict.items():
+
+                df_filtered_for_specific_scenarios = data_frame.loc[
+                    data_frame["scenario"].isin(given_scenario)
+                ]
+                df_filtered_for_specific_scenarios["scenario"] = [
+                    key_scenario_to_check
+                ] * len(df_filtered_for_specific_scenarios["scenario"])
+                concat_df = pd.concat([concat_df, df_filtered_for_specific_scenarios])
+                concat_df["scenario_0"] = data_frame["scenario"]
+
+        return concat_df
+
+    @staticmethod
+    def aggregate_all_values_for_one_scenario(
+        dataframe: pd.DataFrame,
+        list_of_scenarios_to_check: List,
+        column_name_to_check: str,
+        # filter_level_index: int,
+    ) -> pd.DataFrame:
+        """Check for one scenario."""
+
+        aggregated_scenario_dict: Dict = {key: [] for key in list_of_scenarios_to_check}
+        print("aggregated scenario dict", aggregated_scenario_dict)
+        for scenario_to_check in list_of_scenarios_to_check:
+            print("scenario to check", scenario_to_check)
+            for value in dataframe[column_name_to_check].values:
+                if (
+                    isinstance(scenario_to_check, str)
+                    and scenario_to_check in value
+                    and value not in aggregated_scenario_dict[scenario_to_check]
+                ):
+                    aggregated_scenario_dict[scenario_to_check].append(value)
+                elif (
+                    isinstance(scenario_to_check, (float, int))
+                    and scenario_to_check == value
+                    and value not in aggregated_scenario_dict[scenario_to_check]
+                ):
+
+                    aggregated_scenario_dict[scenario_to_check].append(value)
+
+        concat_df = pd.DataFrame()
+        # only take rows from dataframe which are in selected scenarios
+        for (
+            key_scenario_to_check,
+            given_list_of_values,
+        ) in aggregated_scenario_dict.items():
+
+            df_filtered_for_specific_scenarios = dataframe.loc[
+                dataframe[column_name_to_check].isin(given_list_of_values)
+            ]
+
+            df_filtered_for_specific_scenarios.loc[
+                :, "scenario"
+            ] = key_scenario_to_check
+
+            concat_df = pd.concat(
+                [concat_df, df_filtered_for_specific_scenarios], ignore_index=True
+            )
+
+            # concat_df[f"scenario_{filter_level_index}"] = dataframe.loc[:, "scenario"]
+
+            del df_filtered_for_specific_scenarios
+
+        return concat_df
+
+    @staticmethod
+    def check_if_scenario_exists_and_filter_dataframe_for_scenarios_dict(
+        data_frame: pd.DataFrame, dict_of_scenarios_to_check: Dict[str, List[str]],
+    ) -> Tuple[pd.DataFrame, str, str]:
+        """Check if scenario exists and filter dataframe for scenario."""
+
+        concat_df = data_frame
+        filter_level_index = 0
+        for (
+            scenario_to_check_key,
+            list_of_scenarios_to_check,
+        ) in dict_of_scenarios_to_check.items():
+
+            concat_df = ScenarioDataProcessing.aggregate_all_values_for_one_scenario(
+                dataframe=concat_df,
+                list_of_scenarios_to_check=list_of_scenarios_to_check,
+                column_name_to_check=scenario_to_check_key,
+                # filter_level_index=filter_level_index,
+            )
+
+            filter_level_index = filter_level_index + 1
+        key_for_scenario_one = ""
+        key_for_current_scenario = ""
+        # rename scenario with all scenario filter levels
+        for index in concat_df.index:
+            # if even more filter levels need to add condition!
+            if filter_level_index == 2:
+                current_scenario_value = concat_df["scenario"][index]
+                scenario_value_one = concat_df["scenario_1"][index]
+                # scenario zero is original scenario that will be overwritten
+                key_for_scenario_one = list(dict_of_scenarios_to_check.keys())[0]
+                key_for_current_scenario = list(dict_of_scenarios_to_check.keys())[1]
+                # concat_df.iloc[index, concat_df.columns.get_loc("scenario")] = f"{scenario_value_one}_{current_scenario_value}"
+                concat_df.loc[
+                    index, "scenario"
+                ] = f"{scenario_value_one}_{current_scenario_value}"
+            elif filter_level_index == 1:
+                key_for_scenario_one = list(dict_of_scenarios_to_check.keys())[0]
+                key_for_current_scenario = ""
+        return concat_df, key_for_scenario_one, key_for_current_scenario
+
+    @staticmethod
+    def calculate_relative_electricity_demand(dataframe: pd.DataFrame) -> pd.DataFrame:
+        """Calculate relative electricity demand."""
+
+        # look for ElectricityMeter|Electricity|ElectrcityFromGrid output
+        if (
+            "ElectricityMeter|Electricity|ElectricityFromGrid"
+            not in dataframe.variable.values
+        ):
+            raise ValueError(
+                "ElectricityMeter|Electricity|ElectricityFromGrid was not found in variables."
+            )
+
+        # filter again just to be shure
+        filtered_data = dataframe.loc[
+            dataframe.variable == "ElectricityMeter|Electricity|ElectricityFromGrid"
+        ]
+
+        if "share_of_maximum_pv_power" not in filtered_data.columns:
+            raise ValueError(
+                "share_of_maximum_pv_power was not found in dataframe columns"
+            )
+        # sort df accrofing to share of pv
+        filtered_data = filtered_data.sort_values("share_of_maximum_pv_power")
+
+        # iterate over all scenarios
+        for scenario in list(set(filtered_data.scenario.values)):
+
+            if "share_of_maximum_pv_power" not in scenario:
+
+                df_for_one_scenario = filtered_data.loc[
+                    filtered_data.scenario == scenario
+                ]
+
+                df_for_one_scenario_and_for_share_zero = df_for_one_scenario.loc[
+                    df_for_one_scenario.share_of_maximum_pv_power == 0
+                ]
+
+                reference_value_for_electricity_demand = (
+                    df_for_one_scenario_and_for_share_zero.value.values
+                )
+                relative_electricity_demand = [0] * len(
+                    reference_value_for_electricity_demand
+                )
+
+                # get reference value (when share of pv power is zero)
+                for share_of_maximum_pv_power in list(
+                    set(df_for_one_scenario.share_of_maximum_pv_power.values)
+                ):
+
+                    if share_of_maximum_pv_power != 0:
+
+                        df_for_one_scenario_and_for_one_share = df_for_one_scenario.loc[
+                            df_for_one_scenario.share_of_maximum_pv_power
+                            == share_of_maximum_pv_power
+                        ]
+
+                        value_for_electricity_demand = (
+                            df_for_one_scenario_and_for_one_share.value.values
+                        )
+
+                        # calculate reference electricity demand for each scenario and share of pv power
+                        relative_electricity_demand = (
+                            value_for_electricity_demand
+                            / reference_value_for_electricity_demand
+                            * 100
+                        )
+
+                        new_df_only_with_relative_electricity_demand = copy.deepcopy(
+                            df_for_one_scenario_and_for_one_share
+                        )
+                        new_df_only_with_relative_electricity_demand.loc[
+                            :, "variable"
+                        ] = "Relative Electricity Demand"
+                        new_df_only_with_relative_electricity_demand.loc[
+                            :, "unit"
+                        ] = "%"
+                        new_df_only_with_relative_electricity_demand.loc[
+                            :, "value"
+                        ] = relative_electricity_demand
+
+                        del df_for_one_scenario_and_for_one_share
+
+                        dataframe = pd.concat(
+                            [dataframe, new_df_only_with_relative_electricity_demand]
+                        )
+                        del dataframe["Unnamed: 0"]
+                        del new_df_only_with_relative_electricity_demand
+
+            else:
+
+                df_for_one_scenario = filtered_data.loc[
+                    filtered_data.scenario == scenario
+                ]
+                share_of_maximum_pv_power = df_for_one_scenario[
+                    "share_of_maximum_pv_power"
+                ].values[0]
+
+                if share_of_maximum_pv_power == 0:
+
+                    relative_electricity_demand = [0] * len(df_for_one_scenario)
+
+                else:
+
+                    value_for_electricity_demand = df_for_one_scenario.value.values
+                    df_for_one_scenario_and_for_share_zero = filtered_data.loc[
+                        filtered_data.share_of_maximum_pv_power == 0
+                    ]
+                    reference_value_for_electricity_demand = (
+                        df_for_one_scenario_and_for_share_zero.value.values
+                    )
+
+                    # calculate reference electricity demand for each scenario and share of pv power
+                    relative_electricity_demand = (
+                        1
+                        - (
+                            (
+                                reference_value_for_electricity_demand
+                                - value_for_electricity_demand
+                            )
+                            / reference_value_for_electricity_demand
+                        )
+                    ) * 100
+
+                new_df_only_with_relative_electricity_demand = copy.deepcopy(
+                    df_for_one_scenario
+                )
+                new_df_only_with_relative_electricity_demand.loc[
+                    :, "variable"
+                ] = "Relative Electricity Demand"
+                new_df_only_with_relative_electricity_demand.loc[:, "unit"] = "%"
+                new_df_only_with_relative_electricity_demand.loc[
+                    :, "value"
+                ] = relative_electricity_demand
+
+                del df_for_one_scenario
+
+                dataframe = pd.concat(
+                    [dataframe, new_df_only_with_relative_electricity_demand]
+                )
+
+                del dataframe["Unnamed: 0"]
+                del new_df_only_with_relative_electricity_demand
+
+        return dataframe
+
+
+class FilterClass:
+
+    """Class for setting filters on the data for processing."""
+
+    def __init__(self):
+        """Initialize the class."""
+
+        (
+            self.kpi_data,
+            self.electricity_data,
+            self.occuancy_consumption,
+            self.heating_demand,
+            self.variables_for_debugging_purposes,
+        ) = self.get_variables_to_check()
+        (
+            self.building_type,
+            self.building_refurbishment_state,
+            self.building_age,
+            self.pv_share,
+        ) = self.get_scenarios_to_check()
+
+    def get_variables_to_check(self):
+        """Get specific variables to check for the scenario evaluation."""
+
+        # system_setups for variables to check (check names of your variables before your evaluation, if they are correct)
+        # kpi data has no time series, so only choose when you analyze yearly data
+        kpi_data = [
+            "Production",
+            "Consumption",
+            "Self-consumption",
+            "Self-consumption rate",
+            "Autarky rate",
+            "Investment costs for equipment per simulated period",
+            "CO2 footprint for equipment per simulated period",
+            "System operational costs for simulated period",
+            "System operational emissions for simulated period",
+            "Total costs for simulated period",
+            "Total emissions for simulated period",
+            "Temperature deviation of building indoor air temperature being below set temperature 19.0 °C",
+            "Minimum building indoor air temperature reached",
+            "Temperature deviation of building indoor air temperature being above set temperature 24.0 °C",
+            "Maximum building indoor air temperature reached",
+            "Building heating load",
+            "Specific heating load",
+            "Number of heat pump cycles",
+            "Seasonal performance factor of heat pump",
+            "Total energy from electricity grid",
+            "Total energy to electricity grid",
+        ]
+
+        electricity_data = [
+            "ElectricityMeter|Electricity|ElectricityToGrid",
+            "ElectricityMeter|Electricity|ElectricityFromGrid",
+            "ElectricityMeter|Electricity|ElectricityAvailable",
+            # if you analyze a house with ems the production and consumption values of the electricity meter are not representative
+            # use the ems production and consumption or the kpi values instead if needed
+            # "ElectricityMeter|Electricity|ElectricityConsumption",
+            # "ElectricityMeter|Electricity|ElectricityProduction",
+        ]
+
+        occuancy_consumption = [
+            "Occupancy|Electricity|ElectricityOutput",
+            "Occupancy|WarmWater|WaterConsumption",
+        ]
+
+        heating_demand = [
+            "AdvancedHeatPumpHPLib|Heating|ThermalOutputPower",
+            "Building|Temperature|TemperatureIndoorAir",
+        ]
+        variables_for_debugging_purposes = [
+            "AdvancedHeatPumpHPLib|Heating|ThermalOutputPower",
+            "Building|Temperature|TemperatureIndoorAir",
+            "AdvancedHeatPumpHPLib|Any|COP",
+            "Battery_w1|Any|StateOfCharge",
+        ]
+
+        return (
+            kpi_data,
+            electricity_data,
+            occuancy_consumption,
+            heating_demand,
+            variables_for_debugging_purposes,
+        )
+
+    def get_scenarios_to_check(self):
+        """Get scenarios to check for scenario evaluation."""
+
+        (
+            building_type,
+            building_refurbishment_state,
+            building_age,
+        ) = self.get_building_properties_to_check()
+
+        pv_share = self.get_pv_properties_to_check()
+
+        return building_type, building_refurbishment_state, building_age, pv_share
+
+    def get_building_properties_to_check(self):
+        """Get building properties."""
+
+        # system_setups for scenarios to filter
+        building_type = [
+            "DE.N.SFH",
+            "DE.N.TH",
+            "DE.N.MFH",
+            "DE.N.AB",
+        ]
+
+        building_refurbishment_state = [
+            "001.001",
+            "001.002",
+            "001.003",
+        ]
+
+        building_age = [
+            "01.Gen",
+            "02.Gen",
+            "03.Gen",
+            "04.Gen",
+            "05.Gen",
+            "06.Gen",
+            "07.Gen",
+            "08.Gen",
+            "09.Gen",
+            "10.Gen",
+            "11.Gen",
+            "12.Gen",
+        ]
+
+        return building_type, building_refurbishment_state, building_age
+
+    def get_pv_properties_to_check(self):
+        """Get pv properties."""
+
+        # system_setups for scenarios to filter
+        pv_share = [0, 0.25, 0.5, 1]
+
+        return pv_share

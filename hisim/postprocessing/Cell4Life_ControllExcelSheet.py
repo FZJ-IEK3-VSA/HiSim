@@ -84,7 +84,8 @@ def ControllSheetExcel(excelfilepathresults3):
 
 
     # Load data from "Electrolyzher Component" (column 2) and add the collected data to list
-    csv_datei6 = os.path.join(path, 'ElectricityConsumptionElectrolyzer_StaticElectrolyzer.csv')
+    #csv_datei6 = os.path.join(path, 'ElectricityConsumptionElectrolyzer_StaticElectrolyzer.csv')
+    csv_datei6 = os.path.join(path, 'ElectricityConsumptionElectrolyzer_C4LElectrolyzer.csv')
     with open(csv_datei6, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
         for row in csvreader:

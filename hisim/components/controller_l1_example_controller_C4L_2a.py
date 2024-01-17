@@ -18,7 +18,6 @@ from hisim import loadtypes as lt
 from hisim.loadtypes import InandOutputType, ComponentType
 from hisim.simulationparameters import SimulationParameters
 from hisim.components import static_electrolyzer, generic_hydrogen_storage, csvloader_electricityconsumption, csvloader_photovoltaic, generic_CHP
-from hisim.components import C4L_electrolyzer
 from hisim.postprocessing.Cell4Life_ControllExcelSheet import errormessage
 
 __authors__ = "Christof Bernsteiner"
@@ -79,6 +78,9 @@ class SimpleController(Component):
     ElectricityfromCHPtoHouse = "QuantitiyShare_electricity_from_CHP_to_house" #in W ---> the amount of energy which is delivered from the fuel cell/chp to the house
     electricity_fromPVtogrid = "QuantitiyShare_PV_to_grid_ifCHPisRUNNING" #just for // FOR DEBUGGING"
     ElectricityfromBatterytoHouse = "QuantitiyShare_electricity_from_Battery_to_house" #in W ---> the amount of energy which is delivered from the fuel cell/chp to the house
+    ElectrolyzerON = "ElectrolyzerON"
+    FuelCellON = "FuelCellON"
+
     
     def __init__(
         self,
@@ -225,32 +227,33 @@ class SimpleController(Component):
             output_description=f"here a description for {self.electricity_fromPVtogrid} will follow.",
         )
 
+        self.electrolyzer_on: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectrolyzerON,
+            load_type=lt.LoadTypes.ON_OFF,
+            unit=lt.Units.BINARY,
+            postprocessing_flag=[lt.InandOutputType.CONTROL_SIGNAL],
+            output_description="Electrolyzer On",
+        )
 
+        self.fuelcell_on: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.FuelCellON,
+            load_type=lt.LoadTypes.ON_OFF,
+            unit=lt.Units.BINARY,
+            postprocessing_flag=[lt.InandOutputType.CONTROL_SIGNAL],
+            output_description="Fuel Cell On",
+        )
  
         self.state = 0
         self.previous_state = self.state
 
-        self.add_default_connections(self.get_default_connections_from_C4L_electrolyzer())
         self.add_default_connections(self.get_default_connections_from_static_electrolyzer())
         self.add_default_connections(self.get_default_connections_from_h2_storage())
         self.add_default_connections(self.get_default_connections_from_general_electricity_consumption()) # Wie verbinden?
         self.add_default_connections(self.get_default_connections_from_general_photovoltaic_delivery()) # Wie verbinden?
         self.add_default_connections(self.get_default_connections_from_chp_electricity_delivery()) # Wie verbinden?
 
-
-    def get_default_connections_from_C4L_electrolyzer(self):
-        """Sets default connections for the electrolyzer in the energy management system."""
-        log.information("setting electrolyzer default connections in Electrolyzer Controller")
-        connections = []
-        electrolyzer_classname = C4L_electrolyzer.C4LElectrolyzer.get_classname()
-        connections.append(
-            cp.ComponentConnection(
-                SimpleController.Electrolyzer_ElectricityConsumption,
-                electrolyzer_classname,
-                C4L_electrolyzer.C4LElectrolyzer.ElectricityConsumption,
-            )
-        )
-        return connections
 
     def get_default_connections_from_static_electrolyzer(self):
         """Sets default connections for the electrolyzer in the energy management system."""
@@ -382,107 +385,121 @@ class SimpleController(Component):
         General_PhotovoltaicDelivery = stsv.get_input_value(self.General_PhotovoltaicDeliveryInput)
         CHP_ElectricityDelivery = stsv.get_input_value(self.CHP_ElectricityDeliveryInput)
 
-        
-        if self.config.szenario == '1a':
 
-            #Production and consumption without Battery
-            total_electricity_production = General_PhotovoltaicDelivery + CHP_ElectricityDelivery
-            total_electricity_consumption = General_ElectricityConsumptiom + Electrolyzer_ElectricityConsumption + H2Storage_ElectricityConsumption
-            electricity_to__or_from_battery_Wish = total_electricity_production - total_electricity_consumption
+        if self.config.szenario == '2a':
+            print("Startprediction controlled energy management system")
             
-            #Integration of Battery
-            stsv.set_output_value(self.BatteryLoadingPowerWishOutput, electricity_to__or_from_battery_Wish)
-            BatteryAcBatteryPower = stsv.get_input_value(self.BatteryAcBatteryPowerInput)
+            #Load Predicted values
+            pv_prediction = self.simulation_repository.get_dynamic_entry(lt.ComponentType.PV, source_weight = 999)
+            electricityconsumption_prediction = self.simulation_repository.get_dynamic_entry(lt.ComponentType.ELECTRIC_CONSUMPTION, source_weight = 999) #ELECTRIC_BOILER is only a placeholder!  
+            
+            #print(pv_prediction)
+            #print(electricityconsumption_prediction)
+
+
+        
+
+
+        # if self.config.szenario == '1a':
+
+        #     #Production and consumption without Battery
+        #     total_electricity_production = General_PhotovoltaicDelivery + CHP_ElectricityDelivery
+        #     total_electricity_consumption = General_ElectricityConsumptiom + Electrolyzer_ElectricityConsumption + H2Storage_ElectricityConsumption
+        #     electricity_to__or_from_battery_Wish = total_electricity_production - total_electricity_consumption
+            
+        #     #Integration of Battery
+        #     stsv.set_output_value(self.BatteryLoadingPowerWishOutput, electricity_to__or_from_battery_Wish)
+        #     BatteryAcBatteryPower = stsv.get_input_value(self.BatteryAcBatteryPowerInput)
 
            
-            electricity_to_or_from_grid = total_electricity_production - total_electricity_consumption - BatteryAcBatteryPower
+        #     electricity_to_or_from_grid = total_electricity_production - total_electricity_consumption - BatteryAcBatteryPower
             
-            if CHP_ElectricityDelivery > 0 and Electrolyzer_ElectricityConsumption == 0:
-                electricity_from_CHP_to_house,electricity_from_Battery_to_house= electricity_from_CHP_Battery_to_houseFct(CHP_ElectricityDelivery, BatteryAcBatteryPower, electricity_to_or_from_grid, H2Storage_ElectricityConsumption,timestep)
-            elif CHP_ElectricityDelivery == 0 and Electrolyzer_ElectricityConsumption > 0:
-                electricity_from_CHP_to_house = 0
-                if BatteryAcBatteryPower < 0: #Battery is delivering energy to electrolyzer + h2 storage as well to House
-                    electricity_from_Battery_to_house = -BatteryAcBatteryPower - Electrolyzer_ElectricityConsumption - H2Storage_ElectricityConsumption
+        #     if CHP_ElectricityDelivery > 0 and Electrolyzer_ElectricityConsumption == 0:
+        #         electricity_from_CHP_to_house,electricity_from_Battery_to_house= electricity_from_CHP_Battery_to_houseFct(CHP_ElectricityDelivery, BatteryAcBatteryPower, electricity_to_or_from_grid, H2Storage_ElectricityConsumption,timestep)
+        #     elif CHP_ElectricityDelivery == 0 and Electrolyzer_ElectricityConsumption > 0:
+        #         electricity_from_CHP_to_house = 0
+        #         if BatteryAcBatteryPower < 0: #Battery is delivering energy to electrolyzer + h2 storage as well to House
+        #             electricity_from_Battery_to_house = -BatteryAcBatteryPower - Electrolyzer_ElectricityConsumption - H2Storage_ElectricityConsumption
                     
-                    if electricity_from_Battery_to_house < 0: #Consumption of Electrolyzer and H2Storage is more than Battery can deliver --> so no Battery Energy is delivered to House anyways
-                        electricity_from_Battery_to_house = 0
+        #             if electricity_from_Battery_to_house < 0: #Consumption of Electrolyzer and H2Storage is more than Battery can deliver --> so no Battery Energy is delivered to House anyways
+        #                 electricity_from_Battery_to_house = 0
 
-                elif BatteryAcBatteryPower >= 0:
-                    electricity_from_Battery_to_house = 0
+        #         elif BatteryAcBatteryPower >= 0:
+        #             electricity_from_Battery_to_house = 0
             
             
               
-            else:
-                errormessage([timestep, "Fuel Cell and Electrolyzer seems to run at the same time"])
-                breakpoint()
+        #     else:
+        #         errormessage([timestep, "Fuel Cell and Electrolyzer seems to run at the same time"])
+        #         breakpoint()
 
-            stsv.set_output_value(self.electricity_to_or_from_gridOutput, electricity_to_or_from_grid)
-            stsv.set_output_value(self.total_electricity_consumptionOutput, total_electricity_consumption)
-            stsv.set_output_value(self.electricity_from_CHP_to_houseOutput, electricity_from_CHP_to_house)
-            stsv.set_output_value(self.electricity_from_Battery_to_houseOutput, electricity_from_Battery_to_house)
-            part_pv_to_grid = 999999999999999999999999 # is not calculated in case 1b!!!!
-            stsv.set_output_value(self.electricity_from_PV_to_gridOutput, part_pv_to_grid)
+        #     stsv.set_output_value(self.electricity_to_or_from_gridOutput, electricity_to_or_from_grid)
+        #     stsv.set_output_value(self.total_electricity_consumptionOutput, total_electricity_consumption)
+        #     stsv.set_output_value(self.electricity_from_CHP_to_houseOutput, electricity_from_CHP_to_house)
+        #     stsv.set_output_value(self.electricity_from_Battery_to_houseOutput, electricity_from_Battery_to_house)
+        #     part_pv_to_grid = 999999999999999999999999 # is not calculated in case 1b!!!!
+        #     stsv.set_output_value(self.electricity_from_PV_to_gridOutput, part_pv_to_grid)
 
         
         
-        if self.config.szenario == '1b':
-            #Abzug aller Stromproduktionen und Verbräuche
+        # if self.config.szenario == '1b':
+        #     #Abzug aller Stromproduktionen und Verbräuche
 
             
-            #Elektrolysebetrieb
-            if Electrolyzer_ElectricityConsumption > 0 and CHP_ElectricityDelivery == 0:  ##Sind wir im Electrolysebetrieb? Wenn ja, dann...
-                electricity_from_Battery_to_house = 0 # Batterie beliefert ausschließlich Elektrolyseur auf einer direkt Leitung (nicht über allgemeine Netz)
-                electricity_from_CHP_to_house     = 0 #Da CHP/Fuel Cell nicht läuft, kann kein Strom von CHP zu den Wohnungen geliefert werden! 
+        #     #Elektrolysebetrieb
+        #     if Electrolyzer_ElectricityConsumption > 0 and CHP_ElectricityDelivery == 0:  ##Sind wir im Electrolysebetrieb? Wenn ja, dann...
+        #         electricity_from_Battery_to_house = 0 # Batterie beliefert ausschließlich Elektrolyseur auf einer direkt Leitung (nicht über allgemeine Netz)
+        #         electricity_from_CHP_to_house     = 0 #Da CHP/Fuel Cell nicht läuft, kann kein Strom von CHP zu den Wohnungen geliefert werden! 
                 
-                Estatus_house = General_PhotovoltaicDelivery - General_ElectricityConsumptiom ##Decke zuerst mit der PV den Strombedarf des Hauses
-                electricity_electH2stor_consumption_system = Electrolyzer_ElectricityConsumption + H2Storage_ElectricityConsumption ##Rechne den Gesamtstrombedarf des Elektrolyseur + Wasserstoffspeichers zusammen
+        #         Estatus_house = General_PhotovoltaicDelivery - General_ElectricityConsumptiom ##Decke zuerst mit der PV den Strombedarf des Hauses
+        #         electricity_electH2stor_consumption_system = Electrolyzer_ElectricityConsumption + H2Storage_ElectricityConsumption ##Rechne den Gesamtstrombedarf des Elektrolyseur + Wasserstoffspeichers zusammen
         
-                if Estatus_house > 0: #Wenn nach Abzug des Hausstrombedarfs von der PV noch ein PV Strom übrig ist.....
+        #         if Estatus_house > 0: #Wenn nach Abzug des Hausstrombedarfs von der PV noch ein PV Strom übrig ist.....
                                     
-                    status_batteryWish = Estatus_house - electricity_electH2stor_consumption_system #Brauche ich Energie von der Batterie, oder kann ich dieser welche zukommen lassen?          
+        #             status_batteryWish = Estatus_house - electricity_electH2stor_consumption_system #Brauche ich Energie von der Batterie, oder kann ich dieser welche zukommen lassen?          
                     
-                    stsv.set_output_value(self.BatteryLoadingPowerWishOutput, status_batteryWish) 
-                    BatteryAcBatteryPower = stsv.get_input_value(self.BatteryAcBatteryPowerInput) #Falls ich Energie von der Batterie brauche, wieviel kann mir diese liefern?
+        #             stsv.set_output_value(self.BatteryLoadingPowerWishOutput, status_batteryWish) 
+        #             BatteryAcBatteryPower = stsv.get_input_value(self.BatteryAcBatteryPowerInput) #Falls ich Energie von der Batterie brauche, wieviel kann mir diese liefern?
                     
-                    Estatus_system = Estatus_house - electricity_electH2stor_consumption_system - BatteryAcBatteryPower #Strombedarf vom Netz ergibt sich aus PV Produktion + Batteriezuschuss - Verbrauch Elektrolyseur - Verbrauch Wasserstoffspeicher
+        #             Estatus_system = Estatus_house - electricity_electH2stor_consumption_system - BatteryAcBatteryPower #Strombedarf vom Netz ergibt sich aus PV Produktion + Batteriezuschuss - Verbrauch Elektrolyseur - Verbrauch Wasserstoffspeicher
                     
-                    electricity_to_or_from_grid = Estatus_system
+        #             electricity_to_or_from_grid = Estatus_system
 
                 
-                elif Estatus_house <= 0: #Es ist kein PV Strom mehr übrig UND der Hausstrombedarf ist eventuell auch nicht gedeckt
+        #         elif Estatus_house <= 0: #Es ist kein PV Strom mehr übrig UND der Hausstrombedarf ist eventuell auch nicht gedeckt
                     
-                    status_batteryWish = -electricity_electH2stor_consumption_system #Überprüfen ob Batterie den Stromverbrauch Elektrolyseur + Wasserstoffspeicher decken kann?
-                    stsv.set_output_value(self.BatteryLoadingPowerWishOutput, status_batteryWish)
-                    BatteryAcBatteryPower = stsv.get_input_value(self.BatteryAcBatteryPowerInput) #Falls ich Energie von der Batterie brauche, wieviel kann mir diese liefern?
+        #             status_batteryWish = -electricity_electH2stor_consumption_system #Überprüfen ob Batterie den Stromverbrauch Elektrolyseur + Wasserstoffspeicher decken kann?
+        #             stsv.set_output_value(self.BatteryLoadingPowerWishOutput, status_batteryWish)
+        #             BatteryAcBatteryPower = stsv.get_input_value(self.BatteryAcBatteryPowerInput) #Falls ich Energie von der Batterie brauche, wieviel kann mir diese liefern?
 
 
-                    electricity_to_or_from_grid = Estatus_house - electricity_electH2stor_consumption_system - BatteryAcBatteryPower 
-                else:
-                    print("ERROR IM ENERGYMANAGEMENT-SYSTEM")
-                    breakpoint()
-                part_pv_to_grid = 0
+        #             electricity_to_or_from_grid = Estatus_house - electricity_electH2stor_consumption_system - BatteryAcBatteryPower 
+        #         else:
+        #             print("ERROR IM ENERGYMANAGEMENT-SYSTEM")
+        #             breakpoint()
+        #         part_pv_to_grid = 0
             
-            #Brennstoffzellenbetrieb oder Brennstoffzelle ist nicht im Betrieb UND Elektrolyseur ist nicht im Betrieb
-            if Electrolyzer_ElectricityConsumption == 0 and CHP_ElectricityDelivery >= 0:  ##Sind wir im Brennstoffzellenebetrieb oder ist gra nichts im Betrieb? -->  Batterie deckt auch Haus Bedarf, wird aber nur von Überschussstrom der CHP aufgeladen!
-                #print(timestep)
-                Estatus_house = General_PhotovoltaicDelivery - General_ElectricityConsumptiom ##Decke zuerst mit der PV den Strombedarf des Hauses // 
-                part_pv_to_grid = 0
-                if Estatus_house > 0: #Ist ein Überschussstrom vom PV Strom nach Abzug des Strombederafs des Hauses noch vorhanden?
-                    part_pv_to_grid = Estatus_house #WEnn ja, dieser PV-Überschussstrom geht ins Netz....
-                    Estatus_house = 0 #Haustrombedarf ist damit auch auf jeden Fall gedeckt....
+        #     #Brennstoffzellenbetrieb oder Brennstoffzelle ist nicht im Betrieb UND Elektrolyseur ist nicht im Betrieb
+        #     if Electrolyzer_ElectricityConsumption == 0 and CHP_ElectricityDelivery >= 0:  ##Sind wir im Brennstoffzellenebetrieb oder ist gra nichts im Betrieb? -->  Batterie deckt auch Haus Bedarf, wird aber nur von Überschussstrom der CHP aufgeladen!
+        #         #print(timestep)
+        #         Estatus_house = General_PhotovoltaicDelivery - General_ElectricityConsumptiom ##Decke zuerst mit der PV den Strombedarf des Hauses // 
+        #         part_pv_to_grid = 0
+        #         if Estatus_house > 0: #Ist ein Überschussstrom vom PV Strom nach Abzug des Strombederafs des Hauses noch vorhanden?
+        #             part_pv_to_grid = Estatus_house #WEnn ja, dieser PV-Überschussstrom geht ins Netz....
+        #             Estatus_house = 0 #Haustrombedarf ist damit auch auf jeden Fall gedeckt....
                 
-                #Zählen wir den restlichen Hausstrombedarf mit dem Bedarf für den Wasserstoffspeicher zusammen und schauen, wieviel uns die Brennstoffzelle liefert!
-                status_batteryWish = Estatus_house - H2Storage_ElectricityConsumption + CHP_ElectricityDelivery
-                stsv.set_output_value(self.BatteryLoadingPowerWishOutput, status_batteryWish)
-                BatteryAcBatteryPower = stsv.get_input_value(self.BatteryAcBatteryPowerInput) #Falls ich Energie von der Batterie brauche, wieviel kann mir diese liefern?
+        #         #Zählen wir den restlichen Hausstrombedarf mit dem Bedarf für den Wasserstoffspeicher zusammen und schauen, wieviel uns die Brennstoffzelle liefert!
+        #         status_batteryWish = Estatus_house - H2Storage_ElectricityConsumption + CHP_ElectricityDelivery
+        #         stsv.set_output_value(self.BatteryLoadingPowerWishOutput, status_batteryWish)
+        #         BatteryAcBatteryPower = stsv.get_input_value(self.BatteryAcBatteryPowerInput) #Falls ich Energie von der Batterie brauche, wieviel kann mir diese liefern?
 
                 
-                Estatus_total = Estatus_house - H2Storage_ElectricityConsumption + CHP_ElectricityDelivery - BatteryAcBatteryPower
+        #         Estatus_total = Estatus_house - H2Storage_ElectricityConsumption + CHP_ElectricityDelivery - BatteryAcBatteryPower
                 
 
 
-                electricity_to_or_from_grid = Estatus_total + part_pv_to_grid
-                electricity_from_CHP_to_house,electricity_from_Battery_to_house= electricity_from_CHP_Battery_to_houseFct(CHP_ElectricityDelivery, BatteryAcBatteryPower, electricity_to_or_from_grid, H2Storage_ElectricityConsumption,timestep)
+        #         electricity_to_or_from_grid = Estatus_total + part_pv_to_grid
+        #         electricity_from_CHP_to_house,electricity_from_Battery_to_house= electricity_from_CHP_Battery_to_houseFct(CHP_ElectricityDelivery, BatteryAcBatteryPower, electricity_to_or_from_grid, H2Storage_ElectricityConsumption,timestep)
 
    
            
@@ -490,8 +507,8 @@ class SimpleController(Component):
             stsv.set_output_value(self.electricity_from_CHP_to_houseOutput, electricity_from_CHP_to_house)
             stsv.set_output_value(self.electricity_from_Battery_to_houseOutput, electricity_from_Battery_to_house)
             stsv.set_output_value(self.electricity_from_PV_to_gridOutput,   part_pv_to_grid)
-
-    
+            stsv.set_output_value(self.electrolyzer_on,   "xxx")
+            stsv.set_output_value(self.FuelCellON,   "xxx")
     
     
     def write_to_report(self):

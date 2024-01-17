@@ -41,6 +41,13 @@ FuelCellPowerWUnit = "W"
 BatteryCapkWhUnit = "kWh"
 Inverter_RatioUnit = "-"
 
+if szenario == "2a":
+    prediction_horizon = 3600*2
+    prediction_horizonUnit = "seconds"
+else:
+    prediction_horizon = 0
+    prediction_horizonUnit = "seconds"
+
 # PreResultNumber = 0
 # PreResultNumberUnit = "-"
 
@@ -68,11 +75,16 @@ for BatterieFaktor in BatterieFaktorList:
             #param_df["BatteryCapkWhUnit"][0] = BatteryCapkWhUnit
             param_df["szenario"][0] = szenario
             param_df["szenarioUnit"][0] = szenarioUnit
+            param_df["prediction_horizon"][0] = prediction_horizon
+            param_df["prediction_horizonUnit"][0] = prediction_horizonUnit
+
+
             param_df.to_csv("examples/params_to_loop.csv", sep=",", index= False)
             
                     
             input_variablen = Cell4LifeSzenariovII.InputParameter()
-            
+           
+
             charging_rate = input_variablen["p_el_elektrolyzer"]["value"] / (3600*40000) #umrechnung von Watt [=Joule/Sekunde, Leistung) p_el in  kg/s H2
             power_demand_charging_h2storage = charging_rate * input_variablen["h_fuel"]["value"] * 3.6e3 * 1000 * input_variablen["h2storage_energy_for_charge_based_on_massflow_h_fuel"]["value"]/100 # electricity power_demand of hydrogen storage for compression of H2 in Watt;
             inverte_power_demand_min = power_demand_charging_h2storage  + input_variablen["p_el_elektrolyzer"]["value"]
@@ -88,7 +100,6 @@ for BatterieFaktor in BatterieFaktorList:
             param_df.to_csv("examples/params_to_loop.csv", sep=",", index= False)
             #del param_df
             sys.argv = ["hisim_main.py", "examples/Cell4LifeSzenariovII.py", "Cell4Life"]
-
             with open("C:/Users/Standard/Desktop/hisim/HiSim/hisim/hisim_main.py") as f:        #with --> Handler--> mach etwas mit ... führe es aus...mache es wieder zu -> with kümmert sich um das :)
                 exec(f.read())
             

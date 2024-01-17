@@ -26,22 +26,21 @@ import math
 from hisim import log
 from hisim.simulator import Simulator
 from hisim.simulationparameters import SimulationParameters
-from hisim.components.random_numbers import RandomNumbers, RandomNumbersConfig
-from hisim.components.example_transformer import (
-    ExampleTransformer,
-    ExampleTransformerConfig,
-)
+#from hisim.components.random_numbers import RandomNumbers, RandomNumbersConfig
+# from hisim.components.example_transformer import (
+#     ExampleTransformer,
+#     ExampleTransformerConfig,
+# )
 from hisim.components.sumbuilder import SumBuilderForTwoInputs, SumBuilderConfig
 from hisim.components.csvloader import CSVLoader, CSVLoaderConfig
 from hisim.components.csvloader_electricityconsumption import CSVLoader_electricityconsumption, CSVLoader_electricityconsumptionConfig
 from hisim.components.csvloader_photovoltaic import CSVLoader_photovoltaic, CSVLoader_photovoltaicConfig
-from hisim.components import electricity_meter
 from hisim.components import advanced_battery_bslib
-from hisim.components import generic_pv_system
-from hisim.components import (controller_l1_electrolyzer, generic_electrolyzer, generic_hydrogen_storage)
-from hisim.components import static_electrolyzer
+#from hisim.components import generic_pv_system
+from hisim.components import generic_hydrogen_storage
+from hisim.components import (controller_C4L_electrolyzer, C4L_electrolyzer)
 from hisim.components import (controller_l1_chp_CB, generic_CHP) 
-from hisim.components import controller_l1_example_controller_C4L_1a_1b
+from hisim.components import (controller_l1_example_controller_C4L_1a_1b, controller_l1_example_controller_C4L_2a)
 from hisim.modular_household import component_connections
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim import loadtypes
@@ -70,8 +69,16 @@ def Cell4Life(
         my_simulation_parameters = SimulationParameters.full_year_Cell4Life(
             year=2021, seconds_per_timestep=3600
         )
+    
+    my_simulation_parameters.predictive_control = "False"
+    
+    #Just needed if prediciton controlled is activated
+    if input_variablen["szenario"]["value"] == "2a":
+        my_simulation_parameters.predictive_control = "True"
+        my_simulation_parameters.prediction_horizon = input_variablen["prediction_horizon"]["value"]  
+    
     my_sim.set_simulation_parameters(my_simulation_parameters)
-
+    
 
     # Build Results Path
     name = "VII_" + input_variablen["szenario"]["value"] +  "_S" + str(input_variablen["PreResultNumber"]["value"])+"_BCap._" + str(math.ceil(input_variablen["battery_capacity"]["value"])) + "kWh_Inv_" + str(math.ceil(input_variablen["battery_inverter_power"]["value"]/1000)) + "kW_FCPow_" + str(math.ceil(input_variablen["fuel_cell_power"]["value"]/1000)) +"kW"
@@ -151,7 +158,6 @@ def Cell4Life(
     #******************************************************************
     #Build EMS****
     #First Controller
-
     if input_variablen["szenario"]["value"] == "1a" or input_variablen["szenario"]["value"] == "1b": 
         my_electricity_controller_config = (
         controller_l1_example_controller_C4L_1a_1b.SimpleControllerConfig.get_default_config()
@@ -161,7 +167,8 @@ def Cell4Life(
             name = "Elect_Controller", my_simulation_parameters=my_simulation_parameters, config=my_electricity_controller_config)
         )
         my_electricity_controller.config.szenario = input_variablen["szenario"]["value"]
-    elif input_variablen["szenario"]["value"] == "2a": 
+    # Prediction Controlled
+    elif input_variablen["szenario"]["value"] == "2a": #and input_variablen["prediciton_horizon"]["value"] > 0:
         my_electricity_controller_config = (
         controller_l1_example_controller_C4L_2a.SimpleControllerConfig.get_default_config()
         )
@@ -171,7 +178,7 @@ def Cell4Life(
         )
         my_electricity_controller.config.szenario = input_variablen["szenario"]["value"]   
     else:
-        print("Die Zeichenkette ist nicht '1a' oder '1b'.")
+        print("Die Zeichenkette des Input Szenario ist nicht '1a','1b' oder '2a'")
         print("Programm wird beendet. ")
         sys.exit()
 
@@ -186,17 +193,21 @@ def Cell4Life(
 
     #******************************************************************
     #Build Electrolyzer****
-
-    electrolyzer_config = static_electrolyzer.StaticElectrolyzerConfig.get_default_config()
-    electrolyzer_config.source_weight = input_variablen["electrolyzer_source_weight"]["value"]
-    electrolyzer_config.h2_soc_upper_threshold_electrolyzer = input_variablen["h2_soc_upper_threshold_electrolyzer"]["value"]
-    electrolyzer_config.p_el = input_variablen["p_el_elektrolyzer"]["value"]
-    electrolyzer_config.off_on_SOEC = input_variablen["off_on_SOEC"]["value"]
-    electrolyzer_config.on_off_SOEC = input_variablen["on_off_SOEC"]["value"]
     
+    electrolyzer_controller_config = controller_C4L_electrolyzer.C4LelectrolyzerControllerConfig.get_default_config_electrolyzer()
+    electrolyzer_controller_config.off_on_SOEC = input_variablen["off_on_SOEC"]["value"]
+    electrolyzer_controller_config.on_off_SOEC = input_variablen["on_off_SOEC"]["value"]
+    electrolyzer_controller_config.h2_soc_upper_threshold_electrolyzer = input_variablen["h2_soc_upper_threshold_electrolyzer"]["value"]
+    
+    my_electrolyzer_controller = controller_C4L_electrolyzer.C4LelectrolyzerController(
+        my_simulation_parameters=my_simulation_parameters, config=electrolyzer_controller_config)
     
     #*Electrolyzer*s
-    my_electrolyzer = static_electrolyzer.StaticElectrolyzer(
+    electrolyzer_config = C4L_electrolyzer.C4LElectrolyzerConfig.get_default_config()
+    electrolyzer_config.source_weight = input_variablen["electrolyzer_source_weight"]["value"]
+    electrolyzer_config.p_el = input_variablen["p_el_elektrolyzer"]["value"]
+
+    my_electrolyzer = C4L_electrolyzer.C4LElectrolyzer(
         my_simulation_parameters=my_simulation_parameters, config=electrolyzer_config
     )
     
@@ -255,11 +266,16 @@ def Cell4Life(
 
 
 
-    my_h2storage.connect_only_predefined_connections(my_electrolyzer)
+#    my_h2storage.connect_only_predefined_connections(my_electrolyzer)
     my_h2storage.connect_only_predefined_connections(my_chp)
+    my_h2storage.connect_only_predefined_connections(my_electrolyzer)
     my_chp_controller.connect_only_predefined_connections(my_h2storage)
-    my_electrolyzer.connect_only_predefined_connections(my_h2storage)
+    my_electrolyzer_controller.connect_only_predefined_connections(my_h2storage)
+
+    #my_electrolyzer.connect_only_predefined_connections(my_h2storage)
+    
     my_chp.connect_only_predefined_connections(my_chp_controller)
+    my_electrolyzer.connect_only_predefined_connections(my_electrolyzer_controller)
 
     my_electricity_controller.connect_only_predefined_connections(my_h2storage)
     my_electricity_controller.connect_only_predefined_connections(my_electrolyzer)
@@ -304,6 +320,7 @@ def Cell4Life(
     my_sim.add_component(my_electricityconsumption)
     my_sim.add_component(my_h2storage)
     my_sim.add_component(my_advanced_battery)
+    my_sim.add_component(my_electrolyzer_controller)
     my_sim.add_component(my_electrolyzer)
     my_sim.add_component(my_chp_controller)
     my_sim.add_component(my_chp)
@@ -373,6 +390,9 @@ def InputParameter():
 
     szenario = param_df["szenario"][0]
     szenarioUnit = param_df["szenarioUnit"][0]
+
+    prediction_horizon = param_df["prediction_horizon"][0]
+    prediction_horizonUnit = param_df["prediction_horizonUnit"][0]
     #Variation Parameters:
     battery_capacity: Optional[float] = BatteryCapkWh   #Total Capacity of Battery in kWh
     battery_capacityUnit = BatteryCapkWhUnit
@@ -427,6 +447,12 @@ def InputParameter():
     min_resting_time_in_seconds_chp = 0 # This does not work well so let it be 0
     min_resting_time_in_seconds_chpUnit = "s"
     
+    min_operation_time_in_seconds_electrolyzer = 0 #It is not working well so let it be "0"
+    min_operation_time_in_seconds_electrolyzerUnit = "s"
+    
+    min_resting_time_in_seconds_electrolyzer  = 0 # This does not work well so let it be 0
+    min_resting_time_in_seconds_electrolyzerUnit = "s"
+
     h2_soc_lower_threshold_chp = 0 # Minimum state of charge to start operating the fuel cell in %
     h2_soc_lower_threshold_chpUnit = "%"
     
@@ -545,6 +571,16 @@ def InputParameter():
             "value": min_resting_time_in_seconds_chp,
             "unit": min_resting_time_in_seconds_chpUnit,
         },
+
+        "min_operation_time_in_seconds_electrolyzer": {
+            "value": min_operation_time_in_seconds_electrolyzer,
+            "unit": min_operation_time_in_seconds_electrolyzerUnit,
+        },
+        "min_resting_time_in_seconds_electrolyzer": {
+            "value": min_resting_time_in_seconds_electrolyzer,
+            "unit": min_resting_time_in_seconds_electrolyzerUnit,
+        },
+
         "h2_soc_lower_threshold_chp": {
             "value": h2_soc_lower_threshold_chp,
             "unit": h2_soc_lower_threshold_chpUnit,
@@ -583,6 +619,11 @@ def InputParameter():
         "szenario": {
             "value": szenario,
             "unit": szenarioUnit,
+        },
+
+        "prediction_horizon": {
+            "value": prediction_horizon,
+            "unit": prediction_horizonUnit,
         },
         
     }

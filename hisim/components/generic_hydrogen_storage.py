@@ -11,6 +11,7 @@ from hisim import log
 from hisim.components import generic_CHP
 from hisim.components import generic_electrolyzer
 from hisim.components import static_electrolyzer
+from hisim.components import C4L_electrolyzer
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
@@ -111,7 +112,7 @@ class GenericHydrogenStorage(cp.Component):
     HydrogenOutput = "HydrogenOutput"  # kg/s
 
     # output
-    HydrogenSOC = "HydrogenSOC"  # kg/s
+    HydrogenSOC = "HydrogenSOC"  # %
     ElectricityConsumption = "StorageElectricityConsumption" #W (richtig??)
 
     def __init__(
@@ -174,6 +175,10 @@ class GenericHydrogenStorage(cp.Component):
             self.get_default_connections_from_static_electrolyzer()
         )
 
+        self.add_default_connections(
+            self.get_default_connections_from_C4L_electrolyzer()
+        )
+
         self.add_default_connections(self.get_default_connections_from_generic_CHP())
 
     def i_prepare_simulation(self) -> None:
@@ -189,6 +194,25 @@ class GenericHydrogenStorage(cp.Component):
                 GenericHydrogenStorage.HydrogenOutput,
                 chp_classname,
                 generic_CHP.SimpleCHP.FuelDelivered,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_C4L_electrolyzer(
+        self,
+    ) -> List[cp.ComponentConnection]:
+        log.information(
+            "setting static electrolyzer default connections in generic H2 storage"
+        )
+        connections: List[cp.ComponentConnection] = []
+        electrolyzer_classname = (
+            C4L_electrolyzer.C4LElectrolyzer.get_classname()
+        )
+        connections.append(
+            cp.ComponentConnection(
+                GenericHydrogenStorage.HydrogenInput,
+                electrolyzer_classname,
+                C4L_electrolyzer.C4LElectrolyzer.HydrogenOutput,
             )
         )
         return connections

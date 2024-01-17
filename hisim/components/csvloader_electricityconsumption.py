@@ -121,6 +121,28 @@ class CSVLoader_electricityconsumption(cp.Component):
         stsv.set_output_value(
             self.output1, float(self.column[timestep]) * self.multiplier
         )
+
+                #If prediction is activated, then write all timesteps in prediction horizon into pvforcast
+        if (
+            self.my_simulation_parameters.predictive_control
+            and self.my_simulation_parameters.prediction_horizon
+        ):
+            last_forecast_timestep = int(
+                timestep
+                + self.my_simulation_parameters.prediction_horizon
+                / self.my_simulation_parameters.seconds_per_timestep
+            )
+            if last_forecast_timestep > len(self.column):
+                last_forecast_timestep = len(self.column)
+            electricityconsumtionforecast = [
+                self.column[t] * self.multiplier
+                for t in range(timestep, last_forecast_timestep)
+            ]
+            self.simulation_repository.set_dynamic_entry(
+                component_type=lt.ComponentType.ELECTRIC_CONSUMPTION, #ELECTRIC_BOILER is only a placeholder!  
+                source_weight=999,
+                entry=electricityconsumtionforecast,
+            )
         
 
     def i_prepare_simulation(self) -> None:

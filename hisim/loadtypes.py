@@ -181,10 +181,11 @@ class ComponentType(str, enum.Enum):
     H2_STORAGE = "H2Storage"
     ELECTRIC_VEHICLE = "ElectricVehicle"
     ELECTRIC_BOILER = "ElectricBoiler"
+    ELECTRIC_CONSUMPTION = "ELECTRIC_CONSUMPTION"
     BOILER = "Boiler"
     BUFFER = "Buffer"
     HEATERS = [HEAT_PUMP, GAS_HEATER]
-
+    
     # different heat_pump types
     HEAT_PUMP_BUILDING = "HeatPumpBuilding"  # Heatpump for heating the house
     HEAT_PUMP_DHW = "HeatPumpDHW"  # heatpump for heating domnestic hot water

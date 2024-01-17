@@ -360,7 +360,8 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
 
 #Neu:Electricity Consumption of different parts:
     # Load 7. data from "ElectricityConsumptionElectrolyzer" (column 2) and add the collected data to list
-    csv_datei7 = os.path.join(path, 'ElectricityConsumptionElectrolyzer_StaticElectrolyzer.csv')
+    #csv_datei7 = os.path.join(path, 'ElectricityConsumptionElectrolyzer_StaticElectrolyzer.csv')
+    csv_datei7 = os.path.join(path, 'ElectricityConsumptionElectrolyzer_C4LElectrolyzer.csv')
     with open(csv_datei7, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
         for row in csvreader:

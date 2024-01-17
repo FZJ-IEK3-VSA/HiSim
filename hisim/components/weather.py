@@ -375,6 +375,7 @@ class WeatherConfig(ConfigBase):
 
     """Configuration class for Weather."""
 
+    name: str
     location: str
     source_path: str
     data_source: WeatherDataSourceEnum
@@ -440,15 +441,16 @@ class Weather(Component):
         self, my_simulation_parameters: SimulationParameters, config: WeatherConfig
     ):
         """Initializes the entire class."""
+        self.weather_config = config
+
         super().__init__(
-            name="Weather",
+            name=self.weather_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
         )
         if my_simulation_parameters is None:
             raise Exception("Simparameters was none")
         self.last_timestep_with_update = -1
-        self.weather_config = config
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.LOCATION, entry=self.weather_config.location
         )

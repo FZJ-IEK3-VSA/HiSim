@@ -28,7 +28,7 @@ from typing import List
 import pandas as pd
 import os
 from hisim import log
-from hisim.components import (generic_hydrogen_storage, controller_C4L_electrolyzer)
+from hisim.components import (controller_predicitve_C4L_electrolyzer_fuelcell, controller_C4L_electrolyzer)
 from hisim import loadtypes
 from hisim import utils
 from hisim import component as cp
@@ -185,7 +185,8 @@ class C4LElectrolyzer(cp.Component):
         
         #self.add_default_connections(self.get_default_connections_from_h2_storage())
         self.add_default_connections(self.get_default_connections_from_controller_C4L_electrolyzer())
-
+        self.add_default_connections(self.get_default_connections_from_electrolyzerfuelcell_controller())
+        
         # Inputs
         self.electrolyzer_onoff_signal_channel: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -208,21 +209,22 @@ class C4LElectrolyzer(cp.Component):
             )
         )
         return connections
+    
+    def get_default_connections_from_electrolyzerfuelcell_controller(self) -> List[cp.ComponentConnection]:
+        log.information("setting fuel cell default connections in generic H2 storage")
+        connections: List[cp.ComponentConnection] = []
+        electrolyzer_classname = controller_predicitve_C4L_electrolyzer_fuelcell.C4LelectrolyzerfuelcellpredictiveController.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+
+                C4LElectrolyzer.ElectrolyzerControllerOnOffSignal ,
+                electrolyzer_classname,
+                controller_predicitve_C4L_electrolyzer_fuelcell.C4LelectrolyzerfuelcellpredictiveController.ElectrolyzerControllerOnOffSignal,
+            )
+        )
+        return connections
 
 
-    # def get_default_connections_from_h2_storage(self):
-    #     """Sets default connections for the hydrogen storage in the electrolyzer controller."""
-    #     log.information("setting hydrogen storage default connections in Electrolyzer Controller")
-    #     connections = []
-    #     h2_storage_classname = generic_hydrogen_storage.GenericHydrogenStorage.get_classname()
-    #     connections.append(
-    #         cp.ComponentConnection(
-    #             C4LElectrolyzer.HydrogenSOC,
-    #             h2_storage_classname,
-    #             generic_hydrogen_storage.GenericHydrogenStorage.HydrogenSOC,
-    #         )
-    #     )
-    #     return connections
 
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""

@@ -425,7 +425,7 @@ class SimpleController(Component):
 
         
         
-        if self.config.szenario == '1b':
+        if self.config.szenario == '1b' or self.config.szenario == "2a":
             #Abzug aller Stromproduktionen und Verbräuche
 
             

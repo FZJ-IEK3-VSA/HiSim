@@ -13,7 +13,7 @@ from hisim import utils
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import log
-from hisim.components import controller_l1_chp
+from hisim.components import (controller_l1_chp, controller_predicitve_C4L_electrolyzer_fuelcell)
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Frank Burkrad, Maximilian Hillen,"
@@ -207,6 +207,8 @@ class SimpleCHP(cp.Component):
                 output_description="Gas consumption of CHP in Wh.",
             )
         self.add_default_connections(self.get_default_connections_from_chp_controller())
+        self.add_default_connections(self.get_default_connections_from_electrolyzerfuelcell_controller())
+
 
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""
@@ -260,6 +262,28 @@ class SimpleCHP(cp.Component):
                 SimpleCHP.CHPControllerHeatingModeSignal,
                 controller_classname,
                 controller_l1_chp.L1CHPController.CHPControllerHeatingModeSignal,
+            )
+        )
+        return connections
+    
+    def get_default_connections_from_electrolyzerfuelcell_controller(self,) -> List[cp.ComponentConnection]:
+    
+        """Sets default connections for the FuelCell Controller."""
+        log.information("setting fuel cell controller default connections in L1 CHP/Fuel Cell Controller")
+        connections: List[cp.ComponentConnection] = []
+        controller_classname = controller_predicitve_C4L_electrolyzer_fuelcell.C4LelectrolyzerfuelcellpredictiveController.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                SimpleCHP.CHPControllerOnOffSignal,
+                controller_classname,
+                controller_predicitve_C4L_electrolyzer_fuelcell.C4LelectrolyzerfuelcellpredictiveController.FuelCellControllerOnOffSignal,
+            )
+        )
+        connections.append(
+            cp.ComponentConnection(
+                SimpleCHP.CHPControllerHeatingModeSignal ,
+                controller_classname,
+                controller_predicitve_C4L_electrolyzer_fuelcell.C4LelectrolyzerfuelcellpredictiveController.CHPControllerHeatingModeSignal,
             )
         )
         return connections

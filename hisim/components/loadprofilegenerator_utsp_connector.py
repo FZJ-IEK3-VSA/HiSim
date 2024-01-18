@@ -81,7 +81,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
             name="UTSPConnector",
             data_acquisition=LpgDataAcquisitionMode.USE_UTSP,
             household=Households.CHR01_Couple_both_at_Work,
-            result_dir_path=utils.HISIMPATH["results"],
+            result_dir_path=utils.HISIMPATH["utsp_results"],
             energy_intensity=EnergyIntensityType.EnergySaving,
             travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
             transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
@@ -423,15 +423,11 @@ class UtspLpgConnector(cp.Component):
         with open(filepath, "w", encoding="utf-8") as result_file:
             result_file.write(content)
 
-        print("file saved ", filepath)
         return filepath
 
     def build(self):
         """Retrieves and preprocesses all data for this component."""
-        print("\n")
-        print("build start")
-        print("old config in build", self.utsp_config.household, self.utsp_config.guid)
-        print("\n")
+
         # check if file exists and get cache_filepath and put in list
         (
             list_of_file_exists_and_cache_files,
@@ -453,12 +449,6 @@ class UtspLpgConnector(cp.Component):
         # iterate over all unique utsp configs and either take cache results or calculate for each household and sum up later
         for list_index, list_item in enumerate(list_of_file_exists_and_cache_files):
 
-            print("Index ", list_index)
-            print(
-                "new household", list_of_unique_household_configs[list_index].household
-            )
-            print("new guid", list_of_unique_household_configs[list_index].guid)
-            print("\n")
             file_exists = list_item[0]
             cache_filepath = list_item[1]
 
@@ -466,6 +456,7 @@ class UtspLpgConnector(cp.Component):
             if file_exists:
                 with open(cache_filepath, "r", encoding="utf-8") as file:
                     cache_content: Dict = json.load(file)
+
                 saved_files = cache_content["saved_files"]
 
                 cache_complete = True
@@ -476,10 +467,12 @@ class UtspLpgConnector(cp.Component):
                     if not os.path.isfile(filename):
                         log.warning(
                             f"The cache file for {self.component_name} exists, "
-                            f"but the result file {filename} in saved_files could not be found."
+                            f"but the result file {filename} in saved_files could not be found. "
+                            "This is most likely because the file was voluntarily cleaned with the function cleanup_old_lpg_requests() in your system setup. "
+                            "The results will not be taken from cache but requested freshly from utsp or taken from the predefined profile. "     
                         )
-                        # cache_complete = False
-                        # break
+                        cache_complete = False
+                        break
                 if cache_complete:
                     log.information("LPG data taken from cache. ")
                     cached_data = io.StringIO(cache_content["data"])
@@ -559,7 +552,7 @@ class UtspLpgConnector(cp.Component):
                         lpg_households=new_unique_config.household,
                         guid=new_unique_config.guid,
                     )
-                    print("---saved files obtained from utsp: ", saved_files)
+
                     # only one result obtained
                     if isinstance(electricity_file, str):
 
@@ -586,15 +579,6 @@ class UtspLpgConnector(cp.Component):
                         value_dict["heating_by_residents"].append(heating_by_residents)
                         value_dict["water_consumption"].append(water_consumption)
                         value_dict["number_of_residents"].append(number_of_residents)
-                        print(
-                            "value dict length ", len(value_dict["number_of_residents"])
-                        )
-                        print("\n")
-                        print(
-                            "electricity consumption",
-                            len(electricity_consumption),
-                            electricity_consumption[0],
-                        )
 
                         # cache results for each household individually
                         self.cache_results(
@@ -740,7 +724,7 @@ class UtspLpgConnector(cp.Component):
         because part of electricity consumption is feed by PV
         """
         for index, output in enumerate(all_outputs):
-            print(output.component_name, output.load_type)
+
             if (
                 output.component_name == "UTSPConnector"
                 and output.load_type == lt.LoadTypes.ELECTRICITY

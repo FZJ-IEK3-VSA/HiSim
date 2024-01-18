@@ -29,7 +29,7 @@ from hisim.modular_household.interface_configs.modular_household_config import (
 )
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
-
+from hisim import log
 
 def cleanup_old_result_folders():
     """Removes old result folders of previous setup_function simulations."""
@@ -48,10 +48,12 @@ def cleanup_old_lpg_requests():
     if not os.path.exists(hisim.utils.HISIMPATH["utsp_results"]):
         # no old data exists, nothing to remove
         return
-    files_in_folder = os.listdir(hisim.utils.HISIMPATH["utsp_results"])
-    for file in files_in_folder:
-        full_path = os.path.join(hisim.utils.HISIMPATH["utsp_results"], file)
-        os.remove(full_path)
+    folder_list = os.listdir(hisim.utils.HISIMPATH["utsp_results"])
+    for folder in folder_list:
+        for file in os.listdir(os.path.join(hisim.utils.HISIMPATH["utsp_results"], folder)):
+            full_file_path = os.path.join(hisim.utils.HISIMPATH["utsp_results"], folder, file)
+            log.information(f"Clean up old lpg request result file: {full_file_path}")
+            os.remove(full_file_path)
 
 
 def get_heating_reference_temperature_and_season_from_location(

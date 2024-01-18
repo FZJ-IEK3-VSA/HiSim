@@ -41,18 +41,18 @@ hisim_postprocessing_img = os.path.join(
 )  # noqa
 
 HISIMPATH: Dict[str, Any] = {
-    "results": hisim_results,
+    "utsp_results": hisim_results,
     "inputs": hisim_inputs,
     "cache_dir": os.path.join(hisim_abs_path, "inputs", "cache"),
     "cache_indices": os.path.join(
         hisim_abs_path, "inputs", "cache", "cache_indices.json"
     ),
     "cfg": os.path.join(hisim_abs_path, "inputs", "cfg.json"),
-    "utsp_results": os.path.join(hisim_results, "Results"),
+    # "utsp_results": os.path.join(hisim_results, "Results"),
     "utsp_example_results": os.path.join(
         hisim_inputs, "LPGResults_for_tests", "Results"
     ),
-    "utsp_reports": os.path.join(hisim_results, "Reports"),
+    # "utsp_reports": os.path.join(hisim_results, "Reports"),
     "utsp_example_reports": os.path.join(
         hisim_inputs, "LPGResults_for_tests", "Reports"
     ),

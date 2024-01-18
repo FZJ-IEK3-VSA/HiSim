@@ -7,6 +7,8 @@ COPY setup.py setup.py
 # These files are needed by setup.py
 COPY requirements.txt requirements.txt
 COPY README.md README.md
+# This file contains some internal parameters
+COPY .env .env
 
 # Install hisim
 RUN pip install -e .

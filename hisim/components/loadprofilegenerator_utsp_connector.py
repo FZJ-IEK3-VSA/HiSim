@@ -11,6 +11,7 @@ import os
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union
 import copy
+import enum
 import pandas as pd
 from dataclasses_json import dataclass_json
 
@@ -39,6 +40,14 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.component import OpexCostDataClass
 
 
+class LpgDataAcquisitionMode(enum.Enum):
+
+    """Set LPG Data Acquisition Mode."""
+
+    USE_PREDEFINED_PROFILE = "use_predefined_profile"
+    USE_UTSP = "use_utsp"
+
+
 @dataclass_json
 @dataclass
 class UtspLpgConnectorConfig(cp.ConfigBase):
@@ -46,8 +55,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     """Config class for UtspLpgConnector. Contains LPG parameters and UTSP connection parameters."""
 
     name: str
-    url: str
-    api_key: str
+    data_acquisition: LpgDataAcquisitionMode
     household: Union[JsonReference, List[JsonReference]]
     energy_intensity: EnergyIntensityType
     travel_route_set: JsonReference
@@ -71,10 +79,9 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
 
         config = UtspLpgConnectorConfig(
             name="UTSPConnector",
-            url=utils.get_environment_variable("UTSP_URL"),
-            api_key=utils.get_environment_variable("UTSP_API_KEY"),
+            data_acquisition=LpgDataAcquisitionMode.USE_UTSP,
             household=Households.CHR01_Couple_both_at_Work,
-            result_dir_path=utils.HISIMPATH["utsp_results"],
+            result_dir_path=utils.HISIMPATH["results"],
             energy_intensity=EnergyIntensityType.EnergySaving,
             travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
             transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
@@ -332,13 +339,10 @@ class UtspLpgConnector(cp.Component):
         end_date = last_day.strftime("%Y-%m-%d")
 
         # choose if oen lpg request should be made or several in parallel
-        if isinstance(lpg_households, JsonReference) and isinstance(
-            self.utsp_config.household, JsonReference
-        ):
+        if isinstance(lpg_households, JsonReference):
+
             simulation_config = self.prepare_lpg_simulation_config_for_utsp_request(
-                start_date=start_date,
-                end_date=end_date,
-                household=self.utsp_config.household,
+                start_date=start_date, end_date=end_date, household=lpg_households,
             )
 
             (
@@ -369,15 +373,15 @@ class UtspLpgConnector(cp.Component):
                 low_activity_file,
                 saved_files,
             ) = self.calculate_multiple_lpg_requests(  # type: ignore
-                url=self.utsp_config.url,
-                api_key=self.utsp_config.api_key,
+                url=self.utsp_url,
+                api_key=self.utsp_api_key,
                 lpg_configs=simulation_configs,
                 guid=guid,
             )
 
         else:
             raise TypeError(
-                f"Type of lpg_households {lpg_households} is invalid. It should be a JSONReference or a list of JSONReference."
+                f"Type of lpg_households {type(lpg_households)} is invalid. It should be a JSONReference or a list of JSONReference."
             )
 
         return (
@@ -418,14 +422,22 @@ class UtspLpgConnector(cp.Component):
         # Create the result file
         with open(filepath, "w", encoding="utf-8") as result_file:
             result_file.write(content)
+
+        print("file saved ", filepath)
         return filepath
 
     def build(self):
         """Retrieves and preprocesses all data for this component."""
-
+        print("\n")
+        print("build start")
+        print("old config in build", self.utsp_config.household, self.utsp_config.guid)
+        print("\n")
         # check if file exists and get cache_filepath and put in list
-        list_of_file_exists_and_cache_files = (
-            self.get_list_of_file_exists_bools_and_cache_file_paths()
+        (
+            list_of_file_exists_and_cache_files,
+            list_of_unique_household_configs,
+        ) = self.get_list_of_file_exists_bools_and_cache_file_paths(
+            cache_dir_path=self.utsp_config.cache_dir_path
         )
 
         # go through list of file_exists and cache_filepaths and get caches if possible,
@@ -438,27 +450,36 @@ class UtspLpgConnector(cp.Component):
             "heating_by_residents": [],
             "number_of_residents": [],
         }
-        for list_item in list_of_file_exists_and_cache_files:
+        # iterate over all unique utsp configs and either take cache results or calculate for each household and sum up later
+        for list_index, list_item in enumerate(list_of_file_exists_and_cache_files):
+
+            print("Index ", list_index)
+            print(
+                "new household", list_of_unique_household_configs[list_index].household
+            )
+            print("new guid", list_of_unique_household_configs[list_index].guid)
+            print("\n")
             file_exists = list_item[0]
             cache_filepath = list_item[1]
 
+            # a cache file exists
             if file_exists:
                 with open(cache_filepath, "r", encoding="utf-8") as file:
                     cache_content: Dict = json.load(file)
                 saved_files = cache_content["saved_files"]
+
                 cache_complete = True
                 # check if all of the additionally saved files that belong to the cached results
                 # are also still there
                 for filename in saved_files:
 
                     if not os.path.isfile(filename):
-                        log.information(
-                            f"A cache file for {self.component_name} was found, "
-                            "but some of the additional result files from the UTSP could not be "
-                            "found anymore, so the cache is discarded."
+                        log.warning(
+                            f"The cache file for {self.component_name} exists, "
+                            f"but the result file {filename} in saved_files could not be found."
                         )
-                        cache_complete = False
-                        break
+                        # cache_complete = False
+                        # break
                 if cache_complete:
                     log.information("LPG data taken from cache. ")
                     cached_data = io.StringIO(cache_content["data"])
@@ -485,75 +506,64 @@ class UtspLpgConnector(cp.Component):
                     value_dict["water_consumption"].append(water_consumption)
                     value_dict["number_of_residents"].append(number_of_residents)
 
-                    # get sums from result lists
-                    self.electricity_consumption = [
-                        sum(x) for x in zip(*value_dict["electricity_consumption"])
-                    ]
-                    self.heating_by_residents = [
-                        sum(x) for x in zip(*value_dict["heating_by_residents"])
-                    ]
-                    self.water_consumption = [
-                        sum(x) for x in zip(*value_dict["water_consumption"])
-                    ]
-                    self.heating_by_devices = [
-                        sum(x) for x in zip(*value_dict["heating_by_devices"])
-                    ]
-                    self.number_of_residents = [
-                        sum(x) for x in zip(*value_dict["number_of_residents"])
-                    ]
-
-                    self.max_hot_water_demand = max(self.water_consumption)
-
-            if not cache_complete:
-
-                (
-                    electricity_file,
-                    warm_water_file,
-                    inner_device_heat_gains_file,
-                    high_activity_file,
-                    low_activity_file,
-                    saved_files,
-                ) = self.get_profiles_from_utsp(
-                    lpg_households=self.utsp_config.household,
-                    guid=self.utsp_config.guid,
-                )
-
-                if isinstance(electricity_file, str):
-
-                    log.information("One result obtained from lpg utsp connector.")
+                    # sum over all household profiles
                     (
                         self.electricity_consumption,
-                        self.heating_by_devices,
-                        self.water_consumption,
                         self.heating_by_residents,
+                        self.water_consumption,
+                        self.heating_by_devices,
                         self.number_of_residents,
-                    ) = self.load_result_files_and_transform_to_lists(
-                        electricity=electricity_file,
-                        warm_water=warm_water_file,
-                        inner_device_heat_gains=inner_device_heat_gains_file,
-                        high_activity=high_activity_file,
-                        low_activity=low_activity_file,
-                    )
-
-                    self.cache_results(
-                        saved_files=saved_files, cache_filepath=cache_filepath
+                    ) = self.get_result_lists_by_summing_over_value_dict(
+                        value_dict=value_dict
                     )
 
                     self.max_hot_water_demand = max(self.water_consumption)
 
-                elif isinstance(electricity_file, List):
+            if not cache_complete or file_exists is False:
+                log.information(
+                    "LPG data cannot be taken from cache. It will be taken from UTSP or from predefined profile."
+                )
+                # if taking results from cache not possible, check lpg data acquition mode
+                if self.utsp_config.data_acquisition == LpgDataAcquisitionMode.USE_UTSP:
+                    # try to get utsp url and api from .env if possible
+                    try:
+                        self.utsp_url = utils.get_environment_variable("UTSP_URL")
+                        self.utsp_api_key = utils.get_environment_variable(
+                            "UTSP_API_KEY"
+                        )
 
+                    except Exception:
+                        log.warning(
+                            "You chose USE_UTSP as data_acquition_mode but it is not possible to read the url and api_key from the .env file."
+                            "Please check if this file is present in your system."
+                            "Otherwise the predefined LPG profile in hisim/inputs/loadprofiles will be used."
+                        )
+                        self.utsp_config.data_acquisition = (
+                            LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
+                        )
+
+                if self.utsp_config.data_acquisition == LpgDataAcquisitionMode.USE_UTSP:
                     log.information(
-                        "Multiple results obtained from lpg utsp connector."
+                        f"LPG data acquisition mode: {self.utsp_config.data_acquisition}"
                     )
+                    new_unique_config = list_of_unique_household_configs[list_index]
 
-                    for index, electricity in enumerate(electricity_file):
+                    (
+                        electricity_file,
+                        warm_water_file,
+                        inner_device_heat_gains_file,
+                        high_activity_file,
+                        low_activity_file,
+                        saved_files,
+                    ) = self.get_profiles_from_utsp(
+                        lpg_households=new_unique_config.household,
+                        guid=new_unique_config.guid,
+                    )
+                    print("---saved files obtained from utsp: ", saved_files)
+                    # only one result obtained
+                    if isinstance(electricity_file, str):
 
-                        warm_water = warm_water_file[index]
-                        inner_device_heat_gains = inner_device_heat_gains_file[index]
-                        high_activity = high_activity_file[index]
-                        low_activity = low_activity_file[index]
-
+                        log.information("One result obtained from lpg utsp connector.")
                         (
                             electricity_consumption,
                             heating_by_devices,
@@ -561,11 +571,11 @@ class UtspLpgConnector(cp.Component):
                             heating_by_residents,
                             number_of_residents,
                         ) = self.load_result_files_and_transform_to_lists(
-                            electricity=electricity,
-                            warm_water=warm_water,
-                            inner_device_heat_gains=inner_device_heat_gains,
-                            high_activity=high_activity,
-                            low_activity=low_activity,
+                            electricity=electricity_file,
+                            warm_water=warm_water_file,
+                            inner_device_heat_gains=inner_device_heat_gains_file,
+                            high_activity=high_activity_file,
+                            low_activity=low_activity_file,
                         )
 
                         # write lists to dict
@@ -576,29 +586,146 @@ class UtspLpgConnector(cp.Component):
                         value_dict["heating_by_residents"].append(heating_by_residents)
                         value_dict["water_consumption"].append(water_consumption)
                         value_dict["number_of_residents"].append(number_of_residents)
+                        print(
+                            "value dict length ", len(value_dict["number_of_residents"])
+                        )
+                        print("\n")
+                        print(
+                            "electricity consumption",
+                            len(electricity_consumption),
+                            electricity_consumption[0],
+                        )
 
-                        self.electricity_consumption = [
-                            sum(x) for x in zip(*value_dict["electricity_consumption"])
-                        ]
-                        self.heating_by_residents = [
-                            sum(x) for x in zip(*value_dict["heating_by_residents"])
-                        ]
-                        self.water_consumption = [
-                            sum(x) for x in zip(*value_dict["water_consumption"])
-                        ]
-                        self.heating_by_devices = [
-                            sum(x) for x in zip(*value_dict["heating_by_devices"])
-                        ]
-                        self.number_of_residents = [
-                            sum(x) for x in zip(*value_dict["number_of_residents"])
-                        ]
+                        # cache results for each household individually
+                        self.cache_results(
+                            saved_files=saved_files,
+                            cache_filepath=cache_filepath,
+                            number_of_residents=number_of_residents,
+                            electricity_consumption=electricity_consumption,
+                            heating_by_residents=heating_by_residents,
+                            water_consumption=water_consumption,
+                            heating_by_devices=heating_by_devices,
+                        )
+
+                    # multiple results obtained (when multiple households in utsp_config given and the guid in the config is not "" but has a specific value)
+                    elif isinstance(electricity_file, List):
+
+                        log.information(
+                            "Multiple results obtained from lpg utsp connector."
+                        )
+
+                        for index, electricity in enumerate(electricity_file):
+
+                            warm_water = warm_water_file[index]
+                            inner_device_heat_gains = inner_device_heat_gains_file[
+                                index
+                            ]
+                            high_activity = high_activity_file[index]
+                            low_activity = low_activity_file[index]
+
+                            (
+                                electricity_consumption,
+                                heating_by_devices,
+                                water_consumption,
+                                heating_by_residents,
+                                number_of_residents,
+                            ) = self.load_result_files_and_transform_to_lists(
+                                electricity=electricity,
+                                warm_water=warm_water,
+                                inner_device_heat_gains=inner_device_heat_gains,
+                                high_activity=high_activity,
+                                low_activity=low_activity,
+                            )
+
+                            # write lists to dict
+                            value_dict["electricity_consumption"].append(
+                                electricity_consumption
+                            )
+                            value_dict["heating_by_devices"].append(heating_by_devices)
+                            value_dict["heating_by_residents"].append(
+                                heating_by_residents
+                            )
+                            value_dict["water_consumption"].append(water_consumption)
+                            value_dict["number_of_residents"].append(
+                                number_of_residents
+                            )
+
+                        # get sum of all household profiles
+                        (
+                            self.electricity_consumption,
+                            self.heating_by_residents,
+                            self.water_consumption,
+                            self.heating_by_devices,
+                            self.number_of_residents,
+                        ) = self.get_result_lists_by_summing_over_value_dict(
+                            value_dict=value_dict
+                        )
 
                         self.max_hot_water_demand = max(self.water_consumption)
 
+                        # cache for multiple results at a time
                         self.cache_results(
-                            saved_files=saved_files[index],
+                            saved_files=saved_files[list_index],
                             cache_filepath=cache_filepath,
+                            number_of_residents=self.number_of_residents,
+                            heating_by_residents=self.heating_by_residents,
+                            water_consumption=self.water_consumption,
+                            heating_by_devices=self.heating_by_devices,
+                            electricity_consumption=self.electricity_consumption,
                         )
+                        break
+
+                    # get sum of all household profiles
+                    (
+                        self.electricity_consumption,
+                        self.heating_by_residents,
+                        self.water_consumption,
+                        self.heating_by_devices,
+                        self.number_of_residents,
+                    ) = self.get_result_lists_by_summing_over_value_dict(
+                        value_dict=value_dict
+                    )
+
+                    self.max_hot_water_demand = max(self.water_consumption)
+
+                elif (
+                    self.utsp_config.data_acquisition
+                    == LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
+                ):
+                    pass
+
+    def get_lpg_profiles_from_utsp_and_process_results(
+        self,
+        cache_filepath: str,
+        value_dict: Dict,
+        guid: str,
+        household: Union[JsonReference, List[JsonReference]],
+    ) -> None:
+        """Get lpg profiles from utsp and process the results."""
+        pass
+
+    def get_result_lists_by_summing_over_value_dict(
+        self, value_dict: Dict[Any, Any]
+    ) -> Tuple[List, List, List, List, List]:
+        """Get the result lists by summing over the value dict entries."""
+
+        electricity_consumption = [
+            sum(x) for x in zip(*value_dict["electricity_consumption"])
+        ]
+        heating_by_residents = [
+            sum(x) for x in zip(*value_dict["heating_by_residents"])
+        ]
+        water_consumption = [sum(x) for x in zip(*value_dict["water_consumption"])]
+        heating_by_devices = [sum(x) for x in zip(*value_dict["heating_by_devices"])]
+        number_of_residents = [sum(x) for x in zip(*value_dict["number_of_residents"])]
+
+        return (
+            electricity_consumption,
+            heating_by_residents,
+            water_consumption,
+            heating_by_devices,
+            number_of_residents,
+        )
 
     def write_to_report(self):
         """Adds a report entry for this component."""
@@ -631,29 +758,34 @@ class UtspLpgConnector(cp.Component):
 
         return opex_cost_data_class
 
-    def get_list_of_file_exists_bools_and_cache_file_paths(self):
+    def get_list_of_file_exists_bools_and_cache_file_paths(
+        self, cache_dir_path: Optional[str]
+    ) -> Tuple[List, List]:
         """Check if file exists and get cache_filepath and put in list."""
 
         list_of_file_exists_and_cache_files: List = []
+        list_of_unique_household_configs: List = []
 
         # check if cache_dir_path was chosen, otherwise use default cache_dir_path
-        if self.utsp_config.cache_dir_path is None:
-            cache_dir_path: str = os.path.join(utils.hisim_abs_path, "inputs", "cache")
-        else:
-            cache_dir_path = self.utsp_config.cache_dir_path
+        if cache_dir_path is None:
+            cache_dir_path = os.path.join(utils.hisim_abs_path, "inputs", "cache")
 
         # config household is list of jsonreferences and no other guid than default is given ("")
+        # if the guid = "" and multiple households are given as a list, each household will be calculated and cached individually
         if isinstance(self.utsp_config.household, List) and self.utsp_config.guid == "":
             # get specific guid list in order to prevent duplicated requests
-            guid_list = self.vary_guids_for_lpg_utsp_requests_if_config_household_is_a_list_and_contains_duplicated_household_types()
+            guid_list = (
+                self.vary_guids_for_lpg_utsp_requests_if_config_household_is_a_list_and_contains_duplicated_household_types()
+            )
 
             for index, household in enumerate(self.utsp_config.household):
 
                 # make new config object with only one household in order to find local cache in cache_dir_path
-                new_config_object = self.utsp_config
+                new_config_object = copy.deepcopy(self.utsp_config)
                 new_config_object.household = household
                 new_config_object.guid = guid_list[index]
 
+                # check if cache for utsp config exists and get or make cache filepath
                 file_exists, cache_filepath = utils.get_cache_file(
                     component_key=self.component_name,
                     parameter_class=new_config_object,
@@ -663,6 +795,7 @@ class UtspLpgConnector(cp.Component):
                 list_of_file_exists_and_cache_files.append(
                     [file_exists, cache_filepath]
                 )
+                list_of_unique_household_configs.append(new_config_object)
 
         # config household is one jsonreference
         else:
@@ -674,10 +807,14 @@ class UtspLpgConnector(cp.Component):
                 cache_dir_path=cache_dir_path,
             )
             list_of_file_exists_and_cache_files.append([file_exists, cache_filepath])
+            # ustp config is already unique because only 1 household in it
+            list_of_unique_household_configs.append(self.utsp_config)
 
-        return list_of_file_exists_and_cache_files
+        return list_of_file_exists_and_cache_files, list_of_unique_household_configs
 
-    def vary_guids_for_lpg_utsp_requests_if_config_household_is_a_list_and_contains_duplicated_household_types(self) -> List[str]:
+    def vary_guids_for_lpg_utsp_requests_if_config_household_is_a_list_and_contains_duplicated_household_types(
+        self,
+    ) -> List[str]:
         """In case the lpg_utsp_connector config is given a list of households, it will be checked if the list contains any duplicates.
 
         If so, for each duplicate the guid will be varied to make sure that each lpg request delivers a unique profile.
@@ -726,7 +863,7 @@ class UtspLpgConnector(cp.Component):
 
         # Request the time series
         result = client.request_time_series_and_wait_for_delivery(
-            self.utsp_config.url, request, self.utsp_config.api_key, timeout=100
+            self.utsp_url, request, self.utsp_api_key, timeout=100
         )
 
         # decode required result files
@@ -832,7 +969,7 @@ class UtspLpgConnector(cp.Component):
                 flexibility_file_one_result = result.data[flexibility].decode()
                 # Save flexibility
                 path = self.save_result_file(
-                name=flexibility, content=flexibility_file_one_result
+                    name=flexibility, content=flexibility_file_one_result
                 )
                 saved_files_one_result.append(path)
             except Exception:
@@ -922,8 +1059,7 @@ class UtspLpgConnector(cp.Component):
                 low_activity,
             ]
         }
-        optional_files = {
-            flexibility: datastructures.ResultFileRequirement.OPTIONAL}
+        optional_files = {flexibility: datastructures.ResultFileRequirement.OPTIONAL}
         # Define transportation result files
         car_states = result_file_filters.LPGFilters.all_car_states_optional()
         car_locations = result_file_filters.LPGFilters.all_car_locations_optional()
@@ -1103,17 +1239,26 @@ class UtspLpgConnector(cp.Component):
             number_of_residents,
         )
 
-    def cache_results(self, saved_files: List, cache_filepath: str) -> None:
+    def cache_results(
+        self,
+        saved_files: List,
+        cache_filepath: str,
+        number_of_residents: List,
+        heating_by_residents: List,
+        electricity_consumption: List,
+        water_consumption: List,
+        heating_by_devices: List,
+    ) -> None:
         """Make caching file for the results."""
 
         # Saves data in cache
         database = pd.DataFrame(
             {
-                "number_of_residents": self.number_of_residents,
-                "heating_by_residents": self.heating_by_residents,
-                "electricity_consumption": self.electricity_consumption,
-                "water_consumption": self.water_consumption,
-                "heating_by_devices": self.heating_by_devices,
+                "number_of_residents": number_of_residents,
+                "heating_by_residents": heating_by_residents,
+                "electricity_consumption": electricity_consumption,
+                "water_consumption": water_consumption,
+                "heating_by_devices": heating_by_devices,
             }
         )
         # dump the dataframe to str

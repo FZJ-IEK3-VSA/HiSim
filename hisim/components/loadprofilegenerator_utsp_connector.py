@@ -716,6 +716,7 @@ class UtspLpgConnector(cp.Component):
                 ):
                     log.information(
                         f"LPG data acquisition mode: {self.utsp_config.data_acquisition}"
+                        "This means the predefined_lpg_household_chr01 from hisim/inputs/loadprofiles/ is taken."
                     )
 
                     (

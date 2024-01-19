@@ -52,7 +52,6 @@ HISIMPATH: Dict[str, Any] = {
     "utsp_example_results": os.path.join(
         hisim_inputs, "LPGResults_for_tests", "Results"
     ),
-    # "utsp_reports": os.path.join(hisim_results, "Reports"),
     "utsp_example_reports": os.path.join(
         hisim_inputs, "LPGResults_for_tests", "Reports"
     ),

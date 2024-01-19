@@ -30,6 +30,7 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
 from obsolete import loadprofilegenerator_connector
 
+
 def cleanup_old_result_folders():
     """Removes old result folders of previous setup_function simulations."""
     base_path = os.path.join(

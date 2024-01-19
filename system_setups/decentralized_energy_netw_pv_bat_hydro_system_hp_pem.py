@@ -4,7 +4,7 @@ from typing import Any, Optional
 
 from hisim import loadtypes as lt
 from hisim.components import controller_l2_energy_management_system as cl2
-from hisim.components import generic_pv_system, loadprofilegenerator_connector, weather
+from hisim.components import generic_pv_system, loadprofilegenerator_utsp_connector, weather
 from hisim.components.building import Building, BuildingConfig
 from hisim.components.controller_l1_electrolyzer_h2 import (
     ElectrolyzerController,
@@ -161,15 +161,14 @@ def setup_function(
         my_simulation_parameters=my_simulation_parameters, config=my_cl2_config
     )
 
-    my_occupancy_config = (
-        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
+    # Build Occupancy
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
+        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
     # choose 1 to be the default for the number of apartments
     SingletonSimRepository().set_entry(
         key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments
-    )
-    my_occupancy = loadprofilegenerator_connector.Occupancy(
-        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
 
     my_weather_config = weather.WeatherConfig.get_default(

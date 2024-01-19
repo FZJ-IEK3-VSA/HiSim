@@ -5,7 +5,7 @@ from typing import Optional
 
 from hisim.simulator import SimulationParameters
 from hisim.simulator import Simulator
-from hisim.components import loadprofilegenerator_connector
+from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import generic_pv_system
 from hisim.components import building
@@ -236,13 +236,12 @@ def air_conditioned_house(
     my_building_information = my_building.my_building_information
 
     """ Occupancy Profile """
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_chr01_according_to_number_of_apartments(
-        number_of_apartments=my_building_information.number_of_apartments,
-    )
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    my_occupancy_config.data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
     my_occupancy_config.predictive_control = predictive_control
     my_occupancy_config.predictive = predictive
 
-    my_occupancy = loadprofilegenerator_connector.Occupancy(
+    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config,
         my_simulation_parameters=my_simulation_parameters,
     )

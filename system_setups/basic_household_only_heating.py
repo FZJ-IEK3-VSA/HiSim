@@ -2,7 +2,7 @@
 # clean
 from typing import Optional, Any
 from hisim.simulator import SimulationParameters
-from hisim.components import loadprofilegenerator_connector
+from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import building
 from hisim.components import controller_l1_heat_old
@@ -65,9 +65,9 @@ def setup_function(
     my_building_information = my_building.my_building_information
 
     # Build occupancy
-    my_occupancy = loadprofilegenerator_connector.Occupancy(
-        config=loadprofilegenerator_connector.OccupancyConfig.get_default_chr01_couple_both_at_work(),
-        my_simulation_parameters=my_simulation_parameters,
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
+        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # Build Weather

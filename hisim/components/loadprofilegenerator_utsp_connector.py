@@ -64,6 +64,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     consumption: float
     profile_with_washing_machine_and_dishwasher: bool
     predictive_control: bool
+    predictive: bool
     result_dir_path: str
     cache_dir_path: Optional[str] = None
     guid: str = ""
@@ -89,6 +90,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
             consumption=0,
             profile_with_washing_machine_and_dishwasher=True,
             predictive_control=False,
+            predictive=False,
             cache_dir_path=None,
             guid="",
         )
@@ -755,11 +757,11 @@ class UtspLpgConnector(cp.Component):
                         saved_files=[],
                     )
 
-                # if self.utsp_config.predictive:
-                #     SingletonSimRepository().set_entry(
-                #         key=SingletonDictKeyEnum.HEATINGBYRESIDENTSYEARLYFORECAST,
-                #         entry=self.heating_by_residents,
-                #     )
+                    if self.utsp_config.predictive:
+                        SingletonSimRepository().set_entry(
+                            key=SingletonDictKeyEnum.HEATINGBYRESIDENTSYEARLYFORECAST,
+                            entry=self.heating_by_residents,
+                        )
 
     def get_result_lists_by_summing_over_value_dict(
         self, value_dict: Dict[Any, Any]

@@ -131,8 +131,7 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
             building_type="residential",
             number_of_apartments=my_building_information.number_of_apartments,
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-                url=utils.get_environment_variable("UTSP_URL"),
-                api_key=utils.get_environment_variable("UTSP_API_KEY"),
+                data_acquisition_mode=loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP,
                 household=Households.CHR01_Couple_both_at_Work,
                 energy_intensity=EnergyIntensityType.EnergySaving,
                 result_dir_path=utils.HISIMPATH["results"],

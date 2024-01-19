@@ -393,6 +393,42 @@ class UtspLpgConnector(cp.Component):
             saved_files,
         )
 
+    def get_profiles_from_predefined_profile(
+        self,
+    ) -> Tuple[
+        str, str, str, str, str, List,
+    ]:
+        """Get the loadprofiles for a specific predefined profile from hisim/inputs/loadprofiles."""
+        predefined_profile_filepaths = utils.HISIMPATH["occupancy"][
+            "CHR01 Couple both at Work"
+        ]
+        # get first bodily activity files
+        bodily_activity_filepaths = predefined_profile_filepaths["number_of_residents"]
+        # activity_files = []
+        # # get high and low activity files
+        # for filepath in bodily_activity_filepaths:
+        #         with open(filepath, encoding="utf-8") as json_file:
+        #             json_filex = json.load(json_file)
+        #         activity_files.append(json_filex)
+        high_activity_file = bodily_activity_filepaths[0]
+        low_activity_file = bodily_activity_filepaths[1]
+        # get other files
+        electricity_file = predefined_profile_filepaths["electricity_consumption"]
+        warm_water_file = predefined_profile_filepaths["water_consumption"]
+        inner_device_heat_gains_file = predefined_profile_filepaths[
+            "heating_by_devices"
+        ]
+        # when using predefined profile there are no saved files concerning flexibility or car data
+        saved_files: List = []
+        return (
+            electricity_file,
+            warm_water_file,
+            inner_device_heat_gains_file,
+            high_activity_file,
+            low_activity_file,
+            saved_files,
+        )
+
     def save_result_file(self, name: str, content: str) -> str:
         """Saves a result file in the folder specified in the config object.
 
@@ -469,7 +505,7 @@ class UtspLpgConnector(cp.Component):
                             f"The cache file for {self.component_name} exists, "
                             f"but the result file {filename} in saved_files could not be found. "
                             "This is most likely because the file was voluntarily cleaned with the function cleanup_old_lpg_requests() in your system setup. "
-                            "The results will not be taken from cache but requested freshly from utsp or taken from the predefined profile. "     
+                            "The results will not be taken from cache but requested freshly from utsp or taken from the predefined profile. "
                         )
                         cache_complete = False
                         break
@@ -569,6 +605,7 @@ class UtspLpgConnector(cp.Component):
                             inner_device_heat_gains=inner_device_heat_gains_file,
                             high_activity=high_activity_file,
                             low_activity=low_activity_file,
+                            data_acquisition_mode=self.utsp_config.data_acquisition,
                         )
 
                         # write lists to dict
@@ -619,6 +656,7 @@ class UtspLpgConnector(cp.Component):
                                 inner_device_heat_gains=inner_device_heat_gains,
                                 high_activity=high_activity,
                                 low_activity=low_activity,
+                                data_acquisition_mode=self.utsp_config.data_acquisition,
                             )
 
                             # write lists to dict
@@ -676,17 +714,52 @@ class UtspLpgConnector(cp.Component):
                     self.utsp_config.data_acquisition
                     == LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
                 ):
-                    pass
+                    log.information(
+                        f"LPG data acquisition mode: {self.utsp_config.data_acquisition}"
+                    )
 
-    def get_lpg_profiles_from_utsp_and_process_results(
-        self,
-        cache_filepath: str,
-        value_dict: Dict,
-        guid: str,
-        household: Union[JsonReference, List[JsonReference]],
-    ) -> None:
-        """Get lpg profiles from utsp and process the results."""
-        pass
+                    (
+                        electricity_file,
+                        warm_water_file,
+                        inner_device_heat_gains_file,
+                        high_activity_file,
+                        low_activity_file,
+                        saved_files,
+                    ) = self.get_profiles_from_predefined_profile()
+
+                    (
+                        self.electricity_consumption,
+                        self.heating_by_devices,
+                        self.water_consumption,
+                        self.heating_by_residents,
+                        self.number_of_residents,
+                    ) = self.load_result_files_and_transform_to_lists(
+                        electricity=electricity_file,
+                        warm_water=warm_water_file,
+                        inner_device_heat_gains=inner_device_heat_gains_file,
+                        high_activity=high_activity_file,
+                        low_activity=low_activity_file,
+                        data_acquisition_mode=self.utsp_config.data_acquisition,
+                    )
+
+                    self.max_hot_water_demand = max(self.water_consumption)
+
+                    # when using the predefined household there are no saved_files
+                    self.cache_results(
+                        cache_filepath=cache_filepath,
+                        number_of_residents=self.number_of_residents,
+                        heating_by_residents=self.heating_by_residents,
+                        water_consumption=self.water_consumption,
+                        heating_by_devices=self.heating_by_devices,
+                        electricity_consumption=self.electricity_consumption,
+                        saved_files=[],
+                    )
+
+                # if self.utsp_config.predictive:
+                #     SingletonSimRepository().set_entry(
+                #         key=SingletonDictKeyEnum.HEATINGBYRESIDENTSYEARLYFORECAST,
+                #         entry=self.heating_by_residents,
+                #     )
 
     def get_result_lists_by_summing_over_value_dict(
         self, value_dict: Dict[Any, Any]
@@ -1073,12 +1146,13 @@ class UtspLpgConnector(cp.Component):
 
     def load_result_files_and_transform_to_lists(
         self,
-        electricity,
-        warm_water,
-        inner_device_heat_gains,
-        high_activity,
-        low_activity,
-    ):
+        data_acquisition_mode: LpgDataAcquisitionMode,
+        electricity: Any,
+        warm_water: Any,
+        inner_device_heat_gains: Any,
+        high_activity: Any,
+        low_activity: Any,
+    ) -> tuple[List, List, List, List, List]:
         """Load result files and transform to lists."""
 
         ################################
@@ -1092,7 +1166,14 @@ class UtspLpgConnector(cp.Component):
         occupancy_profile = []
         bodily_activity_files = [high_activity, low_activity]
         for filecontent in bodily_activity_files:
-            json_filex = json.loads(filecontent)
+            if data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
+                json_filex = json.loads(filecontent)
+            # this is used for files from predefined profile
+            elif data_acquisition_mode == LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE:
+                with open(filecontent, encoding="utf-8") as json_file:
+                    json_filex = json.load(json_file)
+            else:
+                raise ValueError("Could not recognize data_acquisition_mode.")
 
             occupancy_profile.append(json_filex)
 
@@ -1125,31 +1206,62 @@ class UtspLpgConnector(cp.Component):
                     heating_by_residents[timestep]
                     + gain * occupancy_profile[mode]["Values"][timestep]
                 )
+        if data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
+            # load electricity consumption, water consumption and inner device heat gains
+            electricity_data = io.StringIO(electricity)
+            pre_electricity_consumption = pd.read_csv(
+                electricity_data, sep=";", decimal=".", encoding="cp1252",
+            ).loc[: (steps_desired_in_minutes - 1)]
+            electricity_consumption_list = pd.to_numeric(
+                pre_electricity_consumption["Sum [kWh]"] * 1000 * 60
+            ).tolist()  # 1 kWh/min == 60W / min
 
-        # load electricity consumption, water consumption and inner device heat gains
-        electricity_data = io.StringIO(electricity)
-        pre_electricity_consumption = pd.read_csv(
-            electricity_data, sep=";", decimal=".", encoding="cp1252",
-        ).loc[: (steps_desired_in_minutes - 1)]
-        electricity_consumption_list = pd.to_numeric(
-            pre_electricity_consumption["Sum [kWh]"] * 1000 * 60
-        ).tolist()  # 1 kWh/min == 60W / min
+            water_data = io.StringIO(warm_water)
+            pre_water_consumption = pd.read_csv(
+                water_data, sep=";", decimal=".", encoding="cp1252",
+            ).loc[: (steps_desired_in_minutes - 1)]
+            water_consumption_list = pd.to_numeric(
+                pre_water_consumption["Sum [L]"]
+            ).tolist()
 
-        water_data = io.StringIO(warm_water)
-        pre_water_consumption = pd.read_csv(
-            water_data, sep=";", decimal=".", encoding="cp1252",
-        ).loc[: (steps_desired_in_minutes - 1)]
-        water_consumption_list = pd.to_numeric(
-            pre_water_consumption["Sum [L]"]
-        ).tolist()
+            inner_device_heat_gain_data = io.StringIO(inner_device_heat_gains)
+            pre_inner_device_heat_gains = pd.read_csv(
+                inner_device_heat_gain_data, sep=";", decimal=".", encoding="cp1252",
+            ).loc[: (steps_desired_in_minutes - 1)]
+            inner_device_heat_gains_list = pd.to_numeric(
+                pre_inner_device_heat_gains["Sum [kWh]"] * 1000 * 60
+            ).tolist()  # 1 kWh/min == 60W / min
 
-        inner_device_heat_gain_data = io.StringIO(inner_device_heat_gains)
-        pre_inner_device_heat_gains = pd.read_csv(
-            inner_device_heat_gain_data, sep=";", decimal=".", encoding="cp1252",
-        ).loc[: (steps_desired_in_minutes - 1)]
-        inner_device_heat_gains_list = pd.to_numeric(
-            pre_inner_device_heat_gains["Sum [kWh]"] * 1000 * 60
-        ).tolist()  # 1 kWh/min == 60W / min
+        elif data_acquisition_mode == LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE:
+            # load electricity consumption, water consumption and inner device heat gains
+            pre_electricity_consumption = pd.read_csv(
+                electricity,
+                sep=";",
+                decimal=".",
+                encoding="utf-8",
+                usecols=["Sum [kWh]"],
+            ).loc[: (steps_desired_in_minutes - 1)]
+            electricity_consumption_list = pd.to_numeric(
+                pre_electricity_consumption.loc[:, "Sum [kWh]"] * 1000 * 60
+            ).tolist()  # 1 kWh/min == 60 000 W / min
+
+            pre_water_consumption = pd.read_csv(
+                warm_water, sep=";", decimal=".", encoding="utf-8", usecols=["Sum [L]"],
+            ).loc[: (steps_desired_in_minutes - 1)]
+            water_consumption_list = pd.to_numeric(
+                pre_water_consumption.loc[:, "Sum [L]"]
+            ).tolist()
+
+            pre_inner_device_heat_gains = pd.read_csv(
+                inner_device_heat_gains,
+                sep=";",
+                decimal=".",
+                encoding="utf-8",
+                usecols=["Time", "Sum [kWh]"],
+            ).loc[: (steps_desired_in_minutes - 1)]
+            inner_device_heat_gains_list = pd.to_numeric(
+                pre_inner_device_heat_gains.loc[:, "Sum [kWh]"] * 1000 * 60
+            ).tolist()  # 1 kWh/min == 60W / min
 
         # put everything in a data frame and convert to utc
         initial_data = pd.DataFrame(
@@ -1189,27 +1301,27 @@ class UtspLpgConnector(cp.Component):
         if minutes_per_timestep > 1:
             # power needs averaging, not sum
             electricity_consumption = [
-                sum(electricity_consumption[n: n + minutes_per_timestep])
+                sum(electricity_consumption[n : n + minutes_per_timestep])
                 / minutes_per_timestep
                 for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
             ]
             heating_by_devices = [
-                sum(heating_by_devices[n: n + minutes_per_timestep])
+                sum(heating_by_devices[n : n + minutes_per_timestep])
                 / minutes_per_timestep
                 for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
             ]
             water_consumption = [
-                sum(water_consumption[n: n + minutes_per_timestep])
+                sum(water_consumption[n : n + minutes_per_timestep])
                 for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
             ]
             heating_by_residents = [
-                sum(heating_by_residents[n: n + minutes_per_timestep])
+                sum(heating_by_residents[n : n + minutes_per_timestep])
                 / minutes_per_timestep
                 for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
             ]
             number_of_residents = [
                 int(
-                    sum(number_of_residents[n: n + minutes_per_timestep])
+                    sum(number_of_residents[n : n + minutes_per_timestep])
                     / minutes_per_timestep
                 )
                 for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
@@ -1225,13 +1337,13 @@ class UtspLpgConnector(cp.Component):
 
     def cache_results(
         self,
-        saved_files: List,
         cache_filepath: str,
         number_of_residents: List,
         heating_by_residents: List,
         electricity_consumption: List,
         water_consumption: List,
         heating_by_devices: List,
+        saved_files: List,
     ) -> None:
         """Make caching file for the results."""
 

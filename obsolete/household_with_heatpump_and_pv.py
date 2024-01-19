@@ -148,6 +148,7 @@ def setup_function(
         consumption=0,
         profile_with_washing_machine_and_dishwasher=True,
         predictive_control=False,
+        predictive=False,
     )
 
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(

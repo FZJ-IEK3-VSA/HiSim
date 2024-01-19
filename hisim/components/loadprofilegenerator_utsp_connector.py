@@ -1301,27 +1301,27 @@ class UtspLpgConnector(cp.Component):
         if minutes_per_timestep > 1:
             # power needs averaging, not sum
             electricity_consumption = [
-                sum(electricity_consumption[n : n + minutes_per_timestep])
+                sum(electricity_consumption[n: n + minutes_per_timestep])
                 / minutes_per_timestep
                 for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
             ]
             heating_by_devices = [
-                sum(heating_by_devices[n : n + minutes_per_timestep])
+                sum(heating_by_devices[n: n + minutes_per_timestep])
                 / minutes_per_timestep
                 for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
             ]
             water_consumption = [
-                sum(water_consumption[n : n + minutes_per_timestep])
+                sum(water_consumption[n: n + minutes_per_timestep])
                 for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
             ]
             heating_by_residents = [
-                sum(heating_by_residents[n : n + minutes_per_timestep])
+                sum(heating_by_residents[n: n + minutes_per_timestep])
                 / minutes_per_timestep
                 for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
             ]
             number_of_residents = [
                 int(
-                    sum(number_of_residents[n : n + minutes_per_timestep])
+                    sum(number_of_residents[n: n + minutes_per_timestep])
                     / minutes_per_timestep
                 )
                 for n in range(0, steps_desired_in_minutes, minutes_per_timestep)

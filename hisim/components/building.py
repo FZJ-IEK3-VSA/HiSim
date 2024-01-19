@@ -57,6 +57,7 @@ from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnecto
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.weather import Weather
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from obsolete import loadprofilegenerator_connector
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -426,6 +427,7 @@ class Building(cp.Component):
         self.add_default_connections(self.get_default_connections_from_weather())
         self.add_default_connections(self.get_default_connections_from_utsp_occupancy())
         self.add_default_connections(self.get_default_connections_from_hds())
+        self.add_default_connections(self.get_default_connections_from_outdated_occupancy())
 
     def get_default_connections_from_weather(self,):
         """Get weather default connnections."""
@@ -501,6 +503,27 @@ class Building(cp.Component):
                 Building.HeatingByDevices,
                 utsp_classname,
                 UtspLpgConnector.HeatingByDevices,
+            )
+        )
+        return connections
+    
+    def get_default_connections_from_outdated_occupancy(self,):
+        """Get occupancy default connections."""
+
+        connections = []
+        occupancy_classname = loadprofilegenerator_connector.Occupancy.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                Building.HeatingByResidents,
+                occupancy_classname,
+                loadprofilegenerator_connector.Occupancy.HeatingByResidents,
+            )
+        )
+        connections.append(
+            cp.ComponentConnection(
+                Building.HeatingByDevices,
+                occupancy_classname,
+                loadprofilegenerator_connector.Occupancy.HeatingByDevices,
             )
         )
         return connections

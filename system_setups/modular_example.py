@@ -28,7 +28,7 @@ from hisim.modular_household.interface_configs.modular_household_config import (
 )
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
-# from obsolete import loadprofilegenerator_connector
+from obsolete import loadprofilegenerator_connector
 
 
 def cleanup_old_result_folders():
@@ -283,23 +283,22 @@ def setup_function(
             config=my_occupancy_config,
             my_simulation_parameters=my_simulation_parameters,
         )
+
     else:
-        raise ValueError("Please use the lpg utsp connector. The other lpg_connector in obsolete is outdated.")
-    # else:
-    #     # Build occupancy
-    #     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-    #         "Occupancy",
-    #         occupancy_profile or "",  # type: ignore
-    #         location,
-    #         not smart_devices_included,
-    #         number_of_apartments=my_building_information.number_of_apartments,
-    #         predictive=False,
-    #         predictive_control=False,
-    #     )
-    #     my_occupancy = loadprofilegenerator_connector.Occupancy(
-    #         config=my_occupancy_config,
-    #         my_simulation_parameters=my_simulation_parameters,
-    #     )
+        # Build occupancy
+        my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
+            "Occupancy",
+            occupancy_profile or "",  # type: ignore
+            location,
+            not smart_devices_included,
+            number_of_apartments=my_building_information.number_of_apartments,
+            predictive=False,
+            predictive_control=False,
+        )
+        my_occupancy = loadprofilegenerator_connector.Occupancy(
+            config=my_occupancy_config,
+            my_simulation_parameters=my_simulation_parameters,
+        )
 
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
 

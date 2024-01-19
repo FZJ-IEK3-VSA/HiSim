@@ -408,7 +408,11 @@ class UtspLpgConnector(cp.Component):
         high_activity_file = bodily_activity_filepaths[0]
         low_activity_file = bodily_activity_filepaths[1]
         # get other files
-        electricity_file = predefined_profile_filepaths["electricity_consumption"]
+        if self.utsp_config.profile_with_washing_machine_and_dishwasher:
+            electricity_file = predefined_profile_filepaths["electricity_consumption"]
+        else:
+            electricity_file = predefined_profile_filepaths["electricity_consumption_without_washing_machine_and_dishwasher"]
+
         warm_water_file = predefined_profile_filepaths["water_consumption"]
         inner_device_heat_gains_file = predefined_profile_filepaths[
             "heating_by_devices"

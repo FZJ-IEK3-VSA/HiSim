@@ -23,7 +23,6 @@ __maintainer__ = ""
 __status__ = ""
 
 
-
 def setup_function(
     my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
 ) -> None:  # noqa: too-many-statements
@@ -53,30 +52,54 @@ def setup_function(
     year = 2021
     seconds_per_timestep = 60
 
+    # Set Heat Pump
+    group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
+    heating_reference_temperature_in_celsius: float = -7  # t_in
+    flow_temperature_in_celsius = 21  # t_out_val
+
+    # Set Heat Pump Controller
+    hp_controller_mode = (
+        2  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
+    )
+    set_heating_threshold_outside_temperature_for_heat_pump_in_celsius = 16.0
+    set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = 22.0
+    temperature_offset_for_state_conditions_in_celsius = 5.0
     # =================================================================================================================================
     # Build Components
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.three_months_with_plots_only(
+        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
+    # Build Building
+    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
+    my_building_information = building.BuildingInformation(config=my_building_config)
+    my_building = building.Building(
+        config=my_building_config,
+        my_simulation_parameters=my_simulation_parameters
+    )
+
     # Build Heat Distribution Controller
-    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config()
+    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
+        set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
+        set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
+    )
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
         my_simulation_parameters=my_simulation_parameters,
         config=my_heat_distribution_controller_config
     )
-    # Build Building
-    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
 
-    my_building = building.Building(
-        config=my_building_config,
-        my_simulation_parameters=my_simulation_parameters
+    my_hds_controller_information = (
+        heat_distribution_system.HeatDistributionControllerInformation(
+            config=my_heat_distribution_controller_config
+        )
     )
 
     # Build Occupancy
@@ -87,7 +110,7 @@ def setup_function(
     )
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default( location_entry=weather.LocationEnum.AACHEN)
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
 
     my_weather = weather.Weather(
         config=my_weather_config,
@@ -101,9 +124,16 @@ def setup_function(
     )
 
     # Build Heat Pump Controller for hot water (heating building)
-    my_heatpump_controller_hotwater_config = more_advanced_heat_pump_hplib.HeatPumpHplibControllerHotWaterStorageL1Config.get_default_generic_heat_pump_controller_config()
+    my_heatpump_controller_hotwater_config = more_advanced_heat_pump_hplib.HeatPumpHplibControllerHotWaterStorageL1Config(
+        name="HeatPumpHplibController",
+        mode=hp_controller_mode,
+        set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_pump_in_celsius,
+        set_cooling_threshold_outside_temperature_in_celsius=set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius,
+        temperature_offset_for_state_conditions_in_celsius=temperature_offset_for_state_conditions_in_celsius,
+        heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
+    )
 
-    my_heatpump_controller_hotWater = more_advanced_heat_pump_hplib.HeatPumpHplibControllerHotWaterStorage(
+    my_heatpump_controller_hotwater = more_advanced_heat_pump_hplib.HeatPumpHplibControllerHotWaterStorage(
         config=my_heatpump_controller_hotwater_config,
         my_simulation_parameters=my_simulation_parameters
     )
@@ -118,6 +148,12 @@ def setup_function(
 
     # Build Heat Pump
     my_heatpump_config = more_advanced_heat_pump_hplib.HeatPumpHplibConfig.get_default_generic_advanced_hp_lib()
+    my_heat_pump_config = more_advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
+    )
+    my_heat_pump_config.group_id = group_id
+    my_heat_pump_config.flow_temperature_in_celsius = flow_temperature_in_celsius
 
     my_heatpump = more_advanced_heat_pump_hplib.HeatPumpHplib(
         config=my_heatpump_config,
@@ -126,7 +162,8 @@ def setup_function(
 
     # Build Heat Distribution System
     my_heat_distribution_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-        heating_load_of_building_in_watt=my_building.my_building_information.max_thermal_building_demand_in_watt
+        temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
+        water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
     )
 
     my_heat_distribution = heat_distribution_system.HeatDistribution(
@@ -135,7 +172,12 @@ def setup_function(
     )
 
     # Build Heat Water Storage
-    my_hot_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_default_simplehotwaterstorage_config()
+    my_hot_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
+        max_thermal_power_in_watt_of_heating_system=my_heat_pump_config.set_thermal_output_power_in_watt,
+        heating_system_name=my_heatpump.component_name,
+        temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
+        water_mass_flow_rate_from_hds_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+    )
 
     my_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_hot_water_storage_config,
@@ -171,13 +213,11 @@ def setup_function(
 
     #################################
     my_heatpump.connect_only_predefined_connections(
-        my_heatpump_controller_hotWater, my_heatpump_controller_dhw, my_weather, my_hot_water_storage,
+        my_heatpump_controller_hotwater, my_heatpump_controller_dhw, my_weather, my_hot_water_storage,
         my_dhw_storage)
 
-
     # Verknüpfung mit Luft als Umgebungswärmeqzuelle
-    if my_heatpump.parameters['Group'].iloc[0] == 1.0 or my_heatpump.parameters['Group'].iloc[
-        0] == 4.0:
+    if my_heatpump.parameters['Group'].iloc[0] == 1.0 or my_heatpump.parameters['Group'].iloc[0] == 4.0:
         my_heatpump.connect_input(
             my_heatpump.TemperatureInputPrimary,
             my_weather.component_name,
@@ -186,12 +226,9 @@ def setup_function(
     else:
         raise KeyError("Wasser oder Sole als primäres Wärmeträgermedium muss über extra Wärmenetz-Modell noch bereitgestellt werden")
 
-        #todo: Water and Brine Connection
+        # todo: Water and Brine Connection
 
-
-
-
-    my_heatpump_controller_hotWater.connect_only_predefined_connections(my_heat_distribution_controller,
+    my_heatpump_controller_hotwater.connect_only_predefined_connections(my_heat_distribution_controller,
                                                                         my_weather,
                                                                         my_hot_water_storage)
 
@@ -258,7 +295,6 @@ def setup_function(
     my_sim.add_component(my_heat_distribution)
     my_sim.add_component(my_hot_water_storage)
     my_sim.add_component(my_dhw_storage)
-    my_sim.add_component(my_heatpump_controller_hotWater)
+    my_sim.add_component(my_heatpump_controller_hotwater)
     my_sim.add_component(my_heatpump_controller_dhw)
     my_sim.add_component(my_heatpump)
-

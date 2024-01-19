@@ -1,4 +1,4 @@
-"""Advanced heat pump module.
+"""More advanced heat pump module.
 
 See library on https://github.com/FZJ-IEK3-VSA/hplib/tree/main/hplib
 
@@ -7,8 +7,6 @@ two controller: one dhw controller and one building heating controller
 priority on dhw, if there is a demand from both in one timestep
 
 preparation on district heating for water/water heatpumps
-
-don't work with regulated generic hp group --> todo
 
 """
 from typing import Any, List, Optional, Tuple, Dict
@@ -36,7 +34,6 @@ from hisim.components import (
 from hisim.loadtypes import LoadTypes, Units, InandOutputType
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
-from hisim import log
 from hisim.components.configuration import PhysicsConfig
 
 __authors__ = "Jonas Hoppe"
@@ -69,9 +66,7 @@ class HeatPumpHplibConfig(ConfigBase):
     cycling_mode: bool
     minimum_running_time_in_seconds: Optional[int]
     minimum_idle_time_in_seconds: Optional[int]
-    hx_building_temp_diff: Optional[
-        float
-    ]  # to be used, if water/water or brine/water heatpump
+    hx_building_temp_diff: float  # to be used, if water/water or brine/water heatpump
     #: CO2 footprint of investment in kg
     co2_footprint: float
     #: cost for investment in Euro
@@ -152,11 +147,21 @@ class HeatPumpHplibConfig(ConfigBase):
 
 
 class HeatPumpHplib(Component):
+
+    """Simulate the heat pump.
+
+    Outputs are heat pump efficiency (cop) as well as electrical (p_el) and
+    thermal power (p_th), massflow (m_dot) and output temperature (t_out) for DHW and space heating.
+    Model will switch between both states, but priority is on dhw.
+    Relevant simulation parameters are loaded within the init for a
+    specific or generic heat pump type.
+    """
+
     # Inputs
-    OnOffSwitchHotWater = "OnOffSwitchHotWater"  # 1 = on hot Water,  0 = 0ff
+    OnOffSwitchHotWater = "OnOffSwitchHotWater"  # 1 = on hot Water,  0 = 0ff , -1 = cooling
     OnOffSwitchDHW = "OnOffSwitchDHW"  # 2 = on DHW , 0 = 0ff
     ThermalPowerIsConstantforDHW = "ThermalPowerisConstantforDHW"  # true/false
-    MaxThermalPowerforDHW = "MaxThermalPowerforDHW"  # max. Leistungswert
+    MaxThermalPowerValueforDHW = "MaxThermalPowerValueforDHW"  # max. Leistungswert
     TemperatureInputPrimary = "TemperatureInputPrimary"  # °C
     TemperatureInputSecondary_HotWater = "TemperatureInputSecondaryHotWater"  # °C
     TemperatureInputSecondary_DHW = "TemperatureInputSecondaryDWH"  # °C
@@ -171,7 +176,7 @@ class HeatPumpHplib(Component):
     ElectricalInputPowerGesamt = "ElectricalInputPowerWholeHeatpump"
     COP = "COP"  # -
     EER = "EER"  # -
-    heatpumpOnOffState = "OnOffStateHeatpump"
+    HeatPumpOnOffState = "OnOffStateHeatpump"
     TemperatureOutputHotWater = "TemperatureOutputHotWater"  # °C
     TemperatureOutputDHW = "TemperatureOutputDHW"  # °C
     MassFlowOutputHotWater = "MassFlowOutputHotWater"  # kg/s
@@ -179,7 +184,7 @@ class HeatPumpHplib(Component):
     TimeOn = "TimeOn"  # s
     TimeOff = "TimeOff"  # s
     ThermalPowerFromEnvironment = "ThermalPowerInputFromEnvironment"  # W
-    mdotWaterPrimary = "MassflowPrimary"  # kg/s
+    MdotWaterPrimary = "MassflowPrimary"  # kg/s
     WaterTemperaturePrimaryIn = "TemperaturePrimaryIn"  # °C
     WaterTemperaturePrimaryOut = "TemperaturePrimaryOut"  # °C
 
@@ -188,13 +193,15 @@ class HeatPumpHplib(Component):
         my_simulation_parameters: SimulationParameters,
         config: HeatPumpHplibConfig,
     ):
+        """Loads the parameters of the specified heat pump."""
+
         super().__init__(
             name=config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
         )
-        # caching for hplib simulation
-        self.calculation_cache: Dict = {}
+
+        self.calculation_cache: Dict = {}  # caching for hplib simulation
 
         self.model = config.model
 
@@ -262,7 +269,7 @@ class HeatPumpHplib(Component):
                 )
 
         # Define component inputs
-        self.on_off_switch_hotWater: ComponentInput = self.add_input(
+        self.on_off_switch_hotwater: ComponentInput = self.add_input(
             object_name=self.component_name,
             field_name=self.OnOffSwitchHotWater,
             load_type=LoadTypes.ANY,
@@ -271,7 +278,7 @@ class HeatPumpHplib(Component):
         )
 
         # Define component inputs
-        self.on_off_switch_DHW: ComponentInput = self.add_input(
+        self.on_off_switch_dhw: ComponentInput = self.add_input(
             object_name=self.component_name,
             field_name=self.OnOffSwitchDHW,
             load_type=LoadTypes.ANY,
@@ -279,7 +286,7 @@ class HeatPumpHplib(Component):
             mandatory=True,
         )
 
-        self.const_thermal_power_truefalse_DHW: ComponentInput = self.add_input(
+        self.const_thermal_power_truefalse_dhw: ComponentInput = self.add_input(
             object_name=self.component_name,
             field_name=self.ThermalPowerIsConstantforDHW,
             load_type=LoadTypes.ANY,
@@ -287,9 +294,9 @@ class HeatPumpHplib(Component):
             mandatory=True,
         )
 
-        self.const_thermal_power_value_DHW: ComponentInput = self.add_input(
+        self.const_thermal_power_value_dhw: ComponentInput = self.add_input(
             object_name=self.component_name,
-            field_name=self.MaxThermalPowerforDHW,
+            field_name=self.MaxThermalPowerValueforDHW,
             load_type=LoadTypes.ANY,
             unit=Units.ANY,
             mandatory=True,
@@ -394,7 +401,7 @@ class HeatPumpHplib(Component):
 
         self.heatpump_state: ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.heatpumpOnOffState,
+            field_name=self.HeatPumpOnOffState,
             load_type=LoadTypes.ANY,
             unit=Units.ANY,
             output_description="OnOffState",
@@ -460,7 +467,7 @@ class HeatPumpHplib(Component):
         ):
             self.m_dot_water_primary_dhnet: ComponentOutput = self.add_output(
                 object_name=self.component_name,
-                field_name=self.mdotWaterPrimary,
+                field_name=self.MdotWaterPrimary,
                 load_type=LoadTypes.VOLUME,
                 unit=Units.KG_PER_SEC,
                 output_description="Massflow of Water from District Heating Net",
@@ -524,14 +531,14 @@ class HeatPumpHplib(Component):
             ComponentConnection(
                 HeatPumpHplib.ThermalPowerIsConstantforDHW,
                 hpc_dhw_classname,
-                HeatPumpHplibControllerDHW.ThermalPower_Bedingung_for_konst_dhw,
+                HeatPumpHplibControllerDHW.ThermalPower_dhw_is_constant,
             )
         )
         connections.append(
             ComponentConnection(
-                HeatPumpHplib.MaxThermalPowerforDHW,
+                HeatPumpHplib.MaxThermalPowerValueforDHW,
                 hpc_dhw_classname,
-                HeatPumpHplibControllerDHW.Value_Max_Thermal_Power_for_dhw,
+                HeatPumpHplibControllerDHW.Value_thermalpower_dhw_is_constant,
             )
         )
         return connections
@@ -613,14 +620,10 @@ class HeatPumpHplib(Component):
 
         # Load input values
         # on_off: float
-        on_off_HotWater: float = stsv.get_input_value(self.on_off_switch_hotWater)
-        on_off_DHW: float = stsv.get_input_value(self.on_off_switch_DHW)
-        const_thermal_power_truefalse_DHW: bool = stsv.get_input_value(
-            self.const_thermal_power_truefalse_DHW
-        )
-        const_thermal_power_value_DHW: float = stsv.get_input_value(
-            self.const_thermal_power_value_DHW
-        )
+        on_off_hotwater: float = stsv.get_input_value(self.on_off_switch_hotwater)
+        on_off_dhw: float = stsv.get_input_value(self.on_off_switch_dhw)
+        const_thermal_power_truefalse_dhw: bool = bool(stsv.get_input_value(self.const_thermal_power_truefalse_dhw))
+        const_thermal_power_value_dhw = stsv.get_input_value(self.const_thermal_power_value_dhw)
         t_in_primary = stsv.get_input_value(self.t_in_primary)
         t_in_secondary_hot_water = stsv.get_input_value(self.t_in_secondary_hot_water)
         t_in_secondary_dhw = stsv.get_input_value(self.t_in_secondary_dhw)
@@ -629,10 +632,10 @@ class HeatPumpHplib(Component):
         time_on_cooling = self.state.time_on_cooling
         time_off = self.state.time_off
 
-        if on_off_DHW != 0:
-            on_off = on_off_DHW
+        if on_off_dhw != 0:
+            on_off = on_off_dhw
         else:
-            on_off = on_off_HotWater
+            on_off = on_off_hotwater
         # on_off=self.state.on_off_previous
 
         # cycling means periodic turning on and off of the heat pump
@@ -664,9 +667,9 @@ class HeatPumpHplib(Component):
             raise ValueError("Cycling mode of the advanced hplib unknown.")
 
         if (
-            on_off_DHW != 0
+            on_off_dhw != 0
         ):  # priority on dhw if there is a demand, independently if the actual state and time_on_heating
-            on_off = on_off_DHW
+            on_off = on_off_dhw
 
         if on_off == 1:  # Calculation for building heating
             if force_convergence:
@@ -687,7 +690,7 @@ class HeatPumpHplib(Component):
                 )
 
             p_th_hot_water = results["P_th"].values[0]
-            p_th_dhw = 0
+            p_th_dhw = 0.0
             p_el_hot_water = results["P_el"].values[0]
             p_el_dhw = 0
             cop = results["COP"].values[0]
@@ -720,7 +723,7 @@ class HeatPumpHplib(Component):
                     mode=1,
                 )
 
-            p_th_hot_water = 0
+            p_th_hot_water = 0.0
             p_el_hot_water = 0
             cop = results["COP"].values[0]
             eer = results["EER"].values[0]
@@ -728,14 +731,12 @@ class HeatPumpHplib(Component):
             t_out_dhw = results["T_out"].values[0]
             m_dot_hot_water = 0
             m_dot_dhw = results["m_dot"].values[0]
-            if const_thermal_power_truefalse_DHW == False:  # False=modulation
+            if const_thermal_power_truefalse_dhw is True:  # True = constant thermal power output for dhw
+                p_th_dhw = const_thermal_power_value_dhw
+                p_el_dhw = p_th_dhw / cop
+            if const_thermal_power_truefalse_dhw is False or const_thermal_power_truefalse_dhw == 0:  # False = modulation
                 p_th_dhw = results["P_th"].values[0]
                 p_el_dhw = results["P_el"].values[0]
-            if (
-                const_thermal_power_truefalse_DHW == True
-            ):  # True = constant thermal power output
-                p_th_dhw = const_thermal_power_value_DHW
-                p_el_dhw = p_th_dhw / cop
             time_on_heating = (
                 time_on_heating + self.my_simulation_parameters.seconds_per_timestep
             )
@@ -752,7 +753,7 @@ class HeatPumpHplib(Component):
                 mode=2,
             )
             p_th_hot_water = results["P_th"].values[0]
-            p_th_dhw = 0
+            p_th_dhw = 0.0
             p_el_hot_water = results["P_el"].values[0]
             p_el_dhw = 0
             cop = results["COP"].values[0]
@@ -795,10 +796,10 @@ class HeatPumpHplib(Component):
         ):
             # todo: variability of massflow. now there is a fix temperaturdiffernz between inlet and outlet which calculate the massflow
 
-            q_dot_entzugsleistung = (p_th_dhw + p_th_hot_water) - (
+            q_dot_from_primary_to_secondary_side = (p_th_dhw + p_th_hot_water) - (
                 p_el_dhw + p_el_hot_water
             )
-            m_dot_water_primary = q_dot_entzugsleistung / (
+            m_dot_water_primary = q_dot_from_primary_to_secondary_side / (
                 self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
                 * self.hx_building_temp_diff
             )
@@ -905,6 +906,7 @@ class HeatPumpHplib(Component):
 
 @dataclass
 class HeatPumpState:
+
     """HeatPumpState class."""
 
     time_on: int = 0
@@ -1451,9 +1453,9 @@ class HeatPumpHplibControllerDHWL1Config(ConfigBase):
     #: upper set temperature of DHW Storage, given in °C
     t_max_dhw_storage_in_celsius: float
     #: set thermal power delivered for dhw on constant value --> max. Value of heatpump
-    thermalPower_is_constant_for_dhw: bool
+    thermalpower_dhw_is_constant: bool
     #: max. Power of Heatpump for not modulation dhw production
-    p_th_max_dhw_in_W: float
+    p_th_max_dhw_in_watt: float
 
     @classmethod
     def get_default_generic_heat_pump_controller_config(cls):
@@ -1462,8 +1464,8 @@ class HeatPumpHplibControllerDHWL1Config(ConfigBase):
             name="HeatPumpControllerDHW",
             t_min_dhw_storage_in_celsius=40.0,
             t_max_dhw_storage_in_celsius=60.0,
-            thermalPower_is_constant_for_dhw=False,  # false: modulation, true: constant power for dhw
-            p_th_max_dhw_in_W=5000,  # only if true
+            thermalpower_dhw_is_constant=False,  # false: modulation, true: constant power for dhw
+            p_th_max_dhw_in_watt=5000.0,  # only if true
         )
 
 
@@ -1484,10 +1486,10 @@ class HeatPumpHplibControllerDHW(Component):
 
     # Outputs
     State_dhw = "State DHW"
-    ThermalPower_Bedingung_for_konst_dhw = (
-        "BedingungfuerKonstDHW"  # if heatpump has fix power for dhw
+    ThermalPower_dhw_is_constant = (
+        "ThermalPowerDHWConst"  # if heatpump has fix power for dhw
     )
-    Value_Max_Thermal_Power_for_dhw = (
+    Value_thermalpower_dhw_is_constant = (
         "ThermalPowerHPForDHWConst"  # if heatpump has fix power for dhw
     )
 
@@ -1504,6 +1506,13 @@ class HeatPumpHplibControllerDHW(Component):
             my_config=config,
         )
         self.config: HeatPumpHplibControllerDHWL1Config = config
+
+        self.state_dhw: int
+        self.previous_state_dhw: int
+        self.controller_signal: int
+        self.previous_controller_signal: int
+        self.thermalpower_dhw_is_constant: bool
+        self.p_th_max_dhw: float
 
         self.build()
 
@@ -1531,28 +1540,21 @@ class HeatPumpHplibControllerDHW(Component):
             output_description=f"here a description for {self.State_dhw} will follow.",
         )
 
-        self.thermalPower_const_bedingung_channel: ComponentOutput = self.add_output(
+        self.thermalpower_dhw_is_constant_channel: ComponentOutput = self.add_output(
             self.component_name,
-            self.ThermalPower_Bedingung_for_konst_dhw,
+            self.ThermalPower_dhw_is_constant,
             LoadTypes.ANY,
             Units.ANY,
-            output_description=f"here a description for {self.ThermalPower_Bedingung_for_konst_dhw} will follow.",
+            output_description=f"here a description for {self.ThermalPower_dhw_is_constant} will follow.",
         )
 
-        self.thermalPower_max_value_channel: ComponentOutput = self.add_output(
+        self.thermalpower_dhw_is_constant_value_channel: ComponentOutput = self.add_output(
             self.component_name,
-            self.Value_Max_Thermal_Power_for_dhw,
+            self.Value_thermalpower_dhw_is_constant,
             LoadTypes.ANY,
             Units.ANY,
-            output_description=f"here a description for {self.Value_Max_Thermal_Power_for_dhw} will follow.",
+            output_description=f"here a description for {self.Value_thermalpower_dhw_is_constant} will follow.",
         )
-
-        self.state_dhw: int
-        self.previous_state_dhw: int
-        self.controller_signal: int
-        self.previous_controller_signal: int
-        self.thermalPower_constant_for_dhw: bool
-        self.p_th_max_dhw: float
 
         self.add_default_connections(self.get_default_connections_from_dhw_storage())
 
@@ -1585,16 +1587,16 @@ class HeatPumpHplibControllerDHW(Component):
         self.controller_signal = 0
         self.state_dhw = 0
         self.previous_controller_signal = self.controller_signal
-        self.thermalPower_constant_for_dhw = (
-            self.config.thermalPower_is_constant_for_dhw
+        self.thermalpower_dhw_is_constant = (
+            self.config.thermalpower_dhw_is_constant
         )
-        self.p_th_max_dhw = self.config.p_th_max_dhw_in_W
+        self.p_th_max_dhw = self.config.p_th_max_dhw_in_watt
 
-        if self.thermalPower_constant_for_dhw == True:
-            print("INFO: DHW Power ist constant with " + str(self.p_th_max_dhw) + "W")
-        elif self.thermalPower_constant_for_dhw == False:
+        if self.thermalpower_dhw_is_constant is True:
+            print("INFO: DHW Power is constant with " + str(self.p_th_max_dhw) + " Watt.")
+        elif self.thermalpower_dhw_is_constant is False:
             print("INFO: DHW Power is modulating")
-            self.p_th_max_dhw = 0
+            self.p_th_max_dhw = 0.0
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -1641,13 +1643,13 @@ class HeatPumpHplibControllerDHW(Component):
             if (
                 water_temperature_input_from_dhw_storage_in_celsius
                 < t_min_dhw_storage_in_celsius
-            ):  # an
+            ):  # on
                 self.controller_signal = 1
 
             elif (
                 water_temperature_input_from_dhw_storage_in_celsius
                 > t_max_dhw_storage_in_celsius + temperature_modifier
-            ):  # aus
+            ):  # off
                 self.controller_signal = 0
 
             elif (
@@ -1662,10 +1664,8 @@ class HeatPumpHplibControllerDHW(Component):
 
             if self.controller_signal == 1:
                 self.state_dhw = 2
-            # print("heating dhw on")
             elif self.controller_signal == 0:
                 self.state_dhw = 0
-            # print("heating dhw off")
             else:
                 raise ValueError("Advanced HP Lib DHW Controller State unknown.")
 
@@ -1674,13 +1674,11 @@ class HeatPumpHplibControllerDHW(Component):
 
         stsv.set_output_value(self.state_dhw_channel, self.state_dhw)
         stsv.set_output_value(
-            self.thermalPower_const_bedingung_channel,
-            self.thermalPower_constant_for_dhw,
+            self.thermalpower_dhw_is_constant_channel,
+            self.thermalpower_dhw_is_constant,
         )
 
-        if self.thermalPower_constant_for_dhw == True:
+        if self.thermalpower_dhw_is_constant is True:
             stsv.set_output_value(
-                self.thermalPower_max_value_channel, self.p_th_max_dhw
+                self.thermalpower_dhw_is_constant_value_channel, self.p_th_max_dhw
             )
-        elif self.thermalPower_constant_for_dhw == False:
-            stsv.set_output_value(self.thermalPower_max_value_channel, 0)

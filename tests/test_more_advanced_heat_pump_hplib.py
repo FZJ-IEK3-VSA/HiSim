@@ -12,6 +12,7 @@ from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 
+
 @pytest.mark.base
 def test_heat_pump_hplib_new():
     """Test heat pump hplib."""
@@ -28,17 +29,14 @@ def test_heat_pump_hplib_new():
     force_convergence = False
 
     # Create fake component outputs as inputs for simulation
-    on_off_switch_hotWater = cp.ComponentOutput(
+    on_off_switch_hotwater = cp.ComponentOutput(
         "Fake_on_off_switch", "Fake_on_off_switch", lt.LoadTypes.ANY, lt.Units.ANY
     )
-    on_off_switch_DHW = cp.ComponentOutput(
+    on_off_switch_dhw = cp.ComponentOutput(
         "Fake_on_off_switch", "Fake_on_off_switch", lt.LoadTypes.ANY, lt.Units.ANY
     )
-    const_thermal_power_truefalse_DHW = cp.ComponentOutput(
-        "Fake_const_thermal_power_truefalse_DHW", "Fake_const_thermal_power_truefalse_DHW", lt.LoadTypes.ANY, lt.Units.ANY
-    )
-    const_thermal_power_value_DHW = cp.ComponentOutput(
-        "Fake_const_thermal_power_value_DHW", "Fake_const_thermal_power_value_DHW", lt.LoadTypes.ANY, lt.Units.ANY
+    const_thermal_power_value_dhw = cp.ComponentOutput(
+        "Fake_const_thermal_power_value_dhw", "Fake_const_thermal_power_value_dhw", lt.LoadTypes.ANY, lt.Units.ANY
     )
     t_in_primary = cp.ComponentOutput(
         "Fake_t_in_primary", "Fake_t_in_primary", lt.LoadTypes.ANY, lt.Units.ANY
@@ -52,8 +50,6 @@ def test_heat_pump_hplib_new():
     t_amb = cp.ComponentOutput(
         "Fake_t_amb", "Fake_t_amb", lt.LoadTypes.ANY, lt.Units.ANY
     )
-
-    const_thermal_power_truefalse_DHW=False
 
     # Initialize component
     heatpump_config = HeatPumpHplibConfig(
@@ -80,13 +76,13 @@ def test_heat_pump_hplib_new():
     )
 
     number_of_outputs = fft.get_number_of_outputs(
-        [on_off_switch_hotWater,on_off_switch_DHW, const_thermal_power_value_DHW,t_in_primary, t_in_secondary_hot_water,t_in_secondary_dhw, t_amb, heatpump]
+        [on_off_switch_hotwater, on_off_switch_dhw, const_thermal_power_value_dhw, t_in_primary, t_in_secondary_hot_water, t_in_secondary_dhw, t_amb, heatpump]
     )
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
-    heatpump.on_off_switch_hotWater.source_output = on_off_switch_hotWater
-    heatpump.on_off_switch_DHW.source_output=on_off_switch_DHW
-    heatpump.const_thermal_power_value_DHW.source_output=const_thermal_power_value_DHW
+    heatpump.on_off_switch_hotwater.source_output = on_off_switch_hotwater
+    heatpump.on_off_switch_dhw.source_output = on_off_switch_dhw
+    heatpump.const_thermal_power_value_dhw.source_output = const_thermal_power_value_dhw
     heatpump.t_in_primary.source_output = t_in_primary
     heatpump.t_in_secondary_hot_water.source_output = t_in_secondary_hot_water
     heatpump.t_in_secondary_dhw.source_output = t_in_secondary_dhw
@@ -94,13 +90,12 @@ def test_heat_pump_hplib_new():
 
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components(
-        [on_off_switch_hotWater, on_off_switch_DHW, const_thermal_power_value_DHW,
+        [on_off_switch_hotwater, on_off_switch_dhw, const_thermal_power_value_dhw,
          t_in_primary, t_in_secondary_hot_water, t_in_secondary_dhw, t_amb, heatpump]
     )
-    stsv.values[on_off_switch_hotWater.global_index] = 1
-    stsv.values[on_off_switch_DHW.global_index] = 0
-    stsv.values[const_thermal_power_value_DHW.global_index] = 0
-    stsv.values[const_thermal_power_truefalse_DHW] = False
+    stsv.values[on_off_switch_hotwater.global_index] = 1
+    stsv.values[on_off_switch_dhw.global_index] = 0
+    stsv.values[const_thermal_power_value_dhw.global_index] = 0
     stsv.values[t_in_primary.global_index] = -7
     stsv.values[t_in_secondary_hot_water.global_index] = 47.0
     stsv.values[t_in_secondary_dhw.global_index] = 55.0

@@ -5,7 +5,7 @@
 from typing import List, Optional, Any
 from pathlib import Path
 from dataclasses import dataclass
-from os import getenv, listdir
+from os import listdir
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,
     Households,
@@ -24,7 +24,6 @@ from hisim.components import simple_hot_water_storage
 from hisim.components import generic_car
 from hisim.components import generic_hot_water_storage_modular
 from hisim.components import electricity_meter
-from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.system_setup_configuration import SystemSetupConfigBase
 from hisim import utils
 from hisim import loadtypes as lt
@@ -38,6 +37,14 @@ __license__ = ""
 __version__ = ""
 __maintainer__ = ""
 __status__ = ""
+
+
+@dataclass
+class HouseholdMoreAdvancedHPDieselCarOptions:
+
+    """ Set options for the system setup."""
+
+    pass
 
 
 @dataclass
@@ -82,8 +89,9 @@ class HouseholdMoreAdvancedHPDieselCarConfig(SystemSetupConfigBase):
 
     @classmethod
     def get_scaled_default(
-        cls,
-        building_config: building.BuildingConfig,
+            cls,
+            building_config: building.BuildingConfig,
+            options: HouseholdMoreAdvancedHPDieselCarOptions = HouseholdMoreAdvancedHPDieselCarOptions()
     ) -> "HouseholdMoreAdvancedHPDieselCarConfig":
         """Get scaled default HouseholdMoreAdvancedHPDieselCarConfig."""
 
@@ -266,7 +274,7 @@ def setup_function(
     my_heatpump_controller_hotwater_config = my_config.hp_controller_config
     my_heatpump_controller_hotwater_config.name = "HPHotWaterController"
 
-    my_heatpump_controller_hotWater = more_advanced_heat_pump_hplib.HeatPumpHplibControllerHotWaterStorage(
+    my_heatpump_controller_hotwater = more_advanced_heat_pump_hplib.HeatPumpHplibControllerHotWaterStorage(
         config=my_heatpump_controller_hotwater_config,
         my_simulation_parameters=my_simulation_parameters
     )
@@ -297,7 +305,7 @@ def setup_function(
     my_dhw_storage_config = my_config.dhw_storage_config
     my_dhw_storage_config.name = "DHWStorage"
     my_dhw_storage_config.compute_default_cycle(
-        temperature_difference_in_kelvin=60-40      #default values
+        temperature_difference_in_kelvin=60 - 40   # default values
     )
 
     my_dhw_storage = generic_hot_water_storage_modular.HotWaterStorage(
@@ -353,12 +361,11 @@ def setup_function(
 
     #################################
     my_heatpump.connect_only_predefined_connections(
-        my_heatpump_controller_hotWater, my_heatpump_controller_dhw, my_weather, my_hot_water_storage,
+        my_heatpump_controller_hotwater, my_heatpump_controller_dhw, my_weather, my_hot_water_storage,
         my_dhw_storage)
 
     # Verknüpfung mit Luft als Umgebungswärmequelle
-    if my_heatpump.parameters['Group'].iloc[0] == 1.0 or my_heatpump.parameters['Group'].iloc[
-        0] == 4.0:
+    if my_heatpump.parameters['Group'].iloc[0] == 1.0 or my_heatpump.parameters['Group'].iloc[0] == 4.0:
         my_heatpump.connect_input(
             my_heatpump.TemperatureInputPrimary,
             my_weather.component_name,
@@ -370,7 +377,7 @@ def setup_function(
 
         # todo: Water and Brine Connection
 
-    my_heatpump_controller_hotWater.connect_only_predefined_connections(my_heat_distribution_controller,
+    my_heatpump_controller_hotwater.connect_only_predefined_connections(my_heat_distribution_controller,
                                                                         my_weather,
                                                                         my_hot_water_storage)
 
@@ -432,7 +439,7 @@ def setup_function(
     my_sim.add_component(my_weather)
     my_sim.add_component(my_building)
     my_sim.add_component(my_heatpump)
-    my_sim.add_component(my_heatpump_controller_hotWater)
+    my_sim.add_component(my_heatpump_controller_hotwater)
     my_sim.add_component(my_heatpump_controller_dhw)
     my_sim.add_component(my_heat_distribution)
     my_sim.add_component(my_heat_distribution_controller)
@@ -441,5 +448,3 @@ def setup_function(
     my_sim.add_component(my_electricity_meter)
     for my_car in my_cars:
         my_sim.add_component(my_car)
-
-

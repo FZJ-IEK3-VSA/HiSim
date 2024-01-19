@@ -484,7 +484,6 @@ class Building(cp.Component):
         )
         return connections
 
-
     def get_default_connections_from_utsp_occupancy(self,):
         """Get UTSP default connections."""
 

@@ -15,6 +15,7 @@ from hisim.loadtypes import ComponentType, HeatingSystems, InandOutputType, Load
 from hisim.simulationparameters import SimulationParameters
 from obsolete.loadprofilegenerator_connector import OccupancyConfig
 
+
 def compute_energy_from_power(
     power_timeseries: pd.Series, seconds_per_timestep: int
 ) -> float:

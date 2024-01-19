@@ -266,7 +266,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         )
         self.add_dynamic_default_connections(self.get_default_connections_from_advanced_battery())
 
-
     def get_default_connections_from_utsp_occupancy(
         self,
     ):

@@ -34,6 +34,7 @@ from hisim.json_generator import JsonConfigurationGenerator
 from hisim.postprocessing.webtool_kpi_entries import WebtoolKpiEntries
 from obsolete import loadprofilegenerator_connector
 
+
 class PostProcessor:
 
     """Core Post processor class."""

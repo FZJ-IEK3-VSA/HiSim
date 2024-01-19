@@ -30,9 +30,10 @@ from hisim.components import (advanced_battery_bslib,
                               generic_hydrogen_storage, generic_pv_system,
                               generic_smart_device,
                               weather)
-from obsolete import loadprofilegenerator_connector
+
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.simulator import SimulationParameters
+from obsolete import loadprofilegenerator_connector
 
 
 def get_heating_system_efficiency(

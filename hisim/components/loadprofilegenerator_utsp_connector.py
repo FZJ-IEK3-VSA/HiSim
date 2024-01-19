@@ -40,6 +40,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.component import OpexCostDataClass
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
+
 class LpgDataAcquisitionMode(enum.Enum):
 
     """Set LPG Data Acquisition Mode."""

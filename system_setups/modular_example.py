@@ -265,11 +265,10 @@ def setup_function(
         my_occupancy_config = (
             loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
                 name="UTSPConnector",
-                url=arche_type_config_.url,
-                api_key=arche_type_config_.api_key,
+                data_acquisition_mode=loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP,
                 household=occupancy_profile_utsp,  # type: ignore
                 energy_intensity=EnergyIntensityType.EnergySaving,
-                result_dir_path=hisim.utils.HISIMPATH["results"],
+                result_dir_path=hisim.utils.HISIMPATH["utsp_results"],
                 travel_route_set=this_mobility_distance,
                 transportation_device_set=this_mobility_set,
                 charging_station_set=charging_station,

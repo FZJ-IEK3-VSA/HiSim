@@ -55,7 +55,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     """Config class for UtspLpgConnector. Contains LPG parameters and UTSP connection parameters."""
 
     name: str
-    data_acquisition: LpgDataAcquisitionMode
+    data_acquisition_mode: LpgDataAcquisitionMode
     household: Union[JsonReference, List[JsonReference]]
     energy_intensity: EnergyIntensityType
     travel_route_set: JsonReference
@@ -79,7 +79,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
 
         config = UtspLpgConnectorConfig(
             name="UTSPConnector",
-            data_acquisition=LpgDataAcquisitionMode.USE_UTSP,
+            data_acquisition_mode=LpgDataAcquisitionMode.USE_UTSP,
             household=Households.CHR01_Couple_both_at_Work,
             result_dir_path=utils.HISIMPATH["utsp_results"],
             energy_intensity=EnergyIntensityType.EnergySaving,
@@ -404,12 +404,7 @@ class UtspLpgConnector(cp.Component):
         ]
         # get first bodily activity files
         bodily_activity_filepaths = predefined_profile_filepaths["number_of_residents"]
-        # activity_files = []
-        # # get high and low activity files
-        # for filepath in bodily_activity_filepaths:
-        #         with open(filepath, encoding="utf-8") as json_file:
-        #             json_filex = json.load(json_file)
-        #         activity_files.append(json_filex)
+
         high_activity_file = bodily_activity_filepaths[0]
         low_activity_file = bodily_activity_filepaths[1]
         # get other files
@@ -553,7 +548,7 @@ class UtspLpgConnector(cp.Component):
                     "LPG data cannot be taken from cache. It will be taken from UTSP or from predefined profile."
                 )
                 # if taking results from cache not possible, check lpg data acquition mode
-                if self.utsp_config.data_acquisition == LpgDataAcquisitionMode.USE_UTSP:
+                if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
                     # try to get utsp url and api from .env if possible
                     try:
                         self.utsp_url = utils.get_environment_variable("UTSP_URL")
@@ -567,13 +562,13 @@ class UtspLpgConnector(cp.Component):
                             "Please check if this file is present in your system."
                             "Otherwise the predefined LPG profile in hisim/inputs/loadprofiles will be used."
                         )
-                        self.utsp_config.data_acquisition = (
+                        self.utsp_config.data_acquisition_mode = (
                             LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
                         )
 
-                if self.utsp_config.data_acquisition == LpgDataAcquisitionMode.USE_UTSP:
+                if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
                     log.information(
-                        f"LPG data acquisition mode: {self.utsp_config.data_acquisition}"
+                        f"LPG data acquisition mode: {self.utsp_config.data_acquisition_mode}"
                     )
                     new_unique_config = list_of_unique_household_configs[list_index]
 
@@ -605,7 +600,7 @@ class UtspLpgConnector(cp.Component):
                             inner_device_heat_gains=inner_device_heat_gains_file,
                             high_activity=high_activity_file,
                             low_activity=low_activity_file,
-                            data_acquisition_mode=self.utsp_config.data_acquisition,
+                            data_acquisition_mode=self.utsp_config.data_acquisition_mode,
                         )
 
                         # write lists to dict
@@ -656,7 +651,7 @@ class UtspLpgConnector(cp.Component):
                                 inner_device_heat_gains=inner_device_heat_gains,
                                 high_activity=high_activity,
                                 low_activity=low_activity,
-                                data_acquisition_mode=self.utsp_config.data_acquisition,
+                                data_acquisition_mode=self.utsp_config.data_acquisition_mode,
                             )
 
                             # write lists to dict
@@ -711,11 +706,11 @@ class UtspLpgConnector(cp.Component):
                     self.max_hot_water_demand = max(self.water_consumption)
 
                 elif (
-                    self.utsp_config.data_acquisition
+                    self.utsp_config.data_acquisition_mode
                     == LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
                 ):
                     log.information(
-                        f"LPG data acquisition mode: {self.utsp_config.data_acquisition}"
+                        f"LPG data acquisition mode: {self.utsp_config.data_acquisition_mode}. "
                         "This means the predefined_lpg_household_chr01 from hisim/inputs/loadprofiles/ is taken."
                     )
 
@@ -740,7 +735,7 @@ class UtspLpgConnector(cp.Component):
                         inner_device_heat_gains=inner_device_heat_gains_file,
                         high_activity=high_activity_file,
                         low_activity=low_activity_file,
-                        data_acquisition_mode=self.utsp_config.data_acquisition,
+                        data_acquisition_mode=self.utsp_config.data_acquisition_mode,
                     )
 
                     self.max_hot_water_demand = max(self.water_consumption)

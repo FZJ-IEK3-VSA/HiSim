@@ -7,6 +7,7 @@ from dataclasses_json import dataclass_json
 import pandas as pd
 
 from hisim import component as cp
+from hisim import dynamic_component
 from hisim import loadtypes as lt
 from hisim.component import ComponentInput, OpexCostDataClass
 from hisim.dynamic_component import (

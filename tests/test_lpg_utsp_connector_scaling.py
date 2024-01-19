@@ -117,6 +117,7 @@ def initialize_lpg_utsp_connector_and_return_results(
         consumption=0,
         profile_with_washing_machine_and_dishwasher=True,
         predictive_control=False,
+        predictive=False,
         energy_intensity=energy_intensity,
         guid=guid
     )

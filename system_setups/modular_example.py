@@ -29,7 +29,7 @@ from hisim.modular_household.interface_configs.modular_household_config import (
 )
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
-from hisim import log
+
 
 def cleanup_old_result_folders():
     """Removes old result folders of previous setup_function simulations."""
@@ -52,7 +52,7 @@ def cleanup_old_lpg_requests():
     for folder in folder_list:
         for file in os.listdir(os.path.join(hisim.utils.HISIMPATH["utsp_results"], folder)):
             full_file_path = os.path.join(hisim.utils.HISIMPATH["utsp_results"], folder, file)
-            log.information(f"Clean up old lpg request result file: {full_file_path}")
+            hisim.log.information(f"Clean up old lpg request result file: {full_file_path}")
             os.remove(full_file_path)
 
 

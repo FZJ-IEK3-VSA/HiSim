@@ -99,7 +99,7 @@ def initialize_lpg_utsp_connector_and_return_results(
     charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
     energy_intensity = EnergyIntensityType.EnergySaving
     guid = "guid should not be varied automatically"
-    data_aquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAquisitionMode.USE_UTSP
+    data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP
 
     # Build Simu Params
     my_simulation_parameters = SimulationParameters.full_year(
@@ -109,7 +109,7 @@ def initialize_lpg_utsp_connector_and_return_results(
     # Build occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
         name="UTSPConnector",
-        data_aquisition_mode=data_aquisition_mode,
+        data_acquisition_mode=data_acquisition_mode,
         household=households,
         result_dir_path=result_path,
         travel_route_set=travel_route_set,

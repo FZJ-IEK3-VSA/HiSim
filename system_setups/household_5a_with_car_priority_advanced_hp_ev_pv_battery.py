@@ -131,6 +131,7 @@ class HouseholdAdvancedHpEvPvBatteryConfig(SystemSetupConfigBase):
                 consumption=0.0,
                 profile_with_washing_machine_and_dishwasher=True,
                 predictive_control=False,
+                predictive=False,
             ),
             pv_config=pv_config,
             building_config=building_config,

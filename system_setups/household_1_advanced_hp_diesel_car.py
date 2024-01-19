@@ -133,6 +133,7 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
                 consumption=0.0,
                 profile_with_washing_machine_and_dishwasher=True,
                 predictive_control=False,
+                predictive=False,
             ),
             building_config=building_config,
             hds_controller_config=hds_controller_config,

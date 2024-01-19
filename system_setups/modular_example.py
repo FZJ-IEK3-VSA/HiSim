@@ -275,6 +275,7 @@ def setup_function(
                 consumption=0,
                 profile_with_washing_machine_and_dishwasher=not smart_devices_included,
                 predictive_control=False,
+                predictive=False,
             )
         )
 

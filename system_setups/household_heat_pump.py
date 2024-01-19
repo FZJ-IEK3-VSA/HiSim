@@ -134,7 +134,7 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
                 data_acquisition_mode=loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP,
                 household=Households.CHR01_Couple_both_at_Work,
                 energy_intensity=EnergyIntensityType.EnergySaving,
-                result_dir_path=utils.HISIMPATH["results"],
+                result_dir_path=utils.HISIMPATH["utsp_results"],
                 travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
                 transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
                 charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,

@@ -16,7 +16,6 @@ from tests import functions_for_testing as fft
 from hisim import component
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.simulationparameters import SimulationParameters
-from hisim.utils import get_environment_variable
 from hisim import log
 
 

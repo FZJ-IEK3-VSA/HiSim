@@ -19,7 +19,6 @@ import hisim.utils
 from hisim.components import (
     building,
     controller_l2_energy_management_system,
-    loadprofilegenerator_connector,
     loadprofilegenerator_utsp_connector,
     weather,
 )
@@ -29,7 +28,7 @@ from hisim.modular_household.interface_configs.modular_household_config import (
 )
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
-
+from obsolete import loadprofilegenerator_connector
 
 def cleanup_old_result_folders():
     """Removes old result folders of previous setup_function simulations."""

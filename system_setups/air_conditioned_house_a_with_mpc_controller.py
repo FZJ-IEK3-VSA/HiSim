@@ -233,8 +233,6 @@ def air_conditioned_house(
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    my_building_information = my_building.my_building_information
-
     """ Occupancy Profile """
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
     my_occupancy_config.data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE

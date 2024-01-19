@@ -7,7 +7,7 @@ import time
 import pytest
 
 from hisim import component
-from hisim.components import loadprofilegenerator_connector
+from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import building
 from hisim.loadtypes import LoadTypes, Units
@@ -82,13 +82,10 @@ def test_building():
     my_residence.set_sim_repo(repo)
     my_residence.i_prepare_simulation()
 
-    # Set Occupancy
-    my_occupancy_config = (
-        loadprofilegenerator_connector.OccupancyConfig.get_default_chr01_couple_both_at_work()
-    )
+    # Occupancy
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
     my_occupancy = loadprofilegenerator_connector.Occupancy(
-        config=my_occupancy_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
     my_occupancy.set_sim_repo(repo)
     my_occupancy.i_prepare_simulation()

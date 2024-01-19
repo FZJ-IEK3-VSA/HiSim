@@ -38,7 +38,7 @@ from hisim import log, utils
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig, PhysicsConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import OpexCostDataClass
-
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
 class LpgDataAcquisitionMode(enum.Enum):
 

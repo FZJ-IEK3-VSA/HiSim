@@ -68,8 +68,6 @@ pylint /fast/home/k-rieck/repositories/HiSim/tests/test_electricity_meter.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/tests/test_system_setups_household_with_advanced_hp_hws_hds_pv_battery_ems.py
 if %errorlevel% neq 0 exit /b
-pylint /fast/home/k-rieck/repositories/HiSim/tests/test_occupancy_scalability.py
-if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/tests/test_system_setups_household_1_advanced_hp_diesel_car.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/tests/test_building_heating_demand.py
@@ -126,6 +124,8 @@ pylint /fast/home/k-rieck/repositories/HiSim/obsolete/generic_gas_heater_with_co
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/obsolete/household_with_gas_heater.py
 if %errorlevel% neq 0 exit /b
+pylint /fast/home/k-rieck/repositories/HiSim/obsolete/test_occupancy_scalability.py
+if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/obsolete/test_system_setups_household_with_gas_heater_with_controller.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/obsolete/household_with_advanced_hp_hws_hds_pv.py
@@ -135,6 +135,8 @@ if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/obsolete/test_system_setups_household_with_heatpump_and_pv.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/obsolete/test_system_setups_household_with_advanced_hp_hws_hds_pv.py
+if %errorlevel% neq 0 exit /b
+pylint /fast/home/k-rieck/repositories/HiSim/obsolete/loadprofilegenerator_connector.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/obsolete/generic_heat_pump_for_house_with_hds.py
 if %errorlevel% neq 0 exit /b
@@ -273,8 +275,6 @@ if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/hisim/components/advanced_ev_battery_bslib.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/hisim/components/controller_l2_generic_heat_clever_simple.py
-if %errorlevel% neq 0 exit /b
-pylint /fast/home/k-rieck/repositories/HiSim/hisim/components/loadprofilegenerator_connector.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/hisim/components/controller_l1_heatpump.py
 if %errorlevel% neq 0 exit /b

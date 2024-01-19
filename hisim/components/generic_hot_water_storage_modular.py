@@ -24,7 +24,7 @@ from hisim.components import (
     generic_heat_source,
     configuration,
 )
-from hisim.components.loadprofilegenerator_connector import Occupancy
+from obsolete.loadprofilegenerator_connector import Occupancy
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import OpexCostDataClass

@@ -46,10 +46,10 @@ class ArcheTypeConfig:
     #: average daily commuting distance in kilometers, passed as input to the LoadProfileGenerator and considered to model consumption of cars
     mobility_distance: Optional[JsonReference] = field(
         default_factory=lambda: TravelRouteSets.Travel_Route_Set_for_15km_Commuting_Distance)  # type: ignore
-    # #: url of the UTSP (this is not needed for the config anymore. it is integrated in the tusp_connector build() function automatically)
-    # url: str = get_environment_variable("UTSP_URL")
-    # #: passwort to connect to the UTSP
-    # api_key: str = get_environment_variable("UTSP_API_KEY")
+    #: url of the UTSP (this is not needed for the config anymore. it is integrated in the tusp_connector build() function automatically)
+    url: str = get_environment_variable("UTSP_URL")
+    #: passwort to connect to the UTSP
+    api_key: str = get_environment_variable("UTSP_API_KEY")
 
 
 # def create_archetype_config_file() -> None:

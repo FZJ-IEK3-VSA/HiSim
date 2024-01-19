@@ -506,7 +506,7 @@ class Building(cp.Component):
             )
         )
         return connections
-    
+
     def get_default_connections_from_outdated_occupancy(self,):
         """Get occupancy default connections."""
 

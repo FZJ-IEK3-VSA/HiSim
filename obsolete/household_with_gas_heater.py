@@ -69,8 +69,7 @@ def setup_function(
 
     # Set Occupancy
     name = "UTSPConnector"
-    url = my_config.lpg_url
-    api_key = my_config.api_key
+    data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP
     household = my_config.household_type
     energy_intensity = my_config.energy_intensity
     result_path = my_config.result_path
@@ -91,8 +90,7 @@ def setup_function(
     # Build Occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
         name=name,
-        url=url,
-        api_key=api_key,
+        data_acquisition_mode=data_acquisition_mode,
         household=household,
         energy_intensity=energy_intensity,
         result_dir_path=result_path,

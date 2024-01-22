@@ -107,7 +107,12 @@ def test_household_heat_pump_system_setup_starter_pv():
     # Check if PV has been build and is connected.
     with open(Path(MY_RESULT_DIRECTORY).joinpath("component_connections.json"), mode="r", encoding="utf-8") as file:
         connections_list = json.load(file)
-    pv_con_dict = {"From": {"Component": "PVSystem_w0", "Field": "ElectricityOutput"}, "To": {"Component": "ElectricityMeter", "Field": "Input0"}}
-    assert any(connection == pv_con_dict for connection in connections_list)
+    # Automatic connections are created with an index, we check the first three indexes here, which should suffice to
+    # find the component.
+    pv_con_dicts = [
+        {"From": {"Component": "PVSystem_w0", "Field": "ElectricityOutput"}, "To": {"Component": "ElectricityMeter", "Field": f"Input{i}"}}
+        for i in range(3)
+    ]
+    assert any(any(connection == pv_con_dict for connection in connections_list) for pv_con_dict in pv_con_dicts)
 
     remove_results_directory(MY_RESULT_DIRECTORY)

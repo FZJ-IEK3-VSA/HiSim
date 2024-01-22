@@ -10,7 +10,7 @@ import string
 import pandas as pd
 
 from hisim.components import building
-from hisim.components import loadprofilegenerator_connector
+
 from hisim.postprocessing import reportgenerator
 from hisim.postprocessing import charts
 from hisim import log
@@ -32,6 +32,7 @@ from hisim.postprocessing.report_image_entries import ReportImageEntry, SystemCh
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.json_generator import JsonConfigurationGenerator
 from hisim.postprocessing.webtool_kpi_entries import WebtoolKpiEntries
+from obsolete import loadprofilegenerator_connector
 
 
 class PostProcessor:

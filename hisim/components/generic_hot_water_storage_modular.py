@@ -24,10 +24,11 @@ from hisim.components import (
     generic_heat_source,
     configuration,
 )
-from hisim.components.loadprofilegenerator_connector import Occupancy
+
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import OpexCostDataClass
+from obsolete.loadprofilegenerator_connector import Occupancy
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"

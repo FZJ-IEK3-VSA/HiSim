@@ -62,8 +62,7 @@ def setup_function(
     seconds_per_timestep = 60
 
     # Set Occupancy
-    url = my_config.lpg_url
-    api_key = my_config.api_key
+    data_acquisition_mode = my_config.data_acquisition_mode
     household = my_config.household_type
     energy_intensity = my_config.energy_intensity
     result_path = my_config.result_path
@@ -83,8 +82,7 @@ def setup_function(
 
     # Build Occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-        url=url,
-        api_key=api_key,
+        data_acquisition_mode=data_acquisition_mode,
         household=household,
         energy_intensity=energy_intensity,
         result_dir_path=result_path,
@@ -95,6 +93,7 @@ def setup_function(
         consumption=0,
         profile_with_washing_machine_and_dishwasher=True,
         predictive_control=False,
+        predictive=False
     )
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters

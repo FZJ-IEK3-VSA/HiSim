@@ -4,7 +4,7 @@
 
 from typing import Optional, Any
 from hisim.simulator import SimulationParameters
-from hisim.components import loadprofilegenerator_connector
+
 from hisim.components import weather
 from hisim.components import generic_pv_system
 from hisim.components import building
@@ -15,6 +15,8 @@ from hisim.components import heat_distribution_system
 from hisim import postprocessingoptions
 from hisim import loadtypes
 import generic_heat_pump_for_house_with_hds
+from obsolete import loadprofilegenerator_connector
+
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"

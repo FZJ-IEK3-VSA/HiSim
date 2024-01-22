@@ -6,7 +6,7 @@ from typing import Optional, Any
 
 # import hisim.components.random_numbers
 from hisim.simulator import SimulationParameters
-from hisim.components import loadprofilegenerator_connector
+from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import advanced_battery_bslib
 from hisim.components import weather
 
@@ -92,11 +92,9 @@ def setup_function(
         my_simulation_parameters=my_simulation_parameters, config=my_cl2_config
     )
 
-    my_occupancy_config = (
-        loadprofilegenerator_connector.OccupancyConfig.get_default_chr01_couple_both_at_work()
-    )
-
-    my_occupancy = loadprofilegenerator_connector.Occupancy(
+    # Build Occupancy
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
 

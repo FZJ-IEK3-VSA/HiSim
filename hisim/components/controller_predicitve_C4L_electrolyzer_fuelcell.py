@@ -19,7 +19,7 @@ from hisim.components import (generic_hydrogen_storage, controller_l1_example_co
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 
-__authors__ = "edited Johanna Ganglbauer"
+__authors__ = "edited Christof Bernsteiner"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
 __license__ = "MIT"
@@ -63,7 +63,8 @@ class C4LelectrolyzerfuelcellpredictiveControllerState:
     def __init__(
         self,
         RunElectrolyzer: int,
-        RunFuelCell: int
+        RunFuelCell: int,
+        mode: int,
     ) -> None:
         """Initializes electrolyzer Controller state.
 
@@ -72,12 +73,14 @@ class C4LelectrolyzerfuelcellpredictiveControllerState:
         """
         self.RunElectrolyzer: int = RunElectrolyzer
         self.RunFuelCell: int = RunFuelCell
+        self.mode: int = mode
  
     def clone(self) -> "C4LelectrolyzerfuelcellpredictiveControllerState":
         """Copies the current instance."""
         return C4LelectrolyzerfuelcellpredictiveControllerState(
             RunElectrolyzer=self.RunElectrolyzer,
             RunFuelCell= self.RunFuelCell,
+            mode = self.mode,
         )
 
     def i_prepare_simulation(self) -> None:
@@ -130,7 +133,7 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
         #     / self.my_simulation_parameters.seconds_per_timestep
         # )
 
-        self.state: C4LelectrolyzerfuelcellpredictiveControllerState = C4LelectrolyzerfuelcellpredictiveControllerState(0, 0)
+        self.state: C4LelectrolyzerfuelcellpredictiveControllerState = C4LelectrolyzerfuelcellpredictiveControllerState(0, 0, 0)
         self.previous_state: C4LelectrolyzerfuelcellpredictiveControllerState = self.state.clone()
         self.processed_state: C4LelectrolyzerfuelcellpredictiveControllerState = self.state.clone()
 
@@ -243,9 +246,11 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
                 calc_fuelcell = ((timestep >= self.config.on_off_SOEC) and (timestep <= self.config.off_on_SOEC))
                 if calc_fuelcell:
                     self.state.RunFuelCell = 1 #turn on
+                    self.state.mode = 2 #Needs the fuel cell: then the global thermal power is calculated
+                    stsv.set_output_value(self.chp_heatingmode_signal_channel, self.state.mode)
                 else:
                     self.state.RunFuelCell = 0 #turn off
-
+                    self.state.mode = 0  #if no forced running then only consider 
               
 
 

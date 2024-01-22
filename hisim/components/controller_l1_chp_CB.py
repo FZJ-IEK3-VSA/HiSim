@@ -20,7 +20,7 @@ from hisim.components import building, generic_hot_water_storage_modular, generi
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 
-__authors__ = "edited Johanna Ganglbauer"
+__authors__ = "edited Christof Bernsteiner"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
 __license__ = "MIT"

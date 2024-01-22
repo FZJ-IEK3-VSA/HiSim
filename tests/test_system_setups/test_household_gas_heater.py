@@ -113,6 +113,6 @@ def test_household_gas_heater_system_setup_starter_pv():
         {"From": {"Component": "PVSystem_w0", "Field": "ElectricityOutput"}, "To": {"Component": "ElectricityMeter", "Field": f"Input{i}"}}
         for i in range(3)
     ]
-    assert any([lambda pv_con_dict: any(connection == pv_con_dict for connection in connections_list), pv_con_dicts])
+    assert any(any(connection == pv_con_dict for connection in connections_list) for pv_con_dict in pv_con_dicts)
 
     remove_results_directory(MY_RESULT_DIRECTORY)

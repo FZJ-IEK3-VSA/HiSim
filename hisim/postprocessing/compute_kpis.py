@@ -33,24 +33,29 @@ def building_temperature_control_and_heating_load(
     temperature_difference_of_building_being_below_cooling_set_temperature = 0
 
     # get set temperatures
+    wrapped_building_component = None
     for wrapped_component in components:
-        if "Building" in wrapped_component.my_component.component_name:
-            set_heating_temperature_in_celsius = getattr(
-                wrapped_component.my_component, "set_heating_temperature_in_celsius"
-            )
-            set_cooling_temperature_in_celsius = getattr(
-                wrapped_component.my_component, "set_cooling_temperature_in_celsius"
-            )
-            # get heating load and heating ref temperature
-            heating_load_in_watt = getattr(
-                wrapped_component.my_component, "my_building_information"
-            ).max_thermal_building_demand_in_watt
-            # get specific heating load
-            scaled_conditioned_floor_area_in_m2 = getattr(
-                wrapped_component.my_component, "my_building_information"
-            ).scaled_conditioned_floor_area_in_m2
-            specific_heating_load_in_watt_per_m2 = heating_load_in_watt / scaled_conditioned_floor_area_in_m2
+        if "Building" in wrapped_component.my_component.get_classname():
+            wrapped_building_component = wrapped_component
             break
+    if not wrapped_building_component:
+        raise ValueError("Could not find the Building component.")
+
+    set_heating_temperature_in_celsius = getattr(
+        wrapped_building_component.my_component, "set_heating_temperature_in_celsius"
+    )
+    set_cooling_temperature_in_celsius = getattr(
+        wrapped_building_component.my_component, "set_cooling_temperature_in_celsius"
+    )
+    # get heating load and heating ref temperature
+    heating_load_in_watt = getattr(
+        wrapped_building_component.my_component, "my_building_information"
+    ).max_thermal_building_demand_in_watt
+    # get specific heating load
+    scaled_conditioned_floor_area_in_m2 = getattr(
+        wrapped_building_component.my_component, "my_building_information"
+    ).scaled_conditioned_floor_area_in_m2
+    specific_heating_load_in_watt_per_m2 = heating_load_in_watt / scaled_conditioned_floor_area_in_m2
 
     for column in results.columns:
 

@@ -59,7 +59,7 @@ class HouseholdMoreAdvancedHPDieselCarConfig(SystemSetupConfigBase):
     hds_controller_config: heat_distribution_system.HeatDistributionControllerConfig
     hds_config: heat_distribution_system.HeatDistributionConfig
     hp_controller_config: more_advanced_heat_pump_hplib.HeatPumpHplibControllerHotWaterStorageL1Config
-    hp_config: more_advanced_heat_pump_hplib.HeatPumpHplibConfig
+    hp_config: more_advanced_heat_pump_hplib.HeatPumpHplibWithTwoOutputsConfig
     simple_hot_water_storage_config: simple_hot_water_storage.SimpleHotWaterStorageConfig
     dhw_heatpump_controller_config: more_advanced_heat_pump_hplib.HeatPumpHplibControllerDHWL1Config
     dhw_storage_config: generic_hot_water_storage_modular.StorageConfig
@@ -138,7 +138,7 @@ class HouseholdMoreAdvancedHPDieselCarConfig(SystemSetupConfigBase):
             hp_controller_config=more_advanced_heat_pump_hplib.HeatPumpHplibControllerHotWaterStorageL1Config.get_default_generic_heat_pump_controller_config(
                 heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
             ),
-            hp_config=more_advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
+            hp_config=more_advanced_heat_pump_hplib.HeatPumpHplibWithTwoOutputsConfig.get_scaled_advanced_hp_lib(
                 heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
                 heating_reference_temperature_in_celsius=my_building_information.heating_reference_temperature_in_celsius
             ),
@@ -291,7 +291,7 @@ def setup_function(
     my_heatpump_config = my_config.hp_config
     my_heatpump_config.name = "HeatPumpHPLib"
 
-    my_heatpump = more_advanced_heat_pump_hplib.HeatPumpHplib(
+    my_heatpump = more_advanced_heat_pump_hplib.HeatPumpHplibWithTwoOutputs(
         config=my_heatpump_config,
         my_simulation_parameters=my_simulation_parameters,
     )

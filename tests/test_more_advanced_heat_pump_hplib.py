@@ -4,9 +4,9 @@ import pytest
 from tests import functions_for_testing as fft
 from hisim import component as cp
 from hisim.components.more_advanced_heat_pump_hplib import (
-    HeatPumpHplib,
-    HeatPumpHplibConfig,
-    HeatPumpState,
+    HeatPumpHplibWithTwoOutputs,
+    HeatPumpHplibWithTwoOutputsConfig,
+    HeatPumpWithTwoOutputsState,
 )
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
@@ -52,7 +52,7 @@ def test_heat_pump_hplib_new():
     )
 
     # Initialize component
-    heatpump_config = HeatPumpHplibConfig(
+    heatpump_config = HeatPumpHplibWithTwoOutputsConfig(
         name="Heat Pump",
         model=model,
         heat_source="air",
@@ -70,8 +70,8 @@ def test_heat_pump_hplib_new():
         maintenance_cost_as_percentage_of_investment=0.025,
         consumption=0,
     )
-    heatpump = HeatPumpHplib(config=heatpump_config, my_simulation_parameters=simpars)
-    heatpump.state = HeatPumpState(
+    heatpump = HeatPumpHplibWithTwoOutputs(config=heatpump_config, my_simulation_parameters=simpars)
+    heatpump.state = HeatPumpWithTwoOutputsState(
         time_on=0, time_off=0, time_on_cooling=0, on_off_previous=1
     )
 

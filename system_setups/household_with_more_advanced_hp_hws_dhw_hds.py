@@ -147,15 +147,15 @@ def setup_function(
     )
 
     # Build Heat Pump
-    my_heatpump_config = more_advanced_heat_pump_hplib.HeatPumpHplibConfig.get_default_generic_advanced_hp_lib()
-    my_heat_pump_config = more_advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
+    my_heatpump_config = more_advanced_heat_pump_hplib.HeatPumpHplibWithTwoOutputsConfig.get_default_generic_advanced_hp_lib()
+    my_heat_pump_config = more_advanced_heat_pump_hplib.HeatPumpHplibWithTwoOutputsConfig.get_scaled_advanced_hp_lib(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
     )
     my_heat_pump_config.group_id = group_id
     my_heat_pump_config.flow_temperature_in_celsius = flow_temperature_in_celsius
 
-    my_heatpump = more_advanced_heat_pump_hplib.HeatPumpHplib(
+    my_heatpump = more_advanced_heat_pump_hplib.HeatPumpHplibWithTwoOutputs(
         config=my_heatpump_config,
         my_simulation_parameters=my_simulation_parameters,
     )

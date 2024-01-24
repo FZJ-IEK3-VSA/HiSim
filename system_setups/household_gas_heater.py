@@ -87,7 +87,9 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
         return household_config
 
     @classmethod
-    def get_scaled_default(cls, building_config: building.BuildingConfig, options: HouseholdGasHeaterOptions = HouseholdGasHeaterOptions()) -> "HouseholdGasHeaterConfig":
+    def get_scaled_default(
+        cls, building_config: building.BuildingConfig, options: HouseholdGasHeaterOptions = HouseholdGasHeaterOptions()
+    ) -> "HouseholdGasHeaterConfig":
         """Get scaled HouseholdGasHeaterConfig.
 
         - Simulation Parameters

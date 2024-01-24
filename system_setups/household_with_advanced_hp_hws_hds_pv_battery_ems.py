@@ -26,9 +26,7 @@ __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
 
-def setup_function(
-    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
-) -> None:  # noqa: too-many-statements
+def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:  # noqa: too-many-statements
     """Basic household system setup.
 
     This setup function emulates an household including the basic components. Here the residents have their
@@ -57,9 +55,7 @@ def setup_function(
     seconds_per_timestep = 60
 
     # Set Heat Pump Controller
-    hp_controller_mode = (
-        2  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
-    )
+    hp_controller_mode = 2  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
     set_heating_threshold_outside_temperature_for_heat_pump_in_celsius = 16.0
     set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = 22.0
     temperature_offset_for_state_conditions_in_celsius = 5.0
@@ -74,9 +70,7 @@ def setup_function(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
-            year=year, seconds_per_timestep=seconds_per_timestep
-        )
+        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(year=year, seconds_per_timestep=seconds_per_timestep)
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
@@ -85,30 +79,20 @@ def setup_function(
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
     my_building_information = building.BuildingInformation(config=my_building_config)
-    my_building = building.Building(
-        config=my_building_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     # Build Occupancy
     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_chr01_according_to_number_of_apartments(
         number_of_apartments=my_building_information.number_of_apartments
     )
-    my_occupancy = loadprofilegenerator_connector.Occupancy(
-        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.AACHEN
-    )
-    my_weather = weather.Weather(
-        config=my_weather_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
+    my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
 
     # Build PV
-    my_photovoltaic_system_config = (
-        generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-            rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
-        )
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
+        rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
     )
 
     my_photovoltaic_system = generic_pv_system.PVSystem(
@@ -116,24 +100,20 @@ def setup_function(
         my_simulation_parameters=my_simulation_parameters,
     )
     # Build Heat Distribution Controller
-    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
-        set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
-        set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
+    my_heat_distribution_controller_config = (
+        heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
+            set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
+            set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
+            heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+        )
     )
 
-    my_heat_distribution_controller = (
-        heat_distribution_system.HeatDistributionController(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_heat_distribution_controller_config,
-        )
+    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_distribution_controller_config,
     )
-    my_hds_controller_information = (
-        heat_distribution_system.HeatDistributionControllerInformation(
-            config=my_heat_distribution_controller_config
-        )
-    )
+    my_hds_controller_information = heat_distribution_system.HeatDistributionControllerInformation(config=my_heat_distribution_controller_config)
 
     # Build Heat Pump Controller
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
@@ -151,7 +131,7 @@ def setup_function(
     # Build Heat Pump
     my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
+        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
     my_heat_pump_config.group_id = group_id
     my_heat_pump_config.flow_temperature_in_celsius = flow_temperature_in_celsius
@@ -184,21 +164,15 @@ def setup_function(
     )
 
     # Build EMS
-    my_electricity_controller_config = (
-        controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
-    )
-    my_electricity_controller = (
-        controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_electricity_controller_config,
-        )
+    my_electricity_controller_config = controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
+    my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_electricity_controller_config,
     )
 
     # Build Battery
-    my_advanced_battery_config = (
-        advanced_battery_bslib.BatteryConfig.get_scaled_battery(
-            total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt
-        )
+    my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
+        total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt
     )
     my_advanced_battery = advanced_battery_bslib.Battery(
         my_simulation_parameters=my_simulation_parameters,
@@ -232,18 +206,16 @@ def setup_function(
         output_description="Target electricity for Heat Pump. ",
     )
 
-    electricity_to_or_from_battery_target = (
-        my_electricity_controller.add_component_output(
-            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-            source_tags=[
-                lt.ComponentType.BATTERY,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_weight=3,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target electricity for Battery Control. ",
-        )
+    electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
+        source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+        source_tags=[
+            lt.ComponentType.BATTERY,
+            lt.InandOutputType.ELECTRICITY_TARGET,
+        ],
+        source_weight=3,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        output_description="Target electricity for Battery Control. ",
     )
 
     # -----------------------------------------------------------------------------------------------------------------

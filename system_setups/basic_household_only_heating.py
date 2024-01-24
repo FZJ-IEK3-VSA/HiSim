@@ -19,9 +19,7 @@ __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
 
-def setup_function(
-    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
-) -> None:
+def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
     """Gas heater + buffer storage.
 
     This setup function emulates an household including
@@ -52,9 +50,7 @@ def setup_function(
     # Build Simulation Parameters
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
-            year=year, seconds_per_timestep=seconds_per_timestep
-        )
+        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(year=year, seconds_per_timestep=seconds_per_timestep)
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Building

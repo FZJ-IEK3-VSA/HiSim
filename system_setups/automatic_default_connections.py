@@ -19,9 +19,7 @@ from hisim.components import (
 )
 
 
-def setup_function(
-    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
-) -> Any:
+def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> Any:
     """The setup function emulates an household including the basic components.
 
     Here the residents have their electricity and heating needs covered
@@ -51,51 +49,39 @@ def setup_function(
 
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(
-            year=year, seconds_per_timestep=seconds_per_timestep
-        )
+        my_simulation_parameters = SimulationParameters.full_year_all_options(year=year, seconds_per_timestep=seconds_per_timestep)
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # =================================================================================================================================
     # Set Fix System Parameters
 
     # Set Heat Pump
-    heating_reference_temperature_in_celsius: float = (
-        -7
-    )  # t_in #TODO: get real heating ref temps according to location
+    heating_reference_temperature_in_celsius: float = -7  # t_in #TODO: get real heating ref temps according to location
 
     # =================================================================================================================================
     # Build Basic Components
 
     # Build Building
-    my_building_config = building.BuildingConfig.get_default_german_single_family_home(heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius)
+    my_building_config = building.BuildingConfig.get_default_german_single_family_home(
+        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
+    )
 
     my_building_information = building.BuildingInformation(config=my_building_config)
-    my_building = building.Building(
-        config=my_building_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
 
     # Build Occupancy
     my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_chr01_according_to_number_of_apartments(
         number_of_apartments=my_building_information.number_of_apartments
     )
-    my_occupancy = loadprofilegenerator_connector.Occupancy(
-        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_occupancy = loadprofilegenerator_connector.Occupancy(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.AACHEN
-    )
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
 
-    my_weather = weather.Weather(
-        config=my_weather_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     # Build PV
-    my_photovoltaic_system_config = (
-        generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-            rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
-        )
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
+        rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
@@ -105,24 +91,20 @@ def setup_function(
     # Build Energy System Components
 
     # Build Heat Distribution Controller
-    my_heat_distribution_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
-        set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
-        set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
+    my_heat_distribution_controller_config = (
+        heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
+            set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
+            set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
+            heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+        )
     )
 
-    my_heat_distribution_controller = (
-        heat_distribution_system.HeatDistributionController(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_heat_distribution_controller_config,
-        )
+    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_distribution_controller_config,
     )
-    my_hds_controller_information = (
-        heat_distribution_system.HeatDistributionControllerInformation(
-            config=my_heat_distribution_controller_config
-        )
-    )
+    my_hds_controller_information = heat_distribution_system.HeatDistributionControllerInformation(config=my_heat_distribution_controller_config)
 
     # Build Heat Pump Controller
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
@@ -135,7 +117,7 @@ def setup_function(
     # Build Heat Pump
     my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
+        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
 
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
@@ -186,11 +168,9 @@ def setup_function(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 
-    my_domnestic_hot_water_heatpump_controller = (
-        controller_l1_heatpump.L1HeatPumpController(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_dhw_heatpump_controller_config,
-        )
+    my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_dhw_heatpump_controller_config,
     )
 
     my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
@@ -215,8 +195,6 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
     my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)
     my_sim.add_component(my_domnestic_hot_water_storage, connect_automatically=True)
-    my_sim.add_component(
-        my_domnestic_hot_water_heatpump_controller, connect_automatically=True
-    )
+    my_sim.add_component(my_domnestic_hot_water_heatpump_controller, connect_automatically=True)
     my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
     my_sim.add_component(my_electricity_meter, connect_automatically=True)

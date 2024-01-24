@@ -17,9 +17,7 @@ from hisim.components import generic_price_signal  # mpc
 
 
 __authors__ = "Marwa Alfouly, Sebastian Dickler"
-__copyright__ = (
-    "Copyright 2023, HiSim - Household Infrastructure and Building Simulator"
-)
+__copyright__ = "Copyright 2023, HiSim - Household Infrastructure and Building Simulator"
 __credits__ = ["Noah Pflugradt"]
 __license__ = "MIT"
 __version__ = "0.1"
@@ -28,9 +26,7 @@ __email__ = "s.dickler@fz-juelich.de"
 __status__ = "development"
 
 
-def setup_function(
-    my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None
-) -> None:
+def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
     """Simulates household with air-conditioner with MPC controller."""
 
     air_conditioned_house(my_sim, "MPC", my_simulation_parameters)
@@ -187,9 +183,7 @@ def air_conditioned_house(
     # Set simulation parameters
     # seconds_per_timestep = 60 #mpc#pid#onoff
     if control == "MPC":
-        seconds_per_timestep = (
-            60 * 20
-        )  # multiply seconds_per_timestep with factor (e.g., 20) to run MPC with bigger sampling time
+        seconds_per_timestep = 60 * 20  # multiply seconds_per_timestep with factor (e.g., 20) to run MPC with bigger sampling time
     else:
         seconds_per_timestep = 60
 
@@ -198,9 +192,7 @@ def air_conditioned_house(
     """System parameters"""
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only(
-            year, seconds_per_timestep
-        )
+        my_simulation_parameters = SimulationParameters.one_day_only(year, seconds_per_timestep)
         # my_simulation_parameters = SimulationParameters.one_day_only_with_only_plots(year, seconds_per_timestep)
         # my_simulation_parameters = SimulationParameters.one_day_only_with_all_options(year, seconds_per_timestep)
         # my_simulation_parameters = SimulationParameters.one_week_only(year, seconds_per_timestep)
@@ -226,7 +218,7 @@ def air_conditioned_house(
         total_base_area_in_m2=total_base_area_in_m2,
         number_of_apartments=number_of_apartments,
         predictive=predictive,
-        enable_opening_windows=enable_opening_windows
+        enable_opening_windows=enable_opening_windows,
     )
     my_building = building.Building(
         config=my_building_config,
@@ -249,9 +241,7 @@ def air_conditioned_house(
     my_sim.add_component(my_occupancy)
 
     """Weather"""
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.SEVILLE
-    )
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.SEVILLE)
     my_weather_config.predictive_control = predictive_control
 
     my_weather = weather.Weather(
@@ -436,9 +426,7 @@ def air_conditioned_house(
 
     """PID controller"""  # pid
     if control == "PID":
-        my_pid_controller_config = (
-            controller_pid.PIDControllerConfig.get_default_config()
-        )
+        my_pid_controller_config = controller_pid.PIDControllerConfig.get_default_config()
         pid_controller = controller_pid.PIDController(
             config=my_pid_controller_config,
             my_simulation_parameters=my_simulation_parameters,

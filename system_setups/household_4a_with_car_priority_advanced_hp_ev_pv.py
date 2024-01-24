@@ -81,26 +81,20 @@ class HouseholdAdvancedHPEvPvConfig(SystemSetupConfigBase):
         """Get default HouseholdAdvancedHPEvPvConfig."""
 
         charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
-        charging_power = float(
-            (charging_station_set.Name or "").split("with ")[1].split(" kW")[0]
-        )
+        charging_power = float((charging_station_set.Name or "").split("with ")[1].split(" kW")[0])
         heating_reference_temperature_in_celsius: float = -7
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0
-        building_config = (
-            building.BuildingConfig.get_default_german_single_family_home(heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius)
+        building_config = building.BuildingConfig.get_default_german_single_family_home(
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
         )
         my_building_information = building.BuildingInformation(config=building_config)
         hds_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
             set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
             set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
             heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
         )
-        my_hds_controller_information = (
-            heat_distribution_system.HeatDistributionControllerInformation(
-                config=hds_controller_config
-            )
-        )
+        my_hds_controller_information = heat_distribution_system.HeatDistributionControllerInformation(config=hds_controller_config)
 
         household_config = HouseholdAdvancedHPEvPvConfig(
             building_type="blub",
@@ -126,9 +120,7 @@ class HouseholdAdvancedHPEvPvConfig(SystemSetupConfigBase):
                 profile_with_washing_machine_and_dishwasher=True,
                 predictive_control=False,
             ),
-            pv_config=generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-                rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
-            ),
+            pv_config=generic_pv_system.PVSystemConfig.get_scaled_pv_system(rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2),
             building_config=building_config,
             hds_controller_config=hds_controller_config,
             hds_config=(
@@ -143,7 +135,7 @@ class HouseholdAdvancedHPEvPvConfig(SystemSetupConfigBase):
             hp_config=(
                 advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
                     heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-                    heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
+                    heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
                 )
             ),
             simple_hot_water_storage_config=(
@@ -170,29 +162,19 @@ class HouseholdAdvancedHPEvPvConfig(SystemSetupConfigBase):
             car_config=generic_car.CarConfig.get_default_ev_config(),
             car_battery_config=advanced_ev_battery_bslib.CarBatteryConfig.get_default_config(),
             car_battery_controller_config=(
-                controller_l1_generic_ev_charge.ChargingStationConfig.get_default_config(
-                    charging_station_set=charging_station_set
-                )
+                controller_l1_generic_ev_charge.ChargingStationConfig.get_default_config(charging_station_set=charging_station_set)
             ),
             electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
-            electricity_controller_config=(
-                controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
-            ),
+            electricity_controller_config=(controller_l2_energy_management_system.EMSConfig.get_default_config_ems()),
         )
         # adjust HeatPump
         household_config.hp_config.group_id = 1  # use modulating heatpump as default
-        household_config.hp_controller_config.mode = (
-            2  # use heating and cooling as default
-        )
+        household_config.hp_controller_config.mode = 2  # use heating and cooling as default
         # household_config.hp_config.set_thermal_output_power_in_watt = (
         #     6000  # default value leads to switching on-off very often
         # )
-        household_config.hp_config.minimum_idle_time_in_seconds = (
-            900  # default value leads to switching on-off very often
-        )
-        household_config.hp_config.minimum_running_time_in_seconds = (
-            900  # default value leads to switching on-off very often
-        )
+        household_config.hp_config.minimum_idle_time_in_seconds = 900  # default value leads to switching on-off very often
+        household_config.hp_config.minimum_running_time_in_seconds = 900  # default value leads to switching on-off very often
 
         # set same heating threshold
         household_config.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
@@ -219,9 +201,7 @@ class HouseholdAdvancedHPEvPvConfig(SystemSetupConfigBase):
         return household_config
 
 
-def setup_function(
-    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
-) -> None:  # noqa: too-many-statements
+def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:  # noqa: too-many-statements
     """System setup with advanced hp and EV and PV.
 
     This setup function emulates a household with some basic components. Here the residents have their
@@ -254,9 +234,7 @@ def setup_function(
 
     # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
     if my_sim.my_module_config_path:
-        my_config = HouseholdAdvancedHPEvPvConfig.load_from_json(
-            my_sim.my_module_config_path
-        )
+        my_config = HouseholdAdvancedHPEvPvConfig.load_from_json(my_sim.my_module_config_path)
     else:
         my_config = HouseholdAdvancedHPEvPvConfig.get_default()
     # =================================================================================================================================
@@ -271,28 +249,20 @@ def setup_function(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(
-            year=year, seconds_per_timestep=seconds_per_timestep
-        )
-    my_simulation_parameters.surplus_control = (
-        my_config.surplus_control_car
-    )  # EV charger is controlled by simulation_parameters
+        my_simulation_parameters = SimulationParameters.full_year_all_options(year=year, seconds_per_timestep=seconds_per_timestep)
+    my_simulation_parameters.surplus_control = my_config.surplus_control_car  # EV charger is controlled by simulation_parameters
     clever = my_config.surplus_control
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build heat Distribution System Controller
-    my_heat_distribution_controller = (
-        heat_distribution_system.HeatDistributionController(
-            config=my_config.hds_controller_config,
-            my_simulation_parameters=my_simulation_parameters,
-        )
+    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
+        config=my_config.hds_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Occupancy
     my_occupancy_config = my_config.occupancy_config
-    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
-        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
 
     # Build Weather
     my_weather = weather.Weather(
@@ -313,9 +283,7 @@ def setup_function(
     )
 
     # Build Heat Distribution System
-    my_heat_distribution = heat_distribution_system.HeatDistribution(
-        my_simulation_parameters=my_simulation_parameters, config=my_config.hds_config
-    )
+    my_heat_distribution = heat_distribution_system.HeatDistribution(my_simulation_parameters=my_simulation_parameters, config=my_config.hds_config)
 
     # Build Heat Pump Controller
     my_heat_pump_controller_config = my_config.hp_controller_config
@@ -356,11 +324,9 @@ def setup_function(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 
-    my_domnestic_hot_water_heatpump_controller = (
-        controller_l1_heatpump.L1HeatPumpController(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_dhw_heatpump_controller_config,
-        )
+    my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_dhw_heatpump_controller_config,
     )
 
     my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
@@ -373,9 +339,7 @@ def setup_function(
     filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
     names = [elem.partition(",")[0].partition(".")[2] for elem in filepaths_location]
 
-    my_car_config = (
-        my_config.car_config
-    )  # Todo: check source weight in case of 2 vehicles
+    my_car_config = my_config.car_config  # Todo: check source weight in case of 2 vehicles
     my_car_config.name = "ElectricCar"
 
     # create all cars
@@ -428,19 +392,15 @@ def setup_function(
     )
 
     # Build EMS
-    my_electricity_controller = (
-        controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_config.electricity_controller_config,
-        )
+    my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.electricity_controller_config,
     )
 
     # -----------------------------------------------------------------------------------------------------------------
     # connect Electric Vehicle
     # copied and adopted from modular_example
-    for car, car_battery, car_battery_controller in zip(
-        my_cars, my_car_batteries, my_car_battery_controllers
-    ):
+    for car, car_battery, car_battery_controller in zip(my_cars, my_car_batteries, my_car_battery_controllers):
         car_battery_controller.connect_only_predefined_connections(car)
         car_battery_controller.connect_only_predefined_connections(car_battery)
         car_battery.connect_only_predefined_connections(car_battery_controller)
@@ -631,9 +591,7 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
     my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)
     my_sim.add_component(my_domnestic_hot_water_storage, connect_automatically=True)
-    my_sim.add_component(
-        my_domnestic_hot_water_heatpump_controller, connect_automatically=True
-    )
+    my_sim.add_component(my_domnestic_hot_water_heatpump_controller, connect_automatically=True)
     my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
     my_sim.add_component(my_electricity_meter)
     my_sim.add_component(my_electricity_controller)

@@ -155,9 +155,7 @@ class GenericBattery(cp.Component):
         """Initialize the class."""
         super().__init__("Battery", my_simulation_parameters, my_config=config)
 
-        self.build(
-            manufacturer=config.manufacturer, model=config.model, base=config.base
-        )
+        self.build(manufacturer=config.manufacturer, model=config.model, base=config.base)
 
         self.state = SimpleStorageState(
             max_var_val=self.max_var_stored_energy,
@@ -204,9 +202,7 @@ class GenericBattery(cp.Component):
     def build(self, manufacturer, model, base):
         """Build function."""
         self.base = base
-        self.time_correction_factor = (
-            1 / self.my_simulation_parameters.seconds_per_timestep
-        )
+        self.time_correction_factor = 1 / self.my_simulation_parameters.seconds_per_timestep
         self.seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
 
         # Gets flexibilities, including heat pump
@@ -226,15 +222,9 @@ class GenericBattery(cp.Component):
         self.min_stored_energy = self.max_stored_energy * 0.0
         self.efficiency = battery["Efficiency"]
         self.efficiency_inverter = battery["Inverter Efficiency"]
-        self.max_var_stored_energy = (
-            battery["Maximal Charging Power"] * 1e3 * self.time_correction_factor
-        )
+        self.max_var_stored_energy = battery["Maximal Charging Power"] * 1e3 * self.time_correction_factor
         if "Maximal Discharging Power" in battery:
-            self.min_var_stored_energy = (
-                -battery["Maximal Discharging Power"]
-                * 1e3
-                * self.time_correction_factor
-            )
+            self.min_var_stored_energy = -battery["Maximal Discharging Power"] * 1e3 * self.time_correction_factor
         else:
             self.min_var_stored_energy = -self.max_var_stored_energy
 
@@ -273,9 +263,7 @@ class GenericBattery(cp.Component):
                 key=SingletonDictKeyEnum.MAXIMALDISCHARGINGPOWER,
                 entry=-self.min_var_stored_energy / self.time_correction_factor,
             )
-            SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.BATTERYEFFICIENCY, entry=self.efficiency
-            )
+            SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.BATTERYEFFICIENCY, entry=self.efficiency)
             SingletonSimRepository().set_entry(
                 key=SingletonDictKeyEnum.INVERTEREFFICIENCY,
                 entry=self.efficiency_inverter,
@@ -289,9 +277,7 @@ class GenericBattery(cp.Component):
         """Doublechecks."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
         load = stsv.get_input_value(self.input_channel)
         state = stsv.get_input_value(self.state_channel)
@@ -371,9 +357,7 @@ class BatteryController(cp.Component):
         """Doublechecks."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
         load = stsv.get_input_value(self.input_channel)
         state: float = 0

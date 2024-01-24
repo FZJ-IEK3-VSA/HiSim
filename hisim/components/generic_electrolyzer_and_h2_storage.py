@@ -169,9 +169,9 @@ class ElectrolyzerSimulation:
 
         # interpolation between two points. Future: add input data with higher resolution.. but not provided
         # interpolation for current power level & hydrogen output
-        power_level = self.min_power_percent + (100 - self.min_power_percent) * (
-            electricity_input - self.min_power
-        ) / (self.max_power - self.min_power)
+        power_level = self.min_power_percent + (100 - self.min_power_percent) * (electricity_input - self.min_power) / (
+            self.max_power - self.min_power
+        )
         assert self.min_power_percent <= power_level <= self.max_power_percent
         # Nl / s
         hydrogen_output_liter = self.min_hydrogen_production_rate + (
@@ -179,34 +179,24 @@ class ElectrolyzerSimulation:
             * (power_level - self.min_power_percent)
             / (self.max_power_percent - self.min_power_percent)
         )
-        assert (
-            self.min_hydrogen_production_rate
-            <= hydrogen_output_liter
-            <= self.max_hydrogen_production_rate
-        )
+        assert self.min_hydrogen_production_rate <= hydrogen_output_liter <= self.max_hydrogen_production_rate
         # kg/s = l/s / 1000 * kg/m³
-        hydrogen_output = (
-            hydrogen_output_liter / 1000
-        ) * PhysicsConfig.hydrogen_density
+        hydrogen_output = (hydrogen_output_liter / 1000) * PhysicsConfig.hydrogen_density
         oxygen_output = hydrogen_output * (88.8 / 11.2)
 
         if hydrogen_not_stored > 0:
             hydrogen_real = hydrogen_output - hydrogen_not_stored
             if hydrogen_real == 0:
                 return hydrogen_output, 0, 0, 0
-            hydrogen_output_liter_real = (
-                hydrogen_real * 1000 / PhysicsConfig.hydrogen_density
-            )
+            hydrogen_output_liter_real = hydrogen_real * 1000 / PhysicsConfig.hydrogen_density
             power_level_real = self.min_power_percent + (
                 hydrogen_output_liter_real - self.min_hydrogen_production_rate
             ) * (self.max_power_percent - self.min_power_percent) / (
                 self.max_hydrogen_production_rate - self.min_hydrogen_production_rate
             )
-            electricity_input_real = self.min_power + (
-                self.max_power - self.min_power
-            ) * (power_level_real - self.min_power_percent) / (
-                100 - self.min_power_percent
-            )
+            electricity_input_real = self.min_power + (self.max_power - self.min_power) * (
+                power_level_real - self.min_power_percent
+            ) / (100 - self.min_power_percent)
             oxygen_output = hydrogen_real * (88.8 / 11.2)
 
             return (
@@ -362,12 +352,8 @@ class AdvancedElectrolyzer(Component):
         self.max_power: float = config.max_power
         self.min_power = config.min_power
         self.waste_energy = config.waste_energy
-        min_hydrogen_production_rate = (
-            config.min_hydrogen_production_rate_hour / 3600
-        )  # [Nl/s]
-        max_hydrogen_production_rate = (
-            config.max_hydrogen_production_rate_hour / 3600
-        )  # [Nl/s]
+        min_hydrogen_production_rate = config.min_hydrogen_production_rate_hour / 3600  # [Nl/s]
+        max_hydrogen_production_rate = config.max_hydrogen_production_rate_hour / 3600  # [Nl/s]
 
         self.electrolyzer = ElectrolyzerSimulation(
             waste_energy=config.waste_energy,
@@ -385,10 +371,7 @@ class AdvancedElectrolyzer(Component):
     def write_to_report(self):
         """Write to report."""
         lines = []
-        lines.append(
-            "CHP operation with constant electical and thermal power: "
-            + self.component_name
-        )
+        lines.append("CHP operation with constant electical and thermal power: " + self.component_name)
         return lines
 
     def i_prepare_simulation(self) -> None:
@@ -403,18 +386,13 @@ class AdvancedElectrolyzer(Component):
         """Restores the state."""
         self.electrolyzer.state = self.previous_state
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
         electricity_input: float = stsv.get_input_value(self.electricity_input_channel)
         hydrogen_input = stsv.get_input_value(self.hydrogen_not_stored_channel)
 
         if electricity_input < 0:
-            raise Exception(
-                "trying to run electrolyzer with negative amount"
-                + str(electricity_input)
-            )
+            raise Exception("trying to run electrolyzer with negative amount" + str(electricity_input))
 
         # operations can be skipped if there is no action (electricity_input == 0) in this timestep
         # maybe advance this to electricity_input >= ElectrolyzerConfig.min_power
@@ -437,16 +415,12 @@ class AdvancedElectrolyzer(Component):
                 oxygen_output,
                 power_level,
                 electricity_needed,
-            ) = self.electrolyzer.convert_electricity(
-                electricity_input, hydrogen_input / self.seconds_per_timestep
-            )
+            ) = self.electrolyzer.convert_electricity(electricity_input, hydrogen_input / self.seconds_per_timestep)
             # the losses ae included in the efficiency providedd by supplyer and are not calculated separately
             losses_this_timestep = self.waste_energy
             # unused_hydrogen = charging_amount - hydrogen_input  # add if needed?
             unused_power = unused_power + (electricity_input - electricity_needed)
-        electricity_real_needed = (
-            stsv.get_input_value(self.electricity_input_channel) - unused_power
-        )
+        electricity_real_needed = stsv.get_input_value(self.electricity_input_channel) - unused_power
         # water is split into these products
         if oxygen_output == 0:
             water_consumption = 0
@@ -548,13 +522,7 @@ class HydrogenStorageSimulation:
             # fits completely
             self.fill += hydrogen_input
             # W = kg * kWh/kg * 3600_s/h * 1000_1/k / s
-            energy_demand = (
-                hydrogen_input
-                * self.energy_to_charge
-                * 3600
-                * 1000
-                / seconds_per_timestep
-            )
+            energy_demand = hydrogen_input * self.energy_to_charge * 3600 * 1000 / seconds_per_timestep
             return hydrogen_input, energy_demand, delta_not_stored
         if self.fill >= self.max_capacity:
             # tank is already full
@@ -569,13 +537,7 @@ class HydrogenStorageSimulation:
             amount_stored = self.max_capacity - self.fill
             self.fill += amount_stored
             delta_not_stored = hydrogen_input - amount_stored
-            energy_demand = (
-                amount_stored
-                * self.energy_to_charge
-                * 3600
-                * 1000
-                / seconds_per_timestep
-            )  # w
+            energy_demand = amount_stored * self.energy_to_charge * 3600 * 1000 / seconds_per_timestep  # w
             return amount_stored, energy_demand, delta_not_stored
         raise Exception("forgotten case")
 
@@ -598,13 +560,7 @@ class HydrogenStorageSimulation:
         if self.fill > hydrogen_output:
             # has enough
             self.fill -= hydrogen_output
-            energy_demand = (
-                hydrogen_output
-                * self.energy_to_discharge
-                * 3600
-                * 1000
-                / seconds_per_timestep
-            )  # W
+            energy_demand = hydrogen_output * self.energy_to_discharge * 3600 * 1000 / seconds_per_timestep  # W
             return hydrogen_output, energy_demand, delta_not_released
         if self.fill <= self.min_capacity:
             # empty
@@ -617,9 +573,7 @@ class HydrogenStorageSimulation:
             amount = self.fill
             delta_not_released = hydrogen_output - self.fill
             self.fill = 0
-            energy_demand = (
-                amount * self.energy_to_discharge * 3600 * 1000 / seconds_per_timestep
-            )  # W
+            energy_demand = amount * self.energy_to_discharge * 3600 * 1000 / seconds_per_timestep  # W
             return 0, 0, delta_not_released
         raise Exception("forgotten case")
 
@@ -639,9 +593,7 @@ class HydrogenStorageSimulation:
         """
         # conversion from lost_%/24h to lost_%/timestep
 
-        hydrogen_losses_this_timestep = (
-            self.loss_factor / 24 * (seconds_per_timestep / 3600)
-        )
+        hydrogen_losses_this_timestep = self.loss_factor / 24 * (seconds_per_timestep / 3600)
         # % have to be divided by 100
         losses_this_timestep = self.fill * (hydrogen_losses_this_timestep / 100)
         self.fill -= losses_this_timestep
@@ -780,9 +732,7 @@ class HydrogenStorage(Component):
         """Restores the state."""
         self.hydrogenstorage.fill = self.previous_state
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
         # Setting up the internal values
         charging_amount_sec = stsv.get_input_value(self.charging_hydrogen)
@@ -792,13 +742,9 @@ class HydrogenStorage(Component):
         discharging_amount = discharging_amount_sec * self.seconds_per_timestep
 
         if charging_amount < 0:
-            raise Exception(
-                "trying to charge with negative amount" + str(charging_amount)
-            )
+            raise Exception("trying to charge with negative amount" + str(charging_amount))
         if discharging_amount < 0:
-            raise Exception(
-                "trying to discharge with negative amount: " + str(discharging_amount)
-            )
+            raise Exception("trying to discharge with negative amount: " + str(discharging_amount))
         # operations can be skipped if there is no action in this timestep
         hydrogen_input = 0
         hydrogen_output = 0
@@ -821,8 +767,7 @@ class HydrogenStorage(Component):
             # to check previous if command
             # a heat stick in the storage tank would be better --> direct use of el.Energy
             raise Exception(
-                "Tank cant be charged and discharged in the same timestep. Use existing Hydrogen! Delta:"
-                + str(delta)
+                "Tank cant be charged and discharged in the same timestep. Use existing Hydrogen! Delta:" + str(delta)
             )
 
         if charging_amount > 0:
@@ -837,26 +782,17 @@ class HydrogenStorage(Component):
                 hydrogen_output,
                 discharging_energy_demand,
                 hydrogen_not_released,
-            ) = self.hydrogenstorage.withdraw(
-                discharging_amount, self.seconds_per_timestep
-            )
+            ) = self.hydrogenstorage.withdraw(discharging_amount, self.seconds_per_timestep)
             if hydrogen_not_released > 0:
                 hydrogen_output = 0
                 discharging_energy_demand = 0
-        losses_this_timestep = self.hydrogenstorage.storage_losses(
-            self.seconds_per_timestep
-        )
+        losses_this_timestep = self.hydrogenstorage.storage_losses(self.seconds_per_timestep)
         # discharging amount target
         energy_demand = charging_energy_demand + discharging_energy_demand  # W
-        actual_delta = (
-            hydrogen_input - hydrogen_output - losses_this_timestep
-        ) / self.seconds_per_timestep  # kg/s
+        actual_delta = (hydrogen_input - hydrogen_output - losses_this_timestep) / self.seconds_per_timestep  # kg/s
         percent_fill = self.hydrogenstorage.fill / self.max_capacity
 
-        hydrogen_not_stored = (
-            stsv.get_input_value(self.charging_hydrogen) * self.seconds_per_timestep
-            - hydrogen_input
-        )
+        hydrogen_not_stored = stsv.get_input_value(self.charging_hydrogen) * self.seconds_per_timestep - hydrogen_input
 
         stsv.set_output_value(self.hydrogen_storage_energy_demand, energy_demand)
         stsv.set_output_value(self.hydrogen_losses, losses_this_timestep)

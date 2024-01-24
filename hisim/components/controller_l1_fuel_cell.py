@@ -69,9 +69,7 @@ class FuelCellControllerConfig(ConfigBase):
     def read_config(fuel_cell_name):
         """Opens the according JSON-file, based on the fuel_cell_name."""
 
-        config_file = os.path.join(
-            utils.HISIMPATH["inputs"], "fuel_cell_manufacturer_config.json"
-        )
+        config_file = os.path.join(utils.HISIMPATH["inputs"], "fuel_cell_manufacturer_config.json")
         with open(config_file, "r", encoding="utf-8") as json_file:
             data = json.load(json_file)
             return data.get("Fuel Cell variants", {}).get(fuel_cell_name, {})
@@ -259,16 +257,11 @@ class FuelCellController(Component):
             # Test start
             if self.current_state in ["Starting from OFF", "Starting from STANDBY"]:
                 # pdb.set_trace()
-                if (
-                    self.activation_runtime
-                    <= self.my_simulation_parameters.seconds_per_timestep
-                ):
+                if self.activation_runtime <= self.my_simulation_parameters.seconds_per_timestep:
                     self.current_state = "Starting to min"
                     # pdb.set_trace()
                 else:
-                    self.activation_runtime -= (
-                        self.my_simulation_parameters.seconds_per_timestep
-                    )
+                    self.activation_runtime -= self.my_simulation_parameters.seconds_per_timestep
                     # pdb.set_trace()
                     # self.current_state = self.current_state
                     # starting to min auch unten aufnehmen um so min_load zu verteilen. "Starting to min" kann verwendet werden,
@@ -282,13 +275,8 @@ class FuelCellController(Component):
                 self.current_state = "Starting from STANDBY"
                 self.activation_runtime = warm_start_time_to_min
             else:
-                if (
-                    self.activation_runtime
-                    > self.my_simulation_parameters.seconds_per_timestep
-                ):
-                    self.activation_runtime -= (
-                        self.my_simulation_parameters.seconds_per_timestep
-                    )
+                if self.activation_runtime > self.my_simulation_parameters.seconds_per_timestep:
+                    self.activation_runtime -= self.my_simulation_parameters.seconds_per_timestep
                     # self.current_state = self.current_state
                 # elif self.activation_runtime <= self.my_simulation_parameters.seconds_per_timestep:
                 #    self.activation_runtime -= self.my_simulation_parameters.seconds_per_timestep
@@ -320,9 +308,7 @@ class FuelCellController(Component):
         self.off_count = self.off_count_previous
         self.activation_runtime = self.activation_runtime_previous
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the component."""
         if force_convergence:
             return
@@ -335,12 +321,8 @@ class FuelCellController(Component):
         self.warm_start_time = config.warm_start_time
         self.cold_start_time = config.cold_start_time
         """
-        warm_start_time_to_min = self.warm_start_time * (
-            self.min_output / self.nom_output
-        )
-        cold_start_time_to_min = self.cold_start_time * (
-            self.min_output / self.nom_output
-        )
+        warm_start_time_to_min = self.warm_start_time * (self.min_output / self.nom_output)
+        cold_start_time_to_min = self.cold_start_time * (self.min_output / self.nom_output)
 
         (current_load_to_system, state, self.curtailed_load_count) = self.load_check(
             (abs(stsv.get_input_value(self.demand_profile))),

@@ -224,11 +224,15 @@ class Component:
             if connection.source_class_name != component_name:
                 raise ValueError("Trying to add connections to different components in one go.")
         self.default_connections[component_name] = connections
-        log.trace("added default connections for connections from : " + component_name + "\n" + str(self.default_connections))
+        log.trace(
+            "added default connections for connections from : " + component_name + "\n" + str(self.default_connections)
+        )
 
     def i_prepare_simulation(self) -> None:
         """Gets called before the simulation to prepare the calculation."""
-        raise NotImplementedError("Simulation preparation is missing for " + self.component_name + " (" + self.get_full_classname() + ")")
+        raise NotImplementedError(
+            "Simulation preparation is missing for " + self.component_name + " (" + self.get_full_classname() + ")"
+        )
 
     def set_sim_repo(self, simulation_repository: SimRepository) -> None:
         """Sets the SimRepository."""
@@ -285,7 +289,13 @@ class Component:
         for component_input in self.inputs:
             if component_input.field_name == input_fieldname:
                 if input_to_set is not None:
-                    raise ValueError("The input " + input_fieldname + " of the component " + self.component_name + " was already set.")
+                    raise ValueError(
+                        "The input "
+                        + input_fieldname
+                        + " of the component "
+                        + self.component_name
+                        + " was already set."
+                    )
                 input_to_set = component_input
         if input_to_set is None:
             raise ValueError("The component " + self.component_name + " has no input with the name " + input_fieldname)

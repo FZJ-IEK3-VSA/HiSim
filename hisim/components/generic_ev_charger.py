@@ -153,9 +153,7 @@ class VehiclePure(cp.Component):
 
     """
 
-    def __init__(
-        self, my_simulation_parameters: SimulationParameters, config: VehiclePureConfig
-    ) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: VehiclePureConfig) -> None:
         """Initialize the class."""
         super().__init__(
             name="EV_charger",
@@ -189,9 +187,7 @@ class VehiclePure(cp.Component):
 
         self.max_capacity = electric_vehicle["Battery Capacity"] * 1e3
         if "Battery Useful Capacity" in electric_vehicle:
-            self.min_capacity = (
-                self.max_capacity - electric_vehicle["Battery Useful Capacity"] * 1e3
-            )
+            self.min_capacity = self.max_capacity - electric_vehicle["Battery Useful Capacity"] * 1e3
         else:
             self.min_capacity = self.max_capacity * 0.1
 
@@ -205,12 +201,10 @@ class VehiclePure(cp.Component):
             self.component_name, self.evconfig, self.my_simulation_parameters
         )
         if cache_file_exists:
-            self.car_in_charging_station = pd.read_csv(
-                cache_filepath, sep=",", decimal="."
-            )["CarInChargingStation"].tolist()
-            self.discharge = pd.read_csv(cache_filepath, sep=",", decimal=".")[
-                "Discharge"
+            self.car_in_charging_station = pd.read_csv(cache_filepath, sep=",", decimal=".")[
+                "CarInChargingStation"
             ].tolist()
+            self.discharge = pd.read_csv(cache_filepath, sep=",", decimal=".")["Discharge"].tolist()
         else:
 
             def open_sql(path, table_name):
@@ -222,9 +216,7 @@ class VehiclePure(cp.Component):
                     data = json.load(file)
                 return data["Values"]
 
-            filepath = utils.load_export_load_profile_generator(
-                target=self.evconfig.profile_name
-            )
+            filepath = utils.load_export_load_profile_generator(target=self.evconfig.profile_name)
             if filepath is None:
                 filepath = utils.HISIMPATH
 
@@ -234,24 +226,17 @@ class VehiclePure(cp.Component):
             list_values = []
             for _, row in filepaths.iterrows():
                 json_info = json.loads(row["Json"])
-                if (
-                    "Charging" in json_info["FileName"]
-                    and "png" not in json_info["FileName"]
-                ):
+                if "Charging" in json_info["FileName"] and "png" not in json_info["FileName"]:
                     filepath = os.path.normpath(json_info["FullFileName"])
                     filepath_list = filepath.split(os.sep)
-                    ev_files[filepath_list[-1].split(".")[0]] = json_info[
-                        "FullFileName"
-                    ]
+                    ev_files[filepath_list[-1].split(".")[0]] = json_info["FullFileName"]
                     list_columns.append(filepath_list[-1].split(".")[0])
                     list_values.append(open_ev_json(json_info["FullFileName"]))
             list_values = list(map(list, zip(*list_values)))
             # ev_pd = pd.DataFrame(list_values, columns=list_columns)
 
             # Gets battery information to calculate discharging while not at home
-            transportation_devices = open_sql(
-                filepath["electric_vehicle"][0], "TransportationDevices"
-            )
+            transportation_devices = open_sql(filepath["electric_vehicle"][0], "TransportationDevices")
             for _, vehicle in transportation_devices.iterrows():
                 if "Charging" in vehicle["Name"]:
                     vehicle_info = json.loads(vehicle["Json"])
@@ -266,13 +251,11 @@ class VehiclePure(cp.Component):
             # car_state = []
             discharge_stats = [0]
             # Gets transportation stats
-            transportation_devices_stats = open_sql(
-                filepath["electric_vehicle"][0], "TransportationDeviceStates"
-            )
+            transportation_devices_stats = open_sql(filepath["electric_vehicle"][0], "TransportationDeviceStates")
             for _, column in transportation_devices_stats.iterrows():
-                if datetime.datetime.strptime(
-                    column["DateTime"], "%d/%m/%Y %H:%M"
-                ) > datetime.datetime.strptime("31/12/2018 23:59", "%d/%m/%Y %H:%M"):
+                if datetime.datetime.strptime(column["DateTime"], "%d/%m/%Y %H:%M") > datetime.datetime.strptime(
+                    "31/12/2018 23:59", "%d/%m/%Y %H:%M"
+                ):
                     if (
                         "ParkingAndFullyCharged" in column["DeviceState"]
                         or "ParkingAndCharging" in column["DeviceState"]
@@ -281,9 +264,7 @@ class VehiclePure(cp.Component):
                     else:
                         car_in_charging_station.append(False)
                     load_stats.append(float(column["CurrentRange"]))
-                    soc.append(
-                        float(column["CurrentRange"]) / battery_stored_energy_meters
-                    )
+                    soc.append(float(column["CurrentRange"]) / battery_stored_energy_meters)
                     if len(load_stats) > 1:
                         diff = load_stats[-1] - load_stats[-2]
                         if diff < 0:
@@ -316,9 +297,7 @@ class VehiclePure(cp.Component):
         """Doublechecks."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
         pass
 
@@ -348,9 +327,7 @@ class Vehicle(cp.Component):
     MaxCapacity = "MaxCapacity"
     Discharge = "Discharge"
 
-    def __init__(
-        self, my_simulation_parameters: SimulationParameters, config: VehicleConfig
-    ) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: VehicleConfig) -> None:
         """Initialize the class."""
         super().__init__(
             name="ElectricVehicle",
@@ -389,10 +366,7 @@ class Vehicle(cp.Component):
         electric_vehicle_found = False
         electric_vehicle = None
         for electric_vehicle in electric_vehicle_database:
-            if (
-                electric_vehicle["Manufacturer"] == manufacturer
-                and electric_vehicle["Model"] == model
-            ):
+            if electric_vehicle["Manufacturer"] == manufacturer and electric_vehicle["Model"] == model:
                 electric_vehicle_found = True
                 break
 
@@ -401,9 +375,7 @@ class Vehicle(cp.Component):
 
         self.max_capacity = electric_vehicle["Battery Capacity"] * 1e3
         if "Battery Useful Capacity" in electric_vehicle:
-            self.min_capacity = (
-                self.max_capacity - electric_vehicle["Battery Useful Capacity"] * 1e3
-            )
+            self.min_capacity = self.max_capacity - electric_vehicle["Battery Useful Capacity"] * 1e3
         else:
             self.min_capacity = self.max_capacity * 0.1
 
@@ -425,9 +397,7 @@ class Vehicle(cp.Component):
         """Doubelchecks."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
         if timestep == 0:
             capacity = self.capacity
@@ -585,9 +555,7 @@ class EVCharger(cp.Component):
     # 1. EVChargerController
     # 2. Some ChargingInput
 
-    def __init__(
-        self, my_simulation_parameters: SimulationParameters, config: EVChargerConfig
-    ) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: EVChargerConfig) -> None:
         """Initialize the class."""
         super().__init__(
             name="EVCharger",
@@ -696,9 +664,7 @@ class EVCharger(cp.Component):
         lines.append(f"Manufacturer: {self.manufacturer}")
         lines.append(f"Model: {self.name}")
         lines.append(f"Charging Power: {self.charging_power_original} kW")
-        lines.append(
-            f"EV Battery Capacity: {self.electric_vehicle.max_capacity * 1e-3}"
-        )
+        lines.append(f"EV Battery Capacity: {self.electric_vehicle.max_capacity * 1e-3}")
         lines.append(f"Vehicle: {self.electric_vehicle.model}")
         return lines
 
@@ -714,9 +680,7 @@ class EVCharger(cp.Component):
         """Doubelchecks."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
         if force_convergence:
             return
@@ -738,9 +702,7 @@ class EVCharger(cp.Component):
             to_be_charged = -charging
 
             if state == 0:
-                charging_delta, after_capacity = self.state.keep_state(
-                    capacity=capacity
-                )
+                charging_delta, after_capacity = self.state.keep_state(capacity=capacity)
             elif state == 1:
                 charging_delta, after_capacity = self.charge_only_from_the_grid(
                     max_capacity=max_capacity, capacity=capacity
@@ -760,8 +722,7 @@ class EVCharger(cp.Component):
                 )
             else:
                 raise Exception(
-                    f"State {state} has not been implemented! "
-                    "Please check EVCharger and EVChargerController "
+                    f"State {state} has not been implemented! " "Please check EVCharger and EVChargerController "
                 )
 
         # Discharges battery according to electric vehicle use
@@ -818,9 +779,7 @@ class EVCharger(cp.Component):
 
     def charge_only_from_the_grid(self, max_capacity, capacity):
         """Charge only from the grid."""
-        charging_delta, after_capacity = self.state.force_store(
-            max_capacity=max_capacity, current_capacity=capacity
-        )
+        charging_delta, after_capacity = self.state.force_store(max_capacity=max_capacity, current_capacity=capacity)
         return charging_delta, after_capacity
 
 
@@ -859,12 +818,12 @@ class EVChargerController(cp.Component):
 
         if self.mode == 1:
             self.mode_description = "Straight Charging"
-            self.mode_extended_description = (
-                "Charge the Electric Vehicle whenever is connected to EV Charger"
-            )
+            self.mode_extended_description = "Charge the Electric Vehicle whenever is connected to EV Charger"
         elif self.mode == 2:
             self.mode_description = "Charge only on Electricity Surplus"
-            self.mode_extended_description = "Charge the Electric Vehicle whenever the home grid is on electricity surplus"
+            self.mode_extended_description = (
+                "Charge the Electric Vehicle whenever the home grid is on electricity surplus"
+            )
         elif self.mode == 3:
             self.mode_description = "Operate on Vehicle-to-Grid"
             self.mode_extended_description = (
@@ -937,9 +896,7 @@ class EVChargerController(cp.Component):
         """Doublechecks."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
         # Gets inputs
         # charging = stsv.get_input_value(self.charging_inputC)
@@ -1009,8 +966,7 @@ class EVChargerController(cp.Component):
         lines.append(f"Mode Number: {self.mode}")
         lines.append(f"Mode: {self.mode_description}")
         try:
-            lines.append(
-                f"Extend Mode Description: {self.mode_extended_description}")
+            lines.append(f"Extend Mode Description: {self.mode_extended_description}")
         except AttributeError:
             lines.append("Extend Mode Description: TO BE IMPLEMENTED")
         return lines

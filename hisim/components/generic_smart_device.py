@@ -112,9 +112,7 @@ class SmartDeviceState:
 
         if timestep < self.timestep_of_activation + self.time_to_go:
             # device is running
-            self.actual_power = electricity_profile[
-                timestep - self.timestep_of_activation
-            ]
+            self.actual_power = electricity_profile[timestep - self.timestep_of_activation]
 
         # device deactivation
         if timestep == self.timestep_of_activation + self.time_to_go:
@@ -140,9 +138,7 @@ class SmartDevice(cp.Component):
     # optional Inputs
     ElectricityTarget = "ElectricityTarget"
 
-    def __init__(
-        self, my_simulation_parameters: SimulationParameters, config: SmartDeviceConfig
-    ):
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: SmartDeviceConfig):
         """Initialize the class."""
 
         super().__init__(
@@ -165,9 +161,7 @@ class SmartDevice(cp.Component):
                 lt.ComponentType.SMART_DEVICE,
             ]
         else:
-            postprocessing_flag = [
-                lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED
-            ]
+            postprocessing_flag = [lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
 
         # mandatory Output
         self.electricity_output_channel: cp.ComponentOutput = self.add_output(
@@ -203,9 +197,7 @@ class SmartDevice(cp.Component):
         """Prepares the simulation."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Iteration in smart appliance like washing mashine, dish washer or dryer.
 
         :param timestep: timestep of simulation
@@ -227,21 +219,14 @@ class SmartDevice(cp.Component):
                 # if surplus controller is connected get related signal
                 if self.electricity_target_channel.source_output is not None:
                     electricity_target = stsv.get_input_value(self.electricity_target_channel)
-                    if (
-                        electricity_target
-                        >= self.electricity_profile[self.state.position][0]
-                    ):
+                    if electricity_target >= self.electricity_profile[self.state.position][0]:
                         activation = timestep
                 # if last possible switch on force activation
-                if (
-                    timestep >= self.latest_start[self.state.position]
-                ):  # needs to be activated
+                if timestep >= self.latest_start[self.state.position]:  # needs to be activated
                     activation = timestep
 
                 if timestep == activation:
-                    self.state.run(
-                        timestep, self.electricity_profile[self.state.position]
-                    )
+                    self.state.run(timestep, self.electricity_profile[self.state.position])
 
         # run device if it was already activated
         else:
@@ -249,9 +234,7 @@ class SmartDevice(cp.Component):
 
         stsv.set_output_value(self.electricity_output_channel, self.state.actual_power)
 
-    def build(
-        self, identifier: str, source_weight: int, seconds_per_timestep: int = 60
-    ) -> None:
+    def build(self, identifier: str, source_weight: int, seconds_per_timestep: int = 60) -> None:
         """Initialization of Smart Device information.
 
         :param identifier: name of smart device in LPG
@@ -266,16 +249,12 @@ class SmartDevice(cp.Component):
 
         # load smart device profile
         smart_device_profile = []
-        filepath = path.join(
-            utils.HISIMPATH["utsp_reports"], "FlexibilityEvents.HH1.json"
-        )
+        filepath = path.join(utils.HISIMPATH["utsp_reports"], "FlexibilityEvents.HH1.json")
         with open(filepath, encoding="utf-8") as file:
             smart_device_profile = json.load(file)
 
         if not smart_device_profile:
-            raise NameError(
-                "LPG data for smart appliances is missing or located missleadingly"
-            )
+            raise NameError("LPG data for smart appliances is missing or located missleadingly")
 
         # initializing relevant data
         earliest_start, latest_start, electricity_profile = [], [], []
@@ -304,18 +283,13 @@ class SmartDevice(cp.Component):
                 # latest start in given time resolution
                 y_sample = sample["LatestStart"]["ExternalStep"] / minutes_per_timestep
                 # number of timesteps in given time resolution -> integer value
-                z_sample = ma.ceil(
-                    x_sample + sample["TotalDuration"] / minutes_per_timestep
-                ) - ma.floor(x_sample)
+                z_sample = ma.ceil(x_sample + sample["TotalDuration"] / minutes_per_timestep) - ma.floor(x_sample)
                 # earliest and latest start in new time resolution -> integer value
                 earliest_start.append(ma.floor(x_sample))
                 latest_start.append(ma.ceil(y_sample))
 
                 # get shiftable load profile
-                el_shiftable_load = (
-                    sample["Profiles"][2]["TimeOffsetInSteps"] * [0]
-                    + sample["Profiles"][2]["Values"]
-                )
+                el_shiftable_load = sample["Profiles"][2]["TimeOffsetInSteps"] * [0] + sample["Profiles"][2]["Values"]
 
                 # average profiles given in 1 minute resolution to given time resolution
                 elem_el = []
@@ -327,15 +301,13 @@ class SmartDevice(cp.Component):
                     elem_el.append(
                         sum(
                             el_shiftable_load[
-                                offset
-                                + minutes_per_timestep * i: offset
-                                + (i + 1) * minutes_per_timestep
+                                offset + minutes_per_timestep * i : offset + (i + 1) * minutes_per_timestep
                             ]
                         )
                         / minutes_per_timestep
                     )
 
-                last = el_shiftable_load[offset + (i + 1) * minutes_per_timestep:]
+                last = el_shiftable_load[offset + (i + 1) * minutes_per_timestep :]
                 if offset != minutes_per_timestep:
                     elem_el.append(sum(last) / (minutes_per_timestep - offset))
                 electricity_profile.append(elem_el)
@@ -375,10 +347,7 @@ class SmartDevice(cp.Component):
     ) -> OpexCostDataClass:
         """Get opex costs."""
         for index, output in enumerate(all_outputs):
-            if (
-                output.component_name == self.component_name
-                and output.load_type == lt.LoadTypes.ELECTRICITY
-            ):
+            if output.component_name == self.component_name and output.load_type == lt.LoadTypes.ELECTRICITY:
                 co2_per_unit = 0.4
                 euro_per_unit = 0.25
                 self.consumption = (

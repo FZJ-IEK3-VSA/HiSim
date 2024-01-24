@@ -66,7 +66,7 @@ class GenericGasHeaterControllerL1Config(ConfigBase):
 
     @classmethod
     def get_scaled_generic_gas_heater_controller_config(
-            cls, heating_load_of_building_in_watt: float
+        cls, heating_load_of_building_in_watt: float
     ) -> "GenericGasHeaterControllerL1Config":
         """Gets a default Generic Heat Pump Controller."""
         maximal_thermal_power_in_watt = heating_load_of_building_in_watt
@@ -101,14 +101,10 @@ class GenericGasHeaterControllerL1(Component):
     """
 
     # Inputs
-    WaterTemperatureInputFromHeatWaterStorage = (
-        "WaterTemperatureInputFromHeatWaterStorage"
-    )
+    WaterTemperatureInputFromHeatWaterStorage = "WaterTemperatureInputFromHeatWaterStorage"
 
     # set heating  flow temperature
-    HeatingFlowTemperatureFromHeatDistributionSystem = (
-        "HeatingFlowTemperatureFromHeatDistributionSystem"
-    )
+    HeatingFlowTemperatureFromHeatDistributionSystem = "HeatingFlowTemperatureFromHeatDistributionSystem"
 
     DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
 
@@ -148,14 +144,12 @@ class GenericGasHeaterControllerL1(Component):
             Units.CELSIUS,
             True,
         )
-        self.daily_avg_outside_temperature_input_channel: ComponentInput = (
-            self.add_input(
-                self.component_name,
-                self.DailyAverageOutsideTemperature,
-                LoadTypes.TEMPERATURE,
-                Units.CELSIUS,
-                True,
-            )
+        self.daily_avg_outside_temperature_input_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.DailyAverageOutsideTemperature,
+            LoadTypes.TEMPERATURE,
+            Units.CELSIUS,
+            True,
         )
 
         self.control_signal_to_gasheater_channel: ComponentOutput = self.add_output(
@@ -170,12 +164,8 @@ class GenericGasHeaterControllerL1(Component):
         self.previous_gasheater_mode: Any
 
         self.add_default_connections(self.get_default_connections_from_weather())
-        self.add_default_connections(
-            self.get_default_connections_from_simple_hot_water_storage()
-        )
-        self.add_default_connections(
-            self.get_default_connections_from_heat_distribution_controller()
-        )
+        self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
+        self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
 
     def get_default_connections_from_simple_hot_water_storage(
         self,
@@ -262,9 +252,7 @@ class GenericGasHeaterControllerL1(Component):
         """Write important variables to report."""
         return self.gas_heater_controller_config.get_string_dict()
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the Gas Heater comtroller."""
 
         if force_convergence:
@@ -272,14 +260,12 @@ class GenericGasHeaterControllerL1(Component):
         else:
             # Retrieves inputs
 
-            water_temperature_input_from_heat_water_storage_in_celsius = (
-                stsv.get_input_value(self.water_temperature_input_channel)
+            water_temperature_input_from_heat_water_storage_in_celsius = stsv.get_input_value(
+                self.water_temperature_input_channel
             )
 
-            heating_flow_temperature_from_heat_distribution_system = (
-                stsv.get_input_value(
-                    self.heating_flow_temperature_from_heat_distribution_system_channel
-                )
+            heating_flow_temperature_from_heat_distribution_system = stsv.get_input_value(
+                self.heating_flow_temperature_from_heat_distribution_system_channel
             )
 
             daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
@@ -313,9 +299,7 @@ class GenericGasHeaterControllerL1(Component):
             else:
                 raise ValueError("Gas Heater Controller control_signal unknown.")
 
-            stsv.set_output_value(
-                self.control_signal_to_gasheater_channel, control_signal
-            )
+            stsv.set_output_value(self.control_signal_to_gasheater_channel, control_signal)
 
     def modulate_power(
         self,
@@ -342,18 +326,14 @@ class GenericGasHeaterControllerL1(Component):
             linear_fit = 1 - (
                 (
                     self.gas_heater_controller_config.set_temperature_difference_for_full_power
-                    - (
-                        set_heating_flow_temperature_in_celsius
-                        - water_temperature_input_in_celsius
-                    )
+                    - (set_heating_flow_temperature_in_celsius - water_temperature_input_in_celsius)
                 )
                 / self.gas_heater_controller_config.set_temperature_difference_for_full_power
             )
             percentage = max(minimal_percentage, linear_fit)
             return percentage
         if (
-            water_temperature_input_in_celsius
-            <= set_heating_flow_temperature_in_celsius + 0.5
+            water_temperature_input_in_celsius <= set_heating_flow_temperature_in_celsius + 0.5
         ):  # use same hysteresis like in conditions_on_off()
             percentage = minimal_percentage
             return percentage
@@ -371,8 +351,7 @@ class GenericGasHeaterControllerL1(Component):
 
         if self.controller_gasheatermode == "heating":
             if (
-                water_temperature_input_in_celsius
-                > (set_heating_flow_temperature_in_celsius + 0.5)
+                water_temperature_input_in_celsius > (set_heating_flow_temperature_in_celsius + 0.5)
                 or summer_heating_mode == "off"
             ):  # + 1:
                 self.controller_gasheatermode = "off"
@@ -382,8 +361,7 @@ class GenericGasHeaterControllerL1(Component):
             # gas heater is only turned on if the water temperature is below the flow temperature
             # and if the avg daily outside temperature is cold enough (summer mode on)
             if (
-                water_temperature_input_in_celsius
-                < (set_heating_flow_temperature_in_celsius - 1.0)
+                water_temperature_input_in_celsius < (set_heating_flow_temperature_in_celsius - 1.0)
                 and summer_heating_mode == "on"
             ):  # - 1:
                 self.controller_gasheatermode = "heating"
@@ -404,17 +382,11 @@ class GenericGasHeaterControllerL1(Component):
             heating_mode = "on"
 
         # it is too hot for heating
-        elif (
-            daily_average_outside_temperature_in_celsius
-            > set_heating_threshold_temperature_in_celsius
-        ):
+        elif daily_average_outside_temperature_in_celsius > set_heating_threshold_temperature_in_celsius:
             heating_mode = "off"
 
         # it is cold enough for heating
-        elif (
-            daily_average_outside_temperature_in_celsius
-            < set_heating_threshold_temperature_in_celsius
-        ):
+        elif daily_average_outside_temperature_in_celsius < set_heating_threshold_temperature_in_celsius:
             heating_mode = "on"
 
         else:

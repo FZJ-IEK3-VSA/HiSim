@@ -124,9 +124,7 @@ class ControllerHeat(cp.Component):
             my_config=config,
         )
         self.mode: Any
-        self.temperature_storage_target_warm_water = (
-            self.controller_heat_config.temperature_storage_target_warm_water
-        )
+        self.temperature_storage_target_warm_water = self.controller_heat_config.temperature_storage_target_warm_water
         self.temperature_storage_target_heating_water = (
             self.controller_heat_config.temperature_storage_target_heating_water
         )
@@ -268,16 +266,10 @@ class ControllerHeat(cp.Component):
 
                 # Storage warm enough. Try to turn off Heaters
             elif delta_temperature <= 0:
-                if (
-                    temperature_storage_target_c == temperature_storage_target
-                    and timestep_of_hysteresis != timestep
-                ):
+                if temperature_storage_target_c == temperature_storage_target and timestep_of_hysteresis != timestep:
                     temperature_storage_target_c = temperature_storage_target_hysteresis
                     timestep_of_hysteresis = timestep
-                elif (
-                    temperature_storage_target_c != temperature_storage_target
-                    and timestep_of_hysteresis != timestep
-                ):
+                elif temperature_storage_target_c != temperature_storage_target and timestep_of_hysteresis != timestep:
                     control_signal_heat_pump = 0
                     control_signal_gas_heater = 0
                     control_signal_chp = 0
@@ -291,9 +283,7 @@ class ControllerHeat(cp.Component):
 
         return temperature_storage_target_c, timestep_of_hysteresis
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
         if force_convergence:
             return
@@ -302,13 +292,11 @@ class ControllerHeat(cp.Component):
         # First heat up WarmWaterStorage->more important, than heat up HeatingWater
         # But only one Storage can be heated up in a TimeStep!
         # Simulate WarmWater
-        delta_temperature_ww = (
-            self.state.temperature_storage_target_ww_c
-            - stsv.get_input_value(self.temperature_storage_warm_water_channel)
+        delta_temperature_ww = self.state.temperature_storage_target_ww_c - stsv.get_input_value(
+            self.temperature_storage_warm_water_channel
         )
-        delta_temperature_hw = (
-            self.state.temperature_storage_target_hw_c
-            - stsv.get_input_value(self.temperature_storage_heating_water_channel)
+        delta_temperature_hw = self.state.temperature_storage_target_hw_c - stsv.get_input_value(
+            self.temperature_storage_heating_water_channel
         )
         if (
             stsv.get_input_value(self.temperature_storage_warm_water_channel) == 0
@@ -346,18 +334,15 @@ class ControllerHeat(cp.Component):
                 stsv=stsv,
                 delta_temperature=delta_temperature_ww,
                 timestep=timestep,
-                temperature_storage=stsv.get_input_value(
-                    self.temperature_storage_warm_water_channel
-                ),
+                temperature_storage=stsv.get_input_value(self.temperature_storage_warm_water_channel),
                 temperature_storage_target=self.temperature_storage_target_warm_water,
                 temperature_storage_target_hysteresis=self.temperature_storage_target_hysteresis_ww,
                 temperature_storage_target_c=self.state.temperature_storage_target_ww_c,
                 timestep_of_hysteresis=self.state.timestep_of_hysteresis_ww,
             )
         elif control_signal_choose_storage == 2:
-            delta_temperature_hw = (
-                self.state.temperature_storage_target_hw_c
-                - stsv.get_input_value(self.temperature_storage_heating_water_channel)
+            delta_temperature_hw = self.state.temperature_storage_target_hw_c - stsv.get_input_value(
+                self.temperature_storage_heating_water_channel
             )
             (
                 self.state.temperature_storage_target_hw_c,
@@ -366,15 +351,11 @@ class ControllerHeat(cp.Component):
                 stsv=stsv,
                 delta_temperature=delta_temperature_hw,
                 timestep=timestep,
-                temperature_storage=stsv.get_input_value(
-                    self.temperature_storage_heating_water_channel
-                ),
+                temperature_storage=stsv.get_input_value(self.temperature_storage_heating_water_channel),
                 temperature_storage_target=self.temperature_storage_target_heating_water,
                 temperature_storage_target_hysteresis=self.temperature_storage_target_hysteresis_hw,
                 temperature_storage_target_c=self.state.temperature_storage_target_hw_c,
                 timestep_of_hysteresis=self.state.timestep_of_hysteresis_hw,
             )
 
-        stsv.set_output_value(
-            self.control_signal_choose_storage_channel, control_signal_choose_storage
-        )
+        stsv.set_output_value(self.control_signal_choose_storage_channel, control_signal_choose_storage)

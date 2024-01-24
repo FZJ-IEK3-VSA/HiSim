@@ -48,9 +48,7 @@ class PTXControllerConfig(ConfigBase):
     @staticmethod
     def read_config(electrolyzer_name):
         """Read config."""
-        config_file = os.path.join(
-            utils.HISIMPATH["inputs"], "electrolyzer_manufacturer_config.json"
-        )
+        config_file = os.path.join(utils.HISIMPATH["inputs"], "electrolyzer_manufacturer_config.json")
         with open(config_file, "r", encoding="utf-8") as json_file:
             data = json.load(json_file)
             return data.get("Electrolyzer variants", {}).get(electrolyzer_name, {})
@@ -171,9 +169,7 @@ class PTXController(Component):
         """System operation."""
         if operation_mode == "NominalLoad":
             load_to_system = self.nom_load
-            power_to_battery = (
-                res_load - self.nom_load
-            )  # postive battery charge, negative battery discharges
+            power_to_battery = res_load - self.nom_load  # postive battery charge, negative battery discharges
 
         elif operation_mode == "MinimumLoad":
             if self.min_load <= res_load <= self.max_load:
@@ -219,9 +215,7 @@ class PTXController(Component):
                 else:
                     load_to_system = self.standby_load
                     power_to_battery = res_load - self.standby_load
-                    self.standby_time_count += (
-                        self.my_simulation_parameters.seconds_per_timestep
-                    )
+                    self.standby_time_count += self.my_simulation_parameters.seconds_per_timestep
 
         else:
             if res_load <= self.max_load:
@@ -251,9 +245,7 @@ class PTXController(Component):
         self.standby_time_count = self.standby_time_count_previous
         self.total_energy_to_battery = self.total_energy_to_battery_previous
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the component."""
         if force_convergence:
             return
@@ -276,9 +268,7 @@ class PTXController(Component):
             self.system_state = "ON"
 
         """
-        (load_to_system, power_to_battery) = self.system_operation(
-            self.operation_mode, res_load
-        )
+        (load_to_system, power_to_battery) = self.system_operation(self.operation_mode, res_load)
 
         """
         if self.system_state == "OFF":
@@ -290,9 +280,7 @@ class PTXController(Component):
             power_to_battery = res_load
             load_to_system = 0.0
         """
-        self.total_energy_to_battery += power_to_battery * (
-            self.my_simulation_parameters.seconds_per_timestep / 3600
-        )
+        self.total_energy_to_battery += power_to_battery * (self.my_simulation_parameters.seconds_per_timestep / 3600)
 
         stsv.set_output_value(self.load_to_battery, power_to_battery)
         stsv.set_output_value(self.load_to_system, load_to_system)

@@ -84,9 +84,7 @@ class ElectricityMeter(DynamicComponent):
 
         self.seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
         # Component has states
-        self.state = ElectricityMeterState(
-            cumulative_production_in_watt_hour=0, cumulative_consumption_in_watt_hour=0
-        )
+        self.state = ElectricityMeterState(cumulative_production_in_watt_hour=0, cumulative_consumption_in_watt_hour=0)
         self.previous_state = self.state.self_copy()
 
         # Outputs
@@ -153,16 +151,16 @@ class ElectricityMeter(DynamicComponent):
         self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())
         self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
         self.add_dynamic_default_connections(self.get_default_connections_from_dhw_heat_pump())
-        self.add_dynamic_default_connections(
-            self.get_default_connections_from_advanced_heat_pump()
-        )
+        self.add_dynamic_default_connections(self.get_default_connections_from_advanced_heat_pump())
 
     def get_default_connections_from_utsp_occupancy(
         self,
     ):
         """Get utsp occupancy default connections."""
 
-        from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector  # pylint: disable=import-outside-toplevel
+        from hisim.components.loadprofilegenerator_utsp_connector import (
+            UtspLpgConnector,
+        )  # pylint: disable=import-outside-toplevel
 
         dynamic_connections = []
         occupancy_class_name = UtspLpgConnector.get_classname()
@@ -209,7 +207,9 @@ class ElectricityMeter(DynamicComponent):
     ):
         """Get dhw heat pump default connections."""
 
-        from hisim.components.generic_heat_pump_modular import ModularHeatPump  # pylint: disable=import-outside-toplevel
+        from hisim.components.generic_heat_pump_modular import (
+            ModularHeatPump,
+        )  # pylint: disable=import-outside-toplevel
 
         dynamic_connections = []
         dhw_heat_pump_class_name = ModularHeatPump.get_classname()
@@ -242,7 +242,10 @@ class ElectricityMeter(DynamicComponent):
                 source_component_field_name=HeatPumpHplib.ElectricalInputPower,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
-                source_tags=[lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+                source_tags=[
+                    lt.ComponentType.HEAT_PUMP_BUILDING,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                ],
                 source_weight=999,
             )
         )
@@ -268,15 +271,11 @@ class ElectricityMeter(DynamicComponent):
         """Doublechecks values."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the grid energy balancer."""
 
         if timestep == 0:
-            self.production_inputs = self.get_dynamic_inputs(
-                tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION]
-            )
+            self.production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
             self.consumption_uncontrolled_inputs = self.get_dynamic_inputs(
                 tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
             )
@@ -284,54 +283,35 @@ class ElectricityMeter(DynamicComponent):
         # ELECTRICITY #
 
         # get sum of production and consumption for all inputs for each iteration
-        production_in_watt = sum(
-            [
-                stsv.get_input_value(component_input=elem)
-                for elem in self.production_inputs
-            ]
-        )
+        production_in_watt = sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])
         consumption_uncontrolled_in_watt = sum(
-            [
-                stsv.get_input_value(component_input=elem)
-                for elem in self.consumption_uncontrolled_inputs
-            ]
+            [stsv.get_input_value(component_input=elem) for elem in self.consumption_uncontrolled_inputs]
         )
         # Production of Electricity positve sign
         # Consumption of Electricity negative sign
-        difference_between_production_and_consumption_in_watt = (
-            production_in_watt - consumption_uncontrolled_in_watt
-        )
+        difference_between_production_and_consumption_in_watt = production_in_watt - consumption_uncontrolled_in_watt
 
         # transform watt to watthour
         production_in_watt_hour = production_in_watt * self.seconds_per_timestep / 3600
-        consumption_uncontrolled_in_watt_hour = (
-            consumption_uncontrolled_in_watt * self.seconds_per_timestep / 3600
-        )
+        consumption_uncontrolled_in_watt_hour = consumption_uncontrolled_in_watt * self.seconds_per_timestep / 3600
         difference_between_production_and_consumption_in_watt_hour = (
             production_in_watt_hour - consumption_uncontrolled_in_watt_hour
         )
 
         # calculate cumulative production and consumption
-        cumulative_production_in_watt_hour = (
-            self.state.cumulative_production_in_watt_hour + production_in_watt_hour
-        )
+        cumulative_production_in_watt_hour = self.state.cumulative_production_in_watt_hour + production_in_watt_hour
         cumulative_consumption_in_watt_hour = (
-            self.state.cumulative_consumption_in_watt_hour
-            + consumption_uncontrolled_in_watt_hour
+            self.state.cumulative_consumption_in_watt_hour + consumption_uncontrolled_in_watt_hour
         )
 
         # consumption is bigger than production -> electricity from grid is needed
         # change sign so that value becomes positive
         if difference_between_production_and_consumption_in_watt_hour < 0:
-            electricity_from_grid_in_watt_hour = (
-                -difference_between_production_and_consumption_in_watt_hour
-            )
+            electricity_from_grid_in_watt_hour = -difference_between_production_and_consumption_in_watt_hour
             electricity_to_grid_in_watt_hour = 0.0
         # production is bigger -> electricity can be fed into grid
         elif difference_between_production_and_consumption_in_watt_hour > 0:
-            electricity_to_grid_in_watt_hour = (
-                difference_between_production_and_consumption_in_watt_hour
-            )
+            electricity_to_grid_in_watt_hour = difference_between_production_and_consumption_in_watt_hour
             electricity_from_grid_in_watt_hour = 0.0
 
         # difference between production and consumption is zero
@@ -344,12 +324,8 @@ class ElectricityMeter(DynamicComponent):
             self.electricity_available,
             difference_between_production_and_consumption_in_watt,
         )
-        stsv.set_output_value(
-            self.electricity_to_grid, electricity_to_grid_in_watt_hour
-        )
-        stsv.set_output_value(
-            self.electricity_from_grid, electricity_from_grid_in_watt_hour
-        )
+        stsv.set_output_value(self.electricity_to_grid, electricity_to_grid_in_watt_hour)
+        stsv.set_output_value(self.electricity_from_grid, electricity_from_grid_in_watt_hour)
         stsv.set_output_value(
             self.electricity_consumption_channel,
             consumption_uncontrolled_in_watt_hour,
@@ -370,12 +346,8 @@ class ElectricityMeter(DynamicComponent):
             cumulative_production_in_watt_hour,
         )
 
-        self.state.cumulative_production_in_watt_hour = (
-            cumulative_production_in_watt_hour
-        )
-        self.state.cumulative_consumption_in_watt_hour = (
-            cumulative_consumption_in_watt_hour
-        )
+        self.state.cumulative_production_in_watt_hour = cumulative_production_in_watt_hour
+        self.state.cumulative_consumption_in_watt_hour = cumulative_consumption_in_watt_hour
 
     def get_cost_opex(
         self,
@@ -396,24 +368,18 @@ class ElectricityMeter(DynamicComponent):
                         postprocessing_results.iloc[:, index].sum() * 1e-3,
                         1,
                     )
-        emissions_and_cost_factors = (
-            EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
-                self.my_simulation_parameters.year
-            )
+        emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
+            self.my_simulation_parameters.year
         )
         co2_per_unit = emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh
         euro_per_unit = emissions_and_cost_factors.electricity_costs_in_euro_per_kwh
-        revenue_euro_per_unit = (
-            emissions_and_cost_factors.electricity_to_grid_revenue_in_euro_per_kwh
-        )
+        revenue_euro_per_unit = emissions_and_cost_factors.electricity_to_grid_revenue_in_euro_per_kwh
 
         opex_cost_per_simulated_period_in_euro = (
             self.config.total_energy_from_grid_in_kwh * euro_per_unit
             - self.config.total_energy_to_grid_in_kwh * revenue_euro_per_unit
         )
-        co2_per_simulated_period_in_kg = (
-            self.config.total_energy_from_grid_in_kwh * co2_per_unit
-        )
+        co2_per_simulated_period_in_kg = self.config.total_energy_from_grid_in_kwh * co2_per_unit
         opex_cost_data_class = OpexCostDataClass(
             opex_cost=opex_cost_per_simulated_period_in_euro,
             co2_footprint=co2_per_simulated_period_in_kg,

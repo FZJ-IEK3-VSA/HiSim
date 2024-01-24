@@ -23,7 +23,7 @@ def main(
 ) -> None:
     """Core function."""
     # filter warnings due to pvlib, pvlib generates warnings during simulation within pvlib package
-    warnings.filterwarnings('ignore')
+    warnings.filterwarnings("ignore")
     # before starting, delete old logging files if path and logging files exist
     logging_default_path = log.LOGGING_DEFAULT_PATH
     if os.path.exists(logging_default_path) and os.listdir(logging_default_path) != []:
@@ -32,18 +32,17 @@ def main(
                 try:
                     os.remove(os.path.join(logging_default_path, file))
                 except Exception:
-                    log.information("Logging default file could not be removed. This can occur when more than one simulation run simultaneously.")
+                    log.information(
+                        "Logging default file could not be removed. This can occur when more than one simulation run simultaneously."
+                    )
 
     function_in_module = "setup_function"
     log.information("#################################")
-    log.information(
-        "starting simulation of " + path_to_module)
+    log.information("starting simulation of " + path_to_module)
     starttime = datetime.now()
     starting_date_time_str = starttime.strftime("%d-%b-%Y %H:%M:%S")
     log.information("Start @ " + starting_date_time_str + " ")
-    log.profile(
-        path_to_module + " " + function_in_module + "Start @ " + starting_date_time_str
-    )
+    log.profile(path_to_module + " " + function_in_module + "Start @ " + starting_date_time_str)
     log.information("#################################")
     normalized_path = os.path.normpath(path_to_module)
     path_in_list = normalized_path.split(os.sep)
@@ -112,14 +111,7 @@ if __name__ == "__main__":
         main(path_to_module=FILE_NAME)
     if len(sys.argv) == 3:
         MODULE_CONFIG = sys.argv[2]
-        log.information(
-            "calling "
-            + FUNCTION_NAME
-            + " from "
-            + FILE_NAME
-            + " with module config "
-            + MODULE_CONFIG
-        )
+        log.information("calling " + FUNCTION_NAME + " from " + FILE_NAME + " with module config " + MODULE_CONFIG)
         main(
             path_to_module=FILE_NAME,
             my_module_config_path=MODULE_CONFIG,

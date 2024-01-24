@@ -59,7 +59,8 @@ def main():
     )
 
     folder_from_which_data_will_be_collected = os.path.join(
-        cluster_storage_path, "repositories/HiSim/system_setups/results/",
+        cluster_storage_path,
+        "repositories/HiSim/system_setups/results/",
     )
 
     path_to_default_config = os.path.join(
@@ -68,9 +69,7 @@ def main():
     )
     simulation_duration_to_check = str(365)
 
-    data_processing_mode = (
-        result_data_collection.ResultDataProcessingModeEnum.PROCESS_ALL_DATA
-    )
+    data_processing_mode = result_data_collection.ResultDataProcessingModeEnum.PROCESS_ALL_DATA
 
     filterclass = result_data_processing.FilterClass()
     # list_with_variables_to_check = (

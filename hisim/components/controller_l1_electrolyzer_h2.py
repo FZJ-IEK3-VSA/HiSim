@@ -67,9 +67,7 @@ class ElectrolyzerControllerConfig(ConfigBase):
     def read_config(electrolyzer_name):
         """Opens the according JSON-file, based on the electrolyzer_name."""
 
-        config_file = os.path.join(
-            utils.HISIMPATH["inputs"], "electrolyzer_manufacturer_config.json"
-        )
+        config_file = os.path.join(utils.HISIMPATH["inputs"], "electrolyzer_manufacturer_config.json")
         with open(config_file, "r", encoding="utf-8") as json_file:
             data = json.load(json_file)
             return data.get("Electrolyzer variants", {}).get(electrolyzer_name, {})
@@ -201,9 +199,7 @@ class ElectrolyzerController(Component):
     def load_check(self, current_load, min_load, max_load, standby_load):
         """Load check."""
         if None in (current_load, min_load, max_load, standby_load):
-            raise ValueError(
-                f"None type not accepted. {current_load}, {min_load}, {max_load}, {standby_load}"
-            )
+            raise ValueError(f"None type not accepted. {current_load}, {min_load}, {max_load}, {standby_load}")
         if current_load > max_load:
             current_load_to_system = max_load
             self.curtailed_load_count += current_load - max_load
@@ -251,16 +247,11 @@ class ElectrolyzerController(Component):
             # Test start
             if self.current_state in ["StartingfromOFF", "StartingfromSTANDBY"]:
                 # pdb.set_trace()
-                if (
-                    self.activation_runtime
-                    <= self.my_simulation_parameters.seconds_per_timestep
-                ):
+                if self.activation_runtime <= self.my_simulation_parameters.seconds_per_timestep:
                     self.current_state = "Startingtomin"
                     # pdb.set_trace()
                 else:
-                    self.activation_runtime -= (
-                        self.my_simulation_parameters.seconds_per_timestep
-                    )
+                    self.activation_runtime -= self.my_simulation_parameters.seconds_per_timestep
                     # pdb.set_trace()
                     # self.current_state = self.current_state
                     # starting to min auch unten aufnehmen um so min_load zu verteilen. "Starting to min" kann verwendet werden,
@@ -274,13 +265,8 @@ class ElectrolyzerController(Component):
                 self.current_state = "StartingfromSTANDBY"
                 self.activation_runtime = warm_start_time_to_min
             else:
-                if (
-                    self.activation_runtime
-                    > self.my_simulation_parameters.seconds_per_timestep
-                ):
-                    self.activation_runtime -= (
-                        self.my_simulation_parameters.seconds_per_timestep
-                    )
+                if self.activation_runtime > self.my_simulation_parameters.seconds_per_timestep:
+                    self.activation_runtime -= self.my_simulation_parameters.seconds_per_timestep
                     # self.current_state = self.current_state
                 # elif self.activation_runtime <= self.my_simulation_parameters.seconds_per_timestep:
                 #    self.activation_runtime -= self.my_simulation_parameters.seconds_per_timestep
@@ -312,9 +298,7 @@ class ElectrolyzerController(Component):
         self.off_count = self.off_count_previous
         self.activation_runtime = self.activation_runtime_previous
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the component."""
         if force_convergence:
             return
@@ -370,17 +354,7 @@ class ElectrolyzerController(Component):
         for config_string in self.controllerconfig.get_string_dict():
             lines.append(config_string)
         lines.append("Component Name" + str(self.component_name))
-        lines.append(
-            "Total curtailed load: " + str(self.curtailed_load_count) + " [kW]"
-        )
-        lines.append(
-            "Number of times the system was switched off: "
-            + str(self.off_count)
-            + " [#]"
-        )
-        lines.append(
-            "Number of times the system was switched to standby mode: "
-            + str(self.standby_count)
-            + " [#]"
-        )
+        lines.append("Total curtailed load: " + str(self.curtailed_load_count) + " [kW]")
+        lines.append("Number of times the system was switched off: " + str(self.off_count) + " [#]")
+        lines.append("Number of times the system was switched to standby mode: " + str(self.standby_count) + " [#]")
         return lines

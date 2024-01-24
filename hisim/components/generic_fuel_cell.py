@@ -81,9 +81,7 @@ class FuelCellConfig(cp.ConfigBase):
     @staticmethod
     def read_config(fuel_cell_name):
         """Read config."""
-        config_file = os.path.join(
-            utils.HISIMPATH["inputs"], "fuel_cell_manufacturer_config.json"
-        )
+        config_file = os.path.join(utils.HISIMPATH["inputs"], "fuel_cell_manufacturer_config.json")
         with open(config_file, "r", encoding="utf-8") as json_file:
             data = json.load(json_file)
             return data.get("Fuel Cell variants", {}).get(fuel_cell_name, {})
@@ -380,9 +378,7 @@ class FuelCell(cp.Component):
         based on the nominal current density.
         """
         # Load data from the JSON file
-        data_file = os.path.join(
-            utils.HISIMPATH["inputs"], "polarization_curve_data_fc.json"
-        )
+        data_file = os.path.join(utils.HISIMPATH["inputs"], "polarization_curve_data_fc.json")
         with open(data_file, "r", encoding="utf-8") as file:
             data = json.load(file)
 
@@ -401,12 +397,8 @@ class FuelCell(cp.Component):
         m_h2 = 2.01588  # g/mol
 
         # from nom_current_density to aux_power
-        spec_el_stack_consumption_nom = (
-            faraday_eff * (np.array(u_cell) * (2 * f_constant)) / (m_h2 * 3600)
-        )  # kWh/kg
-        spec_el_consumption_stack = np.interp(
-            i_cell_nom, i_cell, spec_el_stack_consumption_nom
-        )
+        spec_el_stack_consumption_nom = faraday_eff * (np.array(u_cell) * (2 * f_constant)) / (m_h2 * 3600)  # kWh/kg
+        spec_el_consumption_stack = np.interp(i_cell_nom, i_cell, spec_el_stack_consumption_nom)
 
         # calculating aux_power
         aux_power = -nominal_power + (
@@ -448,9 +440,7 @@ class FuelCell(cp.Component):
         # Calculates system_power from stack power
         system_power = stack_power - aux_power
 
-        interp_function_h2_consumption_rate = interp1d(
-            system_power, h2_consumption_rate, kind="quadratic"
-        )
+        interp_function_h2_consumption_rate = interp1d(system_power, h2_consumption_rate, kind="quadratic")
 
         negative_indices = np.where(system_power < 0.13081412540092785)
 
@@ -469,19 +459,13 @@ class FuelCell(cp.Component):
 
         if state == 1 and current_power > min_power:
             # Only consume hydrogen if the system is "on"
-            current_h2_demenad_rate = float(
-                interp_function_h2_consumption_rate(current_power)
-            )
+            current_h2_demenad_rate = float(interp_function_h2_consumption_rate(current_power))
 
-            current_spec_h2_demand_rate = float(
-                interp_function_spec_h2_demand_rate(current_power)
-            )
+            current_spec_h2_demand_rate = float(interp_function_spec_h2_demand_rate(current_power))
             current_eff = current_spec_h2_demand_rate / 33.33  # LHV H2 33.33 kWh/kg
         elif state == 0 and current_power >= min_power:
             # Only consume hydrogen if the system is "on"
-            current_h2_demenad_rate = float(
-                interp_function_h2_consumption_rate(current_power)
-            )
+            current_h2_demenad_rate = float(interp_function_h2_consumption_rate(current_power))
 
             current_eff = 0.0
 
@@ -500,9 +484,7 @@ class FuelCell(cp.Component):
         """
         m_o2 = 31.9988
         m_h2 = 2.01588
-        m_dot_o2 = (
-            (m_o2 / m_h2) * 0.5 * current_h2_demenad_rate
-        )  # Kurzweil (2018) - Elektrolyse von Wasser
+        m_dot_o2 = (m_o2 / m_h2) * 0.5 * current_h2_demenad_rate  # Kurzweil (2018) - Elektrolyse von Wasser
         return m_dot_o2
 
     def water_produced(self, current_h2_demenad_rate):
@@ -513,9 +495,7 @@ class FuelCell(cp.Component):
         """
         m_h2o = 18.01528
         m_h2 = 2.01588
-        m_dot_h2o = (
-            m_h2o / m_h2
-        ) * current_h2_demenad_rate  # Kurzweil (2018) - Elektrolyse von Wasser
+        m_dot_h2o = (m_h2o / m_h2) * current_h2_demenad_rate  # Kurzweil (2018) - Elektrolyse von Wasser
         return m_dot_h2o
 
     def i_save_state(self) -> None:
@@ -560,32 +540,24 @@ class FuelCell(cp.Component):
         """Prepares the simulation."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the component."""
         if force_convergence:
             return
 
         # Variables
-        seconds_per_timestep = (
-            self.my_simulation_parameters.seconds_per_timestep
-        )  # [s/timestep]
+        seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep  # [s/timestep]
 
         power_demand = stsv.get_input_value(self.demand_profile_target)
         # print("power_demand: ", power_demand)
         state = stsv.get_input_value(self.control_signal)
 
         # ramp up per timestep calculation
-        ramp_up_per_timestep = (
-            self.nom_output * self.ramp_up_rate * seconds_per_timestep
-        )
+        ramp_up_per_timestep = self.nom_output * self.ramp_up_rate * seconds_per_timestep
         total_ramp_up_per_timestep = ramp_up_per_timestep
 
         # ramp down per timestep calculation
-        ramp_down_per_timestep = (
-            self.nom_output * self.ramp_down_rate * seconds_per_timestep
-        )
+        ramp_down_per_timestep = self.nom_output * self.ramp_down_rate * seconds_per_timestep
         total_ramp_down_per_timestep = ramp_down_per_timestep
 
         # calculating the current power demand based on the previous state
@@ -605,25 +577,15 @@ class FuelCell(cp.Component):
                 self.total_ramp_down_count_state += 0
 
             # Ramping up
-            if (
-                new_target >= total_ramp_up_per_timestep
-                and self.current_power_state < power_demand
-            ):
+            if new_target >= total_ramp_up_per_timestep and self.current_power_state < power_demand:
                 # print("punkt 4")
                 self.total_ramp_up_count_state += seconds_per_timestep
                 self.current_power_state += total_ramp_up_per_timestep
                 # print("self.current_power_state nach punkt 4: ", self.current_power_state)
-            elif (
-                self.current_power_state < power_demand
-                and new_target < total_ramp_up_per_timestep
-            ):
+            elif self.current_power_state < power_demand and new_target < total_ramp_up_per_timestep:
                 # print("punkt 5")
-                percentage_ramp_up_per_timestep = (
-                    new_target / total_ramp_up_per_timestep
-                )
-                self.total_ramp_up_count_state += (
-                    percentage_ramp_up_per_timestep * seconds_per_timestep
-                )
+                percentage_ramp_up_per_timestep = new_target / total_ramp_up_per_timestep
+                self.total_ramp_up_count_state += percentage_ramp_up_per_timestep * seconds_per_timestep
                 if self.current_power_state == 0:
                     # print("punkt 6")
                     self.current_power_state += power_demand
@@ -632,25 +594,15 @@ class FuelCell(cp.Component):
                     self.current_power_state += new_target
 
             # Ramping down
-            elif (
-                total_ramp_down_per_timestep <= new_target
-                and power_demand < self.current_power_state
-            ):
+            elif total_ramp_down_per_timestep <= new_target and power_demand < self.current_power_state:
                 # print("punkt 8")
                 self.total_ramp_down_count_state += seconds_per_timestep
                 self.current_power_state -= new_target
 
-            elif (
-                power_demand < self.current_power_state
-                and new_target < total_ramp_down_per_timestep
-            ):
+            elif power_demand < self.current_power_state and new_target < total_ramp_down_per_timestep:
                 # print("punkt 9")
-                percentage_ramp_down_per_timestep = (
-                    new_target / total_ramp_down_per_timestep
-                )
-                self.total_ramp_down_count_state += (
-                    percentage_ramp_down_per_timestep * seconds_per_timestep
-                )
+                percentage_ramp_down_per_timestep = new_target / total_ramp_down_per_timestep
+                self.total_ramp_down_count_state += percentage_ramp_down_per_timestep * seconds_per_timestep
                 self.current_power_state -= new_target
 
         elif state == 0:
@@ -698,17 +650,11 @@ class FuelCell(cp.Component):
         current_flow_rate_oxygen = self.oxygen_demand(current_h2_demand_rate)
         current_flow_rate_water = self.water_produced(current_h2_demand_rate)
         # Calculating total amount of hydrogen, oxygen and water
-        total_hydrogen_consumed_in_timestep = current_h2_demand_rate * (
-            seconds_per_timestep / 3600
-        )
+        total_hydrogen_consumed_in_timestep = current_h2_demand_rate * (seconds_per_timestep / 3600)
         self.total_hydrogen_consumed += total_hydrogen_consumed_in_timestep
-        total_oxygen_consumed_in_timestep = current_flow_rate_oxygen * (
-            seconds_per_timestep / 3600
-        )
+        total_oxygen_consumed_in_timestep = current_flow_rate_oxygen * (seconds_per_timestep / 3600)
         self.total_oxygen_consumed += total_oxygen_consumed_in_timestep
-        total_water_produced_in_timestep = current_flow_rate_water * (
-            seconds_per_timestep / 3600
-        )
+        total_water_produced_in_timestep = current_flow_rate_water * (seconds_per_timestep / 3600)
         self.total_water_produced += total_water_produced_in_timestep
 
         self.total_energy += self.current_power_state * (seconds_per_timestep / 3600)
@@ -722,9 +668,7 @@ class FuelCell(cp.Component):
         )  # transform kW to WATT for EMS
         stsv.set_output_value(self.total_energy_produced, self.total_energy)
         stsv.set_output_value(self.total_ramp_up_time, self.total_ramp_up_count_state)
-        stsv.set_output_value(
-            self.total_ramp_down_time, self.total_ramp_down_count_state
-        )
+        stsv.set_output_value(self.total_ramp_down_time, self.total_ramp_down_count_state)
         stsv.set_output_value(self.total_hydrogen, self.total_hydrogen_consumed)
         stsv.set_output_value(self.total_oxygen, self.total_oxygen_consumed)
         stsv.set_output_value(self.total_water, self.total_water_produced)
@@ -737,39 +681,11 @@ class FuelCell(cp.Component):
         for config_string in self.fuelcellconfig.get_string_dict():
             lines.append(config_string)
         lines.append("Component Name" + str(self.component_name))
-        lines.append(
-            "Total operating time during simulation: "
-            + str(self.total_operating_time)
-            + " [h]"
-        )
-        lines.append(
-            "Total hydrogen consumed during simulation: "
-            + str(self.total_hydrogen_consumed)
-            + " [kg]"
-        )
-        lines.append(
-            "Total oxygen consumed during simulation: "
-            + str(self.total_oxygen_consumed)
-            + " [kg]"
-        )
-        lines.append(
-            "Total water demand during simulation: "
-            + str(self.total_water_produced)
-            + " [kg]"
-        )
-        lines.append(
-            "Total energy produced during simulation: "
-            + str(self.total_energy)
-            + " [kWh]"
-        )
-        lines.append(
-            "Total ramp-up time during simulation: "
-            + str(self.total_ramp_up_count_state)
-            + " [kg]"
-        )
-        lines.append(
-            "Total ramp-down time during simulation: "
-            + str(self.total_ramp_down_count_state)
-            + " [kg]"
-        )
+        lines.append("Total operating time during simulation: " + str(self.total_operating_time) + " [h]")
+        lines.append("Total hydrogen consumed during simulation: " + str(self.total_hydrogen_consumed) + " [kg]")
+        lines.append("Total oxygen consumed during simulation: " + str(self.total_oxygen_consumed) + " [kg]")
+        lines.append("Total water demand during simulation: " + str(self.total_water_produced) + " [kg]")
+        lines.append("Total energy produced during simulation: " + str(self.total_energy) + " [kWh]")
+        lines.append("Total ramp-up time during simulation: " + str(self.total_ramp_up_count_state) + " [kg]")
+        lines.append("Total ramp-down time during simulation: " + str(self.total_ramp_down_count_state) + " [kg]")
         return lines

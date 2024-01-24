@@ -433,9 +433,7 @@ class Weather(Component):
     Weather_WindSpeed_yearly_forecast = "Weather_WindSpeed_yearly_forecast"
 
     @utils.measure_execution_time
-    def __init__(
-        self, my_simulation_parameters: SimulationParameters, config: WeatherConfig
-    ):
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: WeatherConfig):
         """Initializes the entire class."""
         super().__init__(
             name="Weather",
@@ -446,9 +444,7 @@ class Weather(Component):
             raise Exception("Simparameters was none")
         self.last_timestep_with_update = -1
         self.weather_config = config
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.LOCATION, entry=self.weather_config.location
-        )
+        SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.LOCATION, entry=self.weather_config.location)
         self.parameter_string = my_simulation_parameters.get_unique_key()
 
         self.air_temperature_output: ComponentOutput = self.add_output(
@@ -559,18 +555,14 @@ class Weather(Component):
         """Double chekc."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Performs the simulation."""
         if self.last_timestep_with_update == timestep:
             return
         if force_convergence:
             return
         """ Performs the simulation. """
-        stsv.set_output_value(
-            self.air_temperature_output, self.temperature_list[timestep]
-        )
+        stsv.set_output_value(self.air_temperature_output, self.temperature_list[timestep])
         stsv.set_output_value(self.dni_output, self.dni_list[timestep])
         stsv.set_output_value(self.dni_extra_output, self.dniextra_list[timestep])
         stsv.set_output_value(self.dhi_output, self.dhi_list[timestep])
@@ -578,9 +570,7 @@ class Weather(Component):
         stsv.set_output_value(self.altitude_output, self.altitude_list[timestep])
         stsv.set_output_value(self.azimuth_output, self.azimuth_list[timestep])
         stsv.set_output_value(self.wind_speed_output, self.wind_speed_list[timestep])
-        stsv.set_output_value(
-            self.apparent_zenith_output, self.apparent_zenith_list[timestep]
-        )
+        stsv.set_output_value(self.apparent_zenith_output, self.apparent_zenith_list[timestep])
         stsv.set_output_value(
             self.daily_average_outside_temperature_output,
             self.daily_average_outside_temperature_list_in_celsius[timestep],
@@ -588,17 +578,13 @@ class Weather(Component):
 
         # set the temperature forecast
         if self.weather_config.predictive_control:
-            timesteps_24h = (
-                24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
-            )
+            timesteps_24h = 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
             last_forecast_timestep = int(timestep + timesteps_24h)
             if last_forecast_timestep > len(self.temperature_list):
                 last_forecast_timestep = len(self.temperature_list)
             # log.information( type(self.temperature))
             temperatureforecast = self.temperature_list[timestep:last_forecast_timestep]
-            self.simulation_repository.set_entry(
-                self.Weather_Temperature_Forecast_24h, temperatureforecast
-            )
+            self.simulation_repository.set_entry(self.Weather_Temperature_Forecast_24h, temperatureforecast)
         self.last_timestep_with_update = timestep
 
     def i_prepare_simulation(self) -> None:
@@ -611,23 +597,15 @@ class Weather(Component):
             source_enum=self.weather_config.data_source,
         )
         self.simulation_repository.set_entry("weather_location", location_dict)
-        cachefound, cache_filepath = utils.get_cache_file(
-            "Weather", self.weather_config, self.my_simulation_parameters
-        )
+        cachefound, cache_filepath = utils.get_cache_file("Weather", self.weather_config, self.my_simulation_parameters)
         if cachefound:
             # read cached files
-            my_weather = pd.read_csv(
-                cache_filepath, sep=",", decimal=".", encoding="cp1252"
-            )
+            my_weather = pd.read_csv(cache_filepath, sep=",", decimal=".", encoding="cp1252")
             self.temperature_list = my_weather["t_out"].tolist()
-            self.daily_average_outside_temperature_list_in_celsius = my_weather[
-                "t_out_daily_average"
-            ].tolist()
+            self.daily_average_outside_temperature_list_in_celsius = my_weather["t_out_daily_average"].tolist()
             self.dry_bulb_list = self.temperature_list
             self.dhi_list = my_weather["DHI"].tolist()
-            self.dni_list = my_weather[
-                "DNI"
-            ].tolist()  # self np.float64( maybe not needed? - Noah
+            self.dni_list = my_weather["DNI"].tolist()  # self np.float64( maybe not needed? - Noah
             self.dniextra_list = my_weather["DNIextra"].tolist()
             self.ghi_list = my_weather["GHI"].tolist()
             self.altitude_list = my_weather["altitude"].tolist()
@@ -640,40 +618,17 @@ class Weather(Component):
                 year=self.my_simulation_parameters.year,
             )
             if self.weather_config.data_source == WeatherDataSourceEnum.NSRDB_15MIN:
-                dni = (
-                    tmy_data["DNI"].resample("1T").asfreq().interpolate(method="linear")
-                )
-                temperature = (
-                    tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")
-                )
-                dhi = (
-                    tmy_data["DHI"].resample("1T").asfreq().interpolate(method="linear")
-                )
-                ghi = (
-                    tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")
-                )
-                wind_speed = (
-                    tmy_data["Wspd"]
-                    .resample("1T")
-                    .asfreq()
-                    .interpolate(method="linear")
-                )
+                dni = tmy_data["DNI"].resample("1T").asfreq().interpolate(method="linear")
+                temperature = tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")
+                dhi = tmy_data["DHI"].resample("1T").asfreq().interpolate(method="linear")
+                ghi = tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")
+                wind_speed = tmy_data["Wspd"].resample("1T").asfreq().interpolate(method="linear")
             else:
-                dni = self.interpolate(
-                    tmy_data["DNI"], self.my_simulation_parameters.year
-                )
-                temperature = self.interpolate(
-                    tmy_data["T"], self.my_simulation_parameters.year
-                )
-                dhi = self.interpolate(
-                    tmy_data["DHI"], self.my_simulation_parameters.year
-                )
-                ghi = self.interpolate(
-                    tmy_data["GHI"], self.my_simulation_parameters.year
-                )
-                wind_speed = self.interpolate(
-                    tmy_data["Wspd"], self.my_simulation_parameters.year
-                )
+                dni = self.interpolate(tmy_data["DNI"], self.my_simulation_parameters.year)
+                temperature = self.interpolate(tmy_data["T"], self.my_simulation_parameters.year)
+                dhi = self.interpolate(tmy_data["DHI"], self.my_simulation_parameters.year)
+                ghi = self.interpolate(tmy_data["GHI"], self.my_simulation_parameters.year)
+                wind_speed = self.interpolate(tmy_data["Wspd"], self.my_simulation_parameters.year)
             # calculate extra terrestrial radiation- n eeded for perez array diffuse irradiance models
             dni_extra = pd.Series(pvlib.irradiance.get_extra_radiation(dni.index), index=dni.index)  # type: ignore
 
@@ -683,48 +638,22 @@ class Weather(Component):
             apparent_zenith = solpos["apparent_zenith"]
 
             if seconds_per_timestep != 60:
-                self.temperature_list = (
-                    temperature.resample(str(seconds_per_timestep) + "S")
-                    .mean()
-                    .tolist()
-                )
-                self.dry_bulb_list = (
-                    temperature.resample(str(seconds_per_timestep) + "S")
-                    .mean()
-                    .to_list()
-                )
+                self.temperature_list = temperature.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                self.dry_bulb_list = temperature.resample(str(seconds_per_timestep) + "S").mean().to_list()
                 self.calculate_daily_average_outside_temperature(
                     temperaturelist=self.temperature_list,
                     seconds_per_timestep=seconds_per_timestep,
                 )
 
-                self.dhi_list = (
-                    dhi.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                )
+                self.dhi_list = dhi.resample(str(seconds_per_timestep) + "S").mean().tolist()
                 # np.float64( ## not sure what this is fore. python float and npfloat 64 are the same.
-                self.dni_list = (
-                    dni.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                )  # )  # type: ignore
-                self.dniextra_list = (
-                    dni_extra.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                )
-                self.ghi_list = (
-                    ghi.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                )
-                self.altitude_list = (
-                    altitude.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                )
-                self.azimuth_list = (
-                    azimuth.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                )
-                self.apparent_zenith_list = (
-                    apparent_zenith.resample(str(seconds_per_timestep) + "S")
-                    .mean()
-                    .tolist()
-                )
-                self.wind_speed_list = (
-                    wind_speed.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                )
+                self.dni_list = dni.resample(str(seconds_per_timestep) + "S").mean().tolist()  # )  # type: ignore
+                self.dniextra_list = dni_extra.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                self.ghi_list = ghi.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                self.altitude_list = altitude.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                self.azimuth_list = azimuth.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                self.apparent_zenith_list = apparent_zenith.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                self.wind_speed_list = wind_speed.resample(str(seconds_per_timestep) + "S").mean().tolist()
             else:
                 self.temperature_list = temperature.tolist()
                 self.dry_bulb_list = temperature.to_list()
@@ -739,9 +668,7 @@ class Weather(Component):
                 self.altitude_list = altitude.tolist()
                 self.azimuth_list = azimuth.tolist()
                 self.apparent_zenith_list = apparent_zenith.tolist()
-                self.wind_speed_list = (
-                    wind_speed.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                )
+                self.wind_speed_list = wind_speed.resample(str(seconds_per_timestep) + "S").mean().tolist()
 
             solardata = [
                 self.dni_list,
@@ -818,19 +745,11 @@ class Weather(Component):
         """Interpolates a time series."""
         firstday = pd.Series(
             [0.0],
-            index=[
-                pd.to_datetime(
-                    datetime.datetime(year - 1, 12, 31, 23, 0), utc=True
-                ).tz_convert(tz="Europe/Berlin")
-            ],
+            index=[pd.to_datetime(datetime.datetime(year - 1, 12, 31, 23, 0), utc=True).tz_convert(tz="Europe/Berlin")],
         )
         lastday = pd.Series(
             pd_database.iloc[-1],
-            index=[
-                pd.to_datetime(
-                    datetime.datetime(year, 12, 31, 22, 59), utc=True
-                ).tz_convert(tz="Europe/Berlin")
-            ],
+            index=[pd.to_datetime(datetime.datetime(year, 12, 31, 22, 59), utc=True).tz_convert(tz="Europe/Berlin")],
         )
         pd_database = pd.concat([pd_database, firstday, lastday])
         pd_database = pd_database.sort_index()
@@ -864,9 +783,7 @@ class Weather(Component):
 
         # Calculate the declination angle: The variation due to the earths tilt
         # http://www.pveducation.org/pvcdrom/properties-of-sunlight/declination-angle
-        declination_rad = math.radians(
-            23.45 * math.sin((2 * math.pi / 365.0) * (day_of_year - 81))
-        )
+        declination_rad = math.radians(23.45 * math.sin((2 * math.pi / 365.0) * (day_of_year - 81)))
 
         # Normalise the day to 2*pi
         # There is some reason as to why it is 364 and not 365.26
@@ -874,18 +791,11 @@ class Weather(Component):
 
         # The deviation between local standard time and true solar time
         equation_of_time = (
-            (9.87 * math.sin(2 * angle_of_day))
-            - (7.53 * math.cos(angle_of_day))
-            - (1.5 * math.sin(angle_of_day))
+            (9.87 * math.sin(2 * angle_of_day)) - (7.53 * math.cos(angle_of_day)) - (1.5 * math.sin(angle_of_day))
         )
 
         # True Solar Time
-        solar_time = (
-            (utc_datetime.hour * 60)
-            + utc_datetime.minute
-            + (4 * longitude_deg)
-            + equation_of_time
-        ) / 60.0
+        solar_time = ((utc_datetime.hour * 60) + utc_datetime.minute + (4 * longitude_deg) + equation_of_time) / 60.0
 
         # Angle between the local longitude and longitude where the sun is at
         # higher altitude
@@ -893,24 +803,16 @@ class Weather(Component):
 
         # Altitude Position of the Sun in Radians
         altitude_rad = math.asin(
-            math.cos(latitude_rad)
-            * math.cos(declination_rad)
-            * math.cos(hour_angle_rad)
+            math.cos(latitude_rad) * math.cos(declination_rad) * math.cos(hour_angle_rad)
             + math.sin(latitude_rad) * math.sin(declination_rad)
         )
 
         # Azimuth Position fo the sun in radians
-        azimuth_rad = math.asin(
-            math.cos(declination_rad)
-            * math.sin(hour_angle_rad)
-            / math.cos(altitude_rad)
-        )
+        azimuth_rad = math.asin(math.cos(declination_rad) * math.sin(hour_angle_rad) / math.cos(altitude_rad))
 
         # I don't really know what this code does, it has been imported from
         # PySolar
-        if math.cos(hour_angle_rad) >= (
-            math.tan(declination_rad) / math.tan(latitude_rad)
-        ):
+        if math.cos(hour_angle_rad) >= (math.tan(declination_rad) / math.tan(latitude_rad)):
             return math.degrees(altitude_rad), math.degrees(azimuth_rad)
         return math.degrees(altitude_rad), (180 - math.degrees(azimuth_rad))
 
@@ -927,14 +829,10 @@ class Weather(Component):
         self.daily_average_outside_temperature_list_in_celsius = []
         start_index = 0
         for index in range(0, total_number_of_timesteps_temperature_list):
-            daily_average_temperature = float(
-                np.mean(temperaturelist[start_index: start_index + timestep_24h])
-            )
+            daily_average_temperature = float(np.mean(temperaturelist[start_index : start_index + timestep_24h]))
             if index == start_index + timestep_24h:
                 start_index = index
-            self.daily_average_outside_temperature_list_in_celsius.append(
-                daily_average_temperature
-            )
+            self.daily_average_outside_temperature_list_in_celsius.append(daily_average_temperature)
         return self.daily_average_outside_temperature_list_in_celsius
 
 
@@ -993,17 +891,13 @@ def read_dwd_data(filepath: str, year: int) -> pd.DataFrame:
         lon = float(lines[2][15:30])
     # check if time series data already exists as .csv with DNI
     if os.path.isfile(filepath + ".csv"):
-        data = pd.read_csv(
-            filepath + ".csv", index_col=0, parse_dates=True, sep=";", decimal=","
-        )
+        data = pd.read_csv(filepath + ".csv", index_col=0, parse_dates=True, sep=";", decimal=",")
         data.index = pd.to_datetime(data.index, utc=True).tz_convert("Europe/Berlin")
     # else read from .dat and calculate DNI etc.
     else:
         # get data
         data = pd.read_csv(filepath + ".dat", sep=r"\s+", skiprows=list(range(0, 31)))
-        data.index = pd.date_range(
-            f"{year}-01-01 00:30:00", periods=8760, freq="H", tz="Europe/Berlin"
-        )
+        data.index = pd.date_range(f"{year}-01-01 00:30:00", periods=8760, freq="H", tz="Europe/Berlin")
         data["GHI"] = data["D"] + data["B"]
         data = data.rename(
             columns={
@@ -1028,9 +922,7 @@ def read_nsrdb_data(filepath: str, year: int) -> pd.DataFrame:
     # get data
     data = pd.read_csv(filepath + ".dat", sep=",", skiprows=list(range(0, 11)))
     data = data.drop(data.index[8761:8772])
-    data.index = pd.date_range(
-        f"{year}-01-01 00:30:00", periods=8760, freq="H", tz="Europe/Berlin"
-    )
+    data.index = pd.date_range(f"{year}-01-01 00:30:00", periods=8760, freq="H", tz="Europe/Berlin")
     data = data.rename(
         columns={
             "DHI": "DHI",
@@ -1052,9 +944,7 @@ def read_nsrdb_15min_data(filepath: str, year: int) -> pd.DataFrame:
     """Reads a set of NSRDB data in 15 min resolution."""
     data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
     # get data
-    data.index = pd.date_range(
-        f"{year}-01-01 00:00:00", periods=24 * 4 * 365, freq="900S", tz="UTC"
-    )
+    data.index = pd.date_range(f"{year}-01-01 00:00:00", periods=24 * 4 * 365, freq="900S", tz="UTC")
     data = data.rename(
         columns={
             "Temperature": "T",
@@ -1091,13 +981,9 @@ def calculate_direct_normal_radiation(
 
     """
 
-    solar_pos = pvlib.solarposition.get_solarposition(
-        direct_horizontal_irradation.index, lat, lon
-    )
+    solar_pos = pvlib.solarposition.get_solarposition(direct_horizontal_irradation.index, lat, lon)
     solar_pos["apparent_zenith"][solar_pos.apparent_zenith > zenith_tol] = zenith_tol
-    dni = direct_horizontal_irradation.div(
-        solar_pos["apparent_zenith"].apply(math.radians).apply(math.cos)
-    )
+    dni = direct_horizontal_irradation.div(solar_pos["apparent_zenith"].apply(math.radians).apply(math.cos))
     if sum(dni.isnull()) > 0:
         raise ValueError("Something went wrong...")
     return dni

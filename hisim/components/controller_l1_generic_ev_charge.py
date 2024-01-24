@@ -64,9 +64,7 @@ class ChargingStationConfig(cp.ConfigBase):
         charging_station_set: JsonReference = ChargingStationSets.Charging_At_Home_with_03_7_kW,
     ) -> "ChargingStationConfig":
         """Returns default configuration of charging station and desired SOC Level."""
-        charging_power = float(
-            (charging_station_set.Name or "").split("with ")[1].split(" kW")[0]
-        )
+        charging_power = float((charging_station_set.Name or "").split("with ")[1].split(" kW")[0])
         lower_threshold_charging_power = (
             charging_power * 1e3 * 0.1
         )  # 10 % of charging power for acceptable efficiencies
@@ -205,11 +203,7 @@ class L1Controller(cp.Component):
                 generic_car.Car.ElectricityOutput,
             )
         )
-        connections.append(
-            cp.ComponentConnection(
-                L1Controller.CarLocation, car_classname, generic_car.Car.CarLocation
-            )
-        )
+        connections.append(cp.ComponentConnection(L1Controller.CarLocation, car_classname, generic_car.Car.CarLocation))
         return connections
 
     def get_default_connections_advanced_battery(self) -> List[cp.ComponentConnection]:
@@ -268,9 +262,7 @@ class L1Controller(cp.Component):
             return min(electricity_target, self.power)
         return 0
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Returns battery charge and discharge (energy consumption of car) of battery at each timestep."""
         if force_convergence:
             self.state = self.processed_state.clone()
@@ -294,9 +286,7 @@ class L1Controller(cp.Component):
         ac_battery_power = stsv.get_input_value(self.ac_battery_power_channel)
         if ac_battery_power > 0:
             # charging of EV
-            stsv.set_output_value(
-                self.battery_charging_power_to_ems_channel, ac_battery_power
-            )
+            stsv.set_output_value(self.battery_charging_power_to_ems_channel, ac_battery_power)
         else:
             # no charging of EV
             stsv.set_output_value(self.battery_charging_power_to_ems_channel, 0)
@@ -311,9 +301,7 @@ class L1Controller(cp.Component):
         self.config = config
         # get charging station location and charging station power out of ChargingStationSet
         if config.charging_station_set.Name is not None:
-            charging_station_string = config.charging_station_set.Name.partition("At ")[
-                2
-            ]
+            charging_station_string = config.charging_station_set.Name.partition("At ")[2]
             location = charging_station_string.partition(" with")[0]
             if location == "Home":
                 self.charging_location = 1
@@ -323,18 +311,13 @@ class L1Controller(cp.Component):
             log.error(
                 'Charging location not known, check the input on the charging station set. It was set to "charging at home per default.'
             )
-        power = (
-            float(charging_station_string.partition("with ")[2].partition(" kW")[0])
-            * 1e3
-        )
+        power = float(charging_station_string.partition("with ")[2].partition(" kW")[0]) * 1e3
         self.power = power
 
     def write_to_report(self) -> List[str]:
         """Writes EV charge controller values to report."""
         lines = []
-        lines.append(
-            self.name + "_w" + str(self.source_weight) + "charging controller: "
-        )
+        lines.append(self.name + "_w" + str(self.source_weight) + "charging controller: ")
         lines.append(f"Power [kW]: {self.power * 1e-3:2.1f}")
         if self.charging_location == 1:
             lines.append("At Home")

@@ -62,9 +62,7 @@ class Simulator:
         self.iteration_logging_path: str = ""
         self.config_dictionary: Dict[str, Any] = {}
 
-    def set_simulation_parameters(
-        self, my_simulation_parameters: SimulationParameters
-    ) -> None:
+    def set_simulation_parameters(self, my_simulation_parameters: SimulationParameters) -> None:
         """Sets the simulation parameters and the logging level at the same time."""
         self._simulation_parameters = my_simulation_parameters
         if self._simulation_parameters is not None:
@@ -83,9 +81,7 @@ class Simulator:
         component.set_sim_repo(self.simulation_repository)
 
         # set the wrapper
-        wrap = ComponentWrapper(
-            component, is_cachable, connect_automatically=connect_automatically
-        )
+        wrap = ComponentWrapper(component, is_cachable, connect_automatically=connect_automatically)
         wrap.register_component_outputs(self.all_outputs)
         self.wrapped_components.append(wrap)
         if component.component_name in self.config_dictionary:
@@ -102,13 +98,10 @@ class Simulator:
     def prepare_calculation(self) -> None:
         """Connects the inputs from every component to the corresponding outputs."""
         for wrapped_component in self.wrapped_components:
-
             # check if component should be connected to default connections automatically
             if wrapped_component.connect_automatically is True:
                 self.connect_everything_automatically(
-                    source_component_list=[
-                        wp.my_component for wp in self.wrapped_components
-                    ],
+                    source_component_list=[wp.my_component for wp in self.wrapped_components],
                     target_component=wrapped_component.my_component,
                 )
             wrapped_component.prepare_calculation()
@@ -164,25 +157,14 @@ class Simulator:
                 and postprocessingoptions.PostProcessingOptions.PROVIDE_DETAILED_ITERATION_LOGGING
                 in self._simulation_parameters.post_processing_options
             ):
-                myerr = stsv.get_differences_for_error_msg(
-                    previous_values, self.all_outputs
-                )
-                with open(
-                    self.iteration_logging_path, "a", encoding="utf-8"
-                ) as filestream:
+                myerr = stsv.get_differences_for_error_msg(previous_values, self.all_outputs)
+                with open(self.iteration_logging_path, "a", encoding="utf-8") as filestream:
                     filestream.write(myerr + "\n")
             if iterative_tries > 10:
                 force_convergence = True
             if iterative_tries > 100:
-                list_of_changed_values = stsv.get_differences_for_error_msg(
-                    previous_values, self.all_outputs
-                )
-                raise ValueError(
-                    "More than 100 tries in time step "
-                    + str(timestep)
-                    + "\n"
-                    + list_of_changed_values
-                )
+                list_of_changed_values = stsv.get_differences_for_error_msg(previous_values, self.all_outputs)
+                raise ValueError("More than 100 tries in time step " + str(timestep) + "\n" + list_of_changed_values)
             # Copies actual values to previous variable
             previous_values.copy_values_from_other(stsv)
             iterative_tries += 1
@@ -199,9 +181,7 @@ class Simulator:
         ):
             # check if result path is already set somewhere manually
             if ResultPathProviderSingleton().get_result_directory_name() is not None:
-                self._simulation_parameters.result_directory = (
-                    ResultPathProviderSingleton().get_result_directory_name()
-                )
+                self._simulation_parameters.result_directory = ResultPathProviderSingleton().get_result_directory_name()
                 log.information(
                     "Using result directory: "
                     + self._simulation_parameters.result_directory
@@ -216,9 +196,7 @@ class Simulator:
                     hash_number=None,
                     sorting_option=SortingOptionEnum.FLAT,
                 )
-                self._simulation_parameters.result_directory = (
-                    ResultPathProviderSingleton().get_result_directory_name()
-                )
+                self._simulation_parameters.result_directory = ResultPathProviderSingleton().get_result_directory_name()
                 log.information(
                     f"Using result directory:  {self._simulation_parameters.result_directory}"
                     + " which is set by the simulator."
@@ -248,15 +226,9 @@ class Simulator:
         # call again because it might not have gotten executed depending on how it's called.
         self.prepare_simulation_directory()
 
-        flagfile = os.path.join(
-            self._simulation_parameters.result_directory, "finished.flag"
-        )
-        if self._simulation_parameters.skip_finished_results and os.path.exists(
-            flagfile
-        ):
-            log.warning(
-                "Found " + flagfile + ". This calculation seems finished. Quitting."
-            )
+        flagfile = os.path.join(self._simulation_parameters.result_directory, "finished.flag")
+        if self._simulation_parameters.skip_finished_results and os.path.exists(flagfile):
+            log.warning("Found " + flagfile + ". This calculation seems finished. Quitting.")
             return
         # Starts time counter
         start_counter = time.perf_counter()
@@ -271,11 +243,7 @@ class Simulator:
             + " outputs."
         )
         all_result_lines = []
-        log.information(
-            "Starting simulation for "
-            + str(self._simulation_parameters.timesteps)
-            + " timesteps"
-        )
+        log.information("Starting simulation for " + str(self._simulation_parameters.timesteps) + " timesteps")
         lastmessage = datetime.datetime.now()
         last_step: int = 0
         starttime = datetime.datetime.now()
@@ -315,9 +283,7 @@ class Simulator:
                 )
                 last_step = step
                 total_iteration_tries_since_last_msg = 0
-        postprocessing_datatransfer = self.prepare_post_processing(
-            all_result_lines, start_counter
-        )
+        postprocessing_datatransfer = self.prepare_post_processing(all_result_lines, start_counter)
         log.information("Starting postprocessing")
         if postprocessing_datatransfer is None:
             raise ValueError("postprocessing_datatransfer was none")
@@ -349,13 +315,9 @@ class Simulator:
             column_name = entry.get_pretty_name()
             colum_names.append(column_name)
             log.debug("Output column: " + column_name)
-        self.results_data_frame = pd.DataFrame(
-            data=all_result_lines, columns=colum_names
-        )
+        self.results_data_frame = pd.DataFrame(data=all_result_lines, columns=colum_names)
         # todo: fix this constant
-        df_index = pd.date_range(
-            "2021-01-01 00:00:00", periods=len(self.results_data_frame), freq="T"
-        )
+        df_index = pd.date_range("2021-01-01 00:00:00", periods=len(self.results_data_frame), freq="T")
         self.results_data_frame.index = df_index
         end_counter = time.perf_counter()
         execution_time = end_counter - start_counter
@@ -405,15 +367,11 @@ class Simulator:
             average_iteration_tries: float = 1
         else:
             average_iteration_tries = total_iteration_tries / elapsed_steps
-        time_elapsed = datetime.timedelta(
-            seconds=(self._simulation_parameters.timesteps - step) / steps_per_second
-        )
+        time_elapsed = datetime.timedelta(seconds=(self._simulation_parameters.timesteps - step) / steps_per_second)
         time_left_minutes, time_left_seconds = divmod(time_elapsed.seconds, 60)
         time_left_seconds = str(time_left_seconds).zfill(2)  # type: ignore
         simulation_status = f"Simulating... {(step / self._simulation_parameters.timesteps) * 100:.1f}% "
-        simulation_status += (
-            f"| Elapsed Time: {elapsed_minutes}:{elapsed_seconds_str} min "
-        )
+        simulation_status += f"| Elapsed Time: {elapsed_minutes}:{elapsed_seconds_str} min "
         simulation_status += f"| Speed: {steps_per_second:.0f} step/s "
         simulation_status += f"| Time Left: {time_left_minutes}:{time_left_seconds} min"
         simulation_status += f"| Avg. iterations {average_iteration_tries:.1f}"
@@ -466,18 +424,14 @@ class Simulator:
                 temp_df_cumulative = temp_df.sum()
 
             # monthly results
-            results_merged_monthly[temp_df_monthly.columns[0]] = temp_df_monthly.values[
-                :, 0
-            ]
+            results_merged_monthly[temp_df_monthly.columns[0]] = temp_df_monthly.values[:, 0]
             results_merged_monthly.index = temp_df_monthly.index
             # daily results
             results_merged_daily[temp_df_daily.columns[0]] = temp_df_daily.values[:, 0]
             results_merged_daily.index = temp_df_daily.index
 
             # cumulative results
-            results_merged_cumulative[
-                temp_df_monthly.columns[0]
-            ] = temp_df_cumulative.values
+            results_merged_cumulative[temp_df_monthly.columns[0]] = temp_df_cumulative.values
 
             if self._simulation_parameters.seconds_per_timestep != 3600:
                 if self.all_outputs[i_column].unit in (
@@ -492,15 +446,11 @@ class Simulator:
                     Units.KG_PER_SEC,
                     Units.PERCENT,
                 ):
-                    temp_df_hourly = temp_df.resample(
-                        "60T"
-                    ).mean()  # .interpolate(method="linear")
+                    temp_df_hourly = temp_df.resample("60T").mean()  # .interpolate(method="linear")
                 else:
                     temp_df_hourly = temp_df.resample("60T").sum()
 
-                results_merged_hourly[
-                    temp_df_hourly.columns[0]
-                ] = temp_df_hourly.values[:, 0]
+                results_merged_hourly[temp_df_hourly.columns[0]] = temp_df_hourly.values[:, 0]
                 results_merged_hourly.index = temp_df_hourly.index
             else:
                 results_merged_hourly[temp_df.columns[0]] = temp_df.values[:, 0]
@@ -527,13 +477,9 @@ class Simulator:
 
         # check if target component is a normal or a dynamic component and get all default connections
         if isinstance(target_component, dcp.DynamicComponent):
-            target_default_connection_dict = (
-                target_component.dynamic_default_connections
-            )
+            target_default_connection_dict = target_component.dynamic_default_connections
 
-        elif isinstance(target_component, cp.Component) and not isinstance(
-            target_component, dcp.DynamicComponent
-        ):
+        elif isinstance(target_component, cp.Component) and not isinstance(target_component, dcp.DynamicComponent):
             target_default_connection_dict = target_component.default_connections
 
         else:
@@ -543,7 +489,6 @@ class Simulator:
 
         # check if target component has any default connections (otherwise automatic connection cannot be made)
         if bool(target_default_connection_dict) is True:
-
             # check if at least one source_component is in the target default connections
             if (
                 any(
@@ -562,13 +507,9 @@ class Simulator:
 
                 # if the source components' classname is found in the target components' default connection dict, a connection is made
                 if source_component_classname in target_default_connection_dict.keys():
-
                     if isinstance(target_component, dcp.DynamicComponent):
-
-                        dynamic_connections = (
-                            target_component.get_dynamic_default_connections(
-                                source_component=source_component
-                            )
+                        dynamic_connections = target_component.get_dynamic_default_connections(
+                            source_component=source_component
                         )
 
                         target_component.connect_with_dynamic_connections_list(
@@ -578,13 +519,8 @@ class Simulator:
                     if isinstance(target_component, cp.Component) and not isinstance(
                         target_component, dcp.DynamicComponent
                     ):
-
-                        connections = target_component.get_default_connections(
-                            source_component=source_component
-                        )
-                        target_component.connect_with_connections_list(
-                            connections=connections
-                        )
+                        connections = target_component.get_default_connections(source_component=source_component)
+                        target_component.connect_with_connections_list(connections=connections)
         else:
             raise KeyError(
                 f"Automatic connection does not work for {target_component.component_name} because no default connections were found. "

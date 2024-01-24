@@ -81,9 +81,7 @@ class StorageConfig(cp.ConfigBase):
         """Returns default configuration for boiler."""
 
         volume = 230
-        radius = (volume * 1e-3 / (4 * np.pi)) ** (
-            1 / 3
-        )  # l to m^3 so that radius is given in m
+        radius = (volume * 1e-3 / (4 * np.pi)) ** (1 / 3)  # l to m^3 so that radius is given in m
         surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
         config = StorageConfig(
             name="DHWBoiler",
@@ -108,9 +106,7 @@ class StorageConfig(cp.ConfigBase):
         """Returns default configuration for boiler."""
 
         volume = default_volume_in_liter * max(number_of_apartments, 1)
-        radius = (volume * 1e-3 / (4 * np.pi)) ** (
-            1 / 3
-        )  # l to m^3 so that radius is given in m
+        radius = (volume * 1e-3 / (4 * np.pi)) ** (1 / 3)  # l to m^3 so that radius is given in m
         surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
         config = StorageConfig(
             name="DHWBoiler",
@@ -132,9 +128,7 @@ class StorageConfig(cp.ConfigBase):
     def get_default_config_buffer(power: float = 2000, volume: float = 500) -> Any:
         """Returns default configuration for buffer (radius:height = 1:4)."""
         # volume = r^2 * pi * h = r^2 * pi * 4r = 4 * r^3 * pi
-        radius = (volume * 1e-3 / (4 * np.pi)) ** (
-            1 / 3
-        )  # l to m^3 so that radius is given in m
+        radius = (volume * 1e-3 / (4 * np.pi)) ** (1 / 3)  # l to m^3 so that radius is given in m
         # cylinder surface area = floor and ceiling area + lateral surface
         surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
         config = StorageConfig(
@@ -161,28 +155,18 @@ class StorageConfig(cp.ConfigBase):
     ) -> None:
         """Computes default volume and surface from power and min idle time of heating system."""
         if self.use != lt.ComponentType.BUFFER:
-            raise Exception(
-                "Default volume can only be computed for buffer storage not for boiler."
-            )
+            raise Exception("Default volume can only be computed for buffer storage not for boiler.")
 
         energy_in_kilo_joule = self.power * time_in_seconds * 1e-3
-        self.volume = (
-            energy_in_kilo_joule
-            * multiplier
-            / (temperature_difference_in_kelvin * 0.977 * 4.182)
-        )
+        self.volume = energy_in_kilo_joule * multiplier / (temperature_difference_in_kelvin * 0.977 * 4.182)
         # volume = r^2 * pi * h = r^2 * pi * 4r = 4 * r^3 * pi
-        radius = (self.volume * 1e-3 / (4 * np.pi)) ** (
-            1 / 3
-        )  # l to m^3 so that radius is given in m
+        radius = (self.volume * 1e-3 / (4 * np.pi)) ** (1 / 3)  # l to m^3 so that radius is given in m
         # cylinder surface area = floor and ceiling area + lateral surface
         self.surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
 
     def compute_default_cycle(self, temperature_difference_in_kelvin: float) -> None:
         """Computes energy needed to heat storage from lower threshold of hysteresis to upper threshold."""
-        self.energy_full_cycle = (
-            self.volume * temperature_difference_in_kelvin * 0.977 * 4.182 / 3600
-        )
+        self.energy_full_cycle = self.volume * temperature_difference_in_kelvin * 0.977 * 4.182 / 3600
 
 
 class StorageState:
@@ -216,17 +200,13 @@ class StorageState:
         """Converts temperature of storage (K) into energy contained in storage (kJ)."""
         # 0.977 is the density of water in kg/l
         # 4.182 is the specific heat of water in kJ / (K * kg)
-        return (
-            self.temperature_in_kelvin * self.volume_in_l * 0.977 * 4.182
-        )  # energy given in kJ
+        return self.temperature_in_kelvin * self.volume_in_l * 0.977 * 4.182  # energy given in kJ
 
     def set_temperature_from_energy(self, energy_in_kilo_joule: float) -> None:
         """Converts energy contained in storage (kJ) into temperature (K)."""
         # 0.977 is the density of water in kg/l
         # 4.182 is the specific heat of water in kJ / (K * kg)
-        self.temperature_in_kelvin = energy_in_kilo_joule / (
-            self.volume_in_l * 0.977 * 4.182
-        )  # temperature given in K
+        self.temperature_in_kelvin = energy_in_kilo_joule / (self.volume_in_l * 0.977 * 4.182)  # temperature given in K
         # filter for boiling water
         # no filtering -> this hides major problems - Noah
         if self.temperature_in_kelvin > 95 + 273.15:
@@ -244,13 +224,7 @@ class StorageState:
 
         For heating up the building in winter. Here 30°C is set as the lower limit for the temperature in the buffer storage in winter.
         """
-        return (
-            (self.temperature_in_kelvin - 273.15 - 25)
-            * self.volume_in_l
-            * 0.977
-            * 4.182
-            * 1e3
-        )
+        return (self.temperature_in_kelvin - 273.15 - 25) * self.volume_in_l * 0.977 * 4.182 * 1e3
 
 
 # class HotWaterStorage(dycp.DynamicComponent):
@@ -285,9 +259,7 @@ class HotWaterStorage(cp.Component):
     # outputs for buffer storage
     PowerFromHotWaterStorage = "PowerFromHotWaterStorage"
 
-    def __init__(
-        self, my_simulation_parameters: SimulationParameters, config: StorageConfig
-    ):
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: StorageConfig):
         """Initializes instance of HotWaterStorage class."""
 
         super().__init__(
@@ -304,9 +276,7 @@ class HotWaterStorage(cp.Component):
         self.heat_to_buffer_inputs: List[cp.ComponentInput]
 
         # initialize Boiler State
-        self.state = StorageState(
-            volume_in_l=config.volume, temperature_in_kelvin=273 + 60
-        )
+        self.state = StorageState(volume_in_l=config.volume, temperature_in_kelvin=273 + 60)
         self.previous_state = self.state.clone()
         self.write_to_report()
 
@@ -322,18 +292,14 @@ class HotWaterStorage(cp.Component):
             self.add_default_connections(self.get_occupancy_default_connections())
             self.add_default_connections(self.get_utsp_default_connections())
         elif self.use == lt.ComponentType.BUFFER:
-            self.heat_controller_target_percentage_channel: cp.ComponentInput = (
-                self.add_input(
-                    self.component_name,
-                    self.HeatControllerTargetPercentage,
-                    lt.LoadTypes.ON_OFF,
-                    lt.Units.BINARY,
-                    mandatory=True,
-                )
+            self.heat_controller_target_percentage_channel: cp.ComponentInput = self.add_input(
+                self.component_name,
+                self.HeatControllerTargetPercentage,
+                lt.LoadTypes.ON_OFF,
+                lt.Units.BINARY,
+                mandatory=True,
             )
-            self.add_default_connections(
-                self.get_heating_controller_default_connections()
-            )
+            self.add_default_connections(self.get_heating_controller_default_connections())
         else:
             hisim.log.error("Type of hot water storage is not defined")
 
@@ -371,9 +337,7 @@ class HotWaterStorage(cp.Component):
             output_description="Power transfered to Building or Hot Water Pipe.",
         )
 
-        self.add_default_connections(
-            self.get_default_connections_from_generic_heat_pump_modular()
-        )
+        self.add_default_connections(self.get_default_connections_from_generic_heat_pump_modular())
         self.add_default_connections(self.get_heatsource_default_connections())
         self.add_default_connections(self.get_chp_default_connections())
 
@@ -451,9 +415,7 @@ class HotWaterStorage(cp.Component):
         """Sets heating controller default connections in hot water storage."""
 
         connections = []
-        heating_controller_classname = (
-            controller_l1_building_heating.L1BuildingHeatController.get_classname()
-        )
+        heating_controller_classname = controller_l1_building_heating.L1BuildingHeatController.get_classname()
         connections.append(
             cp.ComponentConnection(
                 HotWaterStorage.HeatControllerTargetPercentage,
@@ -476,9 +438,7 @@ class HotWaterStorage(cp.Component):
         self.volume = config.volume
         self.surface = config.surface
         self.u_value = config.u_value
-        self.drain_water_temperature = (
-            configuration.HouseholdWarmWaterDemandConfig.freshwater_temperature
-        )
+        self.drain_water_temperature = configuration.HouseholdWarmWaterDemandConfig.freshwater_temperature
         self.warm_water_temperature = (
             configuration.HouseholdWarmWaterDemandConfig.ww_temperature_demand
             - configuration.HouseholdWarmWaterDemandConfig.temperature_difference_hot
@@ -498,9 +458,7 @@ class HotWaterStorage(cp.Component):
         """Abstract. Restores the state of the component. Can be called many times while iterating."""
         self.state = self.previous_state.clone()
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates iteration of hot water storage."""
 
         thermal_energy_delivered = 0.0
@@ -542,9 +500,7 @@ class HotWaterStorage(cp.Component):
         self.state.set_temperature_from_energy(new_energy)
 
         # save outputs
-        stsv.set_output_value(
-            self.temperature_mean_channel, self.state.temperature_in_kelvin - 273.15
-        )
+        stsv.set_output_value(self.temperature_mean_channel, self.state.temperature_in_kelvin - 273.15)
 
     def calculate_heat_consumption(
         self,
@@ -569,15 +525,11 @@ class HotWaterStorage(cp.Component):
                 * self.my_simulation_parameters.seconds_per_timestep
                 * 1e-3
             )  # 1e-3 conversion J to kJ
-            available_energy = (
-                self.state.return_available_energy() + thermal_energy_delivered
-            )
+            available_energy = self.state.return_available_energy() + thermal_energy_delivered
             if heatconsumption > available_energy:
                 heatconsumption = max(available_energy, 0)
             return heatconsumption
-        raise Exception(
-            "Modular storage must be defined either as buffer or as boiler."
-        )
+        raise Exception("Modular storage must be defined either as buffer or as boiler.")
 
     @staticmethod
     def get_cost_capex(config: StorageConfig) -> Tuple[float, float, float]:

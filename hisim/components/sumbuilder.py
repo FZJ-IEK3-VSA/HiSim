@@ -29,9 +29,7 @@ class SumBuilderConfig(cp.ConfigBase):
     @classmethod
     def get_sumbuilder_default_config(cls):
         """Gets a default Sumbuilder."""
-        return SumBuilderConfig(
-            name="Sum", loadtype=lt.LoadTypes.ANY, unit=lt.Units.ANY
-        )
+        return SumBuilderConfig(name="Sum", loadtype=lt.LoadTypes.ANY, unit=lt.Units.ANY)
 
 
 class CalculateOperation(cp.Component):
@@ -64,15 +62,11 @@ class CalculateOperation(cp.Component):
         num_inputs = len(self.inputs)
         label = f"Input{num_inputs + 1}"
         vars(self)[label] = label
-        myinput = cp.ComponentInput(
-            self.component_name, label, self.loadtype, self.unit, True
-        )
+        myinput = cp.ComponentInput(self.component_name, label, self.loadtype, self.unit, True)
         self.inputs.append(myinput)
         return myinput
 
-    def connect_arbitrary_input(
-        self, src_object_name: str, src_field_name: str
-    ) -> None:
+    def connect_arbitrary_input(self, src_object_name: str, src_field_name: str) -> None:
         """Connect arbitrary inputs."""
         next_input = self.add_numbered_input()
         next_input.src_object_name = src_object_name
@@ -109,9 +103,7 @@ class CalculateOperation(cp.Component):
         """Double checks the results."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates."""
         total: float = 0
         for index, input_channel in enumerate(self.inputs):
@@ -188,9 +180,7 @@ class SumBuilderForTwoInputs(Component):
         """Prepares the simulation."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Adds the two values."""
         val1 = stsv.get_input_value(self.input1)
         val2 = stsv.get_input_value(self.input2)
@@ -268,9 +258,7 @@ class SumBuilderForThreeInputs(Component):
         """For double checking results."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Performs the addition of the values."""
         val1 = stsv.get_input_value(self.input1)
         val2 = stsv.get_input_value(self.input2)

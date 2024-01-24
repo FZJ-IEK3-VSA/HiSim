@@ -76,9 +76,7 @@ class CSVLoader(cp.Component):
 
     Output1: str = "CSV Profile"
 
-    def __init__(
-        self, config: CSVLoaderConfig, my_simulation_parameters: SimulationParameters
-    ):
+    def __init__(self, config: CSVLoaderConfig, my_simulation_parameters: SimulationParameters):
         """Initialize the class."""
         self.csvconfig = config
         super().__init__(
@@ -126,13 +124,9 @@ class CSVLoader(cp.Component):
         """Restores the state."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
-        stsv.set_output_value(
-            self.output1_channel, float(self.column[timestep]) * self.multiplier
-        )
+        stsv.set_output_value(self.output1_channel, float(self.column[timestep]) * self.multiplier)
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""

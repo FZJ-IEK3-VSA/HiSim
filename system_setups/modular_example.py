@@ -33,9 +33,7 @@ from obsolete import loadprofilegenerator_connector
 
 def cleanup_old_result_folders():
     """Removes old result folders of previous setup_function simulations."""
-    base_path = os.path.join(
-        hisim.utils.hisim_abs_path, os.path.pardir, "system_setups", "results"
-    )
+    base_path = os.path.join(hisim.utils.hisim_abs_path, os.path.pardir, "system_setups", "results")
     files_in_folder = os.listdir(base_path)
     for file in files_in_folder:
         if file.startswith("setup_function"):
@@ -70,9 +68,7 @@ def get_heating_reference_temperature_and_season_from_location(
     :rtype: Tuple[float, List[int]]
     """
 
-    converting_data = pd.read_csv(
-        hisim.utils.HISIMPATH["housing_reference_temperatures"]
-    )
+    converting_data = pd.read_csv(hisim.utils.HISIMPATH["housing_reference_temperatures"])
     # converting_data.index = converting_data["Location"]
     converting_data.set_index(inplace=True, keys="Location")
 
@@ -112,39 +108,19 @@ def setup_function(
 
     # Build system parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(
-            year=year, seconds_per_timestep=seconds_per_timestep
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.PLOT_CARPET
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.GENERATE_PDF_REPORT
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
-        )
+        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT)
         # my_simulation_parameters.post_processing_options.append(
         #     PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE
         # )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.EXPORT_TO_CSV
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.MAKE_NETWORK_CHARTS
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_OPEX
-        )
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
@@ -154,9 +130,7 @@ def setup_function(
     occupancy_profile = arche_type_config_.occupancy_profile
     building_code = arche_type_config_.building_code
     floor_area = arche_type_config_.absolute_conditioned_floor_area
-    water_heating_system_installed = (
-        arche_type_config_.water_heating_system_installed
-    )  # Electricity, Hydrogen or False
+    water_heating_system_installed = arche_type_config_.water_heating_system_installed  # Electricity, Hydrogen or False
     heating_system_installed = arche_type_config_.heating_system_installed
     mobility_set = arche_type_config_.mobility_set
     mobility_distance = arche_type_config_.mobility_distance
@@ -183,9 +157,7 @@ def setup_function(
         heatpump_power = 1
         hisim.log.information("Default power is used for heat pump. ")
     if heatpump_power < 1:
-        raise Exception(
-            "Heat pump power cannot be smaller than default: choose values greater than one"
-        )
+        raise Exception("Heat pump power cannot be smaller than default: choose values greater than one")
     controllable = system_config_.surplus_control_considered
     pv_included = system_config_.pv_included  # True or False
     pv_peak_power = system_config_.pv_peak_power or 5e3  # set default
@@ -193,9 +165,7 @@ def setup_function(
     buffer_included = system_config_.buffer_included
     buffer_volume = system_config_.buffer_volume or 1  # set default
     if buffer_volume < 1:
-        raise Exception(
-            "Buffer volume cannot be smaller than default: choose values greater than one"
-        )
+        raise Exception("Buffer volume cannot be smaller than default: choose values greater than one")
     battery_included = system_config_.battery_included
     battery_capacity = system_config_.battery_capacity or 5  # set default
     chp_included = system_config_.chp_included
@@ -209,12 +179,8 @@ def setup_function(
 
     # BASICS
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum[location]
-    )
-    my_weather = weather.Weather(
-        config=my_weather_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum[location])
+    my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_weather)
 
     # Build building
@@ -235,48 +201,38 @@ def setup_function(
         predictive=False,
         set_heating_temperature_in_celsius=19.0,
         set_cooling_temperature_in_celsius=24.0,
-        enable_opening_windows=False
+        enable_opening_windows=False,
     )
     my_building_information = building.BuildingInformation(config=my_building_config)
-    my_building = building.Building(
-        config=my_building_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     my_sim.add_component(my_building)
 
     # build occupancy
     if utsp_connected:
         if mobility_set is None:
             this_mobility_set = TransportationDeviceSets.Bus_and_one_30_km_h_Car
-            hisim.log.information(
-                "Default is used for mobility set, because None was defined."
-            )
+            hisim.log.information("Default is used for mobility set, because None was defined.")
         else:
             this_mobility_set = mobility_set
         if mobility_distance is None:
-            this_mobility_distance = (
-                TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance
-            )
-            hisim.log.information(
-                "Default is used for mobility distance, because None was defined."
-            )
+            this_mobility_distance = TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance
+            hisim.log.information("Default is used for mobility distance, because None was defined.")
         else:
             this_mobility_distance = mobility_distance
 
-        my_occupancy_config = (
-            loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-                name="UTSPConnector",
-                data_acquisition_mode=loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP,
-                household=occupancy_profile_utsp,  # type: ignore
-                energy_intensity=EnergyIntensityType.EnergySaving,
-                result_dir_path=hisim.utils.HISIMPATH["utsp_results"],
-                travel_route_set=this_mobility_distance,
-                transportation_device_set=this_mobility_set,
-                charging_station_set=charging_station,
-                consumption=0,
-                profile_with_washing_machine_and_dishwasher=not smart_devices_included,
-                predictive_control=False,
-                predictive=False,
-            )
+        my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
+            name="UTSPConnector",
+            data_acquisition_mode=loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP,
+            household=occupancy_profile_utsp,  # type: ignore
+            energy_intensity=EnergyIntensityType.EnergySaving,
+            result_dir_path=hisim.utils.HISIMPATH["utsp_results"],
+            travel_route_set=this_mobility_distance,
+            transportation_device_set=this_mobility_set,
+            charging_station_set=charging_station,
+            consumption=0,
+            profile_with_washing_machine_and_dishwasher=not smart_devices_included,
+            predictive_control=False,
+            predictive=False,
         )
 
         my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
@@ -357,14 +313,10 @@ def setup_function(
         smart_devices_included,
         water_heating_system_installed,
     ):
-        my_electricity_controller_config = (
-            controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
-        )
-        my_electricity_controller = (
-            controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-                my_simulation_parameters=my_simulation_parameters,
-                config=my_electricity_controller_config,
-            )
+        my_electricity_controller_config = controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
+        my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_electricity_controller_config,
         )
 
         my_electricity_controller.add_component_inputs_and_connect(
@@ -387,9 +339,7 @@ def setup_function(
     # """ EV BATTERY """
     if ev_included:
         if mobility_set is None:
-            raise Exception(
-                "If EV should be simulated mobility set needs to be defined."
-            )
+            raise Exception("If EV should be simulated mobility set needs to be defined.")
         _ = component_connections.configure_ev_batteries(
             my_sim=my_sim,
             my_simulation_parameters=my_simulation_parameters,  # noqa

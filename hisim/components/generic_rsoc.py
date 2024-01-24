@@ -58,9 +58,7 @@ class RsocConfig(cp.ConfigBase):
     def read_config(rsoc_name):
         """Opens the according JSON-file, based on the rSOC_name."""
 
-        config_file = os.path.join(
-            utils.HISIMPATH["inputs"], "rSOC_manufacturer_config.json"
-        )
+        config_file = os.path.join(utils.HISIMPATH["inputs"], "rSOC_manufacturer_config.json")
         with open(config_file, "r", encoding="utf-8") as json_file:
             data = json.load(json_file)
             return data.get("rSOC variants", {}).get(rsoc_name, {})
@@ -119,9 +117,7 @@ class Rsoc(cp.Component):
 
     # SOFC Outputs
     SOFCState = "SOFCState"
-    SOFCCurrentOutput = (
-        "SOFCCurrentPowerOutput"  # current load regarding the ramp-up and -down process
-    )
+    SOFCCurrentOutput = "SOFCCurrentPowerOutput"  # current load regarding the ramp-up and -down process
     TotalEnergyProduced = "TotalEnergyProduced"
 
     SOFCCurrentHydrogenFlowRate = "SOFCCurrentHydrogenFlowRate"
@@ -349,12 +345,8 @@ class Rsoc(cp.Component):
         self.total_operating_time = 0.0
 
         self.current_state_soec_previous = self.current_state_soec
-        self.total_ramp_up_count_state_soec_previous = (
-            self.total_ramp_up_count_state_soec
-        )
-        self.total_ramp_down_count_state_soec_previous = (
-            self.total_ramp_down_count_state_soec
-        )
+        self.total_ramp_up_count_state_soec_previous = self.total_ramp_up_count_state_soec
+        self.total_ramp_down_count_state_soec_previous = self.total_ramp_down_count_state_soec
         self.total_warm_start_count_soec_previous = self.total_warm_start_count_soec
         self.total_cold_start_count_soec_previous = self.total_cold_start_count_soec
         self.total_warm_start_cycles_soec_previous = self.total_warm_start_cycles_soec
@@ -367,12 +359,8 @@ class Rsoc(cp.Component):
         self.total_energy_soec_previous = self.total_energy_soec
 
         self.current_state_sofc_previous = self.current_state_sofc
-        self.total_ramp_up_count_state_sofc_previous = (
-            self.total_ramp_up_count_state_sofc
-        )
-        self.total_ramp_down_count_state_sofc_previous = (
-            self.total_ramp_down_count_state_sofc
-        )
+        self.total_ramp_up_count_state_sofc_previous = self.total_ramp_up_count_state_sofc
+        self.total_ramp_down_count_state_sofc_previous = self.total_ramp_down_count_state_sofc
         self.total_warm_start_count_sofc_previous = self.total_warm_start_count_sofc
         self.total_cold_start_count_sofc_previous = self.total_cold_start_count_sofc
         self.total_warm_start_cycles_sofc_previous = self.total_warm_start_cycles_sofc
@@ -389,17 +377,13 @@ class Rsoc(cp.Component):
     def soec_efficiency(self, name, current_load, min_load, max_load):
         """Efficiency curve data is provided corresponding to the used rSOC system."""
         # Load data from the JSON file
-        data_file = os.path.join(
-            utils.HISIMPATH["inputs"], "rSOC_efficiency_curve_data.json"
-        )
+        data_file = os.path.join(utils.HISIMPATH["inputs"], "rSOC_efficiency_curve_data.json")
         with open(data_file, "r", encoding="utf-8") as file:
             data = json.load(file)
 
         # Check if the provided technology is valid
         if name not in data:
-            raise ValueError(
-                f"Invalid rSOC name. Supported names are: {', '.join(data.keys())}"
-            )
+            raise ValueError(f"Invalid rSOC name. Supported names are: {', '.join(data.keys())}")
 
         # Extract the x and y data points for the selected technology
         load_percentage = data[name]["load_percentage_soec"]
@@ -408,9 +392,7 @@ class Rsoc(cp.Component):
         if min_load <= current_load <= max_load:
             current_load_percentage = current_load / max_load
             # Interpolation
-            current_sys_eff_soec = float(
-                np.interp(current_load_percentage, load_percentage, sys_eff)
-            )
+            current_sys_eff_soec = float(np.interp(current_load_percentage, load_percentage, sys_eff))
 
         else:
             current_sys_eff_soec = 0.0
@@ -420,17 +402,13 @@ class Rsoc(cp.Component):
     def sofc_efficiency(self, name, current_demand, min_power, max_power):
         """Efficiency curve data is provided corresponding to the used rSOC system."""
         # Load data from the JSON file
-        data_file = os.path.join(
-            utils.HISIMPATH["inputs"], "rSOC_efficiency_curve_data.json"
-        )
+        data_file = os.path.join(utils.HISIMPATH["inputs"], "rSOC_efficiency_curve_data.json")
         with open(data_file, "r", encoding="utf-8") as file:
             data = json.load(file)
 
         # Check if the provided technology is valid
         if name not in data:
-            raise ValueError(
-                f"Invalid rSOC name. Supported names are: {', '.join(data.keys())}"
-            )
+            raise ValueError(f"Invalid rSOC name. Supported names are: {', '.join(data.keys())}")
 
         # Extract the x and y data points for the selected technology
         load_percentage = data[name]["load_percentage_sofc"]
@@ -439,9 +417,7 @@ class Rsoc(cp.Component):
         if min_power < current_demand <= max_power:
             current_demand_percentage = current_demand / max_power
             # Interpolation
-            current_sys_eff_sofc = float(
-                np.interp(current_demand_percentage, load_percentage, sys_eff)
-            )
+            current_sys_eff_sofc = float(np.interp(current_demand_percentage, load_percentage, sys_eff))
 
         else:
             current_sys_eff_sofc = 0.0
@@ -452,18 +428,14 @@ class Rsoc(cp.Component):
         """Based on the calculated efficiency the current h2 production rate is calculated."""
         lhv_h2 = 33.33  # [kWh/kg]
 
-        h2_production_rate = (current_sys_eff_soec * current_load) / (
-            lhv_h2 * 3600
-        )  # [kg/s]
+        h2_production_rate = (current_sys_eff_soec * current_load) / (lhv_h2 * 3600)  # [kg/s]
         return h2_production_rate
 
     def h2_consumption_rate(self, current_sys_eff_sofc, current_demand):
         """Based on the calculated efficiency the current h2 consumption rate is calculated."""
         lhv_h2 = 33.33  # [kWh/kg]
         if current_sys_eff_sofc > 0.0 and current_demand >= self.min_power_sofc:
-            h2_consumption_rate = current_demand / (
-                current_sys_eff_sofc * lhv_h2 * 3600
-            )  # [kg/s]
+            h2_consumption_rate = current_demand / (current_sys_eff_sofc * lhv_h2 * 3600)  # [kg/s]
         else:
             h2_consumption_rate = 0.0
         return h2_consumption_rate
@@ -489,12 +461,8 @@ class Rsoc(cp.Component):
     def i_save_state(self) -> None:
         """Saves the current state."""
         self.current_state_soec_previous = self.current_state_soec
-        self.total_ramp_up_count_state_soec_previous = (
-            self.total_ramp_up_count_state_soec
-        )
-        self.total_ramp_down_count_state_soec_previous = (
-            self.total_ramp_down_count_state_soec
-        )
+        self.total_ramp_up_count_state_soec_previous = self.total_ramp_up_count_state_soec
+        self.total_ramp_down_count_state_soec_previous = self.total_ramp_down_count_state_soec
         self.total_warm_start_count_soec_previous = self.total_warm_start_count_soec
         self.total_cold_start_count_soec_previous = self.total_cold_start_count_soec
         self.total_warm_start_cycles_soec_previous = self.total_warm_start_cycles_soec
@@ -507,12 +475,8 @@ class Rsoc(cp.Component):
         self.total_energy_soec_previous = self.total_energy_soec
 
         self.current_state_sofc_previous = self.current_state_sofc
-        self.total_ramp_up_count_state_sofc_previous = (
-            self.total_ramp_up_count_state_sofc
-        )
-        self.total_ramp_down_count_state_sofc_previous = (
-            self.total_ramp_down_count_state_sofc
-        )
+        self.total_ramp_up_count_state_sofc_previous = self.total_ramp_up_count_state_sofc
+        self.total_ramp_down_count_state_sofc_previous = self.total_ramp_down_count_state_sofc
         self.total_warm_start_count_sofc_previous = self.total_warm_start_count_sofc
         self.total_cold_start_count_sofc_previous = self.total_cold_start_count_sofc
         self.total_warm_start_cycles_sofc_previous = self.total_warm_start_cycles_sofc
@@ -533,12 +497,8 @@ class Rsoc(cp.Component):
     def i_restore_state(self) -> None:
         """Restores previous state."""
         self.current_state_soec = self.current_state_soec_previous
-        self.total_ramp_up_count_state_soec = (
-            self.total_ramp_up_count_state_soec_previous
-        )
-        self.total_ramp_down_count_state_soec = (
-            self.total_ramp_down_count_state_soec_previous
-        )
+        self.total_ramp_up_count_state_soec = self.total_ramp_up_count_state_soec_previous
+        self.total_ramp_down_count_state_soec = self.total_ramp_down_count_state_soec_previous
         self.total_warm_start_count_soec = self.total_warm_start_count_soec_previous
         self.total_cold_start_count_soec = self.total_cold_start_count_soec_previous
         self.total_warm_start_cycles_soec = self.total_warm_start_cycles_soec_previous
@@ -551,12 +511,8 @@ class Rsoc(cp.Component):
         self.total_energy_soec = self.total_energy_soec_previous
 
         self.current_state_sofc = self.current_state_sofc_previous
-        self.total_ramp_up_count_state_sofc = (
-            self.total_ramp_up_count_state_sofc_previous
-        )
-        self.total_ramp_down_count_state_sofc = (
-            self.total_ramp_down_count_state_sofc_previous
-        )
+        self.total_ramp_up_count_state_sofc = self.total_ramp_up_count_state_sofc_previous
+        self.total_ramp_down_count_state_sofc = self.total_ramp_down_count_state_sofc_previous
         self.total_warm_start_count_sofc = self.total_warm_start_count_sofc_previous
         self.total_cold_start_count_sofc = self.total_cold_start_count_sofc_previous
         self.total_warm_start_cycles_sofc = self.total_warm_start_cycles_sofc_previous
@@ -574,14 +530,10 @@ class Rsoc(cp.Component):
         """Prepares the simulation."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the component."""
 
-        seconds_per_timestep = (
-            self.my_simulation_parameters.seconds_per_timestep
-        )  # [s/timestep]
+        seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep  # [s/timestep]
 
         if stsv.get_input_value(self.power_input) < 0.0:
             power_to_soec = abs(stsv.get_input_value(self.power_input))
@@ -595,17 +547,11 @@ class Rsoc(cp.Component):
         rsoc_state = stsv.get_input_value(self.input_state_rsoc)
 
         if rsoc_state == 1:
-            self.total_operating_time += (
-                self.my_simulation_parameters.seconds_per_timestep / 3600
-            )
-            stsv.set_output_value(
-                self.total_operating_time_rsco, self.total_operating_time
-            )
+            self.total_operating_time += self.my_simulation_parameters.seconds_per_timestep / 3600
+            stsv.set_output_value(self.total_operating_time_rsco, self.total_operating_time)
         else:
             self.total_operating_time += 0.0
-            stsv.set_output_value(
-                self.total_operating_time_rsco, self.total_operating_time
-            )
+            stsv.set_output_value(self.total_operating_time_rsco, self.total_operating_time)
 
         if power_to_soec != 0.0:
             # SOEC operation
@@ -622,9 +568,7 @@ class Rsoc(cp.Component):
             total_ramp_up_per_timestep = ramp_up_per_timestep
 
             # ramp down per timestep calculation
-            ramp_down_per_timestep = (
-                nominal_load * ramp_down_rate * seconds_per_timestep
-            )
+            ramp_down_per_timestep = nominal_load * ramp_down_rate * seconds_per_timestep
             total_ramp_down_per_timestep = ramp_down_per_timestep
 
             # calculating load input
@@ -642,23 +586,13 @@ class Rsoc(cp.Component):
                     self.total_ramp_down_count_state_soec += 0
 
                 # Ramping up
-                if (
-                    new_load >= total_ramp_up_per_timestep
-                    and self.current_state_soec < power_to_soec
-                ):
+                if new_load >= total_ramp_up_per_timestep and self.current_state_soec < power_to_soec:
                     self.total_ramp_up_count_state_soec += seconds_per_timestep
                     self.current_state_soec += total_ramp_up_per_timestep
 
-                elif (
-                    self.current_state_soec < power_to_soec
-                    and new_load < total_ramp_up_per_timestep
-                ):
-                    percentage_ramp_up_per_timestep = (
-                        new_load / total_ramp_up_per_timestep
-                    )
-                    self.total_ramp_up_count_state_soec += (
-                        percentage_ramp_up_per_timestep * seconds_per_timestep
-                    )
+                elif self.current_state_soec < power_to_soec and new_load < total_ramp_up_per_timestep:
+                    percentage_ramp_up_per_timestep = new_load / total_ramp_up_per_timestep
+                    self.total_ramp_up_count_state_soec += percentage_ramp_up_per_timestep * seconds_per_timestep
 
                     if self.current_state_soec == 0:
                         self.current_state_soec += power_to_soec
@@ -667,31 +601,17 @@ class Rsoc(cp.Component):
                         self.current_state_soec += new_load
 
                 # Ramping down
-                elif (
-                    total_ramp_down_per_timestep <= new_load
-                    and power_to_soec < self.current_state_soec
-                ):
+                elif total_ramp_down_per_timestep <= new_load and power_to_soec < self.current_state_soec:
                     self.total_ramp_down_count_state_soec += seconds_per_timestep
                     self.current_state_soec -= new_load
 
-                elif (
-                    power_to_soec < self.current_state_soec
-                    and new_load < total_ramp_down_per_timestep
-                ):
-                    percentage_ramp_down_per_timestep = (
-                        new_load / total_ramp_down_per_timestep
-                    )
-                    self.total_ramp_down_count_state_soec += (
-                        percentage_ramp_down_per_timestep * seconds_per_timestep
-                    )
+                elif power_to_soec < self.current_state_soec and new_load < total_ramp_down_per_timestep:
+                    percentage_ramp_down_per_timestep = new_load / total_ramp_down_per_timestep
+                    self.total_ramp_down_count_state_soec += percentage_ramp_down_per_timestep * seconds_per_timestep
                     self.current_state_soec -= new_load
 
-                current_sys_eff_soec = self.soec_efficiency(
-                    name, self.current_state_soec, min_load, self.max_load_soec
-                )
-                h2_production_rate = self.h2_production_rate(
-                    current_sys_eff_soec, self.current_state_soec
-                )
+                current_sys_eff_soec = self.soec_efficiency(name, self.current_state_soec, min_load, self.max_load_soec)
+                h2_production_rate = self.h2_production_rate(current_sys_eff_soec, self.current_state_soec)
 
             elif rsoc_state == 0:
                 self.total_ramp_up_count_state_soec += 0
@@ -714,16 +634,12 @@ class Rsoc(cp.Component):
             o2_flow_rate_soec = self.oxygen_rate(h2_production_rate)
             h2o_flow_rate_soec = self.water_rate(h2_production_rate)
 
-            self.total_hydrogen_produced_soec += (
-                h2_production_rate * seconds_per_timestep
-            )
+            self.total_hydrogen_produced_soec += h2_production_rate * seconds_per_timestep
             self.total_oxygen_produced_soec += o2_flow_rate_soec * seconds_per_timestep
             self.total_water_demand_soec += h2o_flow_rate_soec * seconds_per_timestep
 
             stsv.set_output_value(self.soec_hydrogen_flow_rate, h2_production_rate)
-            stsv.set_output_value(
-                self.soec_current_efficiency_state, current_sys_eff_soec
-            )
+            stsv.set_output_value(self.soec_current_efficiency_state, current_sys_eff_soec)
 
             # self.total_hydrogen_consumed_sofc += 0.0
             self.total_oxygen_consumed_sofc += 0.0
@@ -740,20 +656,14 @@ class Rsoc(cp.Component):
 
             name = self.name
 
-            seconds_per_timestep = (
-                self.my_simulation_parameters.seconds_per_timestep
-            )  # [s/timestep]
+            seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep  # [s/timestep]
 
             # ramp up per timestep calculation
-            ramp_up_per_timestep = (
-                self.nom_power_sofc * self.ramp_up_rate_sofc * seconds_per_timestep
-            )
+            ramp_up_per_timestep = self.nom_power_sofc * self.ramp_up_rate_sofc * seconds_per_timestep
             total_ramp_up_per_timestep = ramp_up_per_timestep
 
             # ramp down per timestep calculation
-            ramp_down_per_timestep = (
-                self.nom_power_sofc * self.ramp_down_rate_sofc * seconds_per_timestep
-            )
+            ramp_down_per_timestep = self.nom_power_sofc * self.ramp_down_rate_sofc * seconds_per_timestep
             total_ramp_down_per_timestep = ramp_down_per_timestep
 
             # calculating load input
@@ -772,23 +682,13 @@ class Rsoc(cp.Component):
                     self.total_ramp_down_count_state_sofc += 0
 
                 # Ramping up
-                if (
-                    new_load >= total_ramp_up_per_timestep
-                    and self.current_state_sofc < demand_to_sofc
-                ):
+                if new_load >= total_ramp_up_per_timestep and self.current_state_sofc < demand_to_sofc:
                     self.total_ramp_up_count_state_sofc += seconds_per_timestep
                     self.current_state_sofc += total_ramp_up_per_timestep
 
-                elif (
-                    self.current_state_sofc < demand_to_sofc
-                    and new_load < total_ramp_up_per_timestep
-                ):
-                    percentage_ramp_up_per_timestep = (
-                        new_load / total_ramp_up_per_timestep
-                    )
-                    self.total_ramp_up_count_state_sofc += (
-                        percentage_ramp_up_per_timestep * seconds_per_timestep
-                    )
+                elif self.current_state_sofc < demand_to_sofc and new_load < total_ramp_up_per_timestep:
+                    percentage_ramp_up_per_timestep = new_load / total_ramp_up_per_timestep
+                    self.total_ramp_up_count_state_sofc += percentage_ramp_up_per_timestep * seconds_per_timestep
 
                     if self.current_state_sofc == 0:
                         self.current_state_sofc += demand_to_sofc
@@ -797,23 +697,13 @@ class Rsoc(cp.Component):
                         self.current_state_sofc += new_load
 
                 # Ramping down
-                elif (
-                    total_ramp_down_per_timestep <= new_load
-                    and demand_to_sofc < self.current_state_sofc
-                ):
+                elif total_ramp_down_per_timestep <= new_load and demand_to_sofc < self.current_state_sofc:
                     self.total_ramp_down_count_state_sofc += seconds_per_timestep
                     self.current_state_sofc -= new_load
 
-                elif (
-                    demand_to_sofc < self.current_state_sofc
-                    and new_load < total_ramp_down_per_timestep
-                ):
-                    percentage_ramp_down_per_timestep = (
-                        new_load / total_ramp_down_per_timestep
-                    )
-                    self.total_ramp_down_count_state_sofc += (
-                        percentage_ramp_down_per_timestep * seconds_per_timestep
-                    )
+                elif demand_to_sofc < self.current_state_sofc and new_load < total_ramp_down_per_timestep:
+                    percentage_ramp_down_per_timestep = new_load / total_ramp_down_per_timestep
+                    self.total_ramp_down_count_state_sofc += percentage_ramp_down_per_timestep * seconds_per_timestep
                     self.current_state_sofc -= new_load
 
             elif rsoc_state == 0:
@@ -831,9 +721,7 @@ class Rsoc(cp.Component):
             current_sys_eff_sofc = self.sofc_efficiency(
                 name, self.current_state_sofc, self.min_power_sofc, self.max_power_sofc
             )
-            h2_consumption_rate = self.h2_consumption_rate(
-                current_sys_eff_sofc, self.current_state_sofc
-            )
+            h2_consumption_rate = self.h2_consumption_rate(current_sys_eff_sofc, self.current_state_sofc)
             o2_flow_rate_sofc = self.oxygen_rate(h2_consumption_rate)
             h2o_flow_rate_sofc = self.water_rate(h2_consumption_rate)
 
@@ -842,9 +730,7 @@ class Rsoc(cp.Component):
             self.total_water_produced_sofc += h2o_flow_rate_sofc * seconds_per_timestep
 
             stsv.set_output_value(self.sofc_hydrogen_flow_rate, h2_consumption_rate)
-            stsv.set_output_value(
-                self.sofc_current_efficiency_state, current_sys_eff_sofc
-            )
+            stsv.set_output_value(self.sofc_current_efficiency_state, current_sys_eff_sofc)
 
             # end
 
@@ -890,13 +776,9 @@ class Rsoc(cp.Component):
             self.current_load_soec, (self.current_state_soec * 1000)
         )  # for WATT output in system setup
 
-        self.total_energy_soec += self.current_state_soec * (
-            seconds_per_timestep / 3600
-        )
+        self.total_energy_soec += self.current_state_soec * (seconds_per_timestep / 3600)
         stsv.set_output_value(self.total_energy_consumed, self.total_energy_soec)
-        self.total_energy_sofc += self.current_state_sofc * (
-            seconds_per_timestep / 3600
-        )
+        self.total_energy_sofc += self.current_state_sofc * (seconds_per_timestep / 3600)
         stsv.set_output_value(self.total_energy_produced, self.total_energy_sofc)
 
     def write_to_report(self):
@@ -905,69 +787,17 @@ class Rsoc(cp.Component):
         for config_string in self.rsocconfig.get_string_dict():
             lines.append(config_string)
         lines.append("Component Name" + str(self.component_name))
-        lines.append(
-            "Total operating time during simulation: "
-            + str(self.total_operating_time)
-            + " [h]"
-        )
-        lines.append(
-            "Total hydrogen produced during simulation: "
-            + str(self.total_hydrogen_produced_soec)
-            + " [kg]"
-        )
-        lines.append(
-            "Total hydrogen consumed during simulation: "
-            + str(self.total_hydrogen_consumed_sofc)
-            + " [kg]"
-        )
-        lines.append(
-            "Total oxygen produced during simulation: "
-            + str(self.total_oxygen_produced_soec)
-            + " [kg]"
-        )
-        lines.append(
-            "Total oxygen consumed during simulation: "
-            + str(self.total_oxygen_consumed_sofc)
-            + " [kg]"
-        )
-        lines.append(
-            "Total water demand during simulation: "
-            + str(self.total_water_demand_soec)
-            + " [kg]"
-        )
-        lines.append(
-            "Total water demand during simulation: "
-            + str(self.total_water_produced_sofc)
-            + " [kg]"
-        )
-        lines.append(
-            "Total energy consumed during simulation: "
-            + str(self.total_energy_soec)
-            + " [kg]"
-        )
-        lines.append(
-            "Total energy produced during simulation: "
-            + str(self.total_energy_sofc)
-            + " [kWh]"
-        )
-        lines.append(
-            "Total ramp-up time during simulation: "
-            + str(self.total_ramp_up_count_state_soec)
-            + " [sec]"
-        )
-        lines.append(
-            "Total ramp-up time during simulation: "
-            + str(self.total_ramp_up_count_state_sofc)
-            + " [sec]"
-        )
-        lines.append(
-            "Total ramp-down time during simulation: "
-            + str(self.total_ramp_down_count_state_soec)
-            + " [sec]"
-        )
-        lines.append(
-            "Total ramp-down time during simulation: "
-            + str(self.total_ramp_down_count_state_sofc)
-            + " [sec]"
-        )
+        lines.append("Total operating time during simulation: " + str(self.total_operating_time) + " [h]")
+        lines.append("Total hydrogen produced during simulation: " + str(self.total_hydrogen_produced_soec) + " [kg]")
+        lines.append("Total hydrogen consumed during simulation: " + str(self.total_hydrogen_consumed_sofc) + " [kg]")
+        lines.append("Total oxygen produced during simulation: " + str(self.total_oxygen_produced_soec) + " [kg]")
+        lines.append("Total oxygen consumed during simulation: " + str(self.total_oxygen_consumed_sofc) + " [kg]")
+        lines.append("Total water demand during simulation: " + str(self.total_water_demand_soec) + " [kg]")
+        lines.append("Total water demand during simulation: " + str(self.total_water_produced_sofc) + " [kg]")
+        lines.append("Total energy consumed during simulation: " + str(self.total_energy_soec) + " [kg]")
+        lines.append("Total energy produced during simulation: " + str(self.total_energy_sofc) + " [kWh]")
+        lines.append("Total ramp-up time during simulation: " + str(self.total_ramp_up_count_state_soec) + " [sec]")
+        lines.append("Total ramp-up time during simulation: " + str(self.total_ramp_up_count_state_sofc) + " [sec]")
+        lines.append("Total ramp-down time during simulation: " + str(self.total_ramp_down_count_state_soec) + " [sec]")
+        lines.append("Total ramp-down time during simulation: " + str(self.total_ramp_down_count_state_sofc) + " [sec]")
         return lines

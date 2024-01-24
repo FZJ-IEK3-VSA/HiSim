@@ -129,9 +129,7 @@ class ExampleTransformer(Component):
         """Prepares the simulation."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the transformer."""
         startval_1 = stsv.get_input_value(self.input1)
         startval_2 = stsv.get_input_value(self.input2)

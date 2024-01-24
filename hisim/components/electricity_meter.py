@@ -158,9 +158,9 @@ class ElectricityMeter(DynamicComponent):
     ):
         """Get utsp occupancy default connections."""
 
-        from hisim.components.loadprofilegenerator_utsp_connector import (
+        from hisim.components.loadprofilegenerator_utsp_connector import (  # pylint: disable=import-outside-toplevel
             UtspLpgConnector,
-        )  # pylint: disable=import-outside-toplevel
+        )
 
         dynamic_connections = []
         occupancy_class_name = UtspLpgConnector.get_classname()
@@ -207,9 +207,9 @@ class ElectricityMeter(DynamicComponent):
     ):
         """Get dhw heat pump default connections."""
 
-        from hisim.components.generic_heat_pump_modular import (
+        from hisim.components.generic_heat_pump_modular import (  # pylint: disable=import-outside-toplevel
             ModularHeatPump,
-        )  # pylint: disable=import-outside-toplevel
+        )
 
         dynamic_connections = []
         dhw_heat_pump_class_name = ModularHeatPump.get_classname()

@@ -62,9 +62,7 @@ class OccupancyConfig(cp.ConfigBase):
         return config
 
     @classmethod
-    def get_scaled_chr01_according_to_number_of_apartments(
-        cls, number_of_apartments: float
-    ) -> Any:
+    def get_scaled_chr01_according_to_number_of_apartments(cls, number_of_apartments: float) -> Any:
         """Get default config and scale according to number of apartments of the building."""
         config = OccupancyConfig(
             name="Occupancy_1",
@@ -94,24 +92,14 @@ class OccupancyConfig(cp.ConfigBase):
             scaling_factor_line = scaling_factors.loc[self.country_name]
         else:
             scaling_factor_line = scaling_factors.loc["EU"]
-            log.warning(
-                "Scaling Factor for "
-                + self.country_name
-                + "is not available, EU average is used per default."
-            )
+            log.warning("Scaling Factor for " + self.country_name + "is not available, EU average is used per default.")
         factor_electricity_consumption = float(
             scaling_factor_line["Unit consumption per dwelling for cooking (toe/dw)"]
         ) * 1.163e4 + float(
-            scaling_factor_line[
-                "Unit consumption per dwelling for lighting and electrical appliances (kWh/dw)"
-            ]
+            scaling_factor_line["Unit consumption per dwelling for lighting and electrical appliances (kWh/dw)"]
         )  # 1 toe = 1.163e4 kWh
         factor_hot_water_consumption = (
-            float(
-                scaling_factor_line[
-                    "Unit consumption of hot water per dwelling (toe/dw)"
-                ]
-            )
+            float(scaling_factor_line["Unit consumption of hot water per dwelling (toe/dw)"])
             * 4.1868e7
             / ((40 - 10) * 0.977 * 4.182)
         )  # 1 toe = 4.1868e7 kJ, than Joule to liter with given temperature difference
@@ -165,13 +153,17 @@ class Occupancy(cp.Component):
     # None
     @utils.measure_execution_time
     def __init__(
-        self, my_simulation_parameters: SimulationParameters, config: OccupancyConfig
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: OccupancyConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initialize the class."""
         super().__init__(
             name="Occupancy",
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.profile_name = config.profile_name
         self.occupancy_config = config
@@ -183,9 +175,7 @@ class Occupancy(cp.Component):
             )
         self.build()
 
-        real_number_of_apartments_from_building = (
-            self.occupancy_config.number_of_apartments
-        )
+        real_number_of_apartments_from_building = self.occupancy_config.number_of_apartments
 
         self.scaling_factor_according_to_number_of_apartments = (
             self.get_scaling_factor_according_to_number_of_apartments(
@@ -246,9 +236,7 @@ class Occupancy(cp.Component):
             field_name=self.ElectricityOutput,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
-            postprocessing_flag=[
-                lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED
-            ],
+            postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
             output_description=f"here a description for Occupancy {self.ElectricityOutput} will follow.",
         )
 
@@ -276,9 +264,7 @@ class Occupancy(cp.Component):
         """Doublechecks."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
         # if self.ww_mass_input.source_output is not None:
         # ww demand
@@ -335,60 +321,41 @@ class Occupancy(cp.Component):
 
         stsv.set_output_value(
             self.number_of_residents_channel,
-            self.number_of_residents[timestep]
-            * self.scaling_factor_according_to_number_of_apartments,
+            self.number_of_residents[timestep] * self.scaling_factor_according_to_number_of_apartments,
         )
 
         stsv.set_output_value(
             self.heating_by_residents_channel,
-            self.heating_by_residents[timestep]
-            * self.scaling_factor_according_to_number_of_apartments,
+            self.heating_by_residents[timestep] * self.scaling_factor_according_to_number_of_apartments,
         )
         stsv.set_output_value(
             self.heating_by_devices_channel,
-            self.heating_by_devices[timestep]
-            * self.scaling_factor_according_to_number_of_apartments,
+            self.heating_by_devices[timestep] * self.scaling_factor_according_to_number_of_apartments,
         )
         stsv.set_output_value(
             self.electricity_output_channel,
-            self.electricity_consumption[timestep]
-            * self.scaling_factor_according_to_number_of_apartments,
+            self.electricity_consumption[timestep] * self.scaling_factor_according_to_number_of_apartments,
         )
         stsv.set_output_value(
             self.water_consumption_channel,
-            self.water_consumption[timestep]
-            * self.scaling_factor_according_to_number_of_apartments,
+            self.water_consumption[timestep] * self.scaling_factor_according_to_number_of_apartments,
         )
 
         if self.occupancy_config.predictive_control:
-            last_forecast_timestep = int(
-                timestep
-                + 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
-            )
+            last_forecast_timestep = int(timestep + 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep)
             if last_forecast_timestep > len(self.electricity_consumption):
                 last_forecast_timestep = len(self.electricity_consumption)
 
-            demandforecast = self.electricity_consumption[
-                timestep:last_forecast_timestep
-            ]
-            self.simulation_repository.set_entry(
-                self.Electricity_Demand_Forecast_24h, demandforecast
-            )
+            demandforecast = self.electricity_consumption[timestep:last_forecast_timestep]
+            self.simulation_repository.set_entry(self.Electricity_Demand_Forecast_24h, demandforecast)
 
         if self.occupancy_config.predictive_control:
-            last_forecast_timestep = int(
-                timestep
-                + 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
-            )
+            last_forecast_timestep = int(timestep + 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep)
             if last_forecast_timestep > len(self.electricity_consumption):
                 last_forecast_timestep = len(self.electricity_consumption)
 
-            demandforecast = self.electricity_consumption[
-                timestep:last_forecast_timestep
-            ]
-            self.simulation_repository.set_entry(
-                self.Electricity_Demand_Forecast_24h, demandforecast
-            )
+            demandforecast = self.electricity_consumption[timestep:last_forecast_timestep]
+            self.simulation_repository.set_entry(self.Electricity_Demand_Forecast_24h, demandforecast)
 
     def build(self):
         """Loads relevant consumption data (electricity consumption, hot water consumption and activity profiles of persons).
@@ -409,9 +376,7 @@ class Occupancy(cp.Component):
                 makedirs(path.join(utils.HISIMPATH["utsp_results"], tag))
 
         if file_exists:
-            dataframe = pd.read_csv(
-                cache_filepath, sep=",", decimal=".", encoding="cp1252"
-            )
+            dataframe = pd.read_csv(cache_filepath, sep=",", decimal=".", encoding="cp1252")
             self.number_of_residents = dataframe["number_of_residents"].tolist()
             self.heating_by_residents = dataframe["heating_by_residents"].tolist()
             self.heating_by_devices = dataframe["heating_by_devices"].tolist()
@@ -432,26 +397,17 @@ class Occupancy(cp.Component):
             ) = self.occupancy_config.get_factors_from_country_and_profile()
             # load occupancy profile
             occupancy_profile = []
-            filepaths = utils.HISIMPATH["occupancy"][self.profile_name][
-                "number_of_residents"
-            ]
+            filepaths = utils.HISIMPATH["occupancy"][self.profile_name]["number_of_residents"]
             for filepath in filepaths:
                 with open(filepath, encoding="utf-8") as json_file:
                     json_filex = json.load(json_file)
                 occupancy_profile.append(json_filex)
 
             # see how long csv files from LPG are to check if averaging has to be done and calculate desired length
-            simulation_time_span = (
-                self.my_simulation_parameters.end_date
-                - self.my_simulation_parameters.start_date
-            )
-            minutes_per_timestep = int(
-                self.my_simulation_parameters.seconds_per_timestep / 60
-            )
+            simulation_time_span = self.my_simulation_parameters.end_date - self.my_simulation_parameters.start_date
+            minutes_per_timestep = int(self.my_simulation_parameters.seconds_per_timestep / 60)
             steps_desired = int(
-                simulation_time_span.days
-                * 24
-                * (3600 / self.my_simulation_parameters.seconds_per_timestep)
+                simulation_time_span.days * 24 * (3600 / self.my_simulation_parameters.seconds_per_timestep)
             )
             steps_desired_in_minutes = steps_desired * minutes_per_timestep
 
@@ -462,18 +418,13 @@ class Occupancy(cp.Component):
             # compute heat gains and number of persons
             for mode, gain in enumerate(gain_per_person):
                 for timestep in range(steps_desired_in_minutes):
-                    number_of_residents[timestep] += occupancy_profile[mode]["Values"][
-                        timestep
-                    ]
+                    number_of_residents[timestep] += occupancy_profile[mode]["Values"][timestep]
                     heating_by_residents[timestep] = (
-                        heating_by_residents[timestep]
-                        + gain * occupancy_profile[mode]["Values"][timestep]
+                        heating_by_residents[timestep] + gain * occupancy_profile[mode]["Values"][timestep]
                     )
 
             if self.occupancy_config.profile_with_washing_machine_and_dishwasher:
-                profile_path = utils.HISIMPATH["occupancy"][self.profile_name][
-                    "electricity_consumption"
-                ]
+                profile_path = utils.HISIMPATH["occupancy"][self.profile_name]["electricity_consumption"]
             else:
                 profile_path = utils.HISIMPATH["occupancy"][self.profile_name][
                     "electricity_consumption_without_washing_machine_and_dishwasher"
@@ -493,10 +444,7 @@ class Occupancy(cp.Component):
                 usecols=["Sum [kWh]"],
             ).loc[: (steps_desired_in_minutes - 1)]
             electricity_consumption = pd.to_numeric(
-                pre_electricity_consumption.loc[:, "Sum [kWh]"]
-                * 1000
-                * 60
-                * scaling_electricity_consumption
+                pre_electricity_consumption.loc[:, "Sum [kWh]"] * 1000 * 60 * scaling_electricity_consumption
             ).tolist()  # 1 kWh/min == 60 000 W / min
 
             pre_water_consumption = pd.read_csv(
@@ -514,9 +462,7 @@ class Occupancy(cp.Component):
                 heating_by_devices = [0] * len(water_consumption)
             else:
                 pre_heating_by_devices = pd.read_csv(
-                    utils.HISIMPATH["occupancy"][self.profile_name][
-                        "heating_by_devices"
-                    ],
+                    utils.HISIMPATH["occupancy"][self.profile_name]["heating_by_devices"],
                     sep=";",
                     decimal=".",
                     encoding="utf-8",
@@ -530,12 +476,8 @@ class Occupancy(cp.Component):
             initial_data = pd.DataFrame(
                 {
                     "Time": pd.date_range(
-                        start=dt.datetime(
-                            year=self.my_simulation_parameters.year, month=1, day=1
-                        ),
-                        end=dt.datetime(
-                            year=self.my_simulation_parameters.year, month=1, day=1
-                        )
+                        start=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1),
+                        end=dt.datetime(year=self.my_simulation_parameters.year, month=1, day=1)
                         + dt.timedelta(days=simulation_time_span.days)
                         - dt.timedelta(seconds=60),
                         freq="T",
@@ -548,14 +490,10 @@ class Occupancy(cp.Component):
                 }
             )
             if self.profile_name != "AVG":
-                initial_data = utils.convert_lpg_data_to_utc(
-                    data=initial_data, year=self.my_simulation_parameters.year
-                )
+                initial_data = utils.convert_lpg_data_to_utc(data=initial_data, year=self.my_simulation_parameters.year)
 
             # extract everything from data frame
-            self.electricity_consumption = initial_data[
-                "electricity_consumption"
-            ].tolist()
+            self.electricity_consumption = initial_data["electricity_consumption"].tolist()
             self.heating_by_residents = initial_data["heating_by_residents"].tolist()
             self.number_of_residents = initial_data["number_of_residents"].tolist()
             self.water_consumption = initial_data["water_consumption"].tolist()
@@ -565,27 +503,23 @@ class Occupancy(cp.Component):
             if minutes_per_timestep > 1:
                 # power needs averaging, not sum
                 self.electricity_consumption = [
-                    sum(self.electricity_consumption[n: n + minutes_per_timestep])
-                    / minutes_per_timestep
+                    sum(self.electricity_consumption[n : n + minutes_per_timestep]) / minutes_per_timestep
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.heating_by_devices = [
-                    sum(self.heating_by_devices[n: n + minutes_per_timestep])
-                    / minutes_per_timestep
+                    sum(self.heating_by_devices[n : n + minutes_per_timestep]) / minutes_per_timestep
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.water_consumption = [
-                    sum(self.water_consumption[n: n + minutes_per_timestep])
+                    sum(self.water_consumption[n : n + minutes_per_timestep])
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.heating_by_residents = [
-                    sum(self.heating_by_residents[n: n + minutes_per_timestep])
-                    / minutes_per_timestep
+                    sum(self.heating_by_residents[n : n + minutes_per_timestep]) / minutes_per_timestep
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
                 self.number_of_residents = [
-                    sum(self.number_of_residents[n: n + minutes_per_timestep])
-                    / minutes_per_timestep
+                    sum(self.number_of_residents[n : n + minutes_per_timestep]) / minutes_per_timestep
                     for n in range(0, steps_desired_in_minutes, minutes_per_timestep)
                 ]
 
@@ -615,9 +549,7 @@ class Occupancy(cp.Component):
         """Writes a report."""
         return self.occupancy_config.get_string_dict()
 
-    def get_scaling_factor_according_to_number_of_apartments(
-        self, real_number_of_apartments: float
-    ) -> float:
+    def get_scaling_factor_according_to_number_of_apartments(self, real_number_of_apartments: float) -> float:
         """Get scaling factor according to the real number of apartments which is given by the building component."""
 
         if real_number_of_apartments is not None and real_number_of_apartments > 0:

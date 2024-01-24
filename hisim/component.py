@@ -178,6 +178,7 @@ class SingleTimeStepValues:
 
 @dataclass
 class DisplayConfig:
+
     """Configure how to display this component in postprocessing."""
 
     pretty_name: str | None = None

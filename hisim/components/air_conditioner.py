@@ -170,9 +170,9 @@ class AirConditioner(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: AirConditionerConfig,
-        my_display_config=DisplayConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ):
-        """Constructs all the neccessary attributes."""
+        """Constructs all the necessary attributes."""
 
         self.air_conditioner_config = config
         # self.state = 0

@@ -69,7 +69,6 @@ def search_and_compare(
         return False
 
     for tag_search in tags_to_search:
-
         if tag_search not in tags_of_component:
             return False
 
@@ -108,9 +107,7 @@ class DynamicComponent(Component):
 
         self.my_component_inputs = my_component_inputs
         self.my_component_outputs = my_component_outputs
-        self.dynamic_default_connections: Dict[
-            str, List[DynamicComponentConnection]
-        ] = {}
+        self.dynamic_default_connections: Dict[str, List[DynamicComponentConnection]] = {}
 
     def add_component_output(
         self,
@@ -167,16 +164,9 @@ class DynamicComponent(Component):
         label = f"Input{num_inputs}"
         vars(self)[label] = label
 
-        log.trace(
-            "Added component input and connect: "
-            + source_object_name
-            + " - "
-            + source_component_output
-        )
+        log.trace("Added component input and connect: " + source_object_name + " - " + source_component_output)
         # Define Input as Component Input and add it to inputs
-        myinput = ComponentInput(
-            self.component_name, label, source_load_type, source_unit, True
-        )
+        myinput = ComponentInput(self.component_name, label, source_load_type, source_unit, True)
         self.inputs.append(myinput)
         myinput.src_object_name = source_object_name
         myinput.src_field_name = str(source_component_output)
@@ -223,23 +213,14 @@ class DynamicComponent(Component):
                     vars(self)[label] = label
 
                     # Define Input as Component Input and add it to inputs
-                    myinput = ComponentInput(
-                        self.component_name, label, source_load_type, source_unit, True
-                    )
+                    myinput = ComponentInput(self.component_name, label, source_load_type, source_unit, True)
                     self.inputs.append(myinput)
                     myinput.src_object_name = component.component_name
                     myinput.src_field_name = str(source_component_output)
                     setattr(self, label, myinput)
                     num_inputs += 1
-                    log.trace(
-                        "Added component inputs and connect: "
-                        + myinput.src_object_name
-                        + " - "
-                        + myinput.src_field_name
-                    )
-                    self.connect_input(
-                        label, component.component_name, output_var.field_name
-                    )
+                    log.trace("Added component inputs and connect: " + myinput.src_object_name + " - " + myinput.src_field_name)
+                    self.connect_input(label, component.component_name, output_var.field_name)
                     self.my_component_inputs.append(
                         DynamicConnectionInput(
                             source_component_class=label,
@@ -251,9 +232,7 @@ class DynamicComponent(Component):
                         )
                     )
 
-    def connect_with_dynamic_connections_list(
-        self, dynamic_component_connections: List[DynamicComponentConnection]
-    ) -> None:
+    def connect_with_dynamic_connections_list(self, dynamic_component_connections: List[DynamicComponentConnection]) -> None:
         """Connect all inputs based on a dynamic component connections list."""
         for connection in dynamic_component_connections:
             src_name: str = cast(str, connection.source_instance_name)
@@ -267,28 +246,17 @@ class DynamicComponent(Component):
                 source_object_name=src_name,
             )
 
-    def add_dynamic_default_connections(
-        self, connections: List[DynamicComponentConnection]
-    ) -> None:
+    def add_dynamic_default_connections(self, connections: List[DynamicComponentConnection]) -> None:
         """Adds a dynamic default connection list definition."""
 
         component_name = connections[0].source_class_name
         for connection in connections:
             if connection.source_class_name != component_name:
-                raise ValueError(
-                    "Trying to add dynamic connections to different components in one go."
-                )
+                raise ValueError("Trying to add dynamic connections to different components in one go.")
         self.dynamic_default_connections[component_name] = connections
-        log.trace(
-            "added dynamic default connections for connections from : "
-            + component_name
-            + "\n"
-            + str(self.dynamic_default_connections)
-        )
+        log.trace("added dynamic default connections for connections from : " + component_name + "\n" + str(self.dynamic_default_connections))
 
-    def get_dynamic_default_connections(
-        self, source_component: Component
-    ) -> List[DynamicComponentConnection]:
+    def get_dynamic_default_connections(self, source_component: Component) -> List[DynamicComponentConnection]:
         """Gets the dynamic default connections for this component."""
         source_classname: str = source_component.get_classname()
 
@@ -328,9 +296,7 @@ class DynamicComponent(Component):
                 tags_to_search=tags,
                 tags_of_component=element.source_tags,
             ):
-                inputvalue = stsv.get_input_value(
-                    getattr(self, element.source_component_class)
-                )
+                inputvalue = stsv.get_input_value(getattr(self, element.source_component_class))
                 break
         return inputvalue
 
@@ -344,12 +310,8 @@ class DynamicComponent(Component):
 
         # check if component of component type is available
         for _, element in enumerate(self.my_component_inputs):  # loop over all inputs
-            if tags_search_and_compare(
-                tags_to_search=tags, tags_of_component=element.source_tags
-            ):
-                inputvalues.append(
-                    stsv.get_input_value(getattr(self, element.source_component_class))
-                )
+            if tags_search_and_compare(tags_to_search=tags, tags_of_component=element.source_tags):
+                inputvalues.append(stsv.get_input_value(getattr(self, element.source_component_class)))
             else:
                 continue
         return inputvalues
@@ -371,23 +333,17 @@ class DynamicComponent(Component):
                 tags_to_search=tags,
                 tags_of_component=element.source_tags,
             ):
-                stsv.set_output_value(
-                    getattr(self, element.source_component_class), output_value
-                )
+                stsv.set_output_value(getattr(self, element.source_component_class), output_value)
             else:
                 continue
 
-    def get_dynamic_inputs(
-        self, tags: List[Union[lt.ComponentType, lt.InandOutputType]]
-    ) -> List[ComponentInput]:
+    def get_dynamic_inputs(self, tags: List[Union[lt.ComponentType, lt.InandOutputType]]) -> List[ComponentInput]:
         """Returns inputs from all dynamic inputs with component type and weight."""
         inputs = []
 
         # check if component of component type is available
         for _, element in enumerate(self.my_component_inputs):  # loop over all inputs
-            if tags_search_and_compare(
-                tags_to_search=tags, tags_of_component=element.source_tags
-            ):
+            if tags_search_and_compare(tags_to_search=tags, tags_of_component=element.source_tags):
                 inputs.append(getattr(self, element.source_component_class))
             else:
                 continue

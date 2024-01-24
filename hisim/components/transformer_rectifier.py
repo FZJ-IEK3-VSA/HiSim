@@ -38,9 +38,7 @@ class TransformerConfig(ConfigBase):
     @classmethod
     def get_default_transformer(cls):
         """Gets a default Transformer."""
-        return TransformerConfig(
-            name="Generic Transformer and rectifier Unit", efficiency=0.95
-        )
+        return TransformerConfig(name="Generic Transformer and rectifier Unit", efficiency=0.95)
 
 
 class Transformer(Component):
@@ -112,9 +110,7 @@ class Transformer(Component):
         """Prepares the simulation."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the transformer."""
         startval_1 = stsv.get_input_value(self.input1)
         # print(f"Input from CSV: {startval_1}")

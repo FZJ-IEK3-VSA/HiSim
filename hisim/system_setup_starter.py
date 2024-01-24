@@ -29,17 +29,13 @@ from hisim.utils import set_attributes_of_dataclass_from_dict
 from hisim.simulator import SimulationParameters
 
 
-def make_system_setup(
-    parameters_json: Union[dict, list], result_directory: str
-) -> Tuple[str, Optional[SimulationParameters], str]:
+def make_system_setup(parameters_json: Union[dict, list], result_directory: str) -> Tuple[str, Optional[SimulationParameters], str]:
     """Read setup parameters from JSON and build a system setup for a specific system setup.
 
     The setup is simulated and result files are stored in `result_directory`.
     """
     if isinstance(parameters_json, list):
-        raise NotImplementedError(
-            "System Setup Starter can only handle one setup at a time for now."
-        )
+        raise NotImplementedError("System Setup Starter can only handle one setup at a time for now.")
 
     _parameters_json = deepcopy(parameters_json)
     Path(result_directory).mkdir(parents=True, exist_ok=True)  # pylint: disable=unexpected-keyword-arg
@@ -54,9 +50,7 @@ def make_system_setup(
     module_config_dict = {"options": options, "building_config": building_config, "system_setup_config": system_setup_config}
 
     if _parameters_json:
-        raise AttributeError(
-            f"There are unused attributes ({_parameters_json.keys()}) in parameters JSON."
-        )
+        raise AttributeError(f"There are unused attributes ({_parameters_json.keys()}) in parameters JSON.")
 
     # Set custom simulation parameters
     simulation_parameters = SimulationParameters(
@@ -87,9 +81,7 @@ if __name__ == "__main__":
         PARAMETERS_JSON_FILE = "input/request.json"
         RESULT_DIRECTORY = "results"
         if not Path(PARAMETERS_JSON_FILE).is_file():
-            log.information(
-                "Please specify an input JSON file or place it in `input/request.json`."
-            )
+            log.information("Please specify an input JSON file or place it in `input/request.json`.")
             sys.exit(1)
     elif len(sys.argv) == 2:
         PARAMETERS_JSON_FILE = sys.argv[1]
@@ -110,9 +102,7 @@ if __name__ == "__main__":
         my_path_to_module,
         my_simulation_parameters,
         my_module_config_path,
-    ) = make_system_setup(
-        parameters_json=my_parameters_json, result_directory=RESULT_DIRECTORY
-    )
+    ) = make_system_setup(parameters_json=my_parameters_json, result_directory=RESULT_DIRECTORY)
 
     main(
         my_path_to_module,

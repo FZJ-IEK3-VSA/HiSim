@@ -14,9 +14,7 @@ from hisim.components.random_numbers import RandomNumbers, RandomNumbersConfig
 from hisim.components.sumbuilder import SumBuilderForTwoInputs, SumBuilderConfig
 
 
-def setup_function(
-    my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]
-) -> None:
+def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]) -> None:
     """First system setup.
 
     In this first system setup, a series (my_rn1) of random numbers in a range between 100 and 200 is
@@ -27,12 +25,8 @@ def setup_function(
 
     # Set the simulation parameters for the simulation
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(
-            year=2021, seconds_per_timestep=60
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.PLOT_CARPET
-        )
+        my_simulation_parameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
 
     # testmy_sim = copy.deepcopy(my_sim)
     my_sim.set_simulation_parameters(my_simulation_parameters)

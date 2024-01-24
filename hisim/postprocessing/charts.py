@@ -117,9 +117,7 @@ class Line(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
     ):
         """Initializes a line chart."""
         if output_description is None:
-            raise ValueError(
-                "Output description was None for component " + component_name
-            )
+            raise ValueError("Output description was None for component " + component_name)
 
         super().__init__(
             output=output,

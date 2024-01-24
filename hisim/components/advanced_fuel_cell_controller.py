@@ -59,9 +59,7 @@ class ExtendedControllerSimulation:
                 if state_chp == 0:
                     pass
                 else:
-                    minimum_timesteps = (
-                        CHPControllerConfig.minimum_runtime_minutes * 60
-                    ) / seconds_per_timestep
+                    minimum_timesteps = (CHPControllerConfig.minimum_runtime_minutes * 60) / seconds_per_timestep
                     if runtime_chp >= minimum_timesteps:
                         # switch off chp
                         state_chp = 0
@@ -76,9 +74,7 @@ class ExtendedControllerSimulation:
                     if state_chp == 0:
                         pass  # state_chp = 0
                     else:
-                        minimum_timesteps = (
-                            CHPControllerConfig.minimum_runtime_minutes * 60
-                        ) / seconds_per_timestep
+                        minimum_timesteps = (CHPControllerConfig.minimum_runtime_minutes * 60) / seconds_per_timestep
                         if runtime_chp >= minimum_timesteps:
                             # switch off chp
                             state_chp = 0
@@ -87,9 +83,7 @@ class ExtendedControllerSimulation:
                             state_chp = 1 / power_states_possible
             elif chp.CHPConfig.p_el_min <= demand < chp.CHPConfig.p_el_max:
                 # minimum power plus the demand depending power
-                state_chp = (
-                    1 + ceil((demand - chp.CHPConfig.p_el_min) / power_per_step_size)
-                ) / power_states_possible
+                state_chp = (1 + ceil((demand - chp.CHPConfig.p_el_min) / power_per_step_size)) / power_states_possible
                 assert (1 / power_states_possible) < state_chp <= 1
             else:  # demand >= chp.CHPConfig.P_el_max
                 state_chp = 1
@@ -98,9 +92,7 @@ class ExtendedControllerSimulation:
                 generated_electricity = 0
                 power_from_or_to_grid = demand - generated_electricity
             elif 0 < state_chp <= 1:
-                generated_electricity = chp.CHPConfig.p_el_min + power_per_step_size * (
-                    state_chp * power_states_possible - 1
-                )
+                generated_electricity = chp.CHPConfig.p_el_min + power_per_step_size * (state_chp * power_states_possible - 1)
                 power_from_or_to_grid = demand - generated_electricity
             else:
                 log.error("Wrong controller state")
@@ -111,9 +103,7 @@ class ExtendedControllerSimulation:
                 if state_chp == 0:
                     power_from_or_to_grid = demand
                 else:
-                    minimum_timesteps = (
-                        CHPControllerConfig.minimum_runtime_minutes * 60
-                    ) / seconds_per_timestep
+                    minimum_timesteps = (CHPControllerConfig.minimum_runtime_minutes * 60) / seconds_per_timestep
                     if runtime_chp >= minimum_timesteps:
                         state_chp = 0
                         power_from_or_to_grid = demand
@@ -148,16 +138,10 @@ class ExtendedControllerSimulation:
 
         heights_in_tank = CHPControllerConfig.heights_in_tank
 
-        if (
-            CHPControllerConfig.height_upper_sensor
-            or CHPControllerConfig.height_lower_sensor
-        ) not in heights_in_tank:
+        if (CHPControllerConfig.height_upper_sensor or CHPControllerConfig.height_lower_sensor) not in heights_in_tank:
             log.error(
                 "Wrong sensor setting. Only 0, 20, 40, 60, 80, 100% are allowed.\n"
-                "You tried "
-                + str(CHPControllerConfig.height_upper_sensor)
-                + " and "
-                + str(CHPControllerConfig.height_lower_sensor)
+                "You tried " + str(CHPControllerConfig.height_upper_sensor) + " and " + str(CHPControllerConfig.height_lower_sensor)
             )
             raise ValueError
 
@@ -176,9 +160,7 @@ class ExtendedControllerSimulation:
         # lower sensor (no check needed if chp is off)
         if state_chp == 1:
             if temperature_lower_sensor > CHPControllerConfig.temperature_switch_off:
-                minimum_timesteps = (
-                    CHPControllerConfig.minimum_runtime_minutes * 60
-                ) / seconds_per_timestep
+                minimum_timesteps = (CHPControllerConfig.minimum_runtime_minutes * 60) / seconds_per_timestep
                 if runtime_chp > minimum_timesteps:
                     # switch off is possible if chp has run at least xx min
                     state_chp = 0
@@ -192,11 +174,7 @@ class ExtendedControllerSimulation:
             log.error("Wrong state_chp")
             raise ValueError
         # 'easy equation' --> no modulation
-        power_from_or_to_grid = (
-            electricity_demand_household
-            - pv_production
-            - chp.CHPConfig.p_el_max * state_chp
-        )
+        power_from_or_to_grid = electricity_demand_household - pv_production - chp.CHPConfig.p_el_max * state_chp
 
         return state_chp, runtime_chp, power_from_or_to_grid
 
@@ -213,16 +191,10 @@ class ExtendedControllerSimulation:
         # ToDo: future --> make modulating possible if the waste energy is to high? reduce power, increase mass_flow
 
         heights_in_tank = CHPControllerConfig.heights_in_tank
-        if (
-            GasControllerConfig.height_upper_sensor
-            or GasControllerConfig.height_lower_sensor
-        ) not in heights_in_tank:
+        if (GasControllerConfig.height_upper_sensor or GasControllerConfig.height_lower_sensor) not in heights_in_tank:
             log.error(
                 "Wrong sensor setting. Only 0, 20, 40, 60, 80, 100% are allowed.\n"
-                "You tried "
-                + str(GasControllerConfig.height_upper_sensor)
-                + " and "
-                + str(GasControllerConfig.height_lower_sensor)
+                "You tried " + str(GasControllerConfig.height_upper_sensor) + " and " + str(GasControllerConfig.height_lower_sensor)
             )
             raise ValueError
 
@@ -240,9 +212,7 @@ class ExtendedControllerSimulation:
         # lower sensor (no check needed if gas heater is off)
         if state_gas_heater == 1:
             if temperature_lower_sensor > GasControllerConfig.temperature_switch_off:
-                minimum_timesteps = (
-                    GasControllerConfig.minimum_runtime_minutes * 60
-                ) / seconds_per_timestep
+                minimum_timesteps = (GasControllerConfig.minimum_runtime_minutes * 60) / seconds_per_timestep
                 if runtime_counter > minimum_timesteps:
                     # switch off is possible if gas_heater has run at least xx min
                     state_gas_heater = 0
@@ -274,11 +244,7 @@ class ExtendedControllerSimulation:
             power_to_electrolyzer = 0
             # no change
             # power_from_or_to_grid = power_available
-        elif (
-            AdvElectrolyzerConfig.min_power
-            <= power_available
-            <= AdvElectrolyzerConfig.max_power
-        ):
+        elif AdvElectrolyzerConfig.min_power <= power_available <= AdvElectrolyzerConfig.max_power:
             power_to_electrolyzer = power_available
             power_from_or_to_grid = 0
         else:  # power_available > ElectrolyzerConfig.max_power:
@@ -461,24 +427,17 @@ class ExtendedController(Component):
         self.state_gas_heater1 = deepcopy(self.previous_state_gas_heater1)
         self.runtime_gas_heater1 = deepcopy(self.previous_runtime_gas_heater1)
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the state."""
         if force_convergence:
             return
 
         # Inputs
-        electricity_demand_household = stsv.get_input_value(
-            self.electricity_demand_household_channel
-        )
+        electricity_demand_household = stsv.get_input_value(self.electricity_demand_household_channel)
         pv_production: float = stsv.get_input_value(self.pv_production_channel)
 
         # not needed for power
-        if (
-            ExtendedControllerConfig.chp_mode == "heat"
-            or ExtendedControllerConfig.gas_heater
-        ):
+        if ExtendedControllerConfig.chp_mode == "heat" or ExtendedControllerConfig.gas_heater:
             temperature_0_percent = stsv.get_input_value(self.temperature_0_percent_channel)
             temperature_20_percent = stsv.get_input_value(self.temperature_20_percent_channel)
             temperature_40_percent = stsv.get_input_value(self.temperature_40_percent_channel)
@@ -524,9 +483,7 @@ class ExtendedController(Component):
                     self.seconds_per_timestep,
                 )
             else:
-                log.error(
-                    "Wrong chp controller settings! Choose between heat and power"
-                )
+                log.error("Wrong chp controller settings! Choose between heat and power")
                 raise ValueError
         else:
             power_from_or_to_grid = pv_production - electricity_demand_household
@@ -554,9 +511,7 @@ class ExtendedController(Component):
             (
                 power_to_electrolyzer,
                 power_from_or_to_grid,
-            ) = self.extended_controller.power_distribution_to_electrolyzer(
-                power_from_or_to_grid
-            )
+            ) = self.extended_controller.power_distribution_to_electrolyzer(power_from_or_to_grid)
         else:
             power_to_electrolyzer = 0
 
@@ -585,22 +540,13 @@ class ExtendedController(Component):
         # check the electricity balance
         if chp.CHPConfig.is_modulating:
             if self.test_state > 0:
-                power_chp_test = chp.CHPConfig.p_el_min + (
-                    chp.CHPConfig.p_el_max - chp.CHPConfig.p_el_min
-                ) / (ExtendedControllerConfig.chp_power_states_possible - 1) * (
-                    self.test_state * ExtendedControllerConfig.chp_power_states_possible
-                    - 1
-                )
+                power_chp_test = chp.CHPConfig.p_el_min + (chp.CHPConfig.p_el_max - chp.CHPConfig.p_el_min) / (
+                    ExtendedControllerConfig.chp_power_states_possible - 1
+                ) * (self.test_state * ExtendedControllerConfig.chp_power_states_possible - 1)
             else:
                 power_chp_test = 0
 
-            if 0.00001 > (
-                self.test_pv
-                + power_chp_test
-                + self.test_grid
-                - self.test_demand
-                - self.test_electrolyzer
-            ):
+            if 0.00001 > (self.test_pv + power_chp_test + self.test_grid - self.test_demand - self.test_electrolyzer):
                 pass
             else:
                 log.error("Wrong energy balance:")
@@ -613,13 +559,7 @@ class ExtendedController(Component):
                 raise ValueError
 
         else:
-            if 0.00001 > (
-                self.test_pv
-                + chp.CHPConfig.p_el_max * self.test_state
-                + self.test_grid
-                - self.test_electrolyzer
-                - self.test_demand
-            ):
+            if 0.00001 > (self.test_pv + chp.CHPConfig.p_el_max * self.test_state + self.test_grid - self.test_electrolyzer - self.test_demand):
                 pass
             else:
                 log.error("Wrong energy balance:")

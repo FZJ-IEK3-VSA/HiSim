@@ -38,9 +38,7 @@ __maintainer__ = "Markus Blasberg"
 __status__ = "development"
 
 
-def setup_function(
-    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
-) -> None:  # noqa: too-many-statements
+def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:  # noqa: too-many-statements
     """System setup with advanced hp and EV and PV.
 
     This setup function emulates a household with some basic components. Here the residents have their
@@ -73,9 +71,7 @@ def setup_function(
 
     # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
     if my_sim.my_module_config_path:
-        my_config = HouseholdAdvancedHPEvPvConfig.load_from_json(
-            my_sim.my_module_config_path
-        )
+        my_config = HouseholdAdvancedHPEvPvConfig.load_from_json(my_sim.my_module_config_path)
     else:
         my_config = HouseholdAdvancedHPEvPvConfig.get_default()
     # =================================================================================================================================
@@ -90,28 +86,20 @@ def setup_function(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(
-            year=year, seconds_per_timestep=seconds_per_timestep
-        )
-    my_simulation_parameters.surplus_control = (
-        my_config.surplus_control_car
-    )  # EV charger is controlled by simulation_parameters
+        my_simulation_parameters = SimulationParameters.full_year_all_options(year=year, seconds_per_timestep=seconds_per_timestep)
+    my_simulation_parameters.surplus_control = my_config.surplus_control_car  # EV charger is controlled by simulation_parameters
     clever = my_config.surplus_control
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build heat Distribution System Controller
-    my_heat_distribution_controller = (
-        heat_distribution_system.HeatDistributionController(
-            config=my_config.hds_controller_config,
-            my_simulation_parameters=my_simulation_parameters,
-        )
+    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
+        config=my_config.hds_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Occupancy
     my_occupancy_config = my_config.occupancy_config
-    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
-        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
 
     # Build Weather
     my_weather = weather.Weather(
@@ -132,9 +120,7 @@ def setup_function(
     )
 
     # Build Heat Distribution System
-    my_heat_distribution = heat_distribution_system.HeatDistribution(
-        my_simulation_parameters=my_simulation_parameters, config=my_config.hds_config
-    )
+    my_heat_distribution = heat_distribution_system.HeatDistribution(my_simulation_parameters=my_simulation_parameters, config=my_config.hds_config)
 
     # Build Heat Pump Controller
     my_heat_pump_controller_config = my_config.hp_controller_config
@@ -175,11 +161,9 @@ def setup_function(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 
-    my_domnestic_hot_water_heatpump_controller = (
-        controller_l1_heatpump.L1HeatPumpController(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_dhw_heatpump_controller_config,
-        )
+    my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_dhw_heatpump_controller_config,
     )
 
     my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
@@ -192,9 +176,7 @@ def setup_function(
     filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
     names = [elem.partition(",")[0].partition(".")[2] for elem in filepaths_location]
 
-    my_car_config = (
-        my_config.car_config
-    )  # Todo: check source weight in case of 2 vehicles
+    my_car_config = my_config.car_config  # Todo: check source weight in case of 2 vehicles
     my_car_config.name = "ElectricCar"
 
     # create all cars
@@ -247,19 +229,15 @@ def setup_function(
     )
 
     # Build EMS
-    my_electricity_controller = (
-        controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_config.electricity_controller_config,
-        )
+    my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.electricity_controller_config,
     )
 
     # -----------------------------------------------------------------------------------------------------------------
     # connect Electric Vehicle
     # copied and adopted from modular_example
-    for car, car_battery, car_battery_controller in zip(
-        my_cars, my_car_batteries, my_car_battery_controllers
-    ):
+    for car, car_battery, car_battery_controller in zip(my_cars, my_car_batteries, my_car_battery_controllers):
         car_battery_controller.connect_only_predefined_connections(car)
         car_battery_controller.connect_only_predefined_connections(car_battery)
         car_battery.connect_only_predefined_connections(car_battery_controller)
@@ -450,9 +428,7 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
     my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)
     my_sim.add_component(my_domnestic_hot_water_storage, connect_automatically=True)
-    my_sim.add_component(
-        my_domnestic_hot_water_heatpump_controller, connect_automatically=True
-    )
+    my_sim.add_component(my_domnestic_hot_water_heatpump_controller, connect_automatically=True)
     my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
     my_sim.add_component(my_electricity_meter)
     my_sim.add_component(my_electricity_controller)

@@ -45,10 +45,7 @@ class SystemSetupConfigBase(JSONWizard):
         if options_dict and not building_config:
             raise ValueError("Options for default setup not yet implemented.")
         if building_config:
-            my_config = cls.get_scaled_default(
-                building_config=building_config,
-                options=options
-            )
+            my_config = cls.get_scaled_default(building_config=building_config, options=options)
         else:
             my_config = cls.get_default()
 
@@ -58,9 +55,7 @@ class SystemSetupConfigBase(JSONWizard):
             log.information("Using `system_setup_config` to overwrite defaults.")
             utils.set_attributes_of_dataclass_from_dict(my_config, setup_config_dict)
         else:
-            log.information(
-                "Did not find `system_setup_config` in JSON. Using defaults."
-            )
+            log.information("Did not find `system_setup_config` in JSON. Using defaults.")
 
         return my_config
 
@@ -75,10 +70,6 @@ class SystemSetupConfigBase(JSONWizard):
         raise NotImplementedError
 
     @classmethod
-    def get_scaled_default(
-        cls,
-        building_config: building.BuildingConfig,
-        options: Any
-    ) -> Self:
+    def get_scaled_default(cls, building_config: building.BuildingConfig, options: Any) -> Self:
         """Get scaled default."""
         raise NotImplementedError

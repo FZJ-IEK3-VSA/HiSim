@@ -246,9 +246,7 @@ class PhysicsConfig:
     hydrogen_density = 0.08989  # [kg/m³]
     hydrogen_specific_volume = 1 / hydrogen_density  # [m^3/kg]
     hydrogen_specific_fuel_value_per_m_3 = 10.782 * 10**6  # [J/m³]
-    hydrogen_specific_fuel_value_per_kg = (
-        hydrogen_specific_fuel_value_per_m_3 / hydrogen_density
-    )  # [J/kg]
+    hydrogen_specific_fuel_value_per_kg = hydrogen_specific_fuel_value_per_m_3 / hydrogen_density  # [J/kg]
 
     # Schmidt 2020: Wasserstofftechnik  S.170ff
     # fuel value Methan:    35.894 MJ/m³    (S.172)
@@ -256,9 +254,7 @@ class PhysicsConfig:
     natural_gas_density = 0.71750  # [kg/m³]
     natural_gas_specific_volume = 1 / hydrogen_density  # [m^3/kg]
     natural_gas_specific_fuel_value_per_m_3 = 35.894 * 10**6  # [J/m³]
-    natural_gas_specific_fuel_value_per_kg = (
-        natural_gas_specific_fuel_value_per_m_3 / natural_gas_density
-    )  # [J/kg]
+    natural_gas_specific_fuel_value_per_kg = natural_gas_specific_fuel_value_per_m_3 / natural_gas_density  # [J/kg]
 
 
 @dataclass_json
@@ -380,6 +376,4 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
             )
 
-        raise KeyError(
-            f"No Emission and cost factors implemented yet for the year {year}."
-        )
+        raise KeyError(f"No Emission and cost factors implemented yet for the year {year}.")

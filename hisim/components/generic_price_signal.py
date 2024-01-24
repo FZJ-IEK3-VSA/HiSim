@@ -83,9 +83,7 @@ class PriceSignal(cp.Component):
     PricePurchase = "PricePurchase"
     PriceInjection = "PriceInjection"
 
-    def __init__(
-        self, my_simulation_parameters: SimulationParameters, config: PriceSignalConfig
-    ) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: PriceSignalConfig) -> None:
         """Initialization of Price Signal class.
 
         :param my_simulation_parameters: _description_
@@ -141,42 +139,24 @@ class PriceSignal(cp.Component):
         """Doublechecks."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Outputs price signal of time step."""
         priceinjectionforecast = [0.1]
         pricepurchaseforecast = [0.5]
         if self.config.predictive_control and self.config.prediction_horizon:
-            priceinjectionforecast = [0.1] * int(
-                self.config.prediction_horizon
-                / self.my_simulation_parameters.seconds_per_timestep
-            )
-            pricepurchaseforecast = [0.5] * int(
-                self.config.prediction_horizon
-                / self.my_simulation_parameters.seconds_per_timestep
-            )
-        elif (
-            self.price_signal_config.price_signal_type
-            == "Prices at second half of 2021"
-        ):
+            priceinjectionforecast = [0.1] * int(self.config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep)
+            pricepurchaseforecast = [0.5] * int(self.config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep)
+        elif self.price_signal_config.price_signal_type == "Prices at second half of 2021":
             priceinjectionforecast = [self.price_signal_config.price_injection] * int(
-                self.config.prediction_horizon
-                / self.my_simulation_parameters.seconds_per_timestep
+                self.config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep
             )
         elif self.price_signal_config.pricing_scheme == "dynamic":
             pricepurchaseforecast = self.price_signal_config.static_tou_price
         elif self.price_signal_config.pricing_scheme == "fixed":
             pricepurchaseforecast = self.price_signal_config.fixed_price
         elif self.price_signal_config.price_signal_type == "dummy":
-            priceinjectionforecast = [10] * int(
-                self.config.prediction_horizon
-                / self.my_simulation_parameters.seconds_per_timestep
-            )
-            pricepurchaseforecast = [50] * int(
-                self.config.prediction_horizon
-                / self.my_simulation_parameters.seconds_per_timestep
-            )
+            priceinjectionforecast = [10] * int(self.config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep)
+            pricepurchaseforecast = [50] * int(self.config.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep)
             # pricepurchaseforecast = [ ]
             # for step in range( self.day ):
             #     x = timestep % self.day
@@ -217,22 +197,16 @@ class PriceSignal(cp.Component):
 
         if "Fixed_Price_" + self.price_signal_config.country in price_purchase:
             self.price_signal_config.price_signal_type = "Prices at second half of 2021"
-            fixed_price = price_purchase[
-                "Fixed_Price_" + self.price_signal_config.country
-            ].tolist()
+            fixed_price = price_purchase["Fixed_Price_" + self.price_signal_config.country].tolist()
             # convert euro/kWh to cent/kW-timestep
-            p_conversion = 100 / (
-                1000 * 3600 / self.my_simulation_parameters.seconds_per_timestep
-            )
+            p_conversion = 100 / (1000 * 3600 / self.my_simulation_parameters.seconds_per_timestep)
             fixed_price = [element * p_conversion for element in fixed_price]
             self.price_signal_config.fixed_price = np.repeat(
                 fixed_price,
                 int(3600 / self.my_simulation_parameters.seconds_per_timestep),
             ).tolist()
 
-            static_tou_price = price_purchase[
-                "Static_TOU_Price_" + self.price_signal_config.country
-            ].tolist()
+            static_tou_price = price_purchase["Static_TOU_Price_" + self.price_signal_config.country].tolist()
             static_tou_price = [element * p_conversion for element in static_tou_price]
             self.price_signal_config.static_tou_price = np.repeat(
                 static_tou_price,
@@ -242,10 +216,8 @@ class PriceSignal(cp.Component):
             fit_data = feed_in_tarrif.loc[self.price_signal_config.country]
             for i in range(len(fit_data)):
                 if (
-                    fit_data["min_capacity (kW)"].values[i]
-                    < self.price_signal_config.installed_capacity
-                    and fit_data["max_capacity (kW)"].values[i]
-                    >= self.price_signal_config.installed_capacity
+                    fit_data["min_capacity (kW)"].values[i] < self.price_signal_config.installed_capacity
+                    and fit_data["max_capacity (kW)"].values[i] >= self.price_signal_config.installed_capacity
                 ):
                     price_injection = fit_data["FIT"].values[i]
             self.price_signal_config.price_injection = price_injection * p_conversion

@@ -24,15 +24,16 @@ class ResultDataCollection:
         data_processing_mode: Any,
         simulation_duration_to_check: str,
         time_resolution_of_data_set: Any,
-        folder_from_which_data_will_be_collected: str = os.path.join(
-            os.pardir, os.pardir, os.pardir, "system_setups", "results"
-        ),
+        folder_from_which_data_will_be_collected: str = os.path.join(os.pardir, os.pardir, os.pardir, "system_setups", "results"),
         path_to_default_config: Optional[str] = None,
     ) -> None:
         """Initialize the class."""
         result_folder = folder_from_which_data_will_be_collected
         self.result_data_folder = os.path.join(
-            result_folder, os.pardir, "results_for_scenario_comparison", "data",
+            result_folder,
+            os.pardir,
+            "results_for_scenario_comparison",
+            "data",
         )
 
         # in each system_setups/results folder should be one system setup that was executed with the default config
@@ -40,54 +41,31 @@ class ResultDataCollection:
 
         log.information(f"Checking results from folder: {result_folder}")
 
-        list_with_result_data_folders = self.get_only_useful_data(
-            result_path=result_folder
-        )
+        list_with_result_data_folders = self.get_only_useful_data(result_path=result_folder)
 
         if data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA:
-
             parameter_key = None
 
-        elif (
-            data_processing_mode
-            == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_SIZES
-        ):
+        elif data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_SIZES:
             parameter_key = "conditioned_floor_area_in_m2"
 
-        elif (
-            data_processing_mode
-            == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
-        ):
+        elif data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES:
             parameter_key = "building_code"
 
-        elif (
-            data_processing_mode
-            == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_AZIMUTH_ANGLES
-        ):
+        elif data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_AZIMUTH_ANGLES:
             parameter_key = "pv_azimuth"
 
-        elif (
-            data_processing_mode
-            == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES
-        ):
+        elif data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES:
             parameter_key = "pv_tilt"
 
-        elif (
-            data_processing_mode
-            == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_SHARE_OF_MAXIMUM_PV
-        ):
+        elif data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_SHARE_OF_MAXIMUM_PV:
             parameter_key = "share_of_maximum_pv_power"
 
-        elif (
-            data_processing_mode
-            == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_NUMBER_OF_DWELLINGS
-        ):
+        elif data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_NUMBER_OF_DWELLINGS:
             parameter_key = "number_of_dwellings_per_building"
 
         else:
-            raise ValueError(
-                "Analysis mode is not part of the ResultDataProcessingModeEnum class."
-            )
+            raise ValueError("Analysis mode is not part of the ResultDataProcessingModeEnum class.")
 
         log.information(f"Data Collection Mode is {data_processing_mode}")
 
@@ -102,9 +80,7 @@ class ResultDataCollection:
         else:
             # path to default config is given (which means there should be also a module config dict in the json file in the result folder which has read the config)
 
-            default_config_dict = self.get_default_config(
-                path_to_default_config=path_to_default_config
-            )
+            default_config_dict = self.get_default_config(path_to_default_config=path_to_default_config)
 
             (
                 list_with_csv_files,
@@ -147,9 +123,7 @@ class ResultDataCollection:
         self.clean_result_directory_from_unfinished_results(result_path=result_path)
 
         # get result folders with result data folder
-        list_with_all_paths_to_check = self.get_list_of_all_relevant_scenario_data_folders(
-            result_path=result_path
-        )
+        list_with_all_paths_to_check = self.get_list_of_all_relevant_scenario_data_folders(result_path=result_path)
         print(
             "len of list with all paths to containing result data ",
             len(list_with_all_paths_to_check),
@@ -184,16 +158,10 @@ class ResultDataCollection:
             file.write("Failed simulations found in the following folders: \n")
 
             for folder in os.listdir(result_path):
-                if not os.path.exists(
-                    os.path.join(result_path, folder, "finished.flag")
-                ):
+                if not os.path.exists(os.path.join(result_path, folder, "finished.flag")):
                     file.write(os.path.join(result_path, folder) + "\n")
                     list_of_unfinished_folders.append(os.path.join(result_path, folder))
-            file.write(
-                f"Total number of failed simulations in path {result_path}: {len(list_of_unfinished_folders)}"
-                + "\n"
-                + "\n"
-            )
+            file.write(f"Total number of failed simulations in path {result_path}: {len(list_of_unfinished_folders)}" + "\n" + "\n")
 
         print(
             f"The following result folders do not contain the finished flag: {list_of_unfinished_folders} Number: {len(list_of_unfinished_folders)}. "
@@ -225,9 +193,7 @@ class ResultDataCollection:
             encoding="utf-8",
         ) as file:
             file.write(str(datetime.datetime.now()) + "\n")
-            file.write(
-                "Simulations with unsuccessful heating or cooling found in the following folders: \n"
-            )
+            file.write("Simulations with unsuccessful heating or cooling found in the following folders: \n")
             file.write(
                 "Building is too...,"
                 "set temperature heating [°C],"
@@ -238,64 +204,38 @@ class ResultDataCollection:
                 "temp deviation above set cooling [°C*h], folder \n"
             )
             for folder in list_of_result_path_that_contain_scenario_data:
-                scenario_data_information = os.path.join(
-                    folder, "data_information_for_scenario_evaluation.json"
-                )
+                scenario_data_information = os.path.join(folder, "data_information_for_scenario_evaluation.json")
                 main_folder = os.path.normpath(folder + os.sep + os.pardir)
                 webtool_kpis_file = os.path.join(main_folder, "webtool_kpis.json")
 
                 # get set temperatures used in the simulation
                 if os.path.exists(scenario_data_information):
-                    with open(
-                        scenario_data_information, "r", encoding="utf-8"
-                    ) as data_info_file:
+                    with open(scenario_data_information, "r", encoding="utf-8") as data_info_file:
                         json_file = json.load(data_info_file)
                         component_entries = json_file["componentEntries"]
                         for component in component_entries:
                             if "Building" in component["componentName"]:
-                                set_heating_temperature = float(
-                                    component["configuration"].get(
-                                        "set_heating_temperature_in_celsius"
-                                    )
-                                )
-                                set_cooling_temperature = float(
-                                    component["configuration"].get(
-                                        "set_cooling_temperature_in_celsius"
-                                    )
-                                )
+                                set_heating_temperature = float(component["configuration"].get("set_heating_temperature_in_celsius"))
+                                set_cooling_temperature = float(component["configuration"].get("set_cooling_temperature_in_celsius"))
                                 break
                 else:
-                    raise FileNotFoundError(
-                        f"The file {scenario_data_information} could not be found. "
-                    )
+                    raise FileNotFoundError(f"The file {scenario_data_information} could not be found. ")
 
                 # open the webtool kpis and check if building got too hot or too cold
                 if os.path.exists(webtool_kpis_file):
-
                     with open(webtool_kpis_file, "r", encoding="utf-8") as kpi_file:
                         json_file = json.load(kpi_file)
                         kpi_data = json_file["kpiDict"]
                         # check if min and max temperatures are too low or too high
-                        min_temperature = float(
-                            kpi_data.get(
-                                "Minimum building indoor air temperature reached [\u00b0C] "
-                            )
-                        )
-                        max_temperature = float(
-                            kpi_data.get(
-                                "Maximum building indoor air temperature reached [\u00b0C] "
-                            )
-                        )
+                        min_temperature = float(kpi_data.get("Minimum building indoor air temperature reached [\u00b0C] "))
+                        max_temperature = float(kpi_data.get("Maximum building indoor air temperature reached [\u00b0C] "))
                         temp_deviation_below_set = kpi_data.get(
                             "Temperature deviation of building indoor air temperature being below set temperature 19.0 \u00b0C [\u00b0C*h] "
                         )
                         temp_deviation_above_set = kpi_data.get(
                             "Temperature deviation of building indoor air temperature being above set temperature 24.0 \u00b0C [\u00b0C*h] "
                         )
-                        if (
-                            min_temperature <= set_heating_temperature - 5.0
-                            and max_temperature >= set_cooling_temperature + 5.0
-                        ):
+                        if min_temperature <= set_heating_temperature - 5.0 and max_temperature >= set_cooling_temperature + 5.0:
                             file.write(
                                 "too cold and too warm,"
                                 f"{set_heating_temperature},"
@@ -306,10 +246,7 @@ class ResultDataCollection:
                                 f"{temp_deviation_above_set}, {folder}" + "\n"
                             )
                             list_of_unsuccessful_folders.append(folder)
-                        elif (
-                            min_temperature <= set_heating_temperature - 5.0
-                            and max_temperature < set_cooling_temperature + 5.0
-                        ):
+                        elif min_temperature <= set_heating_temperature - 5.0 and max_temperature < set_cooling_temperature + 5.0:
                             file.write(
                                 "too cold,"
                                 f"{set_heating_temperature},"
@@ -320,10 +257,7 @@ class ResultDataCollection:
                                 f"{temp_deviation_above_set}, {folder}" + "\n"
                             )
                             list_of_unsuccessful_folders.append(folder)
-                        elif (
-                            min_temperature > set_heating_temperature - 5.0
-                            and max_temperature >= set_cooling_temperature + 5.0
-                        ):
+                        elif min_temperature > set_heating_temperature - 5.0 and max_temperature >= set_cooling_temperature + 5.0:
                             file.write(
                                 "too warm,"
                                 f"{set_heating_temperature},"
@@ -335,9 +269,7 @@ class ResultDataCollection:
                             )
                             list_of_unsuccessful_folders.append(folder)
                 else:
-                    raise FileNotFoundError(
-                        f"The file {webtool_kpis_file} could not be found. "
-                    )
+                    raise FileNotFoundError(f"The file {webtool_kpis_file} could not be found. ")
 
             file.write(
                 f"Total number of simulations that have building temperatures way below or above set temperatures: {len(list_of_unsuccessful_folders)}"
@@ -345,24 +277,16 @@ class ResultDataCollection:
                 + "\n"
             )
 
-        print(
-            f"Total number of simulations that have building temperatures way below or above set temperatures: {len(list_of_unsuccessful_folders)}"
-        )
+        print(f"Total number of simulations that have building temperatures way below or above set temperatures: {len(list_of_unsuccessful_folders)}")
 
         # ask if these simulation results should be analyzed
-        answer = input(
-            "Do you want to take these simulation results into account for further analysis?"
-        )
+        answer = input("Do you want to take these simulation results into account for further analysis?")
         if answer.upper() in ["N", "NO"]:
             for folder in list_of_unsuccessful_folders:
                 list_of_result_path_that_contain_scenario_data.remove(folder)
-            print(
-                "The folders with too low or too high building temperatures will be discarded from the further analysis."
-            )
+            print("The folders with too low or too high building temperatures will be discarded from the further analysis.")
         elif answer.upper() in ["Y", "YES"]:
-            print(
-                "The folders with too low or too high building temperatures will be kept for the further analysis."
-            )
+            print("The folders with too low or too high building temperatures will be kept for the further analysis.")
         else:
             print("The answer must be yes or no.")
 
@@ -383,17 +307,11 @@ class ResultDataCollection:
         path_to_check = os.path.join(result_path, "**", "**", "**", "result_data_for_scenario_evaluation")  # type: ignore
         list_of_paths_third_order = list(glob.glob(path_to_check))
 
-        list_with_all_paths_to_check = (
-            list_of_paths_first_order
-            + list_of_paths_second_order
-            + list_of_paths_third_order
-        )
+        list_with_all_paths_to_check = list_of_paths_first_order + list_of_paths_second_order + list_of_paths_third_order
 
         return list_with_all_paths_to_check
 
-    def import_data_from_file(
-        self, paths_to_check: List[str], analyze_yearly_or_hourly_data: Any
-    ) -> List:
+    def import_data_from_file(self, paths_to_check: List[str], analyze_yearly_or_hourly_data: Any) -> List:
         """Import data from result files."""
         log.information("Importing result_data_for_scenario_evaluation from csv files.")
 
@@ -408,12 +326,9 @@ class ResultDataCollection:
         elif analyze_yearly_or_hourly_data == ResultDataTypeEnum.MONTHLY:
             kind_of_data_set = "monthly"
         else:
-            raise ValueError(
-                "analyze_yearly_or_hourly_data was not found in the datacollectorenum class."
-            )
+            raise ValueError("analyze_yearly_or_hourly_data was not found in the datacollectorenum class.")
 
         for folder in paths_to_check:  # type: ignore
-
             for file in os.listdir(folder):  # type: ignore
                 # get yearly or hourly data
                 if kind_of_data_set in file and file.endswith(".csv"):
@@ -422,7 +337,9 @@ class ResultDataCollection:
         return all_csv_files
 
     def make_dictionaries_with_simulation_duration_keys(
-        self, simulation_duration_to_check: str, all_csv_files: List[str],
+        self,
+        simulation_duration_to_check: str,
+        all_csv_files: List[str],
     ) -> Dict:
         """Make dictionaries containing csv files of hourly or yearly data and according to the simulation duration of the data."""
 
@@ -435,26 +352,20 @@ class ResultDataCollection:
             parent_folder = os.path.abspath(os.path.join(file, os.pardir))  # type: ignore
             for file1 in os.listdir(parent_folder):
                 if ".json" in file1:
-                    with open(
-                        os.path.join(parent_folder, file1), "r", encoding="utf-8"
-                    ) as openfile:
+                    with open(os.path.join(parent_folder, file1), "r", encoding="utf-8") as openfile:
                         json_file = json.load(openfile)
-                        simulation_duration = json_file["scenarioDataInformation"].get(
-                            "duration in days"
-                        )
-                        if int(simulation_duration_to_check) == int(
-                            simulation_duration
-                        ):
+                        simulation_duration = json_file["scenarioDataInformation"].get("duration in days")
+                        if int(simulation_duration_to_check) == int(simulation_duration):
                             dict_of_csv_data[f"{simulation_duration}"].append(file)
                         else:
-                            raise ValueError(f"The simulation_duration_to_check of {simulation_duration_to_check} is different,"
-                                             f"to the simulation duration of {simulation_duration} found in the scenario data information json in the result folders.")
+                            raise ValueError(
+                                f"The simulation_duration_to_check of {simulation_duration_to_check} is different,"
+                                f"to the simulation duration of {simulation_duration} found in the scenario data information json in the result folders."
+                            )
 
         # raise error if dict is empty
         if bool(dict_of_csv_data) is False:
-            raise ValueError(
-                "The dictionary is empty. Maybe no data was collected. Please check your parameters again."
-            )
+            raise ValueError("The dictionary is empty. Maybe no data was collected. Please check your parameters again.")
 
         return dict_of_csv_data
 
@@ -472,16 +383,12 @@ class ResultDataCollection:
         dataframe["scenario"] = f"{parameter_key}_{value}"
         return dataframe["scenario"]
 
-    def rename_scenario_name_of_dataframe_with_index(
-        self, dataframe: pd.DataFrame, index: int
-    ) -> Any:
+    def rename_scenario_name_of_dataframe_with_index(self, dataframe: pd.DataFrame, index: int) -> Any:
         """Rename the scenario of the given dataframe adding an index."""
         dataframe["scenario"] = dataframe["scenario"] + f"_{index}"
         return dataframe["scenario"]
 
-    def sort_dataframe_according_to_scenario_values(
-        self, dataframe: pd.DataFrame
-    ) -> pd.DataFrame:
+    def sort_dataframe_according_to_scenario_values(self, dataframe: pd.DataFrame) -> pd.DataFrame:
         """Sort dataframe according to scenario values."""
 
         # get parameter key values from scenario name
@@ -501,7 +408,6 @@ class ResultDataCollection:
         # sort the order of the dataframe according to order of parameter key values
         new_df = pd.DataFrame()
         for sorted_value in ordered_values:
-
             for scenario in list(set(dataframe["scenario"])):
                 scenario_name_splitted = scenario.split("_")
                 number = float(scenario_name_splitted[-1])
@@ -522,9 +428,7 @@ class ResultDataCollection:
         list_with_module_config_dicts: Optional[List[Any]] = None,
     ) -> None:
         """Read the csv files and generate the result dataframe."""
-        log.information(
-            f"Read csv files and generate result dataframes for {time_resolution_of_data_set}."
-        )
+        log.information(f"Read csv files and generate result dataframes for {time_resolution_of_data_set}.")
 
         appended_dataframe = pd.DataFrame()
         index = 0
@@ -535,7 +439,6 @@ class ResultDataCollection:
             raise ValueError("csv_data_list is empty.")
 
         for csv_file in csv_data_list:
-
             dataframe = pd.read_csv(csv_file)
 
             # add hash colum to dataframe so hash does not get lost when scenario is renamed
@@ -550,20 +453,12 @@ class ResultDataCollection:
                     module_config_key,
                     module_config_value,
                 ) in module_config_dict.items():
-                    dataframe[module_config_key] = [module_config_value] * len(
-                        dataframe["scenario"]
-                    )
+                    dataframe[module_config_key] = [module_config_value] * len(dataframe["scenario"])
 
             if rename_scenario is True:
-                if (
-                    parameter_key is not None
-                    and list_with_parameter_key_values is not None
-                    and list_with_parameter_key_values != []
-                ):
+                if parameter_key is not None and list_with_parameter_key_values is not None and list_with_parameter_key_values != []:
                     # rename scenario adding paramter key, value pair
-                    dataframe[
-                        "scenario"
-                    ] = self.rename_scenario_name_of_dataframe_with_parameter_key_and_value(
+                    dataframe["scenario"] = self.rename_scenario_name_of_dataframe_with_parameter_key_and_value(
                         dataframe=dataframe,
                         parameter_key=parameter_key,
                         list_with_parameter_values=list_with_parameter_key_values,
@@ -572,11 +467,7 @@ class ResultDataCollection:
 
                 else:
                     # rename scenario adding an index
-                    dataframe[
-                        "scenario"
-                    ] = self.rename_scenario_name_of_dataframe_with_index(
-                        dataframe=dataframe, index=index
-                    )
+                    dataframe["scenario"] = self.rename_scenario_name_of_dataframe_with_index(dataframe=dataframe, index=index)
 
             appended_dataframe = pd.concat([appended_dataframe, dataframe])
 
@@ -585,9 +476,7 @@ class ResultDataCollection:
         # sort dataframe
         if appended_dataframe.empty:
             raise ValueError("The appended dataframe is empty")
-        appended_dataframe = self.sort_dataframe_according_to_scenario_values(
-            dataframe=appended_dataframe
-        )
+        appended_dataframe = self.sort_dataframe_according_to_scenario_values(dataframe=appended_dataframe)
 
         filename = self.store_scenario_data_with_the_right_name_and_in_the_right_path(
             result_data_folder=self.result_data_folder,
@@ -615,9 +504,7 @@ class ResultDataCollection:
         elif time_resolution_of_data_set == ResultDataTypeEnum.MONTHLY:
             kind_of_data_set = "monthly"
         else:
-            raise ValueError(
-                "This kind of data was not found in the datacollectorenum class."
-            )
+            raise ValueError("This kind of data was not found in the datacollectorenum class.")
 
         if parameter_key is not None:
             path_for_file = os.path.join(
@@ -666,7 +553,6 @@ class ResultDataCollection:
         """Read json config in result_data_for_scenario_evaluation folder and compare with default config."""
 
         for file in os.listdir(path_to_scenario_data_folder):
-
             if ".json" in file:
                 with open(os.path.join(path_to_scenario_data_folder, file), "r", encoding="utf-8") as openfile:  # type: ignore
                     config_dict = json.load(openfile)
@@ -686,17 +572,12 @@ class ResultDataCollection:
         if len(set(default_config_dict).intersection(my_module_config_dict)) == 0:
             raise KeyError(
                 f"The module config of the folder {path_to_scenario_data_folder} should contain the keys of the default config,",
-                "otherwise their values cannot be compared."
+                "otherwise their values cannot be compared.",
             )
         # check if there is a module config which is equal to default config
 
-        if all(
-            item in my_module_config_dict.items()
-            for item in default_config_dict.items()
-        ):
-            self.path_of_scenario_data_executed_with_default_config = (
-                path_to_scenario_data_folder
-            )
+        if all(item in my_module_config_dict.items() for item in default_config_dict.items()):
+            self.path_of_scenario_data_executed_with_default_config = path_to_scenario_data_folder
 
         # for each parameter different than the default config parameter, get the respective path to the folder
         # and also create a dict with the parameter, value pairs
@@ -711,9 +592,7 @@ class ResultDataCollection:
         # add to each item in the dict also the default system setup if the default system setup exists
 
         if self.path_of_scenario_data_executed_with_default_config != "":
-            list_with_csv_files.append(
-                self.path_of_scenario_data_executed_with_default_config
-            )
+            list_with_csv_files.append(self.path_of_scenario_data_executed_with_default_config)
             list_with_parameter_key_values.append(default_config_dict[parameter_key])
 
             list_with_module_configs.append(default_config_dict)
@@ -734,7 +613,6 @@ class ResultDataCollection:
         """Read module config if possible and write to dataframe."""
 
         for file in os.listdir(path_to_scenario_data_folder):
-
             if ".json" in file:
                 with open(os.path.join(path_to_scenario_data_folder, file), "r", encoding="utf-8") as openfile:  # type: ignore
                     config_dict = json.load(openfile)
@@ -744,7 +622,7 @@ class ResultDataCollection:
         if len(set(default_config_dict).intersection(my_module_config_dict)) == 0:
             raise KeyError(
                 f"The module config of the folder {path_to_scenario_data_folder} should contain the keys of the default config,",
-                "otherwise their values cannot be compared."
+                "otherwise their values cannot be compared.",
             )
 
         list_with_module_configs.append(my_module_config_dict)
@@ -768,7 +646,6 @@ class ResultDataCollection:
         list_with_parameter_key_values: List = []
 
         for folder in list_with_result_data_folders:  # type: ignore
-
             if parameter_key is None:
                 (
                     list_with_module_configs,
@@ -782,7 +659,6 @@ class ResultDataCollection:
                 list_with_parameter_key_values = []
 
             else:
-
                 (
                     list_with_csv_files,
                     list_with_parameter_key_values,
@@ -802,16 +678,10 @@ class ResultDataCollection:
             list_with_module_configs,
         )
 
-    def check_for_duplicates_in_dict(
-        self, dictionary_to_check: Dict[str, Any], key: str
-    ) -> List:
+    def check_for_duplicates_in_dict(self, dictionary_to_check: Dict[str, Any], key: str) -> List:
         """Check for duplicates and return index of where the duplicates are found."""
 
-        indices_of_duplicates = [
-            index
-            for index, value in enumerate(dictionary_to_check[key])
-            if value in dictionary_to_check[key][:index]
-        ]
+        indices_of_duplicates = [index for index, value in enumerate(dictionary_to_check[key]) if value in dictionary_to_check[key][:index]]
 
         return indices_of_duplicates
 
@@ -823,36 +693,19 @@ class ResultDataCollection:
         list_of_all_module_configs = []
         list_of_result_folders_which_have_only_unique_configs = []
         for folder in list_of_result_folder_paths_to_check:
-
             for file in os.listdir(folder):
                 if ".json" in file:
                     with open(os.path.join(folder, file), "r", encoding="utf-8") as openfile:  # type: ignore
                         config_dict = json.load(openfile)
                         my_module_config_dict = config_dict["myModuleConfig"]
-                        my_module_config_dict.update(
-                            {
-                                "duration in days": config_dict[
-                                    "scenarioDataInformation"
-                                ].get("duration in days")
-                            }
-                        )
-                        my_module_config_dict.update(
-                            {"model": config_dict["scenarioDataInformation"].get("model")}
-                        )
-                        my_module_config_dict.update(
-                            {
-                                "model": config_dict["scenarioDataInformation"].get(
-                                    "scenario"
-                                )
-                            }
-                        )
+                        my_module_config_dict.update({"duration in days": config_dict["scenarioDataInformation"].get("duration in days")})
+                        my_module_config_dict.update({"model": config_dict["scenarioDataInformation"].get("model")})
+                        my_module_config_dict.update({"model": config_dict["scenarioDataInformation"].get("scenario")})
 
                         # prevent to add modules with same module config and same simulation duration twice
                         if my_module_config_dict not in list_of_all_module_configs:
                             list_of_all_module_configs.append(my_module_config_dict)
-                            list_of_result_folders_which_have_only_unique_configs.append(
-                                os.path.join(folder)
-                            )
+                            list_of_result_folders_which_have_only_unique_configs.append(os.path.join(folder))
 
             # get folders with duplicates
             list_with_duplicates = []
@@ -860,9 +713,7 @@ class ResultDataCollection:
                 whole_parent_folder = os.path.abspath(os.path.join(folder, os.pardir))
                 list_with_duplicates.append(whole_parent_folder)
 
-        print(
-            f"The following folders seem to be duplicated: {list_with_duplicates}. Number: {len(list_with_duplicates)}."
-        )
+        print(f"The following folders seem to be duplicated: {list_with_duplicates}. Number: {len(list_with_duplicates)}.")
         # if list is not empty
         if list_with_duplicates:
             answer = input("Do you want to delete the duplicated folders?")

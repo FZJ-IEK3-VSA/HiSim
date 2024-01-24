@@ -21,7 +21,8 @@ class WebtoolEntries(JSONWizard):
     kpis: Dict[str, Any] = field(default_factory=dict)
 
 
-def get_components_for_webtool(components: List[ComponentWrapper], computed_opex: List, computed_capex: List):
+def get_components_for_webtool(components: List[ComponentWrapper], computed_opex: List, computed_capex: List) -> List:
+    """Create list of components with result values."""
     this_components_dict = {}
 
     # Get component names and initialize dictionary.

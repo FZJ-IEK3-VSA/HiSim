@@ -1,7 +1,9 @@
 """Test for webtool results."""
-from pathlib import Path
-import pytest
 import json
+from pathlib import Path
+
+import pytest
+
 from hisim.component import SimulationParameters
 from hisim.hisim_main import main
 from hisim.postprocessingoptions import PostProcessingOptions
@@ -9,6 +11,7 @@ from hisim.postprocessingoptions import PostProcessingOptions
 
 @pytest.mark.base
 def test_webtool_results():
+    """Check if results for webtool JSON is created."""
     path = "../system_setups/household_heat_pump.py"
     my_simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     my_simulation_parameters.post_processing_options = [

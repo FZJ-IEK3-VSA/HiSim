@@ -46,10 +46,6 @@ class PostProcessingDataTransfer:  # noqa: too-few-public-methods
         self.results_daily = results_daily
         self.post_processing_options = simulation_parameters.post_processing_options
 
-        log.information(
-            "Selected "
-            + str(len(self.post_processing_options))
-            + " post processing options:"
-        )
+        log.information("Selected " + str(len(self.post_processing_options)) + " post processing options:")
         for option in self.post_processing_options:
             log.information("Selected post processing option: " + str(option))

@@ -209,22 +209,10 @@ class L2GenericHeatController(cp.Component):
                 raise ValueError("Day of heating season begin was None")
             if config.day_of_heating_season_end is None:
                 raise ValueError("Day of heating season end was None")
-            self.heating_season_begin = (
-                config.day_of_heating_season_begin
-                * 24
-                * 3600
-                / self.my_simulation_parameters.seconds_per_timestep
-            )
-            self.heating_season_end = (
-                config.day_of_heating_season_end
-                * 24
-                * 3600
-                / self.my_simulation_parameters.seconds_per_timestep
-            )
+            self.heating_season_begin = config.day_of_heating_season_begin * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
+            self.heating_season_end = config.day_of_heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
         self.state: L2GenericHeatControllerState = L2GenericHeatControllerState()
-        self.previous_state: L2GenericHeatControllerState = (
-            L2GenericHeatControllerState()
-        )
+        self.previous_state: L2GenericHeatControllerState = L2GenericHeatControllerState()
 
         # Component Outputs
         self.l2_device_signal_channel: cp.ComponentOutput = self.add_output(
@@ -241,9 +229,7 @@ class L2GenericHeatController(cp.Component):
         )
 
         self.add_default_connections(self.get_default_connections_from_buildings())
-        self.add_default_connections(
-            self.get_default_connections_from_generic_hot_water_storage_modular()
-        )
+        self.add_default_connections(self.get_default_connections_from_generic_hot_water_storage_modular())
 
     def get_default_connections_from_buildings(self):
         """Sets the default connections for the building."""
@@ -263,9 +249,7 @@ class L2GenericHeatController(cp.Component):
         """Sets default connections for the boiler."""
 
         connections = []
-        hotwaterstorage_classname = (
-            generic_hot_water_storage_modular.HotWaterStorage.get_classname()
-        )
+        hotwaterstorage_classname = generic_hot_water_storage_modular.HotWaterStorage.get_classname()
         connections.append(
             cp.ComponentConnection(
                 L2GenericHeatController.ReferenceTemperature,
@@ -307,9 +291,7 @@ class L2GenericHeatController(cp.Component):
                 # use previous state if l3 was not available
                 self.state = self.previous_state.clone()
 
-    def control_heating(
-        self, t_control: float, t_min_heating: float, t_max_heating: float
-    ) -> None:
+    def control_heating(self, t_control: float, t_min_heating: float, t_max_heating: float) -> None:
         """Controles the heating."""
         if t_control > t_max_heating:
             # stop heating if temperature exceeds upper limit
@@ -340,9 +322,7 @@ class L2GenericHeatController(cp.Component):
         """For double checking results."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Core Simulation function."""
         if force_convergence:
             return
@@ -381,10 +361,6 @@ class L2GenericHeatController(cp.Component):
         """Writes the information of the current component to the report."""
         lines: List[str] = []
         lines.append(f"Name: {self.component_name + str(self.config.source_weight)}")
-        lines.append(
-            f"upper set temperature: {self.config.t_max_heating_in_celsius:4.0f} °C"
-        )
-        lines.append(
-            f"lower set temperature: {self.config.t_min_heating_in_celsius:4.0f} °C"
-        )
+        lines.append(f"upper set temperature: {self.config.t_max_heating_in_celsius:4.0f} °C")
+        lines.append(f"lower set temperature: {self.config.t_min_heating_in_celsius:4.0f} °C")
         return lines

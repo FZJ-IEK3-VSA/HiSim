@@ -125,9 +125,7 @@ class L1GenericRuntimeController(cp.Component):
     # Similar components to connect to:
     # 1. Building
     @utils.measure_execution_time
-    def __init__(
-        self, my_simulation_parameters: SimulationParameters, config: L1Config
-    ) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: L1Config) -> None:
         """Initializes the controller."""
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
@@ -137,14 +135,8 @@ class L1GenericRuntimeController(cp.Component):
         self.config = config
         self.name = config.name
         self.source_weight = config.source_weight
-        self.minimum_runtime_in_timesteps = int(
-            config.min_operation_time_in_seconds
-            / self.my_simulation_parameters.seconds_per_timestep
-        )
-        self.minimum_resting_time_in_timesteps = int(
-            config.min_idle_time_in_seconds
-            / self.my_simulation_parameters.seconds_per_timestep
-        )
+        self.minimum_runtime_in_timesteps = int(config.min_operation_time_in_seconds / self.my_simulation_parameters.seconds_per_timestep)
+        self.minimum_resting_time_in_timesteps = int(config.min_idle_time_in_seconds / self.my_simulation_parameters.seconds_per_timestep)
 
         self.state = L1GenericRuntimeControllerState(0, 0, 0)
         self.previous_state = self.state.clone()
@@ -156,17 +148,11 @@ class L1GenericRuntimeController(cp.Component):
             Units.BINARY,
             mandatory=True,
         )
-        self.add_default_connections(
-            self.get_default_connections_from_controller_l2_generic_heat_clever_simple()
-        )
+        self.add_default_connections(self.get_default_connections_from_controller_l2_generic_heat_clever_simple())
 
         # add outputs
-        self.l1_device_signal_channel: cp.ComponentOutput = self.add_output(
-            self.component_name, self.L1DeviceSignal, LoadTypes.ON_OFF, Units.BINARY
-        )
-        self.l1_runtime_signal: cp.ComponentOutput = self.add_output(
-            self.component_name, self.L1RunTimeSignal, LoadTypes.ANY, Units.ANY
-        )
+        self.l1_device_signal_channel: cp.ComponentOutput = self.add_output(self.component_name, self.L1DeviceSignal, LoadTypes.ON_OFF, Units.BINARY)
+        self.l1_runtime_signal: cp.ComponentOutput = self.add_output(self.component_name, self.L1RunTimeSignal, LoadTypes.ANY, Units.ANY)
 
     def get_default_connections_from_controller_l2_generic_heat_clever_simple(
         self,
@@ -178,9 +164,7 @@ class L1GenericRuntimeController(cp.Component):
         component_module = importlib.import_module(name=component_module_name)
         component_class = getattr(component_module, "L2HeatSmartController")
         connections = []
-        controller_classname = (
-            component_class.get_classname()
-        )
+        controller_classname = component_class.get_classname()
         connections.append(
             cp.ComponentConnection(
                 L1GenericRuntimeController.L2DeviceSignal,
@@ -206,9 +190,7 @@ class L1GenericRuntimeController(cp.Component):
         """For checking for problems."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Main simulation function."""
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         if force_convergence:
@@ -220,20 +202,11 @@ class L1GenericRuntimeController(cp.Component):
         l2_devicesignal = stsv.get_input_value(self.l2_device_signal_channel)
 
         # return device on if minimum operation time is not fulfilled and device was on in previous state
-        if (
-            self.state.on_off == 1
-            and self.state.activation_time_step + self.minimum_runtime_in_timesteps
-            >= timestep
-        ):
+        if self.state.on_off == 1 and self.state.activation_time_step + self.minimum_runtime_in_timesteps >= timestep:
             # mandatory on, minimum runtime not reached
             self.state.on_off = 1
             pass
-        elif (
-            self.state.on_off == 0
-            and self.state.deactivation_time_step
-            + self.minimum_resting_time_in_timesteps
-            >= timestep
-        ):
+        elif self.state.on_off == 0 and self.state.deactivation_time_step + self.minimum_resting_time_in_timesteps >= timestep:
             self.state.on_off = 0
         # check signal from l2 and turn on or off if it is necesary
         else:

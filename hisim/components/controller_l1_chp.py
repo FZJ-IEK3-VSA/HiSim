@@ -239,31 +239,15 @@ class L1CHPController(cp.Component):
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
         )
-        self.minimum_runtime_in_timesteps = int(
-            config.min_operation_time_in_seconds
-            / self.my_simulation_parameters.seconds_per_timestep
-        )
-        self.minimum_resting_time_in_timesteps = int(
-            config.min_idle_time_in_seconds
-            / self.my_simulation_parameters.seconds_per_timestep
-        )
+        self.minimum_runtime_in_timesteps = int(config.min_operation_time_in_seconds / self.my_simulation_parameters.seconds_per_timestep)
+        self.minimum_resting_time_in_timesteps = int(config.min_idle_time_in_seconds / self.my_simulation_parameters.seconds_per_timestep)
         """ Initializes the class. """
         if config.day_of_heating_season_begin is None:
             raise ValueError("Day of heating season begin was None")
         if config.day_of_heating_season_end is None:
             raise ValueError("Day of heating season end was None")
-        self.heating_season_begin = (
-            config.day_of_heating_season_begin
-            * 24
-            * 3600
-            / self.my_simulation_parameters.seconds_per_timestep
-        )
-        self.heating_season_end = (
-            config.day_of_heating_season_end
-            * 24
-            * 3600
-            / self.my_simulation_parameters.seconds_per_timestep
-        )
+        self.heating_season_begin = config.day_of_heating_season_begin * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
+        self.heating_season_end = config.day_of_heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
         self.state: L1CHPControllerState = L1CHPControllerState(0, 0, 0, 0)
         self.previous_state: L1CHPControllerState = self.state.clone()
         self.processed_state: L1CHPControllerState = self.state.clone()
@@ -317,9 +301,7 @@ class L1CHPController(cp.Component):
             mandatory=False,
         )
 
-        self.add_default_connections(
-            self.get_default_connections_generic_hot_water_storage_modular()
-        )
+        self.add_default_connections(self.get_default_connections_generic_hot_water_storage_modular())
         self.add_default_connections(self.get_default_connections_from_building())
         self.add_default_connections(self.get_default_connections_from_h2_storage())
 
@@ -330,9 +312,7 @@ class L1CHPController(cp.Component):
         component_module = importlib.import_module(name=component_module_name)
         component_class = getattr(component_module, "HotWaterStorage")
         connections = []
-        boiler_classname = (
-            component_class.get_classname()
-        )
+        boiler_classname = component_class.get_classname()
         connections.append(
             cp.ComponentConnection(
                 L1CHPController.HotWaterStorageTemperature,
@@ -366,9 +346,7 @@ class L1CHPController(cp.Component):
         component_module = importlib.import_module(name=component_module_name)
         component_class = getattr(component_module, "GenericHydrogenStorage")
         connections = []
-        h2_storage_classname = (
-            component_class.get_classname()
-        )
+        h2_storage_classname = component_class.get_classname()
         connections.append(
             cp.ComponentConnection(
                 L1CHPController.HydrogenSOC,
@@ -394,9 +372,7 @@ class L1CHPController(cp.Component):
         """For double checking results."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Core Simulation function."""
         if force_convergence:
             # states are saved after each timestep, outputs after each iteration
@@ -408,15 +384,9 @@ class L1CHPController(cp.Component):
             t_dhw = stsv.get_input_value(self.dhw_temperature_channel)
             # surplus/deficit electricity threshold exceeded?
             if self.electricity_target_channel.source_output is not None:
-                electricity_target = stsv.get_input_value(
-                    self.electricity_target_channel
-                )
-                electricity_threshold_ok = (
-                    electricity_target <= -self.config.electricity_threshold
-                    and self.state.on_off == 0
-                ) or (
-                    electricity_target <= self.config.electricity_threshold
-                    and self.state.on_off == 1
+                electricity_target = stsv.get_input_value(self.electricity_target_channel)
+                electricity_threshold_ok = (electricity_target <= -self.config.electricity_threshold and self.state.on_off == 0) or (
+                    electricity_target <= self.config.electricity_threshold and self.state.on_off == 1
                 )
             else:
                 electricity_threshold_ok = True
@@ -426,31 +396,22 @@ class L1CHPController(cp.Component):
             else:
                 hydrogen_soc_ok = True
             self.determine_heating_mode(timestep, t_building, t_dhw)
-            self.calculate_state(
-                timestep, t_building, t_dhw, electricity_threshold_ok, hydrogen_soc_ok
-            )
+            self.calculate_state(timestep, t_building, t_dhw, electricity_threshold_ok, hydrogen_soc_ok)
             self.processed_state = self.state.clone()
         stsv.set_output_value(self.chp_onoff_signal_channel, self.state.on_off)
         stsv.set_output_value(self.chp_heatingmode_signal_channel, self.state.mode)
 
-    def determine_heating_mode(
-        self, timestep: int, t_building: float, t_dhw: float
-    ) -> None:
+    def determine_heating_mode(self, timestep: int, t_building: float, t_dhw: float) -> None:
         """Determines if hot water or building should be heated.
 
         The mode in the state is 0 if water heating is considered and 1 if heating is enforced.
         """
-        if (
-            self.heating_season_begin > timestep > self.heating_season_end
-            and t_building >= self.config.t_min_heating_in_celsius - 30
-        ):
+        if self.heating_season_begin > timestep > self.heating_season_end and t_building >= self.config.t_min_heating_in_celsius - 30:
             # only consider water heating in summer
             self.state.mode = 0
             return
         # calculate heating level of DHW storage and building
-        soc_dhw = (t_dhw - self.config.t_min_dhw_in_celsius) / (
-            self.config.t_max_dhw_in_celsius - self.config.t_min_dhw_in_celsius
-        )
+        soc_dhw = (t_dhw - self.config.t_min_dhw_in_celsius) / (self.config.t_max_dhw_in_celsius - self.config.t_min_dhw_in_celsius)
         soc_building = (t_building - self.config.t_min_heating_in_celsius) / (
             self.config.t_max_heating_in_celsius - self.config.t_min_heating_in_celsius
         )
@@ -470,19 +431,10 @@ class L1CHPController(cp.Component):
     ) -> None:
         """Calculate the CHP state and activate / deactives."""
         # return device on if minimum operation time is not fulfilled and device was on in previous state
-        if (
-            self.state.on_off == 1
-            and self.state.activation_time_step + self.minimum_runtime_in_timesteps
-            >= timestep
-        ):
+        if self.state.on_off == 1 and self.state.activation_time_step + self.minimum_runtime_in_timesteps >= timestep:
             # mandatory on, minimum runtime not reached
             return
-        if (
-            self.state.on_off == 0
-            and self.state.deactivation_time_step
-            + self.minimum_resting_time_in_timesteps
-            >= timestep
-        ):
+        if self.state.on_off == 0 and self.state.deactivation_time_step + self.minimum_resting_time_in_timesteps >= timestep:
             # mandatory off, minimum resting time not reached
             return
         # deactivate when electricity is not needed:
@@ -494,33 +446,20 @@ class L1CHPController(cp.Component):
             self.state.deactivate(timestep)
             return
         # control according to set temperatures
-        if (
-            self.heating_season_begin > timestep > self.heating_season_end
-            and t_building >= self.config.t_min_heating_in_celsius - 30
-        ):
+        if self.heating_season_begin > timestep > self.heating_season_end and t_building >= self.config.t_min_heating_in_celsius - 30:
             # only consider water heating in summer
             if t_dhw < self.config.t_min_dhw_in_celsius:
-                self.state.activate(
-                    timestep
-                )  # activate CHP when storage temperature is too low and electricity is needed
+                self.state.activate(timestep)  # activate CHP when storage temperature is too low and electricity is needed
                 return
             if t_dhw > self.config.t_max_heating_in_celsius:
-                self.state.deactivate(
-                    timestep
-                )  # deactivate CHP when storage temperature is too high
+                self.state.deactivate(timestep)  # deactivate CHP when storage temperature is too high
                 return
         else:
-            if (
-                t_building < self.config.t_min_heating_in_celsius
-                or t_dhw < self.config.t_min_dhw_in_celsius
-            ):
+            if t_building < self.config.t_min_heating_in_celsius or t_dhw < self.config.t_min_dhw_in_celsius:
                 # activate heating when either dhw storage or building temperature is too low and electricity is needed
                 self.state.activate(timestep)
                 return
-            if (
-                t_building > self.config.t_max_heating_in_celsius
-                and t_dhw > self.config.t_max_dhw_in_celsius
-            ):
+            if t_building > self.config.t_max_heating_in_celsius and t_dhw > self.config.t_max_dhw_in_celsius:
                 # deactivate heating when dhw storage and building temperature is too high
                 self.state.deactivate(timestep)
                 return

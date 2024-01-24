@@ -79,12 +79,8 @@ class HeatPumpConfig(cp.ConfigBase):
             power_th=power_th,
             water_vs_heating=lt.InandOutputType.HEATING,
             device_category=lt.HeatingSystems.HEAT_PUMP,
-            co2_footprint=power_th
-            * 1e-3
-            * 165.84,  # value from emission_factros_and_costs_devices.csv
-            cost=power_th
-            * 1e-3
-            * 1513.74,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=power_th * 1e-3 * 165.84,  # value from emission_factros_and_costs_devices.csv
+            cost=power_th * 1e-3 * 1513.74,  # value from emission_factros_and_costs_devices.csv
             lifetime=10,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
             consumption=0,
@@ -103,12 +99,8 @@ class HeatPumpConfig(cp.ConfigBase):
             power_th=power_th,
             water_vs_heating=lt.InandOutputType.WATER_HEATING,
             device_category=lt.HeatingSystems.HEAT_PUMP,
-            co2_footprint=power_th
-            * 1e-3
-            * 165.84,  # value from emission_factros_and_costs_devices.csv
-            cost=power_th
-            * 1e-3
-            * 1513.74,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=power_th * 1e-3 * 165.84,  # value from emission_factros_and_costs_devices.csv
+            cost=power_th * 1e-3 * 1513.74,  # value from emission_factros_and_costs_devices.csv
             lifetime=10,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
             consumption=0,
@@ -127,9 +119,7 @@ class HeatPumpConfig(cp.ConfigBase):
             power_th=power_th,
             water_vs_heating=lt.InandOutputType.HEATING,
             device_category=lt.HeatingSystems.ELECTRIC_HEATING,
-            co2_footprint=power_th
-            * 1e-3
-            * 1.21,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=power_th * 1e-3 * 1.21,  # value from emission_factros_and_costs_devices.csv
             cost=4635,  # value from emission_factros_and_costs_devices.csv
             lifetime=20,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
@@ -149,9 +139,7 @@ class HeatPumpConfig(cp.ConfigBase):
             power_th=power_th,
             water_vs_heating=lt.InandOutputType.WATER_HEATING,
             device_category=lt.HeatingSystems.ELECTRIC_HEATING,
-            co2_footprint=power_th
-            * 1e-3
-            * 1.21,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=power_th * 1e-3 * 1.21,  # value from emission_factros_and_costs_devices.csv
             cost=4635,  # value from emission_factros_and_costs_devices.csv
             lifetime=20,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
@@ -160,9 +148,7 @@ class HeatPumpConfig(cp.ConfigBase):
         return config
 
     @classmethod
-    def get_scaled_waterheating_to_number_of_apartments(
-        cls, number_of_apartments: float, default_power_in_watt: float = 3000
-    ) -> "HeatPumpConfig":
+    def get_scaled_waterheating_to_number_of_apartments(cls, number_of_apartments: float, default_power_in_watt: float = 3000) -> "HeatPumpConfig":
         """Gets a default heat pump with scaling according to number of apartments."""
 
         # scale with number of apartments
@@ -175,12 +161,8 @@ class HeatPumpConfig(cp.ConfigBase):
             power_th=power_th_in_watt,
             water_vs_heating=lt.InandOutputType.WATER_HEATING,
             device_category=lt.HeatingSystems.HEAT_PUMP,
-            co2_footprint=power_th_in_watt
-            * 1e-3
-            * 165.84,  # value from emission_factros_and_costs_devices.csv
-            cost=power_th_in_watt
-            * 1e-3
-            * 1513.74,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=power_th_in_watt * 1e-3 * 165.84,  # value from emission_factros_and_costs_devices.csv
+            cost=power_th_in_watt * 1e-3 * 1513.74,  # value from emission_factros_and_costs_devices.csv
             lifetime=10,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
             consumption=0,
@@ -224,9 +206,7 @@ class ModularHeatPump(cp.Component):
     PowerModifier = "PowerModifier"
 
     @utils.measure_execution_time
-    def __init__(
-        self, config: HeatPumpConfig, my_simulation_parameters: SimulationParameters
-    ):
+    def __init__(self, config: HeatPumpConfig, my_simulation_parameters: SimulationParameters):
         """Initialize the class."""
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
@@ -296,9 +276,7 @@ class ModularHeatPump(cp.Component):
         )
 
         self.add_default_connections(self.get_default_connections_from_weather())
-        self.add_default_connections(
-            self.get_default_connections_from_controller_l1_heatpump()
-        )
+        self.add_default_connections(self.get_default_connections_from_controller_l1_heatpump())
 
     def get_default_connections_from_weather(self):
         """Sets default connections of Weather."""
@@ -318,9 +296,7 @@ class ModularHeatPump(cp.Component):
         """Sets default connections of heat pump controller."""
 
         connections = []
-        controller_classname = (
-            controller_l1_heatpump.L1HeatPumpController.get_classname()
-        )
+        controller_classname = controller_l1_heatpump.L1HeatPumpController.get_classname()
         connections.append(
             cp.ComponentConnection(
                 ModularHeatPump.HeatControllerTargetPercentage,
@@ -342,10 +318,7 @@ class ModularHeatPump(cp.Component):
         heat_pump_found = False
         heat_pump = None
         for heat_pump in heat_pumps_database:
-            if (
-                heat_pump["Manufacturer"] == self.config.manufacturer
-                and heat_pump["Name"] == self.config.device_name
-            ):
+            if heat_pump["Manufacturer"] == self.config.manufacturer and heat_pump["Name"] == self.config.device_name:
                 heat_pump_found = True
                 break
 
@@ -384,15 +357,11 @@ class ModularHeatPump(cp.Component):
         """Writes relevant data to report."""
         return self.config.get_string_dict()
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Iteration of heat pump simulation."""
 
         # Inputs
-        target_percentage = stsv.get_input_value(
-            self.heat_controller_power_modifier_channel
-        )
+        target_percentage = stsv.get_input_value(self.heat_controller_power_modifier_channel)
 
         temperature_outside: float = stsv.get_input_value(self.temperature_outside_channel)
         cop = self.cal_cop(temperature_outside)
@@ -406,14 +375,10 @@ class ModularHeatPump(cp.Component):
 
         power_modifier = min(1, power_modifier)
 
-        stsv.set_output_value(
-            self.thermal_power_delicered_channel, self.config.power_th * power_modifier
-        )
+        stsv.set_output_value(self.thermal_power_delicered_channel, self.config.power_th * power_modifier)
         stsv.set_output_value(self.power_modifier_channel, power_modifier)
 
-        stsv.set_output_value(
-            self.electricity_output_channel, electric_power * power_modifier
-        )
+        stsv.set_output_value(self.electricity_output_channel, electric_power * power_modifier)
 
     @staticmethod
     def get_cost_capex(config: HeatPumpConfig) -> Tuple[float, float, float]:
@@ -432,14 +397,10 @@ class ModularHeatPump(cp.Component):
         """
         for index, output in enumerate(all_outputs):
             if (
-                output.component_name
-                == self.config.name + "_w" + str(self.config.source_weight)
-                and output.load_type == lt.LoadTypes.ELECTRICITY
+                output.component_name == self.config.name + "_w" + str(self.config.source_weight) and output.load_type == lt.LoadTypes.ELECTRICITY
             ):  # Todo: check component name from system_setups: find another way of using only heatpump-outputs
                 self.config.consumption = round(
-                    sum(postprocessing_results.iloc[:, index])
-                    * self.my_simulation_parameters.seconds_per_timestep
-                    / 3.6e6,
+                    sum(postprocessing_results.iloc[:, index]) * self.my_simulation_parameters.seconds_per_timestep / 3.6e6,
                     1,
                 )
 

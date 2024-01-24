@@ -141,14 +141,10 @@ class SmartController(Component):
         """Doublecheck."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the Smart Controller class."""
         for index, _ in enumerate(self.wrapped_controllers):
-            self.wrapped_controllers[index].i_simulate(
-                timestep=timestep, stsv=stsv, force_convergence=force_convergence
-            )
+            self.wrapped_controllers[index].i_simulate(timestep=timestep, stsv=stsv, force_convergence=force_convergence)
 
     def connect_electricity(self, component: Any) -> None:
         """Connect Electricity input."""

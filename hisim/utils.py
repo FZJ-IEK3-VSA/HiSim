@@ -36,29 +36,19 @@ def get_input_directory() -> str:
 hisim_abs_path = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))  # type: ignore
 hisim_inputs = os.path.join(hisim_abs_path, "inputs")
 hisim_results = os.path.join(hisim_abs_path, "results")
-hisim_postprocessing_img = os.path.join(
-    hisim_abs_path, "postprocessing", "report"
-)  # noqa
+hisim_postprocessing_img = os.path.join(hisim_abs_path, "postprocessing", "report")  # noqa
 
 HISIMPATH: Dict[str, Any] = {
     "results": hisim_results,
     "inputs": hisim_inputs,
     "cache_dir": os.path.join(hisim_abs_path, "inputs", "cache"),
-    "cache_indices": os.path.join(
-        hisim_abs_path, "inputs", "cache", "cache_indices.json"
-    ),
+    "cache_indices": os.path.join(hisim_abs_path, "inputs", "cache", "cache_indices.json"),
     "cfg": os.path.join(hisim_abs_path, "inputs", "cfg.json"),
     "utsp_results": os.path.join(hisim_results, "Results"),
-    "utsp_example_results": os.path.join(
-        hisim_inputs, "LPGResults_for_tests", "Results"
-    ),
+    "utsp_example_results": os.path.join(hisim_inputs, "LPGResults_for_tests", "Results"),
     "utsp_reports": os.path.join(hisim_results, "Reports"),
-    "utsp_example_reports": os.path.join(
-        hisim_inputs, "LPGResults_for_tests", "Reports"
-    ),
-    "housing": os.path.join(
-        hisim_inputs, "housing", "data_processed", "episcope-tabula.csv"
-    ),
+    "utsp_example_reports": os.path.join(hisim_inputs, "LPGResults_for_tests", "Reports"),
+    "housing": os.path.join(hisim_inputs, "housing", "data_processed", "episcope-tabula.csv"),
     "housing_reference_temperatures": os.path.join(
         hisim_inputs,
         "housing",
@@ -71,15 +61,9 @@ HISIMPATH: Dict[str, Any] = {
         "data_processed",
         "heater_efficiencies.csv",
     ),
-    "fuel_costs": os.path.join(
-        hisim_abs_path, "modular_household", "emission_factors_and_costs_fuels.csv"
-    ),
-    "component_costs": os.path.join(
-        hisim_abs_path, "modular_household", "emission_factors_and_costs_devices.csv"
-    ),
-    "occupancy_scaling_factors_per_country": os.path.join(
-        hisim_inputs, "loadprofiles", "WHY_reference_data", "scaling_factors_demand.csv"
-    ),
+    "fuel_costs": os.path.join(hisim_abs_path, "modular_household", "emission_factors_and_costs_fuels.csv"),
+    "component_costs": os.path.join(hisim_abs_path, "modular_household", "emission_factors_and_costs_devices.csv"),
+    "occupancy_scaling_factors_per_country": os.path.join(hisim_inputs, "loadprofiles", "WHY_reference_data", "scaling_factors_demand.csv"),
     "occupancy": {
         "CHR01 Couple both at Work": {
             "number_of_residents": [
@@ -157,26 +141,14 @@ HISIMPATH: Dict[str, Any] = {
         },
     },
     "photovoltaic": {
-        "sandia_modules_new": os.path.join(
-            hisim_inputs, "photovoltaic", "data_processed", "sandia_modules_new.csv"
-        ),
-        "sandia_modules": os.path.join(
-            hisim_inputs, "photovoltaic", "data_processed", "sandia_modules.csv"
-        ),
-        "sandia_inverters": os.path.join(
-            hisim_inputs, "photovoltaic", "data_processed", "sandia_inverters.csv"
-        ),
-        "cec_modules": os.path.join(
-            hisim_inputs, "photovoltaic", "data_processed", "cec_modules.csv"
-        ),
-        "cec_inverters": os.path.join(
-            hisim_inputs, "photovoltaic", "data_processed", "cec_inverters.csv"
-        ),
+        "sandia_modules_new": os.path.join(hisim_inputs, "photovoltaic", "data_processed", "sandia_modules_new.csv"),
+        "sandia_modules": os.path.join(hisim_inputs, "photovoltaic", "data_processed", "sandia_modules.csv"),
+        "sandia_inverters": os.path.join(hisim_inputs, "photovoltaic", "data_processed", "sandia_inverters.csv"),
+        "cec_modules": os.path.join(hisim_inputs, "photovoltaic", "data_processed", "cec_modules.csv"),
+        "cec_inverters": os.path.join(hisim_inputs, "photovoltaic", "data_processed", "cec_inverters.csv"),
     },
     "chp_system": os.path.join(hisim_inputs, "chp_system"),
-    "smart_appliances": os.path.join(
-        hisim_inputs, "smart_devices", "data_processed", "smart_devices.json"
-    ),
+    "smart_appliances": os.path.join(hisim_inputs, "smart_devices", "data_processed", "smart_devices.json"),
     "frank_data": os.path.join(
         hisim_inputs,
         "loadprofiles",
@@ -186,9 +158,7 @@ HISIMPATH: Dict[str, Any] = {
     ),
     "report": os.path.join(hisim_abs_path, "results", "report.pdf"),
     "advanced_battery": {
-        "parameter": os.path.join(
-            hisim_abs_path, "inputs", "advanced_battery", "parameter", "PerModPAR.xlsx"
-        ),
+        "parameter": os.path.join(hisim_abs_path, "inputs", "advanced_battery", "parameter", "PerModPAR.xlsx"),
         "reference_case": os.path.join(
             hisim_abs_path,
             "inputs",
@@ -196,21 +166,13 @@ HISIMPATH: Dict[str, Any] = {
             "reference_case",
             "ref_case_data.npz",
         ),
-        "siemens_junelight": os.path.join(
-            hisim_abs_path, "inputs", "advanced_battery", "Siemens_Junelight.npy"
-        ),
+        "siemens_junelight": os.path.join(hisim_abs_path, "inputs", "advanced_battery", "Siemens_Junelight.npy"),
     },
-    "LoadProfileGenerator_export_directory": os.path.join(
-        os.path.join("D:", os.sep, "Work")
-    ),
-    "bat_parameter": os.path.join(
-        hisim_abs_path, "inputs", "advanced_battery", "Siemens_Junelight.npy"
-    ),
+    "LoadProfileGenerator_export_directory": os.path.join(os.path.join("D:", os.sep, "Work")),
+    "bat_parameter": os.path.join(hisim_abs_path, "inputs", "advanced_battery", "Siemens_Junelight.npy"),
     "modular_household": os.path.join(hisim_abs_path, "modular_household"),
     "price_signal": {
-        "PricePurchase": os.path.join(
-            hisim_inputs, "price_signal", "PricePurchase.csv"
-        ),
+        "PricePurchase": os.path.join(hisim_inputs, "price_signal", "PricePurchase.csv"),
         "FeedInTarrif": os.path.join(hisim_inputs, "price_signal", "FeedInTarrif.csv"),
     },
 }
@@ -223,27 +185,13 @@ def load_smart_appliance(name):  # noqa
     return data[name]
 
 
-def convert_lpg_timestep_to_utc(
-    data: List[int], year: int, seconds_per_timestep: int
-) -> List[int]:
+def convert_lpg_timestep_to_utc(data: List[int], year: int, seconds_per_timestep: int) -> List[int]:
     """Tranform LPG timesteps (list of integers) from local time to UTC."""
     timeshifts = pytz.timezone("Europe/Berlin")._utc_transition_times  # type: ignore # pylint: disable=W0212
     timeshifts = [elem for elem in timeshifts if elem.year == year]
     steps_per_hour = int(3600 / seconds_per_timestep)
-    timeshift1_as_step = (
-        int(
-            (timeshifts[0] - dt.datetime(year=year, month=1, day=1)).seconds
-            / seconds_per_timestep
-        )
-        - 1
-    )
-    timeshift2_as_step = (
-        int(
-            (timeshifts[1] - dt.datetime(year=year, month=1, day=1)).seconds
-            / seconds_per_timestep
-        )
-        - 1
-    )
+    timeshift1_as_step = int((timeshifts[0] - dt.datetime(year=year, month=1, day=1)).seconds / seconds_per_timestep) - 1
+    timeshift2_as_step = int((timeshifts[1] - dt.datetime(year=year, month=1, day=1)).seconds / seconds_per_timestep) - 1
 
     data_utc = []
     for elem in data:
@@ -267,9 +215,7 @@ def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
     # delete hour in spring if neceary:
     if lastdate > timeshifts[0]:
         indices_of_additional_hour_in_spring = data.loc[
-            timeshifts[0]
-            + dt.timedelta(seconds=3600) : timeshifts[0]  # noqa: E203
-            + dt.timedelta(seconds=60 * (60 + 59))
+            timeshifts[0] + dt.timedelta(seconds=3600) : timeshifts[0] + dt.timedelta(seconds=60 * (60 + 59))  # noqa: E203
         ].index
 
         data.drop(index=indices_of_additional_hour_in_spring, inplace=True)
@@ -277,9 +223,7 @@ def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
     # add hour in autumn if necesary
     if lastdate > timeshifts[1]:
         additional_hours_in_autumn = data.loc[
-            timeshifts[1]
-            + dt.timedelta(seconds=3600) : timeshifts[1]  # noqa: E203
-            + dt.timedelta(seconds=60 * (60 + 59))
+            timeshifts[1] + dt.timedelta(seconds=3600) : timeshifts[1] + dt.timedelta(seconds=60 * (60 + 59))  # noqa: E203
         ]
         data = pd.concat([data, additional_hours_in_autumn])
         data.sort_index(inplace=True)
@@ -288,19 +232,14 @@ def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
     data = data[data.index >= dt.datetime(year=year, month=1, day=1, hour=1)]
 
     # add hour at end
-    last_hour = data[
-        data.index
-        >= dt.datetime(year=year, month=lastdate.month, day=lastdate.day, hour=23)  # type: ignore
-    ]
+    last_hour = data[data.index >= dt.datetime(year=year, month=lastdate.month, day=lastdate.day, hour=23)]  # type: ignore
     data = pd.concat([data, last_hour])  # type: ignore
 
     # make integer index again, paste new timestamp (UTC) and format
     data.index = pd.Index(list(range(len(data))))
     data["Time"] = pd.date_range(
         start=dt.datetime(year=year, month=1, day=1, hour=0),
-        end=dt.datetime(
-            year=year, month=lastdate.month, day=lastdate.day, hour=23, minute=59  # type: ignore
-        ),
+        end=dt.datetime(year=year, month=lastdate.month, day=lastdate.day, hour=23, minute=59),  # type: ignore
         freq="T",
         tz="UTC",
     )
@@ -312,7 +251,7 @@ def get_cache_file(
     component_key: str,
     parameter_class: Any,
     my_simulation_parameters: SimulationParameters,
-    cache_dir_path: str = os.path.join(hisim_abs_path, "inputs", "cache")
+    cache_dir_path: str = os.path.join(hisim_abs_path, "inputs", "cache"),
 ) -> Tuple[bool, str]:  # noqa
     """Gets a cache path for a given parameter set.
 
@@ -343,9 +282,7 @@ def get_cache_file(
 
 def load_export_load_profile_generator(target):  # noqa
     """Returns the paths for the SQL exported files from the Load Profile Generator."""
-    targetpath = os.path.join(
-        HISIMPATH["LoadProfileGenerator_export_directory"], target
-    )
+    targetpath = os.path.join(HISIMPATH["LoadProfileGenerator_export_directory"], target)
     if os.path.exists(targetpath):
         lpg_export_path = {
             "electric_vehicle": [
@@ -367,15 +304,7 @@ def measure_execution_time(my_function):  # noqa
         result = my_function(*args, **kwargs)
         end = timer()
         diff = end - start
-        log.profile(
-            "Executing "
-            + my_function.__module__
-            + "."
-            + my_function.__name__
-            + " took "
-            + f"{diff:1.2f}"
-            + " seconds"
-        )
+        log.profile("Executing " + my_function.__module__ + "." + my_function.__name__ + " took " + f"{diff:1.2f}" + " seconds")
         return result
 
     return function_wrapper_for_measuring_execution_time
@@ -393,15 +322,7 @@ def measure_memory_leak(my_function):  # noqa
         rss_by_psutil_end = process.memory_info().rss / (1024 * 1024)
         gc.collect()
         diff = rss_by_psutil_end - rss_by_psutil_start
-        log.trace(
-            "Executing "
-            + my_function.__module__
-            + "."
-            + my_function.__name__
-            + " leaked "
-            + f"{diff:1.2f}"
-            + " MB"
-        )
+        log.trace("Executing " + my_function.__module__ + "." + my_function.__name__ + " leaked " + f"{diff:1.2f}" + " MB")
         return result
 
     return function_wrapper_for_measuring_memory_leak
@@ -419,15 +340,7 @@ def measure_memory_leak_with_error(my_function):  # noqa
         rss_by_psutil_end = process.memory_info().rss / (1024 * 1024)
         gc.collect()
         diff = rss_by_psutil_end - rss_by_psutil_start
-        log.information(
-            "Executing "
-            + my_function.__module__
-            + "."
-            + my_function.__name__
-            + " leaked "
-            + f"{diff:1.2f}"
-            + " MB"
-        )
+        log.information("Executing " + my_function.__module__ + "." + my_function.__name__ + " leaked " + f"{diff:1.2f}" + " MB")
         if diff > 100:
             raise ValueError("Lost over 100MB of memory during the function call")
         return result

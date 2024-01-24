@@ -15,9 +15,7 @@ from hisim.loadtypes import ComponentType, HeatingSystems, InandOutputType, Load
 from hisim.simulationparameters import SimulationParameters
 
 
-def compute_energy_from_power(
-    power_timeseries: pd.Series, seconds_per_timestep: int
-) -> float:
+def compute_energy_from_power(power_timeseries: pd.Series, seconds_per_timestep: int) -> float:
     """Computes energy from power value."""
     if power_timeseries.empty:
         return 0.0
@@ -39,11 +37,7 @@ def get_factor_cooking(occupancy_config: OccupancyConfig) -> float:
         scaling_factor_line = scaling_factors.loc[occupancy_config.country_name]
     else:
         scaling_factor_line = scaling_factors.loc["EU"]
-        log.warning(
-            "Scaling Factor for "
-            + occupancy_config.country_name
-            + "is not available, EU average is used per default."
-        )
+        log.warning("Scaling Factor for " + occupancy_config.country_name + "is not available, EU average is used per default.")
     return float(scaling_factor_line["ratio cooking to total"])
 
 
@@ -77,10 +71,7 @@ def compute_seasonal(
         output_night[
             (
                 (output_night.index > dt.datetime(year=2019, month=6, day=21, hour=12))
-                & (
-                    output_night.index
-                    < dt.datetime(year=2019, month=9, day=23, hour=12)
-                )
+                & (output_night.index < dt.datetime(year=2019, month=9, day=23, hour=12))
             )
         ].sum()
         * factor
@@ -98,10 +89,7 @@ def compute_seasonal(
         output_night[
             (
                 (output_night.index > dt.datetime(year=2019, month=12, day=21, hour=12))
-                | (
-                    output_night.index
-                    < dt.datetime(year=2019, month=3, day=23, hour=12)
-                )
+                | (output_night.index < dt.datetime(year=2019, month=3, day=23, hour=12))
             )
         ].sum()
         * factor
@@ -123,17 +111,11 @@ def compute_seasonal(
         output_night[
             (
                 (output_night.index > dt.datetime(year=2019, month=3, day=23, hour=12))
-                & (
-                    output_night.index
-                    < dt.datetime(year=2019, month=6, day=21, hour=12)
-                )
+                & (output_night.index < dt.datetime(year=2019, month=6, day=21, hour=12))
             )
             | (
                 (output_night.index > dt.datetime(year=2019, month=9, day=23, hour=12))
-                & (
-                    output_night.index
-                    < dt.datetime(year=2019, month=12, day=21, hour=12)
-                )
+                & (output_night.index < dt.datetime(year=2019, month=12, day=21, hour=12))
             )
         ].sum()
         * factor
@@ -241,9 +223,7 @@ def generate_csv_for_database(
         if output.postprocessing_flag is not None:
             if InandOutputType.WATER_HEATING in output.postprocessing_flag:
                 if LoadTypes.DISTRICTHEATING in output.postprocessing_flag:
-                    csv_frame_annual[("WaterHeating", "Distributed Stream [kWh]")] = (
-                        sum(results.iloc[:, index]) * 1e-3
-                    )
+                    csv_frame_annual[("WaterHeating", "Distributed Stream [kWh]")] = sum(results.iloc[:, index]) * 1e-3
                     csv_frame_seasonal = compute_seasonal(
                         csv_frame_seasonal=csv_frame_seasonal,
                         index_in_seasonal_frame=(
@@ -256,9 +236,7 @@ def generate_csv_for_database(
                         night=night,
                     )
                 elif LoadTypes.GAS in output.postprocessing_flag:
-                    csv_frame_annual[("WaterHeating", "Gas [kWh]")] = (
-                        sum(results.iloc[:, index]) * 1e-3
-                    )
+                    csv_frame_annual[("WaterHeating", "Gas [kWh]")] = sum(results.iloc[:, index]) * 1e-3
                     csv_frame_seasonal = compute_seasonal(
                         csv_frame_seasonal=csv_frame_seasonal,
                         index_in_seasonal_frame=("WaterHeating", "Gas [kWh]"),
@@ -268,9 +246,7 @@ def generate_csv_for_database(
                         night=night,
                     )
                 elif LoadTypes.OIL in output.postprocessing_flag:
-                    csv_frame_annual[("WaterHeating", "Oil [l]")] = sum(
-                        results.iloc[:, index]
-                    )
+                    csv_frame_annual[("WaterHeating", "Oil [l]")] = sum(results.iloc[:, index])
                     csv_frame_seasonal = compute_seasonal(
                         csv_frame_seasonal=csv_frame_seasonal,
                         index_in_seasonal_frame=("WaterHeating", "Oil [l]"),
@@ -281,9 +257,7 @@ def generate_csv_for_database(
                     )
                 else:
                     if HeatingSystems.HEAT_PUMP in output.postprocessing_flag:
-                        csv_frame_annual[
-                            ("WaterHeating", "Electricity - HeatPump [kWh]")
-                        ] = compute_energy_from_power(
+                        csv_frame_annual[("WaterHeating", "Electricity - HeatPump [kWh]")] = compute_energy_from_power(
                             power_timeseries=results.iloc[:, index],
                             seconds_per_timestep=simulation_parameters.seconds_per_timestep,
                         )
@@ -299,9 +273,7 @@ def generate_csv_for_database(
                             night=night,
                         )
                     elif HeatingSystems.ELECTRIC_HEATING in output.postprocessing_flag:
-                        csv_frame_annual[
-                            ("WaterHeating", "Electricity [kWh]")
-                        ] = compute_energy_from_power(
+                        csv_frame_annual[("WaterHeating", "Electricity [kWh]")] = compute_energy_from_power(
                             power_timeseries=results.iloc[:, index],
                             seconds_per_timestep=simulation_parameters.seconds_per_timestep,
                         )
@@ -318,9 +290,7 @@ def generate_csv_for_database(
                         )
             elif InandOutputType.HEATING in output.postprocessing_flag:
                 if LoadTypes.DISTRICTHEATING in output.postprocessing_flag:
-                    csv_frame_annual[("SpaceHeating", "Distributed Stream [kWh]")] = (
-                        sum(results.iloc[:, index]) * 1e-3
-                    )
+                    csv_frame_annual[("SpaceHeating", "Distributed Stream [kWh]")] = sum(results.iloc[:, index]) * 1e-3
                     csv_frame_seasonal = compute_seasonal(
                         csv_frame_seasonal=csv_frame_seasonal,
                         index_in_seasonal_frame=(
@@ -333,9 +303,7 @@ def generate_csv_for_database(
                         night=night,
                     )
                 elif LoadTypes.GAS in output.postprocessing_flag:
-                    csv_frame_annual[("SpaceHeating", "Gas [kWh]")] = (
-                        sum(results.iloc[:, index]) * 1e-3
-                    )
+                    csv_frame_annual[("SpaceHeating", "Gas [kWh]")] = sum(results.iloc[:, index]) * 1e-3
                     csv_frame_seasonal = compute_seasonal(
                         csv_frame_seasonal=csv_frame_seasonal,
                         index_in_seasonal_frame=("SpaceHeating", "Gas [kWh]"),
@@ -345,9 +313,7 @@ def generate_csv_for_database(
                         night=night,
                     )
                 elif LoadTypes.OIL in output.postprocessing_flag:
-                    csv_frame_annual[("SpaceHeating", "Oil [l]")] = sum(
-                        results.iloc[:, index]
-                    )
+                    csv_frame_annual[("SpaceHeating", "Oil [l]")] = sum(results.iloc[:, index])
                     csv_frame_seasonal = compute_seasonal(
                         csv_frame_seasonal=csv_frame_seasonal,
                         index_in_seasonal_frame=("SpaceHeating", "Oil [l]"),
@@ -358,9 +324,7 @@ def generate_csv_for_database(
                     )
                 else:
                     if HeatingSystems.HEAT_PUMP in output.postprocessing_flag:
-                        csv_frame_annual[
-                            ("SpaceHeating", "Electricity - HeatPump [kWh]")
-                        ] = compute_energy_from_power(
+                        csv_frame_annual[("SpaceHeating", "Electricity - HeatPump [kWh]")] = compute_energy_from_power(
                             power_timeseries=results.iloc[:, index],
                             seconds_per_timestep=simulation_parameters.seconds_per_timestep,
                         )
@@ -376,9 +340,7 @@ def generate_csv_for_database(
                             night=night,
                         )
                     elif HeatingSystems.ELECTRIC_HEATING in output.postprocessing_flag:
-                        csv_frame_annual[
-                            ("SpaceHeating", "Electricity [kWh]")
-                        ] = compute_energy_from_power(
+                        csv_frame_annual[("SpaceHeating", "Electricity [kWh]")] = compute_energy_from_power(
                             power_timeseries=results.iloc[:, index],
                             seconds_per_timestep=simulation_parameters.seconds_per_timestep,
                         )
@@ -395,9 +357,7 @@ def generate_csv_for_database(
                         )
             elif ComponentType.CAR in output.postprocessing_flag:
                 if LoadTypes.DIESEL in output.postprocessing_flag:
-                    csv_frame_annual[("Transport", "Diesel [l]")] = sum(
-                        results.iloc[:, index]
-                    )
+                    csv_frame_annual[("Transport", "Diesel [l]")] = sum(results.iloc[:, index])
                     csv_frame_seasonal = compute_seasonal(
                         csv_frame_seasonal=csv_frame_seasonal,
                         index_in_seasonal_frame=("Transport", "Diesel [l]"),
@@ -407,9 +367,7 @@ def generate_csv_for_database(
                         night=night,
                     )
                 else:
-                    csv_frame_annual[
-                        ("Transport", "Electricity [kWh]")
-                    ] = compute_energy_from_power(
+                    csv_frame_annual[("Transport", "Electricity [kWh]")] = compute_energy_from_power(
                         power_timeseries=results.iloc[:, index],
                         seconds_per_timestep=simulation_parameters.seconds_per_timestep,
                     )
@@ -421,16 +379,10 @@ def generate_csv_for_database(
                         day=day,
                         night=night,
                     )
-            elif (
-                InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED
-                in output.postprocessing_flag
-            ):
-                remaining_electricity_annual = (
-                    remaining_electricity_annual
-                    + compute_energy_from_power(
-                        power_timeseries=results.iloc[:, index],
-                        seconds_per_timestep=simulation_parameters.seconds_per_timestep,
-                    )
+            elif InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED in output.postprocessing_flag:
+                remaining_electricity_annual = remaining_electricity_annual + compute_energy_from_power(
+                    power_timeseries=results.iloc[:, index],
+                    seconds_per_timestep=simulation_parameters.seconds_per_timestep,
                 )
                 remaining_electricity_seasonal_item = compute_seasonal(
                     csv_frame_seasonal=csv_frame_seasonal,
@@ -440,20 +392,11 @@ def generate_csv_for_database(
                     day=day,
                     night=night,
                 ).loc[("RemainingLoad", "Electricity [kWh]")]
-                remaining_electricity_seasonal = (
-                    remaining_electricity_seasonal
-                    + np.array(remaining_electricity_seasonal_item)
-                )
-            elif (
-                InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED
-                in output.postprocessing_flag
-            ):
-                remaining_electricity_annual = (
-                    remaining_electricity_annual
-                    + compute_energy_from_power(
-                        power_timeseries=results.iloc[:, index],
-                        seconds_per_timestep=simulation_parameters.seconds_per_timestep,
-                    )
+                remaining_electricity_seasonal = remaining_electricity_seasonal + np.array(remaining_electricity_seasonal_item)
+            elif InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED in output.postprocessing_flag:
+                remaining_electricity_annual = remaining_electricity_annual + compute_energy_from_power(
+                    power_timeseries=results.iloc[:, index],
+                    seconds_per_timestep=simulation_parameters.seconds_per_timestep,
                 )
                 remaining_electricity_seasonal_item = compute_seasonal(
                     csv_frame_seasonal=csv_frame_seasonal,
@@ -463,10 +406,7 @@ def generate_csv_for_database(
                     day=day,
                     night=night,
                 ).loc[("RemainingLoad", "Electricity [kWh]")]
-                remaining_electricity_seasonal = (
-                    remaining_electricity_seasonal
-                    + np.array(remaining_electricity_seasonal_item)
-                )
+                remaining_electricity_seasonal = remaining_electricity_seasonal + np.array(remaining_electricity_seasonal_item)
         else:
             continue
 
@@ -475,18 +415,10 @@ def generate_csv_for_database(
     else:
         factor_cooking = get_factor_cooking(occupancy_config)
 
-    csv_frame_annual[
-        ("RemainingLoad", "Electricity [kWh]")
-    ] = remaining_electricity_annual * (1 - factor_cooking)
-    csv_frame_annual[("Cooking", "Electricity [kWh]")] = (
-        remaining_electricity_annual * factor_cooking
-    )
-    csv_frame_seasonal.loc[
-        ("RemainingLoad", "Electricity [kWh]")
-    ] = remaining_electricity_seasonal * (1 - factor_cooking)
-    csv_frame_seasonal.loc[("Cooking", "Electricity [kWh]")] = (
-        remaining_electricity_seasonal * factor_cooking
-    )
+    csv_frame_annual[("RemainingLoad", "Electricity [kWh]")] = remaining_electricity_annual * (1 - factor_cooking)
+    csv_frame_annual[("Cooking", "Electricity [kWh]")] = remaining_electricity_annual * factor_cooking
+    csv_frame_seasonal.loc[("RemainingLoad", "Electricity [kWh]")] = remaining_electricity_seasonal * (1 - factor_cooking)
+    csv_frame_seasonal.loc[("Cooking", "Electricity [kWh]")] = remaining_electricity_seasonal * factor_cooking
 
     # extract infos from used climate data to compare to climate information used for tabula evaluation
     building_code = building_data["Code_BuildingVariant"].to_list()[0]
@@ -494,52 +426,27 @@ def generate_csv_for_database(
     converting_data.index = converting_data["Location"]  # type: ignore
 
     # write all necesary data for building validation to csv file
-    csv_frame_annual[("Annual Heating Demand Tabula", "[kWh/(m*m*a)]")] = building_data[
-        "q_ht"
-    ].to_list()[0]
-    csv_frame_annual[("HeatingDays Tabula", "Number of Days")] = building_data[
-        "HeatingDays"
-    ].to_list()[0]
-    csv_frame_annual[
-        ("AverageTemperatureInHeatingSeason Tabula", "Temperature [C]")
-    ] = building_data["Theta_e"].to_list()[0]
+    csv_frame_annual[("Annual Heating Demand Tabula", "[kWh/(m*m*a)]")] = building_data["q_ht"].to_list()[0]
+    csv_frame_annual[("HeatingDays Tabula", "Number of Days")] = building_data["HeatingDays"].to_list()[0]
+    csv_frame_annual[("AverageTemperatureInHeatingSeason Tabula", "Temperature [C]")] = building_data["Theta_e"].to_list()[0]
     csv_frame_annual[("Annual Heating Demand HiSIM", "[kWh/(m*m*a)]")] = (
-        csv_frame_annual[("SpaceHeating", "Distributed Stream [kWh]")]
-        / building_data["A_C_Ref"]
+        csv_frame_annual[("SpaceHeating", "Distributed Stream [kWh]")] / building_data["A_C_Ref"]
     ).iloc[0]
-    csv_frame_annual[("HeatingDays HiSIM", "Number of Days")] = int(
-        converting_data.loc[building_code.split(".")[0]]["NumberOfHeatingDays"]
+    csv_frame_annual[("HeatingDays HiSIM", "Number of Days")] = int(converting_data.loc[building_code.split(".")[0]]["NumberOfHeatingDays"])
+    csv_frame_annual[("AverageTemperatureInHeatingSeason HiSIM", "Temperature [C]")] = float(
+        converting_data.loc[building_code.split(".")[0]]["Average"]
     )
-    csv_frame_annual[
-        ("AverageTemperatureInHeatingSeason HiSIM", "Temperature [C]")
-    ] = float(converting_data.loc[building_code.split(".")[0]]["Average"])
     csv_frame_annual[("Building Size", "Area [m*m]")] = building_data["A_C_Ref"].iloc[0]
-    csv_frame_annual[("Construction Year", "Period start")] = building_data[
-        "Year1_Building"
-    ].iloc[0]
-    csv_frame_annual[("Construction Year", "Period end")] = building_data[
-        "Year2_Building"
-    ].iloc[0]
-    csv_frame_annual[
-        ("Annual Heating Demand Tabula with HiSIM climate", "[kWh/(m*m*a)]")
-    ] = (
+    csv_frame_annual[("Construction Year", "Period start")] = building_data["Year1_Building"].iloc[0]
+    csv_frame_annual[("Construction Year", "Period end")] = building_data["Year2_Building"].iloc[0]
+    csv_frame_annual[("Annual Heating Demand Tabula with HiSIM climate", "[kWh/(m*m*a)]")] = (
         building_data["q_ht"].to_list()[0]
         * (
-            (
-                20
-                - csv_frame_annual[
-                    ("AverageTemperatureInHeatingSeason HiSIM", "Temperature [C]")
-                ]
-            )
+            (20 - csv_frame_annual[("AverageTemperatureInHeatingSeason HiSIM", "Temperature [C]")])
             * csv_frame_annual[("HeatingDays HiSIM", "Number of Days")]
         )
         / (
-            (
-                20
-                - csv_frame_annual[
-                    ("AverageTemperatureInHeatingSeason Tabula", "Temperature [C]")
-                ]
-            )
+            (20 - csv_frame_annual[("AverageTemperatureInHeatingSeason Tabula", "Temperature [C]")])
             * csv_frame_annual[("HeatingDays Tabula", "Number of Days")]
         )
     )

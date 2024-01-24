@@ -14,7 +14,7 @@ from hisim.system_setup_configuration import SystemSetupConfigBase
 @dataclass
 class ModularHouseholdOptions:
 
-    """ Set options for the system setup."""
+    """Set options for the system setup."""
 
     pass
 
@@ -34,9 +34,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         """Get default ModularHouseholdConfig."""
         system_config_ = system_config.SystemConfig()
         archetype_config_ = archetype_config.ArcheTypeConfig()
-        household_config = ModularHouseholdConfig(
-            system_config_=system_config_, archetype_config_=archetype_config_
-        )
+        household_config = ModularHouseholdConfig(system_config_=system_config_, archetype_config_=archetype_config_)
         return household_config
 
 
@@ -52,15 +50,14 @@ def read_in_configs(pathname: str) -> ModularHouseholdConfig:
         with open(pathname, encoding="utf8") as config_file:
             household_config_dict = json.load(config_file)  # type: ignore
             household_config: ModularHouseholdConfig = ModularHouseholdConfig.from_dict(
-                household_config_dict.get("system_setup_config"))  # type: ignore
+                household_config_dict.get("system_setup_config")
+            )  # type: ignore
         log.information(f"Read modular household config from {pathname}")
         if (household_config.system_config_ is None) and (household_config.archetype_config_ is None):
             raise ValueError()
     except Exception:
         household_config = ModularHouseholdConfig()
-        log.warning(
-            f"Could not read the modular household config from '{pathname}'. Using a default config instead."
-        )
+        log.warning(f"Could not read the modular household config from '{pathname}'. Using a default config instead.")
 
     # set default configs
     if household_config.system_config_ is None:

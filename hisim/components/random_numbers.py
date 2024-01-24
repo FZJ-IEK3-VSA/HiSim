@@ -81,9 +81,7 @@ class RandomNumbers(Component):
         """Restores the state."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
 
         val1: float = self.values[timestep]

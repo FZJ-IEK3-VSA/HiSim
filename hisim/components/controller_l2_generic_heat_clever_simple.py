@@ -156,9 +156,7 @@ class L2HeatSmartController(cp.Component):
     # 2. HeatPump
 
     @utils.measure_execution_time
-    def __init__(
-        self, my_simulation_parameters: SimulationParameters, config: L2HeatSmartConfig
-    ) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: L2HeatSmartConfig) -> None:
         """Initialize the class."""
         if not config.__class__.__name__ == L2HeatSmartConfig.__name__:
             raise ValueError("Wrong config class: " + config.__class__.__name__)
@@ -186,17 +184,11 @@ class L2HeatSmartController(cp.Component):
             Units.CELSIUS,
             mandatory=True,
         )
-        self.l1_runtime_signal_channel: cp.ComponentInput = self.add_input(
-            self.component_name, self.L1RunTimeSignal, LoadTypes.ANY, Units.ANY, True
-        )
+        self.l1_runtime_signal_channel: cp.ComponentInput = self.add_input(self.component_name, self.L1RunTimeSignal, LoadTypes.ANY, Units.ANY, True)
 
         self.add_default_connections(self.get_default_connections_from_buildings())
-        self.add_default_connections(
-            self.get_default_connections_from_hot_water_storage()
-        )
-        self.add_default_connections(
-            self.get_default_connections_from_controller_l1_generic_runtime()
-        )
+        self.add_default_connections(self.get_default_connections_from_hot_water_storage())
+        self.add_default_connections(self.get_default_connections_from_controller_l1_generic_runtime())
 
         self.electricity_target_channel: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -230,9 +222,7 @@ class L2HeatSmartController(cp.Component):
         """Get default connections from hot water storage."""
 
         connections = []
-        boiler_classname = (
-            generic_hot_water_storage_modular.HotWaterStorage.get_classname()
-        )
+        boiler_classname = generic_hot_water_storage_modular.HotWaterStorage.get_classname()
         connections.append(
             cp.ComponentConnection(
                 L2HeatSmartController.ReferenceTemperature,
@@ -246,9 +236,7 @@ class L2HeatSmartController(cp.Component):
         """Get default connections from controller l1 generic runtime."""
 
         connections = []
-        l1_classname = (
-            controller_l1_generic_runtime.L1GenericRuntimeController.get_classname()
-        )
+        l1_classname = controller_l1_generic_runtime.L1GenericRuntimeController.get_classname()
         connections.append(
             cp.ComponentConnection(
                 L2HeatSmartController.l1_RunTimeSignal,
@@ -324,24 +312,12 @@ class L2HeatSmartController(cp.Component):
         if self.cooling_considered:
             self.temperature_min_cooling = config.temperature_min_cooling
             self.temperature_max_cooling = config.temperature_max_cooling
-            self.heating_season_begin = (
-                config.heating_season_begin
-                * 24
-                * 3600
-                / self.my_simulation_parameters.seconds_per_timestep
-            )
-            self.heating_season_end = (
-                config.heating_season_end
-                * 24
-                * 3600
-                / self.my_simulation_parameters.seconds_per_timestep
-            )
+            self.heating_season_begin = config.heating_season_begin * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
+            self.heating_season_end = config.heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
         self.state = L2HeatSmartControllerState()
         self.previous_state = L2HeatSmartControllerState()
 
-    def control_cooling(
-        self, temperature_control: float, temperature_min_cooling: float, temperature_max_cooling: float, l3state: Any
-    ) -> None:
+    def control_cooling(self, temperature_control: float, temperature_min_cooling: float, temperature_max_cooling: float, l3state: Any) -> None:
         """Control cooling."""
         if temperature_control > temperature_max_cooling:
             # start cooling if temperature exceeds upper limit
@@ -364,9 +340,7 @@ class L2HeatSmartController(cp.Component):
                 # use previous state if l3 was not available
                 self.state = self.previous_state.clone()
 
-    def control_heating(
-        self, temperature_control: float, temperature_min_heating: float, l3state: Any
-    ) -> int:
+    def control_heating(self, temperature_control: float, temperature_min_heating: float, l3state: Any) -> int:
         """Control heating."""
         if l3state > 0:
             temperature_min_heating = temperature_min_heating + 5
@@ -386,9 +360,7 @@ class L2HeatSmartController(cp.Component):
         """Doublechecks."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
         if force_convergence:
             return

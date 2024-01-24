@@ -35,9 +35,7 @@ __maintainer__ = "Franz Oldopp"
 __status__ = "development"
 
 
-def setup_function(
-    my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]
-) -> None:
+def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]) -> None:
     """Electrolyzer system setup.
 
     In this system setup, a power input from a csv time series file is transformed
@@ -101,9 +99,7 @@ def setup_function(
     )
 
     # Create new CSV loader object
-    csv_loader = CSVLoader(
-        my_csv_loader, my_simulation_parameters=my_simulation_parameters
-    )
+    csv_loader = CSVLoader(my_csv_loader, my_simulation_parameters=my_simulation_parameters)
 
     # Setup the transformer and rectifier unit
     my_transformer = Transformer(
@@ -130,9 +126,7 @@ def setup_function(
     # Connect Component Inputs with Outputs
 
     # Connect output of csv_loader to input of the transformer
-    my_transformer.connect_input(
-        my_transformer.TransformerInput, csv_loader.component_name, csv_loader.Output1
-    )
+    my_transformer.connect_input(my_transformer.TransformerInput, csv_loader.component_name, csv_loader.Output1)
 
     my_controller.connect_input(
         my_controller.ProvidedLoad,

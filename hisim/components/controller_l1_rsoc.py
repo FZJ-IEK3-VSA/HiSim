@@ -60,9 +60,7 @@ class RsocControllerConfig(ConfigBase):
     def read_config(rsoc_name):
         """Opens the according JSON-file, based on the rSOC_name."""
 
-        config_file = os.path.join(
-            utils.HISIMPATH["inputs"], "rSOC_manufacturer_config.json"
-        )
+        config_file = os.path.join(utils.HISIMPATH["inputs"], "rSOC_manufacturer_config.json")
         with open(config_file, "r", encoding="utf-8") as json_file:
             data = json.load(json_file)
             return data.get("rSOC variants", {}).get(rsoc_name, {})
@@ -79,17 +77,13 @@ class RsocControllerConfig(ConfigBase):
             max_load_soec=config_json.get("max_load_soec", 0.0),
             warm_start_time_soec=config_json.get("warm_start_time_soec", 0.0),
             cold_start_time_soec=config_json.get("cold_start_time_soec", 0.0),
-            switching_time_from_soec_to_sofc=config_json.get(
-                "switching_time_from_soec_to_sofc", 0.0
-            ),
+            switching_time_from_soec_to_sofc=config_json.get("switching_time_from_soec_to_sofc", 0.0),
             nom_power_sofc=config_json.get("nom_power_sofc", 0.0),
             min_power_sofc=config_json.get("min_power_sofc", 0.0),
             max_power_sofc=config_json.get("max_power_sofc", 0.0),
             warm_start_time_sofc=config_json.get("warm_start_time_sofc", 0.0),
             cold_start_time_sofc=config_json.get("cold_start_time_sofc", 0.0),
-            switching_time_from_sofc_to_soec=config_json.get(
-                "switching_time_from_sofc_to_soec", 0.0
-            ),
+            switching_time_from_sofc_to_soec=config_json.get("switching_time_from_sofc_to_soec", 0.0),
         )
         return config
 
@@ -295,9 +289,7 @@ class RsocController(Component):
         self.rsoc_state = self.rsoc_state_previous
         self.total_switch_time_count = self.total_switch_time_count_previous
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the component."""
         if force_convergence:
             return
@@ -341,16 +333,11 @@ class RsocController(Component):
                 self.current_state = "Starting"
                 self.standby_count += 1
             elif self.current_state == "Starting":
-                if (
-                    self.activation_runtime
-                    <= self.my_simulation_parameters.seconds_per_timestep
-                ):
+                if self.activation_runtime <= self.my_simulation_parameters.seconds_per_timestep:
                     self.activation_runtime = 0.0
                     self.current_state = "ON"
                 else:
-                    self.activation_runtime -= (
-                        self.my_simulation_parameters.seconds_per_timestep
-                    )
+                    self.activation_runtime -= self.my_simulation_parameters.seconds_per_timestep
             else:
                 self.activation_runtime = 0.0
                 self.current_state = "ON"
@@ -392,18 +379,13 @@ class RsocController(Component):
                 state_to_rsoc = 0
                 self.total_switch_time_count += self.switching_time_from_sofc_to_soec
             else:
-                if (
-                    self.elapsed_time
-                    <= self.my_simulation_parameters.seconds_per_timestep
-                ):
+                if self.elapsed_time <= self.my_simulation_parameters.seconds_per_timestep:
                     self.elapsed_time = 0.0
                     self.rsoc_state = "SOEC"
                     power_to_rsco = 0.0
                     state_to_rsoc = 0
                 else:
-                    self.elapsed_time -= (
-                        self.my_simulation_parameters.seconds_per_timestep
-                    )
+                    self.elapsed_time -= self.my_simulation_parameters.seconds_per_timestep
                     power_to_rsco = 0.0
                     state_to_rsoc = 0
 
@@ -418,18 +400,13 @@ class RsocController(Component):
                 state_to_rsoc = 0
                 self.total_switch_time_count += self.switching_time_from_soec_to_sofc
             else:
-                if (
-                    self.elapsed_time
-                    <= self.my_simulation_parameters.seconds_per_timestep
-                ):
+                if self.elapsed_time <= self.my_simulation_parameters.seconds_per_timestep:
                     self.elapsed_time = 0.0
                     self.rsoc_state = "SOFC"
                     power_to_rsco = 0.0
                     state_to_rsoc = 0
                 else:
-                    self.elapsed_time -= (
-                        self.my_simulation_parameters.seconds_per_timestep
-                    )
+                    self.elapsed_time -= self.my_simulation_parameters.seconds_per_timestep
                     power_to_rsco = 0.0
                     state_to_rsoc = 0
         elif power < 0.0 and self.current_state == "STANDBY":

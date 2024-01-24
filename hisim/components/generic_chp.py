@@ -103,9 +103,7 @@ class SimpleCHP(cp.Component):
     ElectricityOutput = "ElectricityOutput"
     FuelDelivered = "FuelDelivered"
 
-    def __init__(
-        self, my_simulation_parameters: SimulationParameters, config: CHPConfig
-    ) -> None:
+    def __init__(self, my_simulation_parameters: SimulationParameters, config: CHPConfig) -> None:
         """Initializes the class."""
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
@@ -117,9 +115,7 @@ class SimpleCHP(cp.Component):
         if self.config.use == lt.LoadTypes.HYDROGEN:
             self.p_fuel = config.p_fuel / (3.6e3 * 3.939e4)  # converted to kg / s
         else:
-            self.p_fuel = (
-                config.p_fuel * my_simulation_parameters.seconds_per_timestep / 3.6e3
-            )  # converted to Wh
+            self.p_fuel = config.p_fuel * my_simulation_parameters.seconds_per_timestep / 3.6e3  # converted to Wh
 
         self.state = GenericCHPState(state=0)
         self.previous_state = self.state.clone()
@@ -208,9 +204,7 @@ class SimpleCHP(cp.Component):
         """Doublechecks."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
         # Inputs
         self.state.state = int(stsv.get_input_value(self.chp_onoff_signal_channel))
@@ -230,12 +224,8 @@ class SimpleCHP(cp.Component):
                 self.state.state * self.config.p_th,
             )
 
-        stsv.set_output_value(
-            self.electricity_output_channel, self.state.state * self.config.p_el
-        )
-        stsv.set_output_value(
-            self.fuel_consumption_channel, self.state.state * self.p_fuel
-        )
+        stsv.set_output_value(self.electricity_output_channel, self.state.state * self.config.p_el)
+        stsv.set_output_value(self.fuel_consumption_channel, self.state.state * self.p_fuel)
 
     def get_default_connections_from_chp_controller(
         self,

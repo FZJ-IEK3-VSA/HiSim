@@ -41,16 +41,10 @@ def building_temperature_control_and_heating_load(
     if not wrapped_building_component:
         raise ValueError("Could not find the Building component.")
 
-    set_heating_temperature_in_celsius = getattr(
-        wrapped_building_component.my_component, "set_heating_temperature_in_celsius"
-    )
-    set_cooling_temperature_in_celsius = getattr(
-        wrapped_building_component.my_component, "set_cooling_temperature_in_celsius"
-    )
+    set_heating_temperature_in_celsius = getattr(wrapped_building_component.my_component, "set_heating_temperature_in_celsius")
+    set_cooling_temperature_in_celsius = getattr(wrapped_building_component.my_component, "set_cooling_temperature_in_celsius")
     # get heating load and heating ref temperature
-    heating_load_in_watt = getattr(
-        wrapped_building_component.my_component, "my_building_information"
-    ).max_thermal_building_demand_in_watt
+    heating_load_in_watt = getattr(wrapped_building_component.my_component, "my_building_information").max_thermal_building_demand_in_watt
     # get specific heating load
     scaled_conditioned_floor_area_in_m2 = getattr(
         wrapped_building_component.my_component, "my_building_information"
@@ -58,42 +52,27 @@ def building_temperature_control_and_heating_load(
     specific_heating_load_in_watt_per_m2 = heating_load_in_watt / scaled_conditioned_floor_area_in_m2
 
     for column in results.columns:
-
         if "TemperatureIndoorAir" in column.split(sep=" "):
-
             for temperature in results[column].values:
-
                 if temperature < set_heating_temperature_in_celsius:
-
-                    temperature_difference_heating = (
-                        set_heating_temperature_in_celsius - temperature
-                    )
+                    temperature_difference_heating = set_heating_temperature_in_celsius - temperature
 
                     temperature_difference_of_building_being_below_heating_set_temperature = (
-                        temperature_difference_of_building_being_below_heating_set_temperature
-                        + temperature_difference_heating
+                        temperature_difference_of_building_being_below_heating_set_temperature + temperature_difference_heating
                     )
 
                 elif temperature > set_cooling_temperature_in_celsius:
-
-                    temperature_difference_cooling = (
-                        temperature - set_cooling_temperature_in_celsius
-                    )
+                    temperature_difference_cooling = temperature - set_cooling_temperature_in_celsius
                     temperature_difference_of_building_being_below_cooling_set_temperature = (
-                        temperature_difference_of_building_being_below_cooling_set_temperature
-                        + temperature_difference_cooling
+                        temperature_difference_of_building_being_below_cooling_set_temperature + temperature_difference_cooling
                     )
 
             temperature_hours_of_building_being_below_heating_set_temperature = (
-                temperature_difference_of_building_being_below_heating_set_temperature
-                * seconds_per_timestep
-                / 3600
+                temperature_difference_of_building_being_below_heating_set_temperature * seconds_per_timestep / 3600
             )
 
             temperature_hours_of_building_being_above_cooling_set_temperature = (
-                temperature_difference_of_building_being_below_cooling_set_temperature
-                * seconds_per_timestep
-                / 3600
+                temperature_difference_of_building_being_below_cooling_set_temperature * seconds_per_timestep / 3600
             )
 
             # get also max and min indoor air temperature
@@ -109,22 +88,20 @@ def building_temperature_control_and_heating_load(
         min_temperature_reached_in_celsius,
         max_temperature_reached_in_celsius,
         heating_load_in_watt,
-        specific_heating_load_in_watt_per_m2
+        specific_heating_load_in_watt_per_m2,
     )
 
 
-def get_heatpump_cycles(results: pd.DataFrame,) -> float:
+def get_heatpump_cycles(
+    results: pd.DataFrame,
+) -> float:
     """Get the number of cycles of the heat pump for the simulated period."""
     number_of_cycles = 0
     for column in results.columns:
-
         if "TimeOff" in column.split(sep=" "):
-
             for index, off_time in enumerate(results[column].values):
-
                 try:
                     if off_time != 0 and results[column].values[index + 1] == 0:
-
                         number_of_cycles = number_of_cycles + 1
 
                 except Exception:
@@ -133,9 +110,7 @@ def get_heatpump_cycles(results: pd.DataFrame,) -> float:
     return number_of_cycles
 
 
-def get_heat_pump_seasonal_performance_factor(
-    results: pd.DataFrame, seconds_per_timestep: int
-) -> float:
+def get_heat_pump_seasonal_performance_factor(results: pd.DataFrame, seconds_per_timestep: int) -> float:
     """Get SPF from heat pump over simulated period.
 
     Transform thermal and electrical power from heat pump in energies.
@@ -143,30 +118,21 @@ def get_heat_pump_seasonal_performance_factor(
     thermal_output_energy_in_watt_hour = 0.0
     electrical_energy_in_watt_hour = 1.0
     for column in results.columns:
-
         if "ThermalOutputPower" in column.split(sep=" "):
             # take only output values for heating
-            thermal_output_power_values_in_watt = [
-                value for value in results[column].values if value > 0.0
-            ]
+            thermal_output_power_values_in_watt = [value for value in results[column].values if value > 0.0]
             # get energy from power
-            thermal_output_energy_in_watt_hour = (
-                sum(thermal_output_power_values_in_watt) * seconds_per_timestep / 3600
-            )
+            thermal_output_energy_in_watt_hour = sum(thermal_output_power_values_in_watt) * seconds_per_timestep / 3600
         if "ElectricalInputPower" in column.split(sep=" "):
             # get electrical energie values
-            electrical_energy_in_watt_hour = (
-                sum(results[column].values) * seconds_per_timestep / 3600
-            )
+            electrical_energy_in_watt_hour = sum(results[column].values) * seconds_per_timestep / 3600
 
     # calculate SPF
     spf = thermal_output_energy_in_watt_hour / electrical_energy_in_watt_hour
     return spf
 
 
-def get_heat_pump_kpis(
-    results: pd.DataFrame, seconds_per_timestep: int, components: List[ComponentWrapper]
-) -> Tuple[float, float]:
+def get_heat_pump_kpis(results: pd.DataFrame, seconds_per_timestep: int, components: List[ComponentWrapper]) -> Tuple[float, float]:
     """Get some KPIs from Heat Pump."""
     number_of_cycles = 0.0
     spf = 0.0
@@ -176,9 +142,7 @@ def get_heat_pump_kpis(
             # get number of heat pump cycles over simulated period
             number_of_cycles = get_heatpump_cycles(results=results)
             # get SPF
-            spf = get_heat_pump_seasonal_performance_factor(
-                results=results, seconds_per_timestep=seconds_per_timestep
-            )
+            spf = get_heat_pump_seasonal_performance_factor(results=results, seconds_per_timestep=seconds_per_timestep)
         # heat pump was not used
         else:
             pass
@@ -193,13 +157,8 @@ def get_electricity_to_and_from_grid_from_electricty_meter(
     # go through all wrapped components and try to find electricity meter
     for wrapped_component in wrapped_components:
         if "ElectricityMeter" in wrapped_component.my_component.component_name:
-
-            total_energy_from_grid_in_kwh = (
-                wrapped_component.my_component.config.total_energy_from_grid_in_kwh
-            )
-            total_energy_to_grid_in_kwh = (
-                wrapped_component.my_component.config.total_energy_to_grid_in_kwh
-            )
+            total_energy_from_grid_in_kwh = wrapped_component.my_component.config.total_energy_from_grid_in_kwh
+            total_energy_to_grid_in_kwh = wrapped_component.my_component.config.total_energy_to_grid_in_kwh
 
             break
 
@@ -214,17 +173,13 @@ def read_in_fuel_costs() -> pd.DataFrame:
     return price_frame
 
 
-def get_euro_and_co2(
-    fuel_costs: pd.DataFrame, fuel: Union[LoadTypes, InandOutputType]
-) -> Tuple[float, float]:
+def get_euro_and_co2(fuel_costs: pd.DataFrame, fuel: Union[LoadTypes, InandOutputType]) -> Tuple[float, float]:
     """Returns cost (Euro) of kWh of fuel and CO2 consumption (kg) of kWh of fuel."""
     column = fuel_costs.iloc[fuel_costs.index == fuel.value]
     return (float(column["Cost"].iloc[0]), float(column["Footprint"].iloc[0]))
 
 
-def compute_consumption_production(
-    all_outputs: List, results: pd.DataFrame
-) -> pd.DataFrame:
+def compute_consumption_production(all_outputs: List, results: pd.DataFrame) -> pd.DataFrame:
     """Computes electricity consumption and production based on results of hisim simulation.
 
     Also evaluates battery charge and discharge, because it is relevant for self consumption rates.
@@ -248,10 +203,8 @@ def compute_consumption_production(
                 production_ids.append(index)
 
             elif (
-                InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED
-                in output.postprocessing_flag
-                or InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED
-                in output.postprocessing_flag
+                InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED in output.postprocessing_flag
+                or InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED in output.postprocessing_flag
             ):
                 consumption_ids.append(index)
 
@@ -264,21 +217,11 @@ def compute_consumption_production(
             continue
 
     postprocessing_results = pd.DataFrame()
-    postprocessing_results["consumption"] = (
-        pd.DataFrame(results.iloc[:, consumption_ids]).clip(lower=0).sum(axis=1)
-    )
-    postprocessing_results["production"] = (
-        pd.DataFrame(results.iloc[:, production_ids]).clip(lower=0).sum(axis=1)
-    )
+    postprocessing_results["consumption"] = pd.DataFrame(results.iloc[:, consumption_ids]).clip(lower=0).sum(axis=1)
+    postprocessing_results["production"] = pd.DataFrame(results.iloc[:, production_ids]).clip(lower=0).sum(axis=1)
 
-    postprocessing_results["battery_charge"] = (
-        pd.DataFrame(results.iloc[:, battery_charge_discharge_ids])
-        .clip(lower=0)
-        .sum(axis=1)
-    )
-    postprocessing_results["battery_discharge"] = pd.DataFrame(
-        results.iloc[:, battery_charge_discharge_ids]
-    ).clip(upper=0).sum(axis=1) * (-1)
+    postprocessing_results["battery_charge"] = pd.DataFrame(results.iloc[:, battery_charge_discharge_ids]).clip(lower=0).sum(axis=1)
+    postprocessing_results["battery_discharge"] = pd.DataFrame(results.iloc[:, battery_charge_discharge_ids]).clip(upper=0).sum(axis=1) * (-1)
 
     return postprocessing_results
 
@@ -288,13 +231,8 @@ def compute_self_consumption_and_injection(
 ) -> Tuple[pd.Series, pd.Series]:
     """Computes the self consumption and the grid injection."""
     # account for battery
-    production_with_battery = (
-        postprocessing_results["production"]
-        + postprocessing_results["battery_discharge"]
-    )
-    consumption_with_battery = (
-        postprocessing_results["consumption"] + postprocessing_results["battery_charge"]
-    )
+    production_with_battery = postprocessing_results["production"] + postprocessing_results["battery_discharge"]
+    consumption_with_battery = postprocessing_results["consumption"] + postprocessing_results["battery_charge"]
 
     # evaluate injection and sum over time
     injection = production_with_battery - consumption_with_battery
@@ -306,12 +244,8 @@ def compute_self_consumption_and_injection(
     self_consumption = (
         pd.concat(
             (
-                production_with_battery[
-                    production_with_battery <= postprocessing_results["consumption"]
-                ],
-                postprocessing_results["consumption"][
-                    postprocessing_results["consumption"] < production_with_battery
-                ],
+                production_with_battery[production_with_battery <= postprocessing_results["consumption"]],
+                postprocessing_results["consumption"][postprocessing_results["consumption"] < production_with_battery],
             )
         )
         .groupby(level=0)
@@ -321,36 +255,23 @@ def compute_self_consumption_and_injection(
     return injection, self_consumption
 
 
-def search_electricity_prices_in_results(
-    all_outputs: List, results: pd.DataFrame
-) -> Tuple["pd.Series[float]", "pd.Series[float]"]:
+def search_electricity_prices_in_results(all_outputs: List, results: pd.DataFrame) -> Tuple["pd.Series[float]", "pd.Series[float]"]:
     """Extracts electricity price consumption and electricity price production from results."""
-    electricity_price_consumption = pd.Series(
-        dtype=pd.Float64Dtype()
-    )  # type: pd.Series[float]
-    electricity_price_injection = pd.Series(
-        dtype=pd.Float64Dtype()
-    )  # type: pd.Series[float]
+    electricity_price_consumption = pd.Series(dtype=pd.Float64Dtype())  # type: pd.Series[float]
+    electricity_price_injection = pd.Series(dtype=pd.Float64Dtype())  # type: pd.Series[float]
     for index, output in enumerate(all_outputs):
         if output.postprocessing_flag is not None:
             if LoadTypes.PRICE in output.postprocessing_flag:
-                if (
-                    InandOutputType.ELECTRICITY_CONSUMPTION
-                    in output.postprocessing_flag
-                ):
+                if InandOutputType.ELECTRICITY_CONSUMPTION in output.postprocessing_flag:
                     electricity_price_consumption = results.iloc[:, index]
-                elif (
-                    InandOutputType.ELECTRICITY_INJECTION in output.postprocessing_flag
-                ):
+                elif InandOutputType.ELECTRICITY_INJECTION in output.postprocessing_flag:
                     electricity_price_injection = results.iloc[:, index]
                 else:
                     continue
     return electricity_price_consumption, electricity_price_injection
 
 
-def compute_energy_from_power(
-    power_timeseries: pd.Series, timeresolution: int
-) -> float:
+def compute_energy_from_power(power_timeseries: pd.Series, timeresolution: int) -> float:
     """Computes the energy from a power value."""
     if power_timeseries.empty:
         return 0.0
@@ -375,9 +296,7 @@ def compute_cost_of_fuel_type(
                     continue
     if not fuel_consumption.empty:
         if fuel in [LoadTypes.ELECTRICITY, LoadTypes.GAS, LoadTypes.DISTRICTHEATING]:
-            consumption_sum = compute_energy_from_power(
-                power_timeseries=fuel_consumption, timeresolution=timeresolution
-            )
+            consumption_sum = compute_energy_from_power(power_timeseries=fuel_consumption, timeresolution=timeresolution)
         # convert from Wh to kWh
         elif fuel in [LoadTypes.GAS, LoadTypes.DISTRICTHEATING]:
             consumption_sum = sum(fuel_consumption) * 1e-3
@@ -417,9 +336,7 @@ def compute_kpis(
     price_frame = read_in_fuel_costs()
 
     # compute consumption and production and extract price signals
-    postprocessing_results = compute_consumption_production(
-        all_outputs=all_outputs, results=results
-    )
+    postprocessing_results = compute_consumption_production(all_outputs=all_outputs, results=results)
     (
         electricity_price_consumption,
         electricity_price_injection,
@@ -438,9 +355,7 @@ def compute_kpis(
 
     # computes injection and self consumption + autarky and self consumption rates
     if production_sum > 0:
-        injection, self_consumption = compute_self_consumption_and_injection(
-            postprocessing_results=postprocessing_results
-        )
+        injection, self_consumption = compute_self_consumption_and_injection(postprocessing_results=postprocessing_results)
         injection_sum = compute_energy_from_power(
             power_timeseries=injection[injection > 0],
             timeresolution=simulation_parameters.seconds_per_timestep,
@@ -473,39 +388,28 @@ def compute_kpis(
     # h2_system_losses = 0  # explicitly compute that
 
     # Electricity Price
-    electricity_price_constant, co2_price_constant = get_euro_and_co2(
-        fuel_costs=price_frame, fuel=LoadTypes.ELECTRICITY
-    )
-    electricity_inj_price_constant, _ = get_euro_and_co2(
-        fuel_costs=price_frame, fuel=LoadTypes.ELECTRICITY
-    )
+    electricity_price_constant, co2_price_constant = get_euro_and_co2(fuel_costs=price_frame, fuel=LoadTypes.ELECTRICITY)
+    electricity_inj_price_constant, _ = get_euro_and_co2(fuel_costs=price_frame, fuel=LoadTypes.ELECTRICITY)
 
     if production_sum > 0:
         # evaluate electricity price
         if not electricity_price_injection.empty:
             price = price - compute_energy_from_power(
-                power_timeseries=injection[injection > 0]
-                * electricity_price_injection[injection > 0],
+                power_timeseries=injection[injection > 0] * electricity_price_injection[injection > 0],
                 timeresolution=simulation_parameters.seconds_per_timestep,
             )
             price = price + compute_energy_from_power(
-                power_timeseries=postprocessing_results["consumption"]
-                - self_consumption,
+                power_timeseries=postprocessing_results["consumption"] - self_consumption,
                 timeresolution=simulation_parameters.seconds_per_timestep,
             )  # Todo: is this correct? (maybe not so important, only used if generic_price_signal is used
         else:
-            price = (
-                price
-                - injection_sum * electricity_inj_price_constant
-                + (consumption_sum - self_consumption_sum) * electricity_price_constant
-            )
+            price = price - injection_sum * electricity_inj_price_constant + (consumption_sum - self_consumption_sum) * electricity_price_constant
 
     else:
         if not electricity_price_consumption.empty:
             # substract self consumption from consumption for bill calculation
             price = price + compute_energy_from_power(
-                power_timeseries=postprocessing_results["consumption"]
-                * electricity_price_consumption,
+                power_timeseries=postprocessing_results["consumption"] * electricity_price_consumption,
                 timeresolution=simulation_parameters.seconds_per_timestep,
             )
         else:
@@ -534,35 +438,23 @@ def compute_kpis(
     investment_cost, co2_footprint = compute_investment_cost(components=components)
 
     # get CAPEX and OPEX costs for simulated period
-    capex_results_path = os.path.join(
-        simulation_parameters.result_directory, "investment_cost_co2_footprint.csv"
-    )
-    opex_results_path = os.path.join(
-        simulation_parameters.result_directory, "operational_costs_co2_footprint.csv"
-    )
+    capex_results_path = os.path.join(simulation_parameters.result_directory, "investment_cost_co2_footprint.csv")
+    opex_results_path = os.path.join(simulation_parameters.result_directory, "operational_costs_co2_footprint.csv")
     if Path(opex_results_path).exists():
         opex_df = pd.read_csv(opex_results_path, index_col=0)
         total_operational_cost = opex_df["Operational Costs in EUR"].iloc[-1]
         total_operational_emisions = opex_df["Operational C02 footprint in kg"].iloc[-1]
     else:
-        log.warning(
-            "OPEX-costs for components are not calculated yet. Set PostProcessingOptions.COMPUTE_OPEX"
-        )
+        log.warning("OPEX-costs for components are not calculated yet. Set PostProcessingOptions.COMPUTE_OPEX")
         total_operational_cost = 0
         total_operational_emisions = 0
 
     if Path(capex_results_path).exists():
         capex_df = pd.read_csv(capex_results_path, index_col=0)
-        total_investment_cost_per_simulated_period = capex_df["Investment in EUR"].iloc[
-            -1
-        ]
-        total_device_co2_footprint_per_simulated_period = capex_df[
-            "Device CO2-footprint in kg"
-        ].iloc[-1]
+        total_investment_cost_per_simulated_period = capex_df["Investment in EUR"].iloc[-1]
+        total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint in kg"].iloc[-1]
     else:
-        log.warning(
-            "CAPEX-costs for components are not calculated yet. Set PostProcessingOptions.COMPUTE_CAPEX"
-        )
+        log.warning("CAPEX-costs for components are not calculated yet. Set PostProcessingOptions.COMPUTE_CAPEX")
         total_investment_cost_per_simulated_period = 0
         total_device_co2_footprint_per_simulated_period = 0
 
@@ -575,7 +467,7 @@ def compute_kpis(
         min_temperature_reached_in_celsius,
         max_temperature_reached_in_celsius,
         heating_load_in_watt,
-        specific_heating_load_in_watt_per_m2
+        specific_heating_load_in_watt_per_m2,
     ) = building_temperature_control_and_heating_load(
         results=results,
         seconds_per_timestep=simulation_parameters.seconds_per_timestep,
@@ -593,9 +485,7 @@ def compute_kpis(
     (
         total_energy_to_grid_in_kwh,
         total_energy_from_grid_in_kwh,
-    ) = get_electricity_to_and_from_grid_from_electricty_meter(
-        wrapped_components=components
-    )
+    ) = get_electricity_to_and_from_grid_from_electricty_meter(wrapped_components=components)
 
     # initialize table for report
     table: List = []
@@ -694,12 +584,8 @@ def compute_kpis(
             "°C",
         ]
     )
-    table.append(
-        ["Building heating load:", f"{(heating_load_in_watt):3.0f}", "W"]
-    )
-    table.append(
-        ["Specific heating load:", f"{(specific_heating_load_in_watt_per_m2):3.0f}", "W"]
-    )
+    table.append(["Building heating load:", f"{(heating_load_in_watt):3.0f}", "W"])
+    table.append(["Specific heating load:", f"{(specific_heating_load_in_watt_per_m2):3.0f}", "W"])
 
     table.append(["Number of heat pump cycles:", f"{number_of_cycles:3.0f}", "-"])
     table.append(["Seasonal performance factor of heat pump:", f"{spf:3.0f}", "-"])

@@ -11,9 +11,7 @@ from hisim.simulator import SimulationParameters
 from hisim.simulator import Simulator
 
 __authors__ = "Marwa Alfouly, Sebastian Dickler"
-__copyright__ = (
-    "Copyright 2023, HiSim - Household Infrastructure and Building Simulator"
-)
+__copyright__ = "Copyright 2023, HiSim - Household Infrastructure and Building Simulator"
 __credits__ = ["Noah Pflugradt"]
 __license__ = "MIT"
 __version__ = "0.1"
@@ -22,9 +20,7 @@ __email__ = "s.dickler@fz-juelich.de"
 __status__ = "development"
 
 
-def setup_function(
-    my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None
-) -> None:
+def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
     """Simulates household with air-conditioner with PID controller."""
 
     air_conditioned_house(my_sim, "PID", my_simulation_parameters)

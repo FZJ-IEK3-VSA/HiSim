@@ -69,9 +69,7 @@ class SystemChart:
     ) -> Optional[SystemChartEntry]:
         """Generates the system charts with graphviz."""
 
-        system_chart_entry: Optional[SystemChartEntry] = SystemChartEntry(
-            filename, caption
-        )
+        system_chart_entry: Optional[SystemChartEntry] = SystemChartEntry(filename, caption)
 
         try:
             """Visualizes the entire system with graphviz."""
@@ -87,9 +85,7 @@ class SystemChart:
             for component in self.ppdt.wrapped_components:
                 node_name = component.my_component.component_name
                 if with_class_names:
-                    node_name = (
-                        node_name + "\n" + component.my_component.__class__.__name__
-                    )
+                    node_name = node_name + "\n" + component.my_component.__class__.__name__
                 my_node = pydot.Node(node_name)
                 node_dict[component.my_component.component_name] = my_node
                 graph.add_node(my_node)
@@ -101,19 +97,11 @@ class SystemChart:
                     node_a = node_dict[component_input.src_object_name]
                     node_b = node_dict[component.my_component.component_name]
                     key = (node_a, node_b)
-                    this_edge_label = (
-                        str(component_input.src_field_name)
-                        + " -> "
-                        + component_input.field_name
-                        + " in "
-                        + component_input.unit
-                    )
+                    this_edge_label = str(component_input.src_field_name) + " -> " + component_input.field_name + " in " + component_input.unit
                     if with_results:
                         # result value is either sum or mean value, according to distinction in func "get_std_results()" in simulator.py
                         if isinstance(component_input.source_output, ComponentOutput):
-                            output_cumulative_result = self.ppdt.results_cumulative.at[
-                                0, component_input.source_output.get_pretty_name()
-                            ]
+                            output_cumulative_result = self.ppdt.results_cumulative.at[0, component_input.source_output.get_pretty_name()]
                             this_edge_label += f": {round(output_cumulative_result,3)}"
 
                     this_edge_label = this_edge_label.replace("°C", "&#8451;")
@@ -127,14 +115,9 @@ class SystemChart:
                     graph.add_edge(pydot.Edge(node_key[0], node_key[1], label=label))
                 else:
                     graph.add_edge(pydot.Edge(node_key[0], node_key[1]))
-            fullpath = os.path.join(
-                self.ppdt.simulation_parameters.result_directory, filename
-            )
+            fullpath = os.path.join(self.ppdt.simulation_parameters.result_directory, filename)
             graph.write_png(fullpath)  # noqa: no-member
         except Exception as exc:  # noqa
-            log.error(
-                "Failed to generate network charts. Probably Graphviz is missing on your system. The python error was: "
-                + str(exc)
-            )
+            log.error("Failed to generate network charts. Probably Graphviz is missing on your system. The python error was: " + str(exc))
             system_chart_entry = None
         return system_chart_entry

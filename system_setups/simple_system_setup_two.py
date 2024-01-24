@@ -17,9 +17,7 @@ from hisim.components.example_transformer import (
 from hisim.components.sumbuilder import SumBuilderForTwoInputs, SumBuilderConfig
 
 
-def setup_function(
-    my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]
-) -> None:
+def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]) -> None:
     """Second system setup.
 
     In this second system setup, two series (my_rn1 and my_transformer) are summed up.
@@ -35,9 +33,7 @@ def setup_function(
 
     # Set the simulation parameters for the simulation
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(
-            year=2021, seconds_per_timestep=60
-        )  # use a full year for testing
+        my_simulation_parameters = SimulationParameters.full_year(year=2021, seconds_per_timestep=60)  # use a full year for testing
     my_sim.set_simulation_parameters(my_simulation_parameters)
     # Create first RandomNumbers object and adds to simulator
     my_rn1 = RandomNumbers(

@@ -64,9 +64,7 @@ class SimpleController(Component):
     ) -> None:
         """Initialize the class."""
 
-        super().__init__(
-            name, my_simulation_parameters=my_simulation_parameters, my_config=config
-        )
+        super().__init__(name, my_simulation_parameters=my_simulation_parameters, my_config=config)
         self.input1_channel: ComponentInput = self.add_input(
             self.component_name,
             SimpleController.StorageFillLevel,
@@ -91,9 +89,7 @@ class SimpleController(Component):
         """Restores the state."""
         self.state = self.previous_state
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
 
         if force_convergence:

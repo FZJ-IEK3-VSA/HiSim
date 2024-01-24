@@ -43,9 +43,7 @@ __maintainer__ = "Franz Oldopp"
 __status__ = "development"
 
 
-def setup_function(
-    my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]
-) -> None:
+def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]) -> None:
     """Setup function."""
     log.information("Starting basic electrolyzer system setup")
     # =================================================================================================================================
@@ -82,40 +80,18 @@ def setup_function(
 
     # Set the simulation parameters for the simulation
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(
-            year=year, seconds_per_timestep=seconds_per_timestep
-        )  # use a full year for testing
+        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)  # use a full year for testing
     my_sim.set_simulation_parameters(my_simulation_parameters)
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.PLOT_LINE
-    )
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.PLOT_SINGLE_DAYS
-    )
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.PLOT_CARPET
-    )
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.PLOT_MONTHLY_BAR_CHARTS
-    )
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.MAKE_NETWORK_CHARTS
-    )
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
-    )
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.GENERATE_PDF_REPORT
-    )
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.WRITE_ALL_OUTPUTS_TO_REPORT
-    )
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT
-    )
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT
-    )
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_SINGLE_DAYS)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_MONTHLY_BAR_CHARTS)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_ALL_OUTPUTS_TO_REPORT)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT)
     # =================================================================================================================================
     # Build Components
 
@@ -135,9 +111,7 @@ def setup_function(
     )
 
     # Create new CSV loader object
-    csv_loader = CSVLoader(
-        my_csv_loader, my_simulation_parameters=my_simulation_parameters
-    )
+    csv_loader = CSVLoader(my_csv_loader, my_simulation_parameters=my_simulation_parameters)
 
     my_transformer = Transformer(
         my_simulation_parameters=my_simulation_parameters,
@@ -166,9 +140,7 @@ def setup_function(
 
     my_ptx_controller = PTXController(
         my_simulation_parameters=my_simulation_parameters,
-        config=PTXControllerConfig.control_electrolyzer(
-            electrolyzer_name, operation_mode
-        ),  # "Nominal Load", "Minimum Load", "Standby Load"
+        config=PTXControllerConfig.control_electrolyzer(electrolyzer_name, operation_mode),  # "Nominal Load", "Minimum Load", "Standby Load"
     )
     my_electrolyzer_controller = ElectrolyzerController(
         my_simulation_parameters=my_simulation_parameters,
@@ -182,9 +154,7 @@ def setup_function(
     # Connect Component Inputs with Outputs
 
     # Connect output of csv_loader to input of the transformer (wind to battery)
-    my_transformer.connect_input(
-        my_transformer.TransformerInput, csv_loader.component_name, csv_loader.Output1
-    )
+    my_transformer.connect_input(my_transformer.TransformerInput, csv_loader.component_name, csv_loader.Output1)
 
     my_ptx_controller.connect_input(
         my_ptx_controller.RESLoad,

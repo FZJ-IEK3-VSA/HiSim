@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import control
 import numpy as np
+
 # Owned
 
 from hisim import component as cp
@@ -145,24 +146,20 @@ class PIDController(cp.Component):
             True,
         )
 
-        self.heat_flow_rate_to_internal_surface_node_channel: cp.ComponentInput = (
-            self.add_input(
-                self.component_name,
-                self.HeatFluxWallNode,
-                LoadTypes.HEATING,
-                Units.WATT,
-                True,
-            )
+        self.heat_flow_rate_to_internal_surface_node_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.HeatFluxWallNode,
+            LoadTypes.HEATING,
+            Units.WATT,
+            True,
         )
 
-        self.heat_flow_rate_to_internal_mass_node_channel: cp.ComponentInput = (
-            self.add_input(
-                self.component_name,
-                self.HeatFluxThermalMassNode,
-                LoadTypes.HEATING,
-                Units.WATT,
-                True,
-            )
+        self.heat_flow_rate_to_internal_mass_node_channel: cp.ComponentInput = self.add_input(
+            self.component_name,
+            self.HeatFluxThermalMassNode,
+            LoadTypes.HEATING,
+            Units.WATT,
+            True,
         )
 
         self.thermal_power_channel: cp.ComponentOutput = self.add_output(
@@ -258,24 +255,12 @@ class PIDController(cp.Component):
     def build(self):
         """For calculating internal things and preparing the simulation."""
         """ getting building physical properties for state space model """
-        self.h_tr_w = SingletonSimRepository().get_entry(
-            key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING
-        )
-        self.h_tr_ms = SingletonSimRepository().get_entry(
-            key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS
-        )
-        self.h_tr_em = SingletonSimRepository().get_entry(
-            key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM
-        )
-        self.h_ve_adj = SingletonSimRepository().get_entry(
-            key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION
-        )
-        self.h_tr_is = SingletonSimRepository().get_entry(
-            key=SingletonDictKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR
-        )
-        self.c_m = SingletonSimRepository().get_entry(
-            key=SingletonDictKeyEnum.THERMALCAPACITYENVELOPE
-        )
+        self.h_tr_w = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTGLAZING)
+        self.h_tr_ms = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEMS)
+        self.h_tr_em = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTOPAQUEEM)
+        self.h_ve_adj = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONCOEFFICIENTVENTILLATION)
+        self.h_tr_is = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.THERMALTRANSMISSIONSURFACEINDOORAIR)
+        self.c_m = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.THERMALCAPACITYENVELOPE)
 
     def i_save_state(self):
         """Saves the internal state at the beginning of each timestep."""
@@ -298,17 +283,13 @@ class PIDController(cp.Component):
         lines.append(f"Controller Integral gain is {self.integral_gain:4.2f} \n")
         return lines
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Core smulation function."""
         if force_convergence:
             return
         # Retrieve Disturbance forecast
         phi_m = stsv.get_input_value(self.heat_flow_rate_to_internal_mass_node_channel)
-        phi_st = stsv.get_input_value(
-            self.heat_flow_rate_to_internal_surface_node_channel
-        )
+        phi_st = stsv.get_input_value(self.heat_flow_rate_to_internal_surface_node_channel)
 
         # Retrieve building temperature
         building_temperature_t_mc = stsv.get_input_value(self.temperature_mean_channel)
@@ -368,9 +349,7 @@ class PIDController(cp.Component):
         phi_st_gain: float = self.phi_st_gain
         phi_m_gain: float = self.phi_m_gain
 
-        feed_forward_signal = (
-            -((phi_st_gain * phi_st) + (phi_m_gain * phi_m)) / process_gain
-        )
+        feed_forward_signal = -((phi_st_gain * phi_st) + (phi_m_gain * phi_m)) / process_gain
 
         return feed_forward_signal
 
@@ -384,30 +363,17 @@ class PIDController(cp.Component):
         given these data one could find an acceptable tuning of a PI controller.
         """
         seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
-        x_value = ((self.h_tr_w + self.h_tr_ms) * (self.h_ve_adj + self.h_tr_is)) + (
-            self.h_ve_adj * self.h_tr_is
-        )
-        a11 = (
-            ((self.h_tr_ms**2) * (self.h_tr_is + self.h_ve_adj) / x_value)
-            - self.h_tr_ms
-            - self.h_tr_em
-        ) / (
+        x_value = ((self.h_tr_w + self.h_tr_ms) * (self.h_ve_adj + self.h_tr_is)) + (self.h_ve_adj * self.h_tr_is)
+        a11 = (((self.h_tr_ms**2) * (self.h_tr_is + self.h_ve_adj) / x_value) - self.h_tr_ms - self.h_tr_em) / (
             self.c_m / seconds_per_timestep
         )  # ((self.c_m_ref * self.A_f) * 3600)
 
         b11 = (self.h_tr_ms * self.h_tr_is) / ((self.c_m / seconds_per_timestep) * x_value)
 
-        b_d11 = (
-            (self.h_tr_ms * self.h_tr_w * (self.h_tr_is + self.h_ve_adj) / x_value)
-            + self.h_tr_em
-        ) / (self.c_m / seconds_per_timestep)
-        b_d12 = (self.h_tr_ms * self.h_tr_is * self.h_ve_adj) / (
-            (self.c_m / seconds_per_timestep) * x_value
-        )
+        b_d11 = ((self.h_tr_ms * self.h_tr_w * (self.h_tr_is + self.h_ve_adj) / x_value) + self.h_tr_em) / (self.c_m / seconds_per_timestep)
+        b_d12 = (self.h_tr_ms * self.h_tr_is * self.h_ve_adj) / ((self.c_m / seconds_per_timestep) * x_value)
         b_d13 = (self.h_tr_ms * self.h_tr_is) / ((self.c_m / seconds_per_timestep) * x_value)
-        b_d14 = (self.h_tr_ms * (self.h_tr_is + self.h_ve_adj)) / (
-            (self.c_m / seconds_per_timestep) * x_value
-        )
+        b_d14 = (self.h_tr_ms * (self.h_tr_is + self.h_ve_adj)) / ((self.c_m / seconds_per_timestep) * x_value)
         b_d15 = 1 / (self.c_m / seconds_per_timestep)
 
         """ #comment out due to pylint warning W0612 (unused-variable)
@@ -520,9 +486,7 @@ class PIDController(cp.Component):
         settling_time = time_constant_tm * 0.3
         over_shooting = 20
 
-        damping_ratio = -np.log(over_shooting / 100) / (
-            np.pi**2 + (np.log(over_shooting / 100)) ** 2
-        ) ** (1 / 2)
+        damping_ratio = -np.log(over_shooting / 100) / (np.pi**2 + (np.log(over_shooting / 100)) ** 2) ** (1 / 2)
         natural_frequency = 4 / (settling_time * damping_ratio)
         # damping_frequency=natural_frequency * np.sqrt(1-damping_ratio**2) #comment out due to pylint warning W0612 (unused-variable)
 
@@ -544,13 +508,9 @@ class PIDController(cp.Component):
         minimum_cooling_set_temp = set_point - offset_in_degree_celsius
 
         mode = "off"
-        if (
-            mode == "heating" and current_temperature > maximum_heating_set_temp
-        ):  # 23 22.5
+        if mode == "heating" and current_temperature > maximum_heating_set_temp:  # 23 22.5
             return "off"
-        if (
-            mode == "cooling" and current_temperature < minimum_cooling_set_temp
-        ):  # 24 21.5
+        if mode == "cooling" and current_temperature < minimum_cooling_set_temp:  # 24 21.5
             mode = "off"
         if mode == "off":
             if current_temperature < set_point:  # 21

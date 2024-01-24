@@ -31,7 +31,7 @@ from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataT
 from hisim.postprocessing.report_image_entries import ReportImageEntry, SystemChartEntry
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.json_generator import JsonConfigurationGenerator
-from hisim.postprocessing.webtool_kpi_entries import WebtoolKpiEntries
+from hisim.postprocessing.webtool_entries import WebtoolEntries, get_components_for_webtool
 from obsolete import loadprofilegenerator_connector
 
 
@@ -74,7 +74,7 @@ class PostProcessor:
                 PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE,
                 PostProcessingOptions.COMPUTE_OPEX,
                 PostProcessingOptions.COMPUTE_CAPEX,
-                PostProcessingOptions.MAKE_RESULT_JSON_WITH_KPI_FOR_WEBTOOL,
+                PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL,
                 PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON,
             }
             # Of all specified options, select those that are allowed
@@ -250,9 +250,9 @@ class PostProcessor:
             self.open_dir_in_file_explorer(ppdt)
 
         # Prepare webtool results
-        if PostProcessingOptions.MAKE_RESULT_JSON_WITH_KPI_FOR_WEBTOOL in ppdt.post_processing_options:
-            log.information("Make kpi json file for webtool.")
-            self.write_kpis_for_webtool_to_json_file(ppdt)
+        if PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL in ppdt.post_processing_options:
+            log.information("Make JSON file for webtool.")
+            self.write_results_for_webtool_to_json_file(ppdt)
 
         if PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON in ppdt.post_processing_options:
             log.information("Writing component configurations to JSON file.")
@@ -908,15 +908,12 @@ class PostProcessor:
             f"{module_filename}_{time_resolution_of_data}_results_for_{simulation_duration}_days_in_year_{simulation_year}_in_{region}.csv",
         )
 
-        dataframe.to_csv(
-            path_or_buf=filename,
-            index=None,
-        )  # type: ignore
+        dataframe.to_csv(path_or_buf=filename, index=None)  # type: ignore
 
-    def write_kpis_for_webtool_to_json_file(self, ppdt: PostProcessingDataTransfer) -> None:
-        """Collect important KPIs and write into json for webtool."""
+    def write_results_for_webtool_to_json_file(self, ppdt: PostProcessingDataTransfer) -> None:
+        """Collect results and write into json for webtool."""
 
-        # check if important options were set
+        # Check if important options were set
         if all(
             option in ppdt.post_processing_options
             for option in [
@@ -925,7 +922,7 @@ class PostProcessor:
                 PostProcessingOptions.COMPUTE_OPEX,
             ]
         ):
-            # calculate KPIs
+            # Calculate KPIs
             kpi_compute_return = compute_kpis(
                 components=ppdt.wrapped_components,
                 results=ppdt.results,
@@ -934,15 +931,13 @@ class PostProcessor:
             )
             dict_with_important_kpi = self.get_dict_from_kpi_lists(value_list=kpi_compute_return)
 
-            # caculate capex
+            # Calculate capex
             capex_compute_return = capex_calculation(
                 components=ppdt.wrapped_components,
                 simulation_parameters=ppdt.simulation_parameters,
             )
 
-            dict_with_important_capex = self.get_dict_from_opex_capex_lists(value_list=capex_compute_return)
-
-            # caculate opex
+            # Calculate opex
             opex_compute_return = opex_calculation(
                 components=ppdt.wrapped_components,
                 all_outputs=ppdt.all_outputs,
@@ -950,19 +945,23 @@ class PostProcessor:
                 simulation_parameters=ppdt.simulation_parameters,
             )
 
-            dict_with_important_opex = self.get_dict_from_opex_capex_lists(value_list=opex_compute_return)
-
-            # initialize webtool kpi entries dataclass
-            webtool_kpi_dataclass = WebtoolKpiEntries(
-                kpi_dict=dict_with_important_kpi,
-                capex_dict=dict_with_important_capex,
-                opex_dict=dict_with_important_opex,
+            # Create components
+            components = get_components_for_webtool(
+                components=ppdt.wrapped_components,
+                computed_opex=opex_compute_return,
+                computed_capex=capex_compute_return,
             )
 
-            # save dict as json file in results folder
+            # Initialize webtool kpi entries dataclass
+            webtool_kpi_dataclass = WebtoolEntries(
+                components=components,
+                kpis=dict_with_important_kpi,
+            )
+
+            # Save dict as json file in results folder
             json_file = webtool_kpi_dataclass.to_json(indent=4)
             with open(
-                os.path.join(ppdt.simulation_parameters.result_directory, "webtool_kpis.json"),
+                os.path.join(ppdt.simulation_parameters.result_directory, "results_for_webtool.json"),
                 "w",
                 encoding="utf-8",
             ) as file:

@@ -284,7 +284,7 @@ class UtspLpgConnector(cp.Component):
 
     def get_profiles_from_utsp(
         self, lpg_households: Union[JsonReference, List[JsonReference]], guid: str
-    ) -> Tuple[Union[str, List], Union[str, List], Union[str, List], Union[str, List], Union[str, List], List,]:
+    ) -> Tuple[Union[str, List], Union[str, List], Union[str, List], Union[str, List], Union[str, List], List]:
         """Requests the required load profiles from a UTSP server. Returns raw, unparsed result file contents.
 
         :return: a tuple of all result file contents (electricity, warm water, high bodily activity and low bodily activity),
@@ -350,7 +350,7 @@ class UtspLpgConnector(cp.Component):
 
     def get_profiles_from_predefined_profile(
         self,
-    ) -> Tuple[str, str, str, str, str, List,]:
+    ) -> Tuple[str, str, str, str, str, List]:
         """Get the loadprofiles for a specific predefined profile from hisim/inputs/loadprofiles."""
         predefined_profile_filepaths = utils.HISIMPATH["occupancy"]["CHR01 Couple both at Work"]
         # get first bodily activity files

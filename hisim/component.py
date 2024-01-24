@@ -176,6 +176,19 @@ class SingleTimeStepValues:
         return error_msg
 
 
+@dataclass
+class DisplayConfig:
+    """Configure how to display this component in postprocessing."""
+
+    pretty_name: str | None = None
+    display_in_webtool: bool = True
+
+    @classmethod
+    def show(cls, pretty_name):
+        """Shortcut for showing in webtool with a specified name."""
+        return DisplayConfig(pretty_name, display_in_webtool=True)
+
+
 class Component:
 
     """Base class for all components."""
@@ -190,12 +203,7 @@ class Component:
         """Gets the class name. Helper function for default connections."""
         return cls.__module__ + "." + cls.__name__
 
-    def __init__(
-        self,
-        name: str,
-        my_simulation_parameters: SimulationParameters,
-        my_config: ConfigBase,
-    ) -> None:
+    def __init__(self, name: str, my_simulation_parameters: SimulationParameters, my_config: ConfigBase, my_display_config: DisplayConfig) -> None:
         """Initializes the component class."""
         self.component_name: str = name
         self.inputs: List[ComponentInput] = []
@@ -215,6 +223,7 @@ class Component:
                 "The argument my_config is not a ConfigBase object.",
                 "Please check your components' configuration classes and inherit from ConfigBase class according to hisim/components/example_component.py.",
             )
+        self.my_display_config: DisplayConfig = my_display_config
 
     def add_default_connections(self, connections: List[ComponentConnection]) -> None:
         """Adds a default connection list definition."""

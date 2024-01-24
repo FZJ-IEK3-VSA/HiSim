@@ -221,6 +221,7 @@ class MpcController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: MpcControllerConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Constructs all the neccessary attributes."""
 
@@ -228,6 +229,7 @@ class MpcController(cp.Component):
             config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         self.my_simulation_parameters = my_simulation_parameters

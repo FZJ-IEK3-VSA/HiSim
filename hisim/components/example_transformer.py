@@ -8,12 +8,7 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
-from hisim.component import (
-    Component,
-    SingleTimeStepValues,
-    ComponentInput,
-    ComponentOutput,
-)
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import ConfigBase
@@ -76,6 +71,7 @@ class ExampleTransformer(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: ExampleTransformerConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Constructs all the neccessary attributes."""
         self.transformerconfig = config
@@ -83,6 +79,7 @@ class ExampleTransformer(Component):
             self.transformerconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.input1: ComponentInput = self.add_input(
             self.transformerconfig.name,

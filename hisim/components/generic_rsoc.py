@@ -7,11 +7,7 @@ from dataclasses_json import dataclass_json
 import numpy as np
 
 # Import modules from HiSim
-from hisim.component import (
-    SingleTimeStepValues,
-    ComponentInput,
-    ComponentOutput,
-)
+from hisim.component import SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
@@ -142,6 +138,7 @@ class Rsoc(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: RsocConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ):
         """Constructs all the neccessary attributes."""
         self.rsocconfig = config
@@ -165,6 +162,7 @@ class Rsoc(cp.Component):
             name=self.rsocconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         # =================================================================================================================================

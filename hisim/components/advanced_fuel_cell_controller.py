@@ -4,12 +4,7 @@
 from typing import Any
 from math import ceil
 from copy import deepcopy
-from hisim.component import (
-    Component,
-    SingleTimeStepValues,
-    ComponentInput,
-    ComponentOutput,
-)
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
 from hisim import loadtypes as lt
 
 from hisim.components.configuration import (
@@ -293,12 +288,14 @@ class ExtendedController(Component):
         component_name: str,
         config: ExtendedControllerConfig,
         my_simulation_parameters: SimulationParameters,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the class."""
         super().__init__(
             name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         # Input
         self.electricity_demand_household_channel: ComponentInput = self.add_input(

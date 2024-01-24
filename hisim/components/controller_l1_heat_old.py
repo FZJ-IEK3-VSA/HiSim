@@ -115,6 +115,7 @@ class ControllerHeat(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: ControllerHeatConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initialize the class."""
         self.controller_heat_config = config
@@ -122,6 +123,7 @@ class ControllerHeat(cp.Component):
             name=self.controller_heat_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.mode: Any
         self.temperature_storage_target_warm_water = self.controller_heat_config.temperature_storage_target_warm_water

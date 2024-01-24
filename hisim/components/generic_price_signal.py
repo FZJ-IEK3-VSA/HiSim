@@ -83,7 +83,12 @@ class PriceSignal(cp.Component):
     PricePurchase = "PricePurchase"
     PriceInjection = "PriceInjection"
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: PriceSignalConfig) -> None:
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: PriceSignalConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+    ) -> None:
         """Initialization of Price Signal class.
 
         :param my_simulation_parameters: _description_
@@ -96,6 +101,7 @@ class PriceSignal(cp.Component):
             name=self.price_signal_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         self.build_dummy(

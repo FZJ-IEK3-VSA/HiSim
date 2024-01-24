@@ -120,12 +120,14 @@ class L1Controller(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: ChargingStationConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initializes Car."""
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.state = L1ControllerState(power=0)
         self.previous_state = self.state.clone()

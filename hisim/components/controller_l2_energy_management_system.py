@@ -143,7 +143,12 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     CheckPeakShaving = "CheckPeakShaving"
 
     @utils.measure_execution_time
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: EMSConfig):
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: EMSConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+    ):
         """Initializes."""
         self.my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
         self.my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
@@ -154,6 +159,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             name=self.ems_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         self.state = EMSState(production=0, consumption_uncontrolled=0, consumption_ems_controlled=0)

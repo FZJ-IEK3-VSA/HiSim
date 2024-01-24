@@ -5,13 +5,7 @@ from typing import List
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from hisim.component import (
-    ConfigBase,
-    Component,
-    ComponentInput,
-    ComponentOutput,
-    SingleTimeStepValues,
-)
+from hisim.component import ConfigBase, Component, ComponentInput, ComponentOutput, SingleTimeStepValues, DisplayConfig
 
 from hisim import loadtypes as lt
 from hisim import utils
@@ -92,6 +86,7 @@ class PTXController(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: PTXControllerConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the class."""
         self.ptxcontrollerconfig = config
@@ -106,6 +101,7 @@ class PTXController(Component):
             name=self.ptxcontrollerconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         # =================================================================================================================================

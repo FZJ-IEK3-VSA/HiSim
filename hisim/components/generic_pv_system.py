@@ -257,7 +257,12 @@ class PVSystem(cp.Component):
     # Similar components to connect to:
     # 1. Weather
     @utils.measure_execution_time
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: PVSystemConfig) -> None:
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: PVSystemConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+    ) -> None:
         """Initialize the class."""
         self.my_simulation_parameters = my_simulation_parameters
         self.pvconfig = config
@@ -277,6 +282,7 @@ class PVSystem(cp.Component):
             self.pvconfig.name + "_w" + str(self.pvconfig.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         self.t_out_channel: cp.ComponentInput = self.add_input(

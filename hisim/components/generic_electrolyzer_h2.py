@@ -9,11 +9,7 @@ from scipy.interpolate import interp1d
 import numpy as np
 
 # Import modules from HiSim
-from hisim.component import (
-    SingleTimeStepValues,
-    ComponentInput,
-    ComponentOutput,
-)
+from hisim.component import SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
@@ -172,6 +168,7 @@ class Electrolyzer(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: ElectrolyzerConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ):
         """Constructs all the neccessary attributes."""
         self.electrolyzerconfig = config
@@ -192,6 +189,7 @@ class Electrolyzer(cp.Component):
             name=self.electrolyzerconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         # =================================================================================================================================

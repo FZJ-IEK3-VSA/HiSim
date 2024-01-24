@@ -15,7 +15,7 @@ import pvlib
 
 from hisim import loadtypes as lt
 from hisim import log, utils
-from hisim.component import Component, ComponentOutput, ConfigBase, SingleTimeStepValues
+from hisim.component import Component, ComponentOutput, ConfigBase, SingleTimeStepValues, DisplayConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
@@ -433,12 +433,18 @@ class Weather(Component):
     Weather_WindSpeed_yearly_forecast = "Weather_WindSpeed_yearly_forecast"
 
     @utils.measure_execution_time
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: WeatherConfig):
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: WeatherConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
+    ):
         """Initializes the entire class."""
         super().__init__(
             name="Weather",
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         if my_simulation_parameters is None:
             raise Exception("Simparameters was none")

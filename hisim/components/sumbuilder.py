@@ -43,12 +43,14 @@ class CalculateOperation(cp.Component):
         self,
         config: SumBuilderConfig,
         my_simulation_parameters: SimulationParameters,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initializes the class."""
         super().__init__(
             name=config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.operations: List[str] = []
         self.loadtype = config.loadtype
@@ -135,12 +137,14 @@ class SumBuilderForTwoInputs(Component):
         self,
         config: SumBuilderConfig,
         my_simulation_parameters: SimulationParameters,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initializes the class."""
         super().__init__(
             name=config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.input1: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -208,12 +212,14 @@ class SumBuilderForThreeInputs(Component):
         self,
         config: SumBuilderConfig,
         my_simulation_parameters: SimulationParameters,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initializes the class."""
         super().__init__(
             name=config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.input1: cp.ComponentInput = self.add_input(
             self.component_name,

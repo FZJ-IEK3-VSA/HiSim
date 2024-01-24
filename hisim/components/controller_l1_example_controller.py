@@ -9,13 +9,7 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 # Owned
-from hisim.component import (
-    Component,
-    SingleTimeStepValues,
-    ComponentInput,
-    ComponentOutput,
-    ConfigBase,
-)
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput, ConfigBase, DisplayConfig
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 
@@ -61,10 +55,16 @@ class SimpleController(Component):
         name: str,
         my_simulation_parameters: SimulationParameters,
         config: SimpleControllerConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the class."""
 
-        super().__init__(name, my_simulation_parameters=my_simulation_parameters, my_config=config)
+        super().__init__(
+            name,
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
+            my_display_config=my_display_config,
+        )
         self.input1_channel: ComponentInput = self.add_input(
             self.component_name,
             SimpleController.StorageFillLevel,

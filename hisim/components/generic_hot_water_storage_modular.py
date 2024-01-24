@@ -259,7 +259,12 @@ class HotWaterStorage(cp.Component):
     # outputs for buffer storage
     PowerFromHotWaterStorage = "PowerFromHotWaterStorage"
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: StorageConfig):
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: StorageConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+    ):
         """Initializes instance of HotWaterStorage class."""
 
         super().__init__(
@@ -268,6 +273,7 @@ class HotWaterStorage(cp.Component):
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         self.build(config)

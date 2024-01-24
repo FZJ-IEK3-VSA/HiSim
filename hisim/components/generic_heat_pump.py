@@ -188,6 +188,7 @@ class GenericHeatPump(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: GenericHeatPumpConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Construct all the necessary attributes."""
         self.heatpump_config = config
@@ -195,6 +196,7 @@ class GenericHeatPump(cp.Component):
             self.heatpump_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.manufacturer = self.heatpump_config.manufacturer
         self.heatpump_name = self.heatpump_config.heat_pump_name
@@ -584,6 +586,7 @@ class GenericHeatPumpController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: GenericHeatPumpControllerConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Construct all the neccessary attributes."""
         self.heatpump_controller_config = config
@@ -591,6 +594,7 @@ class GenericHeatPumpController(cp.Component):
             self.heatpump_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.build(
             temperature_air_cooling=self.heatpump_controller_config.temperature_air_cooling_in_celsius,

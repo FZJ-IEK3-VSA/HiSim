@@ -151,9 +151,10 @@ class GenericBattery(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: GenericBatteryConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initialize the class."""
-        super().__init__("Battery", my_simulation_parameters, my_config=config)
+        super().__init__("Battery", my_simulation_parameters, my_config=config, my_display_config=my_display_config)
 
         self.build(manufacturer=config.manufacturer, model=config.model, base=config.base)
 
@@ -322,12 +323,14 @@ class BatteryController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: BatteryControllerConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initialize the class."""
         super().__init__(
             name=config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         self.input_channel: cp.ComponentInput = self.add_input(

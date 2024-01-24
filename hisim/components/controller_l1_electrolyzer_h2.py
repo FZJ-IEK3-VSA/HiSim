@@ -5,13 +5,7 @@ from typing import List, Any
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from hisim.component import (
-    ConfigBase,
-    Component,
-    ComponentInput,
-    ComponentOutput,
-    SingleTimeStepValues,
-)
+from hisim.component import ConfigBase, Component, ComponentInput, ComponentOutput, SingleTimeStepValues, DisplayConfig
 
 from hisim import loadtypes as lt
 from hisim import utils
@@ -110,6 +104,7 @@ class ElectrolyzerController(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: ElectrolyzerControllerConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the class."""
         self.controllerconfig = config
@@ -125,6 +120,7 @@ class ElectrolyzerController(Component):
             name=self.controllerconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         # =================================================================================================================================

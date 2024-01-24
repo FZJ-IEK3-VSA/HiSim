@@ -158,12 +158,14 @@ class HeatDistribution(cp.Component):
         self,
         config: HeatDistributionConfig,
         my_simulation_parameters: SimulationParameters,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Construct all the neccessary attributes."""
         super().__init__(
             name=config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.heat_distribution_system_config = config
 
@@ -489,6 +491,7 @@ class HeatDistributionController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: HeatDistributionControllerConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Construct all the neccessary attributes."""
         self.hsd_controller_config = config
@@ -496,6 +499,7 @@ class HeatDistributionController(cp.Component):
             self.hsd_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.state_controller: int = 0
         self.building_temperature_modifier: float = 0

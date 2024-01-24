@@ -15,6 +15,7 @@ from hisim.component import (
     SingleTimeStepValues,
     ConfigBase,
     ComponentConnection,
+    DisplayConfig,
 )
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
@@ -115,6 +116,7 @@ class GenericGasHeaterControllerL1(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: GenericGasHeaterControllerL1Config,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Construct all the neccessary attributes."""
         self.gas_heater_controller_config = config
@@ -122,6 +124,7 @@ class GenericGasHeaterControllerL1(Component):
             self.gas_heater_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         self.build(

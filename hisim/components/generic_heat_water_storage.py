@@ -134,13 +134,19 @@ class HeatStorage(Component):
     StorageEnergyLoss = "StorageEnergyLoss"
     RealHeatForBuilding = "RealHeatForBuilding"
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: HeatStorageConfig) -> None:
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: HeatStorageConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+    ) -> None:
         """Initialize the class."""
         self.heat_storage_config = config
         super().__init__(
             self.heat_storage_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.volume_sp_heating_water = self.heat_storage_config.volume_sp_heating_water
         self.volume_sp_warm_water = self.heat_storage_config.volume_sp_warm_water
@@ -448,6 +454,7 @@ class HeatStorageController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: HeatStorageControllerConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initialize the class."""
         self.heatstoragecontroller_config = config
@@ -455,6 +462,7 @@ class HeatStorageController(cp.Component):
             name=self.heatstoragecontroller_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.initial_temperature_heating_storage = self.heatstoragecontroller_config.initial_temperature_heating_storage
         self.initial_temperature_building = self.heatstoragecontroller_config.initial_temperature_building

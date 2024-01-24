@@ -156,7 +156,12 @@ class L2HeatSmartController(cp.Component):
     # 2. HeatPump
 
     @utils.measure_execution_time
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: L2HeatSmartConfig) -> None:
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: L2HeatSmartConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+    ) -> None:
         """Initialize the class."""
         if not config.__class__.__name__ == L2HeatSmartConfig.__name__:
             raise ValueError("Wrong config class: " + config.__class__.__name__)
@@ -164,6 +169,7 @@ class L2HeatSmartController(cp.Component):
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.build(config)
 

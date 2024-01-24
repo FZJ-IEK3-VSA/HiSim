@@ -10,13 +10,7 @@ import copy
 from dataclasses_json import dataclass_json
 
 import pandas as pd
-from hisim.component import (
-    Component,
-    SingleTimeStepValues,
-    ComponentInput,
-    ComponentOutput,
-    ConfigBase,
-)
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput, ConfigBase, DisplayConfig
 from hisim import loadtypes as lt
 
 from hisim.components.configuration import PhysicsConfig
@@ -177,13 +171,19 @@ class CHP(Component):
     ThermalOutputPower = "ThermalOutputPower"
     GasDemandReal = "GasDemandReal"
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: CHPConfig) -> None:
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: CHPConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
+    ) -> None:
         """Initialize the class."""
         self.chp_config = config
         super().__init__(
             name=self.chp_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.min_operation_time = self.chp_config.min_operation_time
         self.min_idle_time = self.chp_config.min_idle_time

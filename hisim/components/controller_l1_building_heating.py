@@ -115,6 +115,7 @@ class L1BuildingHeatController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: L1BuildingHeatingConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """For initializing."""
         if not config.__class__.__name__ == L1BuildingHeatingConfig.__name__:
@@ -123,6 +124,7 @@ class L1BuildingHeatController(cp.Component):
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.config: L1BuildingHeatingConfig = config
 

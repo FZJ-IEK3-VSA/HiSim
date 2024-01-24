@@ -134,6 +134,7 @@ class UtspLpgConnector(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: UtspLpgConnectorConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initializes the component and retrieves the LPG data."""
         self.utsp_config = config
@@ -141,6 +142,7 @@ class UtspLpgConnector(cp.Component):
             name=self.utsp_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.build()
         # dummy value as long as there is no way to consider multiple households in one house

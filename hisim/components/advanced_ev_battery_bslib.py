@@ -20,6 +20,7 @@ from hisim.component import (
     ConfigBase,
     SingleTimeStepValues,
     OpexCostDataClass,
+    DisplayConfig,
 )
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
@@ -95,13 +96,19 @@ class CarBattery(Component):
     DcBatteryPower = "DcBatteryPower"  # W
     StateOfCharge = "StateOfCharge"  # [0..1]
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: CarBatteryConfig):
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: CarBatteryConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
+    ):
         """Loads the parameters of the specified battery storage."""
         self.battery_config = config
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         self.source_weight = self.battery_config.source_weight

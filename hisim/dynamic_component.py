@@ -6,13 +6,7 @@ from typing import Any, List, Union, Dict, cast, Optional
 import dataclasses as dc
 import hisim.loadtypes as lt
 from hisim import log
-from hisim.component import (
-    Component,
-    ComponentInput,
-    ComponentOutput,
-    ConfigBase,
-    SingleTimeStepValues,
-)
+from hisim.component import Component, ComponentInput, ComponentOutput, ConfigBase, SingleTimeStepValues, DisplayConfig
 from hisim.simulationparameters import SimulationParameters
 
 
@@ -97,12 +91,14 @@ class DynamicComponent(Component):
         name: str,
         my_simulation_parameters: SimulationParameters,
         my_config: ConfigBase,
+        my_display_config: DisplayConfig,
     ):
         """Initializes a dynamic component."""
         super().__init__(
             name=name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=my_config,
+            my_display_config=my_display_config,
         )
 
         self.my_component_inputs = my_component_inputs

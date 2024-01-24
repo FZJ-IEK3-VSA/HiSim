@@ -110,12 +110,14 @@ class PIDController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: PIDControllerConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Constructs all the neccessary attributes."""
         super().__init__(
             config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         self.my_simulation_parameters = my_simulation_parameters

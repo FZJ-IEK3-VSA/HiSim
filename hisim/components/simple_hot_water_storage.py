@@ -10,12 +10,7 @@ from dataclasses_json import dataclass_json
 import pandas as pd
 import numpy as np
 import hisim.component as cp
-from hisim.component import (
-    SingleTimeStepValues,
-    ComponentInput,
-    ComponentOutput,
-    OpexCostDataClass,
-)
+from hisim.component import SingleTimeStepValues, ComponentInput, ComponentOutput, OpexCostDataClass, DisplayConfig
 
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
@@ -183,12 +178,14 @@ class SimpleHotWaterStorage(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: SimpleHotWaterStorageConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Construct all the neccessary attributes."""
         super().__init__(
             name=config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         # =================================================================================================================================
         # Initialization of variables
@@ -888,6 +885,7 @@ class SimpleHotWaterStorageController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: SimpleHotWaterStorageControllerConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Construct all the neccessary attributes."""
 
@@ -895,6 +893,7 @@ class SimpleHotWaterStorageController(cp.Component):
             "SimpleHotWaterStorageController",
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR):
             self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo = (

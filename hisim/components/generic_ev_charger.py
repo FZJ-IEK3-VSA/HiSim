@@ -153,12 +153,18 @@ class VehiclePure(cp.Component):
 
     """
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: VehiclePureConfig) -> None:
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: VehiclePureConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+    ) -> None:
         """Initialize the class."""
         super().__init__(
             name="EV_charger",
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.evconfig = config
 
@@ -327,12 +333,18 @@ class Vehicle(cp.Component):
     MaxCapacity = "MaxCapacity"
     Discharge = "Discharge"
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: VehicleConfig) -> None:
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: VehicleConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+    ) -> None:
         """Initialize the class."""
         super().__init__(
             name="ElectricVehicle",
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         self.build(manufacturer=config.manufacturer, model=config.model, soc=config.soc)
@@ -555,12 +567,18 @@ class EVCharger(cp.Component):
     # 1. EVChargerController
     # 2. Some ChargingInput
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: EVChargerConfig) -> None:
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: EVChargerConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+    ) -> None:
         """Initialize the class."""
         super().__init__(
             name="EVCharger",
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         self.build(
@@ -807,12 +825,14 @@ class EVChargerController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: EVChargerControllerConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initialize the class."""
         super().__init__(
             name="EVChargerController",
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.mode = config.mode
 

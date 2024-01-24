@@ -24,6 +24,7 @@ from hisim.component import (
     ConfigBase,
     ComponentConnection,
     OpexCostDataClass,
+    DisplayConfig,
 )
 from hisim.components import weather, simple_hot_water_storage, heat_distribution_system
 from hisim.loadtypes import LoadTypes, Units, InandOutputType
@@ -162,6 +163,7 @@ class HeatPumpHplib(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: HeatPumpHplibConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ):
         """Loads the parameters of the specified heat pump.
 
@@ -181,6 +183,7 @@ class HeatPumpHplib(Component):
             name=config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         # caching for hplib simulation
         self.calculation_cache: Dict = {}
@@ -663,6 +666,7 @@ class HeatPumpHplibController(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: HeatPumpHplibControllerL1Config,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Construct all the neccessary attributes."""
         self.heatpump_controller_config = config
@@ -670,6 +674,7 @@ class HeatPumpHplibController(Component):
             self.heatpump_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         self.heat_distribution_system_type = self.heatpump_controller_config.heat_distribution_system_type

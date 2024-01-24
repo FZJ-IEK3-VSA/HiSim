@@ -190,6 +190,7 @@ class L2GenericHeatController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: L2GenericHeatConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """For initializing."""
         if not config.__class__.__name__ == L2GenericHeatConfig.__name__:
@@ -198,6 +199,7 @@ class L2GenericHeatController(cp.Component):
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.config: L2GenericHeatConfig = config
 

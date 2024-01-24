@@ -16,6 +16,7 @@ from hisim.component import (
     ComponentOutput,
     ConfigBase,
     OpexCostDataClass,
+    DisplayConfig,
 )
 
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
@@ -141,6 +142,7 @@ class GasHeater(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: GenericGasHeaterConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Construct all the neccessary attributes."""
         self.gasheater_config = config
@@ -148,6 +150,7 @@ class GasHeater(Component):
             name=self.gasheater_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.control_signal_channel: ComponentInput = self.add_input(
             self.component_name,

@@ -138,13 +138,19 @@ class SmartDevice(cp.Component):
     # optional Inputs
     ElectricityTarget = "ElectricityTarget"
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: SmartDeviceConfig):
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: SmartDeviceConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+    ):
         """Initialize the class."""
 
         super().__init__(
             name=config.identifier.replace("/", "-") + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         self.build(

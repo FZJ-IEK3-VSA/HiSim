@@ -12,7 +12,7 @@ from hisim import log
 
 # owned
 from hisim import component as cp
-from hisim.component import ConfigBase
+from hisim.component import ConfigBase, DisplayConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.loadtypes import LoadTypes, Units
 from hisim.components.weather import Weather
@@ -170,6 +170,7 @@ class AirConditioner(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: AirConditionerConfig,
+        my_display_config=DisplayConfig,
     ):
         """Constructs all the neccessary attributes."""
 
@@ -185,6 +186,7 @@ class AirConditioner(cp.Component):
             name=self.air_conditioner_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.build(
             manufacturer=self.air_conditioner_config.manufacturer,
@@ -588,6 +590,7 @@ class AirConditionerController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: AirConditionerControllerConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ):
         """Constructs all the neccessary attributes."""
 
@@ -599,6 +602,7 @@ class AirConditionerController(cp.Component):
             name=self.air_conditioner_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         self.build(

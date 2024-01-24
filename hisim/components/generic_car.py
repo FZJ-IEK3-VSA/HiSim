@@ -126,12 +126,14 @@ class Car(cp.Component):
         my_simulation_parameters: SimulationParameters,
         config: CarConfig,
         occupancy_config: Any,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initializes Car."""
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.build(config=config, occupancy_config=occupancy_config)
 

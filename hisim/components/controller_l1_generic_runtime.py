@@ -8,7 +8,7 @@ from typing import Any, List
 from dataclasses_json import dataclass_json
 
 from hisim import utils
-from hisim.component import ConfigBase
+from hisim.component import ConfigBase, DisplayConfig
 from hisim import component as cp
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
@@ -125,12 +125,18 @@ class L1GenericRuntimeController(cp.Component):
     # Similar components to connect to:
     # 1. Building
     @utils.measure_execution_time
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: L1Config) -> None:
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: L1Config,
+        my_display_config: DisplayConfig = DisplayConfig(),
+    ) -> None:
         """Initializes the controller."""
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.config = config
         self.name = config.name

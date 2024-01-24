@@ -208,12 +208,18 @@ class ModularHeatPump(cp.Component):
     PowerModifier = "PowerModifier"
 
     @utils.measure_execution_time
-    def __init__(self, config: HeatPumpConfig, my_simulation_parameters: SimulationParameters):
+    def __init__(
+        self,
+        config: HeatPumpConfig,
+        my_simulation_parameters: SimulationParameters,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+    ):
         """Initialize the class."""
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.config = config
         self.build()

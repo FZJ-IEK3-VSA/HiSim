@@ -7,13 +7,7 @@ from typing import List, Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
-from hisim.component import (
-    Component,
-    SingleTimeStepValues,
-    ComponentInput,
-    ComponentOutput,
-    ConfigBase,
-)
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput, ConfigBase, DisplayConfig
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 
@@ -265,6 +259,7 @@ class AdvancedElectrolyzer(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: ElectrolyzerWithStorageConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ):
         """Initialize the class."""
 
@@ -272,6 +267,7 @@ class AdvancedElectrolyzer(Component):
             config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         # input
@@ -622,6 +618,7 @@ class HydrogenStorage(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: ElectrolyzerWithHydrogenStorageConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ):
         """Initialize the class."""
 
@@ -629,6 +626,7 @@ class HydrogenStorage(Component):
             config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.charging_hydrogen: ComponentInput = self.add_input(
             self.component_name,

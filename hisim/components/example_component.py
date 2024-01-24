@@ -9,12 +9,7 @@ from dataclasses_json import dataclass_json
 
 # Owned
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import (
-    Component,
-    SingleTimeStepValues,
-    ComponentInput,
-    ComponentOutput,
-)
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
 from hisim import loadtypes as lt
 from hisim.component import ConfigBase
 
@@ -97,6 +92,7 @@ class ExampleComponent(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: ExampleComponentConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Constructs all the neccessary attributes."""
         self.examplecomponentconfig = config
@@ -104,6 +100,7 @@ class ExampleComponent(Component):
             self.examplecomponentconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         # Initialized variables

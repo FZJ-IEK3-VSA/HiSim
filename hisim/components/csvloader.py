@@ -76,13 +76,19 @@ class CSVLoader(cp.Component):
 
     Output1: str = "CSV Profile"
 
-    def __init__(self, config: CSVLoaderConfig, my_simulation_parameters: SimulationParameters):
+    def __init__(
+        self,
+        config: CSVLoaderConfig,
+        my_simulation_parameters: SimulationParameters,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+    ):
         """Initialize the class."""
         self.csvconfig = config
         super().__init__(
             name=self.csvconfig.component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         self.output1_channel: cp.ComponentOutput = self.add_output(

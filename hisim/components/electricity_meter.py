@@ -65,6 +65,7 @@ class ElectricityMeter(DynamicComponent):
         self,
         my_simulation_parameters: SimulationParameters,
         config: ElectricityMeterConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ):
         """Initialize the component."""
         self.grid_energy_balancer_config = config
@@ -77,6 +78,7 @@ class ElectricityMeter(DynamicComponent):
             self.name,
             my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         self.production_inputs: List[ComponentInput] = []

@@ -103,12 +103,18 @@ class SimpleCHP(cp.Component):
     ElectricityOutput = "ElectricityOutput"
     FuelDelivered = "FuelDelivered"
 
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: CHPConfig) -> None:
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: CHPConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+    ) -> None:
         """Initializes the class."""
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         self.config = config

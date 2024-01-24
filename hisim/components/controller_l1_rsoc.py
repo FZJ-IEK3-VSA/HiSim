@@ -4,13 +4,7 @@ import os
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from hisim.component import (
-    ConfigBase,
-    Component,
-    ComponentInput,
-    ComponentOutput,
-    SingleTimeStepValues,
-)
+from hisim.component import ConfigBase, Component, ComponentInput, ComponentOutput, SingleTimeStepValues, DisplayConfig
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
@@ -112,6 +106,7 @@ class RsocController(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: RsocControllerConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize class."""
         self.rsoccontrollerconfig = config
@@ -140,6 +135,7 @@ class RsocController(Component):
             name=self.rsoccontrollerconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         # =================================================================================================================================

@@ -14,12 +14,7 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
-from hisim.component import (
-    Component,
-    ComponentInput,
-    ComponentOutput,
-    SingleTimeStepValues,
-)
+from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues, DisplayConfig
 from hisim import loadtypes
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import ConfigBase
@@ -129,6 +124,7 @@ class ComponentName(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: ComponentNameConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Constructs all the neccessary attributes."""
         self.componentnameconfig = config
@@ -136,6 +132,7 @@ class ComponentName(Component):
             self.componentnameconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         # If a component requires states, this can be implemented here.

@@ -230,6 +230,7 @@ class L1CHPController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: L1CHPControllerConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """For initializing."""
         if not config.__class__.__name__ == L1CHPControllerConfig.__name__:
@@ -238,6 +239,7 @@ class L1CHPController(cp.Component):
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.minimum_runtime_in_timesteps = int(
             config.min_operation_time_in_seconds / self.my_simulation_parameters.seconds_per_timestep

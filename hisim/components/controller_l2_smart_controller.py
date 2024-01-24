@@ -7,7 +7,7 @@
 from typing import List, Any, Dict, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from hisim.component import Component, SingleTimeStepValues, ConfigBase
+from hisim.component import Component, SingleTimeStepValues, ConfigBase, DisplayConfig
 from hisim.components.generic_heat_pump import (
     GenericHeatPumpController,
     GenericHeatPumpControllerConfig,
@@ -51,12 +51,14 @@ class SmartController(Component):
         my_simulation_parameters: SimulationParameters,
         controllers: Optional[Dict[str, List[str]]],
         config: SmartControllerConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Construct all necessary attributes."""
         super().__init__(
             name="SmartController",
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         if controllers is None:
             controllers = {"HeatPump": ["mode"], "EVCharger": ["mode"]}

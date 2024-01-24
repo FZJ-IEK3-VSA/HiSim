@@ -179,7 +179,12 @@ class L1HeatPumpController(cp.Component):
     HeatControllerTargetPercentage = "HeatControllerTargetPercentage"
 
     @utils.measure_execution_time
-    def __init__(self, my_simulation_parameters: SimulationParameters, config: L1HeatPumpConfig) -> None:
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: L1HeatPumpConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+    ) -> None:
         """For initializing."""
         if not config.__class__.__name__ == L1HeatPumpConfig.__name__:
             raise ValueError("Wrong config class. Got a " + config.__class__.__name__)
@@ -187,6 +192,7 @@ class L1HeatPumpController(cp.Component):
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.config: L1HeatPumpConfig = config
         self.minimum_runtime_in_timesteps = int(

@@ -1,7 +1,7 @@
 """Test for webtool results."""
 import json
-from pathlib import Path
 from numbers import Number
+from pathlib import Path
 
 import pytest
 

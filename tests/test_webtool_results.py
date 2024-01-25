@@ -27,5 +27,5 @@ def test_webtool_results():
         results_for_webtool = json.load(handle)
 
     assert isinstance(
-        results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["economics"]["Operational Costs [EUR]"], Number
+        results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["economical"]["Operational Costs [EUR]"], Number
     )

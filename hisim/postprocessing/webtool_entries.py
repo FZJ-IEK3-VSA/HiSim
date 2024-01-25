@@ -3,9 +3,11 @@
 from dataclasses import dataclass, field, InitVar
 from typing import Dict, List
 
+import pandas as pd
 from dataclass_wizard import JSONWizard
 
 from hisim.component_wrapper import ComponentWrapper
+from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 
 
 @dataclass
@@ -16,16 +18,16 @@ class WebtoolDict(JSONWizard):
     kpis: Dict
     components: Dict = field(init=False)
 
-    component_wrappers: InitVar[List[ComponentWrapper]]
+    post_processing_data_transfer: InitVar[PostProcessingDataTransfer]
     computed_opex: InitVar[List]
     computed_capex: InitVar[List]
 
-    def __post_init__(self, component_wrappers, computed_opex, computed_capex):
+    def __post_init__(self, post_processing_data_transfer, computed_opex, computed_capex):
         """Build the dataclass from input data."""
         self.components = {}
-        self.init_structure(component_wrappers)
-        self.add_opex_capex(computed_opex, computed_capex)
-        self.add_sizing()
+        self.init_structure(post_processing_data_transfer.wrapped_components)
+        self.add_opex_capex_results(computed_opex, computed_capex)
+        self.add_technical_results(post_processing_data_transfer)
 
     def init_structure(self, components):
         """Initialize results dict for webtool with component names and categories."""
@@ -37,15 +39,14 @@ class WebtoolDict(JSONWizard):
                 "prettyName": this_pretty_name,
                 "class": this_component_class,
                 "sizing": {},
-                "energy": {},
-                "emissions": {},
-                "economics": {},
+                "technical": {},
+                "economical": {},
             }
 
-    def add_opex_capex(self, computed_opex, computed_capex):
+    def add_opex_capex_results(self, computed_opex, computed_capex):
         """Add results from the results of `opex_calculation()` and `capex_calculation()` to webtool dict."""
-        categories_opex = ["economics", "emissions", "energy"]
-        categories_capex = ["economics", "emissions", "economics"]
+        categories_opex = ["economical", "technical", "economical"]
+        categories_capex = ["economical", "technical", "economical"]
         # Get OPEX and CAPEX
         for computed_values, categories in zip([computed_opex, computed_capex], [categories_opex, categories_capex]):
             if not all(isinstance(_, str) for _ in computed_values[0]):
@@ -70,6 +71,9 @@ class WebtoolDict(JSONWizard):
                         {computed_values_key: computed_values_item}
                     )
 
-    @staticmethod
-    def add_sizing():
-        print("HI.")
+    def add_technical_results(self, post_processing_data_transfer):
+        df: pd.DataFrame = post_processing_data_transfer.results_cumulative
+        for series_name, series in df.items():
+            component, attribute = series_name.split(" - ", 1)
+            value = series.item()
+            self.components[component]["technical"].update({attribute: round(value, 2)})

@@ -947,8 +947,8 @@ class PostProcessor:
 
             # Consolidate results into structured dataclass for webtool
             webtool_results_dataclass = WebtoolDict(
-                components=ppdt.wrapped_components,
                 kpis=dict_with_important_kpi,
+                component_wrappers=ppdt.wrapped_components,
                 computed_opex=opex_compute_return,
                 computed_capex=capex_compute_return,
             )

@@ -3,11 +3,13 @@
 from dataclasses import dataclass, field, InitVar
 from typing import Dict, List
 
+from dataclass_wizard import JSONWizard
+
 from hisim.component_wrapper import ComponentWrapper
 
 
 @dataclass
-class WebtoolDict:
+class WebtoolDict(JSONWizard):
 
     """Class for storing results for hisim webtool."""
 

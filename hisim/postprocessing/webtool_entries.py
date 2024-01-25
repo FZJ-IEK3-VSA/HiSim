@@ -8,16 +8,11 @@ from hisim.component_wrapper import ComponentWrapper
 
 
 @dataclass
-class WebtoolComponent(JSONWizard):
-    name: str
-
-
-@dataclass
 class WebtoolEntries(JSONWizard):
 
     """Class for storing important kpis for hisim webtool."""
 
-    components: List[WebtoolComponent]
+    components: List
     kpis: Dict[str, Any] = field(default_factory=dict)
 
 

@@ -27,7 +27,7 @@ from hisim.component import (
     DisplayConfig,
 )
 from hisim.components import weather, simple_hot_water_storage, heat_distribution_system
-from hisim.loadtypes import LoadTypes, Units, InandOutputType
+from hisim.loadtypes import LoadTypes, Units, InandOutputType, OutputPostprocessingRules
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
 
@@ -163,7 +163,7 @@ class HeatPumpHplib(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: HeatPumpHplibConfig,
-        my_display_config: DisplayConfig = DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(display_in_webtool=True),
     ):
         """Loads the parameters of the specified heat pump.
 
@@ -253,6 +253,7 @@ class HeatPumpHplib(Component):
             load_type=LoadTypes.HEATING,
             unit=Units.WATT,
             output_description=("Thermal output power in Watt"),
+            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
 
         self.p_el: ComponentOutput = self.add_output(

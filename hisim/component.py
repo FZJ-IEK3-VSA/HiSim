@@ -93,7 +93,7 @@ class ComponentOutput:  # noqa: too-few-public-methods
         self.sankey_flow_direction: Optional[bool] = sankey_flow_direction
         self.output_description: Optional[str] = output_description
 
-    def get_pretty_name(self):
+    def get_pretty_name(self) -> str:
         """Gets a pretty name for a component output."""
         return self.component_name + " - " + self.display_name + " [" + self.load_type + " - " + self.unit + "]"
 

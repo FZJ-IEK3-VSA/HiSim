@@ -62,7 +62,7 @@ def test_system_setup_starter():
     )
     # Check results
     assert os.path.isfile(result_directory + "/finished.flag")
-    assert os.path.isfile(result_directory + "/webtool_kpis.json")
+    assert os.path.isfile(result_directory + "/results_for_webtool.json")
 
     assert (
         simulation_parameters.seconds_per_timestep  # type: ignore
@@ -72,7 +72,7 @@ def test_system_setup_starter():
     )
 
     # Check if the costs of the heat pump have been adapted.
-    with open(result_directory + "/webtool_kpis.json", "r", encoding="utf8") as file:
+    with open(result_directory + "/results_for_webtool.json", "r", encoding="utf8") as file:
         webtool_kpis = json.load(file)
     assert (
         webtool_kpis["capexDict"]["column 1"]["HeatPumpHPLib [Investment in EUR] "]
@@ -126,7 +126,7 @@ def test_system_setup_starter_scaling():
     )
     # Check results
     assert os.path.isfile(result_directory + "/finished.flag")
-    assert os.path.isfile(result_directory + "/webtool_kpis.json")
+    assert os.path.isfile(result_directory + "/results_for_webtool.json")
 
     assert (
         simulation_parameters.seconds_per_timestep  # type: ignore
@@ -135,7 +135,7 @@ def test_system_setup_starter_scaling():
         ]  # type: ignore
     )
 
-    with open(result_directory + "/webtool_kpis.json", "r", encoding="utf8") as file:
+    with open(result_directory + "/results_for_webtool.json", "r", encoding="utf8") as file:
         webtool_kpis = json.load(file)
     assert (
         webtool_kpis["capexDict"]["column 1"]["HeatPumpHPLib [Investment in EUR] "]

@@ -216,7 +216,7 @@ class ResultDataCollection:
             for folder in list_of_result_path_that_contain_scenario_data:
                 scenario_data_information = os.path.join(folder, "data_information_for_scenario_evaluation.json")
                 main_folder = os.path.normpath(folder + os.sep + os.pardir)
-                webtool_kpis_file = os.path.join(main_folder, "webtool_kpis.json")
+                webtool_kpis_file = os.path.join(main_folder, "results_for_webtool.json")
 
                 # get set temperatures used in the simulation
                 if os.path.exists(scenario_data_information):

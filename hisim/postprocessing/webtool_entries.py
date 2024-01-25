@@ -22,7 +22,7 @@ class WebtoolDict(JSONWizard):
 
     def __post_init__(self, component_wrappers, computed_opex, computed_capex):
         """Build the dataclass from input data."""
-        self.components: Dict = {}
+        self.components = {}
         self.init_structure(component_wrappers)
         self.add_opex_capex(computed_opex, computed_capex)
         self.add_sizing()

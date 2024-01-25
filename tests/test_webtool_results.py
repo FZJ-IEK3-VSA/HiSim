@@ -26,4 +26,6 @@ def test_webtool_results():
     with open(Path(my_simulation_parameters.result_directory).joinpath("results_for_webtool.json"), "rb") as handle:
         results_for_webtool = json.load(handle)
 
-    assert isinstance(results_for_webtool["components"][12]["Economics"]["Operational Costs [EUR]"], Number)
+    assert isinstance(
+        results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["economics"]["Operational Costs [EUR]"], Number
+    )

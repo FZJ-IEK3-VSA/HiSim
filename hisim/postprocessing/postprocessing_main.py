@@ -31,7 +31,7 @@ from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataT
 from hisim.postprocessing.report_image_entries import ReportImageEntry, SystemChartEntry
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.json_generator import JsonConfigurationGenerator
-from hisim.postprocessing.webtool_entries import WebtoolEntries, get_components_for_webtool
+from hisim.postprocessing.webtool_entries import WebtoolDict
 from obsolete import loadprofilegenerator_connector
 
 
@@ -945,21 +945,16 @@ class PostProcessor:
                 simulation_parameters=ppdt.simulation_parameters,
             )
 
-            # Create components
-            components = get_components_for_webtool(
+            # Consolidate results into structured dataclass for webtool
+            webtool_results_dataclass = WebtoolDict(
                 components=ppdt.wrapped_components,
+                kpis=dict_with_important_kpi,
                 computed_opex=opex_compute_return,
                 computed_capex=capex_compute_return,
             )
 
-            # Initialize webtool kpi entries dataclass
-            webtool_kpi_dataclass = WebtoolEntries(
-                components=components,
-                kpis=dict_with_important_kpi,
-            )
-
-            # Save dict as json file in results folder
-            json_file = webtool_kpi_dataclass.to_json(indent=4)
+            # Save dataclass as json file in results folder
+            json_file = webtool_results_dataclass.to_json(indent=4)
             with open(
                 os.path.join(ppdt.simulation_parameters.result_directory, "results_for_webtool.json"),
                 "w",
@@ -969,8 +964,8 @@ class PostProcessor:
 
         else:
             raise ValueError(
-                "Some PostProcessingOptions are not set."
-                "Please check if PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT, PostProcessingOptions.COMPUTE_CAPEX,"
+                "Some PostProcessingOptions are not set. Please check if"
+                "PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT, PostProcessingOptions.COMPUTE_CAPEX and"
                 "PostProcessingOptions.COMPUTE_OPEX are set in your system setup."
             )
 

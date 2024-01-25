@@ -1,8 +1,7 @@
 """Webtool results with important kpis."""
 
-from typing import Dict, Any, List
-from dataclasses import dataclass, field
-from dataclass_wizard import JSONWizard
+from dataclasses import dataclass, field, InitVar
+from typing import Dict, List
 
 from hisim.component_wrapper import ComponentWrapper
 
@@ -12,20 +11,19 @@ class WebtoolDict:
 
     """Class for storing results for hisim webtool."""
 
-    def __init__(
-        self,
-        components: List[ComponentWrapper],
-        kpis: Dict,
-        computed_opex: List,
-        computed_capex: List,
-    ):
-        self.components = {}
-        self.kpis = kpis  # KPIs are used for result validation. Do not change this.
+    kpis: Dict
+    components: Dict = field(init=False)
 
-        #  Add results one by one.
-        self.init_structure(components)
+    component_wrappers: InitVar[List[ComponentWrapper]]
+    computed_opex: InitVar[List]
+    computed_capex: InitVar[List]
+
+    def __post_init__(self, component_wrappers, computed_opex, computed_capex):
+        """Build the dataclass from input data."""
+        self.components: Dict = {}
+        self.init_structure(component_wrappers)
         self.add_opex_capex(computed_opex, computed_capex)
-        self.add_sizing(components)
+        self.add_sizing()
 
     def init_structure(self, components):
         """Initialize results dict for webtool with component names and categories."""
@@ -70,5 +68,6 @@ class WebtoolDict:
                         {computed_values_key: computed_values_item}
                     )
 
-    def add_sizing(self, components):
+    @staticmethod
+    def add_sizing():
         print("HI.")

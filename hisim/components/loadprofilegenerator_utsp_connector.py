@@ -1166,7 +1166,7 @@ class UtspLpgConnector(cp.Component):
                     end=datetime.datetime(year=self.my_simulation_parameters.year, month=1, day=1)
                     + datetime.timedelta(days=simulation_time_span.days)
                     - datetime.timedelta(seconds=60),
-                    freq="T",
+                    freq="min",
                 )
             }
         )

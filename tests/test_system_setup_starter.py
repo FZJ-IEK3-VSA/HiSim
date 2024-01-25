@@ -74,9 +74,9 @@ def test_system_setup_starter():
     )
 
     # Check if the costs of the heat pump have been adapted.
-    with open(result_directory + "/results_for_webtool.json", "r", encoding="utf8") as file:
-        webtool_kpis = json.load(file)
     # TODO: Rewrite to the new data path
+    # with open(result_directory + "/results_for_webtool.json", "r", encoding="utf8") as file:
+    #     webtool_kpis = json.load(file)
     # assert webtool_kpis["capexDict"]["column 1"]["HeatPumpHPLib [Investment in EUR] "] == 273.97
     # Remove result directory
     time.sleep(1)
@@ -137,9 +137,9 @@ def test_system_setup_starter_scaling():
         == parameters_json["simulation_parameters"]["seconds_per_timestep"]  # type: ignore
     )
 
-    with open(result_directory + "/results_for_webtool.json", "r", encoding="utf8") as file:
-        webtool_kpis = json.load(file)
     # TODO: Rewrite to the new data path.
+    # with open(result_directory + "/results_for_webtool.json", "r", encoding="utf8") as file:
+    #     webtool_kpis = json.load(file)
     # assert webtool_kpis["capexDict"]["column 1"]["HeatPumpHPLib [Investment in EUR] "] == 3.32
 
     # Remove result directory

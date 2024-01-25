@@ -250,7 +250,7 @@ def convert_lpg_data_to_utc(data: pd.DataFrame, year: int) -> pd.DataFrame:
     data["Time"] = pd.date_range(
         start=dt.datetime(year=year, month=1, day=1, hour=0),
         end=dt.datetime(year=year, month=lastdate.month, day=lastdate.day, hour=23, minute=59),  # type: ignore
-        freq="T",
+        freq="min",
         tz="UTC",
     )
     data["Time"] = data["Time"].dt.strftime("%m/%d/%Y %H:%M")

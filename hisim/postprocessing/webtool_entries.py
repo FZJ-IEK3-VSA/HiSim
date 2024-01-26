@@ -1,7 +1,7 @@
 """Webtool results with important kpis."""
 
 from dataclasses import dataclass, field, InitVar
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import pandas as pd
 from dataclass_wizard import JSONWizard
@@ -13,10 +13,13 @@ from hisim.loadtypes import OutputPostprocessingRules
 
 @dataclass
 class ResultEntry(JSONWizard):
+
+    """Class for storing one result entry for hisim webtool."""
+
     name: str
     unit: str
-    description: str
     value: float
+    description: Optional[str] = None
 
 
 @dataclass
@@ -35,11 +38,12 @@ class WebtoolDict(JSONWizard):
         """Build the dataclass from input data."""
         self.components = {}
         self.init_structure(post_processing_data_transfer)
-        self.add_opex_capex_results(post_processing_data_transfer, computed_opex, computed_capex)
+        self.add_opex_capex_results(computed_opex, computed_capex)
         self.add_technical_results(post_processing_data_transfer)
 
     def init_structure(self, post_processing_data_transfer):
         """Initialize results dict for webtool with component names and categories.
+
         Only components with DisplayConfig.display_in_webtool=True are selected.
         """
 
@@ -57,7 +61,7 @@ class WebtoolDict(JSONWizard):
                     "economical": {},
                 }
 
-    def add_opex_capex_results(self, post_processing_data_transfer, computed_opex, computed_capex):
+    def add_opex_capex_results(self, computed_opex, computed_capex):
         """Add results from the results of `opex_calculation()` and `capex_calculation()` to webtool dict."""
         categories_opex = ["economical", "technical", "economical"]
         categories_capex = ["economical", "technical", "economical"]
@@ -89,7 +93,7 @@ class WebtoolDict(JSONWizard):
                     # Save to dict
                     self.components[this_component][categories[idx_column]].update({computed_values_name: result_entry})
 
-    def add_technical_results(self, post_processing_data_transfer: PostProcessingDataTransfer):
+    def add_technical_results(self, post_processing_data_transfer: PostProcessingDataTransfer) -> None:
         """Add technical results from PostProcessingDataTransfer to results dataclass."""
 
         # Get outputs

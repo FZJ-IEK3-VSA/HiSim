@@ -1,8 +1,4 @@
 """Test for webtool results."""
-import json
-from numbers import Number
-from pathlib import Path
-
 import pytest
 
 from hisim.component import SimulationParameters

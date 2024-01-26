@@ -10,9 +10,10 @@ import numpy as np
 import pandas as pd
 
 from hisim import log, utils
-from hisim.components.loadprofilegenerator_connector import OccupancyConfig
+
 from hisim.loadtypes import ComponentType, HeatingSystems, InandOutputType, LoadTypes
 from hisim.simulationparameters import SimulationParameters
+from obsolete.loadprofilegenerator_connector import OccupancyConfig
 
 
 def compute_energy_from_power(

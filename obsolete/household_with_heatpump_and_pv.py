@@ -41,11 +41,10 @@ class HouseholdPVConfig:
     building_type: str
     household_type: JsonReference
     energy_intensity: EnergyIntensityType
-    lpg_url: str
     result_path: str
     travel_route_set: JsonReference
     simulation_parameters: SimulationParameters
-    api_key: str
+    data_acquisition_mode: loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode
     transportation_device_set: JsonReference
     charging_station_set: JsonReference
     pv_azimuth: float
@@ -62,8 +61,7 @@ class HouseholdPVConfig:
             building_type="blub",
             household_type=Households.CHR01_Couple_both_at_Work,
             energy_intensity=EnergyIntensityType.EnergySaving,
-            lpg_url=get_environment_variable("UTSP_URL"),
-            api_key=get_environment_variable("UTSP_API_KEY"),
+            data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP,
             simulation_parameters=SimulationParameters.one_day_only(2022),
             result_path="mypath",
             travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
@@ -111,8 +109,7 @@ def setup_function(
     seconds_per_timestep = 60
 
     # Set Occupancy
-    url = my_config.lpg_url
-    api_key = my_config.api_key
+    data_acquisition_mode = my_config.data_acquisition_mode
     household = my_config.household_type
     energy_intensity = my_config.energy_intensity
     result_path = my_config.result_path
@@ -141,8 +138,7 @@ def setup_function(
     # Build occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
         name="UTSPConnector",
-        url=url,
-        api_key=api_key,
+        data_acquisition_mode=data_acquisition_mode,
         household=household,
         energy_intensity=energy_intensity,
         result_dir_path=result_path,
@@ -152,6 +148,7 @@ def setup_function(
         consumption=0,
         profile_with_washing_machine_and_dishwasher=True,
         predictive_control=False,
+        predictive=False,
     )
 
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(

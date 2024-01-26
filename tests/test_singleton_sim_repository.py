@@ -7,7 +7,7 @@ from typing import Optional
 import pytest
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
-from hisim.components import loadprofilegenerator_connector
+from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import building
 from hisim.sim_repository_singleton import SingletonSimRepository
@@ -73,9 +73,9 @@ def test_house(
     )
     # Build Occupancy
     my_occupancy_config = (
-        loadprofilegenerator_connector.OccupancyConfig.get_default_chr01_couple_both_at_work()
+        loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
     )
-    my_occupancy = loadprofilegenerator_connector.Occupancy(
+    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
 

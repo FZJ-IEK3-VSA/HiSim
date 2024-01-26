@@ -10,7 +10,7 @@ import string
 import pandas as pd
 
 from hisim.components import building
-from hisim.components import loadprofilegenerator_connector
+
 from hisim.postprocessing import reportgenerator
 from hisim.postprocessing import charts
 from hisim import log
@@ -32,6 +32,7 @@ from hisim.postprocessing.report_image_entries import ReportImageEntry, SystemCh
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.json_generator import JsonConfigurationGenerator
 from hisim.postprocessing.webtool_kpi_entries import WebtoolKpiEntries
+from obsolete import loadprofilegenerator_connector
 
 
 class PostProcessor:
@@ -44,7 +45,7 @@ class PostProcessor:
         self.dirname: str
         self.chapter_counter: int = 1
         self.figure_counter: int = 1
-        self.pyam_data_folder: str = ""
+        self.result_data_folder_for_scenario_evaluation: str = ""
         self.model: str = "HiSim"
         self.scenario: str = ""
         self.region: str = ""
@@ -289,13 +290,13 @@ class PostProcessor:
                 + f"{duration:1.2f}s."
             )
 
-        # Write Outputs to pyam.IAMDataframe format for scenario evaluation
+        # Write Outputs to specific format for scenario evaluation (idea for format from pyam package)
         if (
-            PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
+            PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
             in ppdt.post_processing_options
         ):
-            log.information("Prepare results for scenario evaluation with pyam.")
-            self.prepare_results_for_scenario_evaluation_with_pyam(ppdt)
+            log.information("Prepare results for scenario evaluation.")
+            self.prepare_results_for_scenario_evaluation(ppdt)
 
         # Open file explorer
         if (
@@ -755,20 +756,20 @@ class PostProcessor:
         """
         pass  # noqa: unnecessary-pass
 
-    def prepare_results_for_scenario_evaluation_with_pyam(
+    def prepare_results_for_scenario_evaluation(
         self, ppdt: PostProcessingDataTransfer
     ) -> None:
-        """Prepare the results for the scenario evaluation with pyam."""
+        """Prepare the results for the scenario evaluation."""
 
-        # create pyam data foler
-        self.pyam_data_folder = os.path.join(
-            ppdt.simulation_parameters.result_directory, "pyam_data"
+        # create result data folder
+        self.result_data_folder_for_scenario_evaluation = os.path.join(
+            ppdt.simulation_parameters.result_directory, "result_data_for_scenario_evaluation"
         )
-        if os.path.exists(self.pyam_data_folder) is False:
-            os.makedirs(self.pyam_data_folder)
+        if os.path.exists(self.result_data_folder_for_scenario_evaluation) is False:
+            os.makedirs(self.result_data_folder_for_scenario_evaluation)
         else:
             log.information(
-                "This pyam_data path exists already: " + self.pyam_data_folder
+                "This result data path exists already: " + self.result_data_folder_for_scenario_evaluation
             )
 
         # --------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -794,7 +795,7 @@ class PostProcessor:
             "year": [],
             "value": [],
         }
-        # set pyam model name
+        # set model name
         self.model = "".join(["HiSim_", ppdt.module_filename])
 
         # set pyam scenario name
@@ -807,7 +808,7 @@ class PostProcessor:
         else:
             self.scenario = ""
 
-        # set pyam region
+        # set region
         if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.LOCATION):
             self.region = SingletonSimRepository().get_entry(
                 key=SingletonDictKeyEnum.LOCATION
@@ -815,7 +816,7 @@ class PostProcessor:
         else:
             self.region = ""
 
-        # set pyam year or timeseries
+        # set year or timeseries
         self.year = ppdt.simulation_parameters.year
         timeseries_hourly = ppdt.results_hourly.index
         timeseries_daily = ppdt.results_daily.index
@@ -825,7 +826,15 @@ class PostProcessor:
             PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
             in ppdt.post_processing_options
         ):
-            self.write_kpis_in_pyam_dict(
+            self.write_kpis_in_dict(
+                ppdt=ppdt, simple_dict_cumulative_data=simple_dict_hourly_data)
+            self.write_kpis_in_dict(
+                ppdt=ppdt, simple_dict_cumulative_data=simple_dict_daily_data
+            )
+            self.write_kpis_in_dict(
+                ppdt=ppdt, simple_dict_cumulative_data=simple_dict_monthly_data
+            )
+            self.write_kpis_in_dict(
                 ppdt=ppdt, simple_dict_cumulative_data=simple_dict_cumulative_data
             )
 
@@ -838,7 +847,7 @@ class PostProcessor:
         )
         self.write_filename_and_save_to_csv(
             dataframe=dataframe_hourly_data,
-            folder=self.pyam_data_folder,
+            folder=self.result_data_folder_for_scenario_evaluation,
             module_filename=ppdt.module_filename,
             simulation_duration=ppdt.simulation_parameters.duration.days,
             simulation_year=ppdt.simulation_parameters.year,
@@ -853,7 +862,7 @@ class PostProcessor:
         )
         self.write_filename_and_save_to_csv(
             dataframe=dataframe_daily_data,
-            folder=self.pyam_data_folder,
+            folder=self.result_data_folder_for_scenario_evaluation,
             module_filename=ppdt.module_filename,
             simulation_duration=ppdt.simulation_parameters.duration.days,
             simulation_year=ppdt.simulation_parameters.year,
@@ -868,7 +877,7 @@ class PostProcessor:
         )
         self.write_filename_and_save_to_csv(
             dataframe=dataframe_monthly_data,
-            folder=self.pyam_data_folder,
+            folder=self.result_data_folder_for_scenario_evaluation,
             module_filename=ppdt.module_filename,
             simulation_duration=ppdt.simulation_parameters.duration.days,
             simulation_year=ppdt.simulation_parameters.year,
@@ -899,7 +908,7 @@ class PostProcessor:
         simple_df_yearly_data = pd.DataFrame(simple_dict_cumulative_data)
         self.write_filename_and_save_to_csv(
             dataframe=simple_df_yearly_data,
-            folder=self.pyam_data_folder,
+            folder=self.result_data_folder_for_scenario_evaluation,
             module_filename=ppdt.module_filename,
             time_resolution_of_data="yearly",
             simulation_duration=ppdt.simulation_parameters.duration.days,
@@ -908,7 +917,7 @@ class PostProcessor:
         )
 
         # --------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # create dictionary with all import pyam information
+        # create dictionary with all import data information
         data_information_dict = {
             "model": self.model,
             "scenario": self.scenario,
@@ -926,8 +935,8 @@ class PostProcessor:
             json_generator_config.set_module_config(
                 my_module_config_path=ppdt.my_module_config_path
             )
-        json_generator_config.set_pyam_data_information_dict(
-            pyam_data_information_dict=data_information_dict
+        json_generator_config.set_scenario_data_information_dict(
+            scenario_data_information_dict=data_information_dict
         )
         for component in ppdt.wrapped_components:
             json_generator_config.add_component(config=component.my_component.config)
@@ -935,7 +944,7 @@ class PostProcessor:
         # save the json config
         json_generator_config.save_to_json(
             filename=os.path.join(
-                self.pyam_data_folder, "data_information_for_pyam.json"
+                self.result_data_folder_for_scenario_evaluation, "data_information_for_scenario_evaluation.json"
             )
         )
 
@@ -953,12 +962,12 @@ class PostProcessor:
             )
         )
 
-    def write_kpis_in_pyam_dict(
+    def write_kpis_in_dict(
         self,
         ppdt: PostProcessingDataTransfer,
         simple_dict_cumulative_data: Dict[str, Any],
     ) -> None:
-        """Write kpis in pyam dictionary."""
+        """Write kpis in dictionary."""
 
         kpi_compute_return = compute_kpis(
             components=ppdt.wrapped_components,
@@ -978,7 +987,10 @@ class PostProcessor:
                 simple_dict_cumulative_data["region"].append(self.region)
                 simple_dict_cumulative_data["variable"].append(variable_name)
                 simple_dict_cumulative_data["unit"].append(variable_unit)
-                simple_dict_cumulative_data["year"].append(self.year)
+                try:
+                    simple_dict_cumulative_data["year"].append(self.year)
+                except Exception:
+                    simple_dict_cumulative_data["time"].append(self.year)
                 simple_dict_cumulative_data["value"].append(variable_value)
 
     def get_variable_name_and_unit_from_ppdt_results_column(

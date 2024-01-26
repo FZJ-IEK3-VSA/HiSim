@@ -402,11 +402,11 @@ class Occupancy(cp.Component):
         )
 
         # create directories to put in files for cars and smart devices
-        for tag in ["utsp_reports", "utsp_results"]:
-            is_exist = path.exists(utils.HISIMPATH[tag])
+        for tag in ["Reports", "Results"]:
+            is_exist = path.exists(path.join(utils.HISIMPATH["utsp_results"], tag))
             if not is_exist:
                 # Create a new directory because it does not exist
-                makedirs(utils.HISIMPATH[tag])
+                makedirs(path.join(utils.HISIMPATH["utsp_results"], tag))
 
         if file_exists:
             dataframe = pd.read_csv(

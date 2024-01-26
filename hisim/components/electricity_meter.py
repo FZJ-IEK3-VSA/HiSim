@@ -7,6 +7,7 @@ from dataclasses_json import dataclass_json
 import pandas as pd
 
 from hisim import component as cp
+from hisim import dynamic_component
 from hisim import loadtypes as lt
 from hisim.component import ComponentInput, OpexCostDataClass
 from hisim.dynamic_component import (
@@ -149,27 +150,27 @@ class ElectricityMeter(DynamicComponent):
             sankey_flow_direction=False,
             output_description=f"here a description for {self.CumulativeProduction} will follow.",
         )
-        self.add_dynamic_default_connections(self.get_default_connections_from_occupancy())
+        self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())
         self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
         self.add_dynamic_default_connections(self.get_default_connections_from_dhw_heat_pump())
         self.add_dynamic_default_connections(
             self.get_default_connections_from_advanced_heat_pump()
         )
 
-    def get_default_connections_from_occupancy(
+    def get_default_connections_from_utsp_occupancy(
         self,
     ):
-        """Get occupancy default connections."""
+        """Get utsp occupancy default connections."""
 
-        from hisim.components.loadprofilegenerator_connector import Occupancy  # pylint: disable=import-outside-toplevel
+        from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector  # pylint: disable=import-outside-toplevel
 
         dynamic_connections = []
-        occupancy_class_name = Occupancy.get_classname()
+        occupancy_class_name = UtspLpgConnector.get_classname()
         dynamic_connections.append(
-            DynamicComponentConnection(
-                source_component_class=Occupancy,
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=UtspLpgConnector,
                 source_class_name=occupancy_class_name,
-                source_component_field_name=Occupancy.ElectricityOutput,
+                source_component_field_name=UtspLpgConnector.ElectricityOutput,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],

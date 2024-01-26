@@ -9,7 +9,7 @@ from hisim.components import (
     generic_pv_system,
     weather,
     advanced_heat_pump_hplib,
-    loadprofilegenerator_connector,
+    loadprofilegenerator_utsp_connector,
     electricity_meter,
     simple_hot_water_storage,
     heat_distribution_system,
@@ -76,10 +76,8 @@ def setup_function(
     )
 
     # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_scaled_chr01_according_to_number_of_apartments(
-        number_of_apartments=my_building_information.number_of_apartments
-    )
-    my_occupancy = loadprofilegenerator_connector.Occupancy(
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
 

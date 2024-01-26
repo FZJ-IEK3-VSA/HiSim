@@ -14,14 +14,14 @@ from hisim.modular_household.interface_configs.kpi_config import KPIConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.utils import HISIMPATH
 from hisim.component_wrapper import ComponentWrapper
-from hisim.components import generic_hot_water_storage_modular
+
 from hisim import log
 from hisim.postprocessing.investment_cost_co2 import compute_investment_cost
 
 
 def building_temperature_control_and_heating_load(
     results: pd.DataFrame, seconds_per_timestep: int, components: List[ComponentWrapper]
-) -> Tuple[Any, Any, float, float, float, float, float]:
+) -> Tuple[Any, Any, float, float, float, float, float, float]:
     """Check the building indoor air temperature.
 
     Check for all timesteps and count the
@@ -33,19 +33,29 @@ def building_temperature_control_and_heating_load(
     temperature_difference_of_building_being_below_cooling_set_temperature = 0
 
     # get set temperatures
+    wrapped_building_component = None
     for wrapped_component in components:
-        if "Building" in wrapped_component.my_component.component_name:
-            set_heating_temperature_in_celsius = getattr(
-                wrapped_component.my_component, "set_heating_temperature_in_celsius"
-            )
-            set_cooling_temperature_in_celsius = getattr(
-                wrapped_component.my_component, "set_cooling_temperature_in_celsius"
-            )
-            # get heating load and heating ref temperature
-            heating_load_in_watt = getattr(
-                wrapped_component.my_component, "my_building_information"
-            ).max_thermal_building_demand_in_watt
+        if "Building" in wrapped_component.my_component.get_classname():
+            wrapped_building_component = wrapped_component
             break
+    if not wrapped_building_component:
+        raise ValueError("Could not find the Building component.")
+
+    set_heating_temperature_in_celsius = getattr(
+        wrapped_building_component.my_component, "set_heating_temperature_in_celsius"
+    )
+    set_cooling_temperature_in_celsius = getattr(
+        wrapped_building_component.my_component, "set_cooling_temperature_in_celsius"
+    )
+    # get heating load and heating ref temperature
+    heating_load_in_watt = getattr(
+        wrapped_building_component.my_component, "my_building_information"
+    ).max_thermal_building_demand_in_watt
+    # get specific heating load
+    scaled_conditioned_floor_area_in_m2 = getattr(
+        wrapped_building_component.my_component, "my_building_information"
+    ).scaled_conditioned_floor_area_in_m2
+    specific_heating_load_in_watt_per_m2 = heating_load_in_watt / scaled_conditioned_floor_area_in_m2
 
     for column in results.columns:
 
@@ -99,6 +109,7 @@ def building_temperature_control_and_heating_load(
         min_temperature_reached_in_celsius,
         max_temperature_reached_in_celsius,
         heating_load_in_watt,
+        specific_heating_load_in_watt_per_m2
     )
 
 
@@ -243,6 +254,7 @@ def compute_consumption_production(
                 in output.postprocessing_flag
             ):
                 consumption_ids.append(index)
+
             elif InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
                 if ComponentType.BATTERY in output.postprocessing_flag:
                     battery_charge_discharge_ids.append(index)
@@ -269,93 +281,6 @@ def compute_consumption_production(
     ).clip(upper=0).sum(axis=1) * (-1)
 
     return postprocessing_results
-
-
-def compute_hot_water_storage_losses_and_cycles(
-    components: List[ComponentWrapper],
-    all_outputs: List,
-    results: pd.DataFrame,
-    timeresolution: int,
-) -> Tuple[float, float, float, float, float, float]:
-    """Computes hot water storage losses and cycles."""
-
-    # initialize columns consumption, production, battery_charge, battery_discharge, storage
-    charge_sum_dhw = 0.0
-    charge_sum_buffer = 0.0
-    discharge_sum_dhw = 0.0
-    discharge_sum_buffer = 0.0
-    cycle_buffer = None
-    cycle_dhw = None
-
-    # get cycle of water storages
-    for elem in components:
-        if isinstance(
-            elem.my_component, generic_hot_water_storage_modular.HotWaterStorage
-        ):
-            use = elem.my_component.use
-            if use == ComponentType.BUFFER:
-                cycle_buffer = elem.my_component.config.energy_full_cycle
-            elif use == ComponentType.BOILER:
-                cycle_dhw = elem.my_component.config.energy_full_cycle
-
-    for index, output in enumerate(all_outputs):
-        if output.postprocessing_flag is not None:
-            if InandOutputType.CHARGE in output.postprocessing_flag:
-                if InandOutputType.WATER_HEATING in output.postprocessing_flag:
-                    charge_sum_dhw = charge_sum_dhw + compute_energy_from_power(
-                        power_timeseries=results.iloc[:, index],
-                        timeresolution=timeresolution,
-                    )
-                elif InandOutputType.HEATING in output.postprocessing_flag:
-                    charge_sum_buffer = charge_sum_buffer + compute_energy_from_power(
-                        power_timeseries=results.iloc[:, index],
-                        timeresolution=timeresolution,
-                    )
-            elif InandOutputType.DISCHARGE in output.postprocessing_flag:
-                if ComponentType.BOILER in output.postprocessing_flag:
-                    discharge_sum_dhw = discharge_sum_dhw + compute_energy_from_power(
-                        power_timeseries=results.iloc[:, index],
-                        timeresolution=timeresolution,
-                    )
-                elif ComponentType.BUFFER in output.postprocessing_flag:
-                    discharge_sum_buffer = (
-                        discharge_sum_buffer
-                        + compute_energy_from_power(
-                            power_timeseries=results.iloc[:, index],
-                            timeresolution=timeresolution,
-                        )
-                    )
-        else:
-            continue
-        if cycle_dhw is not None:
-            cycles_dhw = charge_sum_dhw / cycle_dhw
-        else:
-            cycles_dhw = 0
-            log.error(
-                "Energy of full cycle must be defined in config of modular hot water storage to compute the number of cycles. "
-            )
-        storage_loss_dhw = charge_sum_dhw - discharge_sum_dhw
-        if cycle_buffer is not None:
-            cycles_buffer = charge_sum_buffer / cycle_buffer
-        else:
-            cycles_buffer = 0
-            log.error(
-                "Energy of full cycle must be defined in config of modular hot water storage to compute the number of cycles. "
-            )
-        storage_loss_buffer = charge_sum_buffer - discharge_sum_buffer
-    if cycle_buffer == 0:
-        building_heating = charge_sum_buffer
-    else:
-        building_heating = discharge_sum_buffer
-
-    return (
-        cycles_dhw,
-        storage_loss_dhw,
-        discharge_sum_dhw,
-        cycles_buffer,
-        storage_loss_buffer,
-        building_heating,
-    )
 
 
 def compute_self_consumption_and_injection(
@@ -605,20 +530,6 @@ def compute_kpis(
         co2 = co2 + fuel_co2
         price = price + fuel_price
 
-    # (
-    #     cycles_dhw,
-    #     loss_dhw,
-    #     use_dhw,
-    #     cycles_buffer,
-    #     loss_buffer,
-    #     use_heating,
-    # ) = compute_hot_water_storage_losses_and_cycles(
-    #     components=components,
-    #     all_outputs=all_outputs,
-    #     results=results,
-    #     timeresolution=simulation_parameters.seconds_per_timestep,
-    # )
-
     # compute cost and co2 for investment/installation:  # Todo: function compute_investment_cost does not include all components, use capex and opex-results instead
     investment_cost, co2_footprint = compute_investment_cost(components=components)
 
@@ -664,6 +575,7 @@ def compute_kpis(
         min_temperature_reached_in_celsius,
         max_temperature_reached_in_celsius,
         heating_load_in_watt,
+        specific_heating_load_in_watt_per_m2
     ) = building_temperature_control_and_heating_load(
         results=results,
         seconds_per_timestep=simulation_parameters.seconds_per_timestep,
@@ -693,14 +605,6 @@ def compute_kpis(
     table.append(["Self-consumption:", f"{self_consumption_sum:4.0f}", "kWh"])
     table.append(["Injection:", f"{injection_sum:4.0f}", "kWh"])
     table.append(["Battery losses:", f"{battery_losses:4.0f}", "kWh"])
-    # table.append(["DHW storage heat loss:", f"{loss_dhw:4.0f}", "kWh"])
-    # table.append(["DHW storage heat cycles:", f"{cycles_dhw:4.0f}", "Cycles"])
-    # table.append(["DHW energy provided:", f"{use_dhw:4.0f}", "kWh"])
-    # table.append(["Buffer storage heat loss:", f"{loss_buffer:4.0f}", "kWh"])
-    # table.append(["Buffer storage heat cycles:", f"{cycles_buffer:4.0f}", "Cycles"])
-    # table.append(["Heating energy provided:", f"{use_heating:4.0f}", "kWh"])
-    # table.append(["Hydrogen system losses:", f"{h2_system_losses:4.0f}", "kWh"])
-    # table.append(["Hydrogen storage content:", f"{0:4.0f}", "kWh"])
     table.append(["Autarky rate:", f"{autarky_rate:3.1f}", "%"])
     table.append(["Self-consumption rate:", f"{self_consumption_rate:3.1f}", "%"])
     table.append(["Cost for energy use:", f"{price:3.0f}", "EUR"])
@@ -792,6 +696,9 @@ def compute_kpis(
     )
     table.append(
         ["Building heating load:", f"{(heating_load_in_watt):3.0f}", "W"]
+    )
+    table.append(
+        ["Specific heating load:", f"{(specific_heating_load_in_watt_per_m2):3.0f}", "W"]
     )
 
     table.append(["Number of heat pump cycles:", f"{number_of_cycles:3.0f}", "-"])

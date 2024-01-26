@@ -2,7 +2,7 @@
 
 import pytest
 
-from hisim.components import loadprofilegenerator_connector
+from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import building
 from hisim.components import generic_pv_system
@@ -37,8 +37,7 @@ class ExampleConfig:
 
         # Occupancy
         my_occupancy_config = (
-            loadprofilegenerator_connector.OccupancyConfig.get_default_chr01_couple_both_at_work()
-        )
+            loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config())
         occ_entry = jcg.add_component(config=my_occupancy_config)
 
         # Weather

@@ -7,13 +7,14 @@ from typing import Any, List, Tuple
 import pytest
 
 from hisim import component
-from hisim.components import loadprofilegenerator_connector
+
 from hisim.components import weather
 from hisim.components import building
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim import utils
 from tests import functions_for_testing as fft
+from obsolete import loadprofilegenerator_connector
 
 
 @pytest.mark.buildingtest

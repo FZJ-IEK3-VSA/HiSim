@@ -3,7 +3,7 @@
 
 from typing import Optional, Any
 from hisim.simulator import SimulationParameters
-from hisim.components import loadprofilegenerator_connector
+from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import generic_pv_system
 from hisim.components import building
@@ -62,11 +62,9 @@ def setup_function(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
 
-    # Build occupancy
-    my_occupancy_config = (
-        loadprofilegenerator_connector.OccupancyConfig.get_default_chr01_couple_both_at_work()
-    )
-    my_occupancy = loadprofilegenerator_connector.Occupancy(
+    # Build Occupancy
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
     my_sim.add_component(my_occupancy)

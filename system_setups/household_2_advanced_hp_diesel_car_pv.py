@@ -104,11 +104,10 @@ class HouseholdAdvancedHPDieselCarPVConfig(SystemSetupConfigBase):
             # simulation_parameters=SimulationParameters.one_day_only(2022),
             # total_base_area_in_m2=121.2,
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-                url=utils.get_environment_variable("UTSP_URL"),
-                api_key=utils.get_environment_variable("UTSP_API_KEY"),
+                data_acquisition_mode=loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP,
                 household=Households.CHR01_Couple_both_at_Work,
                 energy_intensity=EnergyIntensityType.EnergySaving,
-                result_dir_path=utils.HISIMPATH["results"],
+                result_dir_path=utils.HISIMPATH["utsp_results"],
                 travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
                 transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
                 charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
@@ -116,6 +115,7 @@ class HouseholdAdvancedHPDieselCarPVConfig(SystemSetupConfigBase):
                 consumption=0.0,
                 profile_with_washing_machine_and_dishwasher=True,
                 predictive_control=False,
+                predictive=False,
             ),
             pv_config=generic_pv_system.PVSystemConfig.get_scaled_pv_system(
                 rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2

@@ -2,8 +2,6 @@ pylint /fast/home/k-rieck/repositories/HiSim/setup.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/system_setups/air_conditioned_house_b_with_pid_controller.py
 if %errorlevel% neq 0 exit /b
-pylint /fast/home/k-rieck/repositories/HiSim/system_setups/household_with_gas_heater_with_controller.py
-if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/system_setups/simple_system_setup_one.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/system_setups/household_reference_gas_heater_diesel_car.py
@@ -12,8 +10,6 @@ pylint /fast/home/k-rieck/repositories/HiSim/system_setups/default_connections.p
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/system_setups/household_2_advanced_hp_diesel_car_pv.py
 if %errorlevel% neq 0 exit /b
-pylint /fast/home/k-rieck/repositories/HiSim/system_setups/household_with_gas_heater.py
-if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/system_setups/household_4a_with_car_priority_advanced_hp_ev_pv.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/system_setups/air_conditioned_house_a_with_mpc_controller.py
@@ -21,8 +17,6 @@ if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/system_setups/automatic_default_connections.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/system_setups/dynamic_components.py
-if %errorlevel% neq 0 exit /b
-pylint /fast/home/k-rieck/repositories/HiSim/system_setups/household_with_advanced_hp_hws_hds_pv.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/system_setups/electrolyzer_with_renewables.py
 if %errorlevel% neq 0 exit /b
@@ -56,8 +50,6 @@ pylint /fast/home/k-rieck/repositories/HiSim/system_setups/modular_example.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/system_setups/household_with_advanced_hp_hws_hds_pv_battery_ems.py
 if %errorlevel% neq 0 exit /b
-pylint /fast/home/k-rieck/repositories/HiSim/system_setups/household_with_heatpump_and_pv.py
-if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/system_setups/power_to_x_transformation_battery_electrolyzer_no_grid.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/tests/test_house_with_pyam_postprocessingoption.py
@@ -76,17 +68,11 @@ pylint /fast/home/k-rieck/repositories/HiSim/tests/test_electricity_meter.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/tests/test_system_setups_household_with_advanced_hp_hws_hds_pv_battery_ems.py
 if %errorlevel% neq 0 exit /b
-pylint /fast/home/k-rieck/repositories/HiSim/tests/test_occupancy_scalability.py
-if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/tests/test_system_setups_household_1_advanced_hp_diesel_car.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/tests/test_building_heating_demand.py
 if %errorlevel% neq 0 exit /b
-pylint /fast/home/k-rieck/repositories/HiSim/tests/test_system_setups_household_with_gas_heater_with_controller.py
-if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/tests/test_system_setups_household_4b_with_heatpump_priority.py
-if %errorlevel% neq 0 exit /b
-pylint /fast/home/k-rieck/repositories/HiSim/tests/test_system_setups_household_with_gas_heater.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/tests/test_example_transformer.py
 if %errorlevel% neq 0 exit /b
@@ -96,11 +82,7 @@ pylint /fast/home/k-rieck/repositories/HiSim/tests/test_system_setups_household_
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/tests/test_system_setups_basic_household.py
 if %errorlevel% neq 0 exit /b
-pylint /fast/home/k-rieck/repositories/HiSim/tests/test_system_setups_household_with_heatpump_and_pv.py
-if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/tests/test_system_setups_household_5a_with_car_priority.py
-if %errorlevel% neq 0 exit /b
-pylint /fast/home/k-rieck/repositories/HiSim/tests/test_system_setups_household_with_advanced_hp_hws_hds_pv.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/tests/test_system_setups_household_4a_with_car_priority.py
 if %errorlevel% neq 0 exit /b
@@ -134,13 +116,37 @@ pylint /fast/home/k-rieck/repositories/HiSim/tests/test_generic_rsoc.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/tests/test_example_component.py
 if %errorlevel% neq 0 exit /b
-pylint /fast/home/k-rieck/repositories/HiSim/tests/test_system_setups_household_with_gas_heater_with_new_controller.py
-if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/tests/test_building.py
+if %errorlevel% neq 0 exit /b
+pylint /fast/home/k-rieck/repositories/HiSim/obsolete/household_with_gas_heater_with_controller.py
+if %errorlevel% neq 0 exit /b
+pylint /fast/home/k-rieck/repositories/HiSim/obsolete/generic_gas_heater_with_controller.py
+if %errorlevel% neq 0 exit /b
+pylint /fast/home/k-rieck/repositories/HiSim/obsolete/household_with_gas_heater.py
+if %errorlevel% neq 0 exit /b
+pylint /fast/home/k-rieck/repositories/HiSim/obsolete/test_occupancy_scalability.py
+if %errorlevel% neq 0 exit /b
+pylint /fast/home/k-rieck/repositories/HiSim/obsolete/test_system_setups_household_with_gas_heater_with_controller.py
+if %errorlevel% neq 0 exit /b
+pylint /fast/home/k-rieck/repositories/HiSim/obsolete/household_with_advanced_hp_hws_hds_pv.py
+if %errorlevel% neq 0 exit /b
+pylint /fast/home/k-rieck/repositories/HiSim/obsolete/test_system_setups_household_with_gas_heater.py
+if %errorlevel% neq 0 exit /b
+pylint /fast/home/k-rieck/repositories/HiSim/obsolete/test_system_setups_household_with_heatpump_and_pv.py
+if %errorlevel% neq 0 exit /b
+pylint /fast/home/k-rieck/repositories/HiSim/obsolete/test_system_setups_household_with_advanced_hp_hws_hds_pv.py
+if %errorlevel% neq 0 exit /b
+pylint /fast/home/k-rieck/repositories/HiSim/obsolete/loadprofilegenerator_connector.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/obsolete/generic_heat_pump_for_house_with_hds.py
 if %errorlevel% neq 0 exit /b
+pylint /fast/home/k-rieck/repositories/HiSim/obsolete/obsolete_compute_kpis.py
+if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/obsolete/basic_household_with_new_hp_hds_hws_and_pv.py
+if %errorlevel% neq 0 exit /b
+pylint /fast/home/k-rieck/repositories/HiSim/obsolete/test_system_setups_household_with_gas_heater_with_new_controller.py
+if %errorlevel% neq 0 exit /b
+pylint /fast/home/k-rieck/repositories/HiSim/obsolete/household_with_heatpump_and_pv.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/hisim/simulationparameters.py
 if %errorlevel% neq 0 exit /b
@@ -149,8 +155,6 @@ if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/hisim/utils.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/hisim/log.py
-if %errorlevel% neq 0 exit /b
-pylint /fast/home/k-rieck/repositories/HiSim/hisim/system_setup_starter.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/hisim/sim_repository_singleton.py
 if %errorlevel% neq 0 exit /b
@@ -190,8 +194,6 @@ pylint /fast/home/k-rieck/repositories/HiSim/hisim/postprocessing/postprocessing
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/hisim/postprocessing/reportgenerator.py
 if %errorlevel% neq 0 exit /b
-pylint /fast/home/k-rieck/repositories/HiSim/hisim/postprocessing/pyam_analysis_complete.py
-if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/hisim/postprocessing/postprocessing_datatransfer.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/hisim/postprocessing/system_chart.py
@@ -206,9 +208,11 @@ pylint /fast/home/k-rieck/repositories/HiSim/hisim/postprocessing/charts.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/hisim/postprocessing/compute_kpis.py
 if %errorlevel% neq 0 exit /b
-pylint /fast/home/k-rieck/repositories/HiSim/hisim/postprocessing/pyam_data_collection.py
-if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/hisim/postprocessing/chart_singleday.py
+if %errorlevel% neq 0 exit /b
+pylint /fast/home/k-rieck/repositories/HiSim/hisim/postprocessing/scenario_evaluation/scenario_analysis_complete.py
+if %errorlevel% neq 0 exit /b
+pylint /fast/home/k-rieck/repositories/HiSim/hisim/postprocessing/scenario_evaluation/result_data_collection.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/hisim/components/heat_distribution_system.py
 if %errorlevel% neq 0 exit /b
@@ -217,8 +221,6 @@ if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/hisim/components/air_conditioner.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/hisim/components/controller_l1_electrolyzer_h2.py
-if %errorlevel% neq 0 exit /b
-pylint /fast/home/k-rieck/repositories/HiSim/hisim/components/generic_gas_heater_with_controller.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/hisim/components/sumbuilder.py
 if %errorlevel% neq 0 exit /b
@@ -273,8 +275,6 @@ if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/hisim/components/advanced_ev_battery_bslib.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/hisim/components/controller_l2_generic_heat_clever_simple.py
-if %errorlevel% neq 0 exit /b
-pylint /fast/home/k-rieck/repositories/HiSim/hisim/components/loadprofilegenerator_connector.py
 if %errorlevel% neq 0 exit /b
 pylint /fast/home/k-rieck/repositories/HiSim/hisim/components/controller_l1_heatpump.py
 if %errorlevel% neq 0 exit /b

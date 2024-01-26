@@ -19,7 +19,6 @@ import hisim.utils
 from hisim.components import (
     building,
     controller_l2_energy_management_system,
-    loadprofilegenerator_connector,
     loadprofilegenerator_utsp_connector,
     weather,
 )
@@ -29,6 +28,7 @@ from hisim.modular_household.interface_configs.modular_household_config import (
 )
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
+from obsolete import loadprofilegenerator_connector
 
 
 def cleanup_old_result_folders():
@@ -48,10 +48,12 @@ def cleanup_old_lpg_requests():
     if not os.path.exists(hisim.utils.HISIMPATH["utsp_results"]):
         # no old data exists, nothing to remove
         return
-    files_in_folder = os.listdir(hisim.utils.HISIMPATH["utsp_results"])
-    for file in files_in_folder:
-        full_path = os.path.join(hisim.utils.HISIMPATH["utsp_results"], file)
-        os.remove(full_path)
+    folder_list = os.listdir(hisim.utils.HISIMPATH["utsp_results"])
+    for folder in folder_list:
+        for file in os.listdir(os.path.join(hisim.utils.HISIMPATH["utsp_results"], folder)):
+            full_file_path = os.path.join(hisim.utils.HISIMPATH["utsp_results"], folder, file)
+            hisim.log.information(f"Clean up old lpg request result file: {full_file_path}")
+            os.remove(full_file_path)
 
 
 def get_heating_reference_temperature_and_season_from_location(
@@ -263,17 +265,17 @@ def setup_function(
         my_occupancy_config = (
             loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
                 name="UTSPConnector",
-                url=arche_type_config_.url,
-                api_key=arche_type_config_.api_key,
+                data_acquisition_mode=loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP,
                 household=occupancy_profile_utsp,  # type: ignore
                 energy_intensity=EnergyIntensityType.EnergySaving,
-                result_dir_path=hisim.utils.HISIMPATH["results"],
+                result_dir_path=hisim.utils.HISIMPATH["utsp_results"],
                 travel_route_set=this_mobility_distance,
                 transportation_device_set=this_mobility_set,
                 charging_station_set=charging_station,
                 consumption=0,
                 profile_with_washing_machine_and_dishwasher=not smart_devices_included,
                 predictive_control=False,
+                predictive=False,
             )
         )
 
@@ -281,6 +283,7 @@ def setup_function(
             config=my_occupancy_config,
             my_simulation_parameters=my_simulation_parameters,
         )
+
     else:
         # Build occupancy
         my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(

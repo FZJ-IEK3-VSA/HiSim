@@ -4,7 +4,7 @@
 
 from typing import Optional, Any
 from hisim.simulator import SimulationParameters
-from hisim.components import loadprofilegenerator_connector
+from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import building
 from hisim.components import more_advanced_heat_pump_hplib
@@ -52,11 +52,6 @@ def setup_function(
     year = 2021
     seconds_per_timestep = 60
 
-    # Set Heat Pump
-    group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
-    heating_reference_temperature_in_celsius: float = -7  # t_in
-    flow_temperature_in_celsius = 21  # t_out_val
-
     # Set Heat Pump Controller
     hp_controller_mode = (
         2  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
@@ -64,6 +59,12 @@ def setup_function(
     set_heating_threshold_outside_temperature_for_heat_pump_in_celsius = 16.0
     set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = 22.0
     temperature_offset_for_state_conditions_in_celsius = 5.0
+
+    # Set Heat Pump
+    group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
+    heating_reference_temperature_in_celsius: float = -7  # t_in
+    flow_temperature_in_celsius = 21  # t_out_val
+
     # =================================================================================================================================
     # Build Components
 
@@ -76,11 +77,25 @@ def setup_function(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build Building
-    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
+    my_building_config = building.BuildingConfig.get_default_german_single_family_home(
+        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+    )
     my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(
-        config=my_building_config,
-        my_simulation_parameters=my_simulation_parameters
+        config=my_building_config, my_simulation_parameters=my_simulation_parameters
+    )
+    # Build Occupancy
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
+        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
+    )
+
+    # Build Weather
+    my_weather_config = weather.WeatherConfig.get_default(
+        location_entry=weather.LocationEnum.AACHEN
+    )
+    my_weather = weather.Weather(
+        config=my_weather_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # Build Heat Distribution Controller
@@ -100,13 +115,6 @@ def setup_function(
         heat_distribution_system.HeatDistributionControllerInformation(
             config=my_heat_distribution_controller_config
         )
-    )
-
-    # Build Occupancy
-    my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig.get_default_chr01_couple_both_at_work()
-
-    my_occupancy = loadprofilegenerator_connector.Occupancy(
-        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # Build Weather

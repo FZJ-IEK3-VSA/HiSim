@@ -9,12 +9,7 @@ from dataclasses_json import dataclass_json
 
 # Owned
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import (
-    Component,
-    SingleTimeStepValues,
-    ComponentInput,
-    ComponentOutput,
-)
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
 from hisim import loadtypes as lt
 from hisim.component import ConfigBase
 
@@ -97,6 +92,7 @@ class ExampleComponent(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: ExampleComponentConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Constructs all the neccessary attributes."""
         self.examplecomponentconfig = config
@@ -104,6 +100,7 @@ class ExampleComponent(Component):
             self.examplecomponentconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         # Initialized variables
@@ -156,12 +153,8 @@ class ExampleComponent(Component):
         initial_temperature: Optional[float],
     ) -> None:
         """Build load profile for entire simulation duration."""
-        self.time_correction_factor: float = (
-            1 / self.my_simulation_parameters.seconds_per_timestep
-        )
-        self.seconds_per_timestep: float = (
-            self.my_simulation_parameters.seconds_per_timestep
-        )
+        self.time_correction_factor: float = 1 / self.my_simulation_parameters.seconds_per_timestep
+        self.seconds_per_timestep: float = self.my_simulation_parameters.seconds_per_timestep
 
         if electricity is None:
             self.electricity_output: float = -1e3
@@ -198,9 +191,7 @@ class ExampleComponent(Component):
         """Doublechecks."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
         electricity_output: float = 0
         if 60 * 6 <= timestep < 60 * 9:
@@ -215,12 +206,8 @@ class ExampleComponent(Component):
             temperature: float = self.initial_temperature
             current_stored_energy = (self.initial_temperature + 273.15) * self.capacity
         else:
-            thermal_delivered_energy = stsv.get_input_value(
-                self.thermal_energy_delivered_c
-            )
-            previous_stored_energy = (
-                self.previous_temperature + 273.15
-            ) * self.capacity
+            thermal_delivered_energy = stsv.get_input_value(self.thermal_energy_delivered_c)
+            previous_stored_energy = (self.previous_temperature + 273.15) * self.capacity
             current_stored_energy = previous_stored_energy + thermal_delivered_energy
             self.temperature = current_stored_energy / self.capacity - 273.15
             temperature = self.temperature

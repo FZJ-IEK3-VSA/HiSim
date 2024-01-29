@@ -162,6 +162,14 @@ class Units(str, enum.Enum):
 
 
 @enum.unique
+class OutputPostprocessingRules(str, enum.Enum):
+
+    """Rules for postprocessing."""
+
+    DISPLAY_IN_WEBTOOL = "DISPLAY_IN_WEBTOOL"
+
+
+@enum.unique
 class ComponentType(str, enum.Enum):
 
     """Component types for use in dynamic controllers."""

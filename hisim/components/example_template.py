@@ -14,12 +14,7 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
-from hisim.component import (
-    Component,
-    ComponentInput,
-    ComponentOutput,
-    SingleTimeStepValues,
-)
+from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues, DisplayConfig
 from hisim import loadtypes
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import ConfigBase
@@ -129,6 +124,7 @@ class ComponentName(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: ComponentNameConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Constructs all the neccessary attributes."""
         self.componentnameconfig = config
@@ -136,6 +132,7 @@ class ComponentName(Component):
             self.componentnameconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         # If a component requires states, this can be implemented here.
@@ -180,18 +177,14 @@ class ComponentName(Component):
         """Doublechecks."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
         # define local variables
         input_1 = stsv.get_input_value(self.input_from_other_component)
         input_2 = self.state.output_with_state
 
         # do your calculations
-        output_1 = (
-            input_2 + input_1 * self.my_simulation_parameters.seconds_per_timestep
-        )
+        output_1 = input_2 + input_1 * self.my_simulation_parameters.seconds_per_timestep
         output_2 = input_1 + self.factor
 
         # write values for output time series

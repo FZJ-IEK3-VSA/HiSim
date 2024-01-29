@@ -17,9 +17,7 @@ from hisim.components.example_transformer import (
 from hisim.components.sumbuilder import SumBuilderForTwoInputs, SumBuilderConfig
 
 
-def setup_function(
-    my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]
-) -> None:
+def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]) -> None:
     """Second system setup.
 
     In this second system setup, two series (my_rn1 and my_transformer) are summed up.

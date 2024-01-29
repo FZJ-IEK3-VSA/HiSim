@@ -35,17 +35,10 @@ class ScenarioDataProcessing:
         elif time_resolution_of_data_set == ResultDataTypeEnum.MONTHLY:
             kind_of_data_set = "monthly"
         else:
-            raise ValueError(
-                "This kind of data was not found in the datacollectorenum class."
-            )
-        log.information(
-            f"Read csv files and create one big dataframe for {kind_of_data_set} data."
-        )
+            raise ValueError("This kind of data was not found in the datacollectorenum class.")
+        log.information(f"Read csv files and create one big dataframe for {kind_of_data_set} data.")
 
-        for file in glob.glob(
-            os.path.join(data_folder_path, "**", f"*{kind_of_data_set}*.csv")
-        ):
-
+        for file in glob.glob(os.path.join(data_folder_path, "**", f"*{kind_of_data_set}*.csv")):
             file_df = pd.read_csv(filepath_or_buffer=file)
 
         # if scenario values are no strings, transform them
@@ -62,7 +55,6 @@ class ScenarioDataProcessing:
         #     variables_to_check.append("Relative Electricity Demand")
 
         if dict_of_scenarios_to_check is not None and dict_of_scenarios_to_check != {}:
-
             (
                 file_df,
                 key_for_scenario_one,
@@ -80,15 +72,11 @@ class ScenarioDataProcessing:
         )
 
     @staticmethod
-    def filter_pandas_dataframe(
-        dataframe: pd.DataFrame, variable_to_check: str
-    ) -> pd.DataFrame:
+    def filter_pandas_dataframe(dataframe: pd.DataFrame, variable_to_check: str) -> pd.DataFrame:
         """Filter pandas dataframe according to variable."""
         filtered_dataframe = dataframe.loc[dataframe["variable"] == variable_to_check]
         if filtered_dataframe.empty:
-            print(
-                f"The dataframe contains the following variables: {set(list(dataframe.variable))}"
-            )
+            print(f"The dataframe contains the following variables: {set(list(dataframe.variable))}")
             # raise ValueError(
             print(
                 f"The filtered dataframe is empty. The dataframe did not contain the variable {variable_to_check}. Check the list above."
@@ -97,7 +85,9 @@ class ScenarioDataProcessing:
 
     @staticmethod
     def get_statistics_of_data_and_write_to_excel(
-        filtered_data: pd.DataFrame, path_to_save: str, kind_of_data_set: str,
+        filtered_data: pd.DataFrame,
+        path_to_save: str,
+        kind_of_data_set: str,
     ) -> None:
         """Use pandas describe method to get statistical values of certain data."""
         # create a excel writer object
@@ -105,7 +95,6 @@ class ScenarioDataProcessing:
             path=os.path.join(path_to_save, f"{kind_of_data_set}_statistics.xlsx"),
             mode="w",
         ) as writer:
-
             filtered_data.to_excel(excel_writer=writer, sheet_name="filtered data")
             statistical_data = filtered_data.describe()
 
@@ -113,13 +102,12 @@ class ScenarioDataProcessing:
 
     @staticmethod
     def check_if_scenario_exists_and_filter_dataframe_for_scenarios(
-        data_frame: pd.DataFrame, dict_of_scenarios_to_check: Dict[str, List[str]],
+        data_frame: pd.DataFrame,
+        dict_of_scenarios_to_check: Dict[str, List[str]],
     ) -> pd.DataFrame:
         """Check if scenario exists and filter dataframe for scenario."""
         for (list_of_scenarios_to_check,) in dict_of_scenarios_to_check.values():
-            aggregated_scenario_dict: Dict = {
-                key: [] for key in list_of_scenarios_to_check
-            }
+            aggregated_scenario_dict: Dict = {key: [] for key in list_of_scenarios_to_check}
 
             for given_scenario in data_frame["scenario"]:
                 # string comparison
@@ -127,21 +115,16 @@ class ScenarioDataProcessing:
                 for scenario_to_check in list_of_scenarios_to_check:
                     if (
                         scenario_to_check in given_scenario
-                        and given_scenario
-                        not in aggregated_scenario_dict[scenario_to_check]
+                        and given_scenario not in aggregated_scenario_dict[scenario_to_check]
                     ):
-                        aggregated_scenario_dict[scenario_to_check].append(
-                            given_scenario
-                        )
+                        aggregated_scenario_dict[scenario_to_check].append(given_scenario)
             # raise error if dict is empty
             for (
                 key_scenario_to_check,
                 given_scenario,
             ) in aggregated_scenario_dict.items():
                 if given_scenario == []:
-                    raise ValueError(
-                        f"Scenarios containing {key_scenario_to_check} were not found in the dataframe."
-                    )
+                    raise ValueError(f"Scenarios containing {key_scenario_to_check} were not found in the dataframe.")
 
             concat_df = pd.DataFrame()
             # only take rows from dataframe which are in selected scenarios
@@ -149,13 +132,10 @@ class ScenarioDataProcessing:
                 key_scenario_to_check,
                 given_scenario,
             ) in aggregated_scenario_dict.items():
-
-                df_filtered_for_specific_scenarios = data_frame.loc[
-                    data_frame["scenario"].isin(given_scenario)
-                ]
-                df_filtered_for_specific_scenarios["scenario"] = [
-                    key_scenario_to_check
-                ] * len(df_filtered_for_specific_scenarios["scenario"])
+                df_filtered_for_specific_scenarios = data_frame.loc[data_frame["scenario"].isin(given_scenario)]
+                df_filtered_for_specific_scenarios["scenario"] = [key_scenario_to_check] * len(
+                    df_filtered_for_specific_scenarios["scenario"]
+                )
                 concat_df = pd.concat([concat_df, df_filtered_for_specific_scenarios])
                 concat_df["scenario_0"] = data_frame["scenario"]
 
@@ -186,7 +166,6 @@ class ScenarioDataProcessing:
                     and scenario_to_check == value
                     and value not in aggregated_scenario_dict[scenario_to_check]
                 ):
-
                     aggregated_scenario_dict[scenario_to_check].append(value)
 
         concat_df = pd.DataFrame()
@@ -195,18 +174,13 @@ class ScenarioDataProcessing:
             key_scenario_to_check,
             given_list_of_values,
         ) in aggregated_scenario_dict.items():
-
             df_filtered_for_specific_scenarios = dataframe.loc[
                 dataframe[column_name_to_check].isin(given_list_of_values)
             ]
 
-            df_filtered_for_specific_scenarios.loc[
-                :, "scenario"
-            ] = key_scenario_to_check
+            df_filtered_for_specific_scenarios.loc[:, "scenario"] = key_scenario_to_check
 
-            concat_df = pd.concat(
-                [concat_df, df_filtered_for_specific_scenarios], ignore_index=True
-            )
+            concat_df = pd.concat([concat_df, df_filtered_for_specific_scenarios], ignore_index=True)
 
             # concat_df[f"scenario_{filter_level_index}"] = dataframe.loc[:, "scenario"]
 
@@ -216,7 +190,8 @@ class ScenarioDataProcessing:
 
     @staticmethod
     def check_if_scenario_exists_and_filter_dataframe_for_scenarios_dict(
-        data_frame: pd.DataFrame, dict_of_scenarios_to_check: Dict[str, List[str]],
+        data_frame: pd.DataFrame,
+        dict_of_scenarios_to_check: Dict[str, List[str]],
     ) -> Tuple[pd.DataFrame, str, str]:
         """Check if scenario exists and filter dataframe for scenario."""
 
@@ -226,7 +201,6 @@ class ScenarioDataProcessing:
             scenario_to_check_key,
             list_of_scenarios_to_check,
         ) in dict_of_scenarios_to_check.items():
-
             concat_df = ScenarioDataProcessing.aggregate_all_values_for_one_scenario(
                 dataframe=concat_df,
                 list_of_scenarios_to_check=list_of_scenarios_to_check,
@@ -247,9 +221,7 @@ class ScenarioDataProcessing:
                 key_for_scenario_one = list(dict_of_scenarios_to_check.keys())[0]
                 key_for_current_scenario = list(dict_of_scenarios_to_check.keys())[1]
                 # concat_df.iloc[index, concat_df.columns.get_loc("scenario")] = f"{scenario_value_one}_{current_scenario_value}"
-                concat_df.loc[
-                    index, "scenario"
-                ] = f"{scenario_value_one}_{current_scenario_value}"
+                concat_df.loc[index, "scenario"] = f"{scenario_value_one}_{current_scenario_value}"
             elif filter_level_index == 1:
                 key_for_scenario_one = list(dict_of_scenarios_to_check.keys())[0]
                 key_for_current_scenario = ""
@@ -260,141 +232,87 @@ class ScenarioDataProcessing:
         """Calculate relative electricity demand."""
 
         # look for ElectricityMeter|Electricity|ElectrcityFromGrid output
-        if (
-            "ElectricityMeter|Electricity|ElectricityFromGrid"
-            not in dataframe.variable.values
-        ):
-            raise ValueError(
-                "ElectricityMeter|Electricity|ElectricityFromGrid was not found in variables."
-            )
+        if "ElectricityMeter|Electricity|ElectricityFromGrid" not in dataframe.variable.values:
+            raise ValueError("ElectricityMeter|Electricity|ElectricityFromGrid was not found in variables.")
 
         # filter again just to be shure
-        filtered_data = dataframe.loc[
-            dataframe.variable == "ElectricityMeter|Electricity|ElectricityFromGrid"
-        ]
+        filtered_data = dataframe.loc[dataframe.variable == "ElectricityMeter|Electricity|ElectricityFromGrid"]
 
         if "share_of_maximum_pv_power" not in filtered_data.columns:
-            raise ValueError(
-                "share_of_maximum_pv_power was not found in dataframe columns"
-            )
+            raise ValueError("share_of_maximum_pv_power was not found in dataframe columns")
         # sort df accrofing to share of pv
         filtered_data = filtered_data.sort_values("share_of_maximum_pv_power")
 
         # iterate over all scenarios
         for scenario in list(set(filtered_data.scenario.values)):
-
             if "share_of_maximum_pv_power" not in scenario:
-
-                df_for_one_scenario = filtered_data.loc[
-                    filtered_data.scenario == scenario
-                ]
+                df_for_one_scenario = filtered_data.loc[filtered_data.scenario == scenario]
 
                 df_for_one_scenario_and_for_share_zero = df_for_one_scenario.loc[
                     df_for_one_scenario.share_of_maximum_pv_power == 0
                 ]
 
-                reference_value_for_electricity_demand = (
-                    df_for_one_scenario_and_for_share_zero.value.values
-                )
-                relative_electricity_demand = [0] * len(
-                    reference_value_for_electricity_demand
-                )
+                reference_value_for_electricity_demand = df_for_one_scenario_and_for_share_zero.value.values
+                relative_electricity_demand = [0] * len(reference_value_for_electricity_demand)
 
                 # get reference value (when share of pv power is zero)
-                for share_of_maximum_pv_power in list(
-                    set(df_for_one_scenario.share_of_maximum_pv_power.values)
-                ):
-
+                for share_of_maximum_pv_power in list(set(df_for_one_scenario.share_of_maximum_pv_power.values)):
                     if share_of_maximum_pv_power != 0:
-
                         df_for_one_scenario_and_for_one_share = df_for_one_scenario.loc[
-                            df_for_one_scenario.share_of_maximum_pv_power
-                            == share_of_maximum_pv_power
+                            df_for_one_scenario.share_of_maximum_pv_power == share_of_maximum_pv_power
                         ]
 
-                        value_for_electricity_demand = (
-                            df_for_one_scenario_and_for_one_share.value.values
-                        )
+                        value_for_electricity_demand = df_for_one_scenario_and_for_one_share.value.values
 
                         # calculate reference electricity demand for each scenario and share of pv power
                         relative_electricity_demand = (
-                            value_for_electricity_demand
-                            / reference_value_for_electricity_demand
-                            * 100
+                            value_for_electricity_demand / reference_value_for_electricity_demand * 100
                         )
 
                         new_df_only_with_relative_electricity_demand = copy.deepcopy(
                             df_for_one_scenario_and_for_one_share
                         )
-                        new_df_only_with_relative_electricity_demand.loc[
-                            :, "variable"
-                        ] = "Relative Electricity Demand"
-                        new_df_only_with_relative_electricity_demand.loc[
-                            :, "unit"
-                        ] = "%"
-                        new_df_only_with_relative_electricity_demand.loc[
-                            :, "value"
-                        ] = relative_electricity_demand
+                        new_df_only_with_relative_electricity_demand.loc[:, "variable"] = "Relative Electricity Demand"
+                        new_df_only_with_relative_electricity_demand.loc[:, "unit"] = "%"
+                        new_df_only_with_relative_electricity_demand.loc[:, "value"] = relative_electricity_demand
 
                         del df_for_one_scenario_and_for_one_share
 
-                        dataframe = pd.concat(
-                            [dataframe, new_df_only_with_relative_electricity_demand]
-                        )
+                        dataframe = pd.concat([dataframe, new_df_only_with_relative_electricity_demand])
                         del dataframe["Unnamed: 0"]
                         del new_df_only_with_relative_electricity_demand
 
             else:
-
-                df_for_one_scenario = filtered_data.loc[
-                    filtered_data.scenario == scenario
-                ]
-                share_of_maximum_pv_power = df_for_one_scenario[
-                    "share_of_maximum_pv_power"
-                ].values[0]
+                df_for_one_scenario = filtered_data.loc[filtered_data.scenario == scenario]
+                share_of_maximum_pv_power = df_for_one_scenario["share_of_maximum_pv_power"].values[0]
 
                 if share_of_maximum_pv_power == 0:
-
                     relative_electricity_demand = [0] * len(df_for_one_scenario)
 
                 else:
-
                     value_for_electricity_demand = df_for_one_scenario.value.values
                     df_for_one_scenario_and_for_share_zero = filtered_data.loc[
                         filtered_data.share_of_maximum_pv_power == 0
                     ]
-                    reference_value_for_electricity_demand = (
-                        df_for_one_scenario_and_for_share_zero.value.values
-                    )
+                    reference_value_for_electricity_demand = df_for_one_scenario_and_for_share_zero.value.values
 
                     # calculate reference electricity demand for each scenario and share of pv power
                     relative_electricity_demand = (
                         1
                         - (
-                            (
-                                reference_value_for_electricity_demand
-                                - value_for_electricity_demand
-                            )
+                            (reference_value_for_electricity_demand - value_for_electricity_demand)
                             / reference_value_for_electricity_demand
                         )
                     ) * 100
 
-                new_df_only_with_relative_electricity_demand = copy.deepcopy(
-                    df_for_one_scenario
-                )
-                new_df_only_with_relative_electricity_demand.loc[
-                    :, "variable"
-                ] = "Relative Electricity Demand"
+                new_df_only_with_relative_electricity_demand = copy.deepcopy(df_for_one_scenario)
+                new_df_only_with_relative_electricity_demand.loc[:, "variable"] = "Relative Electricity Demand"
                 new_df_only_with_relative_electricity_demand.loc[:, "unit"] = "%"
-                new_df_only_with_relative_electricity_demand.loc[
-                    :, "value"
-                ] = relative_electricity_demand
+                new_df_only_with_relative_electricity_demand.loc[:, "value"] = relative_electricity_demand
 
                 del df_for_one_scenario
 
-                dataframe = pd.concat(
-                    [dataframe, new_df_only_with_relative_electricity_demand]
-                )
+                dataframe = pd.concat([dataframe, new_df_only_with_relative_electricity_demand])
 
                 del dataframe["Unnamed: 0"]
                 del new_df_only_with_relative_electricity_demand

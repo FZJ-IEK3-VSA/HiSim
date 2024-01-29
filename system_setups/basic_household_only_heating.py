@@ -19,9 +19,7 @@ __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
 
 
-def setup_function(
-    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
-) -> None:
+def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
     """Gas heater + buffer storage.
 
     This setup function emulates an household including

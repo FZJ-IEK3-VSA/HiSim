@@ -9,11 +9,7 @@ from scipy.interpolate import interp1d
 import numpy as np
 
 # Import modules from HiSim
-from hisim.component import (
-    SingleTimeStepValues,
-    ComponentInput,
-    ComponentOutput,
-)
+from hisim.component import SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
@@ -72,9 +68,7 @@ class ElectrolyzerConfig(cp.ConfigBase):
     def read_config(electrolyzer_name):
         """Opens the according JSON-file, based on the electrolyzer_name."""
 
-        config_file = os.path.join(
-            utils.HISIMPATH["inputs"], "electrolyzer_manufacturer_config.json"
-        )
+        config_file = os.path.join(utils.HISIMPATH["inputs"], "electrolyzer_manufacturer_config.json")
         with open(config_file, "r", encoding="utf-8") as json_file:
             data = json.load(json_file)
             electrolyzer_variants = data["Electrolyzer variants"]
@@ -84,7 +78,6 @@ class ElectrolyzerConfig(cp.ConfigBase):
                 )
 
             for key, values in electrolyzer_variants.items():
-
                 if key == electrolyzer_name:
                     data_for_specific_electrolyzer = values
 
@@ -175,6 +168,7 @@ class Electrolyzer(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: ElectrolyzerConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ):
         """Constructs all the neccessary attributes."""
         self.electrolyzerconfig = config
@@ -182,9 +176,7 @@ class Electrolyzer(cp.Component):
 
         self.technology_type = config.electrolyzer_type
         if self.technology_type is None:
-            raise ValueError(
-                "Electrolyzer type should not be None. Please choose a different electrolyzer for config."
-            )
+            raise ValueError("Electrolyzer type should not be None. Please choose a different electrolyzer for config.")
         self.nom_load = config.nom_load
         self.max_load = config.max_load
         self.nom_h2_flow_rate = config.nom_h2_flow_rate
@@ -197,6 +189,7 @@ class Electrolyzer(cp.Component):
             name=self.electrolyzerconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         # =================================================================================================================================
@@ -371,9 +364,7 @@ class Electrolyzer(cp.Component):
         based on the nominal current density.
         """
         # Load data from the JSON file
-        data_file = os.path.join(
-            utils.HISIMPATH["inputs"], "electrolyzer_polarization_curve_data.json"
-        )
+        data_file = os.path.join(utils.HISIMPATH["inputs"], "electrolyzer_polarization_curve_data.json")
         with open(data_file, "r", encoding="utf-8") as file:
             data = json.load(file)
 
@@ -398,9 +389,7 @@ class Electrolyzer(cp.Component):
         spec_el_demand_stack = np.interp(i_cell_nom, i_cell, spec_el_stack_demand_nom)
 
         # calculating aux_power
-        aux_power = nominal_load - (
-            spec_el_demand_stack * h2_flow_rate
-        )  # might needs to be set to a constant value
+        aux_power = nominal_load - (spec_el_demand_stack * h2_flow_rate)  # might needs to be set to a constant value
 
         # interpolarization function
         u_cell_nom = np.interp(i_cell_nom, i_cell, u_cell)  # V
@@ -415,17 +404,13 @@ class Electrolyzer(cp.Component):
         based on the nominal current density.
         """
         # Load data from the JSON file
-        data_file = os.path.join(
-            utils.HISIMPATH["inputs"], "electrolyzer_efficiency_curve_data.json"
-        )
+        data_file = os.path.join(utils.HISIMPATH["inputs"], "electrolyzer_efficiency_curve_data.json")
         with open(data_file, "r", encoding="utf-8") as file:
             data = json.load(file)
 
         # Check if the provided technology is valid
         if electrolyzer_type not in data:
-            raise ValueError(
-                f"Invalid technology. Supported technologies are: {', '.join(data.keys())}"
-            )
+            raise ValueError(f"Invalid technology. Supported technologies are: {', '.join(data.keys())}")
 
         load_perc = data[electrolyzer_type]["load_perc"]
         sys_eff = data[electrolyzer_type]["sys_eff"]
@@ -433,18 +418,14 @@ class Electrolyzer(cp.Component):
         if state == 1:
             current_load_percentage = current_load / max_load
             # Interpolation
-            current_sys_eff_soec = float(
-                np.interp(current_load_percentage, load_perc, sys_eff)
-            )
+            current_sys_eff_soec = float(np.interp(current_load_percentage, load_perc, sys_eff))
 
         else:
             current_sys_eff_soec = 0.0
 
         lhv_h2 = 33.33  # [kWh/kg]
 
-        current_h2_production_rate = (
-            current_sys_eff_soec * current_load
-        ) / lhv_h2  # [kg/h]
+        current_h2_production_rate = (current_sys_eff_soec * current_load) / lhv_h2  # [kg/h]
 
         return current_sys_eff_soec, current_h2_production_rate
 
@@ -478,25 +459,15 @@ class Electrolyzer(cp.Component):
         # Calculates system_power from stack power
         system_power = stack_power + aux_power
 
-        interp_function_h2_production_rate = interp1d(
-            system_power, h2_production_rate, kind="quadratic"
-        )
-        spec_h2_production_rate = (
-            h2_production_rate / system_power
-        )  # kg/kWh (proportional to the system efficiency)
+        interp_function_h2_production_rate = interp1d(system_power, h2_production_rate, kind="quadratic")
+        spec_h2_production_rate = h2_production_rate / system_power  # kg/kWh (proportional to the system efficiency)
 
-        interp_function_spec_h2_production_rate = interp1d(
-            system_power, spec_h2_production_rate, kind="quadratic"
-        )
+        interp_function_spec_h2_production_rate = interp1d(system_power, spec_h2_production_rate, kind="quadratic")
 
         if state == 1:  # and current_load >= min_load:
             # Only produced hydrogen if the system is "on"
-            current_h2_production_rate = float(
-                interp_function_h2_production_rate(current_load)
-            )
-            current_spec_h2_production_rate = float(
-                interp_function_spec_h2_production_rate(current_load)
-            )
+            current_h2_production_rate = float(interp_function_h2_production_rate(current_load))
+            current_spec_h2_production_rate = float(interp_function_spec_h2_production_rate(current_load))
             current_eff = current_spec_h2_production_rate * 33.33  # LHV H2 33.33 kWh/kg
 
         else:
@@ -514,9 +485,7 @@ class Electrolyzer(cp.Component):
         """
         m_o2 = 31.9988
         m_h2 = 2.01588
-        m_dot_o2 = (
-            (m_o2 / m_h2) * 0.5 * current_h2_production_rate
-        )  # Kurzweil (2018) - Elektrolyse von Wasser
+        m_dot_o2 = (m_o2 / m_h2) * 0.5 * current_h2_production_rate  # Kurzweil (2018) - Elektrolyse von Wasser
         return m_dot_o2
 
     def water_demand(self, current_h2_production_rate):
@@ -527,9 +496,7 @@ class Electrolyzer(cp.Component):
         """
         m_h2o = 18.01528
         m_h2 = 2.01588
-        m_dot_h2o = (
-            m_h2o / m_h2
-        ) * current_h2_production_rate  # Kurzweil (2018) - Elektrolyse von Wasser
+        m_dot_h2o = (m_h2o / m_h2) * current_h2_production_rate  # Kurzweil (2018) - Elektrolyse von Wasser
         return m_dot_h2o
 
     def i_save_state(self) -> None:
@@ -574,9 +541,7 @@ class Electrolyzer(cp.Component):
         """Prepares the simulation."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the component."""
         if force_convergence:
             return
@@ -595,9 +560,7 @@ class Electrolyzer(cp.Component):
         i_cell_nom = self.i_cell_nom
         ramp_up_rate = self.ramp_up_rate
         ramp_down_rate = self.ramp_down_rate
-        seconds_per_timestep = (
-            self.my_simulation_parameters.seconds_per_timestep
-        )  # [s/timestep]
+        seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep  # [s/timestep]
 
         # ramp up per timestep calculation
         ramp_up_per_timestep = nominal_load * ramp_up_rate * seconds_per_timestep
@@ -625,20 +588,13 @@ class Electrolyzer(cp.Component):
                 self.total_ramp_down_count_state += 0
                 # pdb.set_trace()
             # Ramping up
-            if (
-                new_load >= total_ramp_up_per_timestep
-                and self.current_load_state < p_el
-            ):
+            if new_load >= total_ramp_up_per_timestep and self.current_load_state < p_el:
                 self.total_ramp_up_count_state += seconds_per_timestep
                 self.current_load_state += total_ramp_up_per_timestep
                 # pdb.set_trace()
-            elif (
-                self.current_load_state < p_el and new_load < total_ramp_up_per_timestep
-            ):
+            elif self.current_load_state < p_el and new_load < total_ramp_up_per_timestep:
                 percentage_ramp_up_per_timestep = new_load / total_ramp_up_per_timestep
-                self.total_ramp_up_count_state += (
-                    percentage_ramp_up_per_timestep * seconds_per_timestep
-                )
+                self.total_ramp_up_count_state += percentage_ramp_up_per_timestep * seconds_per_timestep
                 # pdb.set_trace()
                 if self.current_load_state == 0:
                     self.current_load_state += p_el
@@ -647,23 +603,13 @@ class Electrolyzer(cp.Component):
                     self.current_load_state += new_load
                     # pdb.set_trace()
             # Ramping down
-            elif (
-                total_ramp_down_per_timestep <= new_load
-                and p_el < self.current_load_state
-            ):
+            elif total_ramp_down_per_timestep <= new_load and p_el < self.current_load_state:
                 self.total_ramp_down_count_state += seconds_per_timestep
                 self.current_load_state -= new_load
                 # pdb.set_trace()
-            elif (
-                p_el < self.current_load_state
-                and new_load < total_ramp_down_per_timestep
-            ):
-                percentage_ramp_down_per_timestep = (
-                    new_load / total_ramp_down_per_timestep
-                )
-                self.total_ramp_down_count_state += (
-                    percentage_ramp_down_per_timestep * seconds_per_timestep
-                )
+            elif p_el < self.current_load_state and new_load < total_ramp_down_per_timestep:
+                percentage_ramp_down_per_timestep = new_load / total_ramp_down_per_timestep
+                self.total_ramp_down_count_state += percentage_ramp_down_per_timestep * seconds_per_timestep
                 self.current_load_state -= new_load
                 # pdb.set_trace()
         elif state == 0:
@@ -700,7 +646,10 @@ class Electrolyzer(cp.Component):
                 i_cell_nom,
             )
             # Current hydrogen prduction and specific hydrogen production rate
-            (current_h2_production_rate, current_eff,) = self.h2_production_rate(
+            (
+                current_h2_production_rate,
+                current_eff,
+            ) = self.h2_production_rate(
                 i_cell_nom,
                 u_cell_nom,
                 nominal_load,
@@ -716,17 +665,11 @@ class Electrolyzer(cp.Component):
         current_flow_rate_water = self.water_demand(current_h2_production_rate)
 
         # Calculating total amount of hydrogen, oxygen and water
-        total_hydrogen_produced_in_timestep = current_h2_production_rate * (
-            seconds_per_timestep / 3600
-        )
+        total_hydrogen_produced_in_timestep = current_h2_production_rate * (seconds_per_timestep / 3600)
         self.total_hydrogen_produced += total_hydrogen_produced_in_timestep
-        total_oxygen_produced_in_timestep = current_flow_rate_oxygen * (
-            seconds_per_timestep / 3600
-        )
+        total_oxygen_produced_in_timestep = current_flow_rate_oxygen * (seconds_per_timestep / 3600)
         self.total_oxygen_produced += total_oxygen_produced_in_timestep
-        total_water_demand_in_timestep = current_flow_rate_water * (
-            seconds_per_timestep / 3600
-        )
+        total_water_demand_in_timestep = current_flow_rate_water * (seconds_per_timestep / 3600)
         self.total_water_demand += total_water_demand_in_timestep
 
         self.total_energy += self.current_load_state * (seconds_per_timestep / 3600)
@@ -736,15 +679,11 @@ class Electrolyzer(cp.Component):
         stsv.set_output_value(self.oxygen_flow_rate, current_flow_rate_oxygen)
         stsv.set_output_value(self.water_flow_rate, current_flow_rate_water)
         stsv.set_output_value(self.electrolyzer_state, state)
-        stsv.set_output_value(
-            self.current_load, (self.current_load_state * 1000)
-        )  # Transform kW into WATT for EMS
+        stsv.set_output_value(self.current_load, (self.current_load_state * 1000))  # Transform kW into WATT for EMS
         stsv.set_output_value(self.total_energy_consumed, self.total_energy)
 
         stsv.set_output_value(self.total_ramp_up_time, self.total_ramp_up_count_state)
-        stsv.set_output_value(
-            self.total_ramp_down_time, self.total_ramp_down_count_state
-        )
+        stsv.set_output_value(self.total_ramp_down_time, self.total_ramp_down_count_state)
         stsv.set_output_value(self.total_hydrogen, self.total_hydrogen_produced)
         stsv.set_output_value(self.total_oxygen, self.total_oxygen_produced)
         stsv.set_output_value(self.total_water, self.total_water_demand)
@@ -760,39 +699,11 @@ class Electrolyzer(cp.Component):
         for config_string in self.electrolyzerconfig.get_string_dict():
             lines.append(config_string)
         lines.append("Component Name" + str(self.component_name))
-        lines.append(
-            "Total operating time during simulation: "
-            + str(self.total_operating_time)
-            + " [h]"
-        )
-        lines.append(
-            "Total hydrogen produced during simulation: "
-            + str(self.total_hydrogen_produced)
-            + " [kg]"
-        )
-        lines.append(
-            "Total oxygen produced during simulation: "
-            + str(self.total_oxygen_produced)
-            + " [kg]"
-        )
-        lines.append(
-            "Total water demand during simulation: "
-            + str(self.total_water_demand)
-            + " [kg]"
-        )
-        lines.append(
-            "Total energy consumed during simulation: "
-            + str(self.total_energy)
-            + " [kg]"
-        )
-        lines.append(
-            "Total ramp-up time during simulation: "
-            + str(self.total_ramp_up_count_state)
-            + " [kg]"
-        )
-        lines.append(
-            "Total ramp-down time during simulation: "
-            + str(self.total_ramp_down_count_state)
-            + " [kg]"
-        )
+        lines.append("Total operating time during simulation: " + str(self.total_operating_time) + " [h]")
+        lines.append("Total hydrogen produced during simulation: " + str(self.total_hydrogen_produced) + " [kg]")
+        lines.append("Total oxygen produced during simulation: " + str(self.total_oxygen_produced) + " [kg]")
+        lines.append("Total water demand during simulation: " + str(self.total_water_demand) + " [kg]")
+        lines.append("Total energy consumed during simulation: " + str(self.total_energy) + " [kg]")
+        lines.append("Total ramp-up time during simulation: " + str(self.total_ramp_up_count_state) + " [kg]")
+        lines.append("Total ramp-down time during simulation: " + str(self.total_ramp_down_count_state) + " [kg]")
         return lines

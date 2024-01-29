@@ -29,7 +29,7 @@ def test_heat_pump_hplib_new():
     force_convergence = False
 
     # Create fake component outputs as inputs for simulation
-    on_off_switch_hotwater = cp.ComponentOutput(
+    on_off_switch_space_heating = cp.ComponentOutput(
         "Fake_on_off_switch", "Fake_on_off_switch", lt.LoadTypes.ANY, lt.Units.ANY
     )
     on_off_switch_dhw = cp.ComponentOutput(
@@ -41,7 +41,7 @@ def test_heat_pump_hplib_new():
     t_in_primary = cp.ComponentOutput(
         "Fake_t_in_primary", "Fake_t_in_primary", lt.LoadTypes.ANY, lt.Units.ANY
     )
-    t_in_secondary_hot_water = cp.ComponentOutput(
+    t_in_secondary_space_heating = cp.ComponentOutput(
         "Fake_t_in_secondary_hot_water", "Fake_t_in_secondary_hot_water", lt.LoadTypes.ANY, lt.Units.ANY
     )
     t_in_secondary_dhw = cp.ComponentOutput(
@@ -72,32 +72,32 @@ def test_heat_pump_hplib_new():
     )
     heatpump = HeatPumpHplibWithTwoOutputs(config=heatpump_config, my_simulation_parameters=simpars)
     heatpump.state = HeatPumpWithTwoOutputsState(
-        time_on=0, time_off=0, time_on_cooling=0, on_off_previous=1
+        time_on=0, time_off=0, time_on_cooling=0, on_off_previous=1, cumulative_electrical_energy_in_watt_hour=0, cumulative_thermal_energy_in_watt_hour=0
     )
 
     number_of_outputs = fft.get_number_of_outputs(
-        [on_off_switch_hotwater, on_off_switch_dhw, const_thermal_power_value_dhw, t_in_primary, t_in_secondary_hot_water, t_in_secondary_dhw, t_amb, heatpump]
+        [on_off_switch_space_heating, on_off_switch_dhw, const_thermal_power_value_dhw, t_in_primary, t_in_secondary_space_heating, t_in_secondary_dhw, t_amb, heatpump]
     )
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
-    heatpump.on_off_switch_hotwater.source_output = on_off_switch_hotwater
+    heatpump.on_off_switch_sh.source_output = on_off_switch_space_heating
     heatpump.on_off_switch_dhw.source_output = on_off_switch_dhw
     heatpump.const_thermal_power_value_dhw.source_output = const_thermal_power_value_dhw
     heatpump.t_in_primary.source_output = t_in_primary
-    heatpump.t_in_secondary_hot_water.source_output = t_in_secondary_hot_water
+    heatpump.t_in_secondary_sh.source_output = t_in_secondary_space_heating
     heatpump.t_in_secondary_dhw.source_output = t_in_secondary_dhw
     heatpump.t_amb.source_output = t_amb
 
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components(
-        [on_off_switch_hotwater, on_off_switch_dhw, const_thermal_power_value_dhw,
-         t_in_primary, t_in_secondary_hot_water, t_in_secondary_dhw, t_amb, heatpump]
+        [on_off_switch_space_heating, on_off_switch_dhw, const_thermal_power_value_dhw,
+         t_in_primary, t_in_secondary_space_heating, t_in_secondary_dhw, t_amb, heatpump]
     )
-    stsv.values[on_off_switch_hotwater.global_index] = 1
+    stsv.values[on_off_switch_space_heating.global_index] = 1
     stsv.values[on_off_switch_dhw.global_index] = 0
     stsv.values[const_thermal_power_value_dhw.global_index] = 0
     stsv.values[t_in_primary.global_index] = -7
-    stsv.values[t_in_secondary_hot_water.global_index] = 47.0
+    stsv.values[t_in_secondary_space_heating.global_index] = 47.0
     stsv.values[t_in_secondary_dhw.global_index] = 55.0
     stsv.values[t_amb.global_index] = -7
 
@@ -107,10 +107,10 @@ def test_heat_pump_hplib_new():
     )
     log.information(str(stsv.values))
     # Check
-    assert p_th_set == stsv.values[heatpump.p_th_hot_water.global_index]
-    assert 7074.033573088874 == stsv.values[heatpump.p_el_hot_water.global_index]
+    assert p_th_set == stsv.values[heatpump.p_th_sh.global_index]
+    assert 7074.033573088874 == stsv.values[heatpump.p_el_sh.global_index]
     assert 1.4136206588052005 == stsv.values[heatpump.cop.global_index]
-    assert t_out == stsv.values[heatpump.t_out_hot_water.global_index]
-    assert 0.47619047619047616 == stsv.values[heatpump.m_dot_hot_water.global_index]
+    assert t_out == stsv.values[heatpump.t_out_sh.global_index]
+    assert 0.47619047619047616 == stsv.values[heatpump.m_dot_sh.global_index]
     assert 60 == stsv.values[heatpump.time_on.global_index]
     assert 0 == stsv.values[heatpump.time_off.global_index]

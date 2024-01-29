@@ -132,8 +132,8 @@ def setup_function(
     )
 
     # Build Heat Pump Controller for hot water (heating building)
-    my_heatpump_controller_hotwater_config = more_advanced_heat_pump_hplib.HeatPumpHplibControllerHotWaterStorageL1Config(
-        name="HeatPumpHplibController",
+    my_heatpump_controller_sh_config = more_advanced_heat_pump_hplib.HeatPumpHplibControllerSpaceHeatingConfig(
+        name="HeatPumpControllerSH",
         mode=hp_controller_mode,
         set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_pump_in_celsius,
         set_cooling_threshold_outside_temperature_in_celsius=set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius,
@@ -141,12 +141,12 @@ def setup_function(
         heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
     )
 
-    my_heatpump_controller_hotwater = more_advanced_heat_pump_hplib.HeatPumpHplibControllerHotWaterStorage(
-        config=my_heatpump_controller_hotwater_config,
+    my_heatpump_controller_hotwater = more_advanced_heat_pump_hplib.HeatPumpHplibControllerSpaceHeating(
+        config=my_heatpump_controller_sh_config,
         my_simulation_parameters=my_simulation_parameters
     )
 
-    my_heatpump_controller_dhw_config = more_advanced_heat_pump_hplib.HeatPumpHplibControllerDHWL1Config.get_default_generic_heat_pump_controller_config()
+    my_heatpump_controller_dhw_config = more_advanced_heat_pump_hplib.HeatPumpHplibControllerDHWConfig.get_default_dhw_controller_config()
 
     # Build Heat Pump Controller for dhw
     my_heatpump_controller_dhw = more_advanced_heat_pump_hplib.HeatPumpHplibControllerDHW(
@@ -252,13 +252,13 @@ def setup_function(
     my_hot_water_storage.connect_input(
         my_hot_water_storage.WaterTemperatureFromHeatGenerator,
         my_heatpump.component_name,
-        my_heatpump.TemperatureOutputHotWater,
+        my_heatpump.TemperatureOutputSH,
     )
 
     my_hot_water_storage.connect_input(
         my_hot_water_storage.WaterMassFlowRateFromHeatGenerator,
         my_heatpump.component_name,
-        my_heatpump.MassFlowOutputHotWater,
+        my_heatpump.MassFlowOutputSH,
     )
 
     #################################
@@ -283,7 +283,7 @@ def setup_function(
 
     my_electricity_meter.add_component_input_and_connect(
         source_object_name=my_heatpump.component_name,
-        source_component_output=my_heatpump.ElectricalInputPowerGesamt,
+        source_component_output=my_heatpump.ElectricalInputPowerTotal,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[

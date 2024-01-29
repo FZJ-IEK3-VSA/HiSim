@@ -58,10 +58,10 @@ class HouseholdMoreAdvancedHPDieselCarConfig(SystemSetupConfigBase):
     building_config: building.BuildingConfig
     hds_controller_config: heat_distribution_system.HeatDistributionControllerConfig
     hds_config: heat_distribution_system.HeatDistributionConfig
-    hp_controller_config: more_advanced_heat_pump_hplib.HeatPumpHplibControllerHotWaterStorageL1Config
+    sh_controller_config: more_advanced_heat_pump_hplib.HeatPumpHplibControllerSpaceHeatingConfig
     hp_config: more_advanced_heat_pump_hplib.HeatPumpHplibWithTwoOutputsConfig
     simple_hot_water_storage_config: simple_hot_water_storage.SimpleHotWaterStorageConfig
-    dhw_heatpump_controller_config: more_advanced_heat_pump_hplib.HeatPumpHplibControllerDHWL1Config
+    dhw_heatpump_controller_config: more_advanced_heat_pump_hplib.HeatPumpHplibControllerDHWConfig
     dhw_storage_config: generic_hot_water_storage_modular.StorageConfig
     car_config: generic_car.CarConfig
     electricity_meter_config: electricity_meter.ElectricityMeterConfig
@@ -135,7 +135,7 @@ class HouseholdMoreAdvancedHPDieselCarConfig(SystemSetupConfigBase):
                     water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
                 )
             ),
-            hp_controller_config=more_advanced_heat_pump_hplib.HeatPumpHplibControllerHotWaterStorageL1Config.get_default_generic_heat_pump_controller_config(
+            sh_controller_config=more_advanced_heat_pump_hplib.HeatPumpHplibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
                 heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
             ),
             hp_config=more_advanced_heat_pump_hplib.HeatPumpHplibWithTwoOutputsConfig.get_scaled_advanced_hp_lib(
@@ -148,7 +148,7 @@ class HouseholdMoreAdvancedHPDieselCarConfig(SystemSetupConfigBase):
                 heating_system_name="AdvancedHeatPumpHPLib",
                 water_mass_flow_rate_from_hds_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
             ),
-            dhw_heatpump_controller_config=more_advanced_heat_pump_hplib.HeatPumpHplibControllerDHWL1Config.get_default_generic_heat_pump_controller_config(),
+            dhw_heatpump_controller_config=more_advanced_heat_pump_hplib.HeatPumpHplibControllerDHWConfig.get_default_dhw_controller_config(),
             dhw_storage_config=generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
                 number_of_apartments=int(my_building_information.number_of_apartments)
             ),
@@ -158,7 +158,7 @@ class HouseholdMoreAdvancedHPDieselCarConfig(SystemSetupConfigBase):
 
         # adjust HeatPump
         household_config.hp_config.group_id = 1  # use modulating heatpump as default
-        household_config.hp_controller_config.mode = (
+        household_config.sh_controller_config.mode = (
             2  # use heating and cooling as default
         )
         household_config.hp_config.minimum_idle_time_in_seconds = (
@@ -172,7 +172,7 @@ class HouseholdMoreAdvancedHPDieselCarConfig(SystemSetupConfigBase):
         household_config.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
             set_heating_threshold_outside_temperature_in_celsius
         )
-        household_config.hp_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
+        household_config.sh_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
             set_heating_threshold_outside_temperature_in_celsius
         )
 
@@ -237,6 +237,7 @@ def setup_function(
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year_all_options(
             year=year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters.result_directory = r"C:\Users\j.hoppe\Desktop\new_hp_hisism"
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
@@ -270,12 +271,12 @@ def setup_function(
     my_heat_distribution = heat_distribution_system.HeatDistribution(
         my_simulation_parameters=my_simulation_parameters, config=my_config.hds_config
     )
-    # Build Heat Pump Controller for hot water
-    my_heatpump_controller_hotwater_config = my_config.hp_controller_config
-    my_heatpump_controller_hotwater_config.name = "HPHotWaterController"
+    # Build Heat Pump Controller for space heating
+    my_heatpump_controller_sh_config = my_config.sh_controller_config
+    my_heatpump_controller_sh_config.name = "HeatPumpControllerSH"
 
-    my_heatpump_controller_hotwater = more_advanced_heat_pump_hplib.HeatPumpHplibControllerHotWaterStorage(
-        config=my_heatpump_controller_hotwater_config,
+    my_heatpump_controller_space_heating = more_advanced_heat_pump_hplib.HeatPumpHplibControllerSpaceHeating(
+        config=my_heatpump_controller_sh_config,
         my_simulation_parameters=my_simulation_parameters
     )
 
@@ -361,7 +362,7 @@ def setup_function(
 
     #################################
     my_heatpump.connect_only_predefined_connections(
-        my_heatpump_controller_hotwater, my_heatpump_controller_dhw, my_weather, my_hot_water_storage,
+        my_heatpump_controller_space_heating, my_heatpump_controller_dhw, my_weather, my_hot_water_storage,
         my_dhw_storage)
 
     # Verknüpfung mit Luft als Umgebungswärmequelle
@@ -377,7 +378,7 @@ def setup_function(
 
         # todo: Water and Brine Connection
 
-    my_heatpump_controller_hotwater.connect_only_predefined_connections(my_heat_distribution_controller,
+    my_heatpump_controller_space_heating.connect_only_predefined_connections(my_heat_distribution_controller,
                                                                         my_weather,
                                                                         my_hot_water_storage)
 
@@ -393,13 +394,13 @@ def setup_function(
     my_hot_water_storage.connect_input(
         my_hot_water_storage.WaterTemperatureFromHeatGenerator,
         my_heatpump.component_name,
-        my_heatpump.TemperatureOutputHotWater,
+        my_heatpump.TemperatureOutputSH,
     )
 
     my_hot_water_storage.connect_input(
         my_hot_water_storage.WaterMassFlowRateFromHeatGenerator,
         my_heatpump.component_name,
-        my_heatpump.MassFlowOutputHotWater,
+        my_heatpump.MassFlowOutputSH,
     )
 
     #################################
@@ -424,7 +425,7 @@ def setup_function(
 
     my_electricity_meter.add_component_input_and_connect(
         source_object_name=my_heatpump.component_name,
-        source_component_output=my_heatpump.ElectricalInputPowerGesamt,
+        source_component_output=my_heatpump.ElectricalInputPowerTotal,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[
@@ -439,7 +440,7 @@ def setup_function(
     my_sim.add_component(my_weather)
     my_sim.add_component(my_building)
     my_sim.add_component(my_heatpump)
-    my_sim.add_component(my_heatpump_controller_hotwater)
+    my_sim.add_component(my_heatpump_controller_space_heating)
     my_sim.add_component(my_heatpump_controller_dhw)
     my_sim.add_component(my_heat_distribution)
     my_sim.add_component(my_heat_distribution_controller)

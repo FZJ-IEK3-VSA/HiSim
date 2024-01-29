@@ -237,7 +237,6 @@ def setup_function(
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year_all_options(
             year=year, seconds_per_timestep=seconds_per_timestep)
-        my_simulation_parameters.result_directory = r"C:\Users\j.hoppe\Desktop\new_hp_hisism"
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 

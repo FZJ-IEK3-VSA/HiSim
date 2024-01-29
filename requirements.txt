@@ -24,7 +24,7 @@ plotly
 ordered_set
 typing_extensions
 python-dotenv
-windpowerlib
-wetterdienst
+windpowerlib==0.2.1
+wetterdienst==0.68.0
 cdsapi
 xarray

@@ -68,9 +68,7 @@ class WeatherDataImport:
         self.start_date_for_weather_data = datetime.datetime(
             year=start_year, month=1, day=1, hour=0, minute=0, second=0
         )
-        self.end_date_for_weather_data = datetime.datetime(
-            year=end_year, month=1, day=1, hour=0, minute=0, second=0
-        )
+        self.end_date_for_weather_data = datetime.datetime(year=end_year, month=1, day=1, hour=0, minute=0, second=0)
 
         print(
             f"Weatherdata request from {self.start_date_for_weather_data} to {self.end_date_for_weather_data} in {weather_data_source} database."
@@ -142,9 +140,7 @@ class WeatherDataImport:
             stations = request.df
 
             if len(stations) == 0:
-                raise KeyError(
-                    "No weather station found in the area. Increase radius for station search."
-                )
+                raise KeyError("No weather station found in the area. Increase radius for station search.")
             if len(stations) < 3:
                 raise KeyError(
                     "Only 2 weather stations found in the area. Minimum number 3! Increase radius for station search."
@@ -161,12 +157,8 @@ class WeatherDataImport:
 
             # Calculating weight based on inverse distance
             radial_distance = np.sqrt(
-                np.square(
-                    self.longitude - distance_location_to_stations_df["longitude"]
-                )
-                + np.square(
-                    self.latitude - distance_location_to_stations_df["latitude"]
-                )
+                np.square(self.longitude - distance_location_to_stations_df["longitude"])
+                + np.square(self.latitude - distance_location_to_stations_df["latitude"])
             )
             weights = 1 / (np.sqrt(radial_distance))
             weights = pd.DataFrame({"weights": weights})
@@ -192,13 +184,9 @@ class WeatherDataImport:
                 print("All weather data for a year is available.")
             else:
                 if 60 * 24 * 365 / 10 - len(time_df) + 1 < 50:
-                    print(
-                        f"Note: {60 * 24 * 365 /10 - len(time_df)+1} entries for an entire year are missing."
-                    )
+                    print(f"Note: {60 * 24 * 365 /10 - len(time_df)+1} entries for an entire year are missing.")
 
-                    time_index_full = pd.to_datetime(
-                        time_df[["year", "month", "day", "hour", "minute"]]
-                    )
+                    time_index_full = pd.to_datetime(time_df[["year", "month", "day", "hour", "minute"]])
 
                     missing_times = pd.date_range(
                         start=time_index_full.min(),
@@ -209,14 +197,10 @@ class WeatherDataImport:
                     missing_times = pd.to_datetime(missing_times)
 
                     missing_times_df_year = pd.DataFrame({"year": missing_times.year})
-                    missing_times_df_month = pd.DataFrame(
-                        {"month": missing_times.month}
-                    )
+                    missing_times_df_month = pd.DataFrame({"month": missing_times.month})
                     missing_times_df_day = pd.DataFrame({"day": missing_times.day})
                     missing_times_df_hour = pd.DataFrame({"hour": missing_times.hour})
-                    missing_times_df_minute = pd.DataFrame(
-                        {"minute": missing_times.minute}
-                    )
+                    missing_times_df_minute = pd.DataFrame({"minute": missing_times.minute})
 
                     missing_time_df = pd.concat(
                         [
@@ -243,13 +227,9 @@ class WeatherDataImport:
                 .apply(lambda x: ", ".join(map(str, x)))
                 .reset_index()
             )
-            temperature_dwd_df = temperature_dwd_df.rename(
-                columns={"value": "temperature"}
-            )
+            temperature_dwd_df = temperature_dwd_df.rename(columns={"value": "temperature"})
             temperature_dwd_df["temperature"] = temperature_dwd_df["temperature"].apply(
-                lambda x: [
-                    float(val) if val != "nan" else np.nan for val in x.split(", ")
-                ]
+                lambda x: [float(val) if val != "nan" else np.nan for val in x.split(", ")]
             )
 
             temperatur_air_list = []
@@ -263,18 +243,13 @@ class WeatherDataImport:
                     temperature_location = np.nan
                 else:
                     temperature_location = sum(
-                        temperature_air_valid_data["temperature"]
-                        * weights["weights"][temperature_air_valid_data.index]
+                        temperature_air_valid_data["temperature"] * weights["weights"][temperature_air_valid_data.index]
                     ) / sum(weights["weights"][temperature_air_valid_data.index])
 
                 temperatur_air_list.append(temperature_location)
 
-            temperature_air_df = pd.DataFrame(
-                temperatur_air_list, columns=["temperature"]
-            )
-            temperature_air_df = temperature_air_df.interpolate(
-                method="linear", limit_direction="backward"
-            )
+            temperature_air_df = pd.DataFrame(temperatur_air_list, columns=["temperature"])
+            temperature_air_df = temperature_air_df.interpolate(method="linear", limit_direction="backward")
 
             pressure_dwd_df = (
                 values[values["parameter"] == "pressure_air_site"]
@@ -284,32 +259,25 @@ class WeatherDataImport:
             )
             pressure_dwd_df = pressure_dwd_df.rename(columns={"value": "pressure"})
             pressure_dwd_df["pressure"] = pressure_dwd_df["pressure"].apply(
-                lambda x: [
-                    float(val) if val != "nan" else np.nan for val in x.split(", ")
-                ]
+                lambda x: [float(val) if val != "nan" else np.nan for val in x.split(", ")]
             )
 
             pressure_list = []
             pressure_valid_data = pd.DataFrame()
             for i in range(len(temperature_dwd_df)):
-                pressure_valid_data = pd.DataFrame(
-                    {"pressure": pressure_dwd_df["pressure"][i]}
-                ).dropna()
+                pressure_valid_data = pd.DataFrame({"pressure": pressure_dwd_df["pressure"][i]}).dropna()
 
                 if pressure_valid_data.empty:
                     pressure_location = np.nan
                 else:
                     pressure_location = sum(
-                        pressure_valid_data["pressure"]
-                        * weights["weights"][pressure_valid_data.index]
+                        pressure_valid_data["pressure"] * weights["weights"][pressure_valid_data.index]
                     ) / sum(weights["weights"][pressure_valid_data.index])
 
                 pressure_list.append(pressure_location)
 
             pressure_df = pd.DataFrame(pressure_list, columns=["pressure"])
-            pressure_df = pressure_df.interpolate(
-                method="linear", limit_direction="backward"
-            )
+            pressure_df = pressure_df.interpolate(method="linear", limit_direction="backward")
 
             wind_direction_dwd_df = (
                 values[values["parameter"] == "wind_direction"]
@@ -317,15 +285,9 @@ class WeatherDataImport:
                 .apply(lambda x: ", ".join(map(str, x)))
                 .reset_index()
             )
-            wind_direction_dwd_df = wind_direction_dwd_df.rename(
-                columns={"value": "wind_direction"}
-            )
-            wind_direction_dwd_df["wind_direction"] = wind_direction_dwd_df[
-                "wind_direction"
-            ].apply(
-                lambda x: [
-                    float(val) if val != "nan" else np.nan for val in x.split(", ")
-                ]
+            wind_direction_dwd_df = wind_direction_dwd_df.rename(columns={"value": "wind_direction"})
+            wind_direction_dwd_df["wind_direction"] = wind_direction_dwd_df["wind_direction"].apply(
+                lambda x: [float(val) if val != "nan" else np.nan for val in x.split(", ")]
             )
 
             wind_direction_list = []
@@ -345,12 +307,8 @@ class WeatherDataImport:
 
                 wind_direction_list.append(wind_direction_location)
 
-            wind_direction_df = pd.DataFrame(
-                wind_direction_list, columns=["wind_direction"]
-            )
-            wind_direction_df = wind_direction_df.interpolate(
-                method="linear", limit_direction="backward"
-            )
+            wind_direction_df = pd.DataFrame(wind_direction_list, columns=["wind_direction"])
+            wind_direction_df = wind_direction_df.interpolate(method="linear", limit_direction="backward")
 
             wind_speed_dwd_df = (
                 values[values["parameter"] == "wind_speed"]
@@ -358,36 +316,27 @@ class WeatherDataImport:
                 .apply(lambda x: ", ".join(map(str, x)))
                 .reset_index()
             )
-            wind_speed_dwd_df = wind_speed_dwd_df.rename(
-                columns={"value": "wind_speed"}
-            )
+            wind_speed_dwd_df = wind_speed_dwd_df.rename(columns={"value": "wind_speed"})
             wind_speed_dwd_df["wind_speed"] = wind_speed_dwd_df["wind_speed"].apply(
-                lambda x: [
-                    float(val) if val != "nan" else np.nan for val in x.split(", ")
-                ]
+                lambda x: [float(val) if val != "nan" else np.nan for val in x.split(", ")]
             )
 
             wind_speed_list = []
             wind_speed_valid_data = pd.DataFrame()
             for i in range(len(wind_speed_dwd_df)):
-                wind_speed_valid_data = pd.DataFrame(
-                    {"wind_speed": wind_speed_dwd_df["wind_speed"][i]}
-                ).dropna()
+                wind_speed_valid_data = pd.DataFrame({"wind_speed": wind_speed_dwd_df["wind_speed"][i]}).dropna()
 
                 if wind_speed_valid_data.empty:
                     wind_speed_location = np.nan
                 else:
                     wind_speed_location = sum(
-                        wind_speed_valid_data["wind_speed"]
-                        * weights["weights"][wind_speed_valid_data.index]
+                        wind_speed_valid_data["wind_speed"] * weights["weights"][wind_speed_valid_data.index]
                     ) / sum(weights["weights"][wind_speed_valid_data.index])
 
                 wind_speed_list.append(wind_speed_location)
 
             wind_speed_df = pd.DataFrame(wind_speed_list, columns=["wind_speed"])
-            wind_speed_df = wind_speed_df.interpolate(
-                method="linear", limit_direction="backward"
-            )
+            wind_speed_df = wind_speed_df.interpolate(method="linear", limit_direction="backward")
 
             diffuse_irradiance_dwd_df = (
                 values[values["parameter"] == "radiation_sky_short_wave_diffuse"]
@@ -395,26 +344,16 @@ class WeatherDataImport:
                 .apply(lambda x: ", ".join(map(str, x)))
                 .reset_index()
             )
-            diffuse_irradiance_dwd_df = diffuse_irradiance_dwd_df.rename(
-                columns={"value": "diffuse_irradiance"}
-            )
-            diffuse_irradiance_dwd_df["diffuse_irradiance"] = diffuse_irradiance_dwd_df[
-                "diffuse_irradiance"
-            ].apply(
-                lambda x: [
-                    float(val) if val != "nan" else np.nan for val in x.split(", ")
-                ]
+            diffuse_irradiance_dwd_df = diffuse_irradiance_dwd_df.rename(columns={"value": "diffuse_irradiance"})
+            diffuse_irradiance_dwd_df["diffuse_irradiance"] = diffuse_irradiance_dwd_df["diffuse_irradiance"].apply(
+                lambda x: [float(val) if val != "nan" else np.nan for val in x.split(", ")]
             )
 
             diffuse_irradiance_list = []
             diffuse_irradiance_valid_data = pd.DataFrame()
             for i in range(len(diffuse_irradiance_dwd_df)):
                 diffuse_irradiance_valid_data = pd.DataFrame(
-                    {
-                        "diffuse_irradiance": diffuse_irradiance_dwd_df[
-                            "diffuse_irradiance"
-                        ][i]
-                    }
+                    {"diffuse_irradiance": diffuse_irradiance_dwd_df["diffuse_irradiance"][i]}
                 ).dropna()
 
                 if diffuse_irradiance_valid_data.empty:
@@ -425,18 +364,12 @@ class WeatherDataImport:
                         * weights["weights"][diffuse_irradiance_valid_data.index]
                     ) / sum(weights["weights"][diffuse_irradiance_valid_data.index])
 
-                    diffuse_irradiance_location_watt_per_m2 = (
-                        diffuse_irradiance_location_j_per_cm2 * 10000 / (10 * 60)
-                    )
+                    diffuse_irradiance_location_watt_per_m2 = diffuse_irradiance_location_j_per_cm2 * 10000 / (10 * 60)
 
                 diffuse_irradiance_list.append(diffuse_irradiance_location_watt_per_m2)
 
-            diffuse_irradiance_df = pd.DataFrame(
-                diffuse_irradiance_list, columns=["diffuse_irradiance"]
-            )
-            diffuse_irradiance_df = diffuse_irradiance_df.interpolate(
-                method="linear", limit_direction="backward"
-            )
+            diffuse_irradiance_df = pd.DataFrame(diffuse_irradiance_list, columns=["diffuse_irradiance"])
+            diffuse_irradiance_df = diffuse_irradiance_df.interpolate(method="linear", limit_direction="backward")
 
             global_irradiance_dwd_df = (
                 values[values["parameter"] == "radiation_global"]
@@ -444,26 +377,16 @@ class WeatherDataImport:
                 .apply(lambda x: ", ".join(map(str, x)))
                 .reset_index()
             )
-            global_irradiance_dwd_df = global_irradiance_dwd_df.rename(
-                columns={"value": "global_irradiance"}
-            )
-            global_irradiance_dwd_df["global_irradiance"] = global_irradiance_dwd_df[
-                "global_irradiance"
-            ].apply(
-                lambda x: [
-                    float(val) if val != "nan" else np.nan for val in x.split(", ")
-                ]
+            global_irradiance_dwd_df = global_irradiance_dwd_df.rename(columns={"value": "global_irradiance"})
+            global_irradiance_dwd_df["global_irradiance"] = global_irradiance_dwd_df["global_irradiance"].apply(
+                lambda x: [float(val) if val != "nan" else np.nan for val in x.split(", ")]
             )
 
             global_irradiance_list = []
             global_irradiance_valid_data = pd.DataFrame()
             for i in range(len(global_irradiance_dwd_df)):
                 global_irradiance_valid_data = pd.DataFrame(
-                    {
-                        "global_irradiance": global_irradiance_dwd_df[
-                            "global_irradiance"
-                        ][i]
-                    }
+                    {"global_irradiance": global_irradiance_dwd_df["global_irradiance"][i]}
                 ).dropna()
 
                 if global_irradiance_valid_data.empty:
@@ -474,18 +397,12 @@ class WeatherDataImport:
                         * weights["weights"][global_irradiance_valid_data.index]
                     ) / sum(weights["weights"][global_irradiance_valid_data.index])
 
-                    global_irradiance_location_watt_per_m2 = (
-                        global_irradiance_location_j_per_cm2 * 10000 / (10 * 60)
-                    )
+                    global_irradiance_location_watt_per_m2 = global_irradiance_location_j_per_cm2 * 10000 / (10 * 60)
 
                 global_irradiance_list.append(global_irradiance_location_watt_per_m2)
 
-            global_irradiance_df = pd.DataFrame(
-                global_irradiance_list, columns=["global_irradiance"]
-            )
-            global_irradiance_df = global_irradiance_df.interpolate(
-                method="linear", limit_direction="backward"
-            )
+            global_irradiance_df = pd.DataFrame(global_irradiance_list, columns=["global_irradiance"])
+            global_irradiance_df = global_irradiance_df.interpolate(method="linear", limit_direction="backward")
 
             weather_df = pd.DataFrame()
             weather_df = pd.concat(
@@ -504,12 +421,8 @@ class WeatherDataImport:
 
             if len(missing_time_df) != 0:
                 # Setze den Zeitindex für df2
-                weather_df_time_index = pd.to_datetime(
-                    weather_df[["year", "month", "day", "hour", "minute"]]
-                )
-                time_index_full = pd.to_datetime(
-                    missing_time_df[["year", "month", "day", "hour", "minute"]]
-                )
+                weather_df_time_index = pd.to_datetime(weather_df[["year", "month", "day", "hour", "minute"]])
+                time_index_full = pd.to_datetime(missing_time_df[["year", "month", "day", "hour", "minute"]])
 
                 merged_weather_df = pd.concat(
                     [
@@ -713,13 +626,9 @@ class WeatherDataImport:
                 print("All weather data for a year is available.")
             else:
                 if 24 * 365 - len(time_df) < 50:
-                    print(
-                        f"Note: {24 * 365 - len(time_df)} entries for an entire year are missing."
-                    )
+                    print(f"Note: {24 * 365 - len(time_df)} entries for an entire year are missing.")
 
-                    time_index_full = pd.to_datetime(
-                        time_df[["year", "month", "day", "hour", "minute"]]
-                    )
+                    time_index_full = pd.to_datetime(time_df[["year", "month", "day", "hour", "minute"]])
 
                     missing_times = pd.date_range(
                         start=time_index_full.min(),
@@ -730,14 +639,10 @@ class WeatherDataImport:
                     missing_times = pd.to_datetime(missing_times)
 
                     missing_times_df_year = pd.DataFrame({"year": missing_times.year})
-                    missing_times_df_month = pd.DataFrame(
-                        {"month": missing_times.month}
-                    )
+                    missing_times_df_month = pd.DataFrame({"month": missing_times.month})
                     missing_times_df_day = pd.DataFrame({"day": missing_times.day})
                     missing_times_df_hour = pd.DataFrame({"hour": missing_times.hour})
-                    missing_times_df_minute = pd.DataFrame(
-                        {"minute": missing_times.minute}
-                    )
+                    missing_times_df_minute = pd.DataFrame({"minute": missing_times.minute})
 
                     missing_time_df = pd.concat(
                         [
@@ -754,9 +659,7 @@ class WeatherDataImport:
                     print(missing_times)
 
                 else:
-                    raise KeyError(
-                        f"Note: {24 * 365 - len(time_df)} entries for an entire year are missing. Too much!"
-                    )
+                    raise KeyError(f"Note: {24 * 365 - len(time_df)} entries for an entire year are missing. Too much!")
 
             temperature_air_list_k = values["t2m"].tolist()
             pressure_list_pa = values["sp"].tolist()
@@ -769,21 +672,15 @@ class WeatherDataImport:
             for temperature_in_k in temperature_air_list_k:
                 temperature_in_celsius = temperature_in_k - 273.15
                 temperature_air_list_celsius.append(temperature_in_celsius)
-            temperature_air_df = pd.DataFrame(
-                temperature_air_list_celsius, columns=["temperature"]
-            )
-            temperature_air_df = temperature_air_df.interpolate(
-                method="linear", limit_direction="backward"
-            )
+            temperature_air_df = pd.DataFrame(temperature_air_list_celsius, columns=["temperature"])
+            temperature_air_df = temperature_air_df.interpolate(method="linear", limit_direction="backward")
 
             pressure_list_hpa = []
             for pressure_in_pa in pressure_list_pa:
                 pressure_in_hpa = pressure_in_pa / 100
                 pressure_list_hpa.append(pressure_in_hpa)
             pressure_df = pd.DataFrame(pressure_list_hpa, columns=["pressure"])
-            pressure_df = pressure_df.interpolate(
-                method="linear", limit_direction="backward"
-            )
+            pressure_df = pressure_df.interpolate(method="linear", limit_direction="backward")
 
             wind_speed_list_m_s = []
             wind_direction_list = []
@@ -794,51 +691,29 @@ class WeatherDataImport:
                 wind_direction = 180 + (180 / np.pi) * np.arctan2(v_i, u_i)
                 wind_direction_list.append(wind_direction)
             wind_speed_df = pd.DataFrame(wind_speed_list_m_s, columns=["wind_speed"])
-            wind_speed_df = wind_speed_df.interpolate(
-                method="linear", limit_direction="backward"
-            )
-            wind_direction_df = pd.DataFrame(
-                wind_direction_list, columns=["wind_direction"]
-            )
-            wind_direction_df = wind_direction_df.interpolate(
-                method="linear", limit_direction="backward"
-            )
+            wind_speed_df = wind_speed_df.interpolate(method="linear", limit_direction="backward")
+            wind_direction_df = pd.DataFrame(wind_direction_list, columns=["wind_direction"])
+            wind_direction_df = wind_direction_df.interpolate(method="linear", limit_direction="backward")
 
             global_horizontal_irradiation_list_watt_per_m2 = []
-            for (
-                global_horizontal_irradiation_in_j_per_m2
-            ) in global_horizontal_irradiation_list_j_per_m2:
-                global_horizontal_irradiation_in_watt_per_m2 = (
-                    global_horizontal_irradiation_in_j_per_m2 / (3600)
-                )
-                global_horizontal_irradiation_list_watt_per_m2.append(
-                    global_horizontal_irradiation_in_watt_per_m2
-                )
+            for global_horizontal_irradiation_in_j_per_m2 in global_horizontal_irradiation_list_j_per_m2:
+                global_horizontal_irradiation_in_watt_per_m2 = global_horizontal_irradiation_in_j_per_m2 / (3600)
+                global_horizontal_irradiation_list_watt_per_m2.append(global_horizontal_irradiation_in_watt_per_m2)
             global_irradiance_df = pd.DataFrame(
                 global_horizontal_irradiation_list_watt_per_m2,
                 columns=["global_irradiance"],
             )
-            global_irradiance_df = global_irradiance_df.interpolate(
-                method="linear", limit_direction="backward"
-            )
+            global_irradiance_df = global_irradiance_df.interpolate(method="linear", limit_direction="backward")
 
             direct_horizontal_irradiation_list_watt_per_m2 = []
-            for (
-                direct_horizontal_irradiation_in_j_per_m2
-            ) in direct_horizontal_irradiation_list_j_per_m2:
-                direct_horizontal_irradiation_in_watt_per_m2 = (
-                    direct_horizontal_irradiation_in_j_per_m2 / (3600)
-                )
-                direct_horizontal_irradiation_list_watt_per_m2.append(
-                    direct_horizontal_irradiation_in_watt_per_m2
-                )
+            for direct_horizontal_irradiation_in_j_per_m2 in direct_horizontal_irradiation_list_j_per_m2:
+                direct_horizontal_irradiation_in_watt_per_m2 = direct_horizontal_irradiation_in_j_per_m2 / (3600)
+                direct_horizontal_irradiation_list_watt_per_m2.append(direct_horizontal_irradiation_in_watt_per_m2)
             direct_irradiance_df = pd.DataFrame(
                 direct_horizontal_irradiation_list_watt_per_m2,
                 columns=["direct_irradiance"],
             )
-            direct_irradiance_df = direct_irradiance_df.interpolate(
-                method="linear", limit_direction="backward"
-            )
+            direct_irradiance_df = direct_irradiance_df.interpolate(method="linear", limit_direction="backward")
 
             weather_df = pd.DataFrame()
             weather_df = pd.concat(
@@ -856,12 +731,8 @@ class WeatherDataImport:
             )
 
             if len(missing_time_df) != 0:
-                weather_df_time_index = pd.to_datetime(
-                    weather_df[["year", "month", "day", "hour", "minute"]]
-                )
-                time_index_full = pd.to_datetime(
-                    missing_time_df[["year", "month", "day", "hour", "minute"]]
-                )
+                weather_df_time_index = pd.to_datetime(weather_df[["year", "month", "day", "hour", "minute"]])
+                time_index_full = pd.to_datetime(missing_time_df[["year", "month", "day", "hour", "minute"]])
 
                 merged_weather_df = pd.concat(
                     [
@@ -878,13 +749,9 @@ class WeatherDataImport:
             weather_df = weather_df.reset_index(drop=True)
 
             if weather_df.isna().any(axis=None):
-                raise KeyError(
-                    "The DataFrame weather_df contains NaN values. Check data"
-                )
+                raise KeyError("The DataFrame weather_df contains NaN values. Check data")
             if weather_df.eq("nan").any().any():
-                raise KeyError(
-                    "The DataFrame weather_df contains NaN values. Check data"
-                )
+                raise KeyError("The DataFrame weather_df contains NaN values. Check data")
 
             self.safe_as_csv(weather_df, csv_path)
 

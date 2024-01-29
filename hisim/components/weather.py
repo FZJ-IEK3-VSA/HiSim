@@ -15,7 +15,7 @@ import pvlib
 
 from hisim import loadtypes as lt
 from hisim import log, utils
-from hisim.component import Component, ComponentOutput, ConfigBase, SingleTimeStepValues
+from hisim.component import Component, ComponentOutput, ConfigBase, SingleTimeStepValues, DisplayConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 
@@ -375,6 +375,7 @@ class WeatherConfig(ConfigBase):
 
     """Configuration class for Weather."""
 
+    name: str
     location: str
     source_path: str
     data_source: WeatherDataSourceEnum
@@ -422,6 +423,7 @@ class Weather(Component):
     Azimuth = "Azimuth"
     ApparentZenith = "ApparentZenith"
     WindSpeed = "WindSpeed"
+    Pressure = "Pressure"
     Weather_Temperature_Forecast_24h = "Weather_Temperature_Forecast_24h"
     DailyAverageOutsideTemperatures = "DailyAverageOutsideTemperatures"
 
@@ -442,18 +444,19 @@ class Weather(Component):
         my_display_config: DisplayConfig = DisplayConfig(),
     ):
         """Initializes the entire class."""
-        super().__init__(
-            name=self.weather_config.name,
-            my_simulation_parameters=my_simulation_parameters,
-            my_config=config,
-            my_display_config=my_display_config,
-        )
         if my_simulation_parameters is None:
             raise Exception("Simparameters was none")
         self.last_timestep_with_update = -1
         self.weather_config = config
         SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.LOCATION, entry=self.weather_config.location)
         self.parameter_string = my_simulation_parameters.get_unique_key()
+
+        super().__init__(
+            name=self.weather_config.name,
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
+            my_display_config=my_display_config,
+        )
 
         self.air_temperature_output: ComponentOutput = self.add_output(
             self.component_name,
@@ -588,10 +591,10 @@ class Weather(Component):
         stsv.set_output_value(self.azimuth_output, self.azimuth_list[timestep])
         stsv.set_output_value(self.wind_speed_output, self.wind_speed_list[timestep])
         stsv.set_output_value(self.apparent_zenith_output, self.apparent_zenith_list[timestep])
-        stsv.set_output_value(self.pressure_output, self.pressure_list[timestep] * 100)  # *100 umrechnung von hPA bzw mbar in PA
         stsv.set_output_value(
-            self.apparent_zenith_output, self.apparent_zenith_list[timestep]
-        )
+            self.pressure_output, self.pressure_list[timestep] * 100
+        )  # *100 umrechnung von hPA bzw mbar in PA
+        stsv.set_output_value(self.apparent_zenith_output, self.apparent_zenith_list[timestep])
         stsv.set_output_value(
             self.daily_average_outside_temperature_output,
             self.daily_average_outside_temperature_list_in_celsius[timestep],
@@ -646,6 +649,20 @@ class Weather(Component):
                 ghi = tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")
                 wind_speed = tmy_data["Wspd"].resample("1T").asfreq().interpolate(method="linear")
                 pressure = tmy_data["Pressure"].resample("1T").asfreq().interpolate(method="linear")
+            elif self.weather_config.data_source == WeatherDataSourceEnum.DWD_10MIN:
+                dni = tmy_data["DNI"].resample("1T").asfreq().interpolate(method="linear")
+                temperature = tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")
+                dhi = tmy_data["DHI"].resample("1T").asfreq().interpolate(method="linear")
+                ghi = tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")
+                wind_speed = tmy_data["Wspd"].resample("1T").asfreq().interpolate(method="linear")
+                pressure = tmy_data["Pressure"].resample("1T").asfreq().interpolate(method="linear")
+            elif self.weather_config.data_source == WeatherDataSourceEnum.ERA5:
+                dni = tmy_data["DNI"].resample("1T").asfreq().interpolate(method="linear")
+                temperature = tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")
+                dhi = tmy_data["DHI"].resample("1T").asfreq().interpolate(method="linear")
+                ghi = tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")
+                wind_speed = tmy_data["Wspd"].resample("1T").asfreq().interpolate(method="linear")
+                pressure = tmy_data["Pressure"].resample("1T").asfreq().interpolate(method="linear")
             else:
                 dni = self.interpolate(tmy_data["DNI"], self.my_simulation_parameters.year)
                 temperature = self.interpolate(tmy_data["T"], self.my_simulation_parameters.year)
@@ -678,7 +695,7 @@ class Weather(Component):
                 self.azimuth_list = azimuth.resample(str(seconds_per_timestep) + "S").mean().tolist()
                 self.apparent_zenith_list = apparent_zenith.resample(str(seconds_per_timestep) + "S").mean().tolist()
                 self.wind_speed_list = wind_speed.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                self.pressure_list =pressure.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                self.pressure_list = pressure.resample(str(seconds_per_timestep) + "S").mean().tolist()
             else:
                 self.temperature_list = temperature.tolist()
                 self.dry_bulb_list = temperature.to_list()
@@ -1016,7 +1033,6 @@ def read_nsrdb_15min_data(filepath: str, year: int) -> pd.DataFrame:
 def read_dwd_10min_data(filepath: str, year: int) -> pd.DataFrame:
     """Reads a set of DWD data in 10 min resolution.
 
-    todo: Einbindung von dwd-abruf über "wetterdienst" repository folgt!
     https://github.com/earthobservations/wetterdienst/tree/main
     """
 
@@ -1033,9 +1049,7 @@ def read_dwd_10min_data(filepath: str, year: int) -> pd.DataFrame:
 
     # get data
     data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
-    data.index = pd.date_range(
-        f"{year}-01-01 00:00:00", periods=24 * 6 * 365, freq="600S", tz="UTC"
-    )
+    data.index = pd.date_range(f"{year}-01-01 00:00:00", periods=24 * 6 * 365, freq="600S", tz="UTC")
     data = data.rename(
         columns={
             "diffuse_irradiance": "DHI",
@@ -1052,9 +1066,7 @@ def read_dwd_10min_data(filepath: str, year: int) -> pd.DataFrame:
     )
     # calculate direct normal
     data["direct_horizontal_irradiance"] = data["GHI"] - data["DHI"]
-    data["DNI"] = calculate_direct_normal_radiation(
-        data["direct_horizontal_irradiance"], longitude, latitude
-    )
+    data["DNI"] = calculate_direct_normal_radiation(data["direct_horizontal_irradiance"], longitude, latitude)
 
     return data
 
@@ -1062,7 +1074,6 @@ def read_dwd_10min_data(filepath: str, year: int) -> pd.DataFrame:
 def read_era5_data(filepath: str, year: int) -> pd.DataFrame:
     """Reads a set of era5 in 60 min resolution.
 
-    todo: Einbindung von "era5 abruf" repository folgt!
     https://cds.climate.copernicus.eu/cdsapp#!/dataset/reanalysis-era5-single-levels?tab=overview
     """
 
@@ -1079,9 +1090,7 @@ def read_era5_data(filepath: str, year: int) -> pd.DataFrame:
 
     # get data
     data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
-    data.index = pd.date_range(
-        f"{year}-01-01 00:00:00", periods=8760, freq="H", tz="UTC"
-    )
+    data.index = pd.date_range(f"{year}-01-01 00:00:00", periods=8760, freq="H", tz="UTC")
     data = data.rename(
         columns={
             "month": "Month",
@@ -1097,9 +1106,7 @@ def read_era5_data(filepath: str, year: int) -> pd.DataFrame:
     )
     # calculate direct normal
     data["DHI"] = data["GHI"] - data["direct_irradiance"]
-    data["DNI"] = calculate_direct_normal_radiation(
-        data["direct_irradiance"], longitude, latitude
-    )
+    data["DNI"] = calculate_direct_normal_radiation(data["direct_irradiance"], longitude, latitude)
 
     return data
 

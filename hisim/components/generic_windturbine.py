@@ -11,7 +11,6 @@ import pandas as pd
 from dataclasses_json import dataclass_json
 from windpowerlib import ModelChain, WindTurbine
 
-
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
@@ -35,9 +34,6 @@ Based on: https://github.com/wind-python/windpowerlib/tree/dev
 Use of windpowerlib for calculation of electrical output power
 
 """
-
-# todo: predictiv controll ?
-# todo: wirkungsgrad einbringen?? ggf über bib direkt?
 
 
 @dataclass_json
@@ -140,17 +136,19 @@ class Windturbine(cp.Component):
 
     @utils.measure_execution_time
     def __init__(
-        self, my_simulation_parameters: SimulationParameters, config: WindturbineConfig
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: WindturbineConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initialize the class."""
         self.windturbineconfig = config
 
         super().__init__(
-            self.windturbineconfig.name
-            + "_w"
-            + str(self.windturbineconfig.source_weight),
+            self.windturbineconfig.name + "_w" + str(self.windturbineconfig.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         self.turbine_type = self.windturbineconfig.turbine_type
@@ -245,17 +243,9 @@ class Windturbine(cp.Component):
             )
         )
 
-        connections.append(
-            cp.ComponentConnection(
-                Windturbine.WindSpeed, weather_classname, Weather.WindSpeed
-            )
-        )
+        connections.append(cp.ComponentConnection(Windturbine.WindSpeed, weather_classname, Weather.WindSpeed))
 
-        connections.append(
-            cp.ComponentConnection(
-                Windturbine.Pressure, weather_classname, Weather.Pressure
-            )
-        )
+        connections.append(cp.ComponentConnection(Windturbine.Pressure, weather_classname, Weather.Pressure))
         return connections
 
     def i_save_state(self) -> None:
@@ -279,9 +269,7 @@ class Windturbine(cp.Component):
 
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the component."""
 
         wind_speed_10m_in_m_per_sec = stsv.get_input_value(self.wind_speed_channel)
@@ -304,12 +292,17 @@ class Windturbine(cp.Component):
         # height of measuring points
         columns = [
             np.array(["wind_speed", "temperature", "pressure", "roughness_length"]),
-            np.array([self.measuring_height_wind_speed, self.measuring_height_temperature, self.measuring_height_pressure, self.measuring_height_roughness_length]),
+            np.array(
+                [
+                    self.measuring_height_wind_speed,
+                    self.measuring_height_temperature,
+                    self.measuring_height_pressure,
+                    self.measuring_height_roughness_length,
+                ]
+            ),
         ]
 
-        weather_df = pd.DataFrame(
-            data, columns=columns
-        )  # dataframe, due to package windpowerlib only work with it
+        weather_df = pd.DataFrame(data, columns=columns)  # dataframe, due to package windpowerlib only work with it
 
         # calculation of windturbine power
         windturbine_power = self.calculation_setup.run_model(weather_df)
@@ -319,17 +312,11 @@ class Windturbine(cp.Component):
 
         power_output_windturbine_in_watt = windturbine_power.power_output
 
-        df_electric_power_output_windturbine_in_watt = pd.DataFrame(
-            power_output_windturbine_in_watt
-        )
+        df_electric_power_output_windturbine_in_watt = pd.DataFrame(power_output_windturbine_in_watt)
 
-        electric_power_output_windturbine_in_watt = (
-            df_electric_power_output_windturbine_in_watt.iloc[0].iloc[0]
-        )
+        electric_power_output_windturbine_in_watt = df_electric_power_output_windturbine_in_watt.iloc[0].iloc[0]
 
-        stsv.set_output_value(
-            self.electricity_output_channel, electric_power_output_windturbine_in_watt
-        )
+        stsv.set_output_value(self.electricity_output_channel, electric_power_output_windturbine_in_watt)
 
     @staticmethod
     def get_cost_capex(config: WindturbineConfig) -> Tuple[float, float, float]:

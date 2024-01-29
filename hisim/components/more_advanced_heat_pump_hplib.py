@@ -1465,7 +1465,7 @@ class HeatPumpHplibControllerDHW(Component):
     DWHStorageTemperatureModifier = "StorageTemperatureModifier"
 
     # Outputs
-    State_dhw = "State DHW"
+    State_dhw = "StateDHW"
     ThermalPower_dhw_is_constant = "ThermalPowerDHWConst"  # if heatpump has fix power for dhw
     Value_thermalpower_dhw_is_constant = "ThermalPowerHPForDHWConst"  # if heatpump has fix power for dhw
 

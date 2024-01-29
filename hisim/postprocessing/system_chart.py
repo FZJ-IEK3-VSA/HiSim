@@ -69,9 +69,7 @@ class SystemChart:
     ) -> Optional[SystemChartEntry]:
         """Generates the system charts with graphviz."""
 
-        system_chart_entry: Optional[SystemChartEntry] = SystemChartEntry(
-            filename, caption
-        )
+        system_chart_entry: Optional[SystemChartEntry] = SystemChartEntry(filename, caption)
 
         try:
             """Visualizes the entire system with graphviz."""
@@ -87,9 +85,7 @@ class SystemChart:
             for component in self.ppdt.wrapped_components:
                 node_name = component.my_component.component_name
                 if with_class_names:
-                    node_name = (
-                        node_name + "\n" + component.my_component.__class__.__name__
-                    )
+                    node_name = node_name + "\n" + component.my_component.__class__.__name__
                 my_node = pydot.Node(node_name)
                 node_dict[component.my_component.component_name] = my_node
                 graph.add_node(my_node)
@@ -127,9 +123,7 @@ class SystemChart:
                     graph.add_edge(pydot.Edge(node_key[0], node_key[1], label=label))
                 else:
                     graph.add_edge(pydot.Edge(node_key[0], node_key[1]))
-            fullpath = os.path.join(
-                self.ppdt.simulation_parameters.result_directory, filename
-            )
+            fullpath = os.path.join(self.ppdt.simulation_parameters.result_directory, filename)
             graph.write_png(fullpath)  # noqa: no-member
         except Exception as exc:  # noqa
             log.error(

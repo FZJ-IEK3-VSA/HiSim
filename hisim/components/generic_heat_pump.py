@@ -119,25 +119,19 @@ class GenericHeatPumpState:
             self.heating_power_in_watt = 0.0
             self.cooling_power_in_watt = 0.0
             self.cop = 1.0
-            self.electricity_input_in_watt = abs(
-                self.thermal_power_delivered_in_watt / self.cop
-            )
+            self.electricity_input_in_watt = abs(self.thermal_power_delivered_in_watt / self.cop)
         elif self.thermal_power_delivered_in_watt > 0.0:
             self.activation = -1
             self.heating_power_in_watt = self.thermal_power_delivered_in_watt
             self.cooling_power_in_watt = 0.0
             self.cop = cop
-            self.electricity_input_in_watt = abs(
-                self.thermal_power_delivered_in_watt / self.cop
-            )
+            self.electricity_input_in_watt = abs(self.thermal_power_delivered_in_watt / self.cop)
         elif self.thermal_power_delivered_in_watt < 0.0:
             self.activation = 1
             self.heating_power_in_watt = 0
             self.cooling_power_in_watt = self.thermal_power_delivered_in_watt
             self.cop = cop
-            self.electricity_input_in_watt = abs(
-                self.thermal_power_delivered_in_watt / self.cop
-            )
+            self.electricity_input_in_watt = abs(self.thermal_power_delivered_in_watt / self.cop)
         else:
             raise Exception("Impossible Heat Pump State.")
 
@@ -194,6 +188,7 @@ class GenericHeatPump(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: GenericHeatPumpConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Construct all the necessary attributes."""
         self.heatpump_config = config
@@ -201,6 +196,7 @@ class GenericHeatPump(cp.Component):
             self.heatpump_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.manufacturer = self.heatpump_config.manufacturer
         self.heatpump_name = self.heatpump_config.heat_pump_name
@@ -360,9 +356,7 @@ class GenericHeatPump(cp.Component):
         self.cop_ref = []
         self.temperature_outside_ref = []
         for heat_pump_cops in heat_pump["COP"]:
-            self.temperature_outside_ref.append(
-                float([*heat_pump_cops][0][1:].split("/")[0])
-            )
+            self.temperature_outside_ref.append(float([*heat_pump_cops][0][1:].split("/")[0]))
             self.cop_ref.append(float([*heat_pump_cops.values()][0]))
         self.cop_coef = np.polyfit(self.temperature_outside_ref, self.cop_ref, 1)
 
@@ -375,23 +369,15 @@ class GenericHeatPump(cp.Component):
         # Default values: 15 minutes to full power
         # Used only for non-clocked heat pump
         self.max_heating_power_variation_restriction_in_watt = (
-            self.max_heating_power_in_watt
-            * self.my_simulation_parameters.seconds_per_timestep
-            / 900
+            self.max_heating_power_in_watt * self.my_simulation_parameters.seconds_per_timestep / 900
         )
         self.max_cooling_power_variation_restriction_in_watt = (
-            -self.max_heating_power_in_watt
-            * self.my_simulation_parameters.seconds_per_timestep
-            / 900
+            -self.max_heating_power_in_watt * self.my_simulation_parameters.seconds_per_timestep / 900
         )
 
         # Sets the time operation restricitions
-        self.min_operation_time = (
-            min_operation_time / self.my_simulation_parameters.seconds_per_timestep
-        )
-        self.min_idle_time = (
-            min_idle_time / self.my_simulation_parameters.seconds_per_timestep
-        )
+        self.min_operation_time = min_operation_time / self.my_simulation_parameters.seconds_per_timestep
+        self.min_idle_time = min_idle_time / self.my_simulation_parameters.seconds_per_timestep
 
         # Writes info to report
         self.write_to_report()
@@ -434,17 +420,13 @@ class GenericHeatPump(cp.Component):
     def write_to_report(self) -> List[str]:
         """Write important variables to report."""
         lines = []
-        lines.append(
-            f"Max Heating Power [kW]: {(self.max_heating_power_in_watt) * 1e-3:4.3f}"
-        )
+        lines.append(f"Max Heating Power [kW]: {(self.max_heating_power_in_watt) * 1e-3:4.3f}")
         lines.append(
             f"Max Peating Power Variation Restriction [W]: {self.max_heating_power_variation_restriction_in_watt:4.3f}"
         )
         return self.heatpump_config.get_string_dict() + lines
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate heat pump."""
         # Inputs
         state_c = stsv.get_input_value(self.state_channel)
@@ -501,33 +483,20 @@ class GenericHeatPump(cp.Component):
         if self.state.activation != 0:
             number_of_cycles = self.state.cycle_number
             # Checks if the minimum running time has been reached
-            if (
-                timestep >= self.state.start_timestep + self.min_operation_time
-                and state_c == 0
-            ):
-                self.state = GenericHeatPumpState(
-                    start_timestep=timestep, cycle_number=number_of_cycles
-                )
+            if timestep >= self.state.start_timestep + self.min_operation_time and state_c == 0:
+                self.state = GenericHeatPumpState(start_timestep=timestep, cycle_number=number_of_cycles)
             stsv.set_output_value(
                 self.thermal_power_delivered_channel,
                 self.state.thermal_power_delivered_in_watt,
             )
-            stsv.set_output_value(
-                self.heating_channel, self.state.heating_power_in_watt
-            )
-            stsv.set_output_value(
-                self.cooling_channel, self.state.cooling_power_in_watt
-            )
-            stsv.set_output_value(
-                self.electricity_output_channel, self.state.electricity_input_in_watt
-            )
+            stsv.set_output_value(self.heating_channel, self.state.heating_power_in_watt)
+            stsv.set_output_value(self.cooling_channel, self.state.cooling_power_in_watt)
+            stsv.set_output_value(self.electricity_output_channel, self.state.electricity_input_in_watt)
             stsv.set_output_value(self.number_of_cycles_channel, self.number_of_cycles)
             return
 
         # Heat Pump is Off
-        if state_c != 0 and (
-            timestep >= self.state.start_timestep + self.min_idle_time
-        ):
+        if state_c != 0 and (timestep >= self.state.start_timestep + self.min_idle_time):
             self.number_of_cycles = self.number_of_cycles + 1
             number_of_cycles = self.number_of_cycles
             if state_c == 1:
@@ -554,9 +523,7 @@ class GenericHeatPump(cp.Component):
         )
         stsv.set_output_value(self.heating_channel, self.state.heating_power_in_watt)
         stsv.set_output_value(self.cooling_channel, self.state.cooling_power_in_watt)
-        stsv.set_output_value(
-            self.electricity_output_channel, self.state.electricity_input_in_watt
-        )
+        stsv.set_output_value(self.electricity_output_channel, self.state.electricity_input_in_watt)
         stsv.set_output_value(self.number_of_cycles_channel, self.number_of_cycles)
 
     def process_thermal(self, ws_in: float) -> None:
@@ -619,6 +586,7 @@ class GenericHeatPumpController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: GenericHeatPumpControllerConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Construct all the neccessary attributes."""
         self.heatpump_controller_config = config
@@ -626,6 +594,7 @@ class GenericHeatPumpController(cp.Component):
             self.heatpump_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.build(
             temperature_air_cooling=self.heatpump_controller_config.temperature_air_cooling_in_celsius,
@@ -679,6 +648,7 @@ class GenericHeatPumpController(cp.Component):
         """Get electricity meter default connections."""
 
         from hisim.components.electricity_meter import ElectricityMeter  # pylint: disable=import-outside-toplevel
+
         connections = []
         em_classname = ElectricityMeter.get_classname()
         connections.append(
@@ -732,9 +702,7 @@ class GenericHeatPumpController(cp.Component):
         """Write important variables to report."""
         return self.heatpump_controller_config.get_string_dict()
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the heat pump comtroller."""
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         if force_convergence:
@@ -781,9 +749,7 @@ class GenericHeatPumpController(cp.Component):
                 self.controller_heatpumpmode = "cooling"
                 return
 
-    def smart_conditions(
-        self, set_temperature: float, electricity_input: float
-    ) -> None:
+    def smart_conditions(self, set_temperature: float, electricity_input: float) -> None:
         """Set smart conditions for the heat pump controller mode."""
         smart_offset_upper = 3
         smart_offset_lower = 0.5

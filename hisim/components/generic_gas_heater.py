@@ -16,6 +16,7 @@ from hisim.component import (
     ComponentOutput,
     ConfigBase,
     OpexCostDataClass,
+    DisplayConfig,
 )
 
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
@@ -85,9 +86,7 @@ class GenericGasHeaterConfig(ConfigBase):
             maximal_mass_flow_in_kilogram_per_second=maximal_power_in_watt
             / (4180 * 25),  # kg/s ## -> ~0.07 P_th_max / (4180 * delta_T)
             maximal_temperature_in_celsius=80,  # [°C])
-            co2_footprint=maximal_power_in_watt
-            * 1e-3
-            * 49.47,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=maximal_power_in_watt * 1e-3 * 49.47,  # value from emission_factros_and_costs_devices.csv
             cost=7416,  # value from emission_factros_and_costs_devices.csv
             lifetime=20,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
@@ -96,9 +95,7 @@ class GenericGasHeaterConfig(ConfigBase):
         return config
 
     @classmethod
-    def get_scaled_gasheater_config(
-            cls, heating_load_of_building_in_watt: float
-    ) -> "GenericGasHeaterConfig":
+    def get_scaled_gasheater_config(cls, heating_load_of_building_in_watt: float) -> "GenericGasHeaterConfig":
         """Get a default Building."""
         maximal_power_in_watt: float = heating_load_of_building_in_watt  # W
         config = GenericGasHeaterConfig(
@@ -114,9 +111,7 @@ class GenericGasHeaterConfig(ConfigBase):
             maximal_mass_flow_in_kilogram_per_second=maximal_power_in_watt
             / (4180 * 25),  # kg/s ## -> ~0.07 P_th_max / (4180 * delta_T)
             maximal_temperature_in_celsius=80,  # [°C])
-            co2_footprint=maximal_power_in_watt
-            * 1e-3
-            * 49.47,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=maximal_power_in_watt * 1e-3 * 49.47,  # value from emission_factros_and_costs_devices.csv
             cost=7416,  # value from emission_factros_and_costs_devices.csv
             lifetime=20,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
@@ -133,9 +128,7 @@ class GasHeater(Component):
     """
 
     # Input
-    ControlSignal = (
-        "ControlSignal"  # at which Procentage is the GasHeater modulating [0..1]
-    )
+    ControlSignal = "ControlSignal"  # at which Procentage is the GasHeater modulating [0..1]
     MassflowInputTemperature = "MassflowInputTemperature"
 
     # Output
@@ -149,6 +142,7 @@ class GasHeater(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: GenericGasHeaterConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Construct all the neccessary attributes."""
         self.gasheater_config = config
@@ -156,6 +150,7 @@ class GasHeater(Component):
             name=self.gasheater_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.control_signal_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -201,25 +196,15 @@ class GasHeater(Component):
             output_description=f"here a description for {self.ThermalOutputPower} will follow.",
         )
 
-        self.minimal_thermal_power_in_watt = (
-            self.gasheater_config.minimal_thermal_power_in_watt
-        )
+        self.minimal_thermal_power_in_watt = self.gasheater_config.minimal_thermal_power_in_watt
         self.maximal_thermal_power_in_watt = self.gasheater_config.maximal_power_in_watt
         self.eff_th_min = self.gasheater_config.eff_th_min
         self.eff_th_max = self.gasheater_config.eff_th_max
-        self.maximal_temperature_in_celsius = (
-            self.gasheater_config.maximal_temperature_in_celsius
-        )
-        self.temperature_delta_in_celsius = (
-            self.gasheater_config.temperature_delta_in_celsius
-        )
+        self.maximal_temperature_in_celsius = self.gasheater_config.maximal_temperature_in_celsius
+        self.temperature_delta_in_celsius = self.gasheater_config.temperature_delta_in_celsius
 
-        self.add_default_connections(
-            self.get_default_connections_from_controller_l1_generic_gas_heater()
-        )
-        self.add_default_connections(
-            self.get_default_connections_from_simple_hot_water_storage()
-        )
+        self.add_default_connections(self.get_default_connections_from_controller_l1_generic_gas_heater())
+        self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
 
     def get_default_connections_from_controller_l1_generic_gas_heater(
         self,
@@ -279,9 +264,7 @@ class GasHeater(Component):
         """Doublecheck."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the gas heater."""
         control_signal = stsv.get_input_value(self.control_signal_channel)
         if control_signal > 1:
@@ -292,10 +275,7 @@ class GasHeater(Component):
         # Calculate Eff
         d_eff_th = self.eff_th_max - self.eff_th_min
 
-        if (
-            control_signal * self.maximal_thermal_power_in_watt
-            < self.minimal_thermal_power_in_watt
-        ):
+        if control_signal * self.maximal_thermal_power_in_watt < self.minimal_thermal_power_in_watt:
             maximum_power = self.minimal_thermal_power_in_watt
             eff_th_real = self.eff_th_min
         else:
@@ -304,35 +284,22 @@ class GasHeater(Component):
 
         gas_power_in_watt = maximum_power * eff_th_real * control_signal
         c_w = 4182
-        mass_flow_out_temperature_in_celsius = (
-            self.temperature_delta_in_celsius
-            + stsv.get_input_value(self.mass_flow_input_tempertaure_channel)
+        mass_flow_out_temperature_in_celsius = self.temperature_delta_in_celsius + stsv.get_input_value(
+            self.mass_flow_input_tempertaure_channel
         )
-        mass_flow_out_in_kg_per_s = gas_power_in_watt / (
-            c_w * self.temperature_delta_in_celsius
-        )
+        mass_flow_out_in_kg_per_s = gas_power_in_watt / (c_w * self.temperature_delta_in_celsius)
         # p_th = (
         #     c_w * mass_flow_out_in_kg_per_s * (mass_flow_out_temperature_in_celsius - stsv.get_input_value(self.mass_flow_input_tempertaure_channel))
         # )
-        gas_demand_in_kwh = (
-            gas_power_in_watt
-            * self.my_simulation_parameters.seconds_per_timestep
-            / 3.6e6
-        )
+        gas_demand_in_kwh = gas_power_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3.6e6
 
-        stsv.set_output_value(
-            self.thermal_output_power_channel, gas_power_in_watt
-        )  # efficiency
+        stsv.set_output_value(self.thermal_output_power_channel, gas_power_in_watt)  # efficiency
         stsv.set_output_value(
             self.mass_flow_output_temperature_channel,
             mass_flow_out_temperature_in_celsius,
         )  # efficiency
-        stsv.set_output_value(
-            self.mass_flow_output_channel, mass_flow_out_in_kg_per_s
-        )  # efficiency
-        stsv.set_output_value(
-            self.gas_demand_channel, gas_demand_in_kwh
-        )  # gas consumption
+        stsv.set_output_value(self.mass_flow_output_channel, mass_flow_out_in_kg_per_s)  # efficiency
+        stsv.set_output_value(self.gas_demand_channel, gas_demand_in_kwh)  # gas consumption
 
     @staticmethod
     def get_cost_capex(config: GenericGasHeaterConfig) -> Tuple[float, float, float]:
@@ -346,17 +313,10 @@ class GasHeater(Component):
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of energy and maintenance costs."""
         for index, output in enumerate(all_outputs):
-            if (
-                output.component_name == self.config.name
-                and output.load_type == lt.LoadTypes.GAS
-            ):
-                self.config.consumption = round(
-                    sum(postprocessing_results.iloc[:, index]), 1
-                )
-        emissions_and_cost_factors = (
-            EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
-                self.my_simulation_parameters.year
-            )
+            if output.component_name == self.config.name and output.load_type == lt.LoadTypes.GAS:
+                self.config.consumption = round(sum(postprocessing_results.iloc[:, index]), 1)
+        emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
+            self.my_simulation_parameters.year
         )
         co2_per_unit = emissions_and_cost_factors.gas_footprint_in_kg_per_kwh
         euro_per_unit = emissions_and_cost_factors.gas_costs_in_euro_per_kwh

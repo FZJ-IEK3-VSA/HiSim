@@ -134,9 +134,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     ElectricityToOrFromGrid = "ElectricityToOrFromGrid"
     TotalElectricityConsumption = "TotalElectricityConsumption"
     FlexibleElectricity = "FlexibleElectricity"
-    BuildingTemperatureModifier = (
-        "BuildingTemperatureModifier"  # connect to HDS controller and Building
-    )
+    BuildingTemperatureModifier = "BuildingTemperatureModifier"  # connect to HDS controller and Building
     StorageTemperatureModifier = "StorageTemperatureModifier"  # used for L1HeatPumpController  # Todo: change name?
     SimpleHotWaterStorageTemperatureModifier = (
         "SimpleHotWaterStorageTemperatureModifier"  # used for HeatPumpHplibController
@@ -146,7 +144,10 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
     @utils.measure_execution_time
     def __init__(
-        self, my_simulation_parameters: SimulationParameters, config: EMSConfig
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: EMSConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ):
         """Initializes."""
         self.my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
@@ -158,11 +159,10 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             name=self.ems_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
-        self.state = EMSState(
-            production=0, consumption_uncontrolled=0, consumption_ems_controlled=0
-        )
+        self.state = EMSState(production=0, consumption_uncontrolled=0, consumption_ems_controlled=0)
         self.previous_state = self.state.clone()
 
         self.components_sorted: List[lt.ComponentType] = []
@@ -175,12 +175,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.mode: Any
         self.strategy = self.ems_config.strategy
         self.limit_to_shave = self.ems_config.limit_to_shave
-        self.building_temperature_offset_value = (
-            self.ems_config.building_temperature_offset_value
-        )
-        self.storage_temperature_offset_value = (
-            self.ems_config.storage_temperature_offset_value
-        )
+        self.building_temperature_offset_value = self.ems_config.building_temperature_offset_value
+        self.storage_temperature_offset_value = self.ems_config.storage_temperature_offset_value
         self.simple_hot_water_storage_temperature_offset_value = (
             self.ems_config.simple_hot_water_storage_temperature_offset_value
         )
@@ -258,43 +254,20 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             output_description=f"here a description for {self.CheckPeakShaving} will follow.",
         )
 
-        self.add_dynamic_default_connections(self.get_default_connections_from_occupancy())
         self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())
         self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
         self.add_dynamic_default_connections(self.get_default_connections_from_dhw_heat_pump())
-        self.add_dynamic_default_connections(
-            self.get_default_connections_from_advanced_heat_pump()
-        )
+        self.add_dynamic_default_connections(self.get_default_connections_from_advanced_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_advanced_battery())
-
-    def get_default_connections_from_occupancy(
-        self,
-    ):
-        """Get occupancy default connections."""
-
-        from hisim.components.loadprofilegenerator_connector import Occupancy  # pylint: disable=import-outside-toplevel
-
-        dynamic_connections = []
-        occupancy_class_name = Occupancy.get_classname()
-        dynamic_connections.append(
-            dynamic_component.DynamicComponentConnection(
-                source_component_class=Occupancy,
-                source_class_name=occupancy_class_name,
-                source_component_field_name=Occupancy.ElectricityOutput,
-                source_load_type=lt.LoadTypes.ELECTRICITY,
-                source_unit=lt.Units.WATT,
-                source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-                source_weight=999,
-            )
-        )
-        return dynamic_connections
 
     def get_default_connections_from_utsp_occupancy(
         self,
     ):
         """Get utsp occupancy default connections."""
 
-        from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector  # pylint: disable=import-outside-toplevel
+        from hisim.components.loadprofilegenerator_utsp_connector import (  # pylint: disable=import-outside-toplevel
+            UtspLpgConnector,
+        )
 
         dynamic_connections = []
         occupancy_class_name = UtspLpgConnector.get_classname()
@@ -317,6 +290,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         """Get pv system default connections."""
 
         from hisim.components.generic_pv_system import PVSystem  # pylint: disable=import-outside-toplevel
+
         print("sett defalt connections for ems")
         dynamic_connections = []
         pv_class_name = PVSystem.get_classname()
@@ -341,7 +315,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     ):
         """Get dhw heat pump default connections."""
 
-        from hisim.components.generic_heat_pump_modular import ModularHeatPump  # pylint: disable=import-outside-toplevel
+        from hisim.components.generic_heat_pump_modular import (  # pylint: disable=import-outside-toplevel
+            ModularHeatPump,
+        )
 
         dynamic_connections = []
         dhw_heat_pump_class_name = ModularHeatPump.get_classname()
@@ -404,9 +380,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
     def sort_source_weights_and_components(self) -> None:
         """Sorts dynamic Inputs and Outputs according to source weights."""
-        inputs = [
-            elem for elem in self.my_component_inputs if elem.source_weight != 999
-        ]
+        inputs = [elem for elem in self.my_component_inputs if elem.source_weight != 999]
 
         source_tags = [elem.source_tags[0] for elem in inputs]
         source_weights = [elem.source_weight for elem in inputs]
@@ -414,9 +388,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         source_weights = [source_weights[i] for i in sortindex]
 
         self.components_sorted = [source_tags[i] for i in sortindex]
-        self.inputs_sorted = [
-            getattr(self, inputs[i].source_component_class) for i in sortindex
-        ]
+        self.inputs_sorted = [getattr(self, inputs[i].source_component_class) for i in sortindex]
         self.outputs_sorted = []
 
         for ind, source_weight in enumerate(source_weights):
@@ -433,15 +405,11 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             else:
                 raise Exception("Dynamic input is not conncted to dynamic output")
 
-        self.production_inputs = self.get_dynamic_inputs(
-            tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION]
-        )
+        self.production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
         self.consumption_uncontrolled_inputs = self.get_dynamic_inputs(
             tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
         )
-        self.consumption_ems_controlled_inputs = self.get_dynamic_inputs(
-            tags=[lt.InandOutputType.ELECTRICITY_REAL]
-        )
+        self.consumption_ems_controlled_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_REAL])
 
     def write_to_report(self):
         """Writes relevant information to report."""
@@ -517,9 +485,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 deltademand = deltademand - previous_signal
             else:
                 stsv.set_output_value(self.building_temperature_modifier, 0)
-                stsv.set_output_value(
-                    self.simple_hot_water_storage_temperature_modifier, 0
-                )
+                stsv.set_output_value(self.simple_hot_water_storage_temperature_modifier, 0)
                 stsv.set_output_value(output=output, value=deltademand)
         elif component_type == lt.ComponentType.ELECTROLYZER:
             if deltademand > 0:
@@ -561,38 +527,23 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 output=output,
             )
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates iteration of surplus controller."""
         if timestep == 0:
             self.sort_source_weights_and_components()
 
         # get production
-        self.state.production = sum(
-            [
-                stsv.get_input_value(component_input=elem)
-                for elem in self.production_inputs
-            ]
-        )
+        self.state.production = sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])
         self.state.consumption_uncontrolled = sum(
-            [
-                stsv.get_input_value(component_input=elem)
-                for elem in self.consumption_uncontrolled_inputs
-            ]
+            [stsv.get_input_value(component_input=elem) for elem in self.consumption_uncontrolled_inputs]
         )
         self.state.consumption_ems_controlled = sum(
-            [
-                stsv.get_input_value(component_input=elem)
-                for elem in self.consumption_ems_controlled_inputs
-            ]
+            [stsv.get_input_value(component_input=elem) for elem in self.consumption_ems_controlled_inputs]
         )
 
         # Production of Electricity positve sign
         # Consumption of Electricity negative sign
-        flexible_electricity = (
-            self.state.production - self.state.consumption_uncontrolled
-        )
+        flexible_electricity = self.state.production - self.state.consumption_uncontrolled
         if self.strategy == "optimize_own_consumption":
             self.optimize_own_consumption_iterative(
                 delta_demand=flexible_electricity,
@@ -601,9 +552,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
         # Set other output values
         electricity_to_grid = (
-            self.state.production
-            - self.state.consumption_uncontrolled
-            - self.state.consumption_ems_controlled
+            self.state.production - self.state.consumption_uncontrolled - self.state.consumption_ems_controlled
         )
         stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_grid)
         stsv.set_output_value(self.flexible_electricity_channel, flexible_electricity)

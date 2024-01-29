@@ -1,14 +1,18 @@
-"""Data Collection for Scenario Comparison with Pyam."""
+"""Data Collection for Scenario Comparison."""
 # clean
 import time
 import os
 from typing import Any, List, Optional, Dict
-from hisim.postprocessing import pyam_data_collection, pyam_data_processing
+from hisim.postprocessing.scenario_evaluation import (
+    result_data_collection,
+    result_data_processing,
+    result_data_plotting,
+)
 
 
-class PyamDataAnalysis:
+class ScenarioAnalysis:
 
-    """PyamDataAnalysis class which executes pyam data collection and processing."""
+    """ScenarioAnalysis class which executes result data collection, processing and plotting."""
 
     def __init__(
         self,
@@ -22,28 +26,29 @@ class PyamDataAnalysis:
     ) -> None:
         """Initialize the class."""
 
-        pyam_data_collection.PyamDataCollector(
+        result_data_collection.ResultDataCollection(
             data_processing_mode=data_processing_mode,
             folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
             path_to_default_config=path_to_default_config,
             time_resolution_of_data_set=time_resolution_of_data_set,
             simulation_duration_to_check=simulation_duration_to_check,
         )
-        pyam_data_processing.PyAmChartGenerator(
+        result_data_plotting.ScenarioChartGeneration(
             simulation_duration_to_check=simulation_duration_to_check,
             time_resolution_of_data_set=time_resolution_of_data_set,
             data_processing_mode=data_processing_mode,
             variables_to_check=variables_to_check,
             dict_of_scenarios_to_check=dict_with_scenarios_to_check,
+            folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
         )
 
 
 def main():
-    """Main function to execute the pyam data analysis."""
+    """Main function to execute the scenario analysis."""
 
-    # Inputs for pyam analysis
+    # Inputs for scenario analysis
     # -------------------------------------------------------------------------------------------------------------------------------------
-    time_resolution_of_data_set = pyam_data_collection.PyamDataTypeEnum.YEARLY
+    time_resolution_of_data_set = result_data_collection.ResultDataTypeEnum.YEARLY
 
     cluster_storage_path = "/fast/home/k-rieck/"
     # cluster_storage_path = "/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/hisim_results/results/"
@@ -54,7 +59,8 @@ def main():
     )
 
     folder_from_which_data_will_be_collected = os.path.join(
-        cluster_storage_path, "repositories/HiSim/system_setups/results/",
+        cluster_storage_path,
+        "repositories/HiSim/system_setups/results/",
     )
 
     path_to_default_config = os.path.join(
@@ -63,12 +69,13 @@ def main():
     )
     simulation_duration_to_check = str(365)
 
-    data_processing_mode = (
-        pyam_data_collection.PyamDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
-    )
+    data_processing_mode = result_data_collection.ResultDataProcessingModeEnum.PROCESS_ALL_DATA
 
-    filterclass = pyam_data_processing.FilterClass()
-    list_with_variables_to_check = filterclass.electricity_data + filterclass.kpi_data
+    filterclass = result_data_processing.FilterClass()
+    # list_with_variables_to_check = (
+    #     filterclass.variables_for_debugging_purposes + filterclass.kpi_data
+    # )
+    list_with_variables_to_check = filterclass.electricity_data
 
     # TODO: filter several scenario parameters (eg pv and building code together) not working yet, need to be fixed
     # dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share,"building_code": ["DE.N.SFH.05.Gen.ReEx.001.002"]}
@@ -80,15 +87,15 @@ def main():
     #         "DE.N.AB",
     #     ]
     # }
-    dict_with_scenarios_to_check = {
-        "building_code": filterclass.building_refurbishment_state
-    }
+    # dict_with_scenarios_to_check = {
+    #     "building_code": filterclass.building_age
+    # }
     # dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share}
-    # dict_with_scenarios_to_check = None
+    dict_with_scenarios_to_check = None
 
     # -------------------------------------------------------------------------------------------------------------------------------------
 
-    PyamDataAnalysis(
+    ScenarioAnalysis(
         folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
         time_resolution_of_data_set=time_resolution_of_data_set,
         path_to_default_config=path_to_default_config,

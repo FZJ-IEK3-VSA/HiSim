@@ -68,9 +68,7 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
 
     def get_day_data(self):
         """Extracts data for a single day."""
-        firstindex = (
-            (self.month * 30 + self.day) * 24 * int(1 / self.time_correction_factor)
-        )
+        firstindex = (self.month * 30 + self.day) * 24 * int(1 / self.time_correction_factor)
         lastindex = firstindex + 24 * int(1 / self.time_correction_factor)
         day_number = self.day + 1
         if day_number == 1:
@@ -114,9 +112,7 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         #  twin object for two different y-axis on the sample plot
         my_double.ax2 = my_double.axis.twinx()
         #  make a plot with different y-axis using second axis object
-        my_double.line2 = my_double.ax2.plot(
-            self.data.index, other.data, label=other.property, linewidth=5
-        )
+        my_double.line2 = my_double.ax2.plot(self.data.index, other.data, label=other.property, linewidth=5)
         return my_double
 
     def close(self):
@@ -136,9 +132,7 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         plt.xticks(fontsize=self.fontsize_ticks)
         plt.yticks(fontsize=self.fontsize_ticks)
 
-        single_day_data, self.units = self.rescale_y_axis(
-            y_values=single_day_data, units=self.units
-        )
+        single_day_data, self.units = self.rescale_y_axis(y_values=single_day_data, units=self.units)
         plt.title(self.title, fontsize=self.fontsize_title)
         plt.plot(
             single_day_data.index,

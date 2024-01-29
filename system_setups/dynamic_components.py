@@ -6,7 +6,7 @@ from typing import Optional, Any
 
 # import hisim.components.random_numbers
 from hisim.simulator import SimulationParameters
-from hisim.components import loadprofilegenerator_connector
+from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import advanced_battery_bslib
 from hisim.components import weather
 
@@ -27,9 +27,7 @@ from hisim import loadtypes as lt
 # from hisim import utils
 
 
-def setup_function(
-    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
-) -> None:
+def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
     """Dynamic Components Demonstration.
 
     In this system setup a generic controller is added. The generic controller
@@ -49,17 +47,13 @@ def setup_function(
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
-    my_advanced_battery_config_1 = (
-        advanced_battery_bslib.BatteryConfig.get_default_config()
-    )
+    my_advanced_battery_config_1 = advanced_battery_bslib.BatteryConfig.get_default_config()
     my_advanced_battery_config_1.system_id = "SG1"
     my_advanced_battery_config_1.custom_battery_capacity_generic_in_kilowatt_hour = 10.0
     my_advanced_battery_config_1.custom_pv_inverter_power_generic_in_watt = 5.0
     my_advanced_battery_config_1.source_weight = 1
 
-    my_advanced_battery_config_2 = (
-        advanced_battery_bslib.BatteryConfig.get_default_config()
-    )
+    my_advanced_battery_config_2 = advanced_battery_bslib.BatteryConfig.get_default_config()
     my_advanced_battery_config_2.system_id = "SG1"
     my_advanced_battery_config_2.custom_battery_capacity_generic_in_kilowatt_hour = 5.0
     my_advanced_battery_config_2.custom_pv_inverter_power_generic_in_watt = 2.5
@@ -92,24 +86,16 @@ def setup_function(
         my_simulation_parameters=my_simulation_parameters, config=my_cl2_config
     )
 
-    my_occupancy_config = (
-        loadprofilegenerator_connector.OccupancyConfig.get_default_chr01_couple_both_at_work()
-    )
-
-    my_occupancy = loadprofilegenerator_connector.Occupancy(
+    # Build Occupancy
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
 
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.AACHEN
-    )
-    my_weather = weather.Weather(
-        config=my_weather_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
+    my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
 
-    my_photovoltaic_system_config = (
-        generic_pv_system.PVSystemConfig.get_default_pv_system()
-    )
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_pv_system()
     my_photovoltaic_system = generic_pv_system.PVSystem(
         my_simulation_parameters=my_simulation_parameters,
         config=my_photovoltaic_system_config,

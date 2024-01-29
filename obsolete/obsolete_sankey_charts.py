@@ -8,12 +8,13 @@ from hisim.components import building
 from hisim.components import generic_heat_pump_modular
 from hisim.components import generic_heat_pump
 from hisim.components import advanced_heat_pump_hplib
-from hisim.components import loadprofilegenerator_connector
+
 from hisim import log
 from hisim import utils
 from hisim import loadtypes as lt
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
+from obsolete import loadprofilegenerator_connector
 
 
 class SankeyHISIM(Chart, ChartFontsAndSize):

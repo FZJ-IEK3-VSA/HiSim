@@ -5,13 +5,7 @@ from typing import List
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from hisim.component import (
-    ConfigBase,
-    Component,
-    ComponentInput,
-    ComponentOutput,
-    SingleTimeStepValues,
-)
+from hisim.component import ConfigBase, Component, ComponentInput, ComponentOutput, SingleTimeStepValues, DisplayConfig
 
 from hisim import loadtypes as lt
 from hisim import utils
@@ -48,9 +42,7 @@ class XTPControllerConfig(ConfigBase):
     @staticmethod
     def read_config(fuel_cell_name):
         """Read config."""
-        config_file = os.path.join(
-            utils.HISIMPATH["inputs"], "fuel_cell_manufacturer_config.json"
-        )
+        config_file = os.path.join(utils.HISIMPATH["inputs"], "fuel_cell_manufacturer_config.json")
         with open(config_file, "r", encoding="utf-8") as json_file:
             data = json.load(json_file)
             return data.get("Fuel Cell variants", {}).get(fuel_cell_name, {})
@@ -87,6 +79,7 @@ class XTPController(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: XTPControllerConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the class."""
         self.xtpcontrollerconfig = config
@@ -101,6 +94,7 @@ class XTPController(Component):
             name=self.xtpcontrollerconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         # =================================================================================================================================
@@ -189,9 +183,7 @@ class XTPController(Component):
                 else:
                     demand_to_system = self.standby_load
                     power_from_battery = -self.standby_load
-                    self.standby_time_count += (
-                        self.my_simulation_parameters.seconds_per_timestep
-                    )
+                    self.standby_time_count += self.my_simulation_parameters.seconds_per_timestep
 
         else:
             demand_to_system = demand_load
@@ -215,16 +207,12 @@ class XTPController(Component):
         self.threshold_exceeded = self.threshold_exceeded_previous
         self.standby_time_count = self.standby_time_count_previous
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the component."""
         if force_convergence:
             return
 
-        demand_load = abs(
-            stsv.get_input_value(self.demand_input) / 1000
-        )  # WATT input to KILOWATT
+        demand_load = abs(stsv.get_input_value(self.demand_input) / 1000)  # WATT input to KILOWATT
 
         """ Only for household testing
         if self.system_state == "OFF" and soc < 0.2:
@@ -241,9 +229,7 @@ class XTPController(Component):
             )
             self.system_state = "ON"
         """
-        (demand_to_system, power_from_battery) = self.system_operation(
-            self.operation_mode, demand_load
-        )
+        (demand_to_system, power_from_battery) = self.system_operation(self.operation_mode, demand_load)
 
         """
         if self.system_state == "OFF":
@@ -256,9 +242,7 @@ class XTPController(Component):
             demand_to_system = 0.0
         """
 
-        stsv.set_output_value(
-            self.load_from_battery, power_from_battery * 1000
-        )  # Battery Output in WATT
+        stsv.set_output_value(self.load_from_battery, power_from_battery * 1000)  # Battery Output in WATT
         stsv.set_output_value(self.demand_to_system, demand_to_system)
 
     def write_to_report(self) -> List[str]:

@@ -11,7 +11,7 @@ from hisim.components import controller_l2_energy_management_system as cl2
 from hisim.components import (
     generic_heat_pump,
     generic_pv_system,
-    loadprofilegenerator_connector,
+    loadprofilegenerator_utsp_connector,
     weather,
 )
 from hisim.components.building import Building, BuildingConfig
@@ -27,9 +27,7 @@ from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRep
 from hisim.simulator import SimulationParameters
 
 
-def setup_function(
-    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
-) -> None:
+def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
     """Dynamic Components Demonstration.
 
     In this system setup a generic controller is added. The generic controller
@@ -64,48 +62,26 @@ def setup_function(
     # Build Components
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(
-            year=year, seconds_per_timestep=seconds_per_timestep
-        )
+        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
     # my_simulation_parameters = SimulationParameters.january_only(year=year, seconds_per_timestep=seconds_per_timestep)
     # my_simulation_parameters.enable_all_options( )
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_ALL_OUTPUTS_TO_REPORT)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
     my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.PLOT_LINE
-    )
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.PLOT_CARPET
-    )
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.MAKE_NETWORK_CHARTS
-    )
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT
-    )
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.WRITE_ALL_OUTPUTS_TO_REPORT
-    )
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT
-    )
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.GENERATE_PDF_REPORT
-    )
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.COMPUTE_OPEX
-    )
-    my_simulation_parameters.post_processing_options.append(
-        PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
+        PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
     )
 
-    my_advanced_battery_config_1 = (
-        advanced_battery_bslib.BatteryConfig.get_default_config()
-    )
+    my_advanced_battery_config_1 = advanced_battery_bslib.BatteryConfig.get_default_config()
     my_advanced_battery_config_1.system_id = "SG1"
-    my_advanced_battery_config_1.custom_battery_capacity_generic_in_kilowatt_hour = (
-        200.0
-    )
+    my_advanced_battery_config_1.custom_battery_capacity_generic_in_kilowatt_hour = 200.0
     my_advanced_battery_config_1.custom_pv_inverter_power_generic_in_watt = 110000.0
     my_advanced_battery_config_1.source_weight = 1
 
@@ -141,27 +117,18 @@ def setup_function(
         my_simulation_parameters=my_simulation_parameters, config=my_cl2_config
     )
 
-    my_occupancy_config = (
-        loadprofilegenerator_connector.OccupancyConfig.get_default_CHS01()
-    )
-    # choose 1 to be the default for the number of apartments
-    SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments
-    )
-    my_occupancy = loadprofilegenerator_connector.Occupancy(
+    # Build Occupancy
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
+    # choose 1 to be the default for the number of apartments
+    SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.NUMBEROFAPARTMENTS, entry=number_of_apartments)
 
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.AACHEN
-    )
-    my_weather = weather.Weather(
-        config=my_weather_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
+    my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
 
-    my_photovoltaic_system_config = (
-        generic_pv_system.PVSystemConfig.get_default_pv_system()
-    )
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_pv_system()
     my_photovoltaic_system_config.power_in_watt = pv_power
     my_photovoltaic_system_config.time = time
     my_photovoltaic_system_config.co2_footprint = pv_co2_footprint
@@ -186,7 +153,7 @@ def setup_function(
             predictive=False,
             set_heating_temperature_in_celsius=19.0,
             set_cooling_temperature_in_celsius=24.0,
-            enable_opening_windows=False
+            enable_opening_windows=False,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )
@@ -260,9 +227,7 @@ def setup_function(
         my_cl2.component_name,
         my_cl2.ElectricityToOrFromGrid,
     )
-    my_heat_pump.connect_only_predefined_connections(
-        my_weather, my_heat_pump_controller
-    )
+    my_heat_pump.connect_only_predefined_connections(my_weather, my_heat_pump_controller)
     my_heat_pump.get_default_connections_heatpump_controller()
 
     my_cl2.add_component_input_and_connect(

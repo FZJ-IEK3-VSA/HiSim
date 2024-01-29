@@ -16,7 +16,6 @@ from tests import functions_for_testing as fft
 from hisim import component
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.simulationparameters import SimulationParameters
-from hisim.utils import get_environment_variable
 from hisim import log
 
 
@@ -93,14 +92,13 @@ def initialize_lpg_utsp_connector_and_return_results(
     seconds_per_timestep = 60
 
     # Set Occupancy
-    url = get_environment_variable("UTSP_URL")
-    api_key = get_environment_variable("UTSP_API_KEY")
     result_path = "lpg_utsp_scaling_test"
     travel_route_set = TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance
     transportation_device_set = TransportationDeviceSets.Bus_and_one_30_km_h_Car
     charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
     energy_intensity = EnergyIntensityType.EnergySaving
     guid = "guid should not be varied automatically"
+    data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP
 
     # Build Simu Params
     my_simulation_parameters = SimulationParameters.full_year(
@@ -110,8 +108,7 @@ def initialize_lpg_utsp_connector_and_return_results(
     # Build occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
         name="UTSPConnector",
-        url=url,
-        api_key=api_key,
+        data_acquisition_mode=data_acquisition_mode,
         household=households,
         result_dir_path=result_path,
         travel_route_set=travel_route_set,
@@ -120,6 +117,7 @@ def initialize_lpg_utsp_connector_and_return_results(
         consumption=0,
         profile_with_washing_machine_and_dishwasher=True,
         predictive_control=False,
+        predictive=False,
         energy_intensity=energy_intensity,
         guid=guid
     )

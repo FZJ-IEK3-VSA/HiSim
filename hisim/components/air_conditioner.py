@@ -12,7 +12,7 @@ from hisim import log
 
 # owned
 from hisim import component as cp
-from hisim.component import ConfigBase
+from hisim.component import ConfigBase, DisplayConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.loadtypes import LoadTypes, Units
 from hisim.components.weather import Weather
@@ -170,8 +170,9 @@ class AirConditioner(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: AirConditionerConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ):
-        """Constructs all the neccessary attributes."""
+        """Constructs all the necessary attributes."""
 
         self.air_conditioner_config = config
         # self.state = 0
@@ -185,6 +186,7 @@ class AirConditioner(cp.Component):
             name=self.air_conditioner_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.build(
             manufacturer=self.air_conditioner_config.manufacturer,
@@ -286,9 +288,7 @@ class AirConditioner(cp.Component):
         )
 
         self.add_default_connections(self.get_default_connections_from_weather())
-        self.add_default_connections(
-            self.get_default_connections_from_air_condition_controller()
-        )
+        self.add_default_connections(self.get_default_connections_from_air_condition_controller())
 
         self.control = self.air_conditioner_config.control
 
@@ -382,13 +382,9 @@ class AirConditioner(cp.Component):
 
         """
 
-        for air_conditioner_tout in air_conditioner[
-            "Outdoor temperature range - cooling"
-        ]:
+        for air_conditioner_tout in air_conditioner["Outdoor temperature range - cooling"]:
             self.t_out_cooling_ref.append([air_conditioner_tout][0])
-        for air_conditioner_tout in air_conditioner[
-            "Outdoor temperature range - heating"
-        ]:
+        for air_conditioner_tout in air_conditioner["Outdoor temperature range - heating"]:
             self.t_out_heating_ref.append([air_conditioner_tout][0])
 
         for air_conditioner_eers in air_conditioner["EER W/W"]:
@@ -403,33 +399,21 @@ class AirConditioner(cp.Component):
         print(str(self.t_out_cooling_ref))
         print(str(self.eer_ref))
         self.eer_coef = np.polyfit(self.t_out_cooling_ref, self.eer_ref, 1)
-        self.cooling_capacity_coef = np.polyfit(
-            self.t_out_cooling_ref, self.cooling_capacity_ref, 1
-        )
+        self.cooling_capacity_coef = np.polyfit(self.t_out_cooling_ref, self.cooling_capacity_ref, 1)
 
         self.cop_coef = np.polyfit(self.t_out_heating_ref, self.cop_ref, 1)
-        self.heating_capacity_coef = np.polyfit(
-            self.t_out_heating_ref, self.heating_capacity_ref, 1
-        )
+        self.heating_capacity_coef = np.polyfit(self.t_out_heating_ref, self.heating_capacity_ref, 1)
 
         # Retrieves air conditioner from database - END
 
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.COPCOEFFICIENTHEATING, entry=self.cop_coef
-        )
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.EERCOEFFICIENTCOOLING, entry=self.eer_coef
-        )
+        SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.COPCOEFFICIENTHEATING, entry=self.cop_coef)
+        SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.EERCOEFFICIENTCOOLING, entry=self.eer_coef)
         # self.simulation_repository.set_entry(self.cop_coef_heating, self.cop_coef)
         # self.simulation_repository.set_entry(self.eer_coef_cooling, self.eer_coef)
 
         # Sets the time operation restricitions
-        self.on_time = (
-            self.min_operation_time / self.my_simulation_parameters.seconds_per_timestep
-        )
-        self.off_time = (
-            self.min_idle_time / self.my_simulation_parameters.seconds_per_timestep
-        )
+        self.on_time = self.min_operation_time / self.my_simulation_parameters.seconds_per_timestep
+        self.off_time = self.min_idle_time / self.my_simulation_parameters.seconds_per_timestep
 
         # self.state = AirConditionerState()
         # self.previous_state = AirConditionerState()
@@ -475,9 +459,7 @@ class AirConditioner(cp.Component):
         lines.append(f"Control: {self.control}")
         return self.air_conditioner_config.get_string_dict() + lines
 
-    def i_simulate(  # noqa: C901
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:  # noqa: C901
         """Core simulation function."""
         # Inputs
         t_out = stsv.get_input_value(self.t_out_channel)
@@ -497,21 +479,12 @@ class AirConditioner(cp.Component):
                 self.state0 = self.state.clone()
 
             # return device on if minimum operation time is not fulfilled and device was on in previous state
-            if (
-                self.state0.state == 1
-                and self.state0.timestep_of_last_action + self.on_time >= timestep
-            ):
+            if self.state0.state == 1 and self.state0.timestep_of_last_action + self.on_time >= timestep:
                 self.state.state = 1
-            elif (
-                self.state0.state == -1
-                and self.state0.timestep_of_last_action + self.on_time >= timestep
-            ):
+            elif self.state0.state == -1 and self.state0.timestep_of_last_action + self.on_time >= timestep:
                 self.state.state = -1
             # return device off if minimum idle time is not fulfilled and device was off in previous state
-            elif (
-                self.state0.state == 0
-                and self.state0.timestep_of_last_action + self.off_time >= timestep
-            ):
+            elif self.state0.state == 0 and self.state0.timestep_of_last_action + self.off_time >= timestep:
                 self.state.state = 0
             # check signal from l2 and turn on or off if it is necesary
             else:
@@ -531,9 +504,7 @@ class AirConditioner(cp.Component):
                 electricity_output = 0
 
             # log.information("thermal_energy_delivered {}".format(thermal_energy_delivered))
-            stsv.set_output_value(
-                self.thermal_energy_delivered_channel, thermal_energy_delivered
-            )
+            stsv.set_output_value(self.thermal_energy_delivered_channel, thermal_energy_delivered)
             stsv.set_output_value(self.electricity_output_channel, electricity_output)
             stsv.set_output_value(self.cooling_eer_channel, eer)
 
@@ -559,25 +530,15 @@ class AirConditioner(cp.Component):
                 thermal_energy_delivered = -15000
 
             stsv.set_output_value(self.electricity_output_channel, electricity_output)
-            stsv.set_output_value(
-                self.thermal_energy_delivered_channel, thermal_energy_delivered
-            )
+            stsv.set_output_value(self.thermal_energy_delivered_channel, thermal_energy_delivered)
 
         if self.control == "MPC":
             mode = stsv.get_input_value(self.operating_mode_channel)
-            optimal_electric_power_grid = stsv.get_input_value(
-                self.optimal_electric_power_grid_channel
-            )
-            optimal_electric_power_pv = stsv.get_input_value(
-                self.optimal_electric_power_pv_channel
-            )
-            optimal_electric_power_battery = stsv.get_input_value(
-                self.optimal_electric_power_battery_channel
-            )
+            optimal_electric_power_grid = stsv.get_input_value(self.optimal_electric_power_grid_channel)
+            optimal_electric_power_pv = stsv.get_input_value(self.optimal_electric_power_pv_channel)
+            optimal_electric_power_battery = stsv.get_input_value(self.optimal_electric_power_battery_channel)
             optimal_electric_power_total = (
-                optimal_electric_power_grid
-                + optimal_electric_power_pv
-                + optimal_electric_power_battery
+                optimal_electric_power_grid + optimal_electric_power_pv + optimal_electric_power_battery
             )
 
             if mode == 1:
@@ -593,9 +554,7 @@ class AirConditioner(cp.Component):
                 electricity_output = 0
 
             stsv.set_output_value(self.electricity_output_channel, electricity_output)
-            stsv.set_output_value(
-                self.thermal_energy_delivered_channel, thermal_energy_delivered
-            )
+            stsv.set_output_value(self.thermal_energy_delivered_channel, thermal_energy_delivered)
 
 
 class AirConditionerController(cp.Component):
@@ -631,6 +590,7 @@ class AirConditionerController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: AirConditionerControllerConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ):
         """Constructs all the neccessary attributes."""
 
@@ -642,6 +602,7 @@ class AirConditionerController(cp.Component):
             name=self.air_conditioner_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         self.build(
@@ -676,9 +637,7 @@ class AirConditionerController(cp.Component):
 
     def get_default_connections_from_building(self):
         """Get default inputs from the building component."""
-        log.information(
-            "setting building default connections in AirConditionerController"
-        )
+        log.information("setting building default connections in AirConditionerController")
         connections = []
         building_classname = Building.get_classname()
         connections.append(
@@ -722,17 +681,11 @@ class AirConditionerController(cp.Component):
         lines = []
         lines.append("Air Conditioner Controller")
         lines.append("Control algorith of the Air conditioner is: on-off control\n")
-        lines.append(
-            f"Controller heating set temperature is {format(self.t_set_heating)} Deg C \n"
-        )
-        lines.append(
-            f"Controller cooling set temperature is {format(self.t_set_cooling)} Deg C \n"
-        )
+        lines.append(f"Controller heating set temperature is {format(self.t_set_heating)} Deg C \n")
+        lines.append(f"Controller cooling set temperature is {format(self.t_set_cooling)} Deg C \n")
         return self.air_conditioner_controller_config.get_string_dict() + lines
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Core simulation."""
         # check demand, and change state of self.has_heating_demand, and self._has_cooling_demand
         if force_convergence:

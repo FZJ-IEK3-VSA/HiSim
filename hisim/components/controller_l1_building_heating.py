@@ -115,6 +115,7 @@ class L1BuildingHeatController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: L1BuildingHeatingConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """For initializing."""
         if not config.__class__.__name__ == L1BuildingHeatingConfig.__name__:
@@ -123,40 +124,29 @@ class L1BuildingHeatController(cp.Component):
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.config: L1BuildingHeatingConfig = config
 
         """ Initializes the class. """
         self.source_weight: int = config.source_weight
         self.heating_season_begin = (
-            config.day_of_heating_season_begin
-            * 24
-            * 3600
-            / self.my_simulation_parameters.seconds_per_timestep
+            config.day_of_heating_season_begin * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
         )
         self.heating_season_end = (
-            config.day_of_heating_season_end
-            * 24
-            * 3600
-            / self.my_simulation_parameters.seconds_per_timestep
+            config.day_of_heating_season_end * 24 * 3600 / self.my_simulation_parameters.seconds_per_timestep
         )
         self.state: L1BuildingHeatControllerState = L1BuildingHeatControllerState()
-        self.previous_state: L1BuildingHeatControllerState = (
-            L1BuildingHeatControllerState()
-        )
-        self.processed_state: L1BuildingHeatControllerState = (
-            L1BuildingHeatControllerState()
-        )
+        self.previous_state: L1BuildingHeatControllerState = L1BuildingHeatControllerState()
+        self.processed_state: L1BuildingHeatControllerState = L1BuildingHeatControllerState()
 
         # Component Outputs
-        self.heat_controller_target_percentage_channel: cp.ComponentOutput = (
-            self.add_output(
-                self.component_name,
-                self.HeatControllerTargetPercentage,
-                LoadTypes.ON_OFF,
-                Units.BINARY,
-                output_description="Heating controller of buffer storage.",
-            )
+        self.heat_controller_target_percentage_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatControllerTargetPercentage,
+            LoadTypes.ON_OFF,
+            Units.BINARY,
+            output_description="Heating controller of buffer storage.",
         )
 
         # Component Inputs
@@ -185,9 +175,7 @@ class L1BuildingHeatController(cp.Component):
         )
 
         self.add_default_connections(self.get_building_default_connections())
-        self.add_default_connections(
-            self.get_default_connections_from_hot_water_storage()
-        )
+        self.add_default_connections(self.get_default_connections_from_hot_water_storage())
         self.add_default_connections(self.get_default_connections_from_ems())
 
     def get_building_default_connections(self):
@@ -208,9 +196,7 @@ class L1BuildingHeatController(cp.Component):
         """Sets the default connections for the energy management system."""
 
         connections = []
-        ems_classname = (
-            controller_l2_energy_management_system.L2GenericEnergyManagementSystem.get_classname()
-        )
+        ems_classname = controller_l2_energy_management_system.L2GenericEnergyManagementSystem.get_classname()
         connections.append(
             cp.ComponentConnection(
                 L1BuildingHeatController.BuildingTemperatureModifier,
@@ -227,9 +213,7 @@ class L1BuildingHeatController(cp.Component):
         component_module = importlib.import_module(name=component_module_name)
         component_class = getattr(component_module, "HotWaterStorage")
         connections = []
-        boiler_classname = (
-            component_class.get_classname()
-        )
+        boiler_classname = component_class.get_classname()
         connections.append(
             cp.ComponentConnection(
                 L1BuildingHeatController.BufferTemperature,
@@ -270,20 +254,12 @@ class L1BuildingHeatController(cp.Component):
             self.state.state = 0
             return
         # "surplus heat control" when storage is getting hot
-        if (
-            temperature_modifier > 0
-            and t_buffer > self.config.t_buffer_activation_threshold_in_celsius
-        ):
+        if temperature_modifier > 0 and t_buffer > self.config.t_buffer_activation_threshold_in_celsius:
             # heat with 75 % power and building can still be heated
-            if (
-                t_control
-                < self.config.t_max_heating_in_celsius + temperature_modifier / 2
-            ):
+            if t_control < self.config.t_max_heating_in_celsius + temperature_modifier / 2:
                 self.state.state = 0.75
             # heat with 50 % power when storage is getting hot and building can still be heated, but is already on the upper side of the tolerance interval
-            elif (
-                t_control < self.config.t_max_heating_in_celsius + temperature_modifier
-            ):
+            elif t_control < self.config.t_max_heating_in_celsius + temperature_modifier:
                 self.state.state = 0.5
         return
 
@@ -299,9 +275,7 @@ class L1BuildingHeatController(cp.Component):
         """For double checking results."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the control of the building temperature, when building is heated from buffer."""
         if force_convergence:
             pass
@@ -312,9 +286,7 @@ class L1BuildingHeatController(cp.Component):
                 t_buffer = stsv.get_input_value(self.buffer_temperature_channel)
             else:
                 t_buffer = 0
-            temperature_modifier = stsv.get_input_value(
-                self.building_temperature_modifier_channel
-            )
+            temperature_modifier = stsv.get_input_value(self.building_temperature_modifier_channel)
             self.control_heating(
                 timestep=timestep,
                 t_control=t_control,
@@ -322,9 +294,7 @@ class L1BuildingHeatController(cp.Component):
                 temperature_modifier=temperature_modifier,
             )
             self.processed_state = self.state.clone()
-        stsv.set_output_value(
-            self.heat_controller_target_percentage_channel, self.processed_state.state
-        )
+        stsv.set_output_value(self.heat_controller_target_percentage_channel, self.processed_state.state)
 
     def write_to_report(self) -> List[str]:
         """Writes the information of the current component to the report."""

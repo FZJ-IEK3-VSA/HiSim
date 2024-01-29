@@ -69,9 +69,7 @@ class Chart:  # noqa: too-few-public-methods
         self.time_correction_factor = time_correction_factor
 
         self.title: str = ""
-        matches = re.finditer(
-            ".+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$|#)", self.output
-        )
+        matches = re.finditer(".+?(?:(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|$|#)", self.output)
         matches = [m.group(0) for m in matches]  # type: ignore
 
         pass_sign = False
@@ -96,15 +94,15 @@ class Chart:  # noqa: too-few-public-methods
         self.title.strip()
         self.directory_path = directory_path
         self.output_type = self.output.split(" # ", 2)[1]
-        self.component_output_folder_path = os.path.join(
-            self.directory_path, self.component_name, self.output_type
-        )
+        self.component_output_folder_path = os.path.join(self.directory_path, self.component_name, self.output_type)
         os.makedirs(self.component_output_folder_path, exist_ok=True)
         self.object_name = " "
         self.property = chart_property
         if output2 is not None:
             self.output2 = output2
-            self.filename = f"{self.type.lower()}_{self.component_name}_{self.output_type}_double{self.figure_format.value}"
+            self.filename = (
+                f"{self.type.lower()}_{self.component_name}_{self.output_type}_double{self.figure_format.value}"
+            )
         else:
             self.filename = f"{self.type.lower()}_{self.component_name}_{self.output_type}{self.figure_format.value}"
         self.filepath = os.path.join(self.directory_path, self.filename)

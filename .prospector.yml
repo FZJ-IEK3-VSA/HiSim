@@ -46,6 +46,7 @@ pycodestyle:
     - N802
     - E128
     - E122
+    - E203
 
 pydocstyle:
   run: true

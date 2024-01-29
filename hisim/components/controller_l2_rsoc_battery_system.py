@@ -5,13 +5,7 @@ from typing import List
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-from hisim.component import (
-    ConfigBase,
-    Component,
-    ComponentInput,
-    ComponentOutput,
-    SingleTimeStepValues,
-)
+from hisim.component import ConfigBase, Component, ComponentInput, ComponentOutput, SingleTimeStepValues, DisplayConfig
 
 from hisim import loadtypes as lt
 from hisim import utils
@@ -54,9 +48,7 @@ class RsocBatteryControllerConfig(ConfigBase):
     def read_config(rsoc_name):
         """Opens the according JSON-file, based on the rSOC_name."""
 
-        config_file = os.path.join(
-            utils.HISIMPATH["inputs"], "rSOC_manufacturer_config.json"
-        )
+        config_file = os.path.join(utils.HISIMPATH["inputs"], "rSOC_manufacturer_config.json")
         with open(config_file, "r", encoding="utf-8") as json_file:
             data = json.load(json_file)
             return data.get("rSOC variants", {}).get(rsoc_name, {})
@@ -99,6 +91,7 @@ class RsocBatteryController(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: RsocBatteryControllerConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the class."""
         self.ptxcontrollerconfig = config
@@ -117,6 +110,7 @@ class RsocBatteryController(Component):
             name=self.ptxcontrollerconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         # =================================================================================================================================
@@ -192,13 +186,10 @@ class RsocBatteryController(Component):
 
         if operation_mode == "NominalLoad":
             load_to_system = nom_power
-            power_to_battery = (
-                power_delta - nom_power
-            )  # postive battery charge, negative battery discharges
+            power_to_battery = power_delta - nom_power  # postive battery charge, negative battery discharges
 
             # pdb.set_trace()
         elif operation_mode == "MinimumLoad":
-
             # pdb.set_trace()
             if min_power <= power_delta <= max_power:
                 load_to_system = power_delta
@@ -245,9 +236,7 @@ class RsocBatteryController(Component):
         self.system_state = self.system_state_previous
         self.threshold_exceeded = self.threshold_exceeded_previous
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the component."""
         if force_convergence:
             return
@@ -305,9 +294,7 @@ class RsocBatteryController(Component):
             # pdb.set_trace()
         """
 
-        stsv.set_output_value(
-            self.load_to_battery, (power_to_battery * 1000)
-        )  # Output: WATT
+        stsv.set_output_value(self.load_to_battery, (power_to_battery * 1000))  # Output: WATT
         stsv.set_output_value(self.load_to_system, load_to_system)
         stsv.set_output_value(self.power, power_delta)
 

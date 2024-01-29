@@ -18,6 +18,7 @@ from hisim.component import (
     SingleTimeStepValues,
     ConfigBase,
     OpexCostDataClass,
+    DisplayConfig,
 )
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
 from hisim.simulationparameters import SimulationParameters
@@ -71,14 +72,14 @@ class BatteryConfig(ConfigBase):
     @classmethod
     def get_default_config(cls) -> "BatteryConfig":
         """Returns default configuration of battery."""
-        custom_battery_capacity_generic_in_kilowatt_hour = 10  # size/capacity of battery should be approx. the same as default pv power
+        custom_battery_capacity_generic_in_kilowatt_hour = (
+            10  # size/capacity of battery should be approx. the same as default pv power
+        )
         config = BatteryConfig(
             name="Battery",
             # https://www.energieinstitut.at/die-richtige-groesse-von-batteriespeichern/
             custom_battery_capacity_generic_in_kilowatt_hour=custom_battery_capacity_generic_in_kilowatt_hour,
-            custom_pv_inverter_power_generic_in_watt=10
-            * 0.5
-            * 1e3,  # c-rate is 0.5C (0.5/h) here
+            custom_pv_inverter_power_generic_in_watt=10 * 0.5 * 1e3,  # c-rate is 0.5C (0.5/h) here
             source_weight=1,
             system_id="SG1",
             charge_in_kwh=0,
@@ -96,15 +97,15 @@ class BatteryConfig(ConfigBase):
     @classmethod
     def get_scaled_battery(cls, total_pv_power_in_watt_peak: float) -> "BatteryConfig":
         """Returns scaled configuration of battery according to pv power."""
-        custom_battery_capacity_generic_in_kilowatt_hour = total_pv_power_in_watt_peak * 1e-3  # size/capacity of battery should be approx. the same as default pv power
+        custom_battery_capacity_generic_in_kilowatt_hour = (
+            total_pv_power_in_watt_peak * 1e-3
+        )  # size/capacity of battery should be approx. the same as default pv power
         c_rate = 0.5  # 0.5C corresponds to 0.5/h for fully charging or discharging
         config = BatteryConfig(
             name="Battery",
             # https://www.energieinstitut.at/die-richtige-groesse-von-batteriespeichern/
             custom_battery_capacity_generic_in_kilowatt_hour=custom_battery_capacity_generic_in_kilowatt_hour,
-            custom_pv_inverter_power_generic_in_watt=custom_battery_capacity_generic_in_kilowatt_hour
-            * c_rate
-            * 1e3,
+            custom_pv_inverter_power_generic_in_watt=custom_battery_capacity_generic_in_kilowatt_hour * c_rate * 1e3,
             source_weight=1,
             system_id="SG1",
             charge_in_kwh=0,
@@ -142,25 +143,25 @@ class Battery(Component):
     StateOfCharge = "StateOfCharge"  # [0..1]
 
     def __init__(
-        self, my_simulation_parameters: SimulationParameters, config: BatteryConfig
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: BatteryConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ):
         """Loads the parameters of the specified battery storage."""
         self.battery_config = config
         super().__init__(
-            name=self.battery_config.name
-            + "_w"
-            + str(self.battery_config.source_weight),
+            name=self.battery_config.name + "_w" + str(self.battery_config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         self.source_weight = self.battery_config.source_weight
 
         self.system_id = self.battery_config.system_id
 
-        self.custom_pv_inverter_power_generic_in_watt = (
-            self.battery_config.custom_pv_inverter_power_generic_in_watt
-        )
+        self.custom_pv_inverter_power_generic_in_watt = self.battery_config.custom_pv_inverter_power_generic_in_watt
 
         self.custom_battery_capacity_generic_in_kilowatt_hour = (
             self.battery_config.custom_battery_capacity_generic_in_kilowatt_hour
@@ -232,17 +233,13 @@ class Battery(Component):
         """Prepares the simulation."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
         # Parameters
         time_increment_in_seconds = self.my_simulation_parameters.seconds_per_timestep
 
         # Load input values
-        set_point_for_ac_battery_power_in_watt = stsv.get_input_value(
-            self.loading_power_input_channel
-        )
+        set_point_for_ac_battery_power_in_watt = stsv.get_input_value(self.loading_power_input_channel)
         state_of_charge = self.state.state_of_charge
 
         # Simulate on timestep
@@ -283,10 +280,7 @@ class Battery(Component):
         for index, output in enumerate(all_outputs):
             if (
                 output.postprocessing_flag is not None
-                and output.component_name
-                == self.battery_config.name
-                + "_w"
-                + str(self.battery_config.source_weight)
+                and output.component_name == self.battery_config.name + "_w" + str(self.battery_config.source_weight)
             ):
                 if InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
                     self.battery_config.charge_in_kwh = round(
@@ -302,9 +296,7 @@ class Battery(Component):
                         1,
                     )
 
-        opex_cost_per_simulated_period_in_euro = (
-            self.calc_maintenance_cost()
-        )
+        opex_cost_per_simulated_period_in_euro = self.calc_maintenance_cost()
         opex_cost_data_class = OpexCostDataClass(
             opex_cost=opex_cost_per_simulated_period_in_euro,
             co2_footprint=0,
@@ -325,8 +317,7 @@ class Battery(Component):
         # Todo: Think about better approximation for costs of battery aging
 
         virtual_number_of_full_charge_cycles = (
-            self.battery_config.charge_in_kwh
-            / self.battery_config.custom_battery_capacity_generic_in_kilowatt_hour
+            self.battery_config.charge_in_kwh / self.battery_config.custom_battery_capacity_generic_in_kilowatt_hour
         )
         # virtual_number_of_full_discharge_cycles = self.battery_config.discharge_in_kwh / self.battery_config.custom_battery_capacity_generic_in_kilowatt_hour
 

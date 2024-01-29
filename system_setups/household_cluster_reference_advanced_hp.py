@@ -98,48 +98,30 @@ def setup_function(
     config_filename = my_sim.my_module_config_path
 
     my_config: BuildingPVWeatherConfig
-    if isinstance(config_filename, str) and os.path.exists(
-        config_filename.rstrip("\r")
-    ):
-        with open(
-            config_filename.rstrip("\r"), encoding="unicode_escape"
-        ) as system_config_file:
+    if isinstance(config_filename, str) and os.path.exists(config_filename.rstrip("\r")):
+        with open(config_filename.rstrip("\r"), encoding="unicode_escape") as system_config_file:
             my_config = BuildingPVWeatherConfig.from_json(system_config_file.read())  # type: ignore
 
         log.information(f"Read system config from {config_filename}")
         log.information("Config values: " + f"{my_config.to_dict}" + "\n")
     else:
         my_config = BuildingPVWeatherConfig.get_default()
-        log.information(
-            "No module config path from the simulator was given. Use default config."
-        )
+        log.information("No module config path from the simulator was given. Use default config.")
 
     # Set Simulation Parameters
     year = 2021
     seconds_per_timestep = 60
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(
-            year=year, seconds_per_timestep=seconds_per_timestep
-        )
+        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
         my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
+            PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
         )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_OPEX
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_CAPEX
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.MAKE_RESULT_JSON_WITH_KPI_FOR_WEBTOOL
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER
-        )
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_CAPEX)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Set Building (scale building according to total base area and not absolute floor area)
@@ -155,7 +137,6 @@ def setup_function(
     lpg_households: Union[JsonReference, List[JsonReference]]
 
     if isinstance(my_config.lpg_households, List):
-
         if len(my_config.lpg_households) == 1:
             lpg_households = getattr(Households, my_config.lpg_households[0])
         elif len(my_config.lpg_households) > 1:
@@ -168,26 +149,20 @@ def setup_function(
             raise ValueError("Config list with lpg household is empty.")
 
     else:
-        raise TypeError(
-            f"Type {type(my_config.lpg_households)} is incompatible. Should be List[str]."
-        )
+        raise TypeError(f"Type {type(my_config.lpg_households)} is incompatible. Should be List[str].")
 
     # =================================================================================================================================
     # Set Fix System Parameters
 
     # Set Heat Pump Controller
-    hp_controller_mode = (
-        2  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
-    )
+    hp_controller_mode = 2  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
     set_heating_threshold_outside_temperature_for_heat_pump_in_celsius = 16.0
     set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = 20.0
     temperature_offset_for_state_conditions_in_celsius = 5.0
 
     # Set Heat Pump
     group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
-    heating_reference_temperature_in_celsius: float = (
-        -7
-    )  # t_in #TODO: get real heating ref temps according to location
+    heating_reference_temperature_in_celsius: float = -7  # t_in #TODO: get real heating ref temps according to location
     flow_temperature_in_celsius = 21  # t_out_val
 
     # =================================================================================================================================
@@ -199,21 +174,15 @@ def setup_function(
     )
     my_building_config.building_code = building_code
     my_building_config.total_base_area_in_m2 = total_base_area_in_m2
-    my_building_config.absolute_conditioned_floor_area_in_m2 = (
-        absolute_conditioned_floor_area_in_m2
-    )
+    my_building_config.absolute_conditioned_floor_area_in_m2 = absolute_conditioned_floor_area_in_m2
 
     my_building_config.number_of_apartments = number_of_apartments
     my_building_config.enable_opening_windows = True
     my_building_information = building.BuildingInformation(config=my_building_config)
-    my_building = building.Building(
-        config=my_building_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
 
     # Build Occupancy
-    my_occupancy_config = (
-        loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
-    )
+    my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
     my_occupancy_config.household = lpg_households
     my_occupancy_config.cache_dir_path = cache_dir_path
 
@@ -222,13 +191,9 @@ def setup_function(
     )
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.AACHEN
-    )
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
 
-    my_weather = weather.Weather(
-        config=my_weather_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
 
     # =================================================================================================================================
     # Build Energy System Components
@@ -270,7 +235,8 @@ def setup_function(
     my_heat_pump_config.flow_temperature_in_celsius = flow_temperature_in_celsius
 
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
-        config=my_heat_pump_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_pump_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Distribution System
@@ -300,13 +266,17 @@ def setup_function(
         default_power_in_watt=6000,
     )
 
-    my_dhw_heatpump_controller_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-        name="DHWHeatpumpController"
+    my_dhw_heatpump_controller_config = (
+        controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
+            name="DHWHeatpumpController"
+        )
     )
 
-    my_dhw_storage_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
-        number_of_apartments=my_building_information.number_of_apartments,
-        default_volume_in_liter=450,
+    my_dhw_storage_config = (
+        generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
+            number_of_apartments=my_building_information.number_of_apartments,
+            default_volume_in_liter=450,
+        )
     )
     my_dhw_storage_config.compute_default_cycle(
         temperature_difference_in_kelvin=my_dhw_heatpump_controller_config.t_max_heating_in_celsius
@@ -343,9 +313,7 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
     my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)
     my_sim.add_component(my_domnestic_hot_water_storage, connect_automatically=True)
-    my_sim.add_component(
-        my_domnestic_hot_water_heatpump_controller, connect_automatically=True
-    )
+    my_sim.add_component(my_domnestic_hot_water_heatpump_controller, connect_automatically=True)
     my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
     my_sim.add_component(my_electricity_meter, connect_automatically=True)
 

@@ -7,7 +7,7 @@ from typing import Optional
 import pytest
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
-from hisim.components import loadprofilegenerator_connector
+from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import generic_pv_system
 from hisim.components import building
@@ -66,7 +66,7 @@ def test_house_with_pyam(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
     my_simulation_parameters.post_processing_options.append(
-        postprocessingoptions.PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION_WITH_PYAM
+        postprocessingoptions.PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
     )
 
     # this part is copied from hisim_main
@@ -101,11 +101,10 @@ def test_house_with_pyam(
     my_building = building.Building(
         config=my_building_config, my_simulation_parameters=my_simulation_parameters
     )
-    # Build Occupancy
+    # Occupancy
     my_occupancy_config = (
-        loadprofilegenerator_connector.OccupancyConfig.get_default_chr01_couple_both_at_work()
-    )
-    my_occupancy = loadprofilegenerator_connector.Occupancy(
+        loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config())
+    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
 

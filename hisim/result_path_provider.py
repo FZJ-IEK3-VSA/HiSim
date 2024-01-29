@@ -17,7 +17,9 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
     According to your storting options and your input information a result path is created.
     """
 
-    def __init__(self,):
+    def __init__(
+        self,
+    ):
         """Initialize the class."""
         self.base_path: Optional[str] = None
         self.model_name: Optional[str] = None
@@ -101,10 +103,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
                     self.variant_name,
                     self.datetime_string,
                 )
-            elif (
-                self.sorting_option
-                == SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION
-            ):
+            elif self.sorting_option == SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION:
                 # schauen ob verzeichnis schon da und aufsteigende nummer anhängen
                 idx = 1
 
@@ -136,10 +135,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
                             self.model_name,
                             self.variant_name + "_" + str(idx),
                         )
-            elif (
-                self.sorting_option
-                == SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION
-            ):
+            elif self.sorting_option == SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION:
                 if self.sampling_mode is not None:
                     path = os.path.join(
                         self.base_path,

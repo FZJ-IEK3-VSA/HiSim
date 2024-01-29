@@ -200,8 +200,6 @@ class HeatPumpHplib(Component):
 
         self.minimum_idle_time_in_seconds = config.minimum_idle_time_in_seconds
 
-        postprocessing_flag = [InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
-
         # Component has states
         self.state = HeatPumpState(time_on=0, time_off=0, time_on_cooling=0, on_off_previous=0)
         self.previous_state = self.state.self_copy()

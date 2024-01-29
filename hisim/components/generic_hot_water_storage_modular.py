@@ -229,7 +229,6 @@ class StorageState:
             * self.volume_in_l
             * 0.977
             * 4.182
-            * 1e3
         )
 
 

@@ -38,16 +38,13 @@ class JsonExecutor:
             self.my_obj: ConfigFile = ConfigFile.from_json(json_str)
             if self.my_obj.my_simulation_parameters is None:
                 raise ValueError("No simulation parameters object was found.")
-            self.my_simulation_parameters: SimulationParameters = (
-                self.my_obj.my_simulation_parameters
-            )
+            self.my_simulation_parameters: SimulationParameters = self.my_obj.my_simulation_parameters
 
     def component_importer(self, needed_classes: List[str]) -> Dict[str, Any]:
         """Imports a config."""
         package_dir = os.path.join(PathlibPath(__file__).resolve().parent, "components")
         class_dict = {}
-        for (_idx1, module_name, _idx2) in iter_modules([package_dir]):
-
+        for _idx1, module_name, _idx2 in iter_modules([package_dir]):
             # import the module and iterate through its attributes
             module = import_module(f"hisim.components.{module_name}")
 
@@ -82,9 +79,7 @@ class JsonExecutor:
         )
         component_dict = {}
         for component_entry in self.my_obj.component_entries:
-            component_instance = self.process_one_component_entry(
-                component_entry, class_dict, my_simulation_parameters
-            )
+            component_instance = self.process_one_component_entry(component_entry, class_dict, my_simulation_parameters)
             simulator.add_component(component_instance)
             component_dict[component_entry.component_name] = component_instance
         for component_entry in self.my_obj.component_entries:
@@ -121,23 +116,15 @@ class JsonExecutor:
                 )
         if not found_simulation_parameters:
             raise ValueError(
-                "The class "
-                + component_entry.component_full_classname
-                + " has no simulation parameters parameter"
+                "The class " + component_entry.component_full_classname + " has no simulation parameters parameter"
             )
         if not found_config:
-            raise ValueError(
-                "The class "
-                + component_entry.component_full_classname
-                + " has no config parameter"
-            )
+            raise ValueError("The class " + component_entry.component_full_classname + " has no config parameter")
         config_class = class_dict[component_entry.config_full_classname]
 
         config_instance = config_class.from_dict(component_entry.configuration)
 
-        class_instance = my_class(
-            config=config_instance, my_simulation_parameters=my_simulation_parameters
-        )
+        class_instance = my_class(config=config_instance, my_simulation_parameters=my_simulation_parameters)
         return class_instance
 
     def generate_list_of_needed_classes_for_import(self):

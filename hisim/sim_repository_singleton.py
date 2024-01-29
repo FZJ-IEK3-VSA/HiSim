@@ -44,9 +44,7 @@ class SingletonSimRepository(metaclass=SingletonMeta):
     def __init__(self) -> None:
         """Initializes the SimRepository."""
         self.my_dict: Dict[Any, Any] = {}
-        self.my_dynamic_dict: Dict[lt.ComponentType, Dict[int, Any]] = {
-            elem: {} for elem in lt.ComponentType
-        }
+        self.my_dynamic_dict: Dict[lt.ComponentType, Dict[int, Any]] = {elem: {} for elem in lt.ComponentType}
 
     def set_entry(self, key: Any, entry: Any) -> None:
         """Sets an entry in the SimRepository."""
@@ -66,15 +64,11 @@ class SingletonSimRepository(metaclass=SingletonMeta):
         """Deletes an existing entry."""
         self.my_dict.pop(key)
 
-    def set_dynamic_entry(
-        self, component_type: lt.ComponentType, source_weight: int, entry: Any
-    ) -> None:
+    def set_dynamic_entry(self, component_type: lt.ComponentType, source_weight: int, entry: Any) -> None:
         """Sets a dynamic entry."""
         self.my_dynamic_dict[component_type][source_weight] = entry
 
-    def get_dynamic_entry(
-        self, component_type: lt.ComponentType, source_weight: int
-    ) -> Any:
+    def get_dynamic_entry(self, component_type: lt.ComponentType, source_weight: int) -> Any:
         """Gets a dynmaic entry."""
         component = self.my_dynamic_dict.get(component_type, None)
         if component is None:
@@ -86,9 +80,7 @@ class SingletonSimRepository(metaclass=SingletonMeta):
         """Gets weights for dynamic components."""
         return list(self.my_dynamic_dict[component_type].keys())
 
-    def delete_dynamic_entry(
-        self, component_type: lt.ComponentType, source_weight: int
-    ) -> Any:
+    def delete_dynamic_entry(self, component_type: lt.ComponentType, source_weight: int) -> Any:
         """Deletes a dynamic component entry."""
         self.my_dynamic_dict[component_type].pop(source_weight)
 

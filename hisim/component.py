@@ -93,7 +93,7 @@ class ComponentOutput:  # noqa: too-few-public-methods
         self.sankey_flow_direction: Optional[bool] = sankey_flow_direction
         self.output_description: Optional[str] = output_description
 
-    def get_pretty_name(self):
+    def get_pretty_name(self) -> str:
         """Gets a pretty name for a component output."""
         return self.component_name + " - " + self.display_name + " [" + self.load_type + " - " + self.unit + "]"
 
@@ -176,6 +176,20 @@ class SingleTimeStepValues:
         return error_msg
 
 
+@dataclass
+class DisplayConfig:
+
+    """Configure how to display this component in postprocessing."""
+
+    pretty_name: str | None = None
+    display_in_webtool: bool = False
+
+    @classmethod
+    def show(cls, pretty_name):
+        """Shortcut for showing in webtool with a specified name."""
+        return DisplayConfig(pretty_name, display_in_webtool=True)
+
+
 class Component:
 
     """Base class for all components."""
@@ -195,6 +209,7 @@ class Component:
         name: str,
         my_simulation_parameters: SimulationParameters,
         my_config: ConfigBase,
+        my_display_config: DisplayConfig,
     ) -> None:
         """Initializes the component class."""
         self.component_name: str = name
@@ -215,6 +230,7 @@ class Component:
                 "The argument my_config is not a ConfigBase object.",
                 "Please check your components' configuration classes and inherit from ConfigBase class according to hisim/components/example_component.py.",
             )
+        self.my_display_config: DisplayConfig = my_display_config
 
     def add_default_connections(self, connections: List[ComponentConnection]) -> None:
         """Adds a default connection list definition."""
@@ -224,11 +240,15 @@ class Component:
             if connection.source_class_name != component_name:
                 raise ValueError("Trying to add connections to different components in one go.")
         self.default_connections[component_name] = connections
-        log.trace("added default connections for connections from : " + component_name + "\n" + str(self.default_connections))
+        log.trace(
+            "added default connections for connections from : " + component_name + "\n" + str(self.default_connections)
+        )
 
     def i_prepare_simulation(self) -> None:
         """Gets called before the simulation to prepare the calculation."""
-        raise NotImplementedError("Simulation preparation is missing for " + self.component_name + " (" + self.get_full_classname() + ")")
+        raise NotImplementedError(
+            "Simulation preparation is missing for " + self.component_name + " (" + self.get_full_classname() + ")"
+        )
 
     def set_sim_repo(self, simulation_repository: SimRepository) -> None:
         """Sets the SimRepository."""
@@ -285,7 +305,13 @@ class Component:
         for component_input in self.inputs:
             if component_input.field_name == input_fieldname:
                 if input_to_set is not None:
-                    raise ValueError("The input " + input_fieldname + " of the component " + self.component_name + " was already set.")
+                    raise ValueError(
+                        "The input "
+                        + input_fieldname
+                        + " of the component "
+                        + self.component_name
+                        + " was already set."
+                    )
                 input_to_set = component_input
         if input_to_set is None:
             raise ValueError("The component " + self.component_name + " has no input with the name " + input_fieldname)

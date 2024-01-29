@@ -63,23 +63,21 @@ class IdealizedElectricHeater(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: IdealizedHeaterConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Construct all the neccessary attributes."""
         super().__init__(
             "IdealizedElectricHeater",
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         self.thermal_power_delivered_in_watt: float = 0
         self.theoretical_thermal_building_in_watt: float = 0
         self.heating_in_watt: float = 0
-        self.set_heating_temperature_for_building_in_celsius = (
-            config.set_heating_temperature_for_building_in_celsius
-        )
-        self.set_cooling_temperature_for_building_in_celsius = (
-            config.set_cooling_temperature_for_building_in_celsius
-        )
+        self.set_heating_temperature_for_building_in_celsius = config.set_heating_temperature_for_building_in_celsius
+        self.set_cooling_temperature_for_building_in_celsius = config.set_cooling_temperature_for_building_in_celsius
 
         # Inputs
 
@@ -139,15 +137,11 @@ class IdealizedElectricHeater(cp.Component):
         lines.append("Idealized Electric Heater")
         return lines
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the Idealized Electric Heater."""
 
         # Get inputs ------------------------------------------------------------------------------------------------------------
-        theoretical_thermal_building_in_watt = stsv.get_input_value(
-            self.theoretical_thermal_building_channel
-        )
+        theoretical_thermal_building_in_watt = stsv.get_input_value(self.theoretical_thermal_building_channel)
 
         # Calculations ----------------------------------------------------------------------------------------------------------
 

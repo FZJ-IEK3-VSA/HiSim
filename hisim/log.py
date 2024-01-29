@@ -9,7 +9,7 @@ LOGGING_DEFAULT_PATH: str = r"../logs/"
 
 class LogPrio(IntEnum):
 
-    """ Define a logging priority. """
+    """Define a logging priority."""
 
     ERROR = 1
     WARNING = 2
@@ -20,38 +20,38 @@ class LogPrio(IntEnum):
 
 
 def error(message: str, logging_message_path: str = LOGGING_DEFAULT_PATH) -> None:
-    """ Log an error message. """
+    """Log an error message."""
     log(LogPrio.ERROR, message, logging_message_path)
 
 
 def warning(message: str, logging_message_path: str = LOGGING_DEFAULT_PATH) -> None:
-    """ Log a warning message. """
+    """Log a warning message."""
     log(LogPrio.WARNING, message, logging_message_path)
 
 
 def information(message: str, logging_message_path: str = LOGGING_DEFAULT_PATH) -> None:
-    """ Log a information message. """
+    """Log a information message."""
     log(LogPrio.INFORMATION, message, logging_message_path)
 
 
 def trace(message: str, logging_message_path: str = LOGGING_DEFAULT_PATH) -> None:
-    """ Log a trace message. """
+    """Log a trace message."""
     log(LogPrio.TRACE, message, logging_message_path)
 
 
 def debug(message: str, logging_message_path: str = LOGGING_DEFAULT_PATH) -> None:
-    """ Log a debug message. """
+    """Log a debug message."""
     log(LogPrio.DEBUG, message, logging_message_path)
 
 
 def profile(message: str, logging_message_path: str = LOGGING_DEFAULT_PATH) -> None:
-    """ Log a profile message. """
+    """Log a profile message."""
     log(LogPrio.PROFILE, message, logging_message_path)
     log_profile_file(message, logging_message_path)
 
 
 def log(prio: int, message: str, logging_message_path: str = LOGGING_DEFAULT_PATH) -> None:
-    """ Write and print a log message. """
+    """Write and print a log message."""
     # if(prio < LogPrio.Debug):
     prio_string: str
     if prio == LogPrio.ERROR:
@@ -74,18 +74,18 @@ def log(prio: int, message: str, logging_message_path: str = LOGGING_DEFAULT_PAT
     if not os.path.exists(logging_message_path):
         os.makedirs(logging_message_path)
 
-    file_name = os.path.join(logging_message_path, 'hisim_simulation.log')
-    with open(file_name, 'a', encoding="utf-8") as filestream:
+    file_name = os.path.join(logging_message_path, "hisim_simulation.log")
+    with open(file_name, "a", encoding="utf-8") as filestream:
         filestream.write(message + "\n")
 
 
 def log_profile_file(message: str, logging_message_path: str = LOGGING_DEFAULT_PATH) -> None:
-    """ Write log message to logfile. """
+    """Write log message to logfile."""
 
     if not os.path.exists(logging_message_path):
         os.makedirs(logging_message_path)
 
-    file_name = os.path.join(logging_message_path, 'profiling_timeuse.log')
+    file_name = os.path.join(logging_message_path, "profiling_timeuse.log")
 
-    with open(file_name, 'a', encoding="utf-8") as filestream:
+    with open(file_name, "a", encoding="utf-8") as filestream:
         filestream.write(message + "\n")

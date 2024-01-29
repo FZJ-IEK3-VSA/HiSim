@@ -111,6 +111,7 @@ class L1GenericElectrolyzerController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: L1ElectrolyzerControllerConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initialize the class."""
 
@@ -118,14 +119,13 @@ class L1GenericElectrolyzerController(cp.Component):
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.minimum_runtime_in_timesteps = int(
-            config.min_operation_time_in_seconds
-            / self.my_simulation_parameters.seconds_per_timestep
+            config.min_operation_time_in_seconds / self.my_simulation_parameters.seconds_per_timestep
         )
         self.minimum_resting_time_in_timesteps = int(
-            config.min_idle_time_in_seconds
-            / self.my_simulation_parameters.seconds_per_timestep
+            config.min_idle_time_in_seconds / self.my_simulation_parameters.seconds_per_timestep
         )
 
         self.state = L1ElectrolyzerControllerState()
@@ -165,9 +165,7 @@ class L1GenericElectrolyzerController(cp.Component):
         component_module = importlib.import_module(name=component_module_name)
         component_class = getattr(component_module, "GenericHydrogenStorage")
         connections = []
-        h2_storage_classname = (
-            component_class.get_classname()
-        )
+        h2_storage_classname = component_class.get_classname()
         connections.append(
             cp.ComponentConnection(
                 L1GenericElectrolyzerController.HydrogenSOC,
@@ -193,9 +191,7 @@ class L1GenericElectrolyzerController(cp.Component):
         """Doublechecks."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the component."""
 
         if force_convergence:
@@ -208,41 +204,28 @@ class L1GenericElectrolyzerController(cp.Component):
             self.processed_state = self.state.clone()
 
         # minimum power of electrolyzer fulfilled when running
-        if (
-            self.state.state == 1
-            and electricity_target < self.config.p_min_electrolyzer
-        ):
+        if self.state.state == 1 and electricity_target < self.config.p_min_electrolyzer:
             electricity_target = self.config.p_min_electrolyzer
         stsv.set_output_value(
             self.available_electicity_output_channel,
             self.state.state * electricity_target,
         )
 
-    def calculate_state(
-        self, timestep: int, electricity_target: float, h2_soc: float
-    ) -> None:
+    def calculate_state(self, timestep: int, electricity_target: float, h2_soc: float) -> None:
         """Calculate the state."""
         # return device on if minimum operation time is not fulfilled and device was on in previous state
-        if (
-            self.state.state == 1
-            and self.state.activation_time_step + self.minimum_runtime_in_timesteps
-            >= timestep
-        ):
+        if self.state.state == 1 and self.state.activation_time_step + self.minimum_runtime_in_timesteps >= timestep:
             # mandatory on, minimum runtime not reached
             return
         if (
             self.state.state == 0
-            and self.state.deactivation_time_step
-            + self.minimum_resting_time_in_timesteps
-            >= timestep
+            and self.state.deactivation_time_step + self.minimum_resting_time_in_timesteps >= timestep
         ):
             # mandatory off, minimum resting time not reached
             return
 
         # available electricity too low or hydrogen storage too full
-        if (electricity_target < self.config.p_min_electrolyzer) or (
-            h2_soc > self.config.h2_soc_threshold
-        ):
+        if (electricity_target < self.config.p_min_electrolyzer) or (h2_soc > self.config.h2_soc_threshold):
             self.state.deactivate(timestep)
             return
 

@@ -84,25 +84,21 @@ class HouseholdAdvancedHpEvPvBatteryConfig(SystemSetupConfigBase):
         """Get default HouseholdAdvancedHpEvPvBatteryConfig."""
 
         charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
-        charging_power = float(
-            (charging_station_set.Name or "").split("with ")[1].split(" kW")[0]
-        )
+        charging_power = float((charging_station_set.Name or "").split("with ")[1].split(" kW")[0])
         heating_reference_temperature_in_celsius: float = -7
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0
-        building_config = (
-            building.BuildingConfig.get_default_german_single_family_home(heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius)
+        building_config = building.BuildingConfig.get_default_german_single_family_home(
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
         )
         my_building_information = building.BuildingInformation(config=building_config)
         hds_controller_config = heat_distribution_system.HeatDistributionControllerConfig.get_default_heat_distribution_controller_config(
             set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
             set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
             heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
         )
-        my_hds_controller_information = (
-            heat_distribution_system.HeatDistributionControllerInformation(
-                config=hds_controller_config
-            )
+        my_hds_controller_information = heat_distribution_system.HeatDistributionControllerInformation(
+            config=hds_controller_config
         )
 
         pv_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
@@ -148,7 +144,7 @@ class HouseholdAdvancedHpEvPvBatteryConfig(SystemSetupConfigBase):
             hp_config=(
                 advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
                     heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-                    heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
+                    heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
                 )
             ),
             simple_hot_water_storage_config=(
@@ -183,15 +179,11 @@ class HouseholdAdvancedHpEvPvBatteryConfig(SystemSetupConfigBase):
             advanced_battery_config=advanced_battery_bslib.BatteryConfig.get_scaled_battery(
                 total_pv_power_in_watt_peak=pv_config.power_in_watt
             ),
-            electricity_controller_config=(
-                controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
-            ),
+            electricity_controller_config=(controller_l2_energy_management_system.EMSConfig.get_default_config_ems()),
         )
         # adjust HeatPump
         household_config.hp_config.group_id = 1  # use modulating heatpump as default
-        household_config.hp_controller_config.mode = (
-            2  # use heating and cooling as default
-        )
+        household_config.hp_controller_config.mode = 2  # use heating and cooling as default
         # household_config.hp_config.set_thermal_output_power_in_watt = (
         #     6000  # default value leads to switching on-off very often
         # )
@@ -263,9 +255,7 @@ def setup_function(
 
     # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
     if my_sim.my_module_config_path:
-        my_config = HouseholdAdvancedHpEvPvBatteryConfig.load_from_json(
-            my_sim.my_module_config_path
-        )
+        my_config = HouseholdAdvancedHpEvPvBatteryConfig.load_from_json(my_sim.my_module_config_path)
     else:
         my_config = HouseholdAdvancedHpEvPvBatteryConfig.get_default()
     # =================================================================================================================================
@@ -290,11 +280,9 @@ def setup_function(
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build heat Distribution System Controller
-    my_heat_distribution_controller = (
-        heat_distribution_system.HeatDistributionController(
-            config=my_config.hds_controller_config,
-            my_simulation_parameters=my_simulation_parameters,
-        )
+    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
+        config=my_config.hds_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Occupancy
@@ -365,11 +353,9 @@ def setup_function(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 
-    my_domnestic_hot_water_heatpump_controller = (
-        controller_l1_heatpump.L1HeatPumpController(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_dhw_heatpump_controller_config,
-        )
+    my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_dhw_heatpump_controller_config,
     )
 
     my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
@@ -382,9 +368,7 @@ def setup_function(
     filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
     names = [elem.partition(",")[0].partition(".")[2] for elem in filepaths_location]
 
-    my_car_config = (
-        my_config.car_config
-    )  # Todo: check source weight in case of 2 vehicles
+    my_car_config = my_config.car_config  # Todo: check source weight in case of 2 vehicles
     my_car_config.name = "ElectricCar"
 
     # create all cars
@@ -437,11 +421,9 @@ def setup_function(
     )
 
     # Build EMS
-    my_electricity_controller = (
-        controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_config.electricity_controller_config,
-        )
+    my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.electricity_controller_config,
     )
 
     # Build Battery
@@ -453,9 +435,7 @@ def setup_function(
     # -----------------------------------------------------------------------------------------------------------------
     # connect Electric Vehicle
     # copied and adopted from modular_example
-    for car, car_battery, car_battery_controller in zip(
-        my_cars, my_car_batteries, my_car_battery_controllers
-    ):
+    for car, car_battery, car_battery_controller in zip(my_cars, my_car_batteries, my_car_battery_controllers):
         car_battery_controller.connect_only_predefined_connections(car)
         car_battery_controller.connect_only_predefined_connections(car_battery)
         car_battery.connect_only_predefined_connections(car_battery_controller)
@@ -633,18 +613,16 @@ def setup_function(
         source_weight=4,
     )
 
-    electricity_to_or_from_battery_target = (
-        my_electricity_controller.add_component_output(
-            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-            source_tags=[
-                lt.ComponentType.BATTERY,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_weight=4,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target electricity for Battery Control. ",
-        )
+    electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
+        source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+        source_tags=[
+            lt.ComponentType.BATTERY,
+            lt.InandOutputType.ELECTRICITY_TARGET,
+        ],
+        source_weight=4,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        output_description="Target electricity for Battery Control. ",
     )
 
     # -----------------------------------------------------------------------------------------------------------------
@@ -677,9 +655,7 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
     my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)
     my_sim.add_component(my_domnestic_hot_water_storage, connect_automatically=True)
-    my_sim.add_component(
-        my_domnestic_hot_water_heatpump_controller, connect_automatically=True
-    )
+    my_sim.add_component(my_domnestic_hot_water_heatpump_controller, connect_automatically=True)
     my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
     my_sim.add_component(my_electricity_meter)
     my_sim.add_component(my_advanced_battery)

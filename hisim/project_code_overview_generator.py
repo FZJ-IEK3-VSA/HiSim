@@ -36,7 +36,7 @@ BuiltInAttributes = [
 @dataclass
 class ClassInformation:
 
-    """ Stores information about classes. """
+    """Stores information about classes."""
 
     class_name: str = ""
     lines_of_code: int = 0
@@ -45,7 +45,7 @@ class ClassInformation:
 @dataclass
 class StringInformation:
 
-    """ Stores information for strings. """
+    """Stores information for strings."""
 
     string_name: str = ""
     string_value: str = ""
@@ -54,7 +54,7 @@ class StringInformation:
 @dataclass
 class MethodInformation:
 
-    """ Stores information about methods. """
+    """Stores information about methods."""
 
     method_name: str = ""
 
@@ -62,7 +62,7 @@ class MethodInformation:
 @dataclass
 class ListInformation:
 
-    """ Stores information for all lists. """
+    """Stores information for all lists."""
 
     list_name: str = ""
 
@@ -70,7 +70,7 @@ class ListInformation:
 @dataclass
 class DictInformation:
 
-    """ Stores information for all dictionaries. """
+    """Stores information for all dictionaries."""
 
     dict_name: str = ""
 
@@ -78,7 +78,7 @@ class DictInformation:
 @dataclass
 class OtherMembers:
 
-    """ Stores information for all other members of the files. """
+    """Stores information for all other members of the files."""
 
     member_name: str = ""
     variable_type: str = ""
@@ -87,7 +87,7 @@ class OtherMembers:
 @dataclass
 class FileInformation:
 
-    """ Stores the information about a single file. """
+    """Stores the information about a single file."""
 
     module_name: str = ""
     file_name: str = ""
@@ -113,21 +113,21 @@ class FileInformation:
 
 class OverviewGenerator:
 
-    """ Generates an overview of all modules. """
+    """Generates an overview of all modules."""
 
     def __init__(self):
-        """ Initializes the class. """
+        """Initializes the class."""
         self.existing_classes: List[str] = []
 
     def add_to_cell(self, column: int, row: int, value: Any, worksheet: Workbook) -> int:
-        """ Write data to the Excel sheet. """
+        """Write data to the Excel sheet."""
         worksheet.cell(column=column, row=row, value=value)
         column = column + 1
         return column
 
     def run(self):
-        """ Execute the components finder. """
-        dest_filename = 'components_information.xlsx'
+        """Execute the components finder."""
+        dest_filename = "components_information.xlsx"
 
         # collect file names
         python_files = self.collect_files()
@@ -155,14 +155,18 @@ class OverviewGenerator:
         self.write_clean_files(fis)
 
     def write_clean_files(self, fis: List[FileInformation]) -> None:
-        """ Writes files for calling flak8e and prospector. """
+        """Writes files for calling flak8e and prospector."""
         with open("../flake8_calls.txt", "w", encoding="utf8") as flake8:
             for myfi in fis:
                 if not myfi.cleaned:
                     continue
                 relative_name = myfi.file_name.replace("C:\\work\\hisim_github\\HiSim\\", "")
                 relative_name_slash = relative_name.replace("\\", "/")
-                flake8.write("        flake8 " + relative_name_slash + " --count --select=E9,F63,F7,F82,E800 --show-source --statistics\n")
+                flake8.write(
+                    "        flake8 "
+                    + relative_name_slash
+                    + " --count --select=E9,F63,F7,F82,E800 --show-source --statistics\n"
+                )
         with open("../prospector_calls.txt", "w", encoding="utf8") as prospector:
             for myfi in fis:
                 if not myfi.cleaned:
@@ -197,13 +201,14 @@ class OverviewGenerator:
                 flake8_cmd.write("if %errorlevel% neq 0 exit /b\n")
 
     def write_one_file_block(self, myfi, row, worksheet1):
-        """ Writes the block for a single file to excel. """
+        """Writes the block for a single file to excel."""
         column: int = 1
         column = self.add_to_cell(column=column, row=row, value=myfi.module_name, worksheet=worksheet1)
         column = self.add_to_cell(column=column, row=row, value=myfi.file_name, worksheet=worksheet1)
         column = self.add_to_cell(column=column, row=row, value=myfi.lines, worksheet=worksheet1)
-        column = self.add_to_cell(column=column, row=row, value=myfi.python_module_loading_possible,
-                                  worksheet=worksheet1)
+        column = self.add_to_cell(
+            column=column, row=row, value=myfi.python_module_loading_possible, worksheet=worksheet1
+        )
         column = self.add_to_cell(column=column, row=row, value=myfi.cleaned, worksheet=worksheet1)
         column = self.add_to_cell(column=column, row=row, value=myfi.authors, worksheet=worksheet1)
         column = self.add_to_cell(column=column, row=row, value=myfi.copyright, worksheet=worksheet1)
@@ -252,7 +257,7 @@ class OverviewGenerator:
         return row
 
     def process_one_file(self, filename):  # noqa
-        """ Import the module and iterate through its attributes. """
+        """Import the module and iterate through its attributes."""
         myfi: FileInformation = FileInformation()
 
         myfi.file_name = filename
@@ -305,7 +310,7 @@ class OverviewGenerator:
         return myfi
 
     def try_to_load_module(self, myfi):
-        """ Tries to load a file as python module. Returns None if it couldn't be loaded. """
+        """Tries to load a file as python module. Returns None if it couldn't be loaded."""
         try:
             spec = importlib.util.spec_from_file_location(myfi.module_name, myfi.file_name)
             module: Optional[ModuleType] = importlib.util.module_from_spec(spec)  # type: ignore
@@ -316,7 +321,7 @@ class OverviewGenerator:
         return module
 
     def process_string_attribute(self, myfi, strname, strval):
-        """ Processes all attributes that are of of the type string. """
+        """Processes all attributes that are of of the type string."""
         if strname == "__authors__":
             myfi.authors = strval
         elif strname == "__copyright__":
@@ -336,7 +341,7 @@ class OverviewGenerator:
             myfi.strings.append(sti)
 
     def analyze_file_directly(self, filename, myfi):
-        """ Analyze all the files and count the lines in each file. Could be expanded with more checks. """
+        """Analyze all the files and count the lines in each file. Could be expanded with more checks."""
         count = 0
         with open(filename, "r", encoding="utf8") as sourcefile:
             for count, line in enumerate(sourcefile):
@@ -349,7 +354,7 @@ class OverviewGenerator:
         myfi.lines = count
 
     def collect_files(self):
-        """ Iterate through the modules in the current package. """
+        """Iterate through the modules in the current package."""
         hisim_dir = Pathlibpath(__file__).resolve().parent.parent
         files = []
         for dirpath, _, filenames in os.walk(hisim_dir):

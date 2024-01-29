@@ -8,12 +8,7 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
-from hisim.component import (
-    Component,
-    SingleTimeStepValues,
-    ComponentInput,
-    ComponentOutput,
-)
+from hisim.component import Component, SingleTimeStepValues, ComponentInput, ComponentOutput, DisplayConfig
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import ConfigBase
@@ -38,9 +33,7 @@ class TransformerConfig(ConfigBase):
     @classmethod
     def get_default_transformer(cls):
         """Gets a default Transformer."""
-        return TransformerConfig(
-            name="Generic Transformer and rectifier Unit", efficiency=0.95
-        )
+        return TransformerConfig(name="Generic Transformer and rectifier Unit", efficiency=0.95)
 
 
 class Transformer(Component):
@@ -71,6 +64,7 @@ class Transformer(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: TransformerConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Constructs all the neccessary attributes."""
         self.transformerconfig = config
@@ -78,6 +72,7 @@ class Transformer(Component):
             self.transformerconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.input1: ComponentInput = self.add_input(
             self.transformerconfig.name,
@@ -112,9 +107,7 @@ class Transformer(Component):
         """Prepares the simulation."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the transformer."""
         startval_1 = stsv.get_input_value(self.input1)
         # print(f"Input from CSV: {startval_1}")

@@ -87,7 +87,9 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
         return household_config
 
     @classmethod
-    def get_scaled_default(cls, building_config: building.BuildingConfig, options: HouseholdGasHeaterOptions = HouseholdGasHeaterOptions()) -> "HouseholdGasHeaterConfig":
+    def get_scaled_default(
+        cls, building_config: building.BuildingConfig, options: HouseholdGasHeaterOptions = HouseholdGasHeaterOptions()
+    ) -> "HouseholdGasHeaterConfig":
         """Get scaled HouseholdGasHeaterConfig.
 
         - Simulation Parameters
@@ -113,7 +115,9 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
             heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
             heating_reference_temperature_in_celsius=my_building_information.heating_reference_temperature_in_celsius,
         )
-        my_hds_controller_information = heat_distribution_system.HeatDistributionControllerInformation(config=hds_controller_config)
+        my_hds_controller_information = heat_distribution_system.HeatDistributionControllerInformation(
+            config=hds_controller_config
+        )
 
         household_config = HouseholdGasHeaterConfig(
             building_type="residential",
@@ -132,7 +136,9 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
                 predictive_control=False,
                 predictive=False,
             ),
-            pv_config=generic_pv_system.PVSystemConfig.get_scaled_pv_system(rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2),
+            pv_config=generic_pv_system.PVSystemConfig.get_scaled_pv_system(
+                rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
+            ),
             options=options,
             building_config=building_config,
             hds_controller_config=hds_controller_config,
@@ -185,7 +191,9 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
         return household_config
 
 
-def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:  # noqa: too-many-statements
+def setup_function(
+    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None
+) -> None:  # noqa: too-many-statements
     """Generates a household with gas heater."""
 
     """
@@ -202,7 +210,9 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     year = 2021
     seconds_per_timestep = 60
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(year=year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters = SimulationParameters.full_year_all_options(
+            year=year, seconds_per_timestep=seconds_per_timestep
+        )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     """
@@ -216,7 +226,9 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
 
     # Occupancy
     my_occupancy_config = my_config.occupancy_config
-    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters)
+    my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
+        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
+    )
 
     # Weather
     my_weather = weather.Weather(
@@ -249,7 +261,9 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
 
     # BHeat Distribution System
-    my_heat_distribution = heat_distribution_system.HeatDistribution(my_simulation_parameters=my_simulation_parameters, config=my_config.hds_config)
+    my_heat_distribution = heat_distribution_system.HeatDistribution(
+        my_simulation_parameters=my_simulation_parameters, config=my_config.hds_config
+    )
 
     # Heat Water Storage
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(

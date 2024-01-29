@@ -9,11 +9,7 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 # Owned
-from hisim.component import (
-    Component,
-    SingleTimeStepValues,
-    ConfigBase,
-)
+from hisim.component import Component, SingleTimeStepValues, ConfigBase, DisplayConfig
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 
@@ -55,12 +51,14 @@ class RandomNumbers(Component):
         self,
         config: RandomNumbersConfig,
         my_simulation_parameters: SimulationParameters,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the class."""
         super().__init__(
             name=config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.values: List[float] = []
         self.minimum = config.minimum
@@ -81,9 +79,7 @@ class RandomNumbers(Component):
         """Restores the state."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
 
         val1: float = self.values[timestep]

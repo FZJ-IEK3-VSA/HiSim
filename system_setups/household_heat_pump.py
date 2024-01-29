@@ -81,12 +81,8 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
     @classmethod
     def get_default(cls) -> "HouseholdHeatPumpConfig":
         """Get default HouseholdHeatPumpConfig."""
-        building_config = (
-            building.BuildingConfig.get_default_german_single_family_home()
-        )
-        household_config = cls.get_scaled_default(
-            building_config, options=HouseholdHeatPumpOptions()
-        )
+        building_config = building.BuildingConfig.get_default_german_single_family_home()
+        household_config = cls.get_scaled_default(building_config, options=HouseholdHeatPumpOptions())
         return household_config
 
     @classmethod
@@ -121,10 +117,8 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
             heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
             heating_reference_temperature_in_celsius=my_building_information.heating_reference_temperature_in_celsius,
         )
-        my_hds_controller_information = (
-            heat_distribution_system.HeatDistributionControllerInformation(
-                config=hds_controller_config
-            )
+        my_hds_controller_information = heat_distribution_system.HeatDistributionControllerInformation(
+            config=hds_controller_config
         )
 
         household_config = HouseholdHeatPumpConfig(
@@ -185,9 +179,7 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
                     number_of_apartments=my_building_information.number_of_apartments
                 )
             ),
-            car_config=generic_car.CarConfig.get_default_diesel_config()
-            if options.diesel_car
-            else None,
+            car_config=generic_car.CarConfig.get_default_diesel_config() if options.diesel_car else None,
             electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
         )
 
@@ -230,11 +222,9 @@ def setup_function(
     Build system
     """
     # Heat Distribution System Controller
-    my_heat_distribution_controller = (
-        heat_distribution_system.HeatDistributionController(
-            config=my_config.hds_controller_config,
-            my_simulation_parameters=my_simulation_parameters,
-        )
+    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
+        config=my_config.hds_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Occupancy
@@ -296,11 +286,9 @@ def setup_function(
     my_domestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
-    my_domestic_hot_water_heatpump_controller = (
-        controller_l1_heatpump.L1HeatPumpController(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_dhw_heatpump_controller_config,
-        )
+    my_domestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_dhw_heatpump_controller_config,
     )
     my_domestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
         config=my_dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
@@ -311,9 +299,7 @@ def setup_function(
         # get names of all available cars
         filepaths = listdir(utils.HISIMPATH["utsp_results"])
         filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
-        names = [
-            elem.partition(",")[0].partition(".")[2] for elem in filepaths_location
-        ]
+        names = [elem.partition(",")[0].partition(".")[2] for elem in filepaths_location]
 
         my_car_config = my_config.car_config
         my_car_config.name = "DieselCar"
@@ -350,9 +336,7 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
     my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)
     my_sim.add_component(my_domestic_hot_water_storage, connect_automatically=True)
-    my_sim.add_component(
-        my_domestic_hot_water_heatpump_controller, connect_automatically=True
-    )
+    my_sim.add_component(my_domestic_hot_water_heatpump_controller, connect_automatically=True)
     my_sim.add_component(my_domestic_hot_water_heatpump, connect_automatically=True)
     my_sim.add_component(my_electricity_meter, connect_automatically=True)
 

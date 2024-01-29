@@ -101,6 +101,7 @@ class GenericElectrolyzer(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: GenericElectrolyzerConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ):
         """Initialize an instance."""
 
@@ -108,6 +109,7 @@ class GenericElectrolyzer(cp.Component):
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         self.config = config

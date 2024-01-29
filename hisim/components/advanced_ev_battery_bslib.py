@@ -20,6 +20,7 @@ from hisim.component import (
     ConfigBase,
     SingleTimeStepValues,
     OpexCostDataClass,
+    DisplayConfig,
 )
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
@@ -96,7 +97,10 @@ class CarBattery(Component):
     StateOfCharge = "StateOfCharge"  # [0..1]
 
     def __init__(
-        self, my_simulation_parameters: SimulationParameters, config: CarBatteryConfig
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: CarBatteryConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
     ):
         """Loads the parameters of the specified battery storage."""
         self.battery_config = config
@@ -104,6 +108,7 @@ class CarBattery(Component):
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         self.source_weight = self.battery_config.source_weight
@@ -164,9 +169,7 @@ class CarBattery(Component):
             output_description="State of charge of the battery.",
         )
 
-        self.add_default_connections(
-            self.get_default_connections_from_charge_controller()
-        )
+        self.add_default_connections(self.get_default_connections_from_charge_controller())
 
     def get_default_connections_from_charge_controller(self) -> Any:
         """Get default connections from charge controller."""
@@ -175,9 +178,7 @@ class CarBattery(Component):
         component_module = importlib.import_module(name=component_module_name)
         component_class = getattr(component_module, "L1Controller")
         connections: List[ComponentConnection] = []
-        ev_charge_controller_classname = (
-            component_class.get_classname()
-        )
+        ev_charge_controller_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
                 CarBattery.LoadingPowerInput,
@@ -203,9 +204,7 @@ class CarBattery(Component):
         """Prepares the simulation."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
         # Parameters
         seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
@@ -223,9 +222,7 @@ class CarBattery(Component):
 
         # Simulate battery discharge without losses (this is included in the car consumption of the car component)
         else:
-            soc = soc + (
-                p_set * self.my_simulation_parameters.seconds_per_timestep / 3600
-            ) / (self.e_bat_custom * 1e3)
+            soc = soc + (p_set * self.my_simulation_parameters.seconds_per_timestep / 3600) / (self.e_bat_custom * 1e3)
             if soc < 0:
                 raise ValueError(
                     "Car cannot drive, because battery is empty."
@@ -261,10 +258,7 @@ class CarBattery(Component):
         for index, output in enumerate(all_outputs):
             if (
                 output.postprocessing_flag is not None
-                and output.component_name
-                == self.battery_config.name
-                + "_w"
-                + str(self.battery_config.source_weight)
+                and output.component_name == self.battery_config.name + "_w" + str(self.battery_config.source_weight)
             ):
                 if InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
                     self.battery_config.charge = round(

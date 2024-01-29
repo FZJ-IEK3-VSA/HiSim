@@ -23,9 +23,7 @@ class MyDocTemplate(BaseDocTemplate):
         """Initialize the doc template."""
         self.allow_splitting = 0
         super().__init__(filename, **kw)
-        self.template = PageTemplate(
-            "normal", [Frame(2.5 * cm, 2.5 * cm, 15 * cm, 25 * cm, id="F1")]
-        )
+        self.template = PageTemplate("normal", [Frame(2.5 * cm, 2.5 * cm, 15 * cm, 25 * cm, id="F1")])
         self.addPageTemplates(self.template)
 
     # Entries to the table of contents can be done either manually by
@@ -79,11 +77,7 @@ class ReportGenerator:
 
         self.styles = getSampleStyleSheet()
         self.styles.add(ParagraphStyle(name="Justify", alignment=TA_JUSTIFY))
-        self.styles.add(
-            ParagraphStyle(
-                name="Normal_CENTER", parent=self.styles["Normal"], alignment=TA_CENTER
-            )
-        )
+        self.styles.add(ParagraphStyle(name="Normal_CENTER", parent=self.styles["Normal"], alignment=TA_CENTER))
         self.styles.add(
             ParagraphStyle(
                 name="toc_centered",
@@ -94,12 +88,8 @@ class ReportGenerator:
                 spaceAfter=40,
             )
         )
-        self.style_h1 = ParagraphStyle(
-            name="Heading1", fontSize=12, leading=16, spaceBefore=20
-        )
-        self.style_h2 = ParagraphStyle(
-            name="Heading2", fontSize=12, leading=14, spaceBefore=10
-        )
+        self.style_h1 = ParagraphStyle(name="Heading1", fontSize=12, leading=16, spaceBefore=20)
+        self.style_h2 = ParagraphStyle(name="Heading2", fontSize=12, leading=14, spaceBefore=10)
 
     def write_table_of_content(self):
         """Write Table of Content."""
@@ -111,9 +101,7 @@ class ReportGenerator:
 
         self.toc.levelStyles = [self.style_h1, self.style_h2]
 
-        self.story.append(
-            Paragraph("<b>Table of contents</b>", self.styles["toc_centered"])
-        )
+        self.story.append(Paragraph("<b>Table of contents</b>", self.styles["toc_centered"]))
         self.story.append(self.toc)
         self.story.append(PageBreak())
 
@@ -191,9 +179,7 @@ class ReportGenerator:
         """Get the story."""
         self.story = copy.deepcopy(self.story)
 
-    def write_with_normal_alignment(
-        self, text: Union[List[str], List[Optional[str]]]
-    ) -> None:
+    def write_with_normal_alignment(self, text: Union[List[str], List[Optional[str]]]) -> None:
         """Write a paragraph."""
         if len(text) != 0:
             for part in text:
@@ -287,9 +273,7 @@ class ReportGenerator:
     def add_page_number(self, canvas, doc):
         """Add page number to report."""
         canvas.saveState()
-        canvas.setFont(
-            self.styles["Heading2"].fontName, self.styles["Heading2"].fontSize
-        )
+        canvas.setFont(self.styles["Heading2"].fontName, self.styles["Heading2"].fontSize)
         page_number_text = f"{doc.page}"
         canvas.drawRightString(200 * mm, 20 * mm, page_number_text)
         canvas.restoreState()

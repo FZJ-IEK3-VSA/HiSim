@@ -75,9 +75,7 @@ class HeatStorageControllerConfig(ConfigBase):
     heating_load_of_building_in_watt: float
 
     @classmethod
-    def get_default_heat_storage_controller_config(
-        cls, heating_load_of_building_in_watt: float
-    ) -> Any:
+    def get_default_heat_storage_controller_config(cls, heating_load_of_building_in_watt: float) -> Any:
         """Get default config."""
         config = HeatStorageControllerConfig(
             name="HeatStorageController",
@@ -116,12 +114,8 @@ class HeatStorage(Component):
     """
 
     # Inputs
-    ThermalDemandHeatingWater = (
-        "ThermalDemandHeatingWater"  # Heating Water to regulate room Temperature
-    )
-    ThermalDemandWarmWater = (
-        "ThermalDemandHeating"  # Warmwater for showering, washing etc...
-    )
+    ThermalDemandHeatingWater = "ThermalDemandHeatingWater"  # Heating Water to regulate room Temperature
+    ThermalDemandWarmWater = "ThermalDemandHeating"  # Warmwater for showering, washing etc...
     ControlSignalChooseStorage = "ControlSignalChooseStorage"
     BuildingTemperature = "BuildingTemperature"
 
@@ -141,7 +135,10 @@ class HeatStorage(Component):
     RealHeatForBuilding = "RealHeatForBuilding"
 
     def __init__(
-        self, my_simulation_parameters: SimulationParameters, config: HeatStorageConfig
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: HeatStorageConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initialize the class."""
         self.heat_storage_config = config
@@ -149,12 +146,11 @@ class HeatStorage(Component):
             self.heat_storage_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
         self.volume_sp_heating_water = self.heat_storage_config.volume_sp_heating_water
         self.volume_sp_warm_water = self.heat_storage_config.volume_sp_warm_water
-        self.temperature_of_warm_water_extratcion = (
-            self.heat_storage_config.temperature_of_warm_water_extraction
-        )
+        self.temperature_of_warm_water_extratcion = self.heat_storage_config.temperature_of_warm_water_extraction
         self.ambient_temperature = self.heat_storage_config.ambient_temperature
         self.temperature_sp_warm_water = self.heat_storage_config.temperature_sp_ww
         self.temperature_sp_heating_water = self.heat_storage_config.temperature_sp_hw
@@ -273,16 +269,10 @@ class HeatStorage(Component):
         lines.append("Name: HeatWaterStorage")
         lines.append(f"Volume Warm Water Storage [L]: {self.volume_sp_warm_water}")
         lines.append(f"Volume Heat Water Storage [L]: {self.volume_sp_heating_water}")
-        lines.append(
-            f"Temperature of Warm Water Extraction [°C]: {self.temperature_of_warm_water_extratcion}"
-        )
+        lines.append(f"Temperature of Warm Water Extraction [°C]: {self.temperature_of_warm_water_extratcion}")
         lines.append(f"Ambient Temperature [°C]: {self.ambient_temperature}")
-        lines.append(
-            f"Temperature Warm Water Storage [°C]: {self.temperature_sp_warm_water}"
-        )
-        lines.append(
-            f"temperature Heat Water Storage [°C]: {self.temperature_sp_heating_water}"
-        )
+        lines.append(f"Temperature Warm Water Storage [°C]: {self.temperature_sp_warm_water}")
+        lines.append(f"temperature Heat Water Storage [°C]: {self.temperature_sp_heating_water}")
 
         return self.heat_storage_config.get_string_dict() + lines
 
@@ -308,30 +298,19 @@ class HeatStorage(Component):
         # function to add all possible mass flows
 
         if self.thermal_input_power_one_channel.source_output is not None:
-            production = (
-                stsv.get_input_value(self.thermal_input_power_one_channel) + production
-            )
+            production = stsv.get_input_value(self.thermal_input_power_one_channel) + production
 
         if self.thermal_input_power_two_channel.source_output is not None:
-            production = (
-                stsv.get_input_value(self.thermal_input_power_two_channel) + production
-            )
+            production = stsv.get_input_value(self.thermal_input_power_two_channel) + production
 
         if self.thermal_input_power_three_channel.source_output is not None:
-            production = (
-                stsv.get_input_value(self.thermal_input_power_three_channel)
-                + production
-            )
+            production = stsv.get_input_value(self.thermal_input_power_three_channel) + production
 
         if self.thermal_input_power_four_channel.source_output is not None:
-            production = (
-                stsv.get_input_value(self.thermal_input_power_four_channel) + production
-            )
+            production = stsv.get_input_value(self.thermal_input_power_four_channel) + production
 
         if self.thermal_input_power_five_channel.source_output is not None:
-            production = (
-                stsv.get_input_value(self.thermal_input_power_five_channel) + production
-            )
+            production = stsv.get_input_value(self.thermal_input_power_five_channel) + production
 
         return production
 
@@ -355,11 +334,7 @@ class HeatStorage(Component):
         temperature_sp = (
             temperature_sp
             + (1 / (mass_sp_h * c_w))
-            * (
-                production
-                - last
-                - heat_loss_storage * (temperature_sp - temperature_ext_sp)
-            )
+            * (production - last - heat_loss_storage * (temperature_sp - temperature_ext_sp))
             * seconds_per_timestep
         )
         # T_SP = T_sp + (dt/(m_SP_h*c_w))*(P_h_HS*(T_sp-T_ext_SP) - last*(T_sp-T_ext_SP) - UA_SP*(T_sp-T_ext_SP))
@@ -374,9 +349,7 @@ class HeatStorage(Component):
 
     # def regarding_heating_water_storage (self, T_sp: int):
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
 
         temperature_sp_var_ww = self.state.temperature_sp_ww  # Start-Temp-Storage
@@ -446,12 +419,8 @@ class HeatStorage(Component):
             self.water_output_temperature_heating_water_channel,
             self.state.temperature_sp_hw,
         )
-        stsv.set_output_value(
-            self.water_output_temperature_storage_for_heaters_channel, temperature_sp_c
-        )
-        stsv.set_output_value(
-            self.storage_energy_loss_channel, result_ww[1] + result_hw[1]
-        )
+        stsv.set_output_value(self.water_output_temperature_storage_for_heaters_channel, temperature_sp_c)
+        stsv.set_output_value(self.storage_energy_loss_channel, result_ww[1] + result_hw[1])
         stsv.set_output_value(self.real_heat_for_building_channel, last_var_hw)
 
         # Output Massenstrom von Wasser entspricht dem Input Massenstrom. Nur Temperatur hat sich geändert. Wie ist das zu behandelN?
@@ -485,6 +454,7 @@ class HeatStorageController(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: HeatStorageControllerConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initialize the class."""
         self.heatstoragecontroller_config = config
@@ -492,17 +462,12 @@ class HeatStorageController(cp.Component):
             name=self.heatstoragecontroller_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
-        self.initial_temperature_heating_storage = (
-            self.heatstoragecontroller_config.initial_temperature_heating_storage
-        )
-        self.initial_temperature_building = (
-            self.heatstoragecontroller_config.initial_temperature_building
-        )
+        self.initial_temperature_heating_storage = self.heatstoragecontroller_config.initial_temperature_heating_storage
+        self.initial_temperature_building = self.heatstoragecontroller_config.initial_temperature_building
 
-        self.ref_max_thermal_build_demand_in_watt = (
-            self.heatstoragecontroller_config.heating_load_of_building_in_watt
-        )
+        self.ref_max_thermal_build_demand_in_watt = self.heatstoragecontroller_config.heating_load_of_building_in_watt
         # ===================================================================================================================
         # Inputs
         # self.ref_max_thermal_build_demand: ComponentInput = self.add_input(
@@ -554,12 +519,8 @@ class HeatStorageController(cp.Component):
         """Write to report."""
         lines = []
         lines.append("Name: HeatWaterStorage Controller")
-        lines.append(
-            f"Initial Temperature Building [°C]: {self.initial_temperature_building}"
-        )
-        lines.append(
-            f"Initial Temperature Heat Water Storage [°C]: {self.initial_temperature_heating_storage}"
-        )
+        lines.append(f"Initial Temperature Building [°C]: {self.initial_temperature_building}")
+        lines.append(f"Initial Temperature Heat Water Storage [°C]: {self.initial_temperature_heating_storage}")
         return self.heatstoragecontroller_config.get_string_dict() + lines
 
     def i_save_state(self) -> None:
@@ -574,36 +535,22 @@ class HeatStorageController(cp.Component):
         """Doublechecks."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
-        temperature_sp_var_hw = stsv.get_input_value(
-            self.heating_storage_temperature_channel
-        )  # Start-Temp-Storage
+        temperature_sp_var_hw = stsv.get_input_value(self.heating_storage_temperature_channel)  # Start-Temp-Storage
         last_var_hw = stsv.get_input_value(self.real_thermal_demand_building_channel)
         max_mass_flow_heat_storage = self.ref_max_thermal_build_demand_in_watt / (
-            4.1851
-            * 1000
-            * (
-                self.initial_temperature_heating_storage
-                - self.initial_temperature_building
-            )
+            4.1851 * 1000 * (self.initial_temperature_heating_storage - self.initial_temperature_building)
         )
 
         max_last_var_hw = (
             max_mass_flow_heat_storage
             * 4.185
             * 1000
-            * (
-                temperature_sp_var_hw
-                - stsv.get_input_value(self.building_temperature_channel)
-            )
+            * (temperature_sp_var_hw - stsv.get_input_value(self.building_temperature_channel))
         )
 
         if max_last_var_hw < last_var_hw:
             last_var_hw = max_last_var_hw
 
-        stsv.set_output_value(
-            self.real_thermal_demand_heating_water_channel, last_var_hw
-        )
+        stsv.set_output_value(self.real_thermal_demand_heating_water_channel, last_var_hw)

@@ -107,7 +107,10 @@ class HeatSource(cp.Component):
     FuelDelivered = "FuelDelivered"
 
     def __init__(
-        self, my_simulation_parameters: SimulationParameters, config: HeatSourceConfig
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: HeatSourceConfig,
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initialize the class."""
 
@@ -115,6 +118,7 @@ class HeatSource(cp.Component):
             config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=my_display_config,
         )
 
         # introduce parameters of district heating
@@ -158,9 +162,7 @@ class HeatSource(cp.Component):
         else:
             self.fuel_delivered_channel.unit = lt.Units.WATT_HOUR
 
-        self.add_default_connections(
-            self.get_default_connections_controller_l1_heatpump()
-        )
+        self.add_default_connections(self.get_default_connections_controller_l1_heatpump())
 
     def get_default_connections_controller_l1_heatpump(
         self,
@@ -168,9 +170,7 @@ class HeatSource(cp.Component):
         """Sets default connections of heat source controller."""
         log.information("setting l1 default connections in Generic Heat Source")
         connections = []
-        controller_classname = (
-            controller_l1_heatpump.L1HeatPumpController.get_classname()
-        )
+        controller_classname = controller_l1_heatpump.L1HeatPumpController.get_classname()
         connections.append(
             cp.ComponentConnection(
                 HeatSource.L1HeatSourceTargetPercentage,
@@ -184,8 +184,7 @@ class HeatSource(cp.Component):
         """Writes relevant data to report."""
 
         lines = []
-        lines.append(
-            f"Name: {self.config.name + str(self.config.source_weight)})")
+        lines.append(f"Name: {self.config.name + str(self.config.source_weight)})")
         lines.append(f"Fuel: {self.config.fuel}")
         lines.append(f"Power: {(self.config.power_th) * 1e-3:4.0f} kW")
         lines.append(f"Efficiency : {(self.config.efficiency) * 100:4.0f} %")
@@ -207,9 +206,7 @@ class HeatSource(cp.Component):
         """Doublechecks."""
         pass
 
-    def i_simulate(
-        self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
-    ) -> None:
+    def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Performs the simulation of the heat source model."""
 
         # Inputs
@@ -243,8 +240,5 @@ class HeatSource(cp.Component):
         else:
             stsv.set_output_value(
                 self.fuel_delivered_channel,
-                power_modifier
-                * self.config.power_th
-                * self.my_simulation_parameters.seconds_per_timestep
-                / 3.6e3,
+                power_modifier * self.config.power_th * self.my_simulation_parameters.seconds_per_timestep / 3.6e3,
             )

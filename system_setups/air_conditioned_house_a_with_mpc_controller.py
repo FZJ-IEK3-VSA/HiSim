@@ -17,9 +17,7 @@ from hisim.components import generic_price_signal  # mpc
 
 
 __authors__ = "Marwa Alfouly, Sebastian Dickler"
-__copyright__ = (
-    "Copyright 2023, HiSim - Household Infrastructure and Building Simulator"
-)
+__copyright__ = "Copyright 2023, HiSim - Household Infrastructure and Building Simulator"
 __credits__ = ["Noah Pflugradt"]
 __license__ = "MIT"
 __version__ = "0.1"
@@ -28,9 +26,7 @@ __email__ = "s.dickler@fz-juelich.de"
 __status__ = "development"
 
 
-def setup_function(
-    my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None
-) -> None:
+def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters] = None) -> None:
     """Simulates household with air-conditioner with MPC controller."""
 
     air_conditioned_house(my_sim, "MPC", my_simulation_parameters)
@@ -165,8 +161,12 @@ def air_conditioned_house(
     # offset = 0.5
 
     # Set MPC controller #mpc
-    mpc_scheme = "optimization_once_aday_only"  # The two options are: 'optimization_once_aday_only' or 'moving_horizon_control'
-    flexibility_element = "PV_and_Battery"  # The three options are: 'basic_buidling_configuration' or 'PV_only' or 'PV_and_Battery'
+    mpc_scheme = (
+        "optimization_once_aday_only"  # The two options are: 'optimization_once_aday_only' or 'moving_horizon_control'
+    )
+    flexibility_element = (
+        "PV_and_Battery"  # The three options are: 'basic_buidling_configuration' or 'PV_only' or 'PV_and_Battery'
+    )
     pricing_scheme = "dynamic"  # The two options are: 'dynamic' or 'fixed'
     optimizer_sampling_rate = 1
     # prediction_horizon = 24*3600
@@ -198,9 +198,7 @@ def air_conditioned_house(
     """System parameters"""
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only(
-            year, seconds_per_timestep
-        )
+        my_simulation_parameters = SimulationParameters.one_day_only(year, seconds_per_timestep)
         # my_simulation_parameters = SimulationParameters.one_day_only_with_only_plots(year, seconds_per_timestep)
         # my_simulation_parameters = SimulationParameters.one_day_only_with_all_options(year, seconds_per_timestep)
         # my_simulation_parameters = SimulationParameters.one_week_only(year, seconds_per_timestep)
@@ -226,7 +224,7 @@ def air_conditioned_house(
         total_base_area_in_m2=total_base_area_in_m2,
         number_of_apartments=number_of_apartments,
         predictive=predictive,
-        enable_opening_windows=enable_opening_windows
+        enable_opening_windows=enable_opening_windows,
     )
     my_building = building.Building(
         config=my_building_config,
@@ -235,7 +233,9 @@ def air_conditioned_house(
 
     """ Occupancy Profile """
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
-    my_occupancy_config.data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
+    my_occupancy_config.data_acquisition_mode = (
+        loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
+    )
     my_occupancy_config.predictive_control = predictive_control
     my_occupancy_config.predictive = predictive
 
@@ -246,9 +246,7 @@ def air_conditioned_house(
     my_sim.add_component(my_occupancy)
 
     """Weather"""
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.SEVILLE
-    )
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.SEVILLE)
     my_weather_config.predictive_control = predictive_control
 
     my_weather = weather.Weather(
@@ -433,9 +431,7 @@ def air_conditioned_house(
 
     """PID controller"""  # pid
     if control == "PID":
-        my_pid_controller_config = (
-            controller_pid.PIDControllerConfig.get_default_config()
-        )
+        my_pid_controller_config = controller_pid.PIDControllerConfig.get_default_config()
         pid_controller = controller_pid.PIDController(
             config=my_pid_controller_config,
             my_simulation_parameters=my_simulation_parameters,

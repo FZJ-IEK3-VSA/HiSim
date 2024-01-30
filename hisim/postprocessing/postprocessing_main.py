@@ -9,6 +9,7 @@ import string
 
 import pandas as pd
 
+from hisim.modular_household.interface_configs.kpi_config import KPIConfig
 from hisim.components import building
 
 from hisim.postprocessing import reportgenerator
@@ -17,7 +18,7 @@ from hisim import log
 from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.postprocessing.chart_singleday import ChartSingleDay
-from hisim.postprocessing.compute_kpis import compute_kpis
+from hisim.postprocessing.compute_kpis import KpiGenerator
 from hisim.postprocessing.generate_csv_for_housing_database import (
     generate_csv_for_database,
 )
@@ -70,7 +71,7 @@ class PostProcessor:
             # Charts etc. are not needed when executing HiSim in a container. Allow only csv files and KPI.
             allowed_options_for_docker = {
                 PostProcessingOptions.EXPORT_TO_CSV,
-                PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT,
+                PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT,
                 PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE,
                 PostProcessingOptions.COMPUTE_OPEX,
                 PostProcessingOptions.COMPUTE_CAPEX,
@@ -194,10 +195,10 @@ class PostProcessor:
                 "Computing and writing investment costs and C02 emissions from production of devices to report took "
                 + f"{duration:1.2f}s."
             )
-        if PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT in ppdt.post_processing_options:
+        if PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT in ppdt.post_processing_options:
             log.information("Computing and writing KPIs to report.")
             start = timer()
-            self.compute_and_write_kpis_to_report(ppdt, report)
+            ppdt = self.compute_kpis_and_write_to_report_and_to_ppdt(ppdt, report)
             end = timer()
             duration = end - start
             log.information("Computing and writing KPIs to report took " + f"{duration:1.2f}s.")
@@ -257,6 +258,10 @@ class PostProcessor:
         if PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON in ppdt.post_processing_options:
             log.information("Writing component configurations to JSON file.")
             self.write_component_configurations_to_json(ppdt)
+
+        if PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER in ppdt.post_processing_options:
+            log.information("Writing KPIs to JSON file for building sizer.")
+            self.write_kpis_to_json_for_building_sizer(ppdt)
 
         log.information("Finished main post processing function.")
 
@@ -544,22 +549,23 @@ class PostProcessor:
         report.page_break()
         report.close()
 
-    def compute_and_write_kpis_to_report(
+    def compute_kpis_and_write_to_report_and_to_ppdt(
         self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
-    ) -> None:
-        """Computes KPI's and writes them to report and csv."""
-        kpi_compute_return = compute_kpis(
-            components=ppdt.wrapped_components,
-            results=ppdt.results,
-            all_outputs=ppdt.all_outputs,
-            simulation_parameters=ppdt.simulation_parameters,
-        )
+    ) -> PostProcessingDataTransfer:
+        """Computes KPI's and writes them to report and to ppdt kpi collection."""
+        # initialize kpi data class and compute all kpi values
+        kpi_data_class = KpiGenerator(post_processing_data_transfer=ppdt)
+        # write kpi table to report
+        kpi_table = kpi_data_class.return_table_for_report()
         self.write_new_chapter_with_table_to_report(
             report=report,
-            table_as_list_of_list=kpi_compute_return,
+            table_as_list_of_list=kpi_table,
             headline=". KPIs",
             comment=["Here a comment on calculation of numbers will follow"],
         )
+        # write kpi dict collection into ppdt
+        ppdt.kpi_collection_dict = kpi_data_class.kpi_collection_dict
+        return ppdt
 
     def compute_and_write_opex_costs_to_report(
         self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
@@ -700,7 +706,7 @@ class PostProcessor:
         timeseries_daily = ppdt.results_daily.index
         timeseries_monthly = ppdt.results_monthly.index
 
-        if PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT in ppdt.post_processing_options:
+        if PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT in ppdt.post_processing_options:
             self.write_kpis_in_dict(ppdt=ppdt, simple_dict_cumulative_data=simple_dict_hourly_data)
             self.write_kpis_in_dict(ppdt=ppdt, simple_dict_cumulative_data=simple_dict_daily_data)
             self.write_kpis_in_dict(ppdt=ppdt, simple_dict_cumulative_data=simple_dict_monthly_data)
@@ -826,30 +832,25 @@ class PostProcessor:
         simple_dict_cumulative_data: Dict[str, Any],
     ) -> None:
         """Write kpis in dictionary."""
+        # get kpis from ppdt
+        kpi_collection_dict = ppdt.kpi_collection_dict
 
-        kpi_compute_return = compute_kpis(
-            components=ppdt.wrapped_components,
-            results=ppdt.results,
-            all_outputs=ppdt.all_outputs,
-            simulation_parameters=ppdt.simulation_parameters,
-        )
+        for kpi_name, kpi_entry in kpi_collection_dict.items():
 
-        for i in kpi_compute_return:
-            if "---" not in i:
-                variable_name = "".join(x for x in i[0] if x != ":")
-                variable_value = "".join(x for x in i[1] if x in string.digits)
-                variable_unit = i[2]
+            variable_name = kpi_name
+            variable_value = kpi_entry.value
+            variable_unit = kpi_entry.unit
 
-                simple_dict_cumulative_data["model"].append(self.model)
-                simple_dict_cumulative_data["scenario"].append(self.scenario)
-                simple_dict_cumulative_data["region"].append(self.region)
-                simple_dict_cumulative_data["variable"].append(variable_name)
-                simple_dict_cumulative_data["unit"].append(variable_unit)
-                try:
-                    simple_dict_cumulative_data["year"].append(self.year)
-                except Exception:
-                    simple_dict_cumulative_data["time"].append(self.year)
-                simple_dict_cumulative_data["value"].append(variable_value)
+            simple_dict_cumulative_data["model"].append(self.model)
+            simple_dict_cumulative_data["scenario"].append(self.scenario)
+            simple_dict_cumulative_data["region"].append(self.region)
+            simple_dict_cumulative_data["variable"].append(variable_name)
+            simple_dict_cumulative_data["unit"].append(variable_unit)
+            try:
+                simple_dict_cumulative_data["year"].append(self.year)
+            except Exception:
+                simple_dict_cumulative_data["time"].append(self.year)
+            simple_dict_cumulative_data["value"].append(variable_value)
 
     def get_variable_name_and_unit_from_ppdt_results_column(self, column: str) -> Tuple[str, str]:
         """Get variable name and unit for pyam dictionary."""
@@ -917,19 +918,13 @@ class PostProcessor:
         if all(
             option in ppdt.post_processing_options
             for option in [
-                PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT,
+                PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT,
                 PostProcessingOptions.COMPUTE_CAPEX,
                 PostProcessingOptions.COMPUTE_OPEX,
             ]
         ):
-            # Calculate KPIs
-            kpi_compute_return = compute_kpis(
-                components=ppdt.wrapped_components,
-                results=ppdt.results,
-                all_outputs=ppdt.all_outputs,
-                simulation_parameters=ppdt.simulation_parameters,
-            )
-            dict_with_important_kpi = self.get_dict_from_kpi_lists(value_list=kpi_compute_return)
+            # Get KPIs from ppdt
+            kpi_collection_dict = ppdt.kpi_collection_dict
 
             # Calculate capex
             capex_compute_return = capex_calculation(
@@ -947,7 +942,7 @@ class PostProcessor:
 
             # Consolidate results into structured dataclass for webtool
             webtool_results_dataclass = WebtoolDict(
-                kpis=dict_with_important_kpi,
+                kpis=kpi_collection_dict,
                 post_processing_data_transfer=ppdt,
                 computed_opex=opex_compute_return,
                 computed_capex=capex_compute_return,
@@ -965,24 +960,42 @@ class PostProcessor:
         else:
             raise ValueError(
                 "Some PostProcessingOptions are not set. Please check if"
-                "PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT, PostProcessingOptions.COMPUTE_CAPEX and"
+                "PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT, PostProcessingOptions.COMPUTE_CAPEX and"
                 "PostProcessingOptions.COMPUTE_OPEX are set in your system setup."
             )
 
-    def get_dict_from_kpi_lists(self, value_list: List[str]) -> Dict[str, Any]:
-        """Get dict with values for webtool from kpis lists."""
+    def write_kpis_to_json_for_building_sizer(self, ppdt: PostProcessingDataTransfer) -> None:
+        """Write KPIs to json file for building sizer."""
 
-        dict_with_values = {}
+        # Check if important options were set
+        if PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT in ppdt.post_processing_options:
+            # Get KPIs from ppdt
+            kpi_collection_dict = ppdt.kpi_collection_dict
+            self_consumption_rate = kpi_collection_dict["Self-consumption rate"].value
+            autarky_rate = kpi_collection_dict["Autarky rate"].value
+            grid_injection_in_kilowatt_hour = kpi_collection_dict["Injection"].value
+            economic_cost = kpi_collection_dict["Total costs for simulated period"].value
+            co2_cost = kpi_collection_dict["Total CO2 emissions for simulated period"].value
 
-        for kpi_value_unit in value_list:
-            if "---" not in kpi_value_unit:
-                variable_name = "".join(x for x in kpi_value_unit[0] if x != ":")
-                variable_value = "".join(x for x in kpi_value_unit[1] if x in string.digits)
-                variable_unit = kpi_value_unit[2]
+            # initialize json interface to pass kpi's to building_sizer
+            kpi_config = KPIConfig(
+                self_consumption_rate=self_consumption_rate,
+                autarky_rate=autarky_rate,
+                injection=grid_injection_in_kilowatt_hour,
+                economic_cost=economic_cost,
+                co2_cost=co2_cost,
+            )
 
-                dict_with_values.update({f"{variable_name} [{variable_unit}] ": variable_value})
+            pathname = os.path.join(ppdt.simulation_parameters.result_directory, "kpi_config_for_building_sizer.json")
+            config_file_written = kpi_config.to_json()  # type: ignore
+            with open(pathname, "w", encoding="utf-8") as outfile:
+                outfile.write(config_file_written)
 
-        return dict_with_values
+        else:
+            raise ValueError(
+                "Some PostProcessingOptions are not set. Please check if"
+                "PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT is set in your system setup."
+            )
 
     def get_dict_from_opex_capex_lists(self, value_list: List[str]) -> Dict[str, Any]:
         """Get dict with values for webtool from opex capex lists."""

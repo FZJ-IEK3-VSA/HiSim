@@ -168,7 +168,7 @@ def get_electricity_to_and_from_grid_from_electricty_meter(
     """Get the electricity injected into the grid or taken from grid measured by the electricity meter."""
     # go through all wrapped components and try to find electricity meter
     for wrapped_component in wrapped_components:
-        if isinstance(ElectricityMeter, wrapped_component.my_component):
+        if isinstance(wrapped_component.my_component, ElectricityMeter):
             total_energy_from_grid_in_kwh = wrapped_component.my_component.config.total_energy_from_grid_in_kwh
             total_energy_to_grid_in_kwh = wrapped_component.my_component.config.total_energy_to_grid_in_kwh
 

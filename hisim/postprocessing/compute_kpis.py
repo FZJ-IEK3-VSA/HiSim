@@ -3,20 +3,22 @@
 """Postprocessing option computes overall consumption, production,self-consumption and injection as well as selfconsumption rate and autarky rate."""
 
 import os
-from typing import List, Tuple, Union, Any
 from pathlib import Path
+from typing import List, Tuple, Union, Any
 
 import pandas as pd
 
+from hisim import log
 from hisim.component import ComponentOutput
+from hisim.component_wrapper import ComponentWrapper
+from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib
+from hisim.components.electricity_meter import ElectricityMeter
+from hisim.components.generic_heat_pump import GenericHeatPump
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes
 from hisim.modular_household.interface_configs.kpi_config import KPIConfig
+from hisim.postprocessing.investment_cost_co2 import compute_investment_cost
 from hisim.simulationparameters import SimulationParameters
 from hisim.utils import HISIMPATH
-from hisim.component_wrapper import ComponentWrapper
-
-from hisim import log
-from hisim.postprocessing.investment_cost_co2 import compute_investment_cost
 
 
 def building_temperature_control_and_heating_load(
@@ -148,7 +150,7 @@ def get_heat_pump_kpis(
     spf = 0.0
     # check if Heat Pump was used in components
     for wrapped_component in components:
-        if "HeatPump" in wrapped_component.my_component.component_name:
+        if isinstance(wrapped_component.my_component, (GenericHeatPump, HeatPumpHplib)):
             # get number of heat pump cycles over simulated period
             number_of_cycles = get_heatpump_cycles(results=results)
             # get SPF
@@ -166,7 +168,7 @@ def get_electricity_to_and_from_grid_from_electricty_meter(
     """Get the electricity injected into the grid or taken from grid measured by the electricity meter."""
     # go through all wrapped components and try to find electricity meter
     for wrapped_component in wrapped_components:
-        if "ElectricityMeter" in wrapped_component.my_component.component_name:
+        if isinstance(ElectricityMeter, wrapped_component.my_component):
             total_energy_from_grid_in_kwh = wrapped_component.my_component.config.total_energy_from_grid_in_kwh
             total_energy_to_grid_in_kwh = wrapped_component.my_component.config.total_energy_to_grid_in_kwh
 

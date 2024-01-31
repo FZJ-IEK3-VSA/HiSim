@@ -595,7 +595,7 @@ class KpiGenerator(JSONWizard):
 
         heating_load_in_watt_entry = KpiEntry(name="Building heating load", unit="W", value=heating_load_in_watt,)
         specific_heating_load_in_watt_per_m2_entry = KpiEntry(
-            name="Specific heating load", unit="W", value=specific_heating_load_in_watt_per_m2,
+            name="Specific heating load", unit="W/m2", value=specific_heating_load_in_watt_per_m2,
         )
 
         # update kpi collection dict

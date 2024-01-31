@@ -189,13 +189,13 @@ class KpiGenerator(JSONWizard):
             consumption_with_battery = result_dataframe["consumption"] + result_dataframe["battery_charge"]
 
             # evaluate injection and sum over time
-            grid_injection = production_with_battery - consumption_with_battery
+            grid_injection_series_in_watt: pd.Series = production_with_battery - consumption_with_battery
 
             # evaluate self consumption and immidiately sum over time
             # battery is charged (counting to consumption) and discharged (counting to production)
             # -> only one direction can be counted, otherwise the self-consumption can be greater than 100.
             # Here the production side is counted (battery_discharge).
-            self_consumption = (
+            self_consumption_series_in_watt: pd.Series = (
                 pd.concat(
                     (
                         production_with_battery[production_with_battery <= result_dataframe["consumption"]],
@@ -207,12 +207,12 @@ class KpiGenerator(JSONWizard):
             )
 
             grid_injection_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
-                power_timeseries_in_watt=grid_injection[grid_injection > 0],
+                power_timeseries_in_watt=grid_injection_series_in_watt[grid_injection_series_in_watt > 0],
                 timeresolution=self.simulation_parameters.seconds_per_timestep,
             )
 
             self_consumption_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
-                power_timeseries_in_watt=self_consumption, timeresolution=self.simulation_parameters.seconds_per_timestep,
+                power_timeseries_in_watt=self_consumption_series_in_watt, timeresolution=self.simulation_parameters.seconds_per_timestep,
             )
 
             # compute self consumption rate and autarkie rate
@@ -223,8 +223,8 @@ class KpiGenerator(JSONWizard):
             battery_losses_in_kilowatt_hour = self.compute_battery_losses(result_dataframe=result_dataframe)
 
         else:
-            self_consumption = 0
-            grid_injection = 0
+            self_consumption_series_in_watt = pd.Series([])
+            grid_injection_series_in_watt = pd.Series([])
             self_consumption_in_kilowatt_hour = 0
             grid_injection_in_kilowatt_hour = 0
             self_consumption_rate = 0
@@ -232,8 +232,8 @@ class KpiGenerator(JSONWizard):
             battery_losses_in_kilowatt_hour = 0
 
         # add injection and self-consumption timeseries to result dataframe
-        result_dataframe["self_consumption_in_watt"] = self_consumption
-        result_dataframe["grid_injection_in_watt"] = grid_injection
+        result_dataframe["self_consumption_in_watt"] = self_consumption_series_in_watt
+        result_dataframe["grid_injection_in_watt"] = grid_injection_series_in_watt
 
         # make kpi entry
         grid_injection_entry = KpiEntry(name="Injection", unit="kWh", value=grid_injection_in_kilowatt_hour)
@@ -576,12 +576,12 @@ class KpiGenerator(JSONWizard):
 
                 # make kpi entry
 
-        temperature_hours_of_building_being_below_heating_set_temperature_entry = KpiEntry(
+        temperature_hours_of_building_below_heating_set_temperature_entry = KpiEntry(
             name=f"Temperature deviation of building indoor air temperature being below set temperature {set_heating_temperature_in_celsius} Celsius",
             unit="°C*h",
             value=temperature_hours_of_building_being_below_heating_set_temperature,
         )
-        temperature_hours_of_building_being_above_cooling_set_temperature_entry = KpiEntry(
+        temperature_hours_of_building_above_cooling_set_temperature_entry = KpiEntry(
             name=f"Temperature deviation of building indoor air temperature being above set temperature {set_cooling_temperature_in_celsius} Celsius",
             unit="°C*h",
             value=temperature_hours_of_building_being_above_cooling_set_temperature,
@@ -601,8 +601,8 @@ class KpiGenerator(JSONWizard):
         # update kpi collection dict
         self.kpi_collection_dict.update(
             {
-                temperature_hours_of_building_being_below_heating_set_temperature_entry.name: temperature_hours_of_building_being_below_heating_set_temperature_entry.to_dict(),
-                temperature_hours_of_building_being_above_cooling_set_temperature_entry.name: temperature_hours_of_building_being_above_cooling_set_temperature_entry.to_dict(),
+                temperature_hours_of_building_below_heating_set_temperature_entry.name: temperature_hours_of_building_below_heating_set_temperature_entry.to_dict(),
+                temperature_hours_of_building_above_cooling_set_temperature_entry.name: temperature_hours_of_building_above_cooling_set_temperature_entry.to_dict(),
                 min_temperature_reached_in_celsius_entry.name: min_temperature_reached_in_celsius_entry.to_dict(),
                 max_temperature_reached_in_celsius_entry.name: max_temperature_reached_in_celsius_entry.to_dict(),
                 heating_load_in_watt_entry.name: heating_load_in_watt_entry.to_dict(),

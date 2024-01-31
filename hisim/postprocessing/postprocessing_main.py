@@ -837,8 +837,8 @@ class PostProcessor:
         for kpi_name, kpi_entry in kpi_collection_dict.items():
 
             variable_name = kpi_name
-            variable_value = kpi_entry.value
-            variable_unit = kpi_entry.unit
+            variable_value = kpi_entry["value"]
+            variable_unit = kpi_entry["unit"]
 
             simple_dict_cumulative_data["model"].append(self.model)
             simple_dict_cumulative_data["scenario"].append(self.scenario)
@@ -971,13 +971,13 @@ class PostProcessor:
             # Get KPIs from ppdt
             kpi_collection_dict = ppdt.kpi_collection_dict
 
-            self_consumption_rate = kpi_collection_dict["Self-consumption rate"].value
-            autarky_rate = kpi_collection_dict["Autarky rate"].value
-            grid_injection_in_kilowatt_hour = kpi_collection_dict["Injection"].value
-            economic_cost = kpi_collection_dict["Total costs for simulated period"].value
-            co2_cost = kpi_collection_dict["Total CO2 emissions for simulated period"].value
-            electricity_consumption_in_kilowatt_hour = kpi_collection_dict["Consumption"].value
-            electricity_production_in_kilowatt_hour = kpi_collection_dict["Production"].value
+            self_consumption_rate = kpi_collection_dict["Self-consumption rate"]["value"]
+            autarky_rate = kpi_collection_dict["Autarky rate"]["value"]
+            grid_injection_in_kilowatt_hour = kpi_collection_dict["Injection"]["value"]
+            economic_cost = kpi_collection_dict["Total costs for simulated period"]["value"]
+            co2_cost = kpi_collection_dict["Total CO2 emissions for simulated period"]["value"]
+            electricity_consumption_in_kilowatt_hour = kpi_collection_dict["Consumption"]["value"]
+            electricity_production_in_kilowatt_hour = kpi_collection_dict["Production"]["value"]
 
             # initialize json interface to pass kpi's to building_sizer
             kpi_config = KPIConfig(

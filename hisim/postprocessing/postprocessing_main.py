@@ -6,7 +6,6 @@ import copy
 from typing import Any, Optional, List, Dict, Tuple
 from timeit import default_timer as timer
 import string
-
 import pandas as pd
 
 from hisim.modular_household.interface_configs.kpi_config import KPIConfig
@@ -554,7 +553,7 @@ class PostProcessor:
     ) -> PostProcessingDataTransfer:
         """Computes KPI's and writes them to report and to ppdt kpi collection."""
         # initialize kpi data class and compute all kpi values
-        kpi_data_class = KpiGenerator(post_processing_data_transfer=ppdt)
+        kpi_data_class = KpiGenerator(ppdt)
         # write kpi table to report
         kpi_table = kpi_data_class.return_table_for_report()
         self.write_new_chapter_with_table_to_report(
@@ -971,11 +970,14 @@ class PostProcessor:
         if PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT in ppdt.post_processing_options:
             # Get KPIs from ppdt
             kpi_collection_dict = ppdt.kpi_collection_dict
+
             self_consumption_rate = kpi_collection_dict["Self-consumption rate"].value
             autarky_rate = kpi_collection_dict["Autarky rate"].value
             grid_injection_in_kilowatt_hour = kpi_collection_dict["Injection"].value
             economic_cost = kpi_collection_dict["Total costs for simulated period"].value
             co2_cost = kpi_collection_dict["Total CO2 emissions for simulated period"].value
+            electricity_consumption_in_kilowatt_hour = kpi_collection_dict["Consumption"].value
+            electricity_production_in_kilowatt_hour = kpi_collection_dict["Production"].value
 
             # initialize json interface to pass kpi's to building_sizer
             kpi_config = KPIConfig(
@@ -984,6 +986,8 @@ class PostProcessor:
                 injection=grid_injection_in_kilowatt_hour,
                 economic_cost=economic_cost,
                 co2_cost=co2_cost,
+                electricity_consumption_in_kilowatt_hour=electricity_consumption_in_kilowatt_hour,
+                electricity_production_in_kilowatt_hour=electricity_production_in_kilowatt_hour
             )
 
             pathname = os.path.join(ppdt.simulation_parameters.result_directory, "kpi_config_for_building_sizer.json")

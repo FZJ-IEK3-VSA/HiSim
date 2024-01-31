@@ -3,6 +3,7 @@
 # clean
 
 import os
+import json
 from typing import Optional
 import pytest
 import numpy as np
@@ -17,10 +18,7 @@ from hisim.components import (
     idealized_electric_heater,
 )
 from hisim import utils, loadtypes
-from hisim.postprocessing.compute_kpis import (
-    compute_consumption_production,
-    compute_energy_from_power,
-)
+
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import log
 
@@ -56,7 +54,10 @@ def test_house(
             PostProcessingOptions.EXPORT_TO_CSV
         )
         my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT
+            PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT
+        )
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER
         )
 
     # this part is copied from hisim_main
@@ -172,20 +173,13 @@ def test_house(
     # =========================================================================================================================================================
     # Compare with kpi computation results
 
-    # kpi calculation
-    kpi_consumption_production_dataframe = compute_consumption_production(
-        all_outputs=my_sim.all_outputs, results=my_sim.results_data_frame
-    )
+    # read kpi data
+    with open(os.path.join(my_sim._simulation_parameters.result_directory, "kpi_config_for_building_sizer.json"), "r") as file:
+        jsondata = json.load(file)
 
-    cumulative_consumption_kpi_in_kilowatt_hour = compute_energy_from_power(
-        power_timeseries=kpi_consumption_production_dataframe["consumption"],
-        timeresolution=my_simulation_parameters.seconds_per_timestep,
-    )
+    cumulative_consumption_kpi_in_kilowatt_hour = jsondata["electricity_consumption_in_kilowatt_hour"]
 
-    cumulative_production_kpi_in_kilowatt_hour = compute_energy_from_power(
-        power_timeseries=kpi_consumption_production_dataframe["production"],
-        timeresolution=my_simulation_parameters.seconds_per_timestep,
-    )
+    cumulative_production_kpi_in_kilowatt_hour = jsondata["electricity_production_in_kilowatt_hour"]
 
     # simualtion results from grid energy balancer (last entry)
     simulation_results_electricity_meter_cumulative_production_in_watt_hour = (

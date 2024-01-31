@@ -11,7 +11,6 @@ from dataclass_wizard import JSONWizard
 from hisim.component import ComponentOutput
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes
 from hisim.utils import HISIMPATH
-
 from hisim import log
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 
@@ -29,7 +28,7 @@ class KpiEntry(JSONWizard):
 
 
 @dataclass
-class KpiGenerator:
+class KpiGenerator(JSONWizard):
 
     """Class for generating and calculating key performance indicators."""
 
@@ -45,7 +44,7 @@ class KpiGenerator:
         """Create kpi collection and write back into post processing data transfer."""
 
         # get important variables
-        self.components = post_processing_data_transfer.wrapped_components
+        self.wrapped_components = post_processing_data_transfer.wrapped_components
         self.results = post_processing_data_transfer.results
         self.all_outputs = post_processing_data_transfer.all_outputs
         self.simulation_parameters = post_processing_data_transfer.simulation_parameters
@@ -516,7 +515,8 @@ class KpiGenerator:
 
         # get set temperatures
         wrapped_building_component = None
-        for wrapped_component in self.components:
+        for wrapped_component in self.wrapped_components:
+            print(wrapped_component.my_component.component_name)
             if "Building" in wrapped_component.my_component.get_classname():
                 wrapped_building_component = wrapped_component
                 break
@@ -652,7 +652,7 @@ class KpiGenerator:
         number_of_heat_pump_cycles = 0.0
         seasonal_performance_factor = 0.0
         # check if Heat Pump was used in components
-        for wrapped_component in self.components:
+        for wrapped_component in self.wrapped_components:
             if "HeatPump" in wrapped_component.my_component.component_name:
                 # get number of heat pump cycles over simulated period
                 number_of_heat_pump_cycles = self.get_heatpump_cycles(results=self.results)
@@ -687,7 +687,7 @@ class KpiGenerator:
         total_energy_from_grid_in_kwh = 0.0
         total_energy_to_grid_in_kwh = 0.0
         # go through all wrapped components and try to find electricity meter
-        for wrapped_component in self.components:
+        for wrapped_component in self.wrapped_components:
             if "ElectricityMeter" in wrapped_component.my_component.component_name:
                 total_energy_from_grid_in_kwh = wrapped_component.my_component.config.total_energy_from_grid_in_kwh
                 total_energy_to_grid_in_kwh = wrapped_component.my_component.config.total_energy_to_grid_in_kwh

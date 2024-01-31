@@ -174,7 +174,7 @@ def test_house(
     # Compare with kpi computation results
 
     # read kpi data
-    with open(os.path.join(my_sim._simulation_parameters.result_directory, "kpi_config_for_building_sizer.json"), "r", encoding="utf-8") as file:
+    with open(os.path.join(my_sim._simulation_parameters.result_directory, "kpi_config_for_building_sizer.json"), "r", encoding="utf-8") as file:  # pylint: disable=W0212
         jsondata = json.load(file)
 
     cumulative_consumption_kpi_in_kilowatt_hour = jsondata["electricity_consumption_in_kilowatt_hour"]

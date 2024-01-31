@@ -159,7 +159,7 @@ class HeatPumpHplib(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: HeatPumpHplibConfig,
-        my_display_config: DisplayConfig = DisplayConfig(display_in_webtool=True),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ):
         """Loads the parameters of the specified heat pump.
 

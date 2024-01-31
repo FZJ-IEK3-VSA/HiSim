@@ -119,7 +119,7 @@ def setup_function(
         )
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_CAPEX)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
     my_sim.set_simulation_parameters(my_simulation_parameters)

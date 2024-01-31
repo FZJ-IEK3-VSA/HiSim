@@ -170,7 +170,7 @@ class KpiGenerator(JSONWizard):
 
         # update kpi collection dict
         self.kpi_collection_dict.update(
-            {consumtion_entry.name: consumtion_entry, production_entry.name: production_entry}
+            {consumtion_entry.name: consumtion_entry.to_dict(), production_entry.name: production_entry.to_dict()}
         )
 
         return electricity_consumption_in_kilowatt_hour, electricity_production_in_kilowatt_hour
@@ -223,6 +223,8 @@ class KpiGenerator(JSONWizard):
             battery_losses_in_kilowatt_hour = self.compute_battery_losses(result_dataframe=result_dataframe)
 
         else:
+            self_consumption = 0
+            grid_injection = 0
             self_consumption_in_kilowatt_hour = 0
             grid_injection_in_kilowatt_hour = 0
             self_consumption_rate = 0
@@ -243,11 +245,11 @@ class KpiGenerator(JSONWizard):
         # update kpi collection dict
         self.kpi_collection_dict.update(
             {
-                grid_injection_entry.name: grid_injection_entry,
-                self_consumption_entry.name: self_consumption_entry,
-                self_consumption_rate_entry.name: self_consumption_rate_entry,
-                autarkie_rate_entry.name: autarkie_rate_entry,
-                battery_losses_entry.name: battery_losses_entry,
+                grid_injection_entry.name: grid_injection_entry.to_dict(),
+                self_consumption_entry.name: self_consumption_entry.to_dict(),
+                self_consumption_rate_entry.name: self_consumption_rate_entry.to_dict(),
+                autarkie_rate_entry.name: autarkie_rate_entry.to_dict(),
+                battery_losses_entry.name: battery_losses_entry.to_dict(),
             }
         )
         return grid_injection_in_kilowatt_hour, self_consumption_in_kilowatt_hour, result_dataframe
@@ -427,7 +429,7 @@ class KpiGenerator(JSONWizard):
 
         # update kpi collection dict
         self.kpi_collection_dict.update(
-            {costs_for_energy_use_entry.name: costs_for_energy_use_entry, co2_emission_entry.name: co2_emission_entry}
+            {costs_for_energy_use_entry.name: costs_for_energy_use_entry.to_dict(), co2_emission_entry.name: co2_emission_entry.to_dict()}
         )
 
     def read_opex_and_capex_costs_from_results(self):
@@ -491,12 +493,12 @@ class KpiGenerator(JSONWizard):
         # update kpi collection dict
         self.kpi_collection_dict.update(
             {
-                total_investment_cost_per_simulated_period_entry.name: total_investment_cost_per_simulated_period_entry,
-                total_device_co2_footprint_per_simulated_period_entry.name: total_device_co2_footprint_per_simulated_period_entry,
-                total_operational_cost_entry.name: total_operational_cost_entry,
-                total_operational_emissions_entry.name: total_operational_emissions_entry,
-                total_cost_entry.name: total_cost_entry,
-                total_emissions_entry.name: total_emissions_entry,
+                total_investment_cost_per_simulated_period_entry.name: total_investment_cost_per_simulated_period_entry.to_dict(),
+                total_device_co2_footprint_per_simulated_period_entry.name: total_device_co2_footprint_per_simulated_period_entry.to_dict(),
+                total_operational_cost_entry.name: total_operational_cost_entry.to_dict(),
+                total_operational_emissions_entry.name: total_operational_emissions_entry.to_dict(),
+                total_cost_entry.name: total_cost_entry.to_dict(),
+                total_emissions_entry.name: total_emissions_entry.to_dict(),
             }
         )
 
@@ -516,7 +518,6 @@ class KpiGenerator(JSONWizard):
         # get set temperatures
         wrapped_building_component = None
         for wrapped_component in self.wrapped_components:
-            print(wrapped_component.my_component.component_name)
             if "Building" in wrapped_component.my_component.get_classname():
                 wrapped_building_component = wrapped_component
                 break
@@ -600,12 +601,12 @@ class KpiGenerator(JSONWizard):
         # update kpi collection dict
         self.kpi_collection_dict.update(
             {
-                temperature_hours_of_building_being_below_heating_set_temperature_entry.name: temperature_hours_of_building_being_below_heating_set_temperature_entry,
-                temperature_hours_of_building_being_above_cooling_set_temperature_entry.name: temperature_hours_of_building_being_above_cooling_set_temperature_entry,
-                min_temperature_reached_in_celsius_entry.name: min_temperature_reached_in_celsius_entry,
-                max_temperature_reached_in_celsius_entry.name: max_temperature_reached_in_celsius_entry,
-                heating_load_in_watt_entry.name: heating_load_in_watt_entry,
-                specific_heating_load_in_watt_per_m2_entry.name: specific_heating_load_in_watt_per_m2_entry,
+                temperature_hours_of_building_being_below_heating_set_temperature_entry.name: temperature_hours_of_building_being_below_heating_set_temperature_entry.to_dict(),
+                temperature_hours_of_building_being_above_cooling_set_temperature_entry.name: temperature_hours_of_building_being_above_cooling_set_temperature_entry.to_dict(),
+                min_temperature_reached_in_celsius_entry.name: min_temperature_reached_in_celsius_entry.to_dict(),
+                max_temperature_reached_in_celsius_entry.name: max_temperature_reached_in_celsius_entry.to_dict(),
+                heating_load_in_watt_entry.name: heating_load_in_watt_entry.to_dict(),
+                specific_heating_load_in_watt_per_m2_entry.name: specific_heating_load_in_watt_per_m2_entry.to_dict(),
             }
         )
 
@@ -675,8 +676,8 @@ class KpiGenerator(JSONWizard):
         # update kpi collection dict
         self.kpi_collection_dict.update(
             {
-                number_of_heat_pump_cycles_entry.name: number_of_heat_pump_cycles_entry,
-                seasonal_performance_factor_entry.name: seasonal_performance_factor_entry,
+                number_of_heat_pump_cycles_entry.name: number_of_heat_pump_cycles_entry.to_dict(),
+                seasonal_performance_factor_entry.name: seasonal_performance_factor_entry.to_dict(),
             }
         )
 
@@ -707,8 +708,8 @@ class KpiGenerator(JSONWizard):
         # update kpi collection dict
         self.kpi_collection_dict.update(
             {
-                total_energy_from_grid_in_kwh_entry.name: total_energy_from_grid_in_kwh_entry,
-                total_energy_to_grid_in_kwh_entry.name: total_energy_to_grid_in_kwh_entry,
+                total_energy_from_grid_in_kwh_entry.name: total_energy_from_grid_in_kwh_entry.to_dict(),
+                total_energy_to_grid_in_kwh_entry.name: total_energy_to_grid_in_kwh_entry.to_dict(),
             }
         )
 
@@ -718,6 +719,8 @@ class KpiGenerator(JSONWizard):
         table.append(["KPI", "Value", "Unit"])
 
         for kpi_key, kpi_entry in self.kpi_collection_dict.items():
-            table.append([f"{kpi_key}: ", f"{round(kpi_entry.value, 2)}", f"{kpi_entry.unit}"])
+            value = kpi_entry["value"]
+            unit = kpi_entry["unit"]
+            table.append([f"{kpi_key}: ", f"{round(value, 2)}", f"{unit}"])
 
         return table

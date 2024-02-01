@@ -9,7 +9,6 @@ from utspclient.helpers.lpgdata import TravelRouteSets
 from utspclient.helpers.lpgpythonbindings import JsonReference
 
 from hisim.loadtypes import HeatingSystems
-from hisim.utils import get_environment_variable
 
 
 @dataclass_json

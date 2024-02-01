@@ -340,7 +340,8 @@ class KpiGenerator(JSONWizard):
             if relative_electricity_demand_from_grid_in_percent > 100:
                 raise ValueError(
                     "The relative elecricity demand should not be over 100 %. Something is wrong here. Please check your code."
-                    f"Electricity from grid {electricity_from_grid_in_kilowatt_hour} kWh, total electricity consumption {total_electricity_consumption_in_kilowatt_hour} kWh."
+                    f"Electricity from grid {electricity_from_grid_in_kilowatt_hour} kWh, "
+                    f"total electricity consumption {total_electricity_consumption_in_kilowatt_hour} kWh."
                 )
 
         # make kpi entry

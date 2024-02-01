@@ -32,8 +32,11 @@ class ResultDataCollection:
         """Initialize the class."""
         result_folder = folder_from_which_data_will_be_collected
         self.result_data_folder = os.path.join(
-            result_folder,
+            os.getcwd(),
             os.pardir,
+            os.pardir,
+            os.pardir,
+            "system_setups",
             "results_for_scenario_comparison",
             "data",
         )

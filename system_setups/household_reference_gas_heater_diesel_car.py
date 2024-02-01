@@ -184,6 +184,8 @@ def setup_function(
     # cleanup old lpg requests, mandatory to change number of cars
     if Path(utils.HISIMPATH["utsp_results"]).exists():
         cleanup_old_lpg_requests()
+    else:
+        Path(utils.HISIMPATH["utsp_results"]).mkdir(parents=False, exist_ok=False)
 
     # my_config = utils.create_configuration(my_sim, ReferenceHouseholdConfig)
 

@@ -34,18 +34,20 @@ def test_occupancy_scaling_with_utsp():
         heating_by_devices_one,
         electricity_consumption_one,
         water_consumption_one,
-        data_acquisition_mode_after_initialization
+        data_acquisition_mode_after_initialization,
     ) = initialize_lpg_utsp_connector_and_return_results(households=household)
 
-
-    if data_acquisition_mode_after_initialization == loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE:
-        log.warning("This test makes only sense if the UTSP can be used for data acquisition. Here the use of the UTSP was not possible. Therefore this test will be ignored.")
+    if (
+        data_acquisition_mode_after_initialization
+        == loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
+    ):
+        log.warning(
+            "This test makes only sense if the UTSP can be used for data acquisition. Here the use of the UTSP was not possible. Therefore this test will be ignored."
+        )
 
     else:
 
-        log.information(
-            "number of residents in 1 household " + str(number_of_residents_one)
-        )
+        log.information("number of residents in 1 household " + str(number_of_residents_one))
 
         # run occupancy for two identical households
         household_list = [
@@ -60,28 +62,19 @@ def test_occupancy_scaling_with_utsp():
             heating_by_devices_two,
             electricity_consumption_two,
             water_consumption_two,
+            data_acquisition_mode_after_initialization,
         ) = initialize_lpg_utsp_connector_and_return_results(households=household_list)
 
-        log.information(
-            f"number of residents in {len(household_list)} households " + str(number_of_residents_two)
-        )
+        log.information(f"number of residents in {len(household_list)} households " + str(number_of_residents_two))
 
         # now test if results are doubled when occupancy is initialzed with 2 households
-        np.testing.assert_allclose(
-            number_of_residents_two, len(household_list) * number_of_residents_one, rtol=0.01
-        )
-        np.testing.assert_allclose(
-            heating_by_residents_two, len(household_list) * heating_by_residents_one, rtol=0.01
-        )
-        np.testing.assert_allclose(
-            heating_by_devices_two, len(household_list) * heating_by_devices_one, rtol=0.01
-        )
+        np.testing.assert_allclose(number_of_residents_two, len(household_list) * number_of_residents_one, rtol=0.01)
+        np.testing.assert_allclose(heating_by_residents_two, len(household_list) * heating_by_residents_one, rtol=0.01)
+        np.testing.assert_allclose(heating_by_devices_two, len(household_list) * heating_by_devices_one, rtol=0.01)
         np.testing.assert_allclose(
             electricity_consumption_two, len(household_list) * electricity_consumption_one, rtol=0.01
         )
-        np.testing.assert_allclose(
-            water_consumption_two, len(household_list) * water_consumption_one, rtol=0.01
-        )
+        np.testing.assert_allclose(water_consumption_two, len(household_list) * water_consumption_one, rtol=0.01)
 
 
 def initialize_lpg_utsp_connector_and_return_results(
@@ -92,7 +85,7 @@ def initialize_lpg_utsp_connector_and_return_results(
     Union[float, Any],
     Union[float, Any],
     Union[float, Any],
-    loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode
+    loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode,
 ]:
     """Initialize the lpg utsp connector and simulate for one timestep."""
     # Set Simu Params
@@ -109,9 +102,7 @@ def initialize_lpg_utsp_connector_and_return_results(
     data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP
 
     # Build Simu Params
-    my_simulation_parameters = SimulationParameters.full_year(
-        year=year, seconds_per_timestep=seconds_per_timestep
-    )
+    my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
 
     # Build occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
@@ -127,14 +118,13 @@ def initialize_lpg_utsp_connector_and_return_results(
         predictive_control=False,
         predictive=False,
         energy_intensity=energy_intensity,
-        guid=guid
+        guid=guid,
     )
 
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
     my_occupancy_data_acquisition_mode_after_initialization = my_occupancy.utsp_config.data_acquisition_mode
-
 
     number_of_outputs = fft.get_number_of_outputs([my_occupancy])
     stsv = component.SingleTimeStepValues(number_of_outputs)
@@ -146,18 +136,10 @@ def initialize_lpg_utsp_connector_and_return_results(
 
     timestep = 0
     my_occupancy.i_simulate(timestep, stsv, False)
-    number_of_residents = stsv.values[
-        my_occupancy.number_of_residents_channel.global_index
-    ]
-    heating_by_residents = stsv.values[
-        my_occupancy.heating_by_residents_channel.global_index
-    ]
-    heating_by_devices = stsv.values[
-        my_occupancy.heating_by_devices_channel.global_index
-    ]
-    electricity_consumption = stsv.values[
-        my_occupancy.electricity_output_channel.global_index
-    ]
+    number_of_residents = stsv.values[my_occupancy.number_of_residents_channel.global_index]
+    heating_by_residents = stsv.values[my_occupancy.heating_by_residents_channel.global_index]
+    heating_by_devices = stsv.values[my_occupancy.heating_by_devices_channel.global_index]
+    electricity_consumption = stsv.values[my_occupancy.electricity_output_channel.global_index]
 
     water_consumption = stsv.values[my_occupancy.water_consumption_channel.global_index]
 
@@ -168,6 +150,5 @@ def initialize_lpg_utsp_connector_and_return_results(
         heating_by_devices,
         electricity_consumption,
         water_consumption,
-        my_occupancy_data_acquisition_mode_after_initialization
+        my_occupancy_data_acquisition_mode_after_initialization,
     )
-

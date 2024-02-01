@@ -13,7 +13,6 @@ from hisim.components.heat_distribution_system import HeatDistribution
 from hisim.components.building import Building
 from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib
 from hisim.components.electricity_meter import ElectricityMeter
-from hisim.components.generic_heat_pump import GenericHeatPump
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes
 from hisim.utils import HISIMPATH
 from hisim import log
@@ -742,7 +741,7 @@ class KpiGenerator(JSONWizard):
         if thermal_output_energy_in_kilowatt_hour is None:
             log.warning(
                 "KPI values for heat distribution system are None."
-                "Please check if you have correctly initialized and connected the heat distribution system in your system setup."
+                "Please check if you have correctly initialized and connected the heat distribution system in your system setup or ignore this message."
             )
 
         thermal_output_energy_hds_entry = KpiEntry(
@@ -811,7 +810,7 @@ class KpiGenerator(JSONWizard):
         # check if Heat Pump was used in components
         for wrapped_component in self.wrapped_components:
 
-            if isinstance(wrapped_component.my_component, (GenericHeatPump, HeatPumpHplib)):
+            if isinstance(wrapped_component.my_component, HeatPumpHplib):
 
                 # get number of heat pump cycles over simulated period
                 number_of_heat_pump_cycles = self.get_heatpump_cycles(
@@ -838,8 +837,8 @@ class KpiGenerator(JSONWizard):
             electrical_input_energy_heatpump_in_kilowatt_hour,
         ):
             log.warning(
-                "KPI values for heat pump are None."
-                "Please check if you have correctly initialized and connected the heat pump in your system setup."
+                "KPI values for advanced heat pump hplib are None."
+                "Please check if you have correctly initialized and connected the heat pump in your system setup or ignore this message."
             )
 
         # make kpi entry

@@ -32,16 +32,16 @@ class ElectricityMeterConfig(cp.ConfigBase):
         return ElectricityMeter.get_full_classname()
 
     name: str
-    total_energy_to_grid_in_kwh: float
-    total_energy_from_grid_in_kwh: float
+    total_energy_to_grid_in_kwh: None
+    total_energy_from_grid_in_kwh: None
 
     @classmethod
     def get_electricity_meter_default_config(cls):
         """Gets a default ElectricityMeter."""
         return ElectricityMeterConfig(
             name="ElectricityMeter",
-            total_energy_to_grid_in_kwh=0.0,
-            total_energy_from_grid_in_kwh=0.0,
+            total_energy_to_grid_in_kwh=None,
+            total_energy_from_grid_in_kwh=None,
         )
 
 

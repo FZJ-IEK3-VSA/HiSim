@@ -17,6 +17,7 @@ from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes
 from hisim.utils import HISIMPATH
 from hisim import log
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
+from hisim.postprocessingoptions import PostProcessingOptions
 
 
 @dataclass
@@ -73,11 +74,19 @@ class KpiGenerator(JSONWizard):
             electricity_production_in_kilowatt_hour=total_electricity_production_in_kilowatt_hour,
         )
         # get electricity to and from grid
-        total_electricity_from_grid_in_kwh = self.get_electricity_to_and_from_grid_from_electricty_meter()
+        (
+            total_electricity_from_grid_in_kwh,
+            total_electricity_to_grid_in_kwh,
+        ) = self.get_electricity_to_and_from_grid_from_electricty_meter()
         # get relative electricity demand
         self.compute_relative_electricity_demand_from_grid(
             total_electricity_consumption_in_kilowatt_hour=total_electricity_consumption_in_kilowatt_hour,
             electricity_from_grid_in_kilowatt_hour=total_electricity_from_grid_in_kwh,
+        )
+        # get self-consumption rate according to mydualsun
+        self.compute_self_consumption_rate_according_to_mydualsun(
+            total_electricity_production_in_kilowatt_hour=total_electricity_production_in_kilowatt_hour,
+            electricity_to_grid_in_kilowatt_hour=total_electricity_to_grid_in_kwh,
         )
 
         # get energy prices and co2 emissions
@@ -293,7 +302,7 @@ class KpiGenerator(JSONWizard):
 
         return battery_losses_in_kilowatt_hour
 
-    def get_electricity_to_and_from_grid_from_electricty_meter(self) -> Optional[float]:
+    def get_electricity_to_and_from_grid_from_electricty_meter(self) -> Tuple[Optional[float], Optional[float]]:
         """Get the electricity injected into the grid or taken from grid measured by the electricity meter."""
         total_energy_from_grid_in_kwh = None
         total_energy_to_grid_in_kwh = None
@@ -307,7 +316,9 @@ class KpiGenerator(JSONWizard):
         if total_energy_from_grid_in_kwh is None and total_energy_to_grid_in_kwh is None:
             log.warning(
                 "KPI values for total energy to and from grid are None. "
-                "Please check if you have correctly initialized and connected the electricity meter in your system setup."
+                "Please check if you have correctly initialized and connected the electricity meter in your system setup. "
+                f"Also check if you chose no. {str(PostProcessingOptions.COMPUTE_OPEX)} in your postprocessing options because this "
+                "option is responsible for writing the energy to/from grid values into the electricity meter config."
             )
         # make kpi entry
         total_energy_from_grid_in_kwh_entry = KpiEntry(
@@ -324,10 +335,12 @@ class KpiGenerator(JSONWizard):
                 total_energy_to_grid_in_kwh_entry.name: total_energy_to_grid_in_kwh_entry.to_dict(),
             }
         )
-        return total_energy_from_grid_in_kwh
+        return total_energy_from_grid_in_kwh, total_energy_to_grid_in_kwh
 
     def compute_relative_electricity_demand_from_grid(
-        self, total_electricity_consumption_in_kilowatt_hour: float, electricity_from_grid_in_kilowatt_hour: Optional[float]
+        self,
+        total_electricity_consumption_in_kilowatt_hour: float,
+        electricity_from_grid_in_kilowatt_hour: Optional[float],
     ) -> None:
         """Return the relative electricity demand."""
         if electricity_from_grid_in_kilowatt_hour is None:
@@ -354,6 +367,45 @@ class KpiGenerator(JSONWizard):
         self.kpi_collection_dict.update(
             {relative_electricity_demand_entry.name: relative_electricity_demand_entry.to_dict()}
         )
+
+    def compute_self_consumption_rate_according_to_mydualsun(
+        self,
+        total_electricity_production_in_kilowatt_hour: float,
+        electricity_to_grid_in_kilowatt_hour: Optional[float],
+    ) -> None:
+        """Return self-consumption according to dual sun.
+
+        https://academy.dualsun.com/hc/en-us/articles/360018456939-How-is-the-self-consumption-rate-calculated-on-MyDualSun.
+        """
+        if electricity_to_grid_in_kilowatt_hour is None:
+            self_consumption_rate_in_percent = None
+        else:
+            self_consumption_rate_in_percent = (
+                (total_electricity_production_in_kilowatt_hour - electricity_to_grid_in_kilowatt_hour)
+                / total_electricity_production_in_kilowatt_hour
+                * 100
+            )
+            print(
+                "to grid, total prod",
+                electricity_to_grid_in_kilowatt_hour,
+                total_electricity_production_in_kilowatt_hour,
+            )
+            if self_consumption_rate_in_percent > 100:
+                raise ValueError(
+                    "The self-consumption rate should not be over 100 %. Something is wrong here. Please check your code."
+                    f"Electricity to grid {electricity_to_grid_in_kilowatt_hour} kWh, "
+                    f"total electricity production {total_electricity_production_in_kilowatt_hour} kWh."
+                )
+
+        # make kpi entry
+        self_consumption_rate_entry = KpiEntry(
+            name="Self-consumption rate according to mydualsun",
+            unit="%",
+            value=self_consumption_rate_in_percent,
+        )
+
+        # update kpi collection dict
+        self.kpi_collection_dict.update({self_consumption_rate_entry.name: self_consumption_rate_entry.to_dict()})
 
     def read_in_fuel_costs(self) -> pd.DataFrame:
         """Reads data for costs and co2 emissions of fuels from csv."""
@@ -387,7 +439,12 @@ class KpiGenerator(JSONWizard):
         return (float(column["Cost"].iloc[0]), float(column["Footprint"].iloc[0]))
 
     def compute_cost_of_fuel_type(
-        self, results: pd.DataFrame, all_outputs: List, timeresolution: int, price_frame: pd.DataFrame, fuel: LoadTypes,
+        self,
+        results: pd.DataFrame,
+        all_outputs: List,
+        timeresolution: int,
+        price_frame: pd.DataFrame,
+        fuel: LoadTypes,
     ) -> Tuple[float, float]:
         """Computes the cost of the fuel type."""
         fuel_consumption = pd.Series(dtype=pd.Float64Dtype())  # type: pd.Series[float]
@@ -433,9 +490,10 @@ class KpiGenerator(JSONWizard):
 
         price_frame = self.read_in_fuel_costs()
 
-        (electricity_price_consumption, electricity_price_injection,) = self.search_electricity_prices_in_results(
-            all_outputs=self.all_outputs, results=self.results
-        )
+        (
+            electricity_price_consumption,
+            electricity_price_injection,
+        ) = self.search_electricity_prices_in_results(all_outputs=self.all_outputs, results=self.results)
         # Electricity Price
         electricity_price_constant, co2_price_constant = self.get_euro_and_co2(
             fuel_costs=price_frame, fuel=LoadTypes.ELECTRICITY
@@ -594,7 +652,9 @@ class KpiGenerator(JSONWizard):
             }
         )
 
-    def building_temperature_control_and_heating_load(self,) -> None:
+    def building_temperature_control_and_heating_load(
+        self,
+    ) -> None:
         """Check the building indoor air temperature.
 
         Check for all timesteps and count the
@@ -686,15 +746,25 @@ class KpiGenerator(JSONWizard):
             value=temperature_hours_of_building_being_above_cooling_set_temperature,
         )
         min_temperature_reached_in_celsius_entry = KpiEntry(
-            name="Minimum building indoor air temperature reached", unit="°C", value=min_temperature_reached_in_celsius,
+            name="Minimum building indoor air temperature reached",
+            unit="°C",
+            value=min_temperature_reached_in_celsius,
         )
         max_temperature_reached_in_celsius_entry = KpiEntry(
-            name="Maximum building indoor air temperature reached", unit="°C", value=max_temperature_reached_in_celsius,
+            name="Maximum building indoor air temperature reached",
+            unit="°C",
+            value=max_temperature_reached_in_celsius,
         )
 
-        heating_load_in_watt_entry = KpiEntry(name="Building heating load", unit="W", value=heating_load_in_watt,)
+        heating_load_in_watt_entry = KpiEntry(
+            name="Building heating load",
+            unit="W",
+            value=heating_load_in_watt,
+        )
         specific_heating_load_in_watt_per_m2_entry = KpiEntry(
-            name="Specific heating load", unit="W/m2", value=specific_heating_load_in_watt_per_m2,
+            name="Specific heating load",
+            unit="W/m2",
+            value=specific_heating_load_in_watt_per_m2,
         )
         specific_heat_demand_from_tabula_in_kwh_per_m2_per_a_entry = KpiEntry(
             name="Specific heating demand according to TABULA",

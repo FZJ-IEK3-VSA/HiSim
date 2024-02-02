@@ -255,7 +255,7 @@ class GenericHeatPump(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for {self.ThermalPowerDelivered} will follow.",
-            postprocessing_flag=lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED
+            postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
         )
 
         self.heating_channel: cp.ComponentOutput = self.add_output(

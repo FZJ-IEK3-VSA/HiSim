@@ -306,7 +306,7 @@ class KpiGenerator(JSONWizard):
                 break
         if total_energy_from_grid_in_kwh is None and total_energy_to_grid_in_kwh is None:
             log.warning(
-                "KPI values for total energy to and from grid are None."
+                "KPI values for total energy to and from grid are None. "
                 "Please check if you have correctly initialized and connected the electricity meter in your system setup."
             )
         # make kpi entry
@@ -740,7 +740,7 @@ class KpiGenerator(JSONWizard):
                 break
         if thermal_output_energy_in_kilowatt_hour is None:
             log.warning(
-                "KPI values for heat distribution system are None."
+                "KPI values for heat distribution system are None. "
                 "Please check if you have correctly initialized and connected the heat distribution system in your system setup or ignore this message."
             )
 
@@ -837,7 +837,7 @@ class KpiGenerator(JSONWizard):
             electrical_input_energy_heatpump_in_kilowatt_hour,
         ):
             log.warning(
-                "KPI values for advanced heat pump hplib are None."
+                "KPI values for advanced heat pump HPLib are None. "
                 "Please check if you have correctly initialized and connected the heat pump in your system setup or ignore this message."
             )
 

@@ -55,12 +55,7 @@ def main():
 
     folder_from_which_data_will_be_collected = os.path.join(
         cluster_storage_path,
-        "household_cluster_advanced_hp_pv_battery_ems/monte_carlo_20240108_0935",
-    )
-
-    folder_from_which_data_will_be_collected = os.path.join(
-        cluster_storage_path,
-        "repositories/HiSim/system_setups/results/",
+        "repositories/HiSim/system_setups/results/household_cluster_advanced_hp_pv_battery_ems/monte_carlo_20240108_0935",
     )
 
     path_to_default_config = os.path.join(

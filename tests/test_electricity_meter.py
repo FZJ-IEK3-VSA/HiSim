@@ -57,7 +57,7 @@ def test_house(
             PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT
         )
         my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER
+            PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON
         )
 
     # this part is copied from hisim_main
@@ -174,12 +174,12 @@ def test_house(
     # Compare with kpi computation results
 
     # read kpi data
-    with open(os.path.join(my_sim._simulation_parameters.result_directory, "kpi_config_for_building_sizer.json"), "r", encoding="utf-8") as file:  # pylint: disable=W0212
+    with open(os.path.join(my_sim._simulation_parameters.result_directory, "all_kpis.json"), "r", encoding="utf-8") as file:  # pylint: disable=W0212
         jsondata = json.load(file)
 
-    cumulative_consumption_kpi_in_kilowatt_hour = jsondata["electricity_consumption_in_kilowatt_hour"]
+    cumulative_consumption_kpi_in_kilowatt_hour = jsondata["Consumption"].get("value")
 
-    cumulative_production_kpi_in_kilowatt_hour = jsondata["electricity_production_in_kilowatt_hour"]
+    cumulative_production_kpi_in_kilowatt_hour = jsondata["Production"].get("value")
 
     # simualtion results from grid energy balancer (last entry)
     simulation_results_electricity_meter_cumulative_production_in_watt_hour = (

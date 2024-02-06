@@ -1,5 +1,5 @@
 """KPI config module."""
-from typing import Optional
+
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -20,9 +20,6 @@ class KPIConfig:
     economic_cost: float
     #: annual C02 emmissions due to the construction and operation of the considered technology, given in kg
     co2_cost: float
-    # add electricity consumption and production because this can be useful for other functions
-    electricity_consumption_in_kilowatt_hour: Optional[float] = None
-    electricity_production_in_kilowatt_hour: Optional[float] = None
 
     def get_kpi(self) -> float:
         """Weights all kpis to get one value evaluating the performance of one building configuration.

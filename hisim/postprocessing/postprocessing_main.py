@@ -1005,8 +1005,6 @@ class PostProcessor:
             grid_injection_in_kilowatt_hour = kpi_collection_dict["Injection"]["value"]
             economic_cost = kpi_collection_dict["Total costs for simulated period"]["value"]
             co2_cost = kpi_collection_dict["Total CO2 emissions for simulated period"]["value"]
-            electricity_consumption_in_kilowatt_hour = kpi_collection_dict["Consumption"]["value"]
-            electricity_production_in_kilowatt_hour = kpi_collection_dict["Production"]["value"]
 
             # initialize json interface to pass kpi's to building_sizer
             kpi_config = KPIConfig(
@@ -1015,8 +1013,6 @@ class PostProcessor:
                 injection=grid_injection_in_kilowatt_hour,
                 economic_cost=economic_cost,
                 co2_cost=co2_cost,
-                electricity_consumption_in_kilowatt_hour=electricity_consumption_in_kilowatt_hour,
-                electricity_production_in_kilowatt_hour=electricity_production_in_kilowatt_hour
             )
 
             pathname = os.path.join(ppdt.simulation_parameters.result_directory, "kpi_config_for_building_sizer.json")

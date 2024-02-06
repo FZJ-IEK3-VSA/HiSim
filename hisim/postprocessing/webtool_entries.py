@@ -38,6 +38,7 @@ class WebtoolDict(JSONWizard):
         self.init_structure(post_processing_data_transfer)
         self.add_opex_capex_results(computed_opex, computed_capex)
         self.add_technical_results(post_processing_data_transfer)
+        self.add_configuration(post_processing_data_transfer)
 
     def init_structure(self, post_processing_data_transfer):
         """Initialize results dict for webtool with component names and categories.
@@ -54,14 +55,15 @@ class WebtoolDict(JSONWizard):
                 self.components[this_name] = {
                     "prettyName": this_pretty_name,
                     "class": this_component_class,
-                    "technical": {},
-                    "economical": {},
+                    "configuration": {},
+                    "operation": {},
+                    "economics": {},
                 }
 
     def add_opex_capex_results(self, computed_opex, computed_capex):
         """Add results from the results of `opex_calculation()` and `capex_calculation()` to webtool dict."""
-        categories_opex = ["economical", "technical", "economical"]
-        categories_capex = ["economical", "technical", "economical"]
+        categories_opex = ["economics", "operation", "economics"]
+        categories_capex = ["economics", "operation", "economics"]
         # Get OPEX and CAPEX
         for computed_values, categories in zip([computed_opex, computed_capex], [categories_opex, categories_capex]):
             if not all(isinstance(_, str) for _ in computed_values[0]):
@@ -129,4 +131,11 @@ class WebtoolDict(JSONWizard):
                 value=round(series.item(), 2),
             )
             # Write to result dict
-            self.components[my_output.component_name]["technical"].update({my_output.display_name: my_result.to_dict()})
+            self.components[my_output.component_name]["operation"].update({my_output.display_name: my_result.to_dict()})
+
+    def add_configuration(self, ppdt: PostProcessingDataTransfer) -> None:
+        """Add configuration for displayed components from PostProcessingDataTransfer to results dataclass."""
+        for wrapped_component in ppdt.wrapped_components:
+            if wrapped_component.my_component.my_display_config.display_in_webtool:
+                component_content = wrapped_component.my_component.config.to_dict()
+                self.components[wrapped_component.my_component.component_name]["configuration"] = component_content

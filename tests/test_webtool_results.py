@@ -28,6 +28,6 @@ def test_webtool_results():
         results_for_webtool = json.load(handle)
 
     assert isinstance(
-        results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["technical"]["ThermalOutputPower"]["value"],
+        results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["operation"]["ThermalOutputPower"]["value"],
         Number,
     )

@@ -1,29 +1,29 @@
 """Electricity meter module should replace the sumbuilder. """
+
 # clean
 from dataclasses import dataclass
 from typing import List
 
-from dataclasses_json import dataclass_json
 import pandas as pd
+from dataclasses_json import dataclass_json
 
 from hisim import component as cp
 from hisim import dynamic_component
 from hisim import loadtypes as lt
 from hisim.component import ComponentInput, OpexCostDataClass
+from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.dynamic_component import (
     DynamicComponent,
     DynamicConnectionInput,
     DynamicConnectionOutput,
     DynamicComponentConnection,
 )
-from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
 
 
 @dataclass_json
 @dataclass
 class ElectricityMeterConfig(cp.ConfigBase):
-
     """Electricity Meter Config."""
 
     @classmethod
@@ -46,7 +46,6 @@ class ElectricityMeterConfig(cp.ConfigBase):
 
 
 class ElectricityMeter(DynamicComponent):
-
     """Electricity meter class.
 
     It calculates the electricity production and consumption dynamically for all components.
@@ -65,7 +64,7 @@ class ElectricityMeter(DynamicComponent):
         self,
         my_simulation_parameters: SimulationParameters,
         config: ElectricityMeterConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(display_in_webtool=True),
     ):
         """Initialize the component."""
         self.grid_energy_balancer_config = config
@@ -105,6 +104,7 @@ class ElectricityMeter(DynamicComponent):
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityToGrid} will follow.",
+            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
         self.electricity_from_grid: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -113,6 +113,7 @@ class ElectricityMeter(DynamicComponent):
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityFromGrid} will follow.",
+            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
 
         self.electricity_consumption_channel: cp.ComponentOutput = self.add_output(
@@ -122,6 +123,7 @@ class ElectricityMeter(DynamicComponent):
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityConsumption} will follow.",
+            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
 
         self.electricity_production_channel: cp.ComponentOutput = self.add_output(
@@ -131,6 +133,7 @@ class ElectricityMeter(DynamicComponent):
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityProduction} will follow.",
+            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
 
         self.cumulative_electricity_consumption_channel: cp.ComponentOutput = self.add_output(
@@ -140,6 +143,7 @@ class ElectricityMeter(DynamicComponent):
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.CumulativeConsumption} will follow.",
+            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
 
         self.cumulative_electricity_production_channel: cp.ComponentOutput = self.add_output(
@@ -149,6 +153,7 @@ class ElectricityMeter(DynamicComponent):
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.CumulativeProduction} will follow.",
+            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
         self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())
         self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
@@ -393,7 +398,6 @@ class ElectricityMeter(DynamicComponent):
 
 @dataclass
 class ElectricityMeterState:
-
     """ElectricityMeterState class."""
 
     cumulative_production_in_watt_hour: float

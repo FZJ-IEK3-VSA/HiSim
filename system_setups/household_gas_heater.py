@@ -13,6 +13,7 @@ from utspclient.helpers.lpgdata import (
 )
 from hisim.system_setup_configuration import SystemSetupConfigBase
 from hisim.simulator import SimulationParameters
+from hisim.component import DisplayConfig
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import generic_gas_heater
@@ -40,7 +41,6 @@ __status__ = "development"
 
 @dataclass
 class HouseholdGasHeaterOptions:
-
     """Set options for the system setup."""
 
     photovoltaic: bool = False
@@ -50,7 +50,6 @@ class HouseholdGasHeaterOptions:
 @dataclass_json
 @dataclass
 class HouseholdGasHeaterConfig(SystemSetupConfigBase):
-
     """Configuration for household with gas heater."""
 
     building_type: str
@@ -234,18 +233,21 @@ def setup_function(
     my_weather = weather.Weather(
         config=weather.WeatherConfig.get_default(weather.LocationEnum.AACHEN),
         my_simulation_parameters=my_simulation_parameters,
+        my_display_config=DisplayConfig.show("Wetter"),
     )
 
     # Photovoltaic
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_config.pv_config,
         my_simulation_parameters=my_simulation_parameters,
+        my_display_config=DisplayConfig.show("Photovoltaik"),
     )
 
     # Building
     my_building = building.Building(
         config=my_config.building_config,
         my_simulation_parameters=my_simulation_parameters,
+        my_display_config=DisplayConfig.show("Gebäude"),
     )
 
     # Gas Heater Controller
@@ -258,6 +260,7 @@ def setup_function(
     my_gas_heater = generic_gas_heater.GasHeater(
         config=my_config.gas_heater_config,
         my_simulation_parameters=my_simulation_parameters,
+        my_display_config=DisplayConfig.show("Gastherme"),
     )
 
     # BHeat Distribution System
@@ -269,6 +272,7 @@ def setup_function(
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_config.simple_hot_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
+        my_display_config=DisplayConfig.show("Wärmespeicher"),
     )
 
     # DHW
@@ -281,14 +285,18 @@ def setup_function(
         - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
     )
     my_domestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
-        my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_dhw_storage_config,
+        my_display_config=DisplayConfig.show("Warmwasserspeicher"),
     )
     my_domestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
         my_simulation_parameters=my_simulation_parameters,
         config=my_dhw_heatpump_controller_config,
     )
     my_domestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
-        config=my_dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
+        config=my_dhw_heatpump_config,
+        my_simulation_parameters=my_simulation_parameters,
+        my_display_config=DisplayConfig.show("Warmwasser-Wärmepumpe"),
     )
 
     if my_config.car_config:
@@ -303,13 +311,14 @@ def setup_function(
 
         # create all cars
         my_cars: List[generic_car.Car] = []
-        for car in names:
+        for idx, car in enumerate(names):
             my_car_config.name = car
             my_cars.append(
                 generic_car.Car(
                     my_simulation_parameters=my_simulation_parameters,
                     config=my_car_config,
                     occupancy_config=my_occupancy_config,
+                    my_display_config=DisplayConfig.show(f"Diesel-PKW {idx}"),
                 )
             )
     else:
@@ -319,6 +328,7 @@ def setup_function(
     my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,
         config=my_config.electricity_meter_config,
+        my_display_config=DisplayConfig.show("Stromzähler"),
     )
 
     # =================================================================================================================================

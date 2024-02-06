@@ -2,24 +2,25 @@
 
 Evaluates diesel or electricity consumption based on driven kilometers and processes Car Location for charging stations.
 """
+
 # clean
 
-# -*- coding: utf-8 -*-
-from typing import List, Any, Tuple
-from os import listdir, path
-from dataclasses import dataclass
 import datetime as dt
 import json
-from dataclasses_json import dataclass_json
+from dataclasses import dataclass
+from os import listdir, path
+# -*- coding: utf-8 -*-
+from typing import List, Any, Tuple
 
 import pandas as pd
+from dataclasses_json import dataclass_json
 
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim.simulationparameters import SimulationParameters
-from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim import utils
 from hisim.component import OpexCostDataClass
+from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
+from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -34,7 +35,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class CarConfig(cp.ConfigBase):
-
     """Definition of configuration of Car."""
 
     #: name of the car
@@ -108,7 +108,6 @@ def most_frequent(input_list: List) -> Any:
 
 
 class Car(cp.Component):
-
     """Simulates car with constant consumption. Car usage (driven kilometers and state) orginate from LPG."""
 
     # Outputs
@@ -126,7 +125,7 @@ class Car(cp.Component):
         my_simulation_parameters: SimulationParameters,
         config: CarConfig,
         occupancy_config: Any,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(display_in_webtool=True),
     ) -> None:
         """Initializes Car."""
         super().__init__(
@@ -143,7 +142,7 @@ class Car(cp.Component):
                 field_name=self.ElectricityOutput,
                 load_type=lt.LoadTypes.ELECTRICITY,
                 unit=lt.Units.WATT,
-                postprocessing_flag=[lt.ComponentType.CAR],
+                postprocessing_flag=[lt.ComponentType.CAR, lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
                 output_description="Electricity Consumption of the car while driving. [W]",
             )
             self.car_location_output: cp.ComponentOutput = self.add_output(
@@ -163,6 +162,7 @@ class Car(cp.Component):
                     lt.InandOutputType.FUEL_CONSUMPTION,
                     lt.LoadTypes.DIESEL,
                     lt.ComponentType.CAR,
+                    lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
                 ],
                 output_description="Diesel Consumption of the car while driving [l].",
             )

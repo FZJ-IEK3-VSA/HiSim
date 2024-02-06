@@ -218,11 +218,16 @@ class StorageState:
             )
 
     def return_available_energy(self) -> float:
-        """Returns available energy in (J).
+        """Returns available energy in (kJ).
 
         For heating up the building in winter. Here 30°C is set as the lower limit for the temperature in the buffer storage in winter.
         """
-        return (self.temperature_in_kelvin - 273.15 - 25) * self.volume_in_l * 0.977 * 4.182 * 1e3
+        return (
+            (self.temperature_in_kelvin - 273.15 - 25)
+            * self.volume_in_l
+            * 0.977
+            * 4.182
+        )
 
 
 # class HotWaterStorage(dycp.DynamicComponent):

@@ -162,7 +162,7 @@ def get_heat_pump_kpis(
     return number_of_cycles, spf
 
 
-def get_electricity_to_and_from_grid_from_electricty_meter(
+def get_electricity_to_and_from_grid_from_electricity_meter(
     wrapped_components: List[ComponentWrapper],
 ) -> Tuple[float, float]:
     """Get the electricity injected into the grid or taken from grid measured by the electricity meter."""
@@ -171,10 +171,8 @@ def get_electricity_to_and_from_grid_from_electricty_meter(
         if isinstance(wrapped_component.my_component, ElectricityMeter):
             total_energy_from_grid_in_kwh = wrapped_component.my_component.config.total_energy_from_grid_in_kwh
             total_energy_to_grid_in_kwh = wrapped_component.my_component.config.total_energy_to_grid_in_kwh
-
-            break
-
-    return total_energy_to_grid_in_kwh, total_energy_from_grid_in_kwh
+            return total_energy_to_grid_in_kwh, total_energy_from_grid_in_kwh
+    return 0, 0
 
 
 def read_in_fuel_costs() -> pd.DataFrame:
@@ -513,7 +511,7 @@ def compute_kpis(
     (
         total_energy_to_grid_in_kwh,
         total_energy_from_grid_in_kwh,
-    ) = get_electricity_to_and_from_grid_from_electricty_meter(wrapped_components=components)
+    ) = get_electricity_to_and_from_grid_from_electricity_meter(wrapped_components=components)
 
     # initialize table for report
     table: List = []

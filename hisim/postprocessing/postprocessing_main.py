@@ -6,6 +6,7 @@ import copy
 from typing import Any, Optional, List, Dict, Tuple
 from timeit import default_timer as timer
 import string
+import json
 import pandas as pd
 
 from hisim.modular_household.interface_configs.kpi_config import KPIConfig
@@ -76,6 +77,7 @@ class PostProcessor:
                 PostProcessingOptions.COMPUTE_CAPEX,
                 PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL,
                 PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON,
+                PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON,
             }
             # Of all specified options, select those that are allowed
             valid_options = list(set(ppdt.post_processing_options) & allowed_options_for_docker)
@@ -201,6 +203,7 @@ class PostProcessor:
             end = timer()
             duration = end - start
             log.information("Computing and writing KPIs to report took " + f"{duration:1.2f}s.")
+
         if PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE in ppdt.post_processing_options:
             building_data = pd.DataFrame()
             occupancy_config = None
@@ -242,7 +245,11 @@ class PostProcessor:
         # Write Outputs to specific format for scenario evaluation (idea for format from pyam package)
         if PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION in ppdt.post_processing_options:
             log.information("Prepare results for scenario evaluation.")
+            start = timer()
             self.prepare_results_for_scenario_evaluation(ppdt)
+            end = timer()
+            duration = end - start
+            log.information("Preparing results for scenario evaluation took " + f"{duration:1.2f}s.")
 
         # Open file explorer
         if PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER in ppdt.post_processing_options:
@@ -261,6 +268,10 @@ class PostProcessor:
         if PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER in ppdt.post_processing_options:
             log.information("Writing KPIs to JSON file for building sizer.")
             self.write_kpis_to_json_for_building_sizer(ppdt)
+
+        if PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON in ppdt.post_processing_options:
+            log.information("Write all KPIs to json file.")
+            self.write_all_kpis_to_json_file(ppdt)
 
         log.information("Finished main post processing function.")
 
@@ -958,9 +969,27 @@ class PostProcessor:
 
         else:
             raise ValueError(
-                "Some PostProcessingOptions are not set. Please check if"
-                "PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT, PostProcessingOptions.COMPUTE_CAPEX and"
-                "PostProcessingOptions.COMPUTE_OPEX are set in your system setup."
+                "Some PostProcessingOptions are not set. Please check if "
+                f"{PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT}, {PostProcessingOptions.COMPUTE_CAPEX} and "
+                f"{PostProcessingOptions.COMPUTE_OPEX} are set in your system setup."
+            )
+
+    def write_all_kpis_to_json_file(self, ppdt: PostProcessingDataTransfer) -> None:
+        """Write all KPIs o json file."""
+
+        # Check if important options were set
+        if PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT in ppdt.post_processing_options:
+            # Get KPIs from ppdt
+            kpi_collection_dict = ppdt.kpi_collection_dict
+
+            pathname = os.path.join(ppdt.simulation_parameters.result_directory, "all_kpis.json")
+            with open(pathname, "w", encoding="utf-8") as outfile:
+                json.dump(kpi_collection_dict, outfile, indent=4)
+
+        else:
+            raise ValueError(
+                "Some PostProcessingOptions are not set. Please check if "
+                f"{PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT} is set in your system setup."
             )
 
     def write_kpis_to_json_for_building_sizer(self, ppdt: PostProcessingDataTransfer) -> None:
@@ -997,8 +1026,8 @@ class PostProcessor:
 
         else:
             raise ValueError(
-                "Some PostProcessingOptions are not set. Please check if"
-                "PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT is set in your system setup."
+                "Some PostProcessingOptions are not set. Please check if "
+                f"{PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT} is set in your system setup."
             )
 
     def get_dict_from_opex_capex_lists(self, value_list: List[str]) -> Dict[str, Any]:

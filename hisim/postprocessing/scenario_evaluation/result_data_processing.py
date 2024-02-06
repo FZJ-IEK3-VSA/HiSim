@@ -4,7 +4,6 @@
 import glob
 import os
 from typing import Dict, Any, Tuple, Optional, List
-import copy
 import pandas as pd
 
 from hisim.postprocessing.scenario_evaluation.result_data_collection import (
@@ -41,12 +40,12 @@ class ScenarioDataProcessing:
         csv_data_file_path = os.path.join(data_folder_path, "**", f"*{kind_of_data_set}*.csv")
         list_of_possible_data_csv_files = glob.glob(csv_data_file_path)
         file: str = ""
-        if list_of_possible_data_csv_files == []:
+        if not list_of_possible_data_csv_files:
             raise FileExistsError(f"No csv file could be found in this path {csv_data_file_path}.")
-        elif len(list_of_possible_data_csv_files) > 1:
+        if len(list_of_possible_data_csv_files) > 1:
             raise ValueError(f"The csv file path {csv_data_file_path} should not contain more than one csv file.")
-        else:
-            file = list_of_possible_data_csv_files[0]
+
+        file = list_of_possible_data_csv_files[0]
 
         file_df = pd.read_csv(filepath_or_buffer=file)
 
@@ -152,7 +151,7 @@ class ScenarioDataProcessing:
         """Check for one scenario."""
 
         aggregated_scenario_dict: Dict = {key: [] for key in list_of_scenarios_to_check}
-        print("aggregated scenario dict", aggregated_scenario_dict)
+
         for scenario_to_check in list_of_scenarios_to_check:
             print("scenario to check", scenario_to_check)
             for value in dataframe[column_name_to_check].values:
@@ -258,25 +257,33 @@ class FilterClass:
         kpi_data = [
             "Production",
             "Consumption",
+            "Injection",
             "Self-consumption",
             "Self-consumption rate",
+            "Self-consumption rate according to mydualsun",
             "Autarky rate",
+            "Total energy from grid",
+            "Total energy to grid",
+            "Relative electricity demand from grid",
             "Investment costs for equipment per simulated period",
             "CO2 footprint for equipment per simulated period",
             "System operational costs for simulated period",
             "System operational emissions for simulated period",
             "Total costs for simulated period",
-            "Total emissions for simulated period",
-            "Temperature deviation of building indoor air temperature being below set temperature 19.0 °C",
+            "Total CO2 emissions for simulated period",
+            "Temperature deviation of building indoor air temperature being below set temperature 19.0 Celsius",
             "Minimum building indoor air temperature reached",
-            "Temperature deviation of building indoor air temperature being above set temperature 24.0 °C",
+            "Temperature deviation of building indoor air temperature being above set temperature 24.0 Celsius",
             "Maximum building indoor air temperature reached",
             "Building heating load",
             "Specific heating load",
+            "Specific heating demand according to TABULA",
+            "Thermal output energy of heat distribution system",
             "Number of heat pump cycles",
             "Seasonal performance factor of heat pump",
-            "Total energy from electricity grid",
-            "Total energy to electricity grid",
+            "Thermal output energy of heat pump",
+            "Specific thermal output energy of heat pump",
+            "Electrical input energy of heat pump"
         ]
 
         electricity_data = [

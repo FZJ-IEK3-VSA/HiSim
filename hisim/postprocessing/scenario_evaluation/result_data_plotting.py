@@ -37,9 +37,6 @@ class ScenarioChartGeneration:
         time_resolution_of_data_set: Any,
         variables_to_check: Optional[List[str]] = None,
         dict_of_scenarios_to_check: Optional[Dict[str, List[str]]] = None,
-        folder_from_which_data_will_be_collected: str = os.path.join(
-            os.pardir, os.pardir, os.pardir, "system_setups", "results"
-        ),
     ) -> None:
         """Initialize the class."""
 
@@ -81,16 +78,22 @@ class ScenarioChartGeneration:
             raise ValueError("DataProcessingMode not known.")
 
         self.data_folder_path = os.path.join(
-            folder_from_which_data_will_be_collected,
+            os.getcwd(),
             os.pardir,
+            os.pardir,
+            os.pardir,
+            "system_setups",
             "results_for_scenario_comparison",
             "data",
             data_path_strip,
         )
 
         self.result_folder = os.path.join(
-            folder_from_which_data_will_be_collected,
+            os.getcwd(),
             os.pardir,
+            os.pardir,
+            os.pardir,
+            "system_setups",
             "results_for_scenario_comparison",
             "results",
             result_path_strip,

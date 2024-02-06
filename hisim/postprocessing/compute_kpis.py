@@ -63,6 +63,12 @@ class KpiGenerator(JSONWizard):
             total_electricity_consumption_in_kilowatt_hour,
             total_electricity_production_in_kilowatt_hour,
         ) = self.compute_electricity_consumption_and_production(result_dataframe=self.filtered_result_dataframe)
+        # get ratio between production and consumption
+        self.compute_ratio_between_production_and_consumption(
+            total_electricity_production_in_kwh=total_electricity_production_in_kilowatt_hour,
+            total_electricity_consumption_in_kwh=total_electricity_consumption_in_kilowatt_hour
+        )
+
         # get self-consumption, autarkie, injection, battery losses
         (
             grid_injection_in_kilowatt_hour,
@@ -366,6 +372,21 @@ class KpiGenerator(JSONWizard):
         # update kpi collection dict
         self.kpi_collection_dict.update(
             {relative_electricity_demand_entry.name: relative_electricity_demand_entry.to_dict()}
+        )
+
+    def compute_ratio_between_production_and_consumption(self, total_electricity_production_in_kwh: float, total_electricity_consumption_in_kwh: float) -> None:
+        """Compute the ration of electricity production and consumption."""
+        ratio_in_percent = total_electricity_production_in_kwh / total_electricity_consumption_in_kwh * 100
+        # make kpi entry
+        ratio_in_percent_entry = KpiEntry(
+            name="Ratio between energy production and consumption",
+            unit="%",
+            value=ratio_in_percent,
+        )
+
+        # update kpi collection dict
+        self.kpi_collection_dict.update(
+            {ratio_in_percent_entry.name: ratio_in_percent_entry.to_dict()}
         )
 
     def compute_self_consumption_rate_according_to_mydualsun(

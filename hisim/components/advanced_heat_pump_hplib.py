@@ -3,16 +3,15 @@
 See library on https://github.com/FZJ-IEK3-VSA/hplib/tree/main/hplib
 """
 
+import hashlib
 # clean
 import importlib
-from typing import Any, List, Optional, Tuple, Dict
-import hashlib
 from dataclasses import dataclass
-from dataclasses_json import dataclass_json
-from dataclass_wizard import JSONWizard
+from typing import Any, List, Optional, Tuple, Dict
 
 import pandas as pd
-
+from dataclass_wizard import JSONWizard
+from dataclasses_json import dataclass_json
 from hplib import hplib as hpl
 
 # Import modules from HiSim
@@ -27,10 +26,9 @@ from hisim.component import (
     DisplayConfig,
 )
 from hisim.components import weather, simple_hot_water_storage, heat_distribution_system
+from hisim.components.heat_distribution_system import HeatDistributionSystemType
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, OutputPostprocessingRules
 from hisim.simulationparameters import SimulationParameters
-from hisim.components.heat_distribution_system import HeatDistributionSystemType
-
 
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -45,7 +43,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class HeatPumpHplibConfig(ConfigBase):
-
     """HeatPumpHPLibConfig."""
 
     @classmethod
@@ -134,7 +131,6 @@ class HeatPumpHplibConfig(ConfigBase):
 
 
 class HeatPumpHplib(Component):
-
     """Simulate the heat pump.
 
     Outputs are heat pump efficiency (cop) as well as electrical (p_el) and
@@ -163,7 +159,7 @@ class HeatPumpHplib(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: HeatPumpHplibConfig,
-        my_display_config: DisplayConfig = DisplayConfig(display_in_webtool=True),
+        my_display_config: DisplayConfig = DisplayConfig(),
     ):
         """Loads the parameters of the specified heat pump.
 
@@ -203,8 +199,6 @@ class HeatPumpHplib(Component):
         self.minimum_running_time_in_seconds = config.minimum_running_time_in_seconds
 
         self.minimum_idle_time_in_seconds = config.minimum_idle_time_in_seconds
-
-        postprocessing_flag = [InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
 
         # Component has states
         self.state = HeatPumpState(time_on=0, time_off=0, time_on_cooling=0, on_off_previous=0)
@@ -253,7 +247,10 @@ class HeatPumpHplib(Component):
             load_type=LoadTypes.HEATING,
             unit=Units.WATT,
             output_description=("Thermal output power in Watt"),
-            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
+            postprocessing_flag=[
+                InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+            ],
         )
 
         self.p_el: ComponentOutput = self.add_output(
@@ -261,7 +258,10 @@ class HeatPumpHplib(Component):
             field_name=self.ElectricalInputPower,
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
-            postprocessing_flag=postprocessing_flag,
+            postprocessing_flag=[
+                InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+            ],
             output_description="Electricity input power in Watt",
         )
 
@@ -271,6 +271,9 @@ class HeatPumpHplib(Component):
             load_type=LoadTypes.ANY,
             unit=Units.ANY,
             output_description="COP",
+            postprocessing_flag=[
+                OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+            ],
         )
         self.eer: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -278,6 +281,9 @@ class HeatPumpHplib(Component):
             load_type=LoadTypes.ANY,
             unit=Units.ANY,
             output_description="EER",
+            postprocessing_flag=[
+                OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+            ],
         )
         self.t_out: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -285,6 +291,9 @@ class HeatPumpHplib(Component):
             load_type=LoadTypes.HEATING,
             unit=Units.CELSIUS,
             output_description="Temperature Output in °C",
+            postprocessing_flag=[
+                OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+            ],
         )
 
         self.m_dot: ComponentOutput = self.add_output(
@@ -301,6 +310,9 @@ class HeatPumpHplib(Component):
             load_type=LoadTypes.TIME,
             unit=Units.SECONDS,
             output_description="Time turned on",
+            postprocessing_flag=[
+                OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+            ],
         )
 
         self.time_off: ComponentOutput = self.add_output(
@@ -579,7 +591,6 @@ class HeatPumpHplib(Component):
 
 @dataclass
 class HeatPumpState:
-
     """HeatPumpState class."""
 
     time_on: int = 0
@@ -599,7 +610,6 @@ class HeatPumpState:
 @dataclass_json
 @dataclass
 class HeatPumpHplibControllerL1Config(ConfigBase):
-
     """HeatPump Controller Config Class."""
 
     @classmethod
@@ -630,7 +640,6 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
 
 
 class HeatPumpHplibController(Component):
-
     """Heat Pump Controller.
 
     It takes data from other
@@ -1040,7 +1049,6 @@ class HeatPumpHplibController(Component):
 
 @dataclass
 class CalculationRequest(JSONWizard):
-
     """Class for caching hplib parameters so that hplib.simulate does not need to run so often."""
 
     t_in_primary: float

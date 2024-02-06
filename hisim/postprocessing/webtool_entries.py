@@ -6,14 +6,13 @@ from typing import Dict, List, Optional
 import pandas as pd
 from dataclass_wizard import JSONWizard
 
-from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.component import ComponentOutput
 from hisim.loadtypes import OutputPostprocessingRules
+from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 
 
 @dataclass
 class ResultEntry(JSONWizard):
-
     """Class for storing one result entry for hisim webtool."""
 
     name: str
@@ -24,7 +23,6 @@ class ResultEntry(JSONWizard):
 
 @dataclass
 class WebtoolDict(JSONWizard):
-
     """Class for storing results for hisim webtool."""
 
     kpis: Dict
@@ -56,7 +54,6 @@ class WebtoolDict(JSONWizard):
                 self.components[this_name] = {
                     "prettyName": this_pretty_name,
                     "class": this_component_class,
-                    "sizing": {},
                     "technical": {},
                     "economical": {},
                 }
@@ -105,9 +102,9 @@ class WebtoolDict(JSONWizard):
         # Get bools that tells if the components should be displayed in webtool
         component_display_in_webtool_dict: Dict[str, bool] = {}
         for component in post_processing_data_transfer.wrapped_components:
-            component_display_in_webtool_dict[
-                component.my_component.component_name
-            ] = component.my_component.my_display_config.display_in_webtool
+            component_display_in_webtool_dict[component.my_component.component_name] = (
+                component.my_component.my_display_config.display_in_webtool
+            )
 
         # Read data from PostProcessingDataTransfer and save to results
         data: pd.DataFrame = post_processing_data_transfer.results_cumulative

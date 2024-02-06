@@ -257,6 +257,7 @@ class FilterClass:
         kpi_data = [
             "Production",
             "Consumption",
+            "Ratio between energy production and consumption",
             "Injection",
             "Self-consumption",
             "Self-consumption rate",

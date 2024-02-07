@@ -67,7 +67,7 @@ def main():
 
     filterclass = result_data_processing.FilterClass()
     # list_with_variables_to_check = (
-    #     filterclass.variables_for_debugging_purposes + filterclass.heating_demand 
+    #     filterclass.variables_for_debugging_purposes + filterclass.heating_demand
     # )
     list_with_variables_to_check = filterclass.kpi_data + filterclass.heating_demand
 

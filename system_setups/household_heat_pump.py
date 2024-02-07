@@ -13,6 +13,7 @@ from utspclient.helpers.lpgdata import (
 )
 from hisim.system_setup_configuration import SystemSetupConfigBase
 from hisim.simulator import SimulationParameters
+from hisim.component import DisplayConfig
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import advanced_heat_pump_hplib
@@ -39,7 +40,6 @@ __status__ = "development"
 
 @dataclass
 class HouseholdHeatPumpOptions:
-
     """Set options for the system setup."""
 
     photovoltaic: bool = False
@@ -49,7 +49,6 @@ class HouseholdHeatPumpOptions:
 @dataclass_json
 @dataclass
 class HouseholdHeatPumpConfig(SystemSetupConfigBase):
-
     """Configuration for household with advanced heat pump."""
 
     building_type: str
@@ -237,18 +236,21 @@ def setup_function(
     my_weather = weather.Weather(
         config=weather.WeatherConfig.get_default(weather.LocationEnum.AACHEN),
         my_simulation_parameters=my_simulation_parameters,
+        my_display_config=DisplayConfig.show("Wetter"),
     )
 
     # Photovoltaic
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_config.pv_config,
         my_simulation_parameters=my_simulation_parameters,
+        my_display_config=DisplayConfig.show("Photovoltaik"),
     )
 
     # Building
     my_building = building.Building(
         config=my_config.building_config,
         my_simulation_parameters=my_simulation_parameters,
+        my_display_config=DisplayConfig.show("Gebäude"),
     )
 
     # Advanced Heat Pump Controller
@@ -261,6 +263,7 @@ def setup_function(
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
         config=my_config.hp_config,
         my_simulation_parameters=my_simulation_parameters,
+        my_display_config=DisplayConfig.show("Wärmepumpe"),
     )
 
     # Heat Distribution System
@@ -272,6 +275,7 @@ def setup_function(
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_config.simple_hot_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
+        my_display_config=DisplayConfig.show("Wärmespeicher"),
     )
 
     # DHW
@@ -284,14 +288,18 @@ def setup_function(
         - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
     )
     my_domestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
-        my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_dhw_storage_config,
+        my_display_config=DisplayConfig.show("Warmwasserspeicher"),
     )
     my_domestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
         my_simulation_parameters=my_simulation_parameters,
         config=my_dhw_heatpump_controller_config,
     )
     my_domestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
-        config=my_dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
+        config=my_dhw_heatpump_config,
+        my_simulation_parameters=my_simulation_parameters,
+        my_display_config=DisplayConfig.show("Warmwasser-Wärmepumpe"),
     )
 
     if my_config.car_config:
@@ -306,13 +314,14 @@ def setup_function(
 
         # create all cars
         my_cars: List[generic_car.Car] = []
-        for car in names:
+        for idx, car in enumerate(names):
             my_car_config.name = car
             my_cars.append(
                 generic_car.Car(
                     my_simulation_parameters=my_simulation_parameters,
                     config=my_car_config,
                     occupancy_config=my_occupancy_config,
+                    my_display_config=DisplayConfig.show(f"Diesel-PKW {idx}"),
                 )
             )
     else:
@@ -322,6 +331,7 @@ def setup_function(
     my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,
         config=my_config.electricity_meter_config,
+        my_display_config=DisplayConfig.show("Stromzähler"),
     )
 
     # =================================================================================================================================

@@ -3,20 +3,20 @@
 # clean
 # Owned
 import importlib
-from typing import List, Any, Tuple
 from dataclasses import dataclass
+from typing import List, Any, Tuple
+
+import numpy as np
+import pandas as pd
 from dataclasses_json import dataclass_json
 
-import pandas as pd
-import numpy as np
 import hisim.component as cp
-from hisim.component import SingleTimeStepValues, ComponentInput, ComponentOutput, OpexCostDataClass, DisplayConfig
-
-from hisim.simulationparameters import SimulationParameters
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
-from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
 from hisim import utils
+from hisim.component import SingleTimeStepValues, ComponentInput, ComponentOutput, OpexCostDataClass, DisplayConfig
+from hisim.components.configuration import PhysicsConfig
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Katharina Rieck, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -31,7 +31,6 @@ __status__ = "dev"
 @dataclass_json
 @dataclass
 class SimpleHotWaterStorageConfig(cp.ConfigBase):
-
     """Configuration of the SimpleHotWaterStorage class."""
 
     @classmethod
@@ -130,7 +129,6 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
 
 @dataclass
 class SimpleHotWaterStorageState:
-
     """SimpleHotWaterStorageState class."""
 
     mean_water_temperature_in_celsius: float = 25.0
@@ -147,7 +145,6 @@ class SimpleHotWaterStorageState:
 
 
 class SimpleHotWaterStorage(cp.Component):
-
     """SimpleHotWaterStorage class."""
 
     # Input
@@ -267,7 +264,7 @@ class SimpleHotWaterStorage(cp.Component):
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.WaterMeanTemperatureInStorage} will follow.",
         )
-        #########################
+
         self.thermal_energy_in_storage_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.ThermalEnergyInStorage,
@@ -281,6 +278,7 @@ class SimpleHotWaterStorage(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.ThermalEnergyFromHeatGenerator} will follow.",
+            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
         self.thermal_energy_input_heat_distribution_system_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -288,6 +286,7 @@ class SimpleHotWaterStorage(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.ThermalEnergyFromHeatDistribution} will follow.",
+            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
 
         self.thermal_energy_increase_in_storage_channel: ComponentOutput = self.add_output(
@@ -850,7 +849,6 @@ class SimpleHotWaterStorage(cp.Component):
 @dataclass_json
 @dataclass
 class SimpleHotWaterStorageControllerConfig(cp.ConfigBase):
-
     """Configuration of the SimpleHotWaterStorageController class."""
 
     @classmethod
@@ -872,7 +870,6 @@ class SimpleHotWaterStorageControllerConfig(cp.ConfigBase):
 
 
 class SimpleHotWaterStorageController(cp.Component):
-
     """SimpleHotWaterStorageController Class."""
 
     # Inputs

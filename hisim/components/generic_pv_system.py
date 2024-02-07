@@ -4,11 +4,11 @@
 
 # Generic/Built-in
 import datetime
+import enum
 import math
 import os
 from dataclasses import dataclass
 from typing import Any, List, Tuple, Optional
-import enum
 
 import numpy as np
 import pandas as pd
@@ -22,8 +22,8 @@ from hisim import log
 from hisim import utils
 from hisim.component import ConfigBase, OpexCostDataClass
 from hisim.components.weather import Weather
-from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -49,7 +49,6 @@ https://github.com/FZJ-IEK3-VSA/tsib
 
 
 class PVLibModuleAndInverterEnum(enum.Enum):
-
     """Class to determine what pvlib database for phtotovoltaic modules and inverters should be used.
 
     https://pvlib-python.readthedocs.io/en/v0.9.0/generated/pvlib.pvsystem.retrieve_sam.html.
@@ -65,7 +64,6 @@ class PVLibModuleAndInverterEnum(enum.Enum):
 @dataclass_json
 @dataclass
 class PVSystemConfig(ConfigBase):
-
     """PVSystemConfig class."""
 
     @classmethod
@@ -211,7 +209,6 @@ class PVSystemConfig(ConfigBase):
 
 
 class PVSystem(cp.Component):
-
     """Simulates PV Output based on weather data and peak power.
 
     Parameters
@@ -261,7 +258,7 @@ class PVSystem(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: PVSystemConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(display_in_webtool=True),
     ) -> None:
         """Initialize the class."""
         self.my_simulation_parameters = my_simulation_parameters
@@ -350,7 +347,10 @@ class PVSystem(cp.Component):
             field_name=self.ElectricityOutput,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
-            postprocessing_flag=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
+            postprocessing_flag=[
+                lt.InandOutputType.ELECTRICITY_PRODUCTION,
+                lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+            ],
             output_description=f"here a description for PV {self.ElectricityOutput} will follow.",
         )
 

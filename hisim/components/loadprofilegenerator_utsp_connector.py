@@ -664,16 +664,7 @@ class UtspLpgConnector(cp.Component):
 
                     self.max_hot_water_demand = max(self.water_consumption)
 
-                    # when using the predefined household there are no saved_files
-                    self.cache_results(
-                        cache_filepath=cache_filepath,
-                        number_of_residents=self.number_of_residents,
-                        heating_by_residents=self.heating_by_residents,
-                        water_consumption=self.water_consumption,
-                        heating_by_devices=self.heating_by_devices,
-                        electricity_consumption=self.electricity_consumption,
-                        saved_files=[],
-                    )
+                    # no caching if predefined profile is used
 
                     if self.utsp_config.predictive:
                         SingletonSimRepository().set_entry(

@@ -4,7 +4,6 @@
 import glob
 import os
 from typing import Dict, Any, Tuple, Optional, List
-import copy
 import pandas as pd
 
 from hisim.postprocessing.scenario_evaluation.result_data_collection import (
@@ -38,21 +37,22 @@ class ScenarioDataProcessing:
             raise ValueError("This kind of data was not found in the datacollectorenum class.")
         log.information(f"Read csv files and create one big dataframe for {kind_of_data_set} data.")
 
-        for file in glob.glob(os.path.join(data_folder_path, "**", f"*{kind_of_data_set}*.csv")):
-            file_df = pd.read_csv(filepath_or_buffer=file)
+        csv_data_file_path = os.path.join(data_folder_path, "**", f"*{kind_of_data_set}*.csv")
+        list_of_possible_data_csv_files = glob.glob(csv_data_file_path)
+        file: str = ""
+        if not list_of_possible_data_csv_files:
+            raise FileExistsError(f"No csv file could be found in this path {csv_data_file_path}.")
+        if len(list_of_possible_data_csv_files) > 1:
+            raise ValueError(f"The csv file path {csv_data_file_path} should not contain more than one csv file.")
+
+        file = list_of_possible_data_csv_files[0]
+
+        file_df = pd.read_csv(filepath_or_buffer=file)
 
         # if scenario values are no strings, transform them
         file_df["scenario"] = file_df["scenario"].transform(str)
         key_for_scenario_one = ""
         key_for_current_scenario = ""
-
-        # # make rel electricity calculation before sorting and renaming
-
-        # if "ElectricityMeter|Electricity|ElectricityFromGrid" in variables_to_check:
-        #     print("relative electricity demand will be calculated.")
-
-        #     file_df = self.calculate_relative_electricity_demand(dataframe=file_df)
-        #     variables_to_check.append("Relative Electricity Demand")
 
         if dict_of_scenarios_to_check is not None and dict_of_scenarios_to_check != {}:
             (
@@ -151,7 +151,7 @@ class ScenarioDataProcessing:
         """Check for one scenario."""
 
         aggregated_scenario_dict: Dict = {key: [] for key in list_of_scenarios_to_check}
-        print("aggregated scenario dict", aggregated_scenario_dict)
+
         for scenario_to_check in list_of_scenarios_to_check:
             print("scenario to check", scenario_to_check)
             for value in dataframe[column_name_to_check].values:
@@ -227,98 +227,6 @@ class ScenarioDataProcessing:
                 key_for_current_scenario = ""
         return concat_df, key_for_scenario_one, key_for_current_scenario
 
-    @staticmethod
-    def calculate_relative_electricity_demand(dataframe: pd.DataFrame) -> pd.DataFrame:
-        """Calculate relative electricity demand."""
-
-        # look for ElectricityMeter|Electricity|ElectrcityFromGrid output
-        if "ElectricityMeter|Electricity|ElectricityFromGrid" not in dataframe.variable.values:
-            raise ValueError("ElectricityMeter|Electricity|ElectricityFromGrid was not found in variables.")
-
-        # filter again just to be shure
-        filtered_data = dataframe.loc[dataframe.variable == "ElectricityMeter|Electricity|ElectricityFromGrid"]
-
-        if "share_of_maximum_pv_power" not in filtered_data.columns:
-            raise ValueError("share_of_maximum_pv_power was not found in dataframe columns")
-        # sort df accrofing to share of pv
-        filtered_data = filtered_data.sort_values("share_of_maximum_pv_power")
-
-        # iterate over all scenarios
-        for scenario in list(set(filtered_data.scenario.values)):
-            if "share_of_maximum_pv_power" not in scenario:
-                df_for_one_scenario = filtered_data.loc[filtered_data.scenario == scenario]
-
-                df_for_one_scenario_and_for_share_zero = df_for_one_scenario.loc[
-                    df_for_one_scenario.share_of_maximum_pv_power == 0
-                ]
-
-                reference_value_for_electricity_demand = df_for_one_scenario_and_for_share_zero.value.values
-                relative_electricity_demand = [0] * len(reference_value_for_electricity_demand)
-
-                # get reference value (when share of pv power is zero)
-                for share_of_maximum_pv_power in list(set(df_for_one_scenario.share_of_maximum_pv_power.values)):
-                    if share_of_maximum_pv_power != 0:
-                        df_for_one_scenario_and_for_one_share = df_for_one_scenario.loc[
-                            df_for_one_scenario.share_of_maximum_pv_power == share_of_maximum_pv_power
-                        ]
-
-                        value_for_electricity_demand = df_for_one_scenario_and_for_one_share.value.values
-
-                        # calculate reference electricity demand for each scenario and share of pv power
-                        relative_electricity_demand = (
-                            value_for_electricity_demand / reference_value_for_electricity_demand * 100
-                        )
-
-                        new_df_only_with_relative_electricity_demand = copy.deepcopy(
-                            df_for_one_scenario_and_for_one_share
-                        )
-                        new_df_only_with_relative_electricity_demand.loc[:, "variable"] = "Relative Electricity Demand"
-                        new_df_only_with_relative_electricity_demand.loc[:, "unit"] = "%"
-                        new_df_only_with_relative_electricity_demand.loc[:, "value"] = relative_electricity_demand
-
-                        del df_for_one_scenario_and_for_one_share
-
-                        dataframe = pd.concat([dataframe, new_df_only_with_relative_electricity_demand])
-                        del dataframe["Unnamed: 0"]
-                        del new_df_only_with_relative_electricity_demand
-
-            else:
-                df_for_one_scenario = filtered_data.loc[filtered_data.scenario == scenario]
-                share_of_maximum_pv_power = df_for_one_scenario["share_of_maximum_pv_power"].values[0]
-
-                if share_of_maximum_pv_power == 0:
-                    relative_electricity_demand = [0] * len(df_for_one_scenario)
-
-                else:
-                    value_for_electricity_demand = df_for_one_scenario.value.values
-                    df_for_one_scenario_and_for_share_zero = filtered_data.loc[
-                        filtered_data.share_of_maximum_pv_power == 0
-                    ]
-                    reference_value_for_electricity_demand = df_for_one_scenario_and_for_share_zero.value.values
-
-                    # calculate reference electricity demand for each scenario and share of pv power
-                    relative_electricity_demand = (
-                        1
-                        - (
-                            (reference_value_for_electricity_demand - value_for_electricity_demand)
-                            / reference_value_for_electricity_demand
-                        )
-                    ) * 100
-
-                new_df_only_with_relative_electricity_demand = copy.deepcopy(df_for_one_scenario)
-                new_df_only_with_relative_electricity_demand.loc[:, "variable"] = "Relative Electricity Demand"
-                new_df_only_with_relative_electricity_demand.loc[:, "unit"] = "%"
-                new_df_only_with_relative_electricity_demand.loc[:, "value"] = relative_electricity_demand
-
-                del df_for_one_scenario
-
-                dataframe = pd.concat([dataframe, new_df_only_with_relative_electricity_demand])
-
-                del dataframe["Unnamed: 0"]
-                del new_df_only_with_relative_electricity_demand
-
-        return dataframe
-
 
 class FilterClass:
 
@@ -349,25 +257,34 @@ class FilterClass:
         kpi_data = [
             "Production",
             "Consumption",
+            "Ratio between energy production and consumption",
+            "Injection",
             "Self-consumption",
             "Self-consumption rate",
+            "Self-consumption rate according to mydualsun",
             "Autarky rate",
+            "Total energy from grid",
+            "Total energy to grid",
+            "Relative electricity demand from grid",
             "Investment costs for equipment per simulated period",
             "CO2 footprint for equipment per simulated period",
             "System operational costs for simulated period",
             "System operational emissions for simulated period",
             "Total costs for simulated period",
-            "Total emissions for simulated period",
-            "Temperature deviation of building indoor air temperature being below set temperature 19.0 °C",
+            "Total CO2 emissions for simulated period",
+            "Temperature deviation of building indoor air temperature being below set temperature 19.0 Celsius",
             "Minimum building indoor air temperature reached",
-            "Temperature deviation of building indoor air temperature being above set temperature 24.0 °C",
+            "Temperature deviation of building indoor air temperature being above set temperature 24.0 Celsius",
             "Maximum building indoor air temperature reached",
             "Building heating load",
             "Specific heating load",
+            "Specific heating demand according to TABULA",
+            "Thermal output energy of heat distribution system",
             "Number of heat pump cycles",
             "Seasonal performance factor of heat pump",
-            "Total energy from electricity grid",
-            "Total energy to electricity grid",
+            "Thermal output energy of heat pump",
+            "Specific thermal output energy of heat pump",
+            "Electrical input energy of heat pump"
         ]
 
         electricity_data = [

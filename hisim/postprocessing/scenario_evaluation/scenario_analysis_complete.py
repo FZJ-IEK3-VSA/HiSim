@@ -39,7 +39,6 @@ class ScenarioAnalysis:
             data_processing_mode=data_processing_mode,
             variables_to_check=variables_to_check,
             dict_of_scenarios_to_check=dict_with_scenarios_to_check,
-            folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
         )
 
 
@@ -64,29 +63,29 @@ def main():
     )
     simulation_duration_to_check = str(365)
 
-    data_processing_mode = result_data_collection.ResultDataProcessingModeEnum.PROCESS_ALL_DATA
+    data_processing_mode = result_data_collection.ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
 
     filterclass = result_data_processing.FilterClass()
     # list_with_variables_to_check = (
-    #     filterclass.variables_for_debugging_purposes + filterclass.kpi_data
+    #     filterclass.variables_for_debugging_purposes + filterclass.heating_demand
     # )
-    list_with_variables_to_check = filterclass.electricity_data
+    list_with_variables_to_check = filterclass.kpi_data + filterclass.heating_demand
 
     # TODO: filter several scenario parameters (eg pv and building code together) not working yet, need to be fixed
     # dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share,"building_code": ["DE.N.SFH.05.Gen.ReEx.001.002"]}
     # dict_with_scenarios_to_check = {
     #     "building_code": [
-    #         "DE.N.SFH.",
-    #         "DE.N.TH.",
+    #         "DE.N.SFH",
+    #         "DE.N.TH",
     #         "DE.N.MFH",
     #         "DE.N.AB",
     #     ]
     # }
-    # dict_with_scenarios_to_check = {
-    #     "building_code": filterclass.building_age
-    # }
+    dict_with_scenarios_to_check = {
+        "building_code": filterclass.building_refurbishment_state
+    }
     # dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share}
-    dict_with_scenarios_to_check = None
+    # dict_with_scenarios_to_check = None
 
     # -------------------------------------------------------------------------------------------------------------------------------------
 

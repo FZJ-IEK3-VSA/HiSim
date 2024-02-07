@@ -291,7 +291,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
         from hisim.components.generic_pv_system import PVSystem  # pylint: disable=import-outside-toplevel
 
-        print("sett defalt connections for ems")
         dynamic_connections = []
         pv_class_name = PVSystem.get_classname()
         dynamic_connections.append(

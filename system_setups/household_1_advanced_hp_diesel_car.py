@@ -217,6 +217,8 @@ def setup_function(
     # Todo: change cleanup-function if result_path from occupancy is not utils.HISIMPATH["results"]
     if Path(utils.HISIMPATH["utsp_results"]).exists():
         cleanup_old_lpg_requests()
+    else:
+        Path(utils.HISIMPATH["utsp_results"]).mkdir(parents=False, exist_ok=False)
 
     if my_sim.my_module_config_path:
         my_config = HouseholdAdvancedHPDieselCarConfig.load_from_json(my_sim.my_module_config_path)

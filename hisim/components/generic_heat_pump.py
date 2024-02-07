@@ -24,7 +24,7 @@ from hisim import utils
 
 from hisim.components.building import Building
 from hisim.components.weather import Weather
-from hisim.loadtypes import LoadTypes, Units
+import hisim.loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Vitor Hugo Bellotto Zago"
@@ -216,35 +216,35 @@ class GenericHeatPump(cp.Component):
         self.has_been_converted: Any
         # Inputs - Mandatories
         self.state_channel: cp.ComponentInput = self.add_input(
-            self.component_name, self.State, LoadTypes.ANY, Units.ANY, True
+            self.component_name, self.State, lt.LoadTypes.ANY, lt.Units.ANY, True
         )
         self.temperature_outside_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.TemperatureOutside,
-            LoadTypes.ANY,
-            Units.CELSIUS,
+            lt.LoadTypes.ANY,
+            lt.Units.CELSIUS,
             True,
         )
         # Inputs - Not Mandatories
         self.water_load_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.WaterConsumption,
-            LoadTypes.VOLUME,
-            Units.LITER,
+            lt.LoadTypes.VOLUME,
+            lt.Units.LITER,
             False,
         )
         self.water_input_mass_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.WaterInput_mass,
-            LoadTypes.WARM_WATER,
-            Units.KG_PER_SEC,
+            lt.LoadTypes.WARM_WATER,
+            lt.Units.KG_PER_SEC,
             False,
         )
         self.water_input_temperature_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.WaterInput_temperature,
-            LoadTypes.WARM_WATER,
-            Units.CELSIUS,
+            lt.LoadTypes.WARM_WATER,
+            lt.Units.CELSIUS,
             False,
         )
 
@@ -252,40 +252,41 @@ class GenericHeatPump(cp.Component):
         self.thermal_power_delivered_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.ThermalPowerDelivered,
-            LoadTypes.HEATING,
-            Units.WATT,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
             output_description=f"here a description for {self.ThermalPowerDelivered} will follow.",
+            postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
         )
 
         self.heating_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.Heating,
-            LoadTypes.HEATING,
-            Units.WATT,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
             output_description=f"here a description for {self.Heating} will follow.",
         )
 
         self.cooling_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.Cooling,
-            LoadTypes.COOLING,
-            Units.WATT,
+            lt.LoadTypes.COOLING,
+            lt.Units.WATT,
             output_description=f"here a description for {self.Cooling} will follow.",
         )
 
         self.electricity_output_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.ElectricityOutput,
-            LoadTypes.ELECTRICITY,
-            Units.WATT,
+            lt.LoadTypes.ELECTRICITY,
+            lt.Units.WATT,
             output_description=f"here a description for Heat Pump {self.ElectricityOutput} will follow.",
         )
 
         self.number_of_cycles_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.NumberOfCycles,
-            LoadTypes.ANY,
-            Units.ANY,
+            lt.LoadTypes.ANY,
+            lt.Units.ANY,
             output_description=f"here a description for {self.NumberOfCycles} will follow.",
         )
 
@@ -606,22 +607,22 @@ class GenericHeatPumpController(cp.Component):
         self.temperature_mean_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.TemperatureMean,
-            LoadTypes.TEMPERATURE,
-            Units.CELSIUS,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
             True,
         )
         self.electricity_input_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.ElectricityInput,
-            LoadTypes.ELECTRICITY,
-            Units.WATT,
+            lt.LoadTypes.ELECTRICITY,
+            lt.Units.WATT,
             False,
         )
         self.state_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.State,
-            LoadTypes.ANY,
-            Units.ANY,
+            lt.LoadTypes.ANY,
+            lt.Units.ANY,
             output_description=f"here a description for {self.State} will follow.",
         )
 

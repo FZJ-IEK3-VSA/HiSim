@@ -32,16 +32,16 @@ class ElectricityMeterConfig(cp.ConfigBase):
         return ElectricityMeter.get_full_classname()
 
     name: str
-    total_energy_to_grid_in_kwh: float
-    total_energy_from_grid_in_kwh: float
+    total_energy_to_grid_in_kwh: None
+    total_energy_from_grid_in_kwh: None
 
     @classmethod
     def get_electricity_meter_default_config(cls):
         """Gets a default ElectricityMeter."""
         return ElectricityMeterConfig(
             name="ElectricityMeter",
-            total_energy_to_grid_in_kwh=0.0,
-            total_energy_from_grid_in_kwh=0.0,
+            total_energy_to_grid_in_kwh=None,
+            total_energy_from_grid_in_kwh=None,
         )
 
 
@@ -368,12 +368,12 @@ class ElectricityMeter(DynamicComponent):
                     # Todo: check component name from system_setups: find another way of using the correct outputs
                     self.config.total_energy_to_grid_in_kwh = round(
                         postprocessing_results.iloc[:, index].sum() * 1e-3,
-                        1,
+                        3,
                     )
                 elif output.field_name == self.ElectricityFromGrid:
                     self.config.total_energy_from_grid_in_kwh = round(
                         postprocessing_results.iloc[:, index].sum() * 1e-3,
-                        1,
+                        3,
                     )
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year

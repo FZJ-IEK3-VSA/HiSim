@@ -19,7 +19,7 @@ def test_webtool_results():
     my_simulation_parameters.post_processing_options = [
         PostProcessingOptions.COMPUTE_CAPEX,
         PostProcessingOptions.COMPUTE_OPEX,
-        PostProcessingOptions.COMPUTE_AND_WRITE_KPIS_TO_REPORT,
+        PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT,
         PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL,
     ]
     main(path, my_simulation_parameters)
@@ -28,6 +28,6 @@ def test_webtool_results():
         results_for_webtool = json.load(handle)
 
     assert isinstance(
-        results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["technical"]["ThermalOutputPower"]["value"],
+        results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["operation"]["ThermalOutputPower"]["value"],
         Number,
     )

@@ -4,19 +4,21 @@ Energy bucket model: extracts energy, adds energy and converts back to temperate
 The hot water storage simulates only storage and demand and needs to be connnected to a heat source. It can act as
 DHW hot water storage or as buffer storage.
 """
-from dataclasses import dataclass
 
+from dataclasses import dataclass
 # clean
 # Generic/Built-in
 from typing import Any, List, Optional, Tuple
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 from dataclasses_json import dataclass_json
 
 # Owned
 import hisim.component as cp
 import hisim.log
 from hisim import loadtypes as lt
+from hisim.component import OpexCostDataClass
 from hisim.components import (
     controller_l1_building_heating,
     generic_chp,
@@ -24,10 +26,8 @@ from hisim.components import (
     generic_heat_source,
     configuration,
 )
-
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import OpexCostDataClass
 from obsolete.loadprofilegenerator_connector import Occupancy
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
@@ -43,7 +43,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class StorageConfig(cp.ConfigBase):
-
     """Used in the HotWaterStorageClass defining the basics."""
 
     #: name of the hot water storage
@@ -170,7 +169,6 @@ class StorageConfig(cp.ConfigBase):
 
 
 class StorageState:
-
     """Data class saves the state of the simulation results."""
 
     def __init__(
@@ -220,16 +218,20 @@ class StorageState:
             )
 
     def return_available_energy(self) -> float:
-        """Returns available energy in (J).
+        """Returns available energy in (kJ).
 
         For heating up the building in winter. Here 30°C is set as the lower limit for the temperature in the buffer storage in winter.
         """
-        return (self.temperature_in_kelvin - 273.15 - 25) * self.volume_in_l * 0.977 * 4.182 * 1e3
+        return (
+            (self.temperature_in_kelvin - 273.15 - 25)
+            * self.volume_in_l
+            * 0.977
+            * 4.182
+        )
 
 
 # class HotWaterStorage(dycp.DynamicComponent):
 class HotWaterStorage(cp.Component):
-
     """Simple hot water storage implementation.
 
     Energy bucket model: extracts energy, adds energy and converts back to temperatere.
@@ -263,7 +265,7 @@ class HotWaterStorage(cp.Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: StorageConfig,
-        my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
+        my_display_config: cp.DisplayConfig = cp.DisplayConfig(display_in_webtool=True),
     ):
         """Initializes instance of HotWaterStorage class."""
 
@@ -339,7 +341,11 @@ class HotWaterStorage(cp.Component):
             self.PowerFromHotWaterStorage,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
-            postprocessing_flag=[lt.InandOutputType.DISCHARGE, self.use],
+            postprocessing_flag=[
+                lt.InandOutputType.DISCHARGE,
+                self.use,
+                lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+            ],
             output_description="Power transfered to Building or Hot Water Pipe.",
         )
 

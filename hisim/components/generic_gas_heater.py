@@ -1,13 +1,15 @@
 """Gas Heater Module."""
+
 # clean
 # Owned
 import importlib
-from typing import List, Any, Tuple
 from dataclasses import dataclass
-from dataclasses_json import dataclass_json
+from typing import List, Any, Tuple
 
 import pandas as pd
+from dataclasses_json import dataclass_json
 
+from hisim import loadtypes as lt
 from hisim.component import (
     Component,
     ComponentConnection,
@@ -18,11 +20,8 @@ from hisim.component import (
     OpexCostDataClass,
     DisplayConfig,
 )
-
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
-from hisim import loadtypes as lt
-
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -37,7 +36,6 @@ __status__ = ""
 @dataclass_json
 @dataclass
 class GenericGasHeaterConfig(ConfigBase):
-
     """Configuration of the GasHeater class."""
 
     @classmethod
@@ -121,7 +119,6 @@ class GenericGasHeaterConfig(ConfigBase):
 
 
 class GasHeater(Component):
-
     """GasHeater class.
 
     Get Control Signal and calculate on base of it Massflow and Temperature of Massflow.
@@ -142,7 +139,7 @@ class GasHeater(Component):
         self,
         my_simulation_parameters: SimulationParameters,
         config: GenericGasHeaterConfig,
-        my_display_config: DisplayConfig = DisplayConfig(),
+        my_display_config: DisplayConfig = DisplayConfig(display_in_webtool=True),
     ) -> None:
         """Construct all the neccessary attributes."""
         self.gasheater_config = config
@@ -187,6 +184,9 @@ class GasHeater(Component):
             lt.LoadTypes.GAS,
             lt.Units.KWH,
             output_description=f"here a description for {self.GasDemand} will follow.",
+            postprocessing_flag=[
+                lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+            ],
         )
         self.thermal_output_power_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -194,6 +194,9 @@ class GasHeater(Component):
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT,
             output_description=f"here a description for {self.ThermalOutputPower} will follow.",
+            postprocessing_flag=[
+                lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+            ],
         )
 
         self.minimal_thermal_power_in_watt = self.gasheater_config.minimal_thermal_power_in_watt

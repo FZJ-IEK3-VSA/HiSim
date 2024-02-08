@@ -32,8 +32,11 @@ class ResultDataCollection:
         """Initialize the class."""
         result_folder = folder_from_which_data_will_be_collected
         self.result_data_folder = os.path.join(
-            result_folder,
+            os.getcwd(),
             os.pardir,
+            os.pardir,
+            os.pardir,
+            "system_setups",
             "results_for_scenario_comparison",
             "data",
         )
@@ -177,17 +180,17 @@ class ResultDataCollection:
             f"The following result folders do not contain the finished flag: {list_of_unfinished_folders} Number: {len(list_of_unfinished_folders)}. "
         )
 
-        # # if list of unfinished folders is not empty
-        # if list_of_unfinished_folders:
-        #     answer = input("Do you want to delete them?")
-        #     if answer.upper() in ["Y", "YES"]:
-        #         for folder in list_of_unfinished_folders:
-        #             shutil.rmtree(os.path.join(result_path, folder))
-        #         print("All folders with failed simulations deleted.")
-        #     elif answer.upper() in ["N", "NO"]:
-        #         print("The folders won't be deleted.")
-        #     else:
-        #         print("The answer must be yes or no.")
+        # if list of unfinished folders is not empty
+        if list_of_unfinished_folders:
+            answer = input("Do you want to delete them?")
+            if answer.upper() in ["Y", "YES"]:
+                for folder in list_of_unfinished_folders:
+                    shutil.rmtree(os.path.join(result_path, folder))
+                print("All folders with failed simulations deleted.")
+            elif answer.upper() in ["N", "NO"]:
+                print("The folders won't be deleted.")
+            else:
+                print("The answer must be yes or no.")
 
     def filter_results_that_failed_to_heat_or_cool_building_sufficiently(
         self, list_of_result_path_that_contain_scenario_data: List[str]
@@ -216,13 +219,13 @@ class ResultDataCollection:
             for folder in list_of_result_path_that_contain_scenario_data:
                 scenario_data_information = os.path.join(folder, "data_information_for_scenario_evaluation.json")
                 main_folder = os.path.normpath(folder + os.sep + os.pardir)
-                webtool_kpis_file = os.path.join(main_folder, "results_for_webtool.json")
+                all_kpis_json_file = os.path.join(main_folder, "all_kpis.json")
 
                 # get set temperatures used in the simulation
                 if os.path.exists(scenario_data_information):
                     with open(scenario_data_information, "r", encoding="utf-8") as data_info_file:
-                        json_file = json.load(data_info_file)
-                        component_entries = json_file["componentEntries"]
+                        kpi_data = json.load(data_info_file)
+                        component_entries = kpi_data["componentEntries"]
                         for component in component_entries:
                             if "Building" in component["componentName"]:
                                 set_heating_temperature = float(
@@ -236,22 +239,21 @@ class ResultDataCollection:
                     raise FileNotFoundError(f"The file {scenario_data_information} could not be found. ")
 
                 # open the webtool kpis and check if building got too hot or too cold
-                if os.path.exists(webtool_kpis_file):
-                    with open(webtool_kpis_file, "r", encoding="utf-8") as kpi_file:
-                        json_file = json.load(kpi_file)
-                        kpi_data = json_file["kpiDict"]
+                if os.path.exists(all_kpis_json_file):
+                    with open(all_kpis_json_file, "r", encoding="utf-8") as kpi_file:
+                        kpi_data = json.load(kpi_file)
                         # check if min and max temperatures are too low or too high
                         min_temperature = float(
-                            kpi_data.get("Minimum building indoor air temperature reached [\u00b0C] ")
+                            kpi_data["Minimum building indoor air temperature reached"].get("value")
                         )
                         max_temperature = float(
-                            kpi_data.get("Maximum building indoor air temperature reached [\u00b0C] ")
+                            kpi_data["Maximum building indoor air temperature reached"].get("value")
                         )
-                        temp_deviation_below_set = kpi_data.get(
-                            "Temperature deviation of building indoor air temperature being below set temperature 19.0 \u00b0C [\u00b0C*h] "
+                        temp_deviation_below_set = kpi_data["Temperature deviation of building indoor air temperature being below set temperature 19.0 Celsius"].get(
+                            "value"
                         )
-                        temp_deviation_above_set = kpi_data.get(
-                            "Temperature deviation of building indoor air temperature being above set temperature 24.0 \u00b0C [\u00b0C*h] "
+                        temp_deviation_above_set = kpi_data["Temperature deviation of building indoor air temperature being above set temperature 24.0 Celsius"].get(
+                            "value"
                         )
                         if (
                             min_temperature <= set_heating_temperature - 5.0
@@ -296,7 +298,7 @@ class ResultDataCollection:
                             )
                             list_of_unsuccessful_folders.append(folder)
                 else:
-                    raise FileNotFoundError(f"The file {webtool_kpis_file} could not be found. ")
+                    raise FileNotFoundError(f"The file {all_kpis_json_file} could not be found. ")
 
             file.write(
                 f"Total number of simulations that have building temperatures way below or above set temperatures: {len(list_of_unsuccessful_folders)}"

@@ -1,6 +1,10 @@
 # clean
 
-"""Postprocessing option computes overall consumption, production,self-consumption and injection as well as selfconsumption rate and autarky rate."""
+"""Postprocessing option computes overall consumption, production,self-consumption and injection as well as selfconsumption rate and autarky rate.
+
+KPis for PV-battery systems in houses:
+https://solar.htw-berlin.de/wp-content/uploads/WENIGER-2017-Vergleich-verschiedener-Kennzahlen-zur-Bewertung-von-PV-Batteriesystemen.pdf.
+"""
 
 import os
 from typing import List, Tuple, Union, Dict, Optional
@@ -95,15 +99,17 @@ class KpiGenerator(JSONWizard):
             total_electricity_to_grid_in_kwh,
         ) = self.get_electricity_to_and_from_grid_from_electricty_meter()
         # get relative electricity demand
-        self.compute_relative_electricity_demand_from_grid(
+        relative_electricity_demand_from_grid_in_percent = self.compute_relative_electricity_demand(
             total_electricity_consumption_in_kilowatt_hour=total_electricity_consumption_in_kilowatt_hour,
             electricity_from_grid_in_kilowatt_hour=total_electricity_from_grid_in_kwh,
         )
-        # get self-consumption rate according to mydualsun
-        self.compute_self_consumption_rate_according_to_mydualsun(
+        # get self-consumption rate according to solar htw berlin
+        self.compute_self_consumption_rate_according_to_solar_htw_berlin(
             total_electricity_production_in_kilowatt_hour=total_electricity_production_in_kilowatt_hour,
             electricity_to_grid_in_kilowatt_hour=total_electricity_to_grid_in_kwh,
         )
+        # get autarky rate according to solar htw berlin
+        self.compute_autarky_according_to_solar_htw_berlin(relative_electricty_demand_in_percent=relative_electricity_demand_from_grid_in_percent)
 
         # get energy prices and co2 emissions
         self.compute_energy_prices_and_co2_emission(
@@ -316,7 +322,7 @@ class KpiGenerator(JSONWizard):
         result_dataframe["grid_injection_in_watt"] = grid_injection_series_in_watt
 
         # make kpi entry
-        grid_injection_entry = KpiEntry(name="Injection", unit="kWh", value=grid_injection_in_kilowatt_hour)
+        grid_injection_entry = KpiEntry(name="Grid injection", unit="kWh", value=grid_injection_in_kilowatt_hour)
         self_consumption_entry = KpiEntry(name="Self-consumption", unit="kWh", value=self_consumption_in_kilowatt_hour)
         self_consumption_rate_entry = KpiEntry(
             name="Self-consumption rate", unit="%", value=self_consumption_rate_in_percent
@@ -387,11 +393,11 @@ class KpiGenerator(JSONWizard):
         )
         return total_energy_from_grid_in_kwh, total_energy_to_grid_in_kwh
 
-    def compute_relative_electricity_demand_from_grid(
+    def compute_relative_electricity_demand(
         self,
         total_electricity_consumption_in_kilowatt_hour: float,
         electricity_from_grid_in_kilowatt_hour: Optional[float],
-    ) -> None:
+    ) -> Optional[float]:
         """Return the relative electricity demand."""
         if electricity_from_grid_in_kilowatt_hour is None:
             relative_electricity_demand_from_grid_in_percent = None
@@ -417,6 +423,37 @@ class KpiGenerator(JSONWizard):
         self.kpi_collection_dict.update(
             {relative_electricity_demand_entry.name: relative_electricity_demand_entry.to_dict()}
         )
+        return relative_electricity_demand_from_grid_in_percent
+
+    def compute_autarky_according_to_solar_htw_berlin(
+    self,
+    relative_electricty_demand_in_percent: Optional[float],
+    ) -> None:
+        """Return the autarky rate according to solar htw berlin.
+
+        https://solar.htw-berlin.de/wp-content/uploads/WENIGER-2017-Vergleich-verschiedener-Kennzahlen-zur-Bewertung-von-PV-Batteriesystemen.pdf.
+        """
+        if relative_electricty_demand_in_percent is None:
+            autraky_rate_in_percent = None
+        else:
+            autraky_rate_in_percent = 100 - relative_electricty_demand_in_percent
+            if autraky_rate_in_percent > 100:
+                raise ValueError(
+                    "The autarky rate should not be over 100 %. Something is wrong here. Please check your code. "
+                    f"The realtive electricity demand is {relative_electricty_demand_in_percent} %. "
+                )
+
+        # make kpi entry
+        autarky_rate_entry = KpiEntry(
+            name="Autarky rate according to solar htw berlin",
+            unit="%",
+            value=autraky_rate_in_percent,
+        )
+
+        # update kpi collection dict
+        self.kpi_collection_dict.update(
+            {autarky_rate_entry.name: autarky_rate_entry.to_dict()}
+        )
 
     def compute_ratio_between_two_values_and_set_as_kpi(
         self, denominator_value: float, numerator_value: float, kpi_name: str
@@ -436,16 +473,17 @@ class KpiGenerator(JSONWizard):
         # update kpi collection dict
         self.kpi_collection_dict.update({ratio_in_percent_entry.name: ratio_in_percent_entry.to_dict()})
 
-    def compute_self_consumption_rate_according_to_mydualsun(
+    def compute_self_consumption_rate_according_to_solar_htw_berlin(
         self,
         total_electricity_production_in_kilowatt_hour: float,
         electricity_to_grid_in_kilowatt_hour: Optional[float],
     ) -> None:
-        """Return self-consumption according to dual sun.
+        """Return self-consumption according to solar htw berlin.
 
+        https://solar.htw-berlin.de/wp-content/uploads/WENIGER-2017-Vergleich-verschiedener-Kennzahlen-zur-Bewertung-von-PV-Batteriesystemen.pdf.
         https://academy.dualsun.com/hc/en-us/articles/360018456939-How-is-the-self-consumption-rate-calculated-on-MyDualSun.
         """
-        if electricity_to_grid_in_kilowatt_hour is None:
+        if electricity_to_grid_in_kilowatt_hour is None or total_electricity_production_in_kilowatt_hour == 0:
             self_consumption_rate_in_percent = None
         else:
             self_consumption_rate_in_percent = (
@@ -462,7 +500,7 @@ class KpiGenerator(JSONWizard):
 
         # make kpi entry
         self_consumption_rate_entry = KpiEntry(
-            name="Self-consumption rate according to mydualsun",
+            name="Self-consumption rate according to solar htw berlin",
             unit="%",
             value=self_consumption_rate_in_percent,
         )

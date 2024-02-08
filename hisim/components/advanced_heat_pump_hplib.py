@@ -248,7 +248,6 @@ class HeatPumpHplib(Component):
             unit=Units.WATT,
             output_description=("Thermal output power in Watt"),
             postprocessing_flag=[
-                InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
                 OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
             ],
         )

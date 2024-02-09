@@ -191,7 +191,7 @@ def simulation_for_one_timestep(
     # Set hplib
     my_hplib_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
         heating_load_of_building_in_watt=my_residence_information.max_thermal_building_demand_in_watt,
-        annual_building_heating_demand_in_kilowatt_hour_per_m2_per_year=my_residence_information.energy_need_for_heating_reference_in_kilowatthour_per_m2_per_year,
+        building_heating_demand_in_kilowatt_hour_per_m2_per_year=my_residence_information.energy_need_for_heating_reference_in_kilowatthour_per_m2_per_year,
     )
 
     # Set Hot Water Storage

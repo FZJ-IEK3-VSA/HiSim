@@ -371,7 +371,7 @@ class FilterClass:
             "Building heating load",
             "Specific heating load",
             "Specific heating demand according to TABULA",
-            "Thermal output energy of heat distribution system"
+            "Thermal output energy of heat distribution system",
             "Number of heat pump cycles",
             "Seasonal performance factor of heat pump",
             "Thermal output energy of heat pump",

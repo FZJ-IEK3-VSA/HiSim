@@ -33,9 +33,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
 
 
 def air_conditioned_house(
-    my_sim: Simulator,
-    control: str,
-    my_simulation_parameters: Optional[SimulationParameters] = None,
+    my_sim: Simulator, control: str, my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:
     """Household Model.
 
@@ -226,10 +224,7 @@ def air_conditioned_house(
         predictive=predictive,
         enable_opening_windows=enable_opening_windows,
     )
-    my_building = building.Building(
-        config=my_building_config,
-        my_simulation_parameters=my_simulation_parameters,
-    )
+    my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters,)
 
     """ Occupancy Profile """
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
@@ -240,8 +235,7 @@ def air_conditioned_house(
     my_occupancy_config.predictive = predictive
 
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
-        config=my_occupancy_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters,
     )
     my_sim.add_component(my_occupancy)
 
@@ -249,10 +243,7 @@ def air_conditioned_house(
     my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.SEVILLE)
     my_weather_config.predictive_control = predictive_control
 
-    my_weather = weather.Weather(
-        config=my_weather_config,
-        my_simulation_parameters=my_simulation_parameters,
-    )
+    my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters,)
     my_sim.add_component(my_weather)
 
     """Photovoltaic System"""
@@ -279,8 +270,7 @@ def air_conditioned_house(
         predictive_control=predictive_control,
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(
-        config=my_photovoltaic_system_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_photovoltaic_system_config, my_simulation_parameters=my_simulation_parameters,
     )
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)
     my_sim.add_component(my_photovoltaic_system)
@@ -303,8 +293,7 @@ def air_conditioned_house(
         predictive_control=predictive_control,
     )
     my_price_signal = generic_price_signal.PriceSignal(
-        config=my_price_signal_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_price_signal_config, my_simulation_parameters=my_simulation_parameters,
     )
     my_sim.add_component(my_price_signal)
 
@@ -318,18 +307,13 @@ def air_conditioned_house(
         control=control,
     )
     my_air_conditioner = air_conditioner.AirConditioner(
-        config=my_air_conditioner_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_air_conditioner_config, my_simulation_parameters=my_simulation_parameters,
     )
     my_air_conditioner.connect_input(
-        my_air_conditioner.TemperatureOutside,
-        my_weather.component_name,
-        my_weather.TemperatureOutside,
+        my_air_conditioner.TemperatureOutside, my_weather.component_name, my_weather.TemperatureOutside,
     )
     my_air_conditioner.connect_input(
-        my_air_conditioner.TemperatureMean,
-        my_building.component_name,
-        my_building.TemperatureMeanThermalMass,
+        my_air_conditioner.TemperatureMean, my_building.component_name, my_building.TemperatureMeanThermalMass,
     )
     my_sim.add_component(my_air_conditioner)
 
@@ -344,8 +328,7 @@ def air_conditioned_house(
             predictive=predictive,
         )
         my_battery = generic_battery.GenericBattery(
-            config=my_battery_config,
-            my_simulation_parameters=my_simulation_parameters,
+            config=my_battery_config, my_simulation_parameters=my_simulation_parameters,
         )
         my_sim.add_component(my_battery)
 
@@ -404,19 +387,14 @@ def air_conditioned_house(
         )
 
         my_mpc_controller = controller_mpc.MpcController(
-            config=my_mpc_controller_config,
-            my_simulation_parameters=my_simulation_parameters,
+            config=my_mpc_controller_config, my_simulation_parameters=my_simulation_parameters,
         )
         my_mpc_controller.connect_input(
-            my_mpc_controller.TemperatureMean,
-            my_building.component_name,
-            my_building.TemperatureMeanThermalMass,
+            my_mpc_controller.TemperatureMean, my_building.component_name, my_building.TemperatureMeanThermalMass,
         )
         my_sim.add_component(my_mpc_controller)
         my_battery.connect_input(
-            my_battery.State,
-            my_mpc_controller.component_name,
-            my_mpc_controller.BatteryControlState,
+            my_battery.State, my_mpc_controller.component_name, my_mpc_controller.BatteryControlState,
         )
         my_battery.connect_input(
             my_battery.ElectricityInput,
@@ -424,42 +402,29 @@ def air_conditioned_house(
             my_mpc_controller.BatteryChargingDischargingPower,
         )
         my_battery.connect_input(
-            my_battery.ElectricityInput,
-            my_mpc_controller.component_name,
-            my_mpc_controller.Battery2Load,
+            my_battery.ElectricityInput, my_mpc_controller.component_name, my_mpc_controller.Battery2Load,
         )
 
     """PID controller"""  # pid
     if control == "PID":
         my_pid_controller_config = controller_pid.PIDControllerConfig.get_default_config()
         pid_controller = controller_pid.PIDController(
-            config=my_pid_controller_config,
-            my_simulation_parameters=my_simulation_parameters,
+            config=my_pid_controller_config, my_simulation_parameters=my_simulation_parameters,
         )
         pid_controller.connect_input(
-            pid_controller.TemperatureMean,
-            my_building.component_name,
-            my_building.TemperatureMeanThermalMass,
+            pid_controller.TemperatureMean, my_building.component_name, my_building.TemperatureMeanThermalMass,
         )
         pid_controller.connect_input(
-            pid_controller.HeatFluxThermalMassNode,
-            my_building.component_name,
-            my_building.HeatFluxThermalMassNode,
+            pid_controller.HeatFluxThermalMassNode, my_building.component_name, my_building.HeatFluxThermalMassNode,
         )
         pid_controller.connect_input(
-            pid_controller.HeatFluxWallNode,
-            my_building.component_name,
-            my_building.HeatFluxWallNode,
+            pid_controller.HeatFluxWallNode, my_building.component_name, my_building.HeatFluxWallNode,
         )
         my_air_conditioner.connect_input(
-            my_air_conditioner.FeedForwardSignal,
-            pid_controller.component_name,
-            pid_controller.FeedForwardSignal,
+            my_air_conditioner.FeedForwardSignal, pid_controller.component_name, pid_controller.FeedForwardSignal,
         )
         my_air_conditioner.connect_input(
-            my_air_conditioner.ThermalPowerPID,
-            pid_controller.component_name,
-            pid_controller.ThermalPowerPID,
+            my_air_conditioner.ThermalPowerPID, pid_controller.component_name, pid_controller.ThermalPowerPID,
         )
         my_sim.add_component(pid_controller)
 
@@ -511,7 +476,5 @@ def air_conditioned_house(
     # )
 
     my_building.connect_input(
-        my_building.ThermalPowerDelivered,
-        my_air_conditioner.component_name,
-        my_air_conditioner.ThermalEnergyDelivered,
+        my_building.ThermalPowerDelivered, my_air_conditioner.component_name, my_air_conditioner.ThermalEnergyDelivered,
     )

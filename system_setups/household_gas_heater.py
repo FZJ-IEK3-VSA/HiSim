@@ -219,8 +219,7 @@ def setup_function(
     """
     # Heat Distribution System Controller
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        config=my_config.hds_controller_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.hds_controller_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # Occupancy
@@ -252,8 +251,7 @@ def setup_function(
 
     # Gas Heater Controller
     my_gas_heater_controller = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_config.gas_heater_controller_config,
+        my_simulation_parameters=my_simulation_parameters, config=my_config.gas_heater_controller_config,
     )
 
     # Gas heater
@@ -290,8 +288,7 @@ def setup_function(
         my_display_config=DisplayConfig.show("Warmwasserspeicher"),
     )
     my_domestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_dhw_heatpump_controller_config,
+        my_simulation_parameters=my_simulation_parameters, config=my_dhw_heatpump_controller_config,
     )
     my_domestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
         config=my_dhw_heatpump_config,

@@ -86,9 +86,7 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
 
     @classmethod
     def get_scaled_default(
-        cls,
-        building_config: building.BuildingConfig,
-        options: HouseholdHeatPumpOptions = HouseholdHeatPumpOptions(),
+        cls, building_config: building.BuildingConfig, options: HouseholdHeatPumpOptions = HouseholdHeatPumpOptions(),
     ) -> "HouseholdHeatPumpConfig":
         """Get scaled HouseholdHeatPumpConfig.
 
@@ -156,7 +154,7 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
                 advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
                     heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
                     heating_reference_temperature_in_celsius=my_building_information.heating_reference_temperature_in_celsius,
-                    annual_building_heating_demand_in_kilowatt_hour_per_m2_per_year=my_building_information.energy_need_for_heating_reference_in_kilowatthour_per_m2_per_year,
+                    building_heating_demand_in_kilowatt_hour_per_m2_per_year=my_building_information.energy_need_for_heating_reference_in_kilowatthour_per_m2_per_year,
                 )
             ),
             simple_hot_water_storage_config=(
@@ -223,8 +221,7 @@ def setup_function(
     """
     # Heat Distribution System Controller
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        config=my_config.hds_controller_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.hds_controller_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # Occupancy
@@ -256,8 +253,7 @@ def setup_function(
 
     # Advanced Heat Pump Controller
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
-        config=my_config.hp_controller_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.hp_controller_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # Advanced Heat Pump
@@ -294,8 +290,7 @@ def setup_function(
         my_display_config=DisplayConfig.show("Warmwasserspeicher"),
     )
     my_domestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_dhw_heatpump_controller_config,
+        my_simulation_parameters=my_simulation_parameters, config=my_dhw_heatpump_controller_config,
     )
     my_domestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
         config=my_dhw_heatpump_config,

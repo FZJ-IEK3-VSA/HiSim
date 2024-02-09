@@ -40,10 +40,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     # Create first RandomNumbers object and adds to simulator
     my_rn1 = RandomNumbers(
         config=RandomNumbersConfig(
-            name="Random numbers 100-200",
-            timesteps=my_simulation_parameters.timesteps,
-            minimum=100,
-            maximum=200,
+            name="Random numbers 100-200", timesteps=my_simulation_parameters.timesteps, minimum=100, maximum=200,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )
@@ -52,10 +49,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     # Create second RandomNumbers object and adds to simulator
     my_rn2 = RandomNumbers(
         config=RandomNumbersConfig(
-            name="Random numbers 10-20",
-            timesteps=my_simulation_parameters.timesteps,
-            minimum=10,
-            maximum=20,
+            name="Random numbers 10-20", timesteps=my_simulation_parameters.timesteps, minimum=10, maximum=20,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )
@@ -64,8 +58,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     # Create new Transformer object
     # my_transformer = Transformer(name="MyTransformer", my_simulation_parameters=my_simulation_parameters)
     my_transformer = ExampleTransformer(
-        config=ExampleTransformerConfig.get_default_transformer(),
-        my_simulation_parameters=my_simulation_parameters,
+        config=ExampleTransformerConfig.get_default_transformer(), my_simulation_parameters=my_simulation_parameters,
     )
     my_transformer.connect_input(
         input_fieldname=my_transformer.TransformerInput,  # Connect input from my transformer
@@ -76,14 +69,11 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
 
     # Create sum builder object
     my_sum = SumBuilderForTwoInputs(
-        config=SumBuilderConfig.get_sumbuilder_default_config(),
-        my_simulation_parameters=my_simulation_parameters,
+        config=SumBuilderConfig.get_sumbuilder_default_config(), my_simulation_parameters=my_simulation_parameters,
     )
     # Connect inputs from sum object to both previous outputs
     my_sum.connect_input(
-        input_fieldname=my_sum.SumInput1,
-        src_object_name=my_rn1.component_name,
-        src_field_name=my_rn1.RandomOutput,
+        input_fieldname=my_sum.SumInput1, src_object_name=my_rn1.component_name, src_field_name=my_rn1.RandomOutput,
     )
     my_sum.connect_input(
         input_fieldname=my_sum.SumInput2,

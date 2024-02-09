@@ -104,9 +104,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
 
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
     my_building.connect_input(
-        my_building.ThermalPowerDelivered,
-        my_storage.component_name,
-        my_storage.RealHeatForBuilding,
+        my_building.ThermalPowerDelivered, my_storage.component_name, my_storage.RealHeatForBuilding,
     )
 
     my_storage.connect_input(
@@ -120,9 +118,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         my_controller_heat.ControlSignalChooseStorage,
     )
     my_storage.connect_input(
-        my_storage.ThermalInputPower1,
-        my_gas_heater.component_name,
-        my_gas_heater.ThermalOutputPower,
+        my_storage.ThermalInputPower1, my_gas_heater.component_name, my_gas_heater.ThermalOutputPower,
     )
 
     my_storage_controller.connect_input(
@@ -131,9 +127,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         my_storage.WaterOutputTemperatureHeatingWater,
     )
     my_storage_controller.connect_input(
-        my_storage_controller.BuildingTemperature,
-        my_building.component_name,
-        my_building.TemperatureMeanThermalMass,
+        my_storage_controller.BuildingTemperature, my_building.component_name, my_building.TemperatureMeanThermalMass,
     )
     # my_storage_controller.connect_input(
     #     my_storage_controller.ReferenceMaxHeatBuildingDemand,
@@ -150,20 +144,14 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
 
     my_controller_heat.connect_input(
-        my_controller_heat.ResidenceTemperature,
-        my_building.component_name,
-        my_building.TemperatureMeanThermalMass,
+        my_controller_heat.ResidenceTemperature, my_building.component_name, my_building.TemperatureMeanThermalMass,
     )
 
     my_gas_heater.connect_input(
-        my_gas_heater.ControlSignal,
-        my_controller_heat.component_name,
-        my_controller_heat.ControlSignalGasHeater,
+        my_gas_heater.ControlSignal, my_controller_heat.component_name, my_controller_heat.ControlSignalGasHeater,
     )
     my_gas_heater.connect_input(
-        my_gas_heater.MassflowInputTemperature,
-        my_storage.component_name,
-        my_storage.WaterOutputStorageforHeaters,
+        my_gas_heater.MassflowInputTemperature, my_storage.component_name, my_storage.WaterOutputStorageforHeaters,
     )
 
     # =================================================================================================================================

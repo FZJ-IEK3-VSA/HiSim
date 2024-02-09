@@ -177,9 +177,9 @@ def test_house(
     with open(os.path.join(my_sim._simulation_parameters.result_directory, "all_kpis.json"), "r", encoding="utf-8") as file:  # pylint: disable=W0212
         jsondata = json.load(file)
 
-    cumulative_consumption_kpi_in_kilowatt_hour = jsondata["Consumption"].get("value")
+    cumulative_consumption_kpi_in_kilowatt_hour = jsondata["Total electricity consumption"].get("value")
 
-    cumulative_production_kpi_in_kilowatt_hour = jsondata["Production"].get("value")
+    cumulative_production_kpi_in_kilowatt_hour = jsondata["Total electricity production"].get("value")
 
     # simualtion results from grid energy balancer (last entry)
     simulation_results_electricity_meter_cumulative_production_in_watt_hour = (

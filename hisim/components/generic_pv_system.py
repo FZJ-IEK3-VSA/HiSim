@@ -350,6 +350,7 @@ class PVSystem(cp.Component):
             postprocessing_flag=[
                 lt.InandOutputType.ELECTRICITY_PRODUCTION,
                 lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+                lt.ComponentType.PV,
             ],
             output_description=f"here a description for PV {self.ElectricityOutput} will follow.",
         )

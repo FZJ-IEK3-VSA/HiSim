@@ -1,6 +1,10 @@
 # clean
 
-"""Postprocessing option computes overall consumption, production,self-consumption and injection as well as selfconsumption rate and autarky rate."""
+"""Postprocessing option computes overall consumption, production,self-consumption and injection as well as selfconsumption rate and autarky rate.
+
+KPis for PV-battery systems in houses:
+https://solar.htw-berlin.de/wp-content/uploads/WENIGER-2017-Vergleich-verschiedener-Kennzahlen-zur-Bewertung-von-PV-Batteriesystemen.pdf.
+"""
 
 import os
 from typing import List, Tuple, Union, Dict, Optional
@@ -58,15 +62,25 @@ class KpiGenerator(JSONWizard):
         self.filtered_result_dataframe = self.filter_results_according_to_postprocessing_flags(
             all_outputs=self.all_outputs, results=self.results
         )
+
         # get consumption and production and store in kpi collection
         (
             total_electricity_consumption_in_kilowatt_hour,
             total_electricity_production_in_kilowatt_hour,
+            pv_production_in_kilowatt_hour,
         ) = self.compute_electricity_consumption_and_production(result_dataframe=self.filtered_result_dataframe)
-        # get ratio between production and consumption
-        self.compute_ratio_between_production_and_consumption(
-            total_electricity_production_in_kwh=total_electricity_production_in_kilowatt_hour,
-            total_electricity_consumption_in_kwh=total_electricity_consumption_in_kilowatt_hour
+
+        # get ratio between total production and total consumption
+        self.compute_ratio_between_two_values_and_set_as_kpi(
+            denominator_value=total_electricity_production_in_kilowatt_hour,
+            numerator_value=total_electricity_consumption_in_kilowatt_hour,
+            kpi_name="Ratio between total production and total consumption",
+        )
+        # get ratio between pv production and total consumption
+        self.compute_ratio_between_two_values_and_set_as_kpi(
+            denominator_value=pv_production_in_kilowatt_hour,
+            numerator_value=total_electricity_consumption_in_kilowatt_hour,
+            kpi_name="Ratio between PV production and total consumption",
         )
 
         # get self-consumption, autarkie, injection, battery losses
@@ -85,15 +99,17 @@ class KpiGenerator(JSONWizard):
             total_electricity_to_grid_in_kwh,
         ) = self.get_electricity_to_and_from_grid_from_electricty_meter()
         # get relative electricity demand
-        self.compute_relative_electricity_demand_from_grid(
+        relative_electricity_demand_from_grid_in_percent = self.compute_relative_electricity_demand(
             total_electricity_consumption_in_kilowatt_hour=total_electricity_consumption_in_kilowatt_hour,
             electricity_from_grid_in_kilowatt_hour=total_electricity_from_grid_in_kwh,
         )
-        # get self-consumption rate according to mydualsun
-        self.compute_self_consumption_rate_according_to_mydualsun(
+        # get self-consumption rate according to solar htw berlin
+        self.compute_self_consumption_rate_according_to_solar_htw_berlin(
             total_electricity_production_in_kilowatt_hour=total_electricity_production_in_kilowatt_hour,
             electricity_to_grid_in_kilowatt_hour=total_electricity_to_grid_in_kwh,
         )
+        # get autarky rate according to solar htw berlin
+        self.compute_autarky_according_to_solar_htw_berlin(relative_electricty_demand_in_percent=relative_electricity_demand_from_grid_in_percent)
 
         # get energy prices and co2 emissions
         self.compute_energy_prices_and_co2_emission(
@@ -127,8 +143,9 @@ class KpiGenerator(JSONWizard):
         """
 
         # initialize columns consumption, production, battery_charge, battery_discharge, storage
-        consumption_ids = []
-        production_ids = []
+        total_consumption_ids = []
+        total_production_ids = []
+        pv_production_ids = []
         battery_charge_discharge_ids = []
 
         index: int
@@ -137,25 +154,38 @@ class KpiGenerator(JSONWizard):
         for index, output in enumerate(all_outputs):
             if output.postprocessing_flag is not None:
                 if InandOutputType.ELECTRICITY_PRODUCTION in output.postprocessing_flag:
-                    production_ids.append(index)
+                    total_production_ids.append(index)
+
+                elif (
+                    InandOutputType.ELECTRICITY_PRODUCTION in output.postprocessing_flag
+                    and ComponentType.PV in output.postprocessing_flag
+                ):
+                    pv_production_ids.append(index)
 
                 elif (
                     InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED in output.postprocessing_flag
                     or InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED in output.postprocessing_flag
                 ):
-                    consumption_ids.append(index)
+                    total_consumption_ids.append(index)
 
                 elif InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
                     if ComponentType.BATTERY in output.postprocessing_flag:
                         battery_charge_discharge_ids.append(index)
                     elif ComponentType.CAR_BATTERY in output.postprocessing_flag:
-                        consumption_ids.append(index)
+                        total_consumption_ids.append(index)
             else:
                 continue
 
         result_dataframe = pd.DataFrame()
-        result_dataframe["consumption"] = pd.DataFrame(results.iloc[:, consumption_ids]).clip(lower=0).sum(axis=1)
-        result_dataframe["production"] = pd.DataFrame(results.iloc[:, production_ids]).clip(lower=0).sum(axis=1)
+        result_dataframe["total_consumption"] = (
+            pd.DataFrame(results.iloc[:, total_consumption_ids]).clip(lower=0).sum(axis=1)
+        )
+        result_dataframe["total_production"] = (
+            pd.DataFrame(results.iloc[:, total_production_ids]).clip(lower=0).sum(axis=1)
+        )
+        result_dataframe["pv_production"] = (
+            pd.DataFrame(results.iloc[:, total_production_ids]).clip(lower=0).sum(axis=1)
+        )
 
         result_dataframe["battery_charge"] = (
             pd.DataFrame(results.iloc[:, battery_charge_discharge_ids]).clip(lower=0).sum(axis=1)
@@ -176,31 +206,51 @@ class KpiGenerator(JSONWizard):
         energy_in_kilowatt_hour = float(power_timeseries_in_watt.sum() * timeresolution / 3.6e6)
         return energy_in_kilowatt_hour
 
-    def compute_electricity_consumption_and_production(self, result_dataframe: pd.DataFrame) -> Tuple[float, float]:
+    def compute_electricity_consumption_and_production(
+        self, result_dataframe: pd.DataFrame
+    ) -> Tuple[float, float, float]:
         """Compute electricity consumption and production."""
 
         # sum consumption and production over time
-        electricity_consumption_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
-            power_timeseries_in_watt=result_dataframe["consumption"],
+        total_electricity_consumption_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
+            power_timeseries_in_watt=result_dataframe["total_consumption"],
             timeresolution=self.simulation_parameters.seconds_per_timestep,
         )
 
-        electricity_production_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
-            power_timeseries_in_watt=result_dataframe["production"],
+        total_electricity_production_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
+            power_timeseries_in_watt=result_dataframe["total_production"],
+            timeresolution=self.simulation_parameters.seconds_per_timestep,
+        )
+        pv_production_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
+            power_timeseries_in_watt=result_dataframe["pv_production"],
             timeresolution=self.simulation_parameters.seconds_per_timestep,
         )
 
         # make kpi entry
-        consumtion_entry = KpiEntry(name="Consumption", unit="kWh", value=electricity_consumption_in_kilowatt_hour)
-
-        production_entry = KpiEntry(name="Production", unit="kWh", value=electricity_production_in_kilowatt_hour)
+        total_consumtion_entry = KpiEntry(
+            name="Total electricity consumption", unit="kWh", value=total_electricity_consumption_in_kilowatt_hour
+        )
+        total_production_entry = KpiEntry(
+            name="Total electricity production", unit="kWh", value=total_electricity_production_in_kilowatt_hour
+        )
+        pv_production_entry = KpiEntry(
+            name="PV production", unit="kWh", value=pv_production_in_kilowatt_hour
+        )
 
         # update kpi collection dict
         self.kpi_collection_dict.update(
-            {consumtion_entry.name: consumtion_entry.to_dict(), production_entry.name: production_entry.to_dict()}
+            {
+                total_consumtion_entry.name: total_consumtion_entry.to_dict(),
+                total_production_entry.name: total_production_entry.to_dict(),
+                pv_production_entry.name: pv_production_entry.to_dict(),
+            }
         )
 
-        return electricity_consumption_in_kilowatt_hour, electricity_production_in_kilowatt_hour
+        return (
+            total_electricity_consumption_in_kilowatt_hour,
+            total_electricity_production_in_kilowatt_hour,
+            pv_production_in_kilowatt_hour,
+        )
 
     def compute_self_consumption_injection_autarky_and_battery_losses(
         self,
@@ -212,8 +262,8 @@ class KpiGenerator(JSONWizard):
 
         if electricity_production_in_kilowatt_hour > 0:
             # account for battery
-            production_with_battery = result_dataframe["production"] + result_dataframe["battery_discharge"]
-            consumption_with_battery = result_dataframe["consumption"] + result_dataframe["battery_charge"]
+            production_with_battery = result_dataframe["total_production"] + result_dataframe["battery_discharge"]
+            consumption_with_battery = result_dataframe["total_consumption"] + result_dataframe["battery_charge"]
 
             # evaluate injection and sum over time
             grid_injection_series_in_watt: pd.Series = production_with_battery - consumption_with_battery
@@ -225,8 +275,8 @@ class KpiGenerator(JSONWizard):
             self_consumption_series_in_watt: pd.Series = (
                 pd.concat(
                     (
-                        production_with_battery[production_with_battery <= result_dataframe["consumption"]],
-                        result_dataframe["consumption"][result_dataframe["consumption"] < production_with_battery],
+                        production_with_battery[production_with_battery <= result_dataframe["total_consumption"]],
+                        result_dataframe["total_consumption"][result_dataframe["total_consumption"] < production_with_battery],
                     )
                 )
                 .groupby(level=0)
@@ -272,7 +322,7 @@ class KpiGenerator(JSONWizard):
         result_dataframe["grid_injection_in_watt"] = grid_injection_series_in_watt
 
         # make kpi entry
-        grid_injection_entry = KpiEntry(name="Injection", unit="kWh", value=grid_injection_in_kilowatt_hour)
+        grid_injection_entry = KpiEntry(name="Grid injection", unit="kWh", value=grid_injection_in_kilowatt_hour)
         self_consumption_entry = KpiEntry(name="Self-consumption", unit="kWh", value=self_consumption_in_kilowatt_hour)
         self_consumption_rate_entry = KpiEntry(
             name="Self-consumption rate", unit="%", value=self_consumption_rate_in_percent
@@ -343,11 +393,11 @@ class KpiGenerator(JSONWizard):
         )
         return total_energy_from_grid_in_kwh, total_energy_to_grid_in_kwh
 
-    def compute_relative_electricity_demand_from_grid(
+    def compute_relative_electricity_demand(
         self,
         total_electricity_consumption_in_kilowatt_hour: float,
         electricity_from_grid_in_kilowatt_hour: Optional[float],
-    ) -> None:
+    ) -> Optional[float]:
         """Return the relative electricity demand."""
         if electricity_from_grid_in_kilowatt_hour is None:
             relative_electricity_demand_from_grid_in_percent = None
@@ -373,32 +423,67 @@ class KpiGenerator(JSONWizard):
         self.kpi_collection_dict.update(
             {relative_electricity_demand_entry.name: relative_electricity_demand_entry.to_dict()}
         )
+        return relative_electricity_demand_from_grid_in_percent
 
-    def compute_ratio_between_production_and_consumption(self, total_electricity_production_in_kwh: float, total_electricity_consumption_in_kwh: float) -> None:
-        """Compute the ration of electricity production and consumption."""
-        ratio_in_percent = total_electricity_production_in_kwh / total_electricity_consumption_in_kwh * 100
+    def compute_autarky_according_to_solar_htw_berlin(
+    self,
+    relative_electricty_demand_in_percent: Optional[float],
+    ) -> None:
+        """Return the autarky rate according to solar htw berlin.
+
+        https://solar.htw-berlin.de/wp-content/uploads/WENIGER-2017-Vergleich-verschiedener-Kennzahlen-zur-Bewertung-von-PV-Batteriesystemen.pdf.
+        """
+        if relative_electricty_demand_in_percent is None:
+            autraky_rate_in_percent = None
+        else:
+            autraky_rate_in_percent = 100 - relative_electricty_demand_in_percent
+            if autraky_rate_in_percent > 100:
+                raise ValueError(
+                    "The autarky rate should not be over 100 %. Something is wrong here. Please check your code. "
+                    f"The realtive electricity demand is {relative_electricty_demand_in_percent} %. "
+                )
+
+        # make kpi entry
+        autarky_rate_entry = KpiEntry(
+            name="Autarky rate according to solar htw berlin",
+            unit="%",
+            value=autraky_rate_in_percent,
+        )
+
+        # update kpi collection dict
+        self.kpi_collection_dict.update(
+            {autarky_rate_entry.name: autarky_rate_entry.to_dict()}
+        )
+
+    def compute_ratio_between_two_values_and_set_as_kpi(
+        self, denominator_value: float, numerator_value: float, kpi_name: str
+    ) -> None:
+        """Compute the ratio of two values.
+
+        ratio = denominator / numerator * 100 [%].
+        """
+        ratio_in_percent = denominator_value / numerator_value * 100
         # make kpi entry
         ratio_in_percent_entry = KpiEntry(
-            name="Ratio between energy production and consumption",
+            name=kpi_name,
             unit="%",
             value=ratio_in_percent,
         )
 
         # update kpi collection dict
-        self.kpi_collection_dict.update(
-            {ratio_in_percent_entry.name: ratio_in_percent_entry.to_dict()}
-        )
+        self.kpi_collection_dict.update({ratio_in_percent_entry.name: ratio_in_percent_entry.to_dict()})
 
-    def compute_self_consumption_rate_according_to_mydualsun(
+    def compute_self_consumption_rate_according_to_solar_htw_berlin(
         self,
         total_electricity_production_in_kilowatt_hour: float,
         electricity_to_grid_in_kilowatt_hour: Optional[float],
     ) -> None:
-        """Return self-consumption according to dual sun.
+        """Return self-consumption according to solar htw berlin.
 
+        https://solar.htw-berlin.de/wp-content/uploads/WENIGER-2017-Vergleich-verschiedener-Kennzahlen-zur-Bewertung-von-PV-Batteriesystemen.pdf.
         https://academy.dualsun.com/hc/en-us/articles/360018456939-How-is-the-self-consumption-rate-calculated-on-MyDualSun.
         """
-        if electricity_to_grid_in_kilowatt_hour is None:
+        if electricity_to_grid_in_kilowatt_hour is None or total_electricity_production_in_kilowatt_hour == 0:
             self_consumption_rate_in_percent = None
         else:
             self_consumption_rate_in_percent = (
@@ -415,7 +500,7 @@ class KpiGenerator(JSONWizard):
 
         # make kpi entry
         self_consumption_rate_entry = KpiEntry(
-            name="Self-consumption rate according to mydualsun",
+            name="Self-consumption rate according to solar htw berlin",
             unit="%",
             value=self_consumption_rate_in_percent,
         )
@@ -529,7 +614,7 @@ class KpiGenerator(JSONWizard):
                 costs_for_energy_use_in_euro = (
                     costs_for_energy_use_in_euro
                     + self.compute_total_energy_from_power_timeseries(
-                        power_timeseries_in_watt=result_dataframe["consumption"] - self_consumption,
+                        power_timeseries_in_watt=result_dataframe["total_consumption"] - self_consumption,
                         timeresolution=self.simulation_parameters.seconds_per_timestep,
                     )
                 )  # Todo: is this correct? (maybe not so important, only used if generic_price_signal is used
@@ -547,7 +632,7 @@ class KpiGenerator(JSONWizard):
                 costs_for_energy_use_in_euro = (
                     costs_for_energy_use_in_euro
                     + self.compute_total_energy_from_power_timeseries(
-                        power_timeseries_in_watt=result_dataframe["consumption"] * electricity_price_consumption,
+                        power_timeseries_in_watt=result_dataframe["total_consumption"] * electricity_price_consumption,
                         timeresolution=self.simulation_parameters.seconds_per_timestep,
                     )
                 )

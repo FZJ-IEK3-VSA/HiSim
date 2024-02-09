@@ -255,10 +255,9 @@ class FilterClass:
         # system_setups for variables to check (check names of your variables before your evaluation, if they are correct)
         # kpi data has no time series, so only choose when you analyze yearly data
         kpi_data = [
-            "Production",
-            "Consumption",
-            "Ratio between energy production and consumption",
-            "Injection",
+            "Total electricity consumption",
+            "Total electricity production",
+            "Ratio between total production and total consumption",
             "Self-consumption",
             "Self-consumption rate",
             "Self-consumption rate according to mydualsun",
@@ -266,6 +265,8 @@ class FilterClass:
             "Total energy from grid",
             "Total energy to grid",
             "Relative electricity demand from grid",
+            "Self-consumption rate according to solar htw berlin",
+            "Autarky rate according to solar htw berlin",
             "Investment costs for equipment per simulated period",
             "CO2 footprint for equipment per simulated period",
             "System operational costs for simulated period",
@@ -275,16 +276,17 @@ class FilterClass:
             "Temperature deviation of building indoor air temperature being below set temperature 19.0 Celsius",
             "Minimum building indoor air temperature reached",
             "Temperature deviation of building indoor air temperature being above set temperature 24.0 Celsius",
+            "Temperature deviation of building indoor air temperature being above set temperature 24.0 Celsius",
             "Maximum building indoor air temperature reached",
             "Building heating load",
             "Specific heating load",
             "Specific heating demand according to TABULA",
-            "Thermal output energy of heat distribution system",
+            "Thermal output energy of heat distribution system"
             "Number of heat pump cycles",
             "Seasonal performance factor of heat pump",
             "Thermal output energy of heat pump",
             "Specific thermal output energy of heat pump",
-            "Electrical input energy of heat pump"
+            "Electrical input energy of heat pump",
         ]
 
         electricity_data = [

@@ -104,11 +104,29 @@ class HeatPumpHplibConfig(ConfigBase):
     def get_scaled_advanced_hp_lib(
         cls,
         heating_load_of_building_in_watt: float,
+        annual_building_heating_demand_in_kilowatt_hour_per_m2_per_year: float,
         heating_reference_temperature_in_celsius: float = -7.0,
     ) -> "HeatPumpHplibConfig":
-        """Gets a default heat pump with scaling according to heating load of the building."""
+        """Gets a default heat pump with scaling according to heating load of the building.
 
-        set_thermal_output_power_in_watt = heating_load_of_building_in_watt
+        Depending of the energy efficiency class of the building, the thermal power of the heat pump will be scaled up with an additional factor.
+        Check the following energy efficiency classes: https://www.effizienzhaus-online.de/energieeffizienzklasse/.
+        """
+
+        # scale heat pump power up if the energy efficiency of building is low or very low
+        # if building heating demand is in energy efficiency class A+ - D, additional scaling factor = 1
+        if 0 < annual_building_heating_demand_in_kilowatt_hour_per_m2_per_year <= 130.0:
+            additional_scaling_factor = 1
+        # if building heating demand is in energy efficiency class E - F, additional scaling factor = 2
+        elif 130.0 < annual_building_heating_demand_in_kilowatt_hour_per_m2_per_year <= 200.0:
+            additional_scaling_factor = 2
+        # if building heating demand is in energy efficiency class G - H, additional scaling factor = 3
+        elif annual_building_heating_demand_in_kilowatt_hour_per_m2_per_year > 200.0:
+            additional_scaling_factor = 3
+        else:
+            raise ValueError(f"The annual building heating demand of {annual_building_heating_demand_in_kilowatt_hour_per_m2_per_year} kWh/m2a seems incorrect.")
+
+        set_thermal_output_power_in_watt = heating_load_of_building_in_watt * additional_scaling_factor
 
         return HeatPumpHplibConfig(
             name="AdvancedHeatPumpHPLib",

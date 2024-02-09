@@ -221,6 +221,7 @@ def setup_function(
     my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+        annual_building_heating_demand_in_kilowatt_hour_per_m2_per_year=my_building_information.energy_need_for_heating_reference_in_kilowatthour_per_m2_per_year
     )
     my_heat_pump_config.group_id = group_id
     my_heat_pump_config.flow_temperature_in_celsius = flow_temperature_in_celsius
@@ -240,9 +241,9 @@ def setup_function(
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Heat Water Storage
+    # Build Heat Water Storage (should scale first normally with max thermal building demand in watt, not with hp power)
     my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-        max_thermal_power_in_watt_of_heating_system=my_heat_pump_config.set_thermal_output_power_in_watt,
+        max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,  #my_heat_pump_config.set_thermal_output_power_in_watt,
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
         heating_system_name=my_heat_pump.component_name,
         water_mass_flow_rate_from_hds_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,

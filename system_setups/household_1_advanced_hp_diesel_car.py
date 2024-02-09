@@ -145,6 +145,7 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
             hp_config=advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
                 heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
                 heating_reference_temperature_in_celsius=my_building_information.heating_reference_temperature_in_celsius,
+                annual_building_heating_demand_in_kilowatt_hour_per_m2_per_year=my_building_information.energy_need_for_heating_reference_in_kilowatthour_per_m2_per_year,
             ),
             simple_hot_water_storage_config=simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
                 max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,

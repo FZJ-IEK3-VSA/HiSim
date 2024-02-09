@@ -182,7 +182,7 @@ def setup_function(
 
     my_electricity_controller.add_component_output(
         source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-        source_tags=[lt.ComponentType.HEAT_PUMP_DHW, lt.InandOutputType.ELECTRICITY_TARGET,],
+        source_tags=[lt.ComponentType.HEAT_PUMP_DHW, lt.InandOutputType.ELECTRICITY_TARGET],
         source_weight=1,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
@@ -191,7 +191,7 @@ def setup_function(
 
     my_electricity_controller.add_component_output(
         source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-        source_tags=[lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.ELECTRICITY_TARGET,],
+        source_tags=[lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.ELECTRICITY_TARGET],
         source_weight=2,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
@@ -200,7 +200,7 @@ def setup_function(
 
     electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
         source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET,],
+        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
         source_weight=3,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,

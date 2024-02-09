@@ -530,6 +530,6 @@ def needs_ems(  # pylint: disable=R0911
     if heating_system_installed in [
         lt.HeatingSystems.HEAT_PUMP,
         lt.HeatingSystems.ELECTRIC_HEATING,
-    ] or water_heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING,]:
+    ] or water_heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING]:
         return True
     return False

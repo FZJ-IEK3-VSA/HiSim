@@ -119,7 +119,7 @@ def setup_function(
         source_component_output=my_photovoltaic_system.ElectricityOutput,
         source_load_type=loadtypes.LoadTypes.ELECTRICITY,
         source_unit=loadtypes.Units.WATT,
-        source_tags=[loadtypes.ComponentType.PV, loadtypes.InandOutputType.ELECTRICITY_PRODUCTION,],
+        source_tags=[loadtypes.ComponentType.PV, loadtypes.InandOutputType.ELECTRICITY_PRODUCTION],
         source_weight=999,
     )
 

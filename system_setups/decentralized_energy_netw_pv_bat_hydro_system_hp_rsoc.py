@@ -195,7 +195,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         source_component_output=my_heat_pump.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        source_tags=[lt.ComponentType.HEAT_PUMP, lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,],
+        source_tags=[lt.ComponentType.HEAT_PUMP, lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
         source_weight=999,
     )
     my_building.connect_only_predefined_connections(my_weather)
@@ -218,7 +218,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         source_component_output=my_rsoc.SOFCCurrentOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        source_tags=[lt.ComponentType.FUEL_CELL, lt.InandOutputType.ELECTRICITY_PRODUCTION,],
+        source_tags=[lt.ComponentType.FUEL_CELL, lt.InandOutputType.ELECTRICITY_PRODUCTION],
         source_weight=2,
     )
 
@@ -227,7 +227,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         source_component_output=my_rsoc.SOECCurrentLoad,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        source_tags=[lt.ComponentType.ELECTROLYZER, lt.InandOutputType.ELECTRICITY_REAL,],
+        source_tags=[lt.ComponentType.ELECTROLYZER, lt.InandOutputType.ELECTRICITY_REAL],
         source_weight=1,  # maybe change the weigth
     )
 
@@ -241,7 +241,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
     electricity_to_electrolyzer_target = my_cl2.add_component_output(
         source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-        source_tags=[lt.ComponentType.ELECTROLYZER, lt.InandOutputType.ELECTRICITY_TARGET,],
+        source_tags=[lt.ComponentType.ELECTROLYZER, lt.InandOutputType.ELECTRICITY_TARGET],
         source_weight=1,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,

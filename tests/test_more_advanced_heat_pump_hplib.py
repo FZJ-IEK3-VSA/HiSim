@@ -72,7 +72,20 @@ def test_heat_pump_hplib_new():
     )
     heatpump = HeatPumpHplibWithTwoOutputs(config=heatpump_config, my_simulation_parameters=simpars)
     heatpump.state = HeatPumpWithTwoOutputsState(
-        time_on=0, time_off=0, time_on_cooling=0, on_off_previous=1, cumulative_electrical_energy_in_watt_hour=0, cumulative_thermal_energy_in_watt_hour=0
+        time_on=0,
+        time_off=0,
+        time_on_cooling=0,
+        on_off_previous=1,
+        cumulative_electrical_energy_tot_in_watt_hour=0,
+        cumulative_thermal_energy_tot_in_watt_hour=0,
+        cumulative_thermal_energy_sh_in_watt_hour=0,
+        cumulative_thermal_energy_dhw_in_watt_hour=0,
+        cumulative_electrical_energy_sh_in_watt_hour=0,
+        cumulative_electrical_energy_dhw_in_watt_hour=0,
+        counter_switch_sh=0,
+        counter_switch_dhw=0,
+        counter_onoff=0,
+
     )
 
     number_of_outputs = fft.get_number_of_outputs(

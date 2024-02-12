@@ -94,9 +94,9 @@ class HeatPumpHplibWithTwoOutputsConfig(ConfigBase):
             name="AdvancedHeatPumpHPLib",
             model="Generic",
             heat_source="air",
-            group_id=4,
+            group_id=1,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-            flow_temperature_in_celsius=52,
+            flow_temperature_in_celsius=35,
             set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
             cycling_mode=True,
             minimum_running_time_in_seconds=600,
@@ -125,9 +125,9 @@ class HeatPumpHplibWithTwoOutputsConfig(ConfigBase):
             name="AdvancedHeatPumpHPLib",
             model="Generic",
             heat_source="air",
-            group_id=4,
+            group_id=1,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-            flow_temperature_in_celsius=52,
+            flow_temperature_in_celsius=35,
             set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
             cycling_mode=True,
             minimum_running_time_in_seconds=600,
@@ -180,14 +180,25 @@ class HeatPumpHplibWithTwoOutputs(Component):
     MassFlowOutputDHW = "MassFlowOutputDHW"  # kg/s
     TimeOn = "TimeOn"  # s
     TimeOff = "TimeOff"  # s
-    ThermalEnergy = "ThermalEnergy"  # Wh
-    ElectricalEnergy = "ElectricalEnergy"  # Wh
+    ThermalEnergyTotal = "ThermalEnergyTotal"  # Wh
+    ThermalEnergySH = "ThermalEnergySH"  # Wh
+    ThermalEnergyDHW = "ThermalEnergyDHW"  # Wh
+    ElectricalEnergyTotal = "ElectricalEnergyTotal"  # Wh
+    ElectricalEnergySH = "ElectricalEnergySH"  # Wh
+    ElectricalEnergyDHW = "ElectricalEnergyDHW"  # Wh
     ThermalPowerFromEnvironment = "ThermalPowerInputFromEnvironment"  # W
-    CumulativeThermalEnergy = "CumulativeThermalEnergy"  # Wh
-    CumulativeElectricalEnergy = "CumulativeElectricalEnergy"  # Wh
+    CumulativeThermalEnergyTotal = "CumulativeThermalEnergyTotal"  # Wh
+    CumulativeThermalEnergySH = "CumulativeThermalEnergySH"  # Wh
+    CumulativeThermalEnergyDHW = "CumulativeThermalEnergyDHW"  # Wh
+    CumulativeElectricalEnergyTotal = "CumulativeElectricalEnergyTotal"  # Wh
+    CumulativeElectricalEnergySH = "CumulativeElectricalEnergySH"  # Wh
+    CumulativeElectricalEnergyDHW = "CumulativeElectricalEnergyDHW"  # Wh
     MdotWaterPrimary = "MassflowPrimary"  # kg/s --- used for Water/water HP
     WaterTemperaturePrimaryIn = "TemperaturePrimaryIn"  # °C
     WaterTemperaturePrimaryOut = "TemperaturePrimaryOut"  # °C
+    CounterSwitchToSH = "CounterSwitchToSH"  # Counter of switching to SH != onOff Switch!
+    CounterSwitchToDHW = "CounterSwitchToDHW"  # Counter of switching to DHW != onOff Switch!
+    CounterOnOff = "CounterOnOff"  # Counter of starting the hp
 
     def __init__(
         self,
@@ -238,8 +249,15 @@ class HeatPumpHplibWithTwoOutputs(Component):
             time_off=0,
             time_on_cooling=0,
             on_off_previous=0,
-            cumulative_thermal_energy_in_watt_hour=0,
-            cumulative_electrical_energy_in_watt_hour=0,
+            cumulative_thermal_energy_tot_in_watt_hour=0,
+            cumulative_thermal_energy_sh_in_watt_hour=0,
+            cumulative_thermal_energy_dhw_in_watt_hour=0,
+            cumulative_electrical_energy_tot_in_watt_hour=0,
+            cumulative_electrical_energy_sh_in_watt_hour=0,
+            cumulative_electrical_energy_dhw_in_watt_hour=0,
+            counter_switch_sh=0,
+            counter_switch_dhw=0,
+            counter_onoff=0,
         )
         self.previous_state = self.state.self_copy()
 
@@ -459,34 +477,122 @@ class HeatPumpHplibWithTwoOutputs(Component):
 
         self.thermal_energy_hp_tot_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.ThermalEnergy,
+            field_name=self.ThermalEnergyTotal,
             load_type=LoadTypes.HEATING,
             unit=Units.WATT_HOUR,
-            output_description=f"here a description for {self.ThermalEnergy} will follow.",
+            output_description=f"here a description for {self.ThermalEnergyTotal} will follow.",
+        )
+
+        self.thermal_energy_hp_sh_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ThermalEnergySH,
+            load_type=LoadTypes.HEATING,
+            unit=Units.WATT_HOUR,
+            output_description=f"here a description for {self.ThermalEnergySH} will follow.",
+        )
+
+        self.thermal_energy_hp_dhw_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ThermalEnergyDHW,
+            load_type=LoadTypes.HEATING,
+            unit=Units.WATT_HOUR,
+            output_description=f"here a description for {self.ThermalEnergyDHW} will follow.",
         )
 
         self.electrical_energy_hp_tot_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.ElectricalEnergy,
+            field_name=self.ElectricalEnergyTotal,
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT_HOUR,
-            output_description=f"here a description for {self.ElectricalEnergy} will follow.",
+            output_description=f"here a description for {self.ElectricalEnergyTotal} will follow.",
         )
 
-        self.cumulative_hp_thermal_energy_channel: ComponentOutput = self.add_output(
+        self.electrical_energy_hp_sh_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.CumulativeThermalEnergy,
+            field_name=self.ElectricalEnergySH,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT_HOUR,
+            output_description=f"here a description for {self.ElectricalEnergySH} will follow.",
+        )
+
+        self.electrical_energy_hp_dhw_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricalEnergyDHW,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT_HOUR,
+            output_description=f"here a description for {self.ElectricalEnergyDHW} will follow.",
+        )
+
+        self.cumulative_hp_thermal_energy_tot_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.CumulativeThermalEnergyTotal,
             load_type=LoadTypes.HEATING,
             unit=Units.WATT_HOUR,
-            output_description=f"here a description for {self.CumulativeThermalEnergy} will follow.",
+            output_description=f"here a description for {self.CumulativeThermalEnergyTotal} will follow.",
         )
 
-        self.cumulative_hp_electrical_energy_channel: ComponentOutput = self.add_output(
+        self.cumulative_hp_thermal_energy_sh_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.CumulativeElectricalEnergy,
+            field_name=self.CumulativeThermalEnergySH,
+            load_type=LoadTypes.HEATING,
+            unit=Units.WATT_HOUR,
+            output_description=f"here a description for {self.CumulativeThermalEnergySH} will follow.",
+        )
+
+        self.cumulative_hp_thermal_energy_dhw_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.CumulativeThermalEnergyDHW,
+            load_type=LoadTypes.HEATING,
+            unit=Units.WATT_HOUR,
+            output_description=f"here a description for {self.CumulativeThermalEnergyDHW} will follow.",
+        )
+
+        self.cumulative_hp_electrical_energy_tot_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.CumulativeElectricalEnergyTotal,
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT_HOUR,
-            output_description=f"here a description for {self.CumulativeElectricalEnergy} will follow.",
+            output_description=f"here a description for {self.CumulativeElectricalEnergyTotal} will follow.",
+        )
+
+        self.cumulative_hp_electrical_energy_sh_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.CumulativeElectricalEnergySH,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT_HOUR,
+            output_description=f"here a description for {self.CumulativeElectricalEnergySH} will follow.",
+        )
+
+        self.cumulative_hp_electrical_energy_dhw_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.CumulativeElectricalEnergyDHW,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT_HOUR,
+            output_description=f"here a description for {self.CumulativeElectricalEnergyDHW} will follow.",
+        )
+
+        self.counter_switch_sh_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.CounterSwitchToSH,
+            load_type=LoadTypes.ANY,
+            unit=Units.ANY,
+            output_description=f"{self.CounterSwitchToSH} is a counter of switching the mode to SH, NOT counting starting of on_off.",
+        )
+
+        self.counter_switch_dhw_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.CounterSwitchToDHW,
+            load_type=LoadTypes.ANY,
+            unit=Units.ANY,
+            output_description=f"{self.CounterSwitchToDHW} is a counter of switching the mode to DHW, NOT counting starting of on_off.",
+        )
+
+        self.counter_on_off_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.CounterOnOff,
+            load_type=LoadTypes.ANY,
+            unit=Units.ANY,
+            output_description=f"{self.CounterOnOff} is a counter of starting procedures hp.",
         )
 
         if self.parameters["Group"].iloc[0] == 3.0 or self.parameters["Group"].iloc[0] == 6.0:
@@ -644,7 +750,9 @@ class HeatPumpHplibWithTwoOutputs(Component):
         time_on_cooling = self.state.time_on_cooling
         time_off = self.state.time_off
 
-        if on_off_dhw != 0:
+        if (
+            on_off_dhw != 0
+        ):
             on_off = on_off_dhw
         else:
             on_off = on_off_sh
@@ -678,10 +786,8 @@ class HeatPumpHplibWithTwoOutputs(Component):
         else:
             raise ValueError("Cycling mode of the advanced hplib unknown.")
 
-        if (
-            on_off_dhw != 0
-        ):  # priority on dhw if there is a demand, independently if the actual state and time_on_heating
-            on_off = on_off_dhw
+        # if on_off_dhw != 0:  # priority on dhw if there is a demand, independently if the actual state and time_on_heating
+        #     on_off = on_off_dhw
 
         if on_off == 1:  # Calculation for building heating
             if force_convergence:
@@ -804,14 +910,50 @@ class HeatPumpHplibWithTwoOutputs(Component):
         thermal_power_from_environment = (p_th_dhw + p_th_sh) - (p_el_dhw + p_el_sh)
 
         thermal_energy_hp_tot_in_watt_hour = p_th_tot_in_watt * self.seconds_per_timestep / 3600
-        electrical_energy_hp_tot_in_watt_hour = p_el_tot_in_watt * self.seconds_per_timestep / 3600
+        thermal_energy_hp_sh_in_watt_hour = p_th_sh * self.seconds_per_timestep / 3600
+        thermal_energy_hp_dhw_in_watt_hour = p_th_dhw * self.seconds_per_timestep / 3600
 
-        cumulative_hp_thermal_energy_in_watt_hour = (
-            self.state.cumulative_thermal_energy_in_watt_hour + thermal_energy_hp_tot_in_watt_hour
+        electrical_energy_hp_tot_in_watt_hour = p_el_tot_in_watt * self.seconds_per_timestep / 3600
+        electrical_energy_hp_sh_in_watt_hour = p_el_sh * self.seconds_per_timestep / 3600
+        electrical_energy_hp_dhw_in_watt_hour = p_el_dhw * self.seconds_per_timestep / 3600
+
+        cumulative_hp_thermal_energy_tot_in_watt_hour = (
+            self.state.cumulative_thermal_energy_tot_in_watt_hour + thermal_energy_hp_tot_in_watt_hour
         )
-        cumulative_hp_electrical_energy_in_watt_hour = (
-            self.state.cumulative_electrical_energy_in_watt_hour + electrical_energy_hp_tot_in_watt_hour
+        cumulative_hp_thermal_energy_sh_in_watt_hour = (
+            self.state.cumulative_thermal_energy_sh_in_watt_hour + thermal_energy_hp_sh_in_watt_hour
         )
+        cumulative_hp_thermal_energy_dhw_in_watt_hour = (
+            self.state.cumulative_thermal_energy_dhw_in_watt_hour + thermal_energy_hp_dhw_in_watt_hour
+        )
+
+        cumulative_hp_electrical_energy_tot_in_watt_hour = (
+            self.state.cumulative_electrical_energy_tot_in_watt_hour + electrical_energy_hp_tot_in_watt_hour
+        )
+        cumulative_hp_electrical_energy_sh_in_watt_hour = (
+            self.state.cumulative_electrical_energy_sh_in_watt_hour + electrical_energy_hp_sh_in_watt_hour
+        )
+        cumulative_hp_electrical_energy_dhw_in_watt_hour = (
+            self.state.cumulative_electrical_energy_dhw_in_watt_hour + electrical_energy_hp_dhw_in_watt_hour
+        )
+
+        # Counter for switching in sh mode
+        if self.state.on_off_previous != on_off and on_off == 1:
+            counter_switch_sh = self.state.counter_switch_sh + 1
+        else:
+            counter_switch_sh = self.state.counter_switch_sh
+
+        # Counter for switching in dhw mode
+        if self.state.on_off_previous != on_off and on_off == 2:
+            counter_switch_dhw = self.state.counter_switch_dhw + 1
+        else:
+            counter_switch_dhw = self.state.counter_switch_dhw
+
+        # Counter for switching on Off Mode of HP
+        if self.state.on_off_previous == 0 and on_off != 0:
+            counter_onoff = self.state.counter_onoff + 1
+        else:
+            counter_onoff = self.state.counter_onoff
 
         if self.parameters["Group"].iloc[0] == 3.0 or self.parameters["Group"].iloc[0] == 6.0:
             # todo: variability of massflow. now there is a fix temperaturdiffernz between inlet and outlet which calculate the massflow
@@ -841,24 +983,52 @@ class HeatPumpHplibWithTwoOutputs(Component):
         stsv.set_output_value(self.time_on, time_on_heating)
         stsv.set_output_value(self.time_off, time_off)
         stsv.set_output_value(self.thermal_power_from_environment, thermal_power_from_environment)
+
         stsv.set_output_value(self.thermal_energy_hp_tot_channel, thermal_energy_hp_tot_in_watt_hour)
+        stsv.set_output_value(self.thermal_energy_hp_sh_channel, thermal_energy_hp_sh_in_watt_hour)
+        stsv.set_output_value(self.thermal_energy_hp_dhw_channel, thermal_energy_hp_dhw_in_watt_hour)
+
         stsv.set_output_value(self.electrical_energy_hp_tot_channel, electrical_energy_hp_tot_in_watt_hour)
+        stsv.set_output_value(self.electrical_energy_hp_sh_channel, electrical_energy_hp_sh_in_watt_hour)
+        stsv.set_output_value(self.electrical_energy_hp_dhw_channel, electrical_energy_hp_dhw_in_watt_hour)
         stsv.set_output_value(
-            self.cumulative_hp_thermal_energy_channel,
-            cumulative_hp_thermal_energy_in_watt_hour,
+            self.cumulative_hp_thermal_energy_tot_channel, cumulative_hp_thermal_energy_tot_in_watt_hour
         )
         stsv.set_output_value(
-            self.cumulative_hp_electrical_energy_channel,
-            cumulative_hp_electrical_energy_in_watt_hour,
+            self.cumulative_hp_thermal_energy_sh_channel, cumulative_hp_thermal_energy_sh_in_watt_hour
         )
+        stsv.set_output_value(
+            self.cumulative_hp_thermal_energy_dhw_channel, cumulative_hp_thermal_energy_dhw_in_watt_hour
+        )
+
+        stsv.set_output_value(
+            self.cumulative_hp_electrical_energy_tot_channel, cumulative_hp_electrical_energy_tot_in_watt_hour
+        )
+        stsv.set_output_value(
+            self.cumulative_hp_electrical_energy_sh_channel, cumulative_hp_electrical_energy_sh_in_watt_hour
+        )
+        stsv.set_output_value(
+            self.cumulative_hp_electrical_energy_dhw_channel, cumulative_hp_electrical_energy_dhw_in_watt_hour
+        )
+
+        stsv.set_output_value(self.counter_switch_sh_channel, counter_switch_sh)
+        stsv.set_output_value(self.counter_switch_dhw_channel, counter_switch_dhw)
+        stsv.set_output_value(self.counter_on_off_channel, counter_onoff)
 
         # write values to state
         self.state.time_on = time_on_heating
         self.state.time_on_cooling = time_on_cooling
         self.state.time_off = time_off
         self.state.on_off_previous = on_off
-        self.state.cumulative_thermal_energy_in_watt_hour = cumulative_hp_thermal_energy_in_watt_hour
-        self.state.cumulative_electrical_energy_in_watt_hour = cumulative_hp_electrical_energy_in_watt_hour
+        self.state.cumulative_thermal_energy_tot_in_watt_hour = cumulative_hp_thermal_energy_tot_in_watt_hour
+        self.state.cumulative_thermal_energy_sh_in_watt_hour = cumulative_hp_thermal_energy_sh_in_watt_hour
+        self.state.cumulative_thermal_energy_dhw_in_watt_hour = cumulative_hp_thermal_energy_dhw_in_watt_hour
+        self.state.cumulative_electrical_energy_tot_in_watt_hour = cumulative_hp_electrical_energy_tot_in_watt_hour
+        self.state.cumulative_electrical_energy_sh_in_watt_hour = cumulative_hp_electrical_energy_sh_in_watt_hour
+        self.state.cumulative_electrical_energy_dhw_in_watt_hour = cumulative_hp_electrical_energy_dhw_in_watt_hour
+        self.state.counter_switch_sh = counter_switch_sh
+        self.state.counter_switch_dhw = counter_switch_dhw
+        self.state.counter_onoff = counter_onoff
 
     @staticmethod
     def get_cost_capex(
@@ -938,8 +1108,15 @@ class HeatPumpWithTwoOutputsState:
     time_off: int
     time_on_cooling: int
     on_off_previous: float
-    cumulative_thermal_energy_in_watt_hour: float
-    cumulative_electrical_energy_in_watt_hour: float
+    cumulative_thermal_energy_tot_in_watt_hour: float
+    cumulative_thermal_energy_sh_in_watt_hour: float
+    cumulative_thermal_energy_dhw_in_watt_hour: float
+    cumulative_electrical_energy_tot_in_watt_hour: float
+    cumulative_electrical_energy_sh_in_watt_hour: float
+    cumulative_electrical_energy_dhw_in_watt_hour: float
+    counter_switch_sh: int
+    counter_switch_dhw: int
+    counter_onoff: int
 
     def self_copy(
         self,
@@ -950,8 +1127,15 @@ class HeatPumpWithTwoOutputsState:
             self.time_off,
             self.time_on_cooling,
             self.on_off_previous,
-            self.cumulative_thermal_energy_in_watt_hour,
-            self.cumulative_electrical_energy_in_watt_hour,
+            self.cumulative_thermal_energy_tot_in_watt_hour,
+            self.cumulative_thermal_energy_sh_in_watt_hour,
+            self.cumulative_thermal_energy_dhw_in_watt_hour,
+            self.cumulative_electrical_energy_tot_in_watt_hour,
+            self.cumulative_electrical_energy_sh_in_watt_hour,
+            self.cumulative_electrical_energy_dhw_in_watt_hour,
+            self.counter_switch_sh,
+            self.counter_switch_dhw,
+            self.counter_onoff,
         )
 
 
@@ -1458,8 +1642,6 @@ class HeatPumpHplibControllerDHW(Component):
 
     """
 
-    # in state mit aufnehmen das hier priorisiert wird
-
     # Inputs
     WaterTemperatureInputFromDHWStorage = "WaterTemperatureInputFromDHWStorage"
     DWHStorageTemperatureModifier = "StorageTemperatureModifier"
@@ -1558,7 +1740,6 @@ class HeatPumpHplibControllerDHW(Component):
 
         The function sets important constants and parameters for the calculations.
         """
-        # Sth
 
         self.controller_signal = 0
         self.state_dhw = 0

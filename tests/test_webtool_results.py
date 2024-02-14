@@ -4,8 +4,8 @@ import json
 from numbers import Number
 from pathlib import Path
 
-import pytest
 import pandas as pd
+import pytest
 
 from hisim.component import SimulationParameters
 from hisim.hisim_main import main
@@ -14,7 +14,7 @@ from hisim.postprocessingoptions import PostProcessingOptions
 
 @pytest.mark.base
 def test_webtool_results():
-    """Check if results for webtool JSON is created."""
+    """Check if results for webtool are created."""
     path = "../system_setups/household_heat_pump.py"
     my_simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     my_simulation_parameters.post_processing_options = [
@@ -30,7 +30,7 @@ def test_webtool_results():
     with open(Path(my_simulation_parameters.result_directory).joinpath("results_daily_operation_for_webtool.json"), "rb") as handle:
         results_daily_operation_for_webtool = pd.read_json(handle)
 
-    assert isinstance(results_daily_operation_for_webtool.loc["2021-01-01","AdvancedHeatPumpHPLib - ElectricalInputPower [Electricity - W]" ], Number)
+    assert isinstance(results_daily_operation_for_webtool.loc["2021-01-01","AdvancedHeatPumpHPLib - ElectricalInputPower [Electricity - W]"], Number)
 
     # Read summary results
     with open(Path(my_simulation_parameters.result_directory).joinpath("results_for_webtool.json"), "rb") as handle:
@@ -40,5 +40,3 @@ def test_webtool_results():
         results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["operation"]["ThermalOutputPower"]["value"],
         Number,
     )
-
-

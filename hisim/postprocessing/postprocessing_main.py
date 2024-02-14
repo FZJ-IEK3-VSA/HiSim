@@ -261,6 +261,11 @@ class PostProcessor:
             log.information("Make JSON file for webtool.")
             self.write_results_for_webtool_to_json_file(ppdt)
 
+        # Prepare webtool operation results
+        if PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL in ppdt.post_processing_options:
+            log.information("Make JSON file for webtool (operation).")
+            self.write_operation_data_for_webtool(ppdt)
+
         if PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON in ppdt.post_processing_options:
             log.information("Writing component configurations to JSON file.")
             self.write_component_configurations_to_json(ppdt)
@@ -920,6 +925,16 @@ class PostProcessor:
         )
 
         dataframe.to_csv(path_or_buf=filename, index=None)  # type: ignore
+
+    def write_operation_data_for_webtool(self, ppdt: PostProcessingDataTransfer) -> None:
+        data=ppdt.results_daily.to_json()
+        with open(
+                os.path.join(ppdt.simulation_parameters.result_directory, "results_daily_operation_for_webtool.json"),
+                "w",
+                encoding="utf-8",
+        ) as file:
+            file.write(data)
+        pass
 
     def write_results_for_webtool_to_json_file(self, ppdt: PostProcessingDataTransfer) -> None:
         """Collect results and write into json for webtool."""

@@ -5,6 +5,7 @@ from numbers import Number
 from pathlib import Path
 
 import pytest
+import pandas as pd
 
 from hisim.component import SimulationParameters
 from hisim.hisim_main import main
@@ -21,9 +22,17 @@ def test_webtool_results():
         PostProcessingOptions.COMPUTE_OPEX,
         PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT,
         PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL,
+        PostProcessingOptions.MAKE_OPERATION_RESULTS_FOR_WEBTOOL
     ]
-    main(path, my_simulation_parameters)
+    main(str(path), my_simulation_parameters)
 
+    # Read operational results
+    with open(Path(my_simulation_parameters.result_directory).joinpath("results_daily_operation_for_webtool.json"), "rb") as handle:
+        results_daily_operation_for_webtool = pd.read_json(handle)
+
+    assert isinstance(results_daily_operation_for_webtool.loc["2021-01-01","AdvancedHeatPumpHPLib - ElectricalInputPower [Electricity - W]" ], Number)
+
+    # Read summary results
     with open(Path(my_simulation_parameters.result_directory).joinpath("results_for_webtool.json"), "rb") as handle:
         results_for_webtool = json.load(handle)
 
@@ -31,3 +40,5 @@ def test_webtool_results():
         results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["operation"]["ThermalOutputPower"]["value"],
         Number,
     )
+
+

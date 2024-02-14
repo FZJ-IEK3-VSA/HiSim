@@ -260,7 +260,6 @@ class FilterClass:
             "Ratio between total production and total consumption",
             "Self-consumption",
             "Self-consumption rate",
-            "Self-consumption rate according to mydualsun",
             "Autarky rate",
             "Total energy from grid",
             "Total energy to grid",

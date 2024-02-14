@@ -366,15 +366,11 @@ class ElectricityMeter(DynamicComponent):
             if output.component_name == self.config.name:
                 if output.field_name == self.ElectricityToGrid:
                     # Todo: check component name from system_setups: find another way of using the correct outputs
-                    self.config.total_energy_to_grid_in_kwh = round(
-                        postprocessing_results.iloc[:, index].sum() * 1e-3,
-                        3,
-                    )
+                    self.config.total_energy_to_grid_in_kwh = postprocessing_results.iloc[:, index].sum() * 1e-3
+
                 elif output.field_name == self.ElectricityFromGrid:
-                    self.config.total_energy_from_grid_in_kwh = round(
-                        postprocessing_results.iloc[:, index].sum() * 1e-3,
-                        3,
-                    )
+                    self.config.total_energy_from_grid_in_kwh = postprocessing_results.iloc[:, index].sum() * 1e-3
+
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year
         )

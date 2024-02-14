@@ -929,7 +929,7 @@ class PostProcessor:
 
     def write_operation_data_for_webtool(self, ppdt: PostProcessingDataTransfer) -> None:
         """Collect daily operation results and write into json for webtool."""
-        data = ppdt.results_daily.to_json()
+        data = ppdt.results_daily.to_json(date_format="iso")
         with open(
             os.path.join(ppdt.simulation_parameters.result_directory, "results_daily_operation_for_webtool.json"),
             "w",

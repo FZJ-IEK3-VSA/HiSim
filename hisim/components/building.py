@@ -583,9 +583,9 @@ class Building(cp.Component):
 
         internal_heat_gains_through_occupancy_in_watt = stsv.get_input_value(self.occupancy_heat_gain_channel)
 
-        internal_heat_gains_through_devices_in_watt = 0.0  # stsv.get_input_value(
-        #     self.device_heat_gain_channel
-        # )
+        internal_heat_gains_through_devices_in_watt = stsv.get_input_value(
+            self.device_heat_gain_channel
+        )
 
         temperature_outside_in_celsius = stsv.get_input_value(self.temperature_outside_channel)
 

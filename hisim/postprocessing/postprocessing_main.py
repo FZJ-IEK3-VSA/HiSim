@@ -1002,7 +1002,7 @@ class PostProcessor:
 
             self_consumption_rate = kpi_collection_dict["Self-consumption rate"]["value"]
             autarky_rate = kpi_collection_dict["Autarky rate"]["value"]
-            grid_injection_in_kilowatt_hour = kpi_collection_dict["Injection"]["value"]
+            grid_injection_in_kilowatt_hour = kpi_collection_dict["Grid injection"]["value"]
             economic_cost = kpi_collection_dict["Total costs for simulated period"]["value"]
             co2_cost = kpi_collection_dict["Total CO2 emissions for simulated period"]["value"]
 

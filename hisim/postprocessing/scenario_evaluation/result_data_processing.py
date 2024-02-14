@@ -255,17 +255,17 @@ class FilterClass:
         # system_setups for variables to check (check names of your variables before your evaluation, if they are correct)
         # kpi data has no time series, so only choose when you analyze yearly data
         kpi_data = [
-            "Production",
-            "Consumption",
-            "Ratio between energy production and consumption",
-            "Injection",
+            "Total electricity consumption",
+            "Total electricity production",
+            "Ratio between total production and total consumption",
             "Self-consumption",
             "Self-consumption rate",
-            "Self-consumption rate according to mydualsun",
             "Autarky rate",
             "Total energy from grid",
             "Total energy to grid",
             "Relative electricity demand from grid",
+            "Self-consumption rate according to solar htw berlin",
+            "Autarky rate according to solar htw berlin",
             "Investment costs for equipment per simulated period",
             "CO2 footprint for equipment per simulated period",
             "System operational costs for simulated period",
@@ -284,7 +284,7 @@ class FilterClass:
             "Seasonal performance factor of heat pump",
             "Thermal output energy of heat pump",
             "Specific thermal output energy of heat pump",
-            "Electrical input energy of heat pump"
+            "Electrical input energy of heat pump",
         ]
 
         electricity_data = [

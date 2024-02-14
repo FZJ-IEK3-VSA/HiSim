@@ -1,22 +1,25 @@
 """ Main postprocessing module that starts all other modules. """
+
+import copy
+import json
+
 # clean
 import os
-import sys
-import copy
-from typing import Any, Optional, List, Dict, Tuple
-from timeit import default_timer as timer
 import string
-import json
+import sys
+from timeit import default_timer as timer
+from typing import Any, Optional, List, Dict, Tuple
+
 import pandas as pd
 
-from hisim.modular_household.interface_configs.kpi_config import KPIConfig
-from hisim.components import building
-
-from hisim.postprocessing import reportgenerator
-from hisim.postprocessing import charts
 from hisim import log
 from hisim import utils
-from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.component import ComponentOutput
+from hisim.components import building
+from hisim.json_generator import JsonConfigurationGenerator
+from hisim.modular_household.interface_configs.kpi_config import KPIConfig
+from hisim.postprocessing import charts
+from hisim.postprocessing import reportgenerator
 from hisim.postprocessing.chart_singleday import ChartSingleDay
 from hisim.postprocessing.compute_kpis import KpiGenerator
 from hisim.postprocessing.generate_csv_for_housing_database import (
@@ -26,18 +29,16 @@ from hisim.postprocessing.opex_and_capex_cost_calculation import (
     opex_calculation,
     capex_calculation,
 )
-from hisim.postprocessing.system_chart import SystemChart
-from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.report_image_entries import ReportImageEntry, SystemChartEntry
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
-from hisim.json_generator import JsonConfigurationGenerator
+from hisim.postprocessing.system_chart import SystemChart
 from hisim.postprocessing.webtool_entries import WebtoolDict
+from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from obsolete import loadprofilegenerator_connector
 
 
 class PostProcessor:
-
     """Core Post processor class."""
 
     @utils.measure_execution_time
@@ -927,11 +928,12 @@ class PostProcessor:
         dataframe.to_csv(path_or_buf=filename, index=None)  # type: ignore
 
     def write_operation_data_for_webtool(self, ppdt: PostProcessingDataTransfer) -> None:
-        data=ppdt.results_daily.to_json()
+        """Collect daily operation results and write into json for webtool."""
+        data = ppdt.results_daily.to_json()
         with open(
-                os.path.join(ppdt.simulation_parameters.result_directory, "results_daily_operation_for_webtool.json"),
-                "w",
-                encoding="utf-8",
+            os.path.join(ppdt.simulation_parameters.result_directory, "results_daily_operation_for_webtool.json"),
+            "w",
+            encoding="utf-8",
         ) as file:
             file.write(data)
         pass

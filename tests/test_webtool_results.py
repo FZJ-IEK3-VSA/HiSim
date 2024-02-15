@@ -22,15 +22,22 @@ def test_webtool_results():
         PostProcessingOptions.COMPUTE_OPEX,
         PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT,
         PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL,
-        PostProcessingOptions.MAKE_OPERATION_RESULTS_FOR_WEBTOOL
+        PostProcessingOptions.MAKE_OPERATION_RESULTS_FOR_WEBTOOL,
     ]
     main(str(path), my_simulation_parameters)
 
     # Read operational results
-    with open(Path(my_simulation_parameters.result_directory).joinpath("results_daily_operation_for_webtool.json"), "rb") as handle:
+    with open(
+        Path(my_simulation_parameters.result_directory).joinpath("results_daily_operation_for_webtool.json"), "rb"
+    ) as handle:
         results_daily_operation_for_webtool = pd.read_json(handle)
 
-    assert isinstance(results_daily_operation_for_webtool.loc["2021-01-01","AdvancedHeatPumpHPLib - ElectricalInputPower [Electricity - W]"], Number)
+    assert isinstance(
+        results_daily_operation_for_webtool.loc[
+            "2021-01-01", "AdvancedHeatPumpHPLib - ElectricalInputPower [Electricity - W]"
+        ],
+        Number,
+    )
 
     # Read summary results
     with open(Path(my_simulation_parameters.result_directory).joinpath("results_for_webtool.json"), "rb") as handle:

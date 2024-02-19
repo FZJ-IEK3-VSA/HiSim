@@ -464,7 +464,7 @@ class ScenarioChartGeneration:
         full_pandas_dataframe: pd.DataFrame,
         filtered_data: pd.DataFrame,
         y_data_variable: str,
-        x_data_variable: str = "Ratio between energy production and consumption",
+        x_data_variable: str = "Specific heating demand according to TABULA",
     ) -> None:
         """Make scatter plot."""
         log.information("Make scatter plot with data.")

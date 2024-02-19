@@ -249,10 +249,10 @@ class ResultDataCollection:
                         max_temperature = float(
                             kpi_data["Maximum building indoor air temperature reached"].get("value")
                         )
-                        temp_deviation_below_set = kpi_data["Temperature deviation of building indoor air temperature being below set temperature 19.0 Celsius"].get(
+                        temp_deviation_below_set = kpi_data["Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius"].get(
                             "value"
                         )
-                        temp_deviation_above_set = kpi_data["Temperature deviation of building indoor air temperature being above set temperature 24.0 Celsius"].get(
+                        temp_deviation_above_set = kpi_data["Temperature deviation of building indoor air temperature being above set temperature 25.0 Celsius"].get(
                             "value"
                         )
                         if (

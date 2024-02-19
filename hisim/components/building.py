@@ -528,19 +528,13 @@ class Building(cp.Component):
             solar_heat_gain_through_windows_in_watt = self.solar_heat_gain_through_windows[timestep]
 
         # calc total thermal power to building from all heat sources
-        if thermal_power_delivered_in_watt > 0.0:
-            total_thermal_power_to_residence_in_watt = (
-                internal_heat_gains_through_occupancy_in_watt
-                + internal_heat_gains_through_devices_in_watt
-                + solar_heat_gain_through_windows_in_watt
-                + thermal_power_delivered_in_watt
-            )
-        else:
-            total_thermal_power_to_residence_in_watt = (
-                internal_heat_gains_through_occupancy_in_watt
-                + internal_heat_gains_through_devices_in_watt
-                + solar_heat_gain_through_windows_in_watt
-            )
+
+        total_thermal_power_to_residence_in_watt = (
+            internal_heat_gains_through_occupancy_in_watt
+            + internal_heat_gains_through_devices_in_watt
+            + solar_heat_gain_through_windows_in_watt
+            + thermal_power_delivered_in_watt
+        )
 
         # calc temperatures and heat flow rates with crank nicolson method from ISO 13790
         (

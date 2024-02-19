@@ -241,6 +241,7 @@ class FilterClass:
             self.occuancy_consumption,
             self.heating_demand,
             self.variables_for_debugging_purposes,
+            self.flow_and_return_temperatures
         ) = self.get_variables_to_check()
         (
             self.building_type,
@@ -260,7 +261,6 @@ class FilterClass:
             "Ratio between total production and total consumption",
             "Self-consumption",
             "Self-consumption rate",
-            "Self-consumption rate according to mydualsun",
             "Autarky rate",
             "Total energy from grid",
             "Total energy to grid",
@@ -273,9 +273,9 @@ class FilterClass:
             "System operational emissions for simulated period",
             "Total costs for simulated period",
             "Total CO2 emissions for simulated period",
-            "Temperature deviation of building indoor air temperature being below set temperature 19.0 Celsius",
+            "Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius",
             "Minimum building indoor air temperature reached",
-            "Temperature deviation of building indoor air temperature being above set temperature 24.0 Celsius",
+            "Temperature deviation of building indoor air temperature being above set temperature 25.0 Celsius",
             "Maximum building indoor air temperature reached",
             "Building heating load",
             "Specific heating load",
@@ -296,6 +296,13 @@ class FilterClass:
             # use the ems production and consumption or the kpi values instead if needed
             # "ElectricityMeter|Electricity|ElectricityConsumption",
             # "ElectricityMeter|Electricity|ElectricityProduction",
+        ]
+
+        flow_and_return_temperatures = [
+            "AdvancedHeatPumpHPLib|Heating|TemperatureOutput",
+            "SimpleHotWaterStorage|Water|WaterTemperatureToHeatGenerator",
+            "SimpleHotWaterStorage|Water|WaterTemperatureToHeatDistribution",
+            "HeatDistributionSystem|Water|WaterTemperatureOutput"
         ]
 
         occuancy_consumption = [
@@ -320,6 +327,7 @@ class FilterClass:
             occuancy_consumption,
             heating_demand,
             variables_for_debugging_purposes,
+            flow_and_return_temperatures
         )
 
     def get_scenarios_to_check(self):

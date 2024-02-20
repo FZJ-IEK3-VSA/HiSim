@@ -19,9 +19,7 @@ from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.postprocessing.chart_singleday import ChartSingleDay
 from hisim.postprocessing.compute_kpis import KpiGenerator
-from hisim.postprocessing.generate_csv_for_housing_database import (
-    generate_csv_for_database,
-)
+from hisim.postprocessing.generate_csv_for_housing_database import generate_csv_for_database
 from hisim.postprocessing.opex_and_capex_cost_calculation import (
     opex_calculation,
     capex_calculation,
@@ -281,9 +279,7 @@ class PostProcessor:
         return systemchart.make_chart()
 
     def make_special_one_day_debugging_plots(
-        self,
-        ppdt: PostProcessingDataTransfer,
-        report_image_entries: List[ReportImageEntry],
+        self, ppdt: PostProcessingDataTransfer, report_image_entries: List[ReportImageEntry],
     ) -> None:
         """Makes special plots for debugging if only a single day was calculated."""
         for index, output in enumerate(ppdt.all_outputs):
@@ -323,9 +319,7 @@ class PostProcessor:
         self.export_results_to_csv(ppdt)
 
     def make_monthly_bar_charts(
-        self,
-        ppdt: PostProcessingDataTransfer,
-        report_image_entries: List[ReportImageEntry],
+        self, ppdt: PostProcessingDataTransfer, report_image_entries: List[ReportImageEntry],
     ) -> None:
         """Make bar charts."""
         for index, output in enumerate(ppdt.all_outputs):
@@ -342,10 +336,7 @@ class PostProcessor:
             report_image_entries.append(my_entry)
 
     def make_single_day_plots(
-        self,
-        days: Dict[str, int],
-        ppdt: PostProcessingDataTransfer,
-        report_image_entries: List[ReportImageEntry],
+        self, days: Dict[str, int], ppdt: PostProcessingDataTransfer, report_image_entries: List[ReportImageEntry],
     ) -> None:
         """Makes plots for selected days."""
         for index, output in enumerate(ppdt.all_outputs):
@@ -365,9 +356,7 @@ class PostProcessor:
             report_image_entries.append(my_entry)
 
     def make_carpet_plots(
-        self,
-        ppdt: PostProcessingDataTransfer,
-        report_image_entries: List[ReportImageEntry],
+        self, ppdt: PostProcessingDataTransfer, report_image_entries: List[ReportImageEntry],
     ) -> None:
         """Make carpet plots."""
         for index, output in enumerate(ppdt.all_outputs):
@@ -389,11 +378,7 @@ class PostProcessor:
             report_image_entries.append(my_entry)
 
     @utils.measure_memory_leak
-    def make_line_plots(
-        self,
-        ppdt: PostProcessingDataTransfer,
-        report_image_entries: List[ReportImageEntry],
-    ) -> None:
+    def make_line_plots(self, ppdt: PostProcessingDataTransfer, report_image_entries: List[ReportImageEntry],) -> None:
         """Makes the line plots."""
         for index, output in enumerate(ppdt.all_outputs):
             if output.output_description is None:
@@ -440,9 +425,7 @@ class PostProcessor:
         simulation_parameters_list = ppdt.simulation_parameters.get_unique_key_as_list()
         lines += simulation_parameters_list
         self.write_new_chapter_with_text_content_to_report(
-            report=report,
-            lines=lines,
-            headline=". Simulation Parameters",
+            report=report, lines=lines, headline=". Simulation Parameters",
         )
 
     def write_components_to_report(
@@ -535,9 +518,7 @@ class PostProcessor:
         for output in ppdt.all_outputs:
             all_output_names.append(output.full_name + " [" + output.unit + "]")
         self.write_new_chapter_with_text_content_to_report(
-            report=report,
-            lines=all_output_names,
-            headline=". All Outputs",
+            report=report, lines=all_output_names, headline=". All Outputs",
         )
 
     def write_network_charts_to_report(
@@ -605,8 +586,7 @@ class PostProcessor:
     ) -> None:
         """Computes CAPEX costs and CO2-emissions for production of devices and writes them to report and csv."""
         capex_compute_return = capex_calculation(
-            components=ppdt.wrapped_components,
-            simulation_parameters=ppdt.simulation_parameters,
+            components=ppdt.wrapped_components, simulation_parameters=ppdt.simulation_parameters,
         )
         self.write_new_chapter_with_table_to_report(
             report=report,
@@ -627,11 +607,7 @@ class PostProcessor:
         report.close()
 
     def write_new_chapter_with_table_to_report(
-        self,
-        report: reportgenerator.ReportGenerator,
-        table_as_list_of_list: List,
-        headline: str,
-        comment: List,
+        self, report: reportgenerator.ReportGenerator, table_as_list_of_list: List, headline: str, comment: List,
     ) -> None:
         """Write new chapter with headline and a table to report."""
         report.open()
@@ -725,9 +701,7 @@ class PostProcessor:
         # got through all components and read output values, variables and units
         # for hourly data
         dataframe_hourly_data = self.iterate_over_results_and_add_values_to_dict(
-            results_df=ppdt.results_hourly,
-            dict_to_check=simple_dict_hourly_data,
-            timeseries=timeseries_hourly,
+            results_df=ppdt.results_hourly, dict_to_check=simple_dict_hourly_data, timeseries=timeseries_hourly,
         )
         self.write_filename_and_save_to_csv(
             dataframe=dataframe_hourly_data,
@@ -740,9 +714,7 @@ class PostProcessor:
         )
         # for daily data
         dataframe_daily_data = self.iterate_over_results_and_add_values_to_dict(
-            results_df=ppdt.results_daily,
-            dict_to_check=simple_dict_daily_data,
-            timeseries=timeseries_daily,
+            results_df=ppdt.results_daily, dict_to_check=simple_dict_daily_data, timeseries=timeseries_daily,
         )
         self.write_filename_and_save_to_csv(
             dataframe=dataframe_daily_data,
@@ -755,9 +727,7 @@ class PostProcessor:
         )
         # for monthly data
         dataframe_monthly_data = self.iterate_over_results_and_add_values_to_dict(
-            results_df=ppdt.results_monthly,
-            dict_to_check=simple_dict_monthly_data,
-            timeseries=timeseries_monthly,
+            results_df=ppdt.results_monthly, dict_to_check=simple_dict_monthly_data, timeseries=timeseries_monthly,
         )
         self.write_filename_and_save_to_csv(
             dataframe=dataframe_monthly_data,
@@ -773,10 +743,7 @@ class PostProcessor:
         for column in ppdt.results_cumulative:
             value = ppdt.results_cumulative[column].values[0]
 
-            (
-                variable_name,
-                unit,
-            ) = self.get_variable_name_and_unit_from_ppdt_results_column(column=str(column))
+            (variable_name, unit,) = self.get_variable_name_and_unit_from_ppdt_results_column(column=str(column))
 
             simple_dict_cumulative_data["model"].append(self.model)
             simple_dict_cumulative_data["scenario"].append(self.scenario)
@@ -830,16 +797,11 @@ class PostProcessor:
         for component in ppdt.wrapped_components:
             json_generator_config.add_component(config=component.my_component.config)
         json_generator_config.save_to_json(
-            filename=os.path.join(
-                ppdt.simulation_parameters.result_directory,
-                "component_configurations.json",
-            )
+            filename=os.path.join(ppdt.simulation_parameters.result_directory, "component_configurations.json",)
         )
 
     def write_kpis_in_dict(
-        self,
-        ppdt: PostProcessingDataTransfer,
-        simple_dict_cumulative_data: Dict[str, Any],
+        self, ppdt: PostProcessingDataTransfer, simple_dict_cumulative_data: Dict[str, Any],
     ) -> None:
         """Write kpis in dictionary."""
         # get kpis from ppdt
@@ -885,10 +847,7 @@ class PostProcessor:
                 # values = ppdt.results_hourly[column].values
                 values = results_df[column].values
 
-                (
-                    variable_name,
-                    unit,
-                ) = self.get_variable_name_and_unit_from_ppdt_results_column(column=str(column))
+                (variable_name, unit,) = self.get_variable_name_and_unit_from_ppdt_results_column(column=str(column))
 
                 dict_to_check["model"].append(self.model)
                 dict_to_check["scenario"].append(self.scenario)
@@ -938,8 +897,7 @@ class PostProcessor:
 
             # Calculate capex
             capex_compute_return = capex_calculation(
-                components=ppdt.wrapped_components,
-                simulation_parameters=ppdt.simulation_parameters,
+                components=ppdt.wrapped_components, simulation_parameters=ppdt.simulation_parameters,
             )
 
             # Calculate opex

@@ -19,9 +19,7 @@ from hisim.postprocessing.scenario_evaluation.result_data_collection import (
     ResultDataTypeEnum,
     ResultDataProcessingModeEnum,
 )
-from hisim.postprocessing.scenario_evaluation.result_data_processing import (
-    ScenarioDataProcessing,
-)
+from hisim.postprocessing.scenario_evaluation.result_data_processing import ScenarioDataProcessing
 from hisim.postprocessing.chartbase import ChartFontsAndSize
 from hisim import log
 
@@ -35,6 +33,7 @@ class ScenarioChartGeneration:
         simulation_duration_to_check: str,
         data_processing_mode: Any,
         time_resolution_of_data_set: Any,
+        dict_with_extra_information_for_specific_plot: Dict[str, Dict],
         variables_to_check: Optional[List[str]] = None,
         dict_of_scenarios_to_check: Optional[Dict[str, List[str]]] = None,
     ) -> None:
@@ -125,6 +124,7 @@ class ScenarioChartGeneration:
                 pandas_dataframe=pandas_dataframe,
                 simulation_duration_key=simulation_duration_to_check,
                 variables_to_check=variables_to_check,
+                dict_with_extra_information_for_specific_plot=dict_with_extra_information_for_specific_plot,
             )
 
         else:
@@ -136,6 +136,7 @@ class ScenarioChartGeneration:
         pandas_dataframe: pd.DataFrame,
         simulation_duration_key: str,
         variables_to_check: List[str],
+        dict_with_extra_information_for_specific_plot: Dict[str, Dict],
     ) -> None:
         """Make plots for different kind of data."""
 
@@ -186,8 +187,7 @@ class ScenarioChartGeneration:
 
                 try:
                     self.make_box_plot_for_pandas_dataframe(
-                        filtered_data=filtered_data,
-                        title=self.path_addition,
+                        filtered_data=filtered_data, title=self.path_addition,
                     )
                 except Exception:
                     log.information(f"{variable_to_check} could not be plotted as box plot.")
@@ -200,10 +200,12 @@ class ScenarioChartGeneration:
                     log.information(f"{variable_to_check} could not be plotted as bar plot.")
 
                 try:
+                    x_data_variable = dict_with_extra_information_for_specific_plot["scatter"]["x_data_variable"]
                     self.make_scatter_plot_for_pandas_dataframe(
                         full_pandas_dataframe=pandas_dataframe,
                         filtered_data=filtered_data,
                         y_data_variable=self.path_addition,
+                        x_data_variable=x_data_variable,
                     )
                 except Exception:
                     log.information(f"{variable_to_check} could not be plotted as scatter plot.")
@@ -214,6 +216,18 @@ class ScenarioChartGeneration:
                     )
                 except Exception:
                     log.information(f"{variable_to_check} could not be plotted as histogram.")
+
+                if variable_to_check in [
+                    dict_with_extra_information_for_specific_plot["stacked_bar"]["y1_data_variable"],
+                    dict_with_extra_information_for_specific_plot["stacked_bar"]["y2_data_variable"],
+                ]:
+                    y1_data_variable = dict_with_extra_information_for_specific_plot["stacked_bar"]["y1_data_variable"]
+                    y2_data_variable = dict_with_extra_information_for_specific_plot["stacked_bar"]["y2_data_variable"]
+                    self.make_stacked_bar_plot_for_pandas_dataframe(
+                        full_pandas_dataframe=pandas_dataframe,
+                        y1_data_variable=y1_data_variable,
+                        y2_data_variable=y2_data_variable,
+                    )
 
             elif time_resolution_of_data_set in (
                 ResultDataTypeEnum.HOURLY,
@@ -282,27 +296,19 @@ class ScenarioChartGeneration:
             y_data = mean_values_aggregated_according_to_scenarios
 
             plt.plot(
-                x_data_transformed,
-                y_data,
-                "-o",
-                markersize=line_plot_marker_size,
-                label=scenario,
+                x_data_transformed, y_data, "-o", markersize=line_plot_marker_size, label=scenario,
             )
 
         y_tick_labels, unit, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y", unit=filtered_data.unit.values[0])
         plt.yticks(
-            ticks=y_tick_locations,
-            labels=y_tick_labels,
-            fontsize=self.hisim_chartbase.fontsize_ticks,
+            ticks=y_tick_locations, labels=y_tick_labels, fontsize=self.hisim_chartbase.fontsize_ticks,
         )
 
         plt.ylabel(
-            ylabel=f"{unit}",
-            fontsize=self.hisim_chartbase.fontsize_label,
+            ylabel=f"{unit}", fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
-            xlabel=year,
-            fontsize=self.hisim_chartbase.fontsize_label,
+            xlabel=year, fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
@@ -314,11 +320,7 @@ class ScenarioChartGeneration:
         plt.close()
 
     def make_bar_plot_for_pandas_dataframe(
-        self,
-        filtered_data: pd.DataFrame,
-        title: str,
-        unit: str,
-        alternative_bar_labels: Optional[List[str]] = None,
+        self, filtered_data: pd.DataFrame, title: str, unit: str, alternative_bar_labels: Optional[List[str]] = None,
     ) -> None:
         """Make bar plot."""
         log.information("Make bar plot.")
@@ -346,23 +348,15 @@ class ScenarioChartGeneration:
         colors = [cmap(i) for i in np.linspace(0, 1, len(x_data))]
         a_x.bar(x_data, y_data, label=bar_labels, color=colors)
 
-        y_tick_labels, unit, y_tick_locations = self.set_axis_scale(
-            a_x,
-            x_or_y="y",
-            unit=unit,
-        )
+        y_tick_labels, unit, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y", unit=unit,)
         plt.yticks(
-            ticks=y_tick_locations,
-            labels=y_tick_labels,
-            fontsize=self.hisim_chartbase.fontsize_ticks,
+            ticks=y_tick_locations, labels=y_tick_labels, fontsize=self.hisim_chartbase.fontsize_ticks,
         )
         plt.ylabel(
-            ylabel=f"{unit}",
-            fontsize=self.hisim_chartbase.fontsize_label,
+            ylabel=f"{unit}", fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
-            xlabel=filtered_data.year.values[0],
-            fontsize=self.hisim_chartbase.fontsize_label,
+            xlabel=filtered_data.year.values[0], fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
@@ -377,10 +371,7 @@ class ScenarioChartGeneration:
         plt.close()
 
     def make_box_plot_for_pandas_dataframe(
-        self,
-        filtered_data: pd.DataFrame,
-        title: str,
-        scenario_set: Optional[List[str]] = None,
+        self, filtered_data: pd.DataFrame, title: str, scenario_set: Optional[List[str]] = None,
     ) -> None:
         """Make box plot."""
         log.information("Make box plot.")
@@ -393,26 +384,21 @@ class ScenarioChartGeneration:
 
         y_tick_labels, unit, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y", unit=filtered_data.unit.values[0])
         plt.yticks(
-            ticks=y_tick_locations,
-            labels=y_tick_labels,
-            fontsize=self.hisim_chartbase.fontsize_ticks,
+            ticks=y_tick_locations, labels=y_tick_labels, fontsize=self.hisim_chartbase.fontsize_ticks,
         )
         plt.ylabel(
-            ylabel=f"{unit}",
-            fontsize=self.hisim_chartbase.fontsize_label,
+            ylabel=f"{unit}", fontsize=self.hisim_chartbase.fontsize_label,
         )
         try:
             # this works for yearly data
             plt.xlabel(
-                xlabel=filtered_data.year.values[0],
-                fontsize=self.hisim_chartbase.fontsize_label,
+                xlabel=filtered_data.year.values[0], fontsize=self.hisim_chartbase.fontsize_label,
             )
         except Exception:
             # take year from time colum
             year = filtered_data.time.values[0].split("-")[0]
             plt.xlabel(
-                xlabel=year,
-                fontsize=self.hisim_chartbase.fontsize_label,
+                xlabel=year, fontsize=self.hisim_chartbase.fontsize_label,
             )
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
@@ -425,11 +411,7 @@ class ScenarioChartGeneration:
         plt.close()
 
     def make_histogram_plot_for_pandas_dataframe(
-        self,
-        filtered_data: pd.DataFrame,
-        title: str,
-        unit: str,
-        scenario_set: Optional[List[str]] = None,
+        self, filtered_data: pd.DataFrame, title: str, unit: str, scenario_set: Optional[List[str]] = None,
     ) -> None:
         """Make histogram plot."""
         log.information("Make histogram plot.")
@@ -443,19 +425,16 @@ class ScenarioChartGeneration:
         plt.hist(x=np.array(filtered_data.value.values), bins="auto")
 
         plt.ylabel(
-            ylabel="Count",
-            fontsize=self.hisim_chartbase.fontsize_label,
+            ylabel="Count", fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
-            xlabel=f"{unit}",
-            fontsize=self.hisim_chartbase.fontsize_label,
+            xlabel=f"{unit}", fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
 
         fig.savefig(
-            os.path.join(self.plot_path_complete, "histogram_plot.png"),
-            bbox_inches="tight",
+            os.path.join(self.plot_path_complete, "histogram_plot.png"), bbox_inches="tight",
         )
         plt.close()
 
@@ -464,7 +443,7 @@ class ScenarioChartGeneration:
         full_pandas_dataframe: pd.DataFrame,
         filtered_data: pd.DataFrame,
         y_data_variable: str,
-        x_data_variable: str = "Specific heating demand according to TABULA",
+        x_data_variable: str = "Conditioned floor area",
     ) -> None:
         """Make scatter plot."""
         log.information("Make scatter plot with data.")
@@ -543,18 +522,14 @@ class ScenarioChartGeneration:
 
         y_tick_labels, y_unit, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y", unit=y_data_unit)
         plt.yticks(
-            ticks=y_tick_locations,
-            labels=y_tick_labels,
-            fontsize=self.hisim_chartbase.fontsize_ticks,
+            ticks=y_tick_locations, labels=y_tick_labels, fontsize=self.hisim_chartbase.fontsize_ticks,
         )
 
         plt.ylabel(
-            ylabel=f"{y_data_variable} [{y_unit}]",
-            fontsize=self.hisim_chartbase.fontsize_label,
+            ylabel=f"{y_data_variable} [{y_unit}]", fontsize=self.hisim_chartbase.fontsize_label,
         )
         plt.xlabel(
-            xlabel=f"{x_data_variable} [{x_data_unit}]",
-            fontsize=self.hisim_chartbase.fontsize_label,
+            xlabel=f"{x_data_variable} [{x_data_unit}]", fontsize=self.hisim_chartbase.fontsize_label,
         )
 
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
@@ -563,9 +538,106 @@ class ScenarioChartGeneration:
             plt.legend(bbox_to_anchor=(1, 1), loc="upper left")
 
         fig.savefig(
-            os.path.join(self.plot_path_complete, "scatter_plot.png"),
-            bbox_inches="tight",
+            os.path.join(self.plot_path_complete, "scatter_plot.png"), bbox_inches="tight",
         )
+        plt.close()
+
+    def make_stacked_bar_plot_for_pandas_dataframe(
+        self,
+        full_pandas_dataframe: pd.DataFrame,
+        y1_data_variable: str,
+        y2_data_variable: str,
+        use_y1_as_bottom_for_y2: Optional[bool] = True,
+    ) -> None:
+        """Make stacked bar plot."""
+        log.information("Make stacked bar plot.")
+
+        fig, a_x = plt.subplots(figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi)
+
+        # iterate over all scenarios
+        y1_data_mean_value_list_for_all_scenarios = []
+        y2_data_mean_value_list_for_all_scenarios = []
+        for scenario in list(OrderedSet(list(full_pandas_dataframe.scenario))):
+            full_data_per_scenario = full_pandas_dataframe.loc[full_pandas_dataframe["scenario"] == scenario]
+
+            # get y1_data_list by filtering the df according to y1_data_variable and then by taking values from "value" column
+            y1_data_list = list(
+                full_data_per_scenario.loc[full_data_per_scenario["variable"] == y1_data_variable]["value"].values
+            )
+            y1_data_unit = full_data_per_scenario.loc[full_data_per_scenario["variable"] == y1_data_variable][
+                "unit"
+            ].values[0]
+            # get y2_data_list by filtering the df according to y2_data_variable and then by taking values from "value" column
+            y2_data_list = list(
+                full_data_per_scenario.loc[full_data_per_scenario["variable"] == y2_data_variable]["value"].values
+            )
+            y2_data_unit = full_data_per_scenario.loc[full_data_per_scenario["variable"] == y2_data_variable][
+                "unit"
+            ].values[0]
+            if y1_data_unit != y2_data_unit:
+                raise ValueError("The units of y1 and y2 data variables must be the same for the stacked bar plot.")
+
+            # if y1_data_list has more than 1 value (because more values for this scenario exist), then take mean value
+            if len(y1_data_list) > 1:
+                # for each scenario take the mean value
+                y1_data_mean_value_per_scenario = np.mean(y1_data_list)
+            elif len(y1_data_list) == 1:
+                y1_data_mean_value_per_scenario = y1_data_list[0]
+            else:
+                raise ValueError(
+                    "The y1_data_list is empty. Probably the full dataframe did not contain the y1_data_variable in the column variable."
+                )
+            # if y2_data_list has more than 1 value (because more values for this scenario exist), then take mean value
+            if len(y2_data_list) > 1:
+                # for each scenario take the mean value
+                y2_data_mean_value_per_scenario = np.mean(y2_data_list)
+            elif len(y2_data_list) == 1:
+                y2_data_mean_value_per_scenario = y2_data_list[0]
+            else:
+                raise ValueError(
+                    "The y2_data_list is empty. Probably the full dataframe did not contain the y2_data_variable in the column variable."
+                )
+
+            # append to y1_data_mean_value_list
+            y1_data_mean_value_list_for_all_scenarios.append(y1_data_mean_value_per_scenario)
+
+            # append to y2_data_mean_value_list
+            y2_data_mean_value_list_for_all_scenarios.append(y2_data_mean_value_per_scenario)
+
+        x_data = np.arange(0, len(y1_data_mean_value_list_for_all_scenarios) * 2, step=2)
+
+        # cmap = plt.get_cmap("viridis")
+        # colors = [cmap(i) for i in np.linspace(0, 1, len(x_data))]
+        a_x.bar(x_data, y1_data_mean_value_list_for_all_scenarios, color="r")
+        if use_y1_as_bottom_for_y2 is True:
+            a_x.bar(
+                x_data,
+                y2_data_mean_value_list_for_all_scenarios,
+                bottom=y1_data_mean_value_list_for_all_scenarios,
+                color="b",
+            )
+        else:
+            a_x.bar(x_data, y2_data_mean_value_list_for_all_scenarios, color="b")
+
+        y_tick_labels, unit, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y", unit=y1_data_unit)
+        plt.yticks(
+            ticks=y_tick_locations, labels=y_tick_labels, fontsize=self.hisim_chartbase.fontsize_ticks,
+        )
+        plt.ylabel(
+            ylabel=f"{unit}", fontsize=self.hisim_chartbase.fontsize_label,
+        )
+        plt.xlabel(
+            xlabel=full_pandas_dataframe.year.values[0], fontsize=self.hisim_chartbase.fontsize_label,
+        )
+
+        plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
+
+        plt.legend([y1_data_variable, y2_data_variable], bbox_to_anchor=(1, 1), loc="upper left")
+
+        a_x.xaxis.set_tick_params(labelbottom=False)
+        a_x.set_xticks([])
+        plt.tight_layout()
+        fig.savefig(os.path.join(self.plot_path_complete, "stacked_bar_plot.png"))
         plt.close()
 
     def set_axis_scale(self, a_x: Any, x_or_y: Any, unit: Any) -> Tuple[float, str, Any]:
@@ -586,7 +658,7 @@ class ScenarioChartGeneration:
         new_tick_values = tick_values
         scale = ""
 
-        if unit not in ["-", "%"]:
+        if unit not in ["-", "%", "m2"]:
             if max_scale >= 1e12:
                 new_tick_values = tick_values * 1e-12
                 scale = "T"

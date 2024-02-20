@@ -1,4 +1,5 @@
 """Test for generic pv system."""
+
 import pytest
 from tests import functions_for_testing as fft
 from hisim import sim_repository
@@ -27,25 +28,17 @@ def test_photovoltaic():
     # PVS:  1 output
 
     # Sets Occupancy
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.AACHEN
-    )
-    my_weather = weather.Weather(
-        config=my_weather_config, my_simulation_parameters=mysim
-    )
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
+    my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=mysim)
     my_weather.set_sim_repo(repo)
     my_weather.i_prepare_simulation()
     my_pvs_config = generic_pv_system.PVSystem.get_default_config()
     my_pvs_config.power_in_watt = power_in_watt
-    my_pvs = generic_pv_system.PVSystem(
-        config=my_pvs_config, my_simulation_parameters=mysim
-    )
+    my_pvs = generic_pv_system.PVSystem(config=my_pvs_config, my_simulation_parameters=mysim)
     my_pvs.set_sim_repo(repo)
     my_pvs.i_prepare_simulation()
     number_of_outputs = fft.get_number_of_outputs([my_weather, my_pvs])
-    stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(
-        number_of_outputs
-    )
+    stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(number_of_outputs)
 
     my_pvs.t_out_channel.source_output = my_weather.air_temperature_output
     my_pvs.azimuth_channel.source_output = my_weather.azimuth_output
@@ -62,6 +55,14 @@ def test_photovoltaic():
     my_weather.i_simulate(timestep, stsv, False)
     my_pvs.i_simulate(timestep, stsv, False)
     log.information("pv electricity output [W]: " + str(stsv.values[my_pvs.electricity_output_channel.global_index]))
+    log.information(
+        "pv electricity energy output [Wh]: " + str(stsv.values[my_pvs.electricity_output_energy_channel.global_index])
+    )
 
     # check pv electricity output [W] in timestep 655
     assert stsv.values[my_pvs.electricity_output_channel.global_index] == 334.8800144821672
+
+    # Check pv energy output channel [Wh] which should be the electricity output in W times the timestep length in hours
+    assert pytest.approx(stsv.values[my_pvs.electricity_output_energy_channel.global_index]) == 334.880014 * (
+        seconds_per_timestep / 3600
+    )

@@ -68,7 +68,7 @@ def main():
     data_processing_mode = result_data_collection.ResultDataProcessingModeEnum.PROCESS_ALL_DATA
 
     filterclass = result_data_processing.FilterClass()
-    list_with_variables_to_check = filterclass.flow_and_return_temperatures  # + filterclass.kpi_data
+    list_with_variables_to_check = filterclass.kpi_data  # filterclass.flow_and_return_temperatures +
 
     # TODO: filter several scenario parameters (eg pv and building code together) not working yet, need to be fixed
     # dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share,"building_code": ["DE.N.SFH.05.Gen.ReEx.001.002"]}
@@ -83,11 +83,13 @@ def main():
 
     dict_with_scenarios_to_check = None
 
-    dict_with_extra_information_for_specific_plot = {
-        "scatter": {"x_data_variable": "Conditioned floor area"},
+    dict_with_extra_information_for_specific_plot: Dict[str, Dict] = {
+        "scatter": {"x_data_variable": "Specific heating demand according to TABULA"},
         "stacked_bar": {
-            "y1_data_variable": "Mean return temperature of heat pump",
-            "y2_data_variable": "Mean temperature difference of heat pump",
+            "y1_data_variable": "Mean flow temperature of heat pump",
+            "y2_data_variable": "Mean return temperature of heat pump",
+            "use_y1_as_bottom_for_y2": False,
+            "sort_according_to_y1_or_y2_data": "y2",
         },
     }
 

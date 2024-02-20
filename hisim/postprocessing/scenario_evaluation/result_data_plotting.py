@@ -223,10 +223,18 @@ class ScenarioChartGeneration:
                 ]:
                     y1_data_variable = dict_with_extra_information_for_specific_plot["stacked_bar"]["y1_data_variable"]
                     y2_data_variable = dict_with_extra_information_for_specific_plot["stacked_bar"]["y2_data_variable"]
+                    use_y1_as_bottom_for_y2 = dict_with_extra_information_for_specific_plot["stacked_bar"][
+                        "use_y1_as_bottom_for_y2"
+                    ]
+                    sort_according_to_y1_or_y2_data = dict_with_extra_information_for_specific_plot["stacked_bar"][
+                        "sort_according_to_y1_or_y2_data"
+                    ]
                     self.make_stacked_bar_plot_for_pandas_dataframe(
                         full_pandas_dataframe=pandas_dataframe,
                         y1_data_variable=y1_data_variable,
                         y2_data_variable=y2_data_variable,
+                        use_y1_as_bottom_for_y2=use_y1_as_bottom_for_y2,
+                        sort_according_to_y1_or_y2_data=sort_according_to_y1_or_y2_data,
                     )
 
             elif time_resolution_of_data_set in (
@@ -344,9 +352,11 @@ class ScenarioChartGeneration:
 
         x_data = np.arange(0, len(y_data) * 2, step=2)
 
-        cmap = plt.get_cmap("viridis")
-        colors = [cmap(i) for i in np.linspace(0, 1, len(x_data))]
-        a_x.bar(x_data, y_data, label=bar_labels, color=colors)
+        # sort y_data and labels
+        sorted_zip_lists = sorted(zip(y_data, bar_labels), reverse=True)
+        y_data_sorted = [y for y, bar_label in sorted_zip_lists]
+        bar_labels_sorted = [bar_label for y, bar_label in sorted_zip_lists]
+        a_x.bar(x_data, y_data_sorted, label=bar_labels_sorted)
 
         y_tick_labels, unit, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y", unit=unit,)
         plt.yticks(
@@ -548,6 +558,7 @@ class ScenarioChartGeneration:
         y1_data_variable: str,
         y2_data_variable: str,
         use_y1_as_bottom_for_y2: Optional[bool] = True,
+        sort_according_to_y1_or_y2_data: Optional[str] = None,
     ) -> None:
         """Make stacked bar plot."""
         log.information("Make stacked bar plot.")
@@ -557,6 +568,7 @@ class ScenarioChartGeneration:
         # iterate over all scenarios
         y1_data_mean_value_list_for_all_scenarios = []
         y2_data_mean_value_list_for_all_scenarios = []
+
         for scenario in list(OrderedSet(list(full_pandas_dataframe.scenario))):
             full_data_per_scenario = full_pandas_dataframe.loc[full_pandas_dataframe["scenario"] == scenario]
 
@@ -605,19 +617,35 @@ class ScenarioChartGeneration:
             y2_data_mean_value_list_for_all_scenarios.append(y2_data_mean_value_per_scenario)
 
         x_data = np.arange(0, len(y1_data_mean_value_list_for_all_scenarios) * 2, step=2)
+        # x_data = list(OrderedSet(list(full_pandas_dataframe.scenario)))
 
-        # cmap = plt.get_cmap("viridis")
-        # colors = [cmap(i) for i in np.linspace(0, 1, len(x_data))]
-        a_x.bar(x_data, y1_data_mean_value_list_for_all_scenarios, color="r")
+        # sort values if demanded
+        if sort_according_to_y1_or_y2_data == "y1":
+            sorted_zip_lists = sorted(
+                zip(y1_data_mean_value_list_for_all_scenarios, y2_data_mean_value_list_for_all_scenarios)
+            )
+            y1_data_mean_value_list_for_all_scenarios_sorted = [y1 for y1, y2 in sorted_zip_lists]
+            y2_data_mean_value_list_for_all_scenarios_sorted = [y2 for y1, y2 in sorted_zip_lists]
+        elif sort_according_to_y1_or_y2_data == "y2":
+            sorted_zip_lists = sorted(
+                zip(y2_data_mean_value_list_for_all_scenarios, y1_data_mean_value_list_for_all_scenarios)
+            )
+            y2_data_mean_value_list_for_all_scenarios_sorted = [y2 for y2, y1 in sorted_zip_lists]
+            y1_data_mean_value_list_for_all_scenarios_sorted = [y1 for y2, y1 in sorted_zip_lists]
+        else:
+            y1_data_mean_value_list_for_all_scenarios_sorted = y1_data_mean_value_list_for_all_scenarios
+            y2_data_mean_value_list_for_all_scenarios_sorted = y2_data_mean_value_list_for_all_scenarios
+
+        a_x.bar(x_data, y1_data_mean_value_list_for_all_scenarios_sorted, color="r")
         if use_y1_as_bottom_for_y2 is True:
             a_x.bar(
                 x_data,
-                y2_data_mean_value_list_for_all_scenarios,
-                bottom=y1_data_mean_value_list_for_all_scenarios,
+                y2_data_mean_value_list_for_all_scenarios_sorted,
+                bottom=y1_data_mean_value_list_for_all_scenarios_sorted,
                 color="b",
             )
         else:
-            a_x.bar(x_data, y2_data_mean_value_list_for_all_scenarios, color="b")
+            a_x.bar(x_data, y2_data_mean_value_list_for_all_scenarios_sorted, color="b")
 
         y_tick_labels, unit, y_tick_locations = self.set_axis_scale(a_x, x_or_y="y", unit=y1_data_unit)
         plt.yticks(
@@ -632,11 +660,10 @@ class ScenarioChartGeneration:
 
         plt.tick_params(labelsize=self.hisim_chartbase.fontsize_ticks)
 
-        plt.legend([y1_data_variable, y2_data_variable], bbox_to_anchor=(1, 1), loc="upper left")
+        plt.legend([y1_data_variable, y2_data_variable])
 
         a_x.xaxis.set_tick_params(labelbottom=False)
         a_x.set_xticks([])
-        plt.tight_layout()
         fig.savefig(os.path.join(self.plot_path_complete, "stacked_bar_plot.png"))
         plt.close()
 

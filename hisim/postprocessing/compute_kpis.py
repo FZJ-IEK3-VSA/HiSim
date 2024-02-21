@@ -1002,6 +1002,9 @@ class KpiGenerator(JSONWizard):
         thermal_output_energy_heatpump_in_kilowatt_hour = None
         electrical_input_energy_heatpump_in_kilowatt_hour = None
         specific_thermal_output_energy_of_heat_pump_in_kilowatt_hour_per_m2 = None
+        mean_flow_temperature_in_celsius = None
+        mean_return_temperature_in_celsius = None
+        mean_temperature_difference_between_flow_and_return_in_celsius = None
 
         # check if Heat Pump was used in components
         for wrapped_component in self.wrapped_components:
@@ -1043,6 +1046,9 @@ class KpiGenerator(JSONWizard):
             thermal_output_energy_heatpump_in_kilowatt_hour,
             electrical_input_energy_heatpump_in_kilowatt_hour,
             specific_thermal_output_energy_of_heat_pump_in_kilowatt_hour_per_m2,
+            mean_temperature_difference_between_flow_and_return_in_celsius,
+            mean_flow_temperature_in_celsius,
+            mean_return_temperature_in_celsius
         ):
             log.warning(
                 "KPI values for advanced heat pump HPLib are None. "

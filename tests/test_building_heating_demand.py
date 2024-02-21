@@ -6,7 +6,8 @@ The aim is to compare the calculated heat demand in the building module with the
 import os
 from typing import Optional
 import pytest
-import numpy as np
+
+# import numpy as np
 
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
@@ -203,6 +204,11 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
     energy_need_for_heating_from_idealized_electric_heater_in_kilowatt_hour_per_year_per_m2 = (
         sum_heating_in_kilowatt_hour / my_building_config.absolute_conditioned_floor_area_in_m2
     )
+    deviation_of_both_values_in_percent = round(
+        energy_need_for_heating_from_idealized_electric_heater_in_kilowatt_hour_per_year_per_m2
+        / energy_need_for_heating_given_by_tabula_in_kilowatt_hour_per_year_per_m2
+        * 100
+    )
     log.information(
         "energy need for heating from tabula [kWh/(a*m2)] "
         + str(energy_need_for_heating_given_by_tabula_in_kilowatt_hour_per_year_per_m2)
@@ -211,11 +217,7 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
         "energy need for heating from idealized electric heater [kWh/(a*m2)] "
         + str(energy_need_for_heating_from_idealized_electric_heater_in_kilowatt_hour_per_year_per_m2)
     )
-    log.information(
-        "Deviation of both values "
-        + f"{round(energy_need_for_heating_from_idealized_electric_heater_in_kilowatt_hour_per_year_per_m2 / energy_need_for_heating_given_by_tabula_in_kilowatt_hour_per_year_per_m2 *100 )}"
-        + " %"
-    )
+    log.information("Deviation of both values " + f"{deviation_of_both_values_in_percent}" + " %")
 
     # # test whether tabula energy demand for heating is equal to energy demand for heating generated from idealized electric heater with a tolerance of 10%
     # np.testing.assert_allclose(

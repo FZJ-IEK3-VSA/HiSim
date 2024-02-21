@@ -570,7 +570,7 @@ class Building(cp.Component):
             internal_heat_flux_to_internal_room_surface_in_watt,
             next_thermal_mass_temperature_in_celsius,
             internal_heat_flux_to_indoor_air_in_watt,
-            total_thermal_mass_heat_flux_in_watt
+            total_thermal_mass_heat_flux_in_watt,
         ) = self.calc_crank_nicolson(
             thermal_power_delivered_in_watt=thermal_power_delivered_in_watt,
             internal_heat_gains_in_watt=internal_heat_gains_through_occupancy_in_watt
@@ -598,8 +598,10 @@ class Building(cp.Component):
             heat_loss_from_transmission_in_watt=heat_loss_from_transmission_according_to_tabula_in_watt,
             heat_loss_from_ventilation_in_watt=heat_loss_from_ventilation_according_to_tabula_in_watt,
             solar_gains_in_watt=solar_heat_gain_through_windows_in_watt,
-            internal_heat_gains_in_watt=internal_heat_gains_through_occupancy_in_watt+internal_heat_gains_through_devices_in_watt,
-            gain_utilisation_factor=self.my_building_information.gain_utilisation_factor)
+            internal_heat_gains_in_watt=internal_heat_gains_through_occupancy_in_watt
+            + internal_heat_gains_through_devices_in_watt,
+            gain_utilisation_factor=self.my_building_information.gain_utilisation_factor_reference,
+        )
 
         # if indoor temperature is too high make complete air exchange by opening the windows until outdoor temperature or set_heating_temperature + 1°C is reached
         if (
@@ -646,9 +648,16 @@ class Building(cp.Component):
         stsv.set_output_value(self.total_thermal_power_to_residence_channel, total_thermal_power_to_residence_in_watt)
 
         stsv.set_output_value(self.solar_gain_through_windows_channel, solar_heat_gain_through_windows_in_watt)
-        stsv.set_output_value(self.internal_heat_gains_from_residents_and_devices_channel, internal_heat_gains_through_occupancy_in_watt + internal_heat_gains_through_devices_in_watt)
-        stsv.set_output_value(self.heat_loss_from_transmission_channel, heat_loss_from_transmission_according_to_tabula_in_watt)
-        stsv.set_output_value(self.heat_loss_from_ventilation_channel, heat_loss_from_ventilation_according_to_tabula_in_watt)
+        stsv.set_output_value(
+            self.internal_heat_gains_from_residents_and_devices_channel,
+            internal_heat_gains_through_occupancy_in_watt + internal_heat_gains_through_devices_in_watt,
+        )
+        stsv.set_output_value(
+            self.heat_loss_from_transmission_channel, heat_loss_from_transmission_according_to_tabula_in_watt
+        )
+        stsv.set_output_value(
+            self.heat_loss_from_ventilation_channel, heat_loss_from_ventilation_according_to_tabula_in_watt
+        )
 
         stsv.set_output_value(
             self.heat_demand_according_to_tabula_channel, heat_demand_according_to_tabula_in_watt,
@@ -664,9 +673,7 @@ class Building(cp.Component):
         stsv.set_output_value(
             self.heat_flow_rates_to_internal_surface_node_channel, internal_heat_flux_to_internal_room_surface_in_watt,
         )
-        stsv.set_output_value(
-            self.total_heat_flow_rates_thermal_mass_channel, total_thermal_mass_heat_flux_in_watt
-        )
+        stsv.set_output_value(self.total_heat_flow_rates_thermal_mass_channel, total_thermal_mass_heat_flux_in_watt)
         stsv.set_output_value(
             self.open_window_channel, self.window_open,
         )
@@ -879,9 +886,7 @@ class Building(cp.Component):
 
         # with with dQ/dt = h * (T2-T1) * A -> [W]
         current_heat_transfer_in_watt = (
-            (
-                heat_transfer_coeff_in_watt_per_m2_per_kelvin
-            )
+            (heat_transfer_coeff_in_watt_per_m2_per_kelvin)
             * (indoor_air_temperature_in_celsius - current_outside_temperature_in_celsius)
             * scaled_conditioned_floor_area_in_m2
         )
@@ -893,15 +898,15 @@ class Building(cp.Component):
         heat_loss_from_ventilation_in_watt: float,
         solar_gains_in_watt: float,
         internal_heat_gains_in_watt: float,
-        gain_utilisation_factor: float
+        gain_utilisation_factor: float,
     ) -> Any:
         """Calculate current heat transfer between indoor air and outside using transmission and ventilation coeff from TABULA."""
 
         # with Q_h_nd = (Q_h_tr + Q_h_ve) - eta_h_ng * (Q_sol + Q_int)
         # see https://www.iwu.de/fileadmin/publikationen/gebaeudebestand/episcope/2013_IWU_LogaEtDiefenbach_TABULA-Calculation-Method.pdf
         heat_demand_according_to_tabula_in_watt = (
-            (heat_loss_from_transmission_in_watt + heat_loss_from_ventilation_in_watt) - gain_utilisation_factor * (solar_gains_in_watt + internal_heat_gains_in_watt)
-        )
+            heat_loss_from_transmission_in_watt + heat_loss_from_ventilation_in_watt
+        ) - gain_utilisation_factor * (solar_gains_in_watt + internal_heat_gains_in_watt)
         return heat_demand_according_to_tabula_in_watt
 
     # =====================================================================================================================================
@@ -1501,7 +1506,7 @@ class Building(cp.Component):
             heat_flux_to_internal_room_surface_in_watt,
             next_thermal_mass_temperature_in_celsius,
             heat_flux_to_indoor_air_in_watt,
-            total_thermal_mass_heat_flux_in_watt
+            total_thermal_mass_heat_flux_in_watt,
         )
 
     # =====================================================================================================================================
@@ -1881,7 +1886,7 @@ class BuildingInformation:
             self.heat_transfer_coeff_by_ventilation_reference_in_watt_per_kelvin,
             self.heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin,
             self.heat_transfer_coeff_by_ventilation_ref_in_watt_per_m2_per_kelvin,
-            self.gain_utilisation_factor_reference
+            self.gain_utilisation_factor_reference,
         ) = self.get_some_reference_data_from_tabula(
             buildingdata=self.buildingdata,
             scaled_conditioned_floor_area_in_m2=self.scaled_conditioned_floor_area_in_m2,
@@ -2222,9 +2227,7 @@ class BuildingInformation:
             buildingdata["c_m"].values[0]
         )
         # gain utilisation factor eta_h_gn
-        gain_utilisation_factor_reference = float(
-            buildingdata["eta_h_gn"].values[0]
-        )
+        gain_utilisation_factor_reference = float(buildingdata["eta_h_gn"].values[0])
 
         # Heat transfer coefficient by ventilation in watt per m2 per kelvin
         heat_transfer_coeff_by_ventilation_reference_in_watt_per_m2_per_kelvin = float(
@@ -2255,5 +2258,5 @@ class BuildingInformation:
             heat_transfer_coeff_by_ventilation_reference_in_watt_per_kelvin,
             heat_transfer_coeff_by_transmission_reference_in_watt_per_m2_per_kelvin,
             heat_transfer_coeff_by_ventilation_reference_in_watt_per_m2_per_kelvin,
-            gain_utilisation_factor_reference
+            gain_utilisation_factor_reference,
         )

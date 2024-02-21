@@ -130,7 +130,9 @@ class KpiGenerator(JSONWizard):
         # get building performance indicators
         building_conditioned_floor_area_in_m2 = self.get_building_kpis()
         # get heat distriution system kpis
-        self.get_heat_distribution_system_kpis()
+        self.get_heat_distribution_system_kpis(
+            building_conditioned_floor_area_in_m2=building_conditioned_floor_area_in_m2
+        )
         # get heat pump performance indicators
         self.get_heat_pump_kpis(building_conditioned_floor_area_in_m2=building_conditioned_floor_area_in_m2)
 
@@ -407,7 +409,9 @@ class KpiGenerator(JSONWizard):
             relative_electricity_demand_from_grid_in_percent = None
         else:
             relative_electricity_demand_from_grid_in_percent = (
-                round(electricity_from_grid_in_kilowatt_hour, 2) / round(total_electricity_consumption_in_kilowatt_hour, 2) * 100
+                round(electricity_from_grid_in_kilowatt_hour, 2)
+                / round(total_electricity_consumption_in_kilowatt_hour, 2)
+                * 100
             )
             if relative_electricity_demand_from_grid_in_percent > 100:
                 raise ValueError(
@@ -758,12 +762,6 @@ class KpiGenerator(JSONWizard):
         if not wrapped_building_component:
             raise ValueError("Could not find the Building component.")
 
-        # get building temperatures
-        self.get_building_temperature_deviation_from_set_temperatures(results=self.results, component_name=wrapped_building_component.my_component)
-
-        # get building tabula ref values
-        self.get_building_tabula_reference_values(component_name=wrapped_building_component.my_component)
-
         # get heating load and heating ref temperature
         heating_load_in_watt = getattr(
             wrapped_building_component.my_component, "my_building_information"
@@ -788,7 +786,6 @@ class KpiGenerator(JSONWizard):
         specific_heating_load_in_watt_per_m2_entry = KpiEntry(
             name="Specific heating load", unit="W/m2", value=specific_heating_load_in_watt_per_m2,
         )
-        
 
         # update kpi collection dict
         self.kpi_collection_dict.update(
@@ -798,9 +795,24 @@ class KpiGenerator(JSONWizard):
                 specific_heating_load_in_watt_per_m2_entry.name: specific_heating_load_in_watt_per_m2_entry.to_dict(),
             }
         )
+        # get building temperatures
+        self.get_building_temperature_deviation_from_set_temperatures(
+            results=self.results, component_name=wrapped_building_component.my_component
+        )
+
+        # get building tabula ref values
+        self.get_building_tabula_reference_values(component_name=wrapped_building_component.my_component)
+
+        # get building output kpis
+        self.get_building_outputs(
+            results=self.results, building_conditioned_floor_area_in_m2=scaled_conditioned_floor_area_in_m2
+        )
+
         return scaled_conditioned_floor_area_in_m2
-    
-    def get_building_temperature_deviation_from_set_temperatures(self, results: pd.DataFrame, component_name: str) -> None:
+
+    def get_building_temperature_deviation_from_set_temperatures(
+        self, results: pd.DataFrame, component_name: str
+    ) -> None:
         """Check building temperatures.
 
         Check for all timesteps and count the
@@ -816,18 +828,11 @@ class KpiGenerator(JSONWizard):
         max_temperature_reached_in_celsius = None
 
         # get set temperatures
-        set_heating_temperature_in_celsius = getattr(
-            component_name, "set_heating_temperature_in_celsius"
-        )
-        set_cooling_temperature_in_celsius = getattr(
-            component_name, "set_cooling_temperature_in_celsius"
-        )
-        print(component_name)
+        set_heating_temperature_in_celsius = getattr(component_name, "set_heating_temperature_in_celsius")
+        set_cooling_temperature_in_celsius = getattr(component_name, "set_cooling_temperature_in_celsius")
+
         for column in results.columns:
-            if all(
-                x in column.split(sep=" ")
-                for x in [Building.TemperatureIndoorAir]
-            ):
+            if all(x in column.split(sep=" ") for x in [Building.TemperatureIndoorAir]):
                 for temperature in results[column].values:
                     if temperature < set_heating_temperature_in_celsius:
                         temperature_difference_heating = set_heating_temperature_in_celsius - temperature
@@ -889,7 +894,7 @@ class KpiGenerator(JSONWizard):
             }
         )
 
-    def get_building_tabula_reference_values(self, component_name: str) -> float:
+    def get_building_tabula_reference_values(self, component_name: str) -> None:
         """Check tabula reference values."""
 
         # get tabula reference value for energy need in kWh per m2 / a
@@ -918,27 +923,27 @@ class KpiGenerator(JSONWizard):
         ).gain_utilisation_factor_reference
 
         # make kpi entry
-        specific_heat_demand_from_tabula_in_kwh_per_m2_per_a_entry = KpiEntry(
+        specific_heat_demand_from_tabula_in_kwh_per_m2a_entry = KpiEntry(
             name="Specific heating demand according to TABULA",
             unit="kWh/m2a",
             value=energy_need_for_heating_in_kilowatthour_per_m2_per_year_tabula_ref,
         )
-        specific_heat_loss_transmission_from_tabula_in_kwh_per_m2_per_a_entry = KpiEntry(
+        specific_heat_loss_transmission_from_tabula_in_kwh_per_m2a_entry = KpiEntry(
             name="Specific transmission heat loss according to TABULA",
             unit="kWh/m2a",
             value=transmission_heat_loss_in_kilowatthour_per_m2_per_year_tabula_ref,
         )
-        specific_heat_loss_ventilation_from_tabula_in_kwh_per_m2_per_a_entry = KpiEntry(
+        specific_heat_loss_ventilation_from_tabula_in_kwh_per_m2a_entry = KpiEntry(
             name="Specific ventilation heat loss according to TABULA",
             unit="kWh/m2a",
             value=ventilation_heat_loss_in_kilowatthour_per_m2_per_year_tabula_ref,
         )
-        specific_solar_gains_from_tabula_in_kwh_per_m2_per_a_entry = KpiEntry(
+        specific_solar_gains_from_tabula_in_kwh_per_m2a_entry = KpiEntry(
             name="Specific solar gains according to TABULA",
             unit="kWh/m2a",
             value=solar_gains_in_kilowatthour_per_m2_per_year_tabula_ref,
         )
-        specific_internal_gains_from_tabula_in_kwh_per_m2_per_a_entry = KpiEntry(
+        specific_internal_gains_from_tabula_in_kwh_per_m2a_entry = KpiEntry(
             name="Specific internal gains according to TABULA",
             unit="kWh/m2a",
             value=internal_gains_in_kilowatthour_per_m2_per_year_tabula_ref,
@@ -952,19 +957,120 @@ class KpiGenerator(JSONWizard):
         # update kpi collection dict
         self.kpi_collection_dict.update(
             {
-                specific_heat_demand_from_tabula_in_kwh_per_m2_per_a_entry.name: specific_heat_demand_from_tabula_in_kwh_per_m2_per_a_entry.to_dict(),
-                specific_heat_loss_transmission_from_tabula_in_kwh_per_m2_per_a_entry.name: specific_heat_loss_transmission_from_tabula_in_kwh_per_m2_per_a_entry.to_dict(),
-                specific_heat_loss_ventilation_from_tabula_in_kwh_per_m2_per_a_entry.name: specific_heat_loss_ventilation_from_tabula_in_kwh_per_m2_per_a_entry.to_dict(),
-                specific_solar_gains_from_tabula_in_kwh_per_m2_per_a_entry.name: specific_solar_gains_from_tabula_in_kwh_per_m2_per_a_entry.to_dict(),
-                specific_internal_gains_from_tabula_in_kwh_per_m2_per_a_entry.name: specific_internal_gains_from_tabula_in_kwh_per_m2_per_a_entry.to_dict(),
-                gain_utilisation_factor_tabula_ref_entry.name: gain_utilisation_factor_tabula_ref_entry.to_dict()
+                specific_heat_demand_from_tabula_in_kwh_per_m2a_entry.name: specific_heat_demand_from_tabula_in_kwh_per_m2a_entry.to_dict(),
+                specific_heat_loss_transmission_from_tabula_in_kwh_per_m2a_entry.name: specific_heat_loss_transmission_from_tabula_in_kwh_per_m2a_entry.to_dict(),
+                specific_heat_loss_ventilation_from_tabula_in_kwh_per_m2a_entry.name: specific_heat_loss_ventilation_from_tabula_in_kwh_per_m2a_entry.to_dict(),
+                specific_solar_gains_from_tabula_in_kwh_per_m2a_entry.name: specific_solar_gains_from_tabula_in_kwh_per_m2a_entry.to_dict(),
+                specific_internal_gains_from_tabula_in_kwh_per_m2a_entry.name: specific_internal_gains_from_tabula_in_kwh_per_m2a_entry.to_dict(),
+                gain_utilisation_factor_tabula_ref_entry.name: gain_utilisation_factor_tabula_ref_entry.to_dict(),
             }
         )
 
-    def get_heat_distribution_system_kpis(self) -> None:
+    def get_building_outputs(self, results: pd.DataFrame, building_conditioned_floor_area_in_m2: float) -> None:
+        """Get KPIs for building outputs."""
+
+        specific_heat_loss_from_transmission_in_kilowatt_hour_per_m2 = None
+        specific_heat_loss_from_ventilation_in_kilowatt_hour_per_m2 = None
+        specific_solar_gains_in_kilowatt_hour_per_m2 = None
+        specific_internal_heat_gains_in_kilowatt_hour_per_m2 = None
+        specific_heat_demand_calculated_with_tabula_method_in_kilowatthour_per_m2 = None
+
+        for column in results.columns:
+            # get ouputs in watt and transform to kwh
+            if all(x in column.split(sep=" ") for x in [Building.HeatLossFromTransmission]):
+                heat_loss_from_transmission_values_in_watt = results[column]
+                # get energy from power
+                energy_loss_from_transmission_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
+                    power_timeseries_in_watt=heat_loss_from_transmission_values_in_watt,
+                    timeresolution=self.simulation_parameters.seconds_per_timestep,
+                )
+                specific_heat_loss_from_transmission_in_kilowatt_hour_per_m2 = (
+                    energy_loss_from_transmission_in_kilowatt_hour / building_conditioned_floor_area_in_m2
+                )
+
+            if all(x in column.split(sep=" ") for x in [Building.HeatLossFromVentilation]):
+                heat_loss_from_ventilation_values_in_watt = results[column]
+                # get energy from power
+                energy_loss_from_ventilation_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
+                    power_timeseries_in_watt=heat_loss_from_ventilation_values_in_watt,
+                    timeresolution=self.simulation_parameters.seconds_per_timestep,
+                )
+                specific_heat_loss_from_ventilation_in_kilowatt_hour_per_m2 = (
+                    energy_loss_from_ventilation_in_kilowatt_hour / building_conditioned_floor_area_in_m2
+                )
+
+            if all(x in column.split(sep=" ") for x in [Building.SolarGainThroughWindows]):
+                solar_gains_values_in_watt = results[column]
+                # get energy from power
+                energy_gains_from_solar_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
+                    power_timeseries_in_watt=solar_gains_values_in_watt,
+                    timeresolution=self.simulation_parameters.seconds_per_timestep,
+                )
+                specific_solar_gains_in_kilowatt_hour_per_m2 = (
+                    energy_gains_from_solar_in_kilowatt_hour / building_conditioned_floor_area_in_m2
+                )
+
+            if all(x in column.split(sep=" ") for x in [Building.InternalHeatGainsFromOccupancy]):
+                internal_gains_values_in_watt = results[column]
+                # get energy from power
+                energy_gains_from_internal_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
+                    power_timeseries_in_watt=internal_gains_values_in_watt,
+                    timeresolution=self.simulation_parameters.seconds_per_timestep,
+                )
+                specific_internal_heat_gains_in_kilowatt_hour_per_m2 = (
+                    energy_gains_from_internal_in_kilowatt_hour / building_conditioned_floor_area_in_m2
+                )
+
+            if all(x in column.split(sep=" ") for x in [Building.HeatDemandAccordingToTabula]):
+                heat_demand_values_in_watt = results[column]
+                # get energy from power
+                energy_demand_calculated_based_on_tabula_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
+                    power_timeseries_in_watt=heat_demand_values_in_watt,
+                    timeresolution=self.simulation_parameters.seconds_per_timestep,
+                )
+                specific_heat_demand_calculated_with_tabula_method_in_kilowatthour_per_m2 = (
+                    energy_demand_calculated_based_on_tabula_in_kilowatt_hour / building_conditioned_floor_area_in_m2
+                )
+
+        specific_energy_loss_from_transmission_entry = KpiEntry(
+            name="Specific energy transfer from transmission",
+            unit="kWh/m2",
+            value=specific_heat_loss_from_transmission_in_kilowatt_hour_per_m2,
+        )
+        specific_energy_loss_from_ventilation_entry = KpiEntry(
+            name="Specific energy transfer from ventilation",
+            unit="kWh/m2",
+            value=specific_heat_loss_from_ventilation_in_kilowatt_hour_per_m2,
+        )
+        specific_energy_gains_from_solar_entry = KpiEntry(
+            name="Specific solar energy gains", unit="kWh/m2", value=specific_solar_gains_in_kilowatt_hour_per_m2,
+        )
+        specific_energy_gains_from_internal_entry = KpiEntry(
+            name="Specific internal energy gains",
+            unit="kWh/m2",
+            value=specific_internal_heat_gains_in_kilowatt_hour_per_m2,
+        )
+        specific_heat_demand_calculated_entry = KpiEntry(
+            name="Specific heat demand calculated based on TABULA",
+            unit="kWh/m2",
+            value=specific_heat_demand_calculated_with_tabula_method_in_kilowatthour_per_m2,
+        )
+        # update kpi collection dict
+        self.kpi_collection_dict.update(
+            {
+                specific_energy_loss_from_transmission_entry.name: specific_energy_loss_from_transmission_entry.to_dict(),
+                specific_energy_loss_from_ventilation_entry.name: specific_energy_loss_from_ventilation_entry.to_dict(),
+                specific_energy_gains_from_solar_entry.name: specific_energy_gains_from_solar_entry.to_dict(),
+                specific_energy_gains_from_internal_entry.name: specific_energy_gains_from_internal_entry.to_dict(),
+                specific_heat_demand_calculated_entry.name: specific_heat_demand_calculated_entry.to_dict(),
+            }
+        )
+
+    def get_heat_distribution_system_kpis(self, building_conditioned_floor_area_in_m2: float) -> None:
         """Get KPIs from heat distriution system like thermal energy delivered."""
 
         thermal_output_energy_in_kilowatt_hour = None
+        specific_thermal_output_energy_in_kilowatt_hour = None
         for wrapped_component in self.wrapped_components:
             if isinstance(wrapped_component.my_component, HeatDistribution):
                 wrapped_hds_component = wrapped_component
@@ -983,6 +1089,7 @@ class KpiGenerator(JSONWizard):
                             power_timeseries_in_watt=thermal_output_power_values_in_watt,
                             timeresolution=self.simulation_parameters.seconds_per_timestep,
                         )
+                        specific_thermal_output_energy_in_kilowatt_hour = thermal_output_energy_in_kilowatt_hour / building_conditioned_floor_area_in_m2
                 break
         if thermal_output_energy_in_kilowatt_hour is None:
             log.warning(
@@ -995,9 +1102,17 @@ class KpiGenerator(JSONWizard):
             unit="kWh",
             value=thermal_output_energy_in_kilowatt_hour,
         )
+        specific_thermal_output_energy_hds_entry = KpiEntry(
+            name="Specific thermal output energy of heat distribution system",
+            unit="kWh/m2",
+            value=specific_thermal_output_energy_in_kilowatt_hour,
+        )
         # update kpi collection dict
         self.kpi_collection_dict.update(
-            {thermal_output_energy_hds_entry.name: thermal_output_energy_hds_entry.to_dict()}
+            {
+                thermal_output_energy_hds_entry.name: thermal_output_energy_hds_entry.to_dict(),
+                specific_thermal_output_energy_hds_entry.name: specific_thermal_output_energy_hds_entry.to_dict(),
+            }
         )
 
     def get_heatpump_cycles(self, results: pd.DataFrame, component_name: str) -> float:
@@ -1029,9 +1144,9 @@ class KpiGenerator(JSONWizard):
             if all(x in column.split(sep=" ") for x in [SimpleHotWaterStorage.WaterTemperatureToHeatGenerator]):
                 return_temperature_list_in_celsius = results[column]
 
-        mean_temperature_difference_between_flow_and_return_in_celsius = float(np.mean(
-            flow_temperature_list_in_celsius - return_temperature_list_in_celsius
-        ))
+        mean_temperature_difference_between_flow_and_return_in_celsius = float(
+            np.mean(flow_temperature_list_in_celsius - return_temperature_list_in_celsius)
+        )
         mean_flow_temperature_in_celsius = float(np.mean(flow_temperature_list_in_celsius))
         mean_return_temperature_in_celsius = float(np.mean(return_temperature_list_in_celsius))
 
@@ -1137,7 +1252,7 @@ class KpiGenerator(JSONWizard):
             specific_thermal_output_energy_of_heat_pump_in_kilowatt_hour_per_m2,
             mean_temperature_difference_between_flow_and_return_in_celsius,
             mean_flow_temperature_in_celsius,
-            mean_return_temperature_in_celsius
+            mean_return_temperature_in_celsius,
         ):
             log.warning(
                 "KPI values for advanced heat pump HPLib are None. "

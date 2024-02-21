@@ -168,7 +168,7 @@ class ScenarioChartGeneration:
             )
             # get unit of variable
             try:
-                unit = filtered_data.unit.values[0]
+                unit = str(filtered_data.unit.values[0])
             except Exception:
                 if "Temperature deviation" in variable_to_check:
                     unit = "°C*h"
@@ -406,7 +406,7 @@ class ScenarioChartGeneration:
             )
         except Exception:
             # take year from time colum
-            year = filtered_data.time.values[0].split("-")[0]
+            year = str(filtered_data.time.values[0]).split("-")[0]
             plt.xlabel(
                 xlabel=year, fontsize=self.hisim_chartbase.fontsize_label,
             )

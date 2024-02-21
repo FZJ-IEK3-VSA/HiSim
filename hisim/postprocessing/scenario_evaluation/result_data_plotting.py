@@ -406,7 +406,7 @@ class ScenarioChartGeneration:
             )
         except Exception:
             # take year from time colum
-            year = str(filtered_data.time.values[0]).split("-")[0]
+            year = str(filtered_data.time.values[0]).split("-", maxsplit=1)[0]
             plt.xlabel(
                 xlabel=year, fontsize=self.hisim_chartbase.fontsize_label,
             )

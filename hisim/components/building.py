@@ -539,7 +539,7 @@ class Building(cp.Component):
         # calc temperatures and heat flow rates with crank nicolson method from ISO 13790
         (
             thermal_mass_average_bulk_temperature_in_celsius,
-            heat_loss_in_watt,
+            # heat_loss_in_watt,
             internal_surface_temperature_in_celsius,
             indoor_air_temperature_in_celsius,
             internal_heat_flux_to_thermal_mass_in_watt,
@@ -693,7 +693,7 @@ class Building(cp.Component):
             phi_ia_forecast: list = []
             for i in range(self.my_simulation_parameters.timesteps):
                 (
-                    _,
+                    # _,
                     phi_ia_yearly,
                     phi_st_yearly,
                     phi_m_yearly,
@@ -1201,20 +1201,20 @@ class Building(cp.Component):
             / self.my_building_information.total_internal_surface_area_in_m2
         ) * (0.5 * internal_heat_gains_in_watt + solar_heat_gains_in_watt)
 
-        # Heat loss in W, before labeled Phi_loss
-        heat_loss_in_watt = (
-            self.transmission_heat_transfer_coeff_windows_and_door_in_watt_per_kelvin
-            / (
-                self.my_building_information.heat_transfer_coeff_thermal_mass_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin
-                * self.my_building_information.total_internal_surface_area_in_m2
-            )
-        ) * (0.5 * internal_heat_gains_in_watt + solar_heat_gains_in_watt)
+        # # Heat loss in W, before labeled Phi_loss
+        # heat_loss_in_watt = (
+        #     self.transmission_heat_transfer_coeff_windows_and_door_in_watt_per_kelvin
+        #     / (
+        #         self.my_building_information.heat_transfer_coeff_thermal_mass_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin
+        #         * self.my_building_information.total_internal_surface_area_in_m2
+        #     )
+        # ) * (0.5 * internal_heat_gains_in_watt + solar_heat_gains_in_watt)
 
         return (
             heat_flux_indoor_air_in_watt,
             heat_flux_internal_room_surface_in_watt,
             heat_flux_thermal_mass_in_watt,
-            heat_loss_in_watt,
+            # heat_loss_in_watt,
         )
 
     # =====================================================================================================================================
@@ -1381,7 +1381,7 @@ class Building(cp.Component):
         outside_temperature_in_celsius: float,
         thermal_mass_temperature_prev_in_celsius: float,
         thermal_power_delivered_in_watt: float,
-    ) -> Tuple[float, float, float, float, float, float, float, float, float]:
+    ) -> Tuple[float, float, float, float, float, float, float, float]:  # , float]:
         """Determine node temperatures and computes derivation to determine the new node temperatures.
 
         Used in: has_demand(), solve_energy(), calc_energy_demand()
@@ -1395,7 +1395,7 @@ class Building(cp.Component):
             heat_flux_to_indoor_air_in_watt,
             heat_flux_to_internal_room_surface_in_watt,
             heat_flux_to_thermal_mass_in_watt,
-            heat_loss_in_watt,
+            # heat_loss_in_watt,
         ) = self.calc_internal_heat_flows_from_internal_gains_and_solar_gains(
             internal_heat_gains_in_watt, solar_heat_gains_in_watt,
         )
@@ -1440,7 +1440,7 @@ class Building(cp.Component):
 
         return (
             thermal_mass_average_bulk_temperature_in_celsius,
-            heat_loss_in_watt,
+            # heat_loss_in_watt,
             internal_room_surface_temperature_in_celsius,
             indoor_air_temperature_in_celsius,
             heat_flux_to_thermal_mass_in_watt,

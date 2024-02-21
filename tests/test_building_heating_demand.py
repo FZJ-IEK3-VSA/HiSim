@@ -63,9 +63,7 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(
-            year=year, seconds_per_timestep=seconds_per_timestep
-        )
+        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
 
     # # in case ou want to check on all TABULA buildings -> run test over all building_codes
     # d_f = pd.read_csv(
@@ -97,11 +95,9 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home(
         set_cooling_temperature_in_celsius=set_cooling_temperature_for_building_in_celsius,
-        set_heating_temperature_in_celsius=set_heating_temperature_for_building_in_celsius
+        set_heating_temperature_in_celsius=set_heating_temperature_for_building_in_celsius,
     )
-    my_building = building.Building(
-        config=my_building_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     # Occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
@@ -109,12 +105,8 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
     )
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.AACHEN
-    )
-    my_weather = weather.Weather(
-        config=my_weather_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
+    my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     # Build Fake Heater Config
     my_idealized_electric_heater_config = idealized_electric_heater.IdealizedHeaterConfig(
         name="IdealizedElectricHeater",
@@ -130,12 +122,8 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
     # Connect Components
 
     # Building
-    my_building.connect_input(
-        my_building.Altitude, my_weather.component_name, my_weather.Altitude
-    )
-    my_building.connect_input(
-        my_building.Azimuth, my_weather.component_name, my_weather.Azimuth
-    )
+    my_building.connect_input(my_building.Altitude, my_weather.component_name, my_weather.Altitude)
+    my_building.connect_input(my_building.Azimuth, my_weather.component_name, my_weather.Azimuth)
     my_building.connect_input(
         my_building.DirectNormalIrradiance,
         my_weather.component_name,
@@ -156,9 +144,7 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
         my_weather.component_name,
         my_weather.DirectNormalIrradianceExtra,
     )
-    my_building.connect_input(
-        my_building.ApparentZenith, my_weather.component_name, my_weather.ApparentZenith
-    )
+    my_building.connect_input(my_building.ApparentZenith, my_weather.component_name, my_weather.ApparentZenith)
     my_building.connect_input(
         my_building.TemperatureOutside,
         my_weather.component_name,
@@ -200,9 +186,7 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
     # =========================================================================================================================================================
     # Calculate annual heat pump heating energy
 
-    results_heating = my_sim.results_data_frame[
-        "IdealizedElectricHeater - HeatingPowerDelivered [Heating - W]"
-    ]
+    results_heating = my_sim.results_data_frame["IdealizedElectricHeater - HeatingPowerDelivered [Heating - W]"]
 
     sum_heating_in_watt_timestep = sum(results_heating)
     log.information("sum heating [W*timestep] " + str(sum_heating_in_watt_timestep))
@@ -217,8 +201,7 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
     )
 
     energy_need_for_heating_from_idealized_electric_heater_in_kilowatt_hour_per_year_per_m2 = (
-        sum_heating_in_kilowatt_hour
-        / my_building_config.absolute_conditioned_floor_area_in_m2
+        sum_heating_in_kilowatt_hour / my_building_config.absolute_conditioned_floor_area_in_m2
     )
     log.information(
         "energy need for heating from tabula [kWh/(a*m2)] "
@@ -226,11 +209,13 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
     )
     log.information(
         "energy need for heating from idealized electric heater [kWh/(a*m2)] "
-        + str(
-            energy_need_for_heating_from_idealized_electric_heater_in_kilowatt_hour_per_year_per_m2
-        )
+        + str(energy_need_for_heating_from_idealized_electric_heater_in_kilowatt_hour_per_year_per_m2)
     )
-    log.information("Deviation of both values " + f"{round(energy_need_for_heating_from_idealized_electric_heater_in_kilowatt_hour_per_year_per_m2 / energy_need_for_heating_given_by_tabula_in_kilowatt_hour_per_year_per_m2 *100 )}"+ " %")
+    log.information(
+        "Deviation of both values "
+        + f"{round(energy_need_for_heating_from_idealized_electric_heater_in_kilowatt_hour_per_year_per_m2 / energy_need_for_heating_given_by_tabula_in_kilowatt_hour_per_year_per_m2 *100 )}"
+        + " %"
+    )
 
     # # test whether tabula energy demand for heating is equal to energy demand for heating generated from idealized electric heater with a tolerance of 10%
     # np.testing.assert_allclose(
@@ -238,8 +223,10 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
     #     energy_need_for_heating_from_idealized_electric_heater_in_kilowatt_hour_per_year_per_m2,
     #     rtol=0.10,
     # )
-    log.information("This test currently fails.\n"
-                    + "TODO: Find out why these values are so different. Compare annual solar and internal gains as well as heat transfer through transmission and ventilation "
-                    + "with TABULA reference values.\n"
-                    + "See TABULA calculation method here: "
-                    + "https://www.iwu.de/fileadmin/publikationen/gebaeudebestand/episcope/2013_IWU_LogaEtDiefenbach_TABULA-Calculation-Method.pdf")
+    log.information(
+        "This test fails now because heating by devices was integrated in internal heat gains.\n"
+        + "TODO: Find out why heating demands are so different. Compare annual solar and internal gains as well as heat transfer through transmission and ventilation "
+        + "with TABULA reference values.\n"
+        + "See TABULA calculation method here: "
+        + "https://www.iwu.de/fileadmin/publikationen/gebaeudebestand/episcope/2013_IWU_LogaEtDiefenbach_TABULA-Calculation-Method.pdf"
+    )

@@ -407,7 +407,7 @@ class KpiGenerator(JSONWizard):
             relative_electricity_demand_from_grid_in_percent = None
         else:
             relative_electricity_demand_from_grid_in_percent = (
-                electricity_from_grid_in_kilowatt_hour / total_electricity_consumption_in_kilowatt_hour * 100
+                round(electricity_from_grid_in_kilowatt_hour, 2) / round(total_electricity_consumption_in_kilowatt_hour, 2) * 100
             )
             if relative_electricity_demand_from_grid_in_percent > 100:
                 raise ValueError(

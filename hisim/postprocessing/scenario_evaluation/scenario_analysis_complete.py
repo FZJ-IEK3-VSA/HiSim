@@ -22,6 +22,7 @@ class ScenarioAnalysis:
         time_resolution_of_data_set: Any,
         data_processing_mode: Any,
         variables_to_check: List[str],
+        dict_with_extra_information_for_specific_plot: Dict[str, Dict],
         dict_with_scenarios_to_check: Optional[Dict[str, List[str]]] = None,
     ) -> None:
         """Initialize the class."""
@@ -39,6 +40,7 @@ class ScenarioAnalysis:
             data_processing_mode=data_processing_mode,
             variables_to_check=variables_to_check,
             dict_of_scenarios_to_check=dict_with_scenarios_to_check,
+            dict_with_extra_information_for_specific_plot=dict_with_extra_information_for_specific_plot,
         )
 
 
@@ -54,7 +56,7 @@ def main():
 
     folder_from_which_data_will_be_collected = os.path.join(
         cluster_storage_path,
-        "repositories/HiSim/system_setups/results/household_cluster_advanced_hp_pv_battery_ems/monte_carlo_20240108_0935",
+        "repositories/HiSim/system_setups/results/household_cluster_advanced_hp_pv_battery_ems/new_hp_flow_temp/monte_carlo_20240208_1637",
     )
 
     path_to_default_config = os.path.join(
@@ -63,13 +65,10 @@ def main():
     )
     simulation_duration_to_check = str(365)
 
-    data_processing_mode = result_data_collection.ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
+    data_processing_mode = result_data_collection.ResultDataProcessingModeEnum.PROCESS_ALL_DATA
 
     filterclass = result_data_processing.FilterClass()
-    # list_with_variables_to_check = (
-    #     filterclass.variables_for_debugging_purposes + filterclass.heating_demand
-    # )
-    list_with_variables_to_check = filterclass.kpi_data + filterclass.heating_demand
+    list_with_variables_to_check = filterclass.kpi_data  # filterclass.flow_and_return_temperatures +
 
     # TODO: filter several scenario parameters (eg pv and building code together) not working yet, need to be fixed
     # dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share,"building_code": ["DE.N.SFH.05.Gen.ReEx.001.002"]}
@@ -81,11 +80,18 @@ def main():
     #         "DE.N.AB",
     #     ]
     # }
-    dict_with_scenarios_to_check = {
-        "building_code": filterclass.building_refurbishment_state
+
+    dict_with_scenarios_to_check = None
+
+    dict_with_extra_information_for_specific_plot: Dict[str, Dict] = {
+        "scatter": {"x_data_variable": "Specific heating demand according to TABULA"},
+        "stacked_bar": {
+            "y1_data_variable": "Mean flow temperature of heat pump",
+            "y2_data_variable": "Mean return temperature of heat pump",
+            "use_y1_as_bottom_for_y2": False,
+            "sort_according_to_y1_or_y2_data": "y2",
+        },
     }
-    # dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share}
-    # dict_with_scenarios_to_check = None
 
     # -------------------------------------------------------------------------------------------------------------------------------------
 
@@ -97,6 +103,7 @@ def main():
         data_processing_mode=data_processing_mode,
         variables_to_check=list_with_variables_to_check,
         dict_with_scenarios_to_check=dict_with_scenarios_to_check,
+        dict_with_extra_information_for_specific_plot=dict_with_extra_information_for_specific_plot,
     )
 
 

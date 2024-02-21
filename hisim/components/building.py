@@ -1820,11 +1820,14 @@ class BuildingInformation:
             self.solar_heat_load_during_heating_seasons_reference_in_kilowatthour_per_m2_per_year,
             self.internal_heat_sources_reference_in_kilowatthour_per_m2_per_year,
             self.total_heat_transfer_reference_in_kilowatthour_per_m2_per_year,
+            self.transmission_heat_losses_ref_in_kilowatthour_per_m2_per_year,
+            self.ventilation_heat_losses_ref_in_kilowatthour_per_m2_per_year,
             self.energy_need_for_heating_reference_in_kilowatthour_per_m2_per_year,
             self.thermal_capacity_of_building_thermal_mass_reference_in_watthour_per_m2_per_kelvin,
             self.heat_transfer_coeff_by_ventilation_reference_in_watt_per_kelvin,
             self.heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin,
             self.heat_transfer_coeff_by_ventilation_ref_in_watt_per_m2_per_kelvin,
+            self.gain_utilisation_factor_reference
         ) = self.get_some_reference_data_from_tabula(
             buildingdata=self.buildingdata,
             scaled_conditioned_floor_area_in_m2=self.scaled_conditioned_floor_area_in_m2,
@@ -2139,7 +2142,7 @@ class BuildingInformation:
 
     def get_some_reference_data_from_tabula(
         self, buildingdata: Any, scaled_conditioned_floor_area_in_m2: float
-    ) -> Tuple[float, float, float, float, float, float, float, float]:
+    ) -> Tuple[float, float, float, float, float, float, float, float, float, float, float]:
         """Get some reference parameter from Tabula."""
 
         # Floor area related heat load during heating season
@@ -2153,12 +2156,20 @@ class BuildingInformation:
         # Floor area related annual losses
         # reference taken from TABULA (* Check header) as Q_ht [kWh/m2.a], before q_ht_ref
         total_heat_transfer_reference_in_kilowatthour_per_m2_per_year = float(buildingdata["q_ht"].values[0])
+        # transmission heat losses
+        transmission_heat_losses_ref_in_kilowatthour_per_m2_per_year = float(buildingdata["q_ht_tr"].values[0])
+        # ventilation heat losses
+        ventilation_heat_losses_ref_in_kilowatthour_per_m2_per_year = float(buildingdata["q_ht_ve"].values[0])
         # Energy need for heating
         # reference taken from TABULA (* Check header) as Q_H_nd [kWh/m2.a], before q_h_nd_ref
         energy_need_for_heating_reference_in_kilowatthour_per_m2_per_year = float(buildingdata["q_h_nd"].values[0])
         # Internal heat capacity per m2 reference area [Wh/(m^2.K)] (TABULA: Internal heat capacity)
         thermal_capacity_of_building_thermal_mass_reference_in_watthour_per_m2_per_kelvin = float(
             buildingdata["c_m"].values[0]
+        )
+        # gain utilisation factor eta_h_gn
+        gain_utilisation_factor_reference = float(
+            buildingdata["eta_h_gn"].values[0]
         )
 
         # Heat transfer coefficient by ventilation in watt per m2 per kelvin
@@ -2183,9 +2194,12 @@ class BuildingInformation:
             solar_heat_load_during_heating_seasons_reference_in_kilowatthour_per_m2_per_year,
             internal_heat_sources_reference_in_kilowatthour_per_m2_per_year,
             total_heat_transfer_reference_in_kilowatthour_per_m2_per_year,
+            transmission_heat_losses_ref_in_kilowatthour_per_m2_per_year,
+            ventilation_heat_losses_ref_in_kilowatthour_per_m2_per_year,
             energy_need_for_heating_reference_in_kilowatthour_per_m2_per_year,
             thermal_capacity_of_building_thermal_mass_reference_in_watthour_per_m2_per_kelvin,
             heat_transfer_coeff_by_ventilation_reference_in_watt_per_kelvin,
             heat_transfer_coeff_by_transmission_reference_in_watt_per_m2_per_kelvin,
             heat_transfer_coeff_by_ventilation_reference_in_watt_per_m2_per_kelvin,
+            gain_utilisation_factor_reference
         )

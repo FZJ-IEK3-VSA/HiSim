@@ -168,7 +168,7 @@ class ScenarioChartGeneration:
             )
             # get unit of variable
             try:
-                unit = filtered_data.unit.values[0]
+                unit = str(filtered_data.unit.values[0])
             except Exception:
                 if "Temperature deviation" in variable_to_check:
                     unit = "°C*h"
@@ -406,7 +406,7 @@ class ScenarioChartGeneration:
             )
         except Exception:
             # take year from time colum
-            year = filtered_data.time.values[0].split("-")[0]
+            year = str(filtered_data.time.values[0]).split("-", maxsplit=1)[0]
             plt.xlabel(
                 xlabel=year, fontsize=self.hisim_chartbase.fontsize_label,
             )
@@ -453,7 +453,7 @@ class ScenarioChartGeneration:
         full_pandas_dataframe: pd.DataFrame,
         filtered_data: pd.DataFrame,
         y_data_variable: str,
-        x_data_variable: str = "Conditioned floor area",
+        x_data_variable: str = "Specific heating demand according to TABULA",
     ) -> None:
         """Make scatter plot."""
         log.information("Make scatter plot with data.")

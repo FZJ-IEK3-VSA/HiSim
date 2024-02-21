@@ -563,7 +563,7 @@ class Building(cp.Component):
         # calc temperatures and heat flow rates with crank nicolson method from ISO 13790
         (
             thermal_mass_average_bulk_temperature_in_celsius,
-            heat_loss_in_watt,
+            # heat_loss_in_watt,
             internal_surface_temperature_in_celsius,
             indoor_air_temperature_in_celsius,
             internal_heat_flux_to_thermal_mass_in_watt,
@@ -732,7 +732,7 @@ class Building(cp.Component):
             phi_ia_forecast: list = []
             for i in range(self.my_simulation_parameters.timesteps):
                 (
-                    _,
+                    # _,
                     phi_ia_yearly,
                     phi_st_yearly,
                     phi_m_yearly,
@@ -1255,20 +1255,20 @@ class Building(cp.Component):
             / self.my_building_information.total_internal_surface_area_in_m2
         ) * (0.5 * internal_heat_gains_in_watt + solar_heat_gains_in_watt)
 
-        # Heat loss in W, before labeled Phi_loss
-        heat_loss_in_watt = (
-            self.transmission_heat_transfer_coeff_windows_and_door_in_watt_per_kelvin
-            / (
-                self.my_building_information.heat_transfer_coeff_thermal_mass_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin
-                * self.my_building_information.total_internal_surface_area_in_m2
-            )
-        ) * (0.5 * internal_heat_gains_in_watt + solar_heat_gains_in_watt)
+        # # Heat loss in W, before labeled Phi_loss
+        # heat_loss_in_watt = (
+        #     self.transmission_heat_transfer_coeff_windows_and_door_in_watt_per_kelvin
+        #     / (
+        #         self.my_building_information.heat_transfer_coeff_thermal_mass_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin
+        #         * self.my_building_information.total_internal_surface_area_in_m2
+        #     )
+        # ) * (0.5 * internal_heat_gains_in_watt + solar_heat_gains_in_watt)
 
         return (
             heat_flux_indoor_air_in_watt,
             heat_flux_internal_room_surface_in_watt,
             heat_flux_thermal_mass_in_watt,
-            heat_loss_in_watt,
+            # heat_loss_in_watt,
         )
 
     # =====================================================================================================================================
@@ -1435,7 +1435,7 @@ class Building(cp.Component):
         outside_temperature_in_celsius: float,
         thermal_mass_temperature_prev_in_celsius: float,
         thermal_power_delivered_in_watt: float,
-    ) -> Tuple[float, float, float, float, float, float, float, float, float]:
+    ) -> Tuple[float, float, float, float, float, float, float, float]:  # , float]:
         """Determine node temperatures and computes derivation to determine the new node temperatures.
 
         Used in: has_demand(), solve_energy(), calc_energy_demand()
@@ -1449,7 +1449,7 @@ class Building(cp.Component):
             heat_flux_to_indoor_air_in_watt,
             heat_flux_to_internal_room_surface_in_watt,
             heat_flux_to_thermal_mass_in_watt,
-            heat_loss_in_watt,
+            # heat_loss_in_watt,
         ) = self.calc_internal_heat_flows_from_internal_gains_and_solar_gains(
             internal_heat_gains_in_watt, solar_heat_gains_in_watt,
         )
@@ -1494,7 +1494,7 @@ class Building(cp.Component):
 
         return (
             thermal_mass_average_bulk_temperature_in_celsius,
-            heat_loss_in_watt,
+            # heat_loss_in_watt,
             internal_room_surface_temperature_in_celsius,
             indoor_air_temperature_in_celsius,
             heat_flux_to_thermal_mass_in_watt,
@@ -1874,11 +1874,14 @@ class BuildingInformation:
             self.solar_heat_load_during_heating_seasons_reference_in_kilowatthour_per_m2_per_year,
             self.internal_heat_sources_reference_in_kilowatthour_per_m2_per_year,
             self.total_heat_transfer_reference_in_kilowatthour_per_m2_per_year,
+            self.transmission_heat_losses_ref_in_kilowatthour_per_m2_per_year,
+            self.ventilation_heat_losses_ref_in_kilowatthour_per_m2_per_year,
             self.energy_need_for_heating_reference_in_kilowatthour_per_m2_per_year,
             self.thermal_capacity_of_building_thermal_mass_reference_in_watthour_per_m2_per_kelvin,
             self.heat_transfer_coeff_by_ventilation_reference_in_watt_per_kelvin,
             self.heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin,
             self.heat_transfer_coeff_by_ventilation_ref_in_watt_per_m2_per_kelvin,
+            self.gain_utilisation_factor_reference
         ) = self.get_some_reference_data_from_tabula(
             buildingdata=self.buildingdata,
             scaled_conditioned_floor_area_in_m2=self.scaled_conditioned_floor_area_in_m2,
@@ -2193,7 +2196,7 @@ class BuildingInformation:
 
     def get_some_reference_data_from_tabula(
         self, buildingdata: Any, scaled_conditioned_floor_area_in_m2: float
-    ) -> Tuple[float, float, float, float, float, float, float, float]:
+    ) -> Tuple[float, float, float, float, float, float, float, float, float, float, float]:
         """Get some reference parameter from Tabula."""
 
         # Floor area related heat load during heating season
@@ -2207,12 +2210,20 @@ class BuildingInformation:
         # Floor area related annual losses
         # reference taken from TABULA (* Check header) as Q_ht [kWh/m2.a], before q_ht_ref
         total_heat_transfer_reference_in_kilowatthour_per_m2_per_year = float(buildingdata["q_ht"].values[0])
+        # transmission heat losses
+        transmission_heat_losses_ref_in_kilowatthour_per_m2_per_year = float(buildingdata["q_ht_tr"].values[0])
+        # ventilation heat losses
+        ventilation_heat_losses_ref_in_kilowatthour_per_m2_per_year = float(buildingdata["q_ht_ve"].values[0])
         # Energy need for heating
         # reference taken from TABULA (* Check header) as Q_H_nd [kWh/m2.a], before q_h_nd_ref
         energy_need_for_heating_reference_in_kilowatthour_per_m2_per_year = float(buildingdata["q_h_nd"].values[0])
         # Internal heat capacity per m2 reference area [Wh/(m^2.K)] (TABULA: Internal heat capacity)
         thermal_capacity_of_building_thermal_mass_reference_in_watthour_per_m2_per_kelvin = float(
             buildingdata["c_m"].values[0]
+        )
+        # gain utilisation factor eta_h_gn
+        gain_utilisation_factor_reference = float(
+            buildingdata["eta_h_gn"].values[0]
         )
 
         # Heat transfer coefficient by ventilation in watt per m2 per kelvin
@@ -2237,9 +2248,12 @@ class BuildingInformation:
             solar_heat_load_during_heating_seasons_reference_in_kilowatthour_per_m2_per_year,
             internal_heat_sources_reference_in_kilowatthour_per_m2_per_year,
             total_heat_transfer_reference_in_kilowatthour_per_m2_per_year,
+            transmission_heat_losses_ref_in_kilowatthour_per_m2_per_year,
+            ventilation_heat_losses_ref_in_kilowatthour_per_m2_per_year,
             energy_need_for_heating_reference_in_kilowatthour_per_m2_per_year,
             thermal_capacity_of_building_thermal_mass_reference_in_watthour_per_m2_per_kelvin,
             heat_transfer_coeff_by_ventilation_reference_in_watt_per_kelvin,
             heat_transfer_coeff_by_transmission_reference_in_watt_per_m2_per_kelvin,
             heat_transfer_coeff_by_ventilation_reference_in_watt_per_m2_per_kelvin,
+            gain_utilisation_factor_reference
         )

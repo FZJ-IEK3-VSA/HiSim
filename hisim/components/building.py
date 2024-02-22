@@ -581,7 +581,22 @@ class Building(cp.Component):
         )
         self.state.thermal_mass_temperature_in_celsius = thermal_mass_average_bulk_temperature_in_celsius
 
-        # some calculations based on tabula
+        # if indoor temperature is too high make complete air exchange by opening the windows until outdoor temperature or initial temperature is reached
+        if (
+            self.buildingconfig.enable_opening_windows is True
+            and self.buildingconfig.initial_internal_temperature_in_celsius
+            < self.set_cooling_temperature_in_celsius
+            < indoor_air_temperature_in_celsius
+            and temperature_outside_in_celsius < indoor_air_temperature_in_celsius
+        ):
+            indoor_air_temperature_in_celsius = max(
+                self.buildingconfig.initial_internal_temperature_in_celsius, temperature_outside_in_celsius,
+            )
+            self.window_open = 1
+        else:
+            self.window_open = 0
+
+        # some calculations based on tabula based on heat transfer coeff and indoor/outside temperature
         heat_loss_from_transmission_according_to_tabula_in_watt = self.calc_heat_transfer_from_transmission_or_ventilation(
             indoor_air_temperature_in_celsius=indoor_air_temperature_in_celsius,
             current_outside_temperature_in_celsius=temperature_outside_in_celsius,
@@ -602,21 +617,6 @@ class Building(cp.Component):
             + internal_heat_gains_through_devices_in_watt,
             gain_utilisation_factor=self.my_building_information.gain_utilisation_factor_reference,
         )
-
-        # if indoor temperature is too high make complete air exchange by opening the windows until outdoor temperature or set_heating_temperature + 1°C is reached
-        if (
-            self.buildingconfig.enable_opening_windows is True
-            and self.buildingconfig.initial_internal_temperature_in_celsius
-            < self.set_cooling_temperature_in_celsius
-            < indoor_air_temperature_in_celsius
-            and temperature_outside_in_celsius < indoor_air_temperature_in_celsius
-        ):
-            indoor_air_temperature_in_celsius = max(
-                self.buildingconfig.initial_internal_temperature_in_celsius, temperature_outside_in_celsius,
-            )
-            self.window_open = 1
-        else:
-            self.window_open = 0
 
         # increase set_heating_temperature when connected to EnergyManagementSystem and surplus electricity available
         set_heating_temperature_modified_in_celsius = (

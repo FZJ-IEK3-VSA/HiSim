@@ -270,6 +270,12 @@ class FilterClass:
             "Mean flow temperature of heat pump",
             "Mean return temperature of heat pump",
             "Mean temperature difference of heat pump",
+            "Max flow temperature of heat pump",
+            "Max return temperature of heat pump",
+            "Max temperature difference of heat pump",
+            "Min flow temperature of heat pump",
+            "Min return temperature of heat pump",
+            "Min temperature difference of heat pump",
         ]
 
         electricity_data = [

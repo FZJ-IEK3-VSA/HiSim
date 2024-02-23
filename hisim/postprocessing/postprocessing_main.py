@@ -555,7 +555,7 @@ class PostProcessor:
             comment=["Here a comment on calculation of numbers will follow"],
         )
         # write kpi dict collection into ppdt
-        ppdt.kpi_collection_dict = kpi_data_class.kpi_collection_dict
+        ppdt.kpi_collection_dict = kpi_data_class.kpi_collection_dict_sorted
         return ppdt
 
     def compute_and_write_opex_costs_to_report(
@@ -807,22 +807,23 @@ class PostProcessor:
         # get kpis from ppdt
         kpi_collection_dict = ppdt.kpi_collection_dict
 
-        for kpi_name, kpi_entry in kpi_collection_dict.items():
+        for kpi_entries in kpi_collection_dict.values():
+            for kpi_name, kpi_entry in kpi_entries.items():
 
-            variable_name = kpi_name
-            variable_value = kpi_entry["value"]
-            variable_unit = kpi_entry["unit"]
+                variable_name = kpi_name
+                variable_value = kpi_entry["value"]
+                variable_unit = kpi_entry["unit"]
 
-            simple_dict_cumulative_data["model"].append(self.model)
-            simple_dict_cumulative_data["scenario"].append(self.scenario)
-            simple_dict_cumulative_data["region"].append(self.region)
-            simple_dict_cumulative_data["variable"].append(variable_name)
-            simple_dict_cumulative_data["unit"].append(variable_unit)
-            try:
-                simple_dict_cumulative_data["year"].append(self.year)
-            except Exception:
-                simple_dict_cumulative_data["time"].append(self.year)
-            simple_dict_cumulative_data["value"].append(variable_value)
+                simple_dict_cumulative_data["model"].append(self.model)
+                simple_dict_cumulative_data["scenario"].append(self.scenario)
+                simple_dict_cumulative_data["region"].append(self.region)
+                simple_dict_cumulative_data["variable"].append(variable_name)
+                simple_dict_cumulative_data["unit"].append(variable_unit)
+                try:
+                    simple_dict_cumulative_data["year"].append(self.year)
+                except Exception:
+                    simple_dict_cumulative_data["time"].append(self.year)
+                simple_dict_cumulative_data["value"].append(variable_value)
 
     def get_variable_name_and_unit_from_ppdt_results_column(self, column: str) -> Tuple[str, str]:
         """Get variable name and unit for pyam dictionary."""
@@ -942,7 +943,7 @@ class PostProcessor:
 
             pathname = os.path.join(ppdt.simulation_parameters.result_directory, "all_kpis.json")
             with open(pathname, "w", encoding="utf-8") as outfile:
-                json.dump(kpi_collection_dict, outfile, indent=4)
+                json.dump(kpi_collection_dict, outfile, indent=5)
 
         else:
             raise ValueError(
@@ -956,13 +957,14 @@ class PostProcessor:
         # Check if important options were set
         if PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT in ppdt.post_processing_options:
             # Get KPIs from ppdt
-            kpi_collection_dict = ppdt.kpi_collection_dict
+            kpi_collection_dict_general_values = ppdt.kpi_collection_dict["General"]
+            kpi_collection_dict_cost_and_emission_values = ppdt.kpi_collection_dict["Costs and Emissions"]
 
-            self_consumption_rate = kpi_collection_dict["Self-consumption rate"]["value"]
-            autarky_rate = kpi_collection_dict["Autarky rate"]["value"]
-            grid_injection_in_kilowatt_hour = kpi_collection_dict["Grid injection"]["value"]
-            economic_cost = kpi_collection_dict["Total costs for simulated period"]["value"]
-            co2_cost = kpi_collection_dict["Total CO2 emissions for simulated period"]["value"]
+            self_consumption_rate = kpi_collection_dict_general_values["Self-consumption rate"]["value"]
+            autarky_rate = kpi_collection_dict_general_values["Autarky rate"]["value"]
+            grid_injection_in_kilowatt_hour = kpi_collection_dict_general_values["Grid injection"]["value"]
+            economic_cost = kpi_collection_dict_cost_and_emission_values["Total costs for simulated period"]["value"]
+            co2_cost = kpi_collection_dict_cost_and_emission_values["Total CO2 emissions for simulated period"]["value"]
 
             # initialize json interface to pass kpi's to building_sizer
             kpi_config = KPIConfig(

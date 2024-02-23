@@ -87,7 +87,7 @@ def setup_function(
     seconds_per_timestep = 60
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters = SimulationParameters.one_day_only(year=year, seconds_per_timestep=seconds_per_timestep)
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
         )
@@ -96,6 +96,8 @@ def setup_function(
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL)
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 

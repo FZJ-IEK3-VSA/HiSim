@@ -10,6 +10,7 @@ import os
 from typing import List, Tuple, Union, Dict, Optional
 from pathlib import Path
 from dataclasses import dataclass, InitVar
+from enum import Enum
 import numpy as np
 import pandas as pd
 from dataclass_wizard import JSONWizard
@@ -26,6 +27,17 @@ from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataT
 from hisim.postprocessingoptions import PostProcessingOptions
 
 
+class KpiTagEnumClass(Enum):
+
+    """Determine KPI tags as enums."""
+
+    GENERAL = "General"
+    COSTS_AND_EMISSIONS = "Costs and Emissions"
+    BUILDING = "Building"
+    HEATDISTRIBUTIONSYSTEM = "Heat Distribution System"
+    HEATPUMP = "Heat Pump"
+
+
 @dataclass
 class KpiEntry(JSONWizard):
 
@@ -35,7 +47,7 @@ class KpiEntry(JSONWizard):
     unit: str
     value: Optional[float]
     description: Optional[str] = None
-    tag: Optional[str] = None
+    tag: Optional[KpiTagEnumClass] = None
 
 
 @dataclass
@@ -47,8 +59,11 @@ class KpiGenerator(JSONWizard):
 
     def __post_init__(self, post_processing_data_transfer):
         """Build the dataclass from input data."""
-        self.kpi_collection_dict: Dict = {}
+        self.kpi_collection_dict_unsorted: Dict = {}
         self.create_kpi_collection(post_processing_data_transfer)
+        self.kpi_collection_dict_sorted = self.sort_kpi_collection_according_to_kpi_tags(
+            kpi_collection_dict_unsorted=self.kpi_collection_dict_unsorted
+        )
         self.return_table_for_report()
 
     def create_kpi_collection(self, post_processing_data_transfer):
@@ -234,15 +249,23 @@ class KpiGenerator(JSONWizard):
 
         # make kpi entry
         total_consumtion_entry = KpiEntry(
-            name="Total electricity consumption", unit="kWh", value=total_electricity_consumption_in_kilowatt_hour
+            name="Total electricity consumption",
+            unit="kWh",
+            value=total_electricity_consumption_in_kilowatt_hour,
+            tag=KpiTagEnumClass.GENERAL,
         )
         total_production_entry = KpiEntry(
-            name="Total electricity production", unit="kWh", value=total_electricity_production_in_kilowatt_hour
+            name="Total electricity production",
+            unit="kWh",
+            value=total_electricity_production_in_kilowatt_hour,
+            tag=KpiTagEnumClass.GENERAL,
         )
-        pv_production_entry = KpiEntry(name="PV production", unit="kWh", value=pv_production_in_kilowatt_hour)
+        pv_production_entry = KpiEntry(
+            name="PV production", unit="kWh", value=pv_production_in_kilowatt_hour, tag=KpiTagEnumClass.GENERAL
+        )
 
         # update kpi collection dict
-        self.kpi_collection_dict.update(
+        self.kpi_collection_dict_unsorted.update(
             {
                 total_consumtion_entry.name: total_consumtion_entry.to_dict(),
                 total_production_entry.name: total_production_entry.to_dict(),
@@ -328,16 +351,24 @@ class KpiGenerator(JSONWizard):
         result_dataframe["grid_injection_in_watt"] = grid_injection_series_in_watt
 
         # make kpi entry
-        grid_injection_entry = KpiEntry(name="Grid injection", unit="kWh", value=grid_injection_in_kilowatt_hour)
-        self_consumption_entry = KpiEntry(name="Self-consumption", unit="kWh", value=self_consumption_in_kilowatt_hour)
-        self_consumption_rate_entry = KpiEntry(
-            name="Self-consumption rate", unit="%", value=self_consumption_rate_in_percent
+        grid_injection_entry = KpiEntry(
+            name="Grid injection", unit="kWh", value=grid_injection_in_kilowatt_hour, tag=KpiTagEnumClass.GENERAL
         )
-        autarkie_rate_entry = KpiEntry(name="Autarky rate", unit="%", value=autarky_rate_in_percent)
-        battery_losses_entry = KpiEntry(name="Battery losses", unit="kWh", value=battery_losses_in_kilowatt_hour)
+        self_consumption_entry = KpiEntry(
+            name="Self-consumption", unit="kWh", value=self_consumption_in_kilowatt_hour, tag=KpiTagEnumClass.GENERAL
+        )
+        self_consumption_rate_entry = KpiEntry(
+            name="Self-consumption rate", unit="%", value=self_consumption_rate_in_percent, tag=KpiTagEnumClass.GENERAL
+        )
+        autarkie_rate_entry = KpiEntry(
+            name="Autarky rate", unit="%", value=autarky_rate_in_percent, tag=KpiTagEnumClass.GENERAL
+        )
+        battery_losses_entry = KpiEntry(
+            name="Battery losses", unit="kWh", value=battery_losses_in_kilowatt_hour, tag=KpiTagEnumClass.GENERAL
+        )
 
         # update kpi collection dict
-        self.kpi_collection_dict.update(
+        self.kpi_collection_dict_unsorted.update(
             {
                 grid_injection_entry.name: grid_injection_entry.to_dict(),
                 self_consumption_entry.name: self_consumption_entry.to_dict(),
@@ -384,14 +415,14 @@ class KpiGenerator(JSONWizard):
             )
         # make kpi entry
         total_energy_from_grid_in_kwh_entry = KpiEntry(
-            name="Total energy from grid", unit="kWh", value=total_energy_from_grid_in_kwh
+            name="Total energy from grid", unit="kWh", value=total_energy_from_grid_in_kwh, tag=KpiTagEnumClass.GENERAL
         )
         total_energy_to_grid_in_kwh_entry = KpiEntry(
-            name="Total energy to grid", unit="kWh", value=total_energy_to_grid_in_kwh
+            name="Total energy to grid", unit="kWh", value=total_energy_to_grid_in_kwh, tag=KpiTagEnumClass.GENERAL
         )
 
         # update kpi collection dict
-        self.kpi_collection_dict.update(
+        self.kpi_collection_dict_unsorted.update(
             {
                 total_energy_from_grid_in_kwh_entry.name: total_energy_from_grid_in_kwh_entry.to_dict(),
                 total_energy_to_grid_in_kwh_entry.name: total_energy_to_grid_in_kwh_entry.to_dict(),
@@ -425,10 +456,11 @@ class KpiGenerator(JSONWizard):
             name="Relative electricity demand from grid",
             unit="%",
             value=relative_electricity_demand_from_grid_in_percent,
+            tag=KpiTagEnumClass.GENERAL,
         )
 
         # update kpi collection dict
-        self.kpi_collection_dict.update(
+        self.kpi_collection_dict_unsorted.update(
             {relative_electricity_demand_entry.name: relative_electricity_demand_entry.to_dict()}
         )
         return relative_electricity_demand_from_grid_in_percent
@@ -452,11 +484,14 @@ class KpiGenerator(JSONWizard):
 
         # make kpi entry
         autarky_rate_entry = KpiEntry(
-            name="Autarky rate according to solar htw berlin", unit="%", value=autraky_rate_in_percent,
+            name="Autarky rate according to solar htw berlin",
+            unit="%",
+            value=autraky_rate_in_percent,
+            tag=KpiTagEnumClass.GENERAL,
         )
 
         # update kpi collection dict
-        self.kpi_collection_dict.update({autarky_rate_entry.name: autarky_rate_entry.to_dict()})
+        self.kpi_collection_dict_unsorted.update({autarky_rate_entry.name: autarky_rate_entry.to_dict()})
 
     def compute_ratio_between_two_values_and_set_as_kpi(
         self, denominator_value: float, numerator_value: float, kpi_name: str
@@ -467,10 +502,10 @@ class KpiGenerator(JSONWizard):
         """
         ratio_in_percent = denominator_value / numerator_value * 100
         # make kpi entry
-        ratio_in_percent_entry = KpiEntry(name=kpi_name, unit="%", value=ratio_in_percent,)
+        ratio_in_percent_entry = KpiEntry(name=kpi_name, unit="%", value=ratio_in_percent, tag=KpiTagEnumClass.GENERAL)
 
         # update kpi collection dict
-        self.kpi_collection_dict.update({ratio_in_percent_entry.name: ratio_in_percent_entry.to_dict()})
+        self.kpi_collection_dict_unsorted.update({ratio_in_percent_entry.name: ratio_in_percent_entry.to_dict()})
 
     def compute_self_consumption_rate_according_to_solar_htw_berlin(
         self,
@@ -502,10 +537,13 @@ class KpiGenerator(JSONWizard):
             name="Self-consumption rate according to solar htw berlin",
             unit="%",
             value=self_consumption_rate_in_percent,
+            tag=KpiTagEnumClass.GENERAL,
         )
 
         # update kpi collection dict
-        self.kpi_collection_dict.update({self_consumption_rate_entry.name: self_consumption_rate_entry.to_dict()})
+        self.kpi_collection_dict_unsorted.update(
+            {self_consumption_rate_entry.name: self_consumption_rate_entry.to_dict()}
+        )
 
     def read_in_fuel_costs(self) -> pd.DataFrame:
         """Reads data for costs and co2 emissions of fuels from csv."""
@@ -658,14 +696,20 @@ class KpiGenerator(JSONWizard):
 
         # make kpi entry
         costs_for_energy_use_entry = KpiEntry(
-            name="Cost for energy use", unit="EUR", value=costs_for_energy_use_in_euro
+            name="Cost for energy use",
+            unit="EUR",
+            value=costs_for_energy_use_in_euro,
+            tag=KpiTagEnumClass.COSTS_AND_EMISSIONS,
         )
         co2_emission_entry = KpiEntry(
-            name="CO2 emission due to energy use", unit="kg", value=co2_emitted_due_to_energy_use_in_kilogram
+            name="CO2 emission due to energy use",
+            unit="kg",
+            value=co2_emitted_due_to_energy_use_in_kilogram,
+            tag=KpiTagEnumClass.COSTS_AND_EMISSIONS,
         )
 
         # update kpi collection dict
-        self.kpi_collection_dict.update(
+        self.kpi_collection_dict_unsorted.update(
             {
                 costs_for_energy_use_entry.name: costs_for_energy_use_entry.to_dict(),
                 co2_emission_entry.name: co2_emission_entry.to_dict(),
@@ -707,35 +751,41 @@ class KpiGenerator(JSONWizard):
             name="Investment costs for equipment per simulated period",
             unit="EUR",
             value=total_investment_cost_per_simulated_period,
+            tag=KpiTagEnumClass.COSTS_AND_EMISSIONS,
         )
         total_device_co2_footprint_per_simulated_period_entry = KpiEntry(
             name="CO2 footprint for equipment per simulated period",
             unit="kg",
             value=total_device_co2_footprint_per_simulated_period,
+            tag=KpiTagEnumClass.COSTS_AND_EMISSIONS,
         )
         total_operational_cost_entry = KpiEntry(
             name="System operational costs for simulated period",
             unit="EUR",
             value=total_operational_cost_per_simulated_period,
+            tag=KpiTagEnumClass.COSTS_AND_EMISSIONS,
         )
         total_operational_emissions_entry = KpiEntry(
             name="System operational emissions for simulated period",
             unit="kg",
             value=total_operational_emissions_per_simulated_period,
+            tag=KpiTagEnumClass.COSTS_AND_EMISSIONS,
         )
         total_cost_entry = KpiEntry(
             name="Total costs for simulated period",
             unit="EUR",
             value=total_operational_cost_per_simulated_period + total_investment_cost_per_simulated_period,
+            tag=KpiTagEnumClass.COSTS_AND_EMISSIONS,
         )
         total_emissions_entry = KpiEntry(
             name="Total CO2 emissions for simulated period",
             unit="kg",
             value=total_operational_emissions_per_simulated_period + total_device_co2_footprint_per_simulated_period,
+            tag=KpiTagEnumClass.COSTS_AND_EMISSIONS,
         )
 
         # update kpi collection dict
-        self.kpi_collection_dict.update(
+        self.kpi_collection_dict_unsorted.update(
             {
                 total_investment_cost_per_simulated_period_entry.name: total_investment_cost_per_simulated_period_entry.to_dict(),
                 total_device_co2_footprint_per_simulated_period_entry.name: total_device_co2_footprint_per_simulated_period_entry.to_dict(),
@@ -779,16 +829,24 @@ class KpiGenerator(JSONWizard):
 
         # make kpi entry
 
-        heating_load_in_watt_entry = KpiEntry(name="Building heating load", unit="W", value=heating_load_in_watt,)
+        heating_load_in_watt_entry = KpiEntry(
+            name="Building heating load", unit="W", value=heating_load_in_watt, tag=KpiTagEnumClass.BUILDING
+        )
         scaled_conditioned_floor_area_in_m2_entry = KpiEntry(
-            name="Conditioned floor area", unit="m2", value=scaled_conditioned_floor_area_in_m2
+            name="Conditioned floor area",
+            unit="m2",
+            value=scaled_conditioned_floor_area_in_m2,
+            tag=KpiTagEnumClass.BUILDING,
         )
         specific_heating_load_in_watt_per_m2_entry = KpiEntry(
-            name="Specific heating load", unit="W/m2", value=specific_heating_load_in_watt_per_m2,
+            name="Specific heating load",
+            unit="W/m2",
+            value=specific_heating_load_in_watt_per_m2,
+            tag=KpiTagEnumClass.BUILDING,
         )
 
         # update kpi collection dict
-        self.kpi_collection_dict.update(
+        self.kpi_collection_dict_unsorted.update(
             {
                 heating_load_in_watt_entry.name: heating_load_in_watt_entry.to_dict(),
                 scaled_conditioned_floor_area_in_m2_entry.name: scaled_conditioned_floor_area_in_m2_entry.to_dict(),
@@ -871,21 +929,29 @@ class KpiGenerator(JSONWizard):
             name=f"Temperature deviation of building indoor air temperature being below set temperature {set_heating_temperature_in_celsius} Celsius",
             unit="°C*h",
             value=temperature_hours_of_building_being_below_heating_set_temperature,
+            tag=KpiTagEnumClass.BUILDING,
         )
         temperature_hours_of_building_above_cooling_set_temperature_entry = KpiEntry(
             name=f"Temperature deviation of building indoor air temperature being above set temperature {set_cooling_temperature_in_celsius} Celsius",
             unit="°C*h",
             value=temperature_hours_of_building_being_above_cooling_set_temperature,
+            tag=KpiTagEnumClass.BUILDING,
         )
         min_temperature_reached_in_celsius_entry = KpiEntry(
-            name="Minimum building indoor air temperature reached", unit="°C", value=min_temperature_reached_in_celsius,
+            name="Minimum building indoor air temperature reached",
+            unit="°C",
+            value=min_temperature_reached_in_celsius,
+            tag=KpiTagEnumClass.BUILDING,
         )
         max_temperature_reached_in_celsius_entry = KpiEntry(
-            name="Maximum building indoor air temperature reached", unit="°C", value=max_temperature_reached_in_celsius,
+            name="Maximum building indoor air temperature reached",
+            unit="°C",
+            value=max_temperature_reached_in_celsius,
+            tag=KpiTagEnumClass.BUILDING,
         )
 
         # update kpi collection dict
-        self.kpi_collection_dict.update(
+        self.kpi_collection_dict_unsorted.update(
             {
                 temperature_hours_of_building_below_heating_set_temperature_entry.name: temperature_hours_of_building_below_heating_set_temperature_entry.to_dict(),
                 temperature_hours_of_building_above_cooling_set_temperature_entry.name: temperature_hours_of_building_above_cooling_set_temperature_entry.to_dict(),
@@ -927,35 +993,41 @@ class KpiGenerator(JSONWizard):
             name="Specific heating demand according to TABULA",
             unit="kWh/m2a",
             value=energy_need_for_heating_in_kilowatthour_per_m2_per_year_tabula_ref,
+            tag=KpiTagEnumClass.BUILDING,
         )
         specific_heat_loss_transmission_from_tabula_in_kwh_per_m2a_entry = KpiEntry(
             name="Specific transmission heat loss according to TABULA",
             unit="kWh/m2a",
             value=transmission_heat_loss_in_kilowatthour_per_m2_per_year_tabula_ref,
+            tag=KpiTagEnumClass.BUILDING,
         )
         specific_heat_loss_ventilation_from_tabula_in_kwh_per_m2a_entry = KpiEntry(
             name="Specific ventilation heat loss according to TABULA",
             unit="kWh/m2a",
             value=ventilation_heat_loss_in_kilowatthour_per_m2_per_year_tabula_ref,
+            tag=KpiTagEnumClass.BUILDING,
         )
         specific_solar_gains_from_tabula_in_kwh_per_m2a_entry = KpiEntry(
             name="Specific solar gains according to TABULA",
             unit="kWh/m2a",
             value=solar_gains_in_kilowatthour_per_m2_per_year_tabula_ref,
+            tag=KpiTagEnumClass.BUILDING,
         )
         specific_internal_gains_from_tabula_in_kwh_per_m2a_entry = KpiEntry(
             name="Specific internal gains according to TABULA",
             unit="kWh/m2a",
             value=internal_gains_in_kilowatthour_per_m2_per_year_tabula_ref,
+            tag=KpiTagEnumClass.BUILDING,
         )
         gain_utilisation_factor_tabula_ref_entry = KpiEntry(
             name="Building gain utilisation factor according to TABULA",
             unit="-",
             value=gain_utilisation_factor_tabula_ref,
+            tag=KpiTagEnumClass.BUILDING,
         )
 
         # update kpi collection dict
-        self.kpi_collection_dict.update(
+        self.kpi_collection_dict_unsorted.update(
             {
                 specific_heat_demand_from_tabula_in_kwh_per_m2a_entry.name: specific_heat_demand_from_tabula_in_kwh_per_m2a_entry.to_dict(),
                 specific_heat_loss_transmission_from_tabula_in_kwh_per_m2a_entry.name: specific_heat_loss_transmission_from_tabula_in_kwh_per_m2a_entry.to_dict(),
@@ -1036,27 +1108,34 @@ class KpiGenerator(JSONWizard):
             name="Specific energy transfer from transmission",
             unit="kWh/m2",
             value=specific_heat_loss_from_transmission_in_kilowatt_hour_per_m2,
+            tag=KpiTagEnumClass.BUILDING,
         )
         specific_energy_loss_from_ventilation_entry = KpiEntry(
             name="Specific energy transfer from ventilation",
             unit="kWh/m2",
             value=specific_heat_loss_from_ventilation_in_kilowatt_hour_per_m2,
+            tag=KpiTagEnumClass.BUILDING,
         )
         specific_energy_gains_from_solar_entry = KpiEntry(
-            name="Specific solar energy gains", unit="kWh/m2", value=specific_solar_gains_in_kilowatt_hour_per_m2,
+            name="Specific solar energy gains",
+            unit="kWh/m2",
+            value=specific_solar_gains_in_kilowatt_hour_per_m2,
+            tag=KpiTagEnumClass.BUILDING,
         )
         specific_energy_gains_from_internal_entry = KpiEntry(
             name="Specific internal energy gains",
             unit="kWh/m2",
             value=specific_internal_heat_gains_in_kilowatt_hour_per_m2,
+            tag=KpiTagEnumClass.BUILDING,
         )
         specific_heat_demand_calculated_entry = KpiEntry(
             name="Specific heat demand calculated based on TABULA",
             unit="kWh/m2",
             value=specific_heat_demand_calculated_with_tabula_method_in_kilowatthour_per_m2,
+            tag=KpiTagEnumClass.BUILDING,
         )
         # update kpi collection dict
-        self.kpi_collection_dict.update(
+        self.kpi_collection_dict_unsorted.update(
             {
                 specific_energy_loss_from_transmission_entry.name: specific_energy_loss_from_transmission_entry.to_dict(),
                 specific_energy_loss_from_ventilation_entry.name: specific_energy_loss_from_ventilation_entry.to_dict(),
@@ -1089,7 +1168,9 @@ class KpiGenerator(JSONWizard):
                             power_timeseries_in_watt=thermal_output_power_values_in_watt,
                             timeresolution=self.simulation_parameters.seconds_per_timestep,
                         )
-                        specific_thermal_output_energy_in_kilowatt_hour = thermal_output_energy_in_kilowatt_hour / building_conditioned_floor_area_in_m2
+                        specific_thermal_output_energy_in_kilowatt_hour = (
+                            thermal_output_energy_in_kilowatt_hour / building_conditioned_floor_area_in_m2
+                        )
                 break
         if thermal_output_energy_in_kilowatt_hour is None:
             log.warning(
@@ -1101,14 +1182,16 @@ class KpiGenerator(JSONWizard):
             name="Thermal output energy of heat distribution system",
             unit="kWh",
             value=thermal_output_energy_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATDISTRIBUTIONSYSTEM,
         )
         specific_thermal_output_energy_hds_entry = KpiEntry(
             name="Specific thermal output energy of heat distribution system",
             unit="kWh/m2",
             value=specific_thermal_output_energy_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATDISTRIBUTIONSYSTEM,
         )
         # update kpi collection dict
-        self.kpi_collection_dict.update(
+        self.kpi_collection_dict_unsorted.update(
             {
                 thermal_output_energy_hds_entry.name: thermal_output_energy_hds_entry.to_dict(),
                 specific_thermal_output_energy_hds_entry.name: specific_thermal_output_energy_hds_entry.to_dict(),
@@ -1133,7 +1216,7 @@ class KpiGenerator(JSONWizard):
 
     def get_heatpump_flow_and_return_temperatures(
         self, results: pd.DataFrame, component_name: str
-    ) -> Tuple[float, float, float]:
+    ) -> Tuple[float, float, float, float, float, float, float, float, float]:
         """Get the flow and return temperatures of the heat pump for the simulated period."""
         flow_temperature_list_in_celsius = pd.Series([])
         return_temperature_list_in_celsius = pd.Series([])
@@ -1144,16 +1227,37 @@ class KpiGenerator(JSONWizard):
             if all(x in column.split(sep=" ") for x in [SimpleHotWaterStorage.WaterTemperatureToHeatGenerator]):
                 return_temperature_list_in_celsius = results[column]
 
+        # mean
         mean_temperature_difference_between_flow_and_return_in_celsius = float(
             np.mean(flow_temperature_list_in_celsius - return_temperature_list_in_celsius)
         )
         mean_flow_temperature_in_celsius = float(np.mean(flow_temperature_list_in_celsius))
         mean_return_temperature_in_celsius = float(np.mean(return_temperature_list_in_celsius))
 
+        # max
+        max_temperature_difference_between_flow_and_return_in_celsius = float(
+            np.max(flow_temperature_list_in_celsius - return_temperature_list_in_celsius)
+        )
+        max_flow_temperature_in_celsius = float(np.max(flow_temperature_list_in_celsius))
+        max_return_temperature_in_celsius = float(np.max(return_temperature_list_in_celsius))
+
+        # min
+        min_temperature_difference_between_flow_and_return_in_celsius = float(
+            np.min(flow_temperature_list_in_celsius - return_temperature_list_in_celsius)
+        )
+        min_flow_temperature_in_celsius = float(np.min(flow_temperature_list_in_celsius))
+        min_return_temperature_in_celsius = float(np.min(return_temperature_list_in_celsius))
+
         return (
             mean_flow_temperature_in_celsius,
             mean_return_temperature_in_celsius,
             mean_temperature_difference_between_flow_and_return_in_celsius,
+            max_flow_temperature_in_celsius,
+            max_return_temperature_in_celsius,
+            max_temperature_difference_between_flow_and_return_in_celsius,
+            min_flow_temperature_in_celsius,
+            min_return_temperature_in_celsius,
+            min_temperature_difference_between_flow_and_return_in_celsius,
         )
 
     def get_heat_pump_energy_performance(
@@ -1209,6 +1313,12 @@ class KpiGenerator(JSONWizard):
         mean_flow_temperature_in_celsius = None
         mean_return_temperature_in_celsius = None
         mean_temperature_difference_between_flow_and_return_in_celsius = None
+        min_flow_temperature_in_celsius = None
+        min_return_temperature_in_celsius = None
+        min_temperature_difference_between_flow_and_return_in_celsius = None
+        max_flow_temperature_in_celsius = None
+        max_return_temperature_in_celsius = None
+        max_temperature_difference_between_flow_and_return_in_celsius = None
 
         # check if Heat Pump was used in components
         for wrapped_component in self.wrapped_components:
@@ -1238,6 +1348,12 @@ class KpiGenerator(JSONWizard):
                     mean_flow_temperature_in_celsius,
                     mean_return_temperature_in_celsius,
                     mean_temperature_difference_between_flow_and_return_in_celsius,
+                    max_flow_temperature_in_celsius,
+                    max_return_temperature_in_celsius,
+                    max_temperature_difference_between_flow_and_return_in_celsius,
+                    min_flow_temperature_in_celsius,
+                    min_return_temperature_in_celsius,
+                    min_temperature_difference_between_flow_and_return_in_celsius,
                 ) = self.get_heatpump_flow_and_return_temperatures(
                     results=self.results, component_name=wrapped_component.my_component.component_name
                 )
@@ -1253,6 +1369,12 @@ class KpiGenerator(JSONWizard):
             mean_temperature_difference_between_flow_and_return_in_celsius,
             mean_flow_temperature_in_celsius,
             mean_return_temperature_in_celsius,
+            min_temperature_difference_between_flow_and_return_in_celsius,
+            min_flow_temperature_in_celsius,
+            min_return_temperature_in_celsius,
+            max_temperature_difference_between_flow_and_return_in_celsius,
+            max_flow_temperature_in_celsius,
+            max_return_temperature_in_celsius,
         ):
             log.warning(
                 "KPI values for advanced heat pump HPLib are None. "
@@ -1261,38 +1383,89 @@ class KpiGenerator(JSONWizard):
 
         # make kpi entry
         number_of_heat_pump_cycles_entry = KpiEntry(
-            name="Number of heat pump cycles", unit="-", value=number_of_heat_pump_cycles
+            name="Number of heat pump cycles", unit="-", value=number_of_heat_pump_cycles, tag=KpiTagEnumClass.HEATPUMP
         )
         seasonal_performance_factor_entry = KpiEntry(
-            name="Seasonal performance factor of heat pump", unit="-", value=seasonal_performance_factor
+            name="Seasonal performance factor of heat pump",
+            unit="-",
+            value=seasonal_performance_factor,
+            tag=KpiTagEnumClass.HEATPUMP,
         )
         thermal_output_energy_heatpump_entry = KpiEntry(
-            name="Thermal output energy of heat pump", unit="kWh", value=thermal_output_energy_heatpump_in_kilowatt_hour
+            name="Thermal output energy of heat pump",
+            unit="kWh",
+            value=thermal_output_energy_heatpump_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP,
         )
         specific_thermal_output_energy_of_heatpump_entry = KpiEntry(
             name="Specific thermal output energy of heat pump",
             unit="kWh/m2",
             value=specific_thermal_output_energy_of_heat_pump_in_kilowatt_hour_per_m2,
+            tag=KpiTagEnumClass.HEATPUMP,
         )
         electrical_input_energy_heatpump_entry = KpiEntry(
             name="Electrical input energy of heat pump",
             unit="kWh",
             value=electrical_input_energy_heatpump_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP,
         )
         mean_flow_temperature_heatpump_entry = KpiEntry(
-            name="Mean flow temperature of heat pump", unit="°C", value=mean_flow_temperature_in_celsius,
+            name="Mean flow temperature of heat pump",
+            unit="°C",
+            value=mean_flow_temperature_in_celsius,
+            tag=KpiTagEnumClass.HEATPUMP,
         )
         mean_return_temperature_heatpump_entry = KpiEntry(
-            name="Mean return temperature of heat pump", unit="°C", value=mean_return_temperature_in_celsius,
+            name="Mean return temperature of heat pump",
+            unit="°C",
+            value=mean_return_temperature_in_celsius,
+            tag=KpiTagEnumClass.HEATPUMP,
         )
         mean_temperature_difference_heatpump_entry = KpiEntry(
             name="Mean temperature difference of heat pump",
             unit="°C",
             value=mean_temperature_difference_between_flow_and_return_in_celsius,
+            tag=KpiTagEnumClass.HEATPUMP,
+        )
+        max_flow_temperature_heatpump_entry = KpiEntry(
+            name="Max flow temperature of heat pump",
+            unit="°C",
+            value=max_flow_temperature_in_celsius,
+            tag=KpiTagEnumClass.HEATPUMP,
+        )
+        max_return_temperature_heatpump_entry = KpiEntry(
+            name="Max return temperature of heat pump",
+            unit="°C",
+            value=max_return_temperature_in_celsius,
+            tag=KpiTagEnumClass.HEATPUMP,
+        )
+        max_temperature_difference_heatpump_entry = KpiEntry(
+            name="Max temperature difference of heat pump",
+            unit="°C",
+            value=max_temperature_difference_between_flow_and_return_in_celsius,
+            tag=KpiTagEnumClass.HEATPUMP,
+        )
+        min_flow_temperature_heatpump_entry = KpiEntry(
+            name="Min flow temperature of heat pump",
+            unit="°C",
+            value=min_flow_temperature_in_celsius,
+            tag=KpiTagEnumClass.HEATPUMP,
+        )
+        min_return_temperature_heatpump_entry = KpiEntry(
+            name="Min return temperature of heat pump",
+            unit="°C",
+            value=min_return_temperature_in_celsius,
+            tag=KpiTagEnumClass.HEATPUMP,
+        )
+        min_temperature_difference_heatpump_entry = KpiEntry(
+            name="Min temperature difference of heat pump",
+            unit="°C",
+            value=min_temperature_difference_between_flow_and_return_in_celsius,
+            tag=KpiTagEnumClass.HEATPUMP,
         )
 
         # update kpi collection dict
-        self.kpi_collection_dict.update(
+        self.kpi_collection_dict_unsorted.update(
             {
                 number_of_heat_pump_cycles_entry.name: number_of_heat_pump_cycles_entry.to_dict(),
                 seasonal_performance_factor_entry.name: seasonal_performance_factor_entry.to_dict(),
@@ -1302,6 +1475,12 @@ class KpiGenerator(JSONWizard):
                 mean_flow_temperature_heatpump_entry.name: mean_flow_temperature_heatpump_entry.to_dict(),
                 mean_return_temperature_heatpump_entry.name: mean_return_temperature_heatpump_entry.to_dict(),
                 mean_temperature_difference_heatpump_entry.name: mean_temperature_difference_heatpump_entry.to_dict(),
+                max_flow_temperature_heatpump_entry.name: max_flow_temperature_heatpump_entry.to_dict(),
+                max_return_temperature_heatpump_entry.name: max_return_temperature_heatpump_entry.to_dict(),
+                max_temperature_difference_heatpump_entry.name: max_temperature_difference_heatpump_entry.to_dict(),
+                min_flow_temperature_heatpump_entry.name: min_flow_temperature_heatpump_entry.to_dict(),
+                min_return_temperature_heatpump_entry.name: min_return_temperature_heatpump_entry.to_dict(),
+                min_temperature_difference_heatpump_entry.name: min_temperature_difference_heatpump_entry.to_dict(),
             }
         )
 
@@ -1310,11 +1489,32 @@ class KpiGenerator(JSONWizard):
         table: List = []
         table.append(["KPI", "Value", "Unit"])
 
-        for kpi_key, kpi_entry in self.kpi_collection_dict.items():
-            value = kpi_entry["value"]
-            if value is not None:
-                value = round(value, 2)
-            unit = kpi_entry["unit"]
-            table.append([f"{kpi_key}: ", f"{value}", f"{unit}"])
+        for kpi_tag, kpi_entries in self.kpi_collection_dict_sorted.items():
+            table.append([f"{kpi_tag}", "", ""])
+            table.append(["-------------------------------------", "", ""])
+
+            for kpi_name, kpi_entry in kpi_entries.items():
+                value = kpi_entry["value"]
+                if value is not None:
+                    value = round(value, 2)
+                unit = kpi_entry["unit"]
+                table.append([f"{kpi_name}: ", f"{value}", f"{unit}"])
+            table.append(["\n", "\n", "\n"])
 
         return table
+
+    def sort_kpi_collection_according_to_kpi_tags(self, kpi_collection_dict_unsorted: Dict) -> Dict:
+        """Sort KPI collection dict according to KPI tags."""
+
+        kpi_collection_dict_sorted: Dict[str, Dict] = {}
+        # get all tags and use as keys for sorted kpi dict
+        for entry in kpi_collection_dict_unsorted.values():
+            kpi_collection_dict_sorted.update({entry["tag"]: {}})
+
+        # now sort kpi dict entries according to tags
+        for kpi_name, entry in kpi_collection_dict_unsorted.items():
+            for tag in kpi_collection_dict_sorted.keys():  # pylint: disable=consider-using-dict-items, consider-iterating-dictionary
+                if entry["tag"] in tag:
+                    kpi_collection_dict_sorted[tag].update({kpi_name: entry})
+
+        return kpi_collection_dict_sorted

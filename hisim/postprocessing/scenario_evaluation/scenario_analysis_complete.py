@@ -50,13 +50,12 @@ def main():
     # Inputs for scenario analysis
     # -------------------------------------------------------------------------------------------------------------------------------------
     time_resolution_of_data_set = result_data_collection.ResultDataTypeEnum.YEARLY
-
     cluster_storage_path = "/fast/home/k-rieck/"
     # cluster_storage_path = "/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/hisim_results/results/"
 
     folder_from_which_data_will_be_collected = os.path.join(
         cluster_storage_path,
-        "repositories/HiSim/system_setups/results/household_cluster_advanced_hp_pv_battery_ems/all_radiators/monte_carlo_20240208_1637",
+        "repositories/HiSim/system_setups/results/household_cluster_advanced_hp_pv_battery_ems/52_hp_all_floor_but_no_cooling_hds_normal/monte_carlo_20240208_1637",
     )
 
     path_to_default_config = os.path.join(
@@ -68,7 +67,9 @@ def main():
     data_processing_mode = result_data_collection.ResultDataProcessingModeEnum.PROCESS_ALL_DATA
 
     filterclass = result_data_processing.FilterClass()
-    list_with_variables_to_check = filterclass.kpi_data  # filterclass.flow_and_return_temperatures +
+    list_with_variables_to_check = (
+        filterclass.kpi_data
+    )  # filterclass.flow_and_return_temperatures  # +filterclass.kpi_data  #
 
     # TODO: filter several scenario parameters (eg pv and building code together) not working yet, need to be fixed
     # dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share,"building_code": ["DE.N.SFH.05.Gen.ReEx.001.002"]}
@@ -84,7 +85,9 @@ def main():
     dict_with_scenarios_to_check = None
 
     dict_with_extra_information_for_specific_plot: Dict[str, Dict] = {
-        "scatter": {"x_data_variable": "Specific heating demand according to TABULA"},
+        "scatter": {
+            "x_data_variable": "Specific heating demand according to TABULA"
+        },  # "SimpleHotWaterStorage|Water|WaterTemperatureToHeatGenerator" "Weather|Temperature|DailyAverageOutsideTemperatures"
         "stacked_bar": {
             "y1_data_variable": "Mean flow temperature of heat pump",
             "y2_data_variable": "Mean return temperature of heat pump",

@@ -87,7 +87,7 @@ def setup_function(
     seconds_per_timestep = 60
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(year=year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
         )
@@ -138,13 +138,13 @@ def setup_function(
     # Set Fix System Parameters
 
     # Set Heat Pump Controller
-    hp_controller_mode = 1  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
+    hp_controller_mode = 2  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
     set_heating_threshold_outside_temperature_for_heat_pump_in_celsius = 16.0
     set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = 22.0
     temperature_offset_for_state_conditions_in_celsius = 5.0
 
     # Set Heat Pump
-    group_id: int = 4  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
+    group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
     heating_reference_temperature_in_celsius: float = -7  # t_in #TODO: get real heating ref temps according to location
     flow_temperature_in_celsius = 52  # t_out_val
 
@@ -530,7 +530,7 @@ def setup_function(
 
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,  # r"/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/hisim_results",
-        model_name=os.path.join(my_sim.module_filename, "kpi_test"),
+        model_name=os.path.join(my_sim.module_filename, "23-02-2024"),
         variant_name="no_surplus_",
         hash_number=hash_number,
         sorting_option=sorting_option,

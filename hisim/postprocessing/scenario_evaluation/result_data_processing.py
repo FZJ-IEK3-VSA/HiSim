@@ -287,6 +287,7 @@ class FilterClass:
             "SimpleHotWaterStorage|Water|WaterTemperatureToHeatGenerator",
             "SimpleHotWaterStorage|Water|WaterTemperatureToHeatDistribution",
             "HeatDistributionSystem|Water|WaterTemperatureOutput",
+            "Weather|Temperature|DailyAverageOutsideTemperatures",
         ]
 
         occuancy_consumption = [

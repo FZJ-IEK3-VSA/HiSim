@@ -276,6 +276,15 @@ class FilterClass:
             "Min flow temperature of heat pump",
             "Min return temperature of heat pump",
             "Min temperature difference of heat pump",
+            "Mean flow temperature of heat distribution system",
+            "Mean return temperature of heat distribution system",
+            "Mean temperature difference of heat distribution system",
+            "Max flow temperature of heat distribution system",
+            "Max return temperature of heat distribution system",
+            "Max temperature difference of heat distribution system",
+            "Min flow temperature of heat distribution system",
+            "Min return temperature of heat distribution system",
+            "Min temperature difference of heat distribution system",
         ]
 
         electricity_data = [

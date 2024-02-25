@@ -1150,6 +1150,16 @@ class KpiGenerator(JSONWizard):
 
         thermal_output_energy_in_kilowatt_hour = None
         specific_thermal_output_energy_in_kilowatt_hour = None
+        mean_flow_temperature_in_celsius = None
+        mean_return_temperature_in_celsius = None
+        mean_temperature_difference_between_flow_and_return_in_celsius = None
+        min_flow_temperature_in_celsius = None
+        min_return_temperature_in_celsius = None
+        min_temperature_difference_between_flow_and_return_in_celsius = None
+        max_flow_temperature_in_celsius = None
+        max_return_temperature_in_celsius = None
+        max_temperature_difference_between_flow_and_return_in_celsius = None
+
         for wrapped_component in self.wrapped_components:
             if isinstance(wrapped_component.my_component, HeatDistribution):
                 wrapped_hds_component = wrapped_component
@@ -1171,11 +1181,42 @@ class KpiGenerator(JSONWizard):
                         specific_thermal_output_energy_in_kilowatt_hour = (
                             thermal_output_energy_in_kilowatt_hour / building_conditioned_floor_area_in_m2
                         )
+
                 break
-        if thermal_output_energy_in_kilowatt_hour is None:
+
+        # get flow and return temperatures
+        (
+            mean_flow_temperature_in_celsius,
+            mean_return_temperature_in_celsius,
+            mean_temperature_difference_between_flow_and_return_in_celsius,
+            max_flow_temperature_in_celsius,
+            max_return_temperature_in_celsius,
+            max_temperature_difference_between_flow_and_return_in_celsius,
+            min_flow_temperature_in_celsius,
+            min_return_temperature_in_celsius,
+            min_temperature_difference_between_flow_and_return_in_celsius,
+        ) = self.get_flow_and_return_temperatures(
+            results=self.results,
+            output_name_flow_temperature=SimpleHotWaterStorage.WaterTemperatureToHeatDistribution,
+            output_name_return_temperature=HeatDistribution.WaterTemperatureOutput
+        )
+
+        if None in (
+            thermal_output_energy_in_kilowatt_hour,
+            specific_thermal_output_energy_in_kilowatt_hour,
+            mean_temperature_difference_between_flow_and_return_in_celsius,
+            mean_flow_temperature_in_celsius,
+            mean_return_temperature_in_celsius,
+            min_temperature_difference_between_flow_and_return_in_celsius,
+            min_flow_temperature_in_celsius,
+            min_return_temperature_in_celsius,
+            max_temperature_difference_between_flow_and_return_in_celsius,
+            max_flow_temperature_in_celsius,
+            max_return_temperature_in_celsius,
+        ):
             log.warning(
                 "KPI values for heat distribution system are None. "
-                "Please check if you have correctly initialized and connected the heat distribution system in your system setup or ignore this message."
+                "Please check if you have correctly initialized and connected the hds in your system setup or ignore this message."
             )
 
         thermal_output_energy_hds_entry = KpiEntry(
@@ -1190,11 +1231,74 @@ class KpiGenerator(JSONWizard):
             value=specific_thermal_output_energy_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATDISTRIBUTIONSYSTEM,
         )
+        mean_flow_temperature_hds_entry = KpiEntry(
+            name="Mean flow temperature of heat distribution system",
+            unit="°C",
+            value=mean_flow_temperature_in_celsius,
+            tag=KpiTagEnumClass.HEATDISTRIBUTIONSYSTEM,
+        )
+        mean_return_temperature_hds_entry = KpiEntry(
+            name="Mean return temperature of heat distribution system",
+            unit="°C",
+            value=mean_return_temperature_in_celsius,
+            tag=KpiTagEnumClass.HEATDISTRIBUTIONSYSTEM,
+        )
+        mean_temperature_difference_hds_entry = KpiEntry(
+            name="Mean temperature difference of heat distribution system",
+            unit="°C",
+            value=mean_temperature_difference_between_flow_and_return_in_celsius,
+            tag=KpiTagEnumClass.HEATDISTRIBUTIONSYSTEM,
+        )
+        max_flow_temperature_hds_entry = KpiEntry(
+            name="Max flow temperature of heat distribution system",
+            unit="°C",
+            value=max_flow_temperature_in_celsius,
+            tag=KpiTagEnumClass.HEATDISTRIBUTIONSYSTEM,
+        )
+        max_return_temperature_hds_entry = KpiEntry(
+            name="Max return temperature of heat distribution system",
+            unit="°C",
+            value=max_return_temperature_in_celsius,
+            tag=KpiTagEnumClass.HEATDISTRIBUTIONSYSTEM,
+        )
+        max_temperature_difference_hds_entry = KpiEntry(
+            name="Max temperature difference of heat distribution system",
+            unit="°C",
+            value=max_temperature_difference_between_flow_and_return_in_celsius,
+            tag=KpiTagEnumClass.HEATDISTRIBUTIONSYSTEM,
+        )
+        min_flow_temperature_hds_entry = KpiEntry(
+            name="Min flow temperature of heat distribution system",
+            unit="°C",
+            value=min_flow_temperature_in_celsius,
+            tag=KpiTagEnumClass.HEATDISTRIBUTIONSYSTEM,
+        )
+        min_return_temperature_hds_entry = KpiEntry(
+            name="Min return temperature of heat distribution system",
+            unit="°C",
+            value=min_return_temperature_in_celsius,
+            tag=KpiTagEnumClass.HEATDISTRIBUTIONSYSTEM,
+        )
+        min_temperature_difference_hds_entry = KpiEntry(
+            name="Min temperature difference of heat distribution system",
+            unit="°C",
+            value=min_temperature_difference_between_flow_and_return_in_celsius,
+            tag=KpiTagEnumClass.HEATDISTRIBUTIONSYSTEM,
+        )
         # update kpi collection dict
         self.kpi_collection_dict_unsorted.update(
             {
                 thermal_output_energy_hds_entry.name: thermal_output_energy_hds_entry.to_dict(),
                 specific_thermal_output_energy_hds_entry.name: specific_thermal_output_energy_hds_entry.to_dict(),
+                mean_flow_temperature_hds_entry.name: mean_flow_temperature_hds_entry.to_dict(),
+                mean_return_temperature_hds_entry.name: mean_return_temperature_hds_entry.to_dict(),
+                mean_temperature_difference_hds_entry.name: mean_temperature_difference_hds_entry.to_dict(),
+                max_flow_temperature_hds_entry.name: max_flow_temperature_hds_entry.to_dict(),
+                max_return_temperature_hds_entry.name: max_return_temperature_hds_entry.to_dict(),
+                max_temperature_difference_hds_entry.name: max_temperature_difference_hds_entry.to_dict(),
+                min_flow_temperature_hds_entry.name: min_flow_temperature_hds_entry.to_dict(),
+                min_return_temperature_hds_entry.name: min_return_temperature_hds_entry.to_dict(),
+                min_temperature_difference_hds_entry.name: min_temperature_difference_hds_entry.to_dict(),
             }
         )
 
@@ -1214,39 +1318,34 @@ class KpiGenerator(JSONWizard):
 
         return number_of_cycles
 
-    def get_heatpump_flow_and_return_temperatures(
-        self, results: pd.DataFrame, component_name: str
+    def get_flow_and_return_temperatures(
+        self, results: pd.DataFrame, output_name_flow_temperature: str, output_name_return_temperature: str
     ) -> Tuple[float, float, float, float, float, float, float, float, float]:
         """Get the flow and return temperatures of the heat pump for the simulated period."""
         flow_temperature_list_in_celsius = pd.Series([])
         return_temperature_list_in_celsius = pd.Series([])
         for column in results.columns:
 
-            if all(x in column.split(sep=" ") for x in [HeatPumpHplib.TemperatureOutput, component_name]):
+            if all(x in column.split(sep=" ") for x in [output_name_flow_temperature]):
                 flow_temperature_list_in_celsius = results[column]
-            if all(x in column.split(sep=" ") for x in [SimpleHotWaterStorage.WaterTemperatureToHeatGenerator]):
+            if all(x in column.split(sep=" ") for x in [output_name_return_temperature]):
                 return_temperature_list_in_celsius = results[column]
 
-        # mean
-        mean_temperature_difference_between_flow_and_return_in_celsius = float(
-            np.mean(flow_temperature_list_in_celsius - return_temperature_list_in_celsius)
+        # get mean, max and min values of flow and return temperatures
+        temperature_diff_flow_and_return_in_celsius = (
+            flow_temperature_list_in_celsius - return_temperature_list_in_celsius
         )
-        mean_flow_temperature_in_celsius = float(np.mean(flow_temperature_list_in_celsius))
-        mean_return_temperature_in_celsius = float(np.mean(return_temperature_list_in_celsius))
+        (mean_temperature_difference_between_flow_and_return_in_celsius,
+         max_temperature_difference_between_flow_and_return_in_celsius,
+         min_temperature_difference_between_flow_and_return_in_celsius) = self.calc_mean_max_min_value(list_or_pandas_series=temperature_diff_flow_and_return_in_celsius)
 
-        # max
-        max_temperature_difference_between_flow_and_return_in_celsius = float(
-            np.max(flow_temperature_list_in_celsius - return_temperature_list_in_celsius)
-        )
-        max_flow_temperature_in_celsius = float(np.max(flow_temperature_list_in_celsius))
-        max_return_temperature_in_celsius = float(np.max(return_temperature_list_in_celsius))
+        (mean_flow_temperature_in_celsius,
+         max_flow_temperature_in_celsius,
+         min_flow_temperature_in_celsius) = self.calc_mean_max_min_value(list_or_pandas_series=flow_temperature_list_in_celsius)
 
-        # min
-        min_temperature_difference_between_flow_and_return_in_celsius = float(
-            np.min(flow_temperature_list_in_celsius - return_temperature_list_in_celsius)
-        )
-        min_flow_temperature_in_celsius = float(np.min(flow_temperature_list_in_celsius))
-        min_return_temperature_in_celsius = float(np.min(return_temperature_list_in_celsius))
+        (mean_return_temperature_in_celsius,
+         max_return_temperature_in_celsius,
+         min_return_temperature_in_celsius) = self.calc_mean_max_min_value(list_or_pandas_series=return_temperature_list_in_celsius)
 
         return (
             mean_flow_temperature_in_celsius,
@@ -1354,8 +1453,10 @@ class KpiGenerator(JSONWizard):
                     min_flow_temperature_in_celsius,
                     min_return_temperature_in_celsius,
                     min_temperature_difference_between_flow_and_return_in_celsius,
-                ) = self.get_heatpump_flow_and_return_temperatures(
-                    results=self.results, component_name=wrapped_component.my_component.component_name
+                ) = self.get_flow_and_return_temperatures(
+                    results=self.results,
+                    output_name_flow_temperature=HeatPumpHplib.TemperatureOutput,
+                    output_name_return_temperature=SimpleHotWaterStorage.WaterTemperatureToHeatGenerator
                 )
 
                 break
@@ -1483,6 +1584,15 @@ class KpiGenerator(JSONWizard):
                 min_temperature_difference_heatpump_entry.name: min_temperature_difference_heatpump_entry.to_dict(),
             }
         )
+
+    def calc_mean_max_min_value(self, list_or_pandas_series: Union[List, pd.Series]) -> Tuple[float, float, float]:
+        """Calc mean, max and min values from List or pd.Series with numpy."""
+
+        mean_value = float(np.mean(list_or_pandas_series))
+        max_value = float(np.max(list_or_pandas_series))
+        min_value = float(np.min(list_or_pandas_series))
+
+        return mean_value, max_value, min_value
 
     def return_table_for_report(self):
         """Return a table with all kpis for the report."""

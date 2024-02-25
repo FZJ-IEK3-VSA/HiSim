@@ -224,15 +224,15 @@ class ResultDataCollection:
                         kpi_data = json.load(kpi_file)
                         # check if min and max temperatures are too low or too high
                         min_temperature = float(
-                            kpi_data["Minimum building indoor air temperature reached"].get("value")
+                            kpi_data["Building"]["Minimum building indoor air temperature reached"].get("value")
                         )
                         max_temperature = float(
-                            kpi_data["Maximum building indoor air temperature reached"].get("value")
+                            kpi_data["Building"]["Maximum building indoor air temperature reached"].get("value")
                         )
-                        temp_deviation_below_set = kpi_data[
+                        temp_deviation_below_set = kpi_data["Building"][
                             "Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius"
                         ].get("value")
-                        temp_deviation_above_set = kpi_data[
+                        temp_deviation_above_set = kpi_data["Building"][
                             "Temperature deviation of building indoor air temperature being above set temperature 25.0 Celsius"
                         ].get("value")
                         if (

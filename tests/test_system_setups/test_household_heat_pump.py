@@ -1,4 +1,5 @@
 """ Tests for the household with advanced heat pump. """
+
 import os
 import shutil
 from pathlib import Path
@@ -74,6 +75,11 @@ def test_household_heat_pump_system_setup_starter_default():
     #  Check if calculation has finished without errors.
     assert Path(MY_RESULT_DIRECTORY).joinpath("finished.flag").is_file()
 
+    from hisim.units import Quantity, Unitless
+
+    # Test
+    assert Quantity(0, Unitless).id < 10
+
     remove_results_directory(MY_RESULT_DIRECTORY)
 
 
@@ -110,7 +116,10 @@ def test_household_heat_pump_system_setup_starter_pv():
     # Automatic connections are created with an index, we check the first three indexes here, which should suffice to
     # find the component.
     pv_con_dicts = [
-        {"From": {"Component": "PVSystem_w0", "Field": "ElectricityOutput"}, "To": {"Component": "ElectricityMeter", "Field": f"Input{i}"}}
+        {
+            "From": {"Component": "PVSystem_w0", "Field": "ElectricityOutput"},
+            "To": {"Component": "ElectricityMeter", "Field": f"Input{i}"},
+        }
         for i in range(3)
     ]
     assert any(any(connection == pv_con_dict for connection in connections_list) for pv_con_dict in pv_con_dicts)

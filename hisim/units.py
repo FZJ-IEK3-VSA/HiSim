@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, ClassVar, TypeVar, overload, Generic, Self
+from typing import Any, ClassVar, TypeVar, overload, Generic
+from hisim.utils import InstanceCounter
 
 T = TypeVar("T", bound=type)
 
@@ -45,36 +46,37 @@ class AbstractUnit(metaclass=UnitType):  # abstract base (no symbol)
     pass
 
 
-V = TypeVar("V")
+V = TypeVar("V", int, float)
 U = TypeVar("U", bound=AbstractUnit)
 
 
 @dataclasses.dataclass
-class Quantity(Generic[V, U]):
+class Quantity(InstanceCounter, Generic[V, U]):
     """generic container for values and `UnitType` instances"""
 
     value: V
     unit: type[U]
+    # count: InstanceCounter = InstanceCounter()
 
     def _is_valid_operand(self, other):
         return other.unit == self.unit
 
-    def __add__(self, other: Self) -> Self:
+    def __add__(self, other: Quantity[V, U]) -> Quantity[V, U]:
         if not self._is_valid_operand(other):
             return NotImplemented
         return Quantity(self.value + other.value, self.unit)
 
-    def __radd__(self, other: Self) -> Self:
+    def __radd__(self, other: Quantity[V, U]) -> Quantity[V, U]:
         if not self._is_valid_operand(other):
             return NotImplemented
         return Quantity(self.value + other.value, self.unit)
 
-    def __sub__(self, other: Self) -> Self:
+    def __sub__(self, other: Quantity[V, U]) -> Quantity[V, U]:
         if not self._is_valid_operand(other):
             return NotImplemented
         return Quantity(self.value - other.value, self.unit)
 
-    def __rsub__(self, other: Self) -> Self:
+    def __rsub__(self, other: Quantity[V, U]) -> Quantity[V, U]:
         if not self._is_valid_operand(other):
             return NotImplemented
         return Quantity(self.value - other.value, self.unit)

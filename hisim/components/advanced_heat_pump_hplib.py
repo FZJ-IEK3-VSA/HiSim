@@ -100,7 +100,7 @@ class HeatPumpHplibConfig(ConfigBase):
             cost=Quantity(set_thermal_output_power_in_watt.value * 1e-3 * 1513.74, Euro),
             lifetime=Quantity(10, Years),  # value from emission_factors_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
-            consumption=0,
+            consumption=Quantity(0, KilowattHour),
         )
 
     @classmethod
@@ -130,7 +130,7 @@ class HeatPumpHplibConfig(ConfigBase):
             # value from emission_factros_and_costs_devices.csv
             lifetime=Quantity(10, Years),
             maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
-            consumption=0,
+            consumption=Quantity(0, KilowattHour),
         )
 
 
@@ -200,9 +200,17 @@ class HeatPumpHplib(Component):
 
         self.cycling_mode = config.cycling_mode
 
-        self.minimum_running_time_in_seconds = config.minimum_running_time_in_seconds.value
+        self.minimum_running_time_in_seconds = (
+            config.minimum_running_time_in_seconds.value
+            if config.minimum_running_time_in_seconds
+            else config.minimum_running_time_in_seconds
+        )
 
-        self.minimum_idle_time_in_seconds = config.minimum_idle_time_in_seconds.value
+        self.minimum_idle_time_in_seconds = (
+            config.minimum_idle_time_in_seconds.value
+            if config.minimum_idle_time_in_seconds
+            else config.minimum_idle_time_in_seconds
+        )
 
         # Component has states
         self.state = HeatPumpState(time_on=0, time_off=0, time_on_cooling=0, on_off_previous=0)

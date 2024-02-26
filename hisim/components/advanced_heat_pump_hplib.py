@@ -147,6 +147,7 @@ class HeatPumpHplib(Component):
 
     # Outputs
     ThermalOutputPower = "ThermalOutputPower"  # W
+    ThermalOutputEnergy = "ThermalOutputEnergy"  # Wh
     ElectricalInputPower = "ElectricalInputPower"  # W
     COP = "COP"  # -
     EER = "EER"  # -
@@ -247,6 +248,14 @@ class HeatPumpHplib(Component):
             load_type=LoadTypes.HEATING,
             unit=Units.WATT,
             output_description=("Thermal output power in Watt"),
+        )
+
+        self.q_th: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ThermalOutputEnergy,
+            load_type=LoadTypes.HEATING,
+            unit=Units.WATT_HOUR,
+            output_description=("Thermal output enery in Watthours"),
             postprocessing_flag=[
                 OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
             ],
@@ -457,6 +466,7 @@ class HeatPumpHplib(Component):
 
             # Get outputs for heating mode
             p_th = results["P_th"].values[0]
+            q_th = results["Q_th"].values[0]
             p_el = results["P_el"].values[0]
             cop = results["COP"].values[0]
             eer = results["EER"].values[0]
@@ -477,6 +487,7 @@ class HeatPumpHplib(Component):
             )
 
             p_th = results["P_th"].values[0]
+            q_th = results["Q_th"].values[0]
             p_el = results["P_el"].values[0]
             cop = results["COP"].values[0]
             eer = results["EER"].values[0]
@@ -489,6 +500,7 @@ class HeatPumpHplib(Component):
         elif on_off == 0:
             # Calulate outputs for off mode
             p_th = 0
+            q_th = 0
             p_el = 0
             # None values or nans will cause troubles in post processing, that is why there are not used here
             # cop = None
@@ -506,6 +518,7 @@ class HeatPumpHplib(Component):
 
         # write values for output time series
         stsv.set_output_value(self.p_th, p_th)
+        stsv.set_output_value(self.q_th, q_th)
         stsv.set_output_value(self.p_el, p_el)
         stsv.set_output_value(self.cop, cop)
         stsv.set_output_value(self.eer, eer)

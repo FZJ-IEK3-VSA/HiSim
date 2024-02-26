@@ -35,6 +35,8 @@ from hisim.postprocessing.system_chart import SystemChart
 from hisim.postprocessing.webtool_entries import WebtoolDict
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.loadtypes import OutputPostprocessingRules
+
 from obsolete import loadprofilegenerator_connector
 
 
@@ -115,8 +117,8 @@ class PostProcessor:
 
         # make monthly bar plots only if simulation duration approximately a year
         if (
-            PostProcessingOptions.PLOT_MONTHLY_BAR_CHARTS in ppdt.post_processing_options
-            and ppdt.simulation_parameters.duration.days >= 360
+                PostProcessingOptions.PLOT_MONTHLY_BAR_CHARTS in ppdt.post_processing_options
+                and ppdt.simulation_parameters.duration.days >= 360
         ):
             log.information("Making monthly bar charts.")
             start = timer()
@@ -231,8 +233,8 @@ class PostProcessor:
 
         # only a single day has been calculated. This gets special charts for debugging.
         if (
-            PostProcessingOptions.PLOT_SPECIAL_TESTING_SINGLE_DAY in ppdt.post_processing_options
-            and len(ppdt.results) == 1440
+                PostProcessingOptions.PLOT_SPECIAL_TESTING_SINGLE_DAY in ppdt.post_processing_options
+                and len(ppdt.results) == 1440
         ):
             log.information("Making special single day plots for a single day calculation for testing.")
             start = timer()
@@ -263,7 +265,7 @@ class PostProcessor:
             self.write_results_for_webtool_to_json_file(ppdt)
 
         # Prepare webtool operation results
-        if PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL in ppdt.post_processing_options:
+        if PostProcessingOptions.MAKE_OPERATION_RESULTS_FOR_WEBTOOL in ppdt.post_processing_options:
             log.information("Make JSON file for webtool (operation).")
             self.write_operation_data_for_webtool(ppdt)
 
@@ -287,9 +289,9 @@ class PostProcessor:
         return systemchart.make_chart()
 
     def make_special_one_day_debugging_plots(
-        self,
-        ppdt: PostProcessingDataTransfer,
-        report_image_entries: List[ReportImageEntry],
+            self,
+            ppdt: PostProcessingDataTransfer,
+            report_image_entries: List[ReportImageEntry],
     ) -> None:
         """Makes special plots for debugging if only a single day was calculated."""
         for index, output in enumerate(ppdt.all_outputs):
@@ -329,9 +331,9 @@ class PostProcessor:
         self.export_results_to_csv(ppdt)
 
     def make_monthly_bar_charts(
-        self,
-        ppdt: PostProcessingDataTransfer,
-        report_image_entries: List[ReportImageEntry],
+            self,
+            ppdt: PostProcessingDataTransfer,
+            report_image_entries: List[ReportImageEntry],
     ) -> None:
         """Make bar charts."""
         for index, output in enumerate(ppdt.all_outputs):
@@ -348,10 +350,10 @@ class PostProcessor:
             report_image_entries.append(my_entry)
 
     def make_single_day_plots(
-        self,
-        days: Dict[str, int],
-        ppdt: PostProcessingDataTransfer,
-        report_image_entries: List[ReportImageEntry],
+            self,
+            days: Dict[str, int],
+            ppdt: PostProcessingDataTransfer,
+            report_image_entries: List[ReportImageEntry],
     ) -> None:
         """Makes plots for selected days."""
         for index, output in enumerate(ppdt.all_outputs):
@@ -371,9 +373,9 @@ class PostProcessor:
             report_image_entries.append(my_entry)
 
     def make_carpet_plots(
-        self,
-        ppdt: PostProcessingDataTransfer,
-        report_image_entries: List[ReportImageEntry],
+            self,
+            ppdt: PostProcessingDataTransfer,
+            report_image_entries: List[ReportImageEntry],
     ) -> None:
         """Make carpet plots."""
         for index, output in enumerate(ppdt.all_outputs):
@@ -396,9 +398,9 @@ class PostProcessor:
 
     @utils.measure_memory_leak
     def make_line_plots(
-        self,
-        ppdt: PostProcessingDataTransfer,
-        report_image_entries: List[ReportImageEntry],
+            self,
+            ppdt: PostProcessingDataTransfer,
+            report_image_entries: List[ReportImageEntry],
     ) -> None:
         """Makes the line plots."""
         for index, output in enumerate(ppdt.all_outputs):
@@ -439,7 +441,7 @@ class PostProcessor:
             ppdt.results_monthly[column].to_csv(csvfilename, sep=",", decimal=".", header=header)
 
     def write_simulation_parameters_to_report(
-        self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
+            self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
     ) -> None:
         """Write simulation parameters to report."""
         lines = ["The following information was used to configure the HiSim Building Simulation."]
@@ -452,15 +454,15 @@ class PostProcessor:
         )
 
     def write_components_to_report(
-        self,
-        ppdt: PostProcessingDataTransfer,
-        report: reportgenerator.ReportGenerator,
-        report_image_entries: List[ReportImageEntry],
+            self,
+            ppdt: PostProcessingDataTransfer,
+            report: reportgenerator.ReportGenerator,
+            report_image_entries: List[ReportImageEntry],
     ) -> None:
         """Writes information about the components used in the simulation to the simulation report."""
 
         def write_image_entry_to_report_for_one_component(
-            component: Any, report_image_entries_for_component: List[ReportImageEntry]
+                component: Any, report_image_entries_for_component: List[ReportImageEntry]
         ) -> None:
             """Write image entry to report for one component."""
 
@@ -532,7 +534,7 @@ class PostProcessor:
         report.close()
 
     def write_all_outputs_to_report(
-        self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
+            self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
     ) -> None:
         """Write all outputs to report."""
         all_output_names: List[Optional[str]]
@@ -547,10 +549,10 @@ class PostProcessor:
         )
 
     def write_network_charts_to_report(
-        self,
-        ppdt: PostProcessingDataTransfer,
-        report: reportgenerator.ReportGenerator,
-        system_chart_entries: List[SystemChartEntry],
+            self,
+            ppdt: PostProcessingDataTransfer,
+            report: reportgenerator.ReportGenerator,
+            system_chart_entries: List[SystemChartEntry],
     ) -> None:
         """Write network charts to report."""
         report.open()
@@ -566,7 +568,7 @@ class PostProcessor:
         report.close()
 
     def compute_kpis_and_write_to_report_and_to_ppdt(
-        self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
+            self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
     ) -> PostProcessingDataTransfer:
         """Computes KPI's and writes them to report and to ppdt kpi collection."""
         # initialize kpi data class and compute all kpi values
@@ -584,7 +586,7 @@ class PostProcessor:
         return ppdt
 
     def compute_and_write_opex_costs_to_report(
-        self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
+            self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
     ) -> None:
         """Computes OPEX costs and operational CO2-emissions and writes them to report and csv."""
         opex_compute_return = opex_calculation(
@@ -607,7 +609,7 @@ class PostProcessor:
         )
 
     def compute_and_write_capex_costs_to_report(
-        self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
+            self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
     ) -> None:
         """Computes CAPEX costs and CO2-emissions for production of devices and writes them to report and csv."""
         capex_compute_return = capex_calculation(
@@ -622,7 +624,7 @@ class PostProcessor:
         )
 
     def write_new_chapter_with_text_content_to_report(
-        self, report: reportgenerator.ReportGenerator, lines: List, headline: str
+            self, report: reportgenerator.ReportGenerator, lines: List, headline: str
     ) -> None:
         """Write new chapter with headline and some general information e.g. KPIs to report."""
         report.open()
@@ -633,11 +635,11 @@ class PostProcessor:
         report.close()
 
     def write_new_chapter_with_table_to_report(
-        self,
-        report: reportgenerator.ReportGenerator,
-        table_as_list_of_list: List,
-        headline: str,
-        comment: List,
+            self,
+            report: reportgenerator.ReportGenerator,
+            table_as_list_of_list: List,
+            headline: str,
+            comment: List,
     ) -> None:
         """Write new chapter with headline and a table to report."""
         report.open()
@@ -843,9 +845,9 @@ class PostProcessor:
         )
 
     def write_kpis_in_dict(
-        self,
-        ppdt: PostProcessingDataTransfer,
-        simple_dict_cumulative_data: Dict[str, Any],
+            self,
+            ppdt: PostProcessingDataTransfer,
+            simple_dict_cumulative_data: Dict[str, Any],
     ) -> None:
         """Write kpis in dictionary."""
         # get kpis from ppdt
@@ -882,7 +884,7 @@ class PostProcessor:
         return variable_name, unit
 
     def iterate_over_results_and_add_values_to_dict(
-        self, results_df: pd.DataFrame, dict_to_check: Dict[str, Any], timeseries: Any
+            self, results_df: pd.DataFrame, dict_to_check: Dict[str, Any], timeseries: Any
     ) -> pd.DataFrame:
         """Iterate over results and add values to dict, write to dataframe and save as csv."""
 
@@ -909,14 +911,14 @@ class PostProcessor:
         return dataframe_from_dict
 
     def write_filename_and_save_to_csv(
-        self,
-        dataframe: pd.DataFrame,
-        folder: str,
-        module_filename: str,
-        time_resolution_of_data: str,
-        simulation_duration: int,
-        simulation_year: int,
-        region: str,
+            self,
+            dataframe: pd.DataFrame,
+            folder: str,
+            module_filename: str,
+            time_resolution_of_data: str,
+            simulation_duration: int,
+            simulation_year: int,
+            region: str,
     ) -> None:
         """Write file to csv."""
 
@@ -929,11 +931,22 @@ class PostProcessor:
 
     def write_operation_data_for_webtool(self, ppdt: PostProcessingDataTransfer) -> None:
         """Collect daily operation results and write into json for webtool."""
-        data = ppdt.results_daily.to_json(date_format="iso")
+
+        # Get bools that tells if the output should be displayed in webtool
+        component_display_in_webtool: list[str] = []
+        for output in ppdt.all_outputs:
+            if output.postprocessing_flag:
+                if OutputPostprocessingRules.DISPLAY_IN_WEBTOOL not in output.postprocessing_flag:
+                    component_display_in_webtool.append(output.get_pretty_name())
+            df = ppdt.results_daily[component_display_in_webtool]
+
+        data = df.to_json(date_format="iso")
+
+        # Write to file
         with open(
-            os.path.join(ppdt.simulation_parameters.result_directory, "results_daily_operation_for_webtool.json"),
-            "w",
-            encoding="utf-8",
+                os.path.join(ppdt.simulation_parameters.result_directory, "results_daily_operation_for_webtool.json"),
+                "w",
+                encoding="utf-8",
         ) as file:
             file.write(data)
         pass
@@ -943,12 +956,12 @@ class PostProcessor:
 
         # Check if important options were set
         if all(
-            option in ppdt.post_processing_options
-            for option in [
-                PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT,
-                PostProcessingOptions.COMPUTE_CAPEX,
-                PostProcessingOptions.COMPUTE_OPEX,
-            ]
+                option in ppdt.post_processing_options
+                for option in [
+                    PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT,
+                    PostProcessingOptions.COMPUTE_CAPEX,
+                    PostProcessingOptions.COMPUTE_OPEX,
+                ]
         ):
             # Get KPIs from ppdt
             kpi_collection_dict = ppdt.kpi_collection_dict
@@ -978,9 +991,9 @@ class PostProcessor:
             # Save dataclass as json file in results folder
             json_file = webtool_results_dataclass.to_json(indent=4)
             with open(
-                os.path.join(ppdt.simulation_parameters.result_directory, "results_for_webtool.json"),
-                "w",
-                encoding="utf-8",
+                    os.path.join(ppdt.simulation_parameters.result_directory, "results_for_webtool.json"),
+                    "w",
+                    encoding="utf-8",
             ) as file:
                 file.write(json_file)
 

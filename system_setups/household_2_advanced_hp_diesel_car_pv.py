@@ -35,7 +35,7 @@ from hisim.components import (
 )
 from hisim.simulator import SimulationParameters
 from hisim.system_setup_configuration import SystemSetupConfigBase
-from hisim.units import Celsius, Quantity, Seconds
+from hisim.units import Celsius, Quantity, Seconds, Watt
 from system_setups.modular_example import cleanup_old_lpg_requests
 
 __authors__ = "Markus Blasberg"

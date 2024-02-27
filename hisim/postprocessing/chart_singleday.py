@@ -135,11 +135,7 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         single_day_data, self.units = self.rescale_y_axis(y_values=single_day_data, units=self.units)
         plt.title(self.title, fontsize=self.fontsize_title)
         plt.plot(
-            single_day_data.index,
-            single_day_data,
-            color="green",
-            linewidth=1.0,
-            label=self.property,
+            single_day_data.index, single_day_data, color="green", linewidth=1.0, label=self.property,
         )
         plt.grid(True)
         plt.xlabel("Time [hours]", fontsize=self.fontsize_label)

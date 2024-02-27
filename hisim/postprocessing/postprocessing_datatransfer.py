@@ -6,6 +6,7 @@ from hisim import log
 from hisim.component_wrapper import ComponentWrapper
 from hisim.simulationparameters import SimulationParameters
 
+
 class PostProcessingDataTransfer:  # noqa: too-few-public-methods
 
     """Data class for transfering the result data to this class."""
@@ -25,7 +26,7 @@ class PostProcessingDataTransfer:  # noqa: too-few-public-methods
         results_hourly: Any,
         results_cumulative: Any,
         results_daily: Any,
-        kpi_collection_dict: Dict = {}
+        kpi_collection_dict: Dict = {},
     ) -> None:
         """Initializes the values."""
         # Johanna Ganglbauer: time correction factor is applied in postprocessing to sum over power values and convert them to energy

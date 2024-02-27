@@ -29,10 +29,7 @@ def get_factor_cooking(occupancy_config: OccupancyConfig) -> float:
     if occupancy_config.profile_name != "AVG":
         return 0
     scaling_factors = pd.read_csv(
-        utils.HISIMPATH["occupancy_scaling_factors_per_country"],
-        encoding="utf-8",
-        sep=";",
-        index_col=1,
+        utils.HISIMPATH["occupancy_scaling_factors_per_country"], encoding="utf-8", sep=";", index_col=1,
     )
     if occupancy_config.country_name in scaling_factors.index:
         scaling_factor_line = scaling_factors.loc[occupancy_config.country_name]
@@ -197,8 +194,7 @@ def generate_csv_for_database(
     tuples = list(zip(*[device_index, units]))
 
     csv_frame_annual = pd.Series(
-        [0.0] * len(device_index),
-        index=pd.MultiIndex.from_tuples(tuples, names=["Category", "Fuel"]),
+        [0.0] * len(device_index), index=pd.MultiIndex.from_tuples(tuples, names=["Category", "Fuel"]),
     )
     csv_frame_seasonal = pd.DataFrame(
         {
@@ -229,10 +225,7 @@ def generate_csv_for_database(
                     csv_frame_annual[("WaterHeating", "Distributed Stream [kWh]")] = sum(results.iloc[:, index]) * 1e-3
                     csv_frame_seasonal = compute_seasonal(
                         csv_frame_seasonal=csv_frame_seasonal,
-                        index_in_seasonal_frame=(
-                            "WaterHeating",
-                            "Distributed Stream [kWh]",
-                        ),
+                        index_in_seasonal_frame=("WaterHeating", "Distributed Stream [kWh]",),
                         factor=1e-3,
                         output=results.iloc[:, index],
                         day=day,
@@ -266,10 +259,7 @@ def generate_csv_for_database(
                         )
                         csv_frame_seasonal = compute_seasonal(
                             csv_frame_seasonal=csv_frame_seasonal,
-                            index_in_seasonal_frame=(
-                                "WaterHeating",
-                                "Electricity - HeatPump [kWh]",
-                            ),
+                            index_in_seasonal_frame=("WaterHeating", "Electricity - HeatPump [kWh]",),
                             factor=simulation_parameters.seconds_per_timestep / 3.6e6,
                             output=results.iloc[:, index],
                             day=day,
@@ -282,10 +272,7 @@ def generate_csv_for_database(
                         )
                         csv_frame_seasonal = compute_seasonal(
                             csv_frame_seasonal=csv_frame_seasonal,
-                            index_in_seasonal_frame=(
-                                "WaterHeating",
-                                "Electricity [kWh]",
-                            ),
+                            index_in_seasonal_frame=("WaterHeating", "Electricity [kWh]",),
                             factor=simulation_parameters.seconds_per_timestep / 3.6e6,
                             output=results.iloc[:, index],
                             day=day,
@@ -296,10 +283,7 @@ def generate_csv_for_database(
                     csv_frame_annual[("SpaceHeating", "Distributed Stream [kWh]")] = sum(results.iloc[:, index]) * 1e-3
                     csv_frame_seasonal = compute_seasonal(
                         csv_frame_seasonal=csv_frame_seasonal,
-                        index_in_seasonal_frame=(
-                            "SpaceHeating",
-                            "Distributed Stream [kWh]",
-                        ),
+                        index_in_seasonal_frame=("SpaceHeating", "Distributed Stream [kWh]",),
                         factor=1e-3,
                         output=results.iloc[:, index],
                         day=day,
@@ -333,10 +317,7 @@ def generate_csv_for_database(
                         )
                         csv_frame_seasonal = compute_seasonal(
                             csv_frame_seasonal=csv_frame_seasonal,
-                            index_in_seasonal_frame=(
-                                "SpaceHeating",
-                                "Electricity - HeatPump [kWh]",
-                            ),
+                            index_in_seasonal_frame=("SpaceHeating", "Electricity - HeatPump [kWh]",),
                             factor=simulation_parameters.seconds_per_timestep / 3.6e6,
                             output=results.iloc[:, index],
                             day=day,
@@ -349,10 +330,7 @@ def generate_csv_for_database(
                         )
                         csv_frame_seasonal = compute_seasonal(
                             csv_frame_seasonal=csv_frame_seasonal,
-                            index_in_seasonal_frame=(
-                                "SpaceHeating",
-                                "Electricity [kWh]",
-                            ),
+                            index_in_seasonal_frame=("SpaceHeating", "Electricity [kWh]",),
                             factor=simulation_parameters.seconds_per_timestep / 3.6e6,
                             output=results.iloc[:, index],
                             day=day,
@@ -465,16 +443,9 @@ def generate_csv_for_database(
     )
 
     csv_frame_annual.to_csv(
-        os.path.join(
-            simulation_parameters.result_directory,
-            "csv_for_housing_data_base_annual.csv",
-        ),
-        encoding="utf-8",
+        os.path.join(simulation_parameters.result_directory, "csv_for_housing_data_base_annual.csv",), encoding="utf-8",
     )
     csv_frame_seasonal.to_csv(
-        os.path.join(
-            simulation_parameters.result_directory,
-            "csv_for_housing_data_base_seasonal.csv",
-        ),
+        os.path.join(simulation_parameters.result_directory, "csv_for_housing_data_base_seasonal.csv",),
         encoding="utf-8",
     )

@@ -104,9 +104,9 @@ class WebtoolDict(JSONWizard):
         # Get bools that tells if the components should be displayed in webtool
         component_display_in_webtool_dict: Dict[str, bool] = {}
         for component in post_processing_data_transfer.wrapped_components:
-            component_display_in_webtool_dict[component.my_component.component_name] = (
-                component.my_component.my_display_config.display_in_webtool
-            )
+            component_display_in_webtool_dict[
+                component.my_component.component_name
+            ] = component.my_component.my_display_config.display_in_webtool
 
         # Read data from PostProcessingDataTransfer and save to results
         data: pd.DataFrame = post_processing_data_transfer.results_cumulative

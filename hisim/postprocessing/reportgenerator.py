@@ -67,12 +67,7 @@ class ReportGenerator:
     def open(self):
         """Open a file."""
         self.doc = MyDocTemplate(
-            self.filepath,
-            pagesize=letter,
-            rightMargin=72,
-            leftMargin=72,
-            topMargin=72,
-            bottomMargin=18,
+            self.filepath, pagesize=letter, rightMargin=72, leftMargin=72, topMargin=72, bottomMargin=18,
         )
 
         self.styles = getSampleStyleSheet()

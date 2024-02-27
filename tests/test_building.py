@@ -155,7 +155,7 @@ def test_building():
 
         assert (
             stsv.values[my_residence.thermal_mass_temperature_channel.global_index]
-            - 23.0
+            - my_residence_config.initial_internal_temperature_in_celsius
         ) > -0.1 * (seconds_per_timestep / 60)
 
     t_seven = time.perf_counter()

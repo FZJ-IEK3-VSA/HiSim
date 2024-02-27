@@ -14,7 +14,7 @@ from hisim import utils
 from hisim import loadtypes as lt
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
-from obsolete import loadprofilegenerator_connector
+from hisim.obsolete import loadprofilegenerator_connector
 
 
 class SankeyHISIM(Chart, ChartFontsAndSize):

@@ -28,7 +28,7 @@ from hisim.modular_household.interface_configs.modular_household_config import (
 )
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
-from obsolete import loadprofilegenerator_connector
+from hisim.obsolete import loadprofilegenerator_connector
 
 
 def cleanup_old_result_folders():

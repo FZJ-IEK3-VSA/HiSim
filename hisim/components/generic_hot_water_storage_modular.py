@@ -28,7 +28,7 @@ from hisim.components import (
 )
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 from hisim.simulationparameters import SimulationParameters
-from obsolete.loadprofilegenerator_connector import Occupancy
+from hisim.obsolete.loadprofilegenerator_connector import Occupancy
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"

@@ -15,8 +15,7 @@ from hisim.components import heat_distribution_system
 from hisim import postprocessingoptions
 from hisim import loadtypes
 import generic_heat_pump_for_house_with_hds
-from obsolete import loadprofilegenerator_connector
-
+from hisim.obsolete import loadprofilegenerator_connector
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"

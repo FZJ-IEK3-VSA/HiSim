@@ -14,7 +14,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim import utils
 from tests import functions_for_testing as fft
-from obsolete import loadprofilegenerator_connector
+from hisim.obsolete import loadprofilegenerator_connector
 
 
 @pytest.mark.buildingtest

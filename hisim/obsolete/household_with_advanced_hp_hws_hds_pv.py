@@ -12,8 +12,7 @@ from hisim.components import advanced_heat_pump_hplib
 from hisim.components import electricity_meter
 from hisim.components import simple_hot_water_storage
 from hisim.components import heat_distribution_system
-from obsolete import loadprofilegenerator_connector
-
+from hisim.obsolete import loadprofilegenerator_connector
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"

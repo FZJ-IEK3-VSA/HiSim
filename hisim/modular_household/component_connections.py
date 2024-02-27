@@ -39,7 +39,7 @@ from hisim.components import (
 
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.simulator import SimulationParameters
-from obsolete import loadprofilegenerator_connector
+from hisim.obsolete import loadprofilegenerator_connector
 
 
 def get_heating_system_efficiency(

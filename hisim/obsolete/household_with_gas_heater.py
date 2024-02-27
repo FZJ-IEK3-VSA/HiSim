@@ -1,4 +1,5 @@
 """  Household system setup with gas heater. """
+
 # clean
 from typing import Optional, Any
 from pathlib import Path
@@ -20,7 +21,7 @@ from hisim.components import controller_l1_heat_old
 from hisim.components import generic_heat_water_storage
 from hisim.components import building
 from hisim import log
-from obsolete.household_with_heatpump_and_pv import HouseholdPVConfig
+from hisim.obsolete.household_with_heatpump_and_pv import HouseholdPVConfig
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -100,7 +101,7 @@ def setup_function(
         consumption=0,
         profile_with_washing_machine_and_dishwasher=True,
         predictive_control=False,
-        predictive=False
+        predictive=False,
     )
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
@@ -115,9 +116,7 @@ def setup_function(
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home()
     my_building_information = building.BuildingInformation(config=my_building_config)
-    my_building = building.Building(
-        config=my_building_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     # Build Gasheater
     my_gasheater = generic_gas_heater.GasHeater(
         config=generic_gas_heater.GenericGasHeaterConfig.get_default_gasheater_config(),

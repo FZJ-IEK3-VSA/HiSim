@@ -13,7 +13,7 @@ from hisim import log, utils
 
 from hisim.loadtypes import ComponentType, HeatingSystems, InandOutputType, LoadTypes
 from hisim.simulationparameters import SimulationParameters
-from obsolete.loadprofilegenerator_connector import OccupancyConfig
+from hisim.obsolete.loadprofilegenerator_connector import OccupancyConfig
 
 
 def compute_energy_from_power(power_timeseries: pd.Series, seconds_per_timestep: int) -> float:

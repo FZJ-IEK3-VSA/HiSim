@@ -66,7 +66,7 @@ def setup_function(
     # Set Heat Pump
     group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
     heating_reference_temperature_in_celsius: float = -7.0  # t_in
-    flow_temperature_in_celsius:float = 21.0  # t_out_val
+    flow_temperature_in_celsius: float = 21.0  # t_out_val
 
     # =================================================================================================================================
     # Build Components

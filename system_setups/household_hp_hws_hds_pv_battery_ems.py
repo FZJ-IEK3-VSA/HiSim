@@ -15,7 +15,7 @@ from hisim.components import (
 )
 from hisim.components import simple_hot_water_storage
 from hisim.components import heat_distribution_system
-from hisim.units import Quantity, Celsius 
+from hisim.units import Quantity, Celsius
 from hisim import loadtypes as lt
 
 __authors__ = "Katharina Rieck"

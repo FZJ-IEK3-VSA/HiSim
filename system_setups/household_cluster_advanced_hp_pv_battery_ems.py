@@ -108,6 +108,7 @@ def setup_function(
     # Set Photovoltaic System
     azimuth = my_config.pv_azimuth
     tilt = my_config.pv_tilt
+    share_of_maximum_pv_power = my_config.share_of_maximum_pv_power
 
     # Set Building (scale building according to total base area and not absolute floor area)
     building_code = my_config.building_code
@@ -181,7 +182,8 @@ def setup_function(
 
     # Build PV
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-        rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
+        rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2,
+        share_of_maximum_pv_power=share_of_maximum_pv_power
     )
     my_photovoltaic_system_config.azimuth = azimuth
     my_photovoltaic_system_config.tilt = tilt
@@ -532,7 +534,7 @@ def setup_function(
 
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,  # r"/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/hisim_results",
-        model_name=os.path.join(my_sim.module_filename, "23-02-2024"),
+        model_name=os.path.join(my_sim.module_filename, "27-02-2024"),
         variant_name="no_surplus_",
         hash_number=hash_number,
         sorting_option=sorting_option,

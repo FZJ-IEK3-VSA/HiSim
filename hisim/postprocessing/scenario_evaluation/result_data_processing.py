@@ -133,7 +133,7 @@ class ScenarioDataProcessing:
         dataframe: pd.DataFrame,
         list_of_scenarios_to_check: List,
         column_name_to_check: str,
-        # filter_level_index: int,
+        filter_level_index: int,
     ) -> pd.DataFrame:
         """Check for one scenario."""
 
@@ -166,7 +166,7 @@ class ScenarioDataProcessing:
 
             concat_df = pd.concat([concat_df, df_filtered_for_specific_scenarios], ignore_index=True)
 
-            # concat_df[f"scenario_{filter_level_index}"] = dataframe.loc[:, "scenario"]
+            concat_df[f"scenario_{filter_level_index}"] = dataframe.loc[:, "scenario"]
 
             del df_filtered_for_specific_scenarios
 
@@ -185,7 +185,7 @@ class ScenarioDataProcessing:
                 dataframe=concat_df,
                 list_of_scenarios_to_check=list_of_scenarios_to_check,
                 column_name_to_check=scenario_to_check_key,
-                # filter_level_index=filter_level_index,
+                filter_level_index=filter_level_index,
             )
 
             filter_level_index = filter_level_index + 1

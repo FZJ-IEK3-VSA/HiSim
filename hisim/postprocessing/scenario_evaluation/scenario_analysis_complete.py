@@ -64,7 +64,7 @@ def main():
     )
     simulation_duration_to_check = str(365)
 
-    data_processing_mode = result_data_collection.ResultDataProcessingModeEnum.PROCESS_ALL_DATA
+    data_processing_mode = result_data_collection.ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_SHARE_OF_MAXIMUM_PV
 
     filterclass = result_data_processing.FilterClass()
     list_with_variables_to_check = (
@@ -72,7 +72,7 @@ def main():
     )  # filterclass.flow_and_return_temperatures  # +filterclass.kpi_data  #
 
     # TODO: filter several scenario parameters (eg pv and building code together) not working yet, need to be fixed
-    # dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share,"building_code": ["DE.N.SFH.05.Gen.ReEx.001.002"]}
+    dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share}
     # dict_with_scenarios_to_check = {
     #     "building_code": [
     #         "DE.N.SFH",
@@ -82,7 +82,7 @@ def main():
     #     ]
     # }
 
-    dict_with_scenarios_to_check = None
+    # dict_with_scenarios_to_check = None
 
     dict_with_extra_information_for_specific_plot: Dict[str, Dict] = {
         "scatter": {

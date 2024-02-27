@@ -98,10 +98,14 @@ def setup_function(
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL)
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Set ems strategies
+    surplus_control: bool = False  # strategy 2: storage temperature modifier
+    surplus_control_building_temperature_modifier: bool = False  # strategy 3: building temperature modifier
     surplus_control: bool = False  # strategy 2: storage temperature modifier
     surplus_control_building_temperature_modifier: bool = False  # strategy 3: building temperature modifier
 
@@ -149,6 +153,7 @@ def setup_function(
     # Set Heat Pump
     group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
     heating_reference_temperature_in_celsius: float = -7  # t_in #TODO: get real heating ref temps according to location
+    flow_temperature_in_celsius = 52  # t_out_val
     flow_temperature_in_celsius = 52  # t_out_val
 
     # =================================================================================================================================
@@ -199,6 +204,7 @@ def setup_function(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
+    # my_heat_distribution_controller_config.heating_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
     # my_heat_distribution_controller_config.heating_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(

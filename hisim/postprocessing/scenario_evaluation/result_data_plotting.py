@@ -171,6 +171,7 @@ class ScenarioChartGeneration:
             # get unit of variable
             try:
                 unit = str(filtered_data.unit.values[0])
+                unit = str(filtered_data.unit.values[0])
             except Exception:
                 if "Temperature deviation" in variable_to_check:
                     unit = "°C*h"
@@ -194,12 +195,12 @@ class ScenarioChartGeneration:
                 except Exception:
                     log.information(f"{variable_to_check} could not be plotted as box plot.")
 
-                # try:
-                self.make_bar_plot_for_pandas_dataframe(
-                    filtered_data=filtered_data, title=self.path_addition, unit=unit
-                )
-                # except Exception:
-                #     log.information(f"{variable_to_check} could not be plotted as bar plot.")
+                try:
+                    self.make_bar_plot_for_pandas_dataframe(
+                        filtered_data=filtered_data, title=self.path_addition, unit=unit
+                    )
+                except Exception:
+                    log.information(f"{variable_to_check} could not be plotted as bar plot.")
 
                 try:
                     x_data_variable = dict_with_extra_information_for_specific_plot["scatter"]["x_data_variable"]
@@ -218,6 +219,26 @@ class ScenarioChartGeneration:
                     )
                 except Exception:
                     log.information(f"{variable_to_check} could not be plotted as histogram.")
+
+                if variable_to_check in [
+                    dict_with_extra_information_for_specific_plot["stacked_bar"]["y1_data_variable"],
+                    dict_with_extra_information_for_specific_plot["stacked_bar"]["y2_data_variable"],
+                ]:
+                    y1_data_variable = dict_with_extra_information_for_specific_plot["stacked_bar"]["y1_data_variable"]
+                    y2_data_variable = dict_with_extra_information_for_specific_plot["stacked_bar"]["y2_data_variable"]
+                    use_y1_as_bottom_for_y2 = dict_with_extra_information_for_specific_plot["stacked_bar"][
+                        "use_y1_as_bottom_for_y2"
+                    ]
+                    sort_according_to_y1_or_y2_data = dict_with_extra_information_for_specific_plot["stacked_bar"][
+                        "sort_according_to_y1_or_y2_data"
+                    ]
+                    self.make_stacked_bar_plot_for_pandas_dataframe(
+                        full_pandas_dataframe=pandas_dataframe,
+                        y1_data_variable=y1_data_variable,
+                        y2_data_variable=y2_data_variable,
+                        use_y1_as_bottom_for_y2=use_y1_as_bottom_for_y2,
+                        sort_according_to_y1_or_y2_data=sort_according_to_y1_or_y2_data,
+                    )
 
                 if variable_to_check in [
                     dict_with_extra_information_for_specific_plot["stacked_bar"]["y1_data_variable"],
@@ -287,6 +308,18 @@ class ScenarioChartGeneration:
                 except Exception:
                     log.information(f"{variable_to_check} could not be plotted as line scatter plot.")
 
+                try:
+                    x_data_variable = dict_with_extra_information_for_specific_plot["scatter"]["x_data_variable"]
+                    self.make_line_scatter_plot_for_pandas_dataframe(
+                        full_pandas_dataframe=pandas_dataframe,
+                        filtered_data=filtered_data,
+                        y_data_variable=self.path_addition,
+                        x_data_variable=x_data_variable,
+                        line_plot_marker_size=line_plot_marker_size,
+                    )
+                except Exception:
+                    log.information(f"{variable_to_check} could not be plotted as line scatter plot.")
+
             else:
                 raise ValueError("This kind of data was not found in the datacollectorenum class.")
 
@@ -321,6 +354,16 @@ class ScenarioChartGeneration:
                 x_data_transformed, y_data, "-o", markersize=line_plot_marker_size, label=scenario,
             )
 
+        self.set_ticks_labels_legend_and_save_fig(
+            fig=fig,
+            a_x=a_x,
+            x_axis_label=year,
+            y_axis_unit=filtered_data.unit.values[0],
+            show_legend=self.show_plot_legend,
+            title=title,
+            plot_type_name="line_plot",
+            rotate_x_ticks=True,
+        )
         self.set_ticks_labels_legend_and_save_fig(
             fig=fig,
             a_x=a_x,
@@ -397,6 +440,8 @@ class ScenarioChartGeneration:
 
         try:
             # this works for yearly data
+            x_axis_label = filtered_data.year.values[0]
+
             x_axis_label = filtered_data.year.values[0]
 
         except Exception:

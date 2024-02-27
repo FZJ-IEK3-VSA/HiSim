@@ -34,7 +34,7 @@ def test_webtool_results():
 
     assert isinstance(
         results_daily_operation_for_webtool.loc[
-            "2021-01-01", "AdvancedHeatPumpHPLib - ElectricalInputPower [Electricity - W]"
+            "2021-01-01", "'DHWHeatPump_w1 - ThermalPowerDelivered [Heating - W]'"
         ],
         Number,
     )

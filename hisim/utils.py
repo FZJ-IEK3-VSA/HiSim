@@ -11,7 +11,7 @@ import os
 from functools import wraps
 from functools import reduce as freduce
 from timeit import default_timer as timer
-from typing import Any, Dict, List, Optional, Tuple, ClassVar
+from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
 import pandas as pd
@@ -437,18 +437,20 @@ def get_environment_variable(key: str, default: Optional[str] = None) -> str:
 
 
 class InstanceCounterMeta(type):
-    """Metaclass to make instance counter not share count with descendants"""
+    """Metaclass to make instance counter not share count with descendants."""
 
     def __init__(cls, name, bases, attrs):
+        """Initalize class with counter."""
         super().__init__(name, bases, attrs)
-        cls._ids = itertools.count(1)
+        cls.ids = itertools.count(1)
 
 
 @dataclass
-class InstanceCounter(object, metaclass=InstanceCounterMeta):
-    """Mixin to add automatic ID generation"""
+class InstanceCounter(metaclass=InstanceCounterMeta):
+    """Mixin to add automatic ID generation."""
 
     def __post_init__(self):
-        self.id = next(self.__class__._ids)
-        if self.id > 10e4:
+        """Runs after initialization of the dataclass."""
+        self.instance_id = next(self.__class__.ids)
+        if self.instance_id > 10e4:
             raise RuntimeError("Too many instances.")

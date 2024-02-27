@@ -2,37 +2,41 @@
 
 # clean
 
-from typing import List, Optional, Any
+from dataclasses import dataclass
 from os import listdir
 from pathlib import Path
-from dataclasses import dataclass
+from typing import Any, List, Optional
+
 from dataclasses_json import dataclass_json
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,
+    EnergyIntensityType,
     Households,
     TransportationDeviceSets,
     TravelRouteSets,
-    EnergyIntensityType,
 )
-from hisim.system_setup_configuration import SystemSetupConfigBase
-from hisim.simulator import SimulationParameters
-from hisim.components import loadprofilegenerator_utsp_connector
-from hisim.components import weather
-from hisim.components import advanced_heat_pump_hplib
-from hisim.components import heat_distribution_system
-from hisim.components import building
-from hisim.components import simple_hot_water_storage
-from hisim.components import generic_car
-from hisim.components import generic_heat_pump_modular
-from hisim.components import controller_l1_heatpump
-from hisim.components import generic_hot_water_storage_modular
-from hisim.components import electricity_meter
-from hisim.components import generic_pv_system
-from hisim.components import controller_l2_energy_management_system
-from hisim import utils
+
 from hisim import loadtypes as lt
+from hisim import utils
+from hisim.components import (
+    advanced_heat_pump_hplib,
+    building,
+    controller_l1_heatpump,
+    controller_l2_energy_management_system,
+    electricity_meter,
+    generic_car,
+    generic_heat_pump_modular,
+    generic_hot_water_storage_modular,
+    generic_pv_system,
+    heat_distribution_system,
+    loadprofilegenerator_utsp_connector,
+    simple_hot_water_storage,
+    weather,
+)
+from hisim.simulator import SimulationParameters
+from hisim.system_setup_configuration import SystemSetupConfigBase
+from hisim.units import Celsius, Quantity, Seconds
 from system_setups.modular_example import cleanup_old_lpg_requests
-from hisim.units import Quantity, Celsius, Seconds
 
 __authors__ = "Markus Blasberg"
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
@@ -46,14 +50,15 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class HouseholdAdvancedHPDieselCarPVConfig(SystemSetupConfigBase):
-
     """Configuration for with advanced heat pump and diesel car and PV."""
 
     building_type: str
     number_of_apartments: int
     # dhw_controllable: bool  # if dhw is controlled by EMS
     # heatpump_controllable: bool  # if heatpump is controlled by EMS
-    surplus_control: bool  # decision on the consideration of smart control for heat pump and dhw, increase storage temperatures
+    surplus_control: (
+        bool  # decision on the consideration of smart control for heat pump and dhw, increase storage temperatures
+    )
     surplus_control_building_temperature_modifier: bool  # increase set_room_temperature in case of surplus electricity
     # simulation_parameters: SimulationParameters
     # total_base_area_in_m2: float
@@ -133,7 +138,9 @@ class HouseholdAdvancedHPDieselCarPVConfig(SystemSetupConfigBase):
             hp_config=(
                 advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
                     heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-                    heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
+                    heating_reference_temperature_in_celsius=Quantity(
+                        heating_reference_temperature_in_celsius, Celsius
+                    ),
                 )
             ),
             simple_hot_water_storage_config=(

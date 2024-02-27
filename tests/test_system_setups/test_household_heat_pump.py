@@ -1,16 +1,18 @@
 """ Tests for the household with advanced heat pump. """
 
+import json
 import os
 import shutil
 from pathlib import Path
-import json
+
 import pytest
 
-from hisim import utils, hisim_main, log
-from hisim.simulationparameters import SimulationParameters
-from hisim.postprocessingoptions import PostProcessingOptions
-from hisim.system_setup_starter import make_system_setup
+from hisim import hisim_main, log, utils
 from hisim.hisim_main import main
+from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.simulationparameters import SimulationParameters
+from hisim.system_setup_starter import make_system_setup
+from hisim.units import Quantity, Unitless
 
 MY_PATH_TO_MODULE = "../system_setups/household_heat_pump.py"
 MY_SIMULATION_PARAMETERS = {
@@ -75,10 +77,8 @@ def test_household_heat_pump_system_setup_starter_default():
     #  Check if calculation has finished without errors.
     assert Path(MY_RESULT_DIRECTORY).joinpath("finished.flag").is_file()
 
-    from hisim.units import Quantity, Unitless
-
     # Test
-    assert Quantity(0, Unitless).id < 10
+    assert Quantity(0, Unitless).instance_id < 10
 
     remove_results_directory(MY_RESULT_DIRECTORY)
 

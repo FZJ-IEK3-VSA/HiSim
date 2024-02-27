@@ -17,6 +17,7 @@ from hisim.components import (
     generic_heat_pump_modular,
     generic_hot_water_storage_modular,
 )
+from hisim.units import Quantity, Watt
 
 from hisim import log
 from hisim import utils
@@ -190,7 +191,7 @@ def simulation_for_one_timestep(
 
     # Set hplib
     my_hplib_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=my_residence_information.max_thermal_building_demand_in_watt
+        heating_load_of_building_in_watt=Quantity(my_residence_information.max_thermal_building_demand_in_watt, Watt)
     )
 
     # Set Hot Water Storage

@@ -143,7 +143,7 @@ class HouseholdAdvancedHPEvPvConfig(SystemSetupConfigBase):
             ),
             hp_config=(
                 advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+                    heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
                     heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
                 )
             ),

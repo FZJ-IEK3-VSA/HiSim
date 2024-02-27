@@ -36,7 +36,7 @@ from hisim.components import (
 )
 from hisim.simulator import SimulationParameters
 from hisim.system_setup_configuration import SystemSetupConfigBase
-from hisim.units import Celsius, Quantity, Seconds
+from hisim.units import Celsius, Quantity, Seconds, Watt
 from system_setups.modular_example import cleanup_old_lpg_requests
 
 __authors__ = "Markus Blasberg"
@@ -139,7 +139,7 @@ class HouseholdAdvancedHPDieselCarPVBatteryConfig(SystemSetupConfigBase):
             ),
             hp_config=(
                 advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+                    heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
                     heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
                 )
             ),

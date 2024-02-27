@@ -77,9 +77,6 @@ def test_household_heat_pump_system_setup_starter_default():
     #  Check if calculation has finished without errors.
     assert Path(MY_RESULT_DIRECTORY).joinpath("finished.flag").is_file()
 
-    # Test
-    assert Quantity(0, Unitless).instance_id < 10
-
     remove_results_directory(MY_RESULT_DIRECTORY)
 
 

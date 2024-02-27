@@ -97,12 +97,14 @@ def setup_function(
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL)
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Set ems strategies
-    surplus_control: bool = True  # strategy 2: storage temperature modifier
-    surplus_control_building_temperature_modifier: bool = True  # strategy 3: building temperature modifier
+    surplus_control: bool = False  # strategy 2: storage temperature modifier
+    surplus_control_building_temperature_modifier: bool = False  # strategy 3: building temperature modifier
 
     # Set Photovoltaic System
     azimuth = my_config.pv_azimuth
@@ -147,7 +149,7 @@ def setup_function(
     # Set Heat Pump
     group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
     heating_reference_temperature_in_celsius: float = -7  # t_in #TODO: get real heating ref temps according to location
-    flow_temperature_in_celsius = 21  # t_out_val
+    flow_temperature_in_celsius = 52  # t_out_val
 
     # =================================================================================================================================
     # Build Basic Components
@@ -196,6 +198,7 @@ def setup_function(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
+    # my_heat_distribution_controller_config.heating_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
         my_simulation_parameters=my_simulation_parameters,
@@ -519,7 +522,7 @@ def setup_function(
 
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
-            entry=f"surplus_modifier_{hash_number}",
+            entry=f"no_surplus_{hash_number}",
         )
 
     # if config_filename is not given, make result path with index enumeration
@@ -530,8 +533,8 @@ def setup_function(
 
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,  # r"/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/hisim_results",
-        model_name=my_sim.module_filename,
-        variant_name="surplus_modifier_",
+        model_name=os.path.join(my_sim.module_filename, "23-02-2024"),
+        variant_name="no_surplus_",
         hash_number=hash_number,
         sorting_option=sorting_option,
         sampling_mode=sampling_mode,

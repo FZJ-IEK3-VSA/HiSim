@@ -62,15 +62,17 @@ def test_system_setup_starter():
         == parameters_json["simulation_parameters"]["seconds_per_timestep"]  # type: ignore
     )
 
-    with open(Path(simulation_parameters.result_directory).joinpath("results_for_webtool.json"), "rb") as handle:
-        results_for_webtool = json.load(handle)
-
-    assert (
-        99999
-        == results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["configuration"][
-            "set_thermal_output_power_in_watt"
-        ]["value"]
-    )
+    if simulation_parameters:
+        with open(Path(simulation_parameters.result_directory).joinpath("results_for_webtool.json"), "rb") as handle:
+            results_for_webtool = json.load(handle)
+        assert (
+            99999
+            == results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["configuration"][
+                "set_thermal_output_power_in_watt"
+            ]["value"]
+        )
+    else:
+        raise ValueError("No simulations parameters created.")
 
     # Check if the costs of the heat pump have been adapted.
     # TODO: Rewrite to the new data path

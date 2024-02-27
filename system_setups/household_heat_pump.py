@@ -27,7 +27,7 @@ from hisim.components import generic_hot_water_storage_modular
 from hisim.components import generic_pv_system
 from hisim.components import electricity_meter
 from hisim import utils
-from hisim.units import Quantity, Watt, Celsius, Seconds, Kilogram, Euro, Years, KilowattHour
+from hisim.units import Quantity, Watt, Celsius
 
 
 __authors__ = ["Katharina Rieck", "Kevin Knosala", "Markus Blasberg"]

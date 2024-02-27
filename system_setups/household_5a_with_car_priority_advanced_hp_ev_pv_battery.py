@@ -36,6 +36,7 @@ from hisim.components import controller_l2_energy_management_system
 from hisim import utils
 from hisim import loadtypes as lt
 from system_setups.modular_example import cleanup_old_lpg_requests
+from hisim.units import Quantity, Seconds, Celsius
 
 __authors__ = "Markus Blasberg"
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
@@ -144,7 +145,7 @@ class HouseholdAdvancedHpEvPvBatteryConfig(SystemSetupConfigBase):
             hp_config=(
                 advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
                     heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-                    heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+                    heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
                 )
             ),
             simple_hot_water_storage_config=(
@@ -187,11 +188,11 @@ class HouseholdAdvancedHpEvPvBatteryConfig(SystemSetupConfigBase):
         # household_config.hp_config.set_thermal_output_power_in_watt = (
         #     6000  # default value leads to switching on-off very often
         # )
-        household_config.hp_config.minimum_idle_time_in_seconds = (
-            900  # default value leads to switching on-off very often
+        household_config.hp_config.minimum_idle_time_in_seconds = Quantity(
+            900, Seconds  # default value leads to switching on-off very often
         )
-        household_config.hp_config.minimum_running_time_in_seconds = (
-            900  # default value leads to switching on-off very often
+        household_config.hp_config.minimum_running_time_in_seconds = Quantity(
+            900, Seconds  # default value leads to switching on-off very often
         )
 
         # set same heating threshold
@@ -202,7 +203,7 @@ class HouseholdAdvancedHpEvPvBatteryConfig(SystemSetupConfigBase):
             set_heating_threshold_outside_temperature_in_celsius
         )
 
-        household_config.hp_config.flow_temperature_in_celsius = 21  # Todo: check value
+        household_config.hp_config.flow_temperature_in_celsius = Quantity(21, Celsius)  # Todo: check value
 
         # set dhw storage volume, because default(volume = 230) leads to an error
         household_config.dhw_storage_config.volume = 250

@@ -25,7 +25,7 @@ class UnitType(type):
         namespace: dict[str, Any],
         /,
         **kwargs: Any,
-    ) -> T: 
+    ) -> T:
         pass
 
     def __new__(

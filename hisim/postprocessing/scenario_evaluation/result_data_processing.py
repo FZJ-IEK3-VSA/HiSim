@@ -6,9 +6,7 @@ import os
 from typing import Dict, Any, Tuple, Optional, List
 import pandas as pd
 
-from hisim.postprocessing.scenario_evaluation.result_data_collection import (
-    ResultDataTypeEnum,
-)
+from hisim.postprocessing.scenario_evaluation.result_data_collection import ResultDataTypeEnum
 from hisim import log
 
 
@@ -60,8 +58,7 @@ class ScenarioDataProcessing:
                 key_for_scenario_one,
                 key_for_current_scenario,
             ) = ScenarioDataProcessing.check_if_scenario_exists_and_filter_dataframe_for_scenarios_dict(
-                data_frame=file_df,
-                dict_of_scenarios_to_check=dict_of_scenarios_to_check,
+                data_frame=file_df, dict_of_scenarios_to_check=dict_of_scenarios_to_check,
             )
 
         return (
@@ -85,15 +82,12 @@ class ScenarioDataProcessing:
 
     @staticmethod
     def get_statistics_of_data_and_write_to_excel(
-        filtered_data: pd.DataFrame,
-        path_to_save: str,
-        kind_of_data_set: str,
+        filtered_data: pd.DataFrame, path_to_save: str, kind_of_data_set: str,
     ) -> None:
         """Use pandas describe method to get statistical values of certain data."""
         # create a excel writer object
         with pd.ExcelWriter(  # pylint: disable=abstract-class-instantiated
-            path=os.path.join(path_to_save, f"{kind_of_data_set}_statistics.xlsx"),
-            mode="w",
+            path=os.path.join(path_to_save, f"{kind_of_data_set}_statistics.xlsx"), mode="w",
         ) as writer:
             filtered_data.to_excel(excel_writer=writer, sheet_name="filtered data")
             statistical_data = filtered_data.describe()
@@ -102,8 +96,7 @@ class ScenarioDataProcessing:
 
     @staticmethod
     def check_if_scenario_exists_and_filter_dataframe_for_scenarios(
-        data_frame: pd.DataFrame,
-        dict_of_scenarios_to_check: Dict[str, List[str]],
+        data_frame: pd.DataFrame, dict_of_scenarios_to_check: Dict[str, List[str]],
     ) -> pd.DataFrame:
         """Check if scenario exists and filter dataframe for scenario."""
         for (list_of_scenarios_to_check,) in dict_of_scenarios_to_check.values():
@@ -119,19 +112,13 @@ class ScenarioDataProcessing:
                     ):
                         aggregated_scenario_dict[scenario_to_check].append(given_scenario)
             # raise error if dict is empty
-            for (
-                key_scenario_to_check,
-                given_scenario,
-            ) in aggregated_scenario_dict.items():
+            for (key_scenario_to_check, given_scenario,) in aggregated_scenario_dict.items():
                 if given_scenario == []:
                     raise ValueError(f"Scenarios containing {key_scenario_to_check} were not found in the dataframe.")
 
             concat_df = pd.DataFrame()
             # only take rows from dataframe which are in selected scenarios
-            for (
-                key_scenario_to_check,
-                given_scenario,
-            ) in aggregated_scenario_dict.items():
+            for (key_scenario_to_check, given_scenario,) in aggregated_scenario_dict.items():
                 df_filtered_for_specific_scenarios = data_frame.loc[data_frame["scenario"].isin(given_scenario)]
                 df_filtered_for_specific_scenarios["scenario"] = [key_scenario_to_check] * len(
                     df_filtered_for_specific_scenarios["scenario"]
@@ -146,7 +133,7 @@ class ScenarioDataProcessing:
         dataframe: pd.DataFrame,
         list_of_scenarios_to_check: List,
         column_name_to_check: str,
-        # filter_level_index: int,
+        filter_level_index: int,
     ) -> pd.DataFrame:
         """Check for one scenario."""
 
@@ -170,10 +157,7 @@ class ScenarioDataProcessing:
 
         concat_df = pd.DataFrame()
         # only take rows from dataframe which are in selected scenarios
-        for (
-            key_scenario_to_check,
-            given_list_of_values,
-        ) in aggregated_scenario_dict.items():
+        for (key_scenario_to_check, given_list_of_values,) in aggregated_scenario_dict.items():
             df_filtered_for_specific_scenarios = dataframe.loc[
                 dataframe[column_name_to_check].isin(given_list_of_values)
             ]
@@ -182,7 +166,7 @@ class ScenarioDataProcessing:
 
             concat_df = pd.concat([concat_df, df_filtered_for_specific_scenarios], ignore_index=True)
 
-            # concat_df[f"scenario_{filter_level_index}"] = dataframe.loc[:, "scenario"]
+            concat_df[f"scenario_{filter_level_index}"] = dataframe.loc[:, "scenario"]
 
             del df_filtered_for_specific_scenarios
 
@@ -190,22 +174,18 @@ class ScenarioDataProcessing:
 
     @staticmethod
     def check_if_scenario_exists_and_filter_dataframe_for_scenarios_dict(
-        data_frame: pd.DataFrame,
-        dict_of_scenarios_to_check: Dict[str, List[str]],
+        data_frame: pd.DataFrame, dict_of_scenarios_to_check: Dict[str, List[str]],
     ) -> Tuple[pd.DataFrame, str, str]:
         """Check if scenario exists and filter dataframe for scenario."""
 
         concat_df = data_frame
         filter_level_index = 0
-        for (
-            scenario_to_check_key,
-            list_of_scenarios_to_check,
-        ) in dict_of_scenarios_to_check.items():
+        for (scenario_to_check_key, list_of_scenarios_to_check,) in dict_of_scenarios_to_check.items():
             concat_df = ScenarioDataProcessing.aggregate_all_values_for_one_scenario(
                 dataframe=concat_df,
                 list_of_scenarios_to_check=list_of_scenarios_to_check,
                 column_name_to_check=scenario_to_check_key,
-                # filter_level_index=filter_level_index,
+                filter_level_index=filter_level_index,
             )
 
             filter_level_index = filter_level_index + 1
@@ -241,6 +221,7 @@ class FilterClass:
             self.occuancy_consumption,
             self.heating_demand,
             self.variables_for_debugging_purposes,
+            self.flow_and_return_temperatures,
         ) = self.get_variables_to_check()
         (
             self.building_type,
@@ -272,11 +253,12 @@ class FilterClass:
             "System operational emissions for simulated period",
             "Total costs for simulated period",
             "Total CO2 emissions for simulated period",
-            "Temperature deviation of building indoor air temperature being below set temperature 19.0 Celsius",
+            "Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius",
             "Minimum building indoor air temperature reached",
-            "Temperature deviation of building indoor air temperature being above set temperature 24.0 Celsius",
+            "Temperature deviation of building indoor air temperature being above set temperature 25.0 Celsius",
             "Maximum building indoor air temperature reached",
             "Building heating load",
+            "Conditioned floor area",
             "Specific heating load",
             "Specific heating demand according to TABULA",
             "Thermal output energy of heat distribution system",
@@ -285,6 +267,24 @@ class FilterClass:
             "Thermal output energy of heat pump",
             "Specific thermal output energy of heat pump",
             "Electrical input energy of heat pump",
+            "Mean flow temperature of heat pump",
+            "Mean return temperature of heat pump",
+            "Mean temperature difference of heat pump",
+            "Max flow temperature of heat pump",
+            "Max return temperature of heat pump",
+            "Max temperature difference of heat pump",
+            "Min flow temperature of heat pump",
+            "Min return temperature of heat pump",
+            "Min temperature difference of heat pump",
+            "Mean flow temperature of heat distribution system",
+            "Mean return temperature of heat distribution system",
+            "Mean temperature difference of heat distribution system",
+            "Max flow temperature of heat distribution system",
+            "Max return temperature of heat distribution system",
+            "Max temperature difference of heat distribution system",
+            "Min flow temperature of heat distribution system",
+            "Min return temperature of heat distribution system",
+            "Min temperature difference of heat distribution system",
         ]
 
         electricity_data = [
@@ -295,6 +295,14 @@ class FilterClass:
             # use the ems production and consumption or the kpi values instead if needed
             # "ElectricityMeter|Electricity|ElectricityConsumption",
             # "ElectricityMeter|Electricity|ElectricityProduction",
+        ]
+
+        flow_and_return_temperatures = [
+            "AdvancedHeatPumpHPLib|Heating|TemperatureOutput",
+            "SimpleHotWaterStorage|Water|WaterTemperatureToHeatGenerator",
+            "SimpleHotWaterStorage|Water|WaterTemperatureToHeatDistribution",
+            "HeatDistributionSystem|Water|WaterTemperatureOutput",
+            "Weather|Temperature|DailyAverageOutsideTemperatures",
         ]
 
         occuancy_consumption = [
@@ -319,16 +327,13 @@ class FilterClass:
             occuancy_consumption,
             heating_demand,
             variables_for_debugging_purposes,
+            flow_and_return_temperatures,
         )
 
     def get_scenarios_to_check(self):
         """Get scenarios to check for scenario evaluation."""
 
-        (
-            building_type,
-            building_refurbishment_state,
-            building_age,
-        ) = self.get_building_properties_to_check()
+        (building_type, building_refurbishment_state, building_age,) = self.get_building_properties_to_check()
 
         pv_share = self.get_pv_properties_to_check()
 

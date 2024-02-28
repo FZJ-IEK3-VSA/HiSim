@@ -13,7 +13,7 @@ from hisim import log, utils
 
 from hisim.loadtypes import ComponentType, HeatingSystems, InandOutputType, LoadTypes
 from hisim.simulationparameters import SimulationParameters
-from obsolete.loadprofilegenerator_connector import OccupancyConfig
+from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnectorConfig
 
 
 def compute_energy_from_power(power_timeseries: pd.Series, seconds_per_timestep: int) -> float:
@@ -22,23 +22,24 @@ def compute_energy_from_power(power_timeseries: pd.Series, seconds_per_timestep:
         return 0.0
     return float(power_timeseries.sum() * seconds_per_timestep / 3.6e6)
 
+# TODO: enable this functio for the lpg_utsp_connector if needed
+# so far he lpg_utsp_connector only has the predefined profile CHR01 and not the AVG profiles
+# def get_factor_cooking(occupancy_config: UtspLpgConnectorConfig) -> float:
+#     """Reads in portion of electricity consumption which is assigned to cooking."""
 
-def get_factor_cooking(occupancy_config: OccupancyConfig) -> float:
-    """Reads in portion of electricity consumption which is assigned to cooking."""
-
-    if occupancy_config.profile_name != "AVG":
-        return 0
-    scaling_factors = pd.read_csv(
-        utils.HISIMPATH["occupancy_scaling_factors_per_country"], encoding="utf-8", sep=";", index_col=1,
-    )
-    if occupancy_config.country_name in scaling_factors.index:
-        scaling_factor_line = scaling_factors.loc[occupancy_config.country_name]
-    else:
-        scaling_factor_line = scaling_factors.loc["EU"]
-        log.warning(
-            "Scaling Factor for " + occupancy_config.country_name + "is not available, EU average is used per default."
-        )
-    return float(scaling_factor_line["ratio cooking to total"])
+#     if occupancy_config.profile_name != "AVG":
+#         return 0
+#     scaling_factors = pd.read_csv(
+#         utils.HISIMPATH["occupancy_scaling_factors_per_country"], encoding="utf-8", sep=";", index_col=1,
+#     )
+#     if occupancy_config.country_name in scaling_factors.index:
+#         scaling_factor_line = scaling_factors.loc[occupancy_config.country_name]
+#     else:
+#         scaling_factor_line = scaling_factors.loc["EU"]
+#         log.warning(
+#             "Scaling Factor for " + occupancy_config.country_name + "is not available, EU average is used per default."
+#         )
+#     return float(scaling_factor_line["ratio cooking to total"])
 
 
 def compute_seasonal(
@@ -129,7 +130,7 @@ def generate_csv_for_database(
     results: pd.DataFrame,
     simulation_parameters: SimulationParameters,
     building_data: pd.DataFrame,
-    occupancy_config: Optional[OccupancyConfig],
+    occupancy_config: Optional[UtspLpgConnectorConfig],
 ) -> None:
     """Extracts relevant data from the HiSIM simulation and puts it together in a .csv file.
 
@@ -398,7 +399,9 @@ def generate_csv_for_database(
     if occupancy_config is None:
         factor_cooking = 0.0
     else:
-        factor_cooking = get_factor_cooking(occupancy_config)
+        log.warning("The factor_cooking can not be calcuated with the lpg_utsp_connector. "
+                    + "The AVG profiles must be implemented in the lpg_ustp_connector first.")
+        factor_cooking = 0.0  # get_factor_cooking(occupancy_config)
 
     csv_frame_annual[("RemainingLoad", "Electricity [kWh]")] = remaining_electricity_annual * (1 - factor_cooking)
     csv_frame_annual[("Cooking", "Electricity [kWh]")] = remaining_electricity_annual * factor_cooking

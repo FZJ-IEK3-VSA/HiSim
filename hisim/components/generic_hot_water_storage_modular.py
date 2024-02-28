@@ -6,6 +6,7 @@ DHW hot water storage or as buffer storage.
 """
 
 from dataclasses import dataclass
+
 # clean
 # Generic/Built-in
 from typing import Any, List, Optional, Tuple
@@ -28,7 +29,6 @@ from hisim.components import (
 )
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 from hisim.simulationparameters import SimulationParameters
-from obsolete.loadprofilegenerator_connector import Occupancy
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -222,12 +222,7 @@ class StorageState:
 
         For heating up the building in winter. Here 30°C is set as the lower limit for the temperature in the buffer storage in winter.
         """
-        return (
-            (self.temperature_in_kelvin - 273.15 - 25)
-            * self.volume_in_l
-            * 0.977
-            * 4.182
-        )
+        return (self.temperature_in_kelvin - 273.15 - 25) * self.volume_in_l * 0.977 * 4.182
 
 
 # class HotWaterStorage(dycp.DynamicComponent):
@@ -297,7 +292,6 @@ class HotWaterStorage(cp.Component):
                 lt.Units.LITER,
                 mandatory=True,
             )
-            self.add_default_connections(self.get_occupancy_default_connections())
             self.add_default_connections(self.get_utsp_default_connections())
         elif self.use == lt.ComponentType.BUFFER:
             self.heat_controller_target_percentage_channel: cp.ComponentInput = self.add_input(
@@ -352,20 +346,6 @@ class HotWaterStorage(cp.Component):
         self.add_default_connections(self.get_default_connections_from_generic_heat_pump_modular())
         self.add_default_connections(self.get_heatsource_default_connections())
         self.add_default_connections(self.get_chp_default_connections())
-
-    def get_occupancy_default_connections(self):
-        """Sets occupancy default connections in hot water storage."""
-
-        connections = []
-        occupancy_classname = Occupancy.get_classname()
-        connections.append(
-            cp.ComponentConnection(
-                HotWaterStorage.WaterConsumption,
-                occupancy_classname,
-                Occupancy.WaterConsumption,
-            )
-        )
-        return connections
 
     def get_utsp_default_connections(self):
         """Sets occupancy default connections in hot water storage."""

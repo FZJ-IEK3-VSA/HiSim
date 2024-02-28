@@ -194,6 +194,12 @@ After the simulator runs all time steps, the post processing (`postprocessing.py
 plots the data and
 generates a report.
 
+## Contributions and Collaborations
+HiSim welcomes any kind of feedback, contributions, and collaborations. 
+If you are interested in joining the project, adding new features, or providing valuable insights, feel free to reach out (email to k.rieck@fz-juelich.de) and participate in our HiSim developer meetings held every second Monday. Additionally, we encourage you to utilize our Issue section to share feedback or report any bugs you encounter.
+We look forward to your contributions and to making meaningful improvements. 
+Happy coding!
+
 ## License
 
 MIT License

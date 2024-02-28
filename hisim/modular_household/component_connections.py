@@ -35,11 +35,11 @@ from hisim.components import (
     generic_pv_system,
     generic_smart_device,
     weather,
+    loadprofilegenerator_utsp_connector
 )
 
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.simulator import SimulationParameters
-from obsolete import loadprofilegenerator_connector
 
 
 def get_heating_system_efficiency(
@@ -178,7 +178,7 @@ def configure_cars(
         Integer tracking component hierachy for EMS.
     ev_included: bool
         True if Car is electric, False if it is diesel.
-    occupancy_config: loadprofilegenerator_connector.OccupancyConfig
+    occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnector,
         Unique description of load profile generator call (mobility is related!)
 
 
@@ -437,7 +437,7 @@ def configure_battery(
 def configure_water_heating(
     my_sim: Any,
     my_simulation_parameters: SimulationParameters,
-    my_occupancy: loadprofilegenerator_connector.Occupancy,
+    my_occupancy: loadprofilegenerator_utsp_connector.UtspLpgConnector,
     water_heating_system_installed: lt.HeatingSystems,
     count: int,
     number_of_apartments: float,
@@ -522,7 +522,7 @@ def configure_water_heating(
 def configure_water_heating_electric(
     my_sim: Any,
     my_simulation_parameters: SimulationParameters,
-    my_occupancy: loadprofilegenerator_connector.Occupancy,
+    my_occupancy: loadprofilegenerator_utsp_connector.UtspLpgConnector,
     my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
     my_weather: weather.Weather,
     water_heating_system_installed: lt.HeatingSystems,

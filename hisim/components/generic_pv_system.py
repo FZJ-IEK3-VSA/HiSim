@@ -250,7 +250,8 @@ class PVSystem(cp.Component):
 
     # Outputs
     ElectricityOutput = "ElectricityOutput"
-    ElectricityOutputEnergy = "ElectricityOutputEnergy"
+    # Additional output channels must not contain 'ElectricityOutput' or dynamic components will fail.
+    ElectricityOutputEnergy = "ElectricitityEnergyOutput"
 
     # Similar components to connect to:
     # 1. Weather

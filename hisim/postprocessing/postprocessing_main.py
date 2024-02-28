@@ -36,7 +36,6 @@ from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDict
 from hisim.loadtypes import OutputPostprocessingRules
 
 
-
 class PostProcessor:
     """Core Post processor class."""
 

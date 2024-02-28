@@ -15,7 +15,7 @@ import pandas as pd
 from hisim import log
 from hisim import utils
 from hisim.component import ComponentOutput
-from hisim.components import building
+from hisim.components import building, loadprofilegenerator_utsp_connector
 from hisim.json_generator import JsonConfigurationGenerator
 from hisim.modular_household.interface_configs.kpi_config import KPIConfig
 from hisim.postprocessing import charts
@@ -35,7 +35,6 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.loadtypes import OutputPostprocessingRules
 
-from obsolete import loadprofilegenerator_connector
 
 
 class PostProcessor:
@@ -211,7 +210,7 @@ class PostProcessor:
             for elem in ppdt.wrapped_components:
                 if isinstance(elem.my_component, building.Building):
                     building_data = elem.my_component.my_building_information.buildingdata
-                elif isinstance(elem.my_component, loadprofilegenerator_connector.Occupancy):
+                elif isinstance(elem.my_component, loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig):
                     occupancy_config = elem.my_component.occupancy_config
             if len(building_data) == 0:
                 log.warning("Building needs to be defined to generate csv for housing data base.")

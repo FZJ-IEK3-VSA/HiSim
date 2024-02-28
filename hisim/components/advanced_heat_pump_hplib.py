@@ -466,7 +466,7 @@ class HeatPumpHplib(Component):
 
             # Get outputs for heating mode
             p_th = results["P_th"].values[0]
-            q_th = results["Q_th"].values[0]
+            q_th = p_th * self.my_simulation_parameters.seconds_per_timestep / 3600
             p_el = results["P_el"].values[0]
             cop = results["COP"].values[0]
             eer = results["EER"].values[0]
@@ -487,7 +487,7 @@ class HeatPumpHplib(Component):
             )
 
             p_th = results["P_th"].values[0]
-            q_th = results["Q_th"].values[0]
+            q_th = p_th * self.my_simulation_parameters.seconds_per_timestep / 3600
             p_el = results["P_el"].values[0]
             cop = results["COP"].values[0]
             eer = results["EER"].values[0]

@@ -251,7 +251,7 @@ class PVSystem(cp.Component):
     # Outputs
     ElectricityOutput = "ElectricityOutput"
     # Additional output channels must not contain 'ElectricityOutput' or dynamic components will fail.
-    ElectricityOutputEnergy = "ElectricitityEnergyOutput"
+    ElectricitityEnergyOutput = "ElectricitityEnergyOutput"
 
     # Similar components to connect to:
     # 1. Weather
@@ -356,15 +356,15 @@ class PVSystem(cp.Component):
             output_description=f"here a description for PV {self.ElectricityOutput} will follow.",
         )
 
-        self.electricity_output_energy_channel: cp.ComponentOutput = self.add_output(
+        self.electricity_energy_output_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.ElectricityOutputEnergy,
+            field_name=self.ElectricitityEnergyOutput,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT_HOUR,
             postprocessing_flag=[
                 lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
             ],
-            output_description=f"Here a description for PV {self.ElectricityOutputEnergy} will follow.",
+            output_description=f"Here a description for PV {self.ElectricitityEnergyOutput} will follow.",
         )
 
         self.add_default_connections(self.get_default_connections_from_weather())

@@ -56,13 +56,13 @@ def test_photovoltaic():
     my_pvs.i_simulate(timestep, stsv, False)
     log.information("pv electricity output [W]: " + str(stsv.values[my_pvs.electricity_output_channel.global_index]))
     log.information(
-        "pv electricity energy output [Wh]: " + str(stsv.values[my_pvs.electricity_output_energy_channel.global_index])
+        "pv electricity energy output [Wh]: " + str(stsv.values[my_pvs.electricity_energy_output_channel.global_index])
     )
 
     # check pv electricity output [W] in timestep 655
     assert stsv.values[my_pvs.electricity_output_channel.global_index] == 334.8800144821672
 
     # Check pv energy output channel [Wh] which should be the electricity output in W times the timestep length in hours
-    assert pytest.approx(stsv.values[my_pvs.electricity_output_energy_channel.global_index]) == 334.880014 * (
+    assert pytest.approx(stsv.values[my_pvs.electricity_energy_output_channel.global_index]) == 334.880014 * (
         seconds_per_timestep / 3600
     )

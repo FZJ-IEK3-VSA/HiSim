@@ -12,7 +12,6 @@ from hisim.hisim_main import main
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import SimulationParameters
 from hisim.system_setup_starter import make_system_setup
-from hisim.units import Quantity, Unitless
 
 MY_PATH_TO_MODULE = "../system_setups/household_heat_pump.py"
 MY_SIMULATION_PARAMETERS = {

@@ -474,7 +474,7 @@ class PVSystem(cp.Component):
                 self.ac_power_ratios_for_all_timesteps_output[timestep] * self.pvconfig.power_in_watt,
             )
             stsv.set_output_value(
-                self.electricity_output_energy_channel,
+                self.electricity_energy_output_channel,
                 self.ac_power_ratios_for_all_timesteps_output[timestep]
                 * self.pvconfig.power_in_watt
                 * self.my_simulation_parameters.seconds_per_timestep
@@ -512,7 +512,7 @@ class PVSystem(cp.Component):
 
             stsv.set_output_value(self.electricity_output_channel, ac_power_in_watt)
             stsv.set_output_value(
-                self.electricity_output_energy_channel,
+                self.electricity_energy_output_channel,
                 ac_power_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3600,
             )
 

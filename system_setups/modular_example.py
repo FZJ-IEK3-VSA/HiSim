@@ -28,7 +28,6 @@ from hisim.modular_household.interface_configs.modular_household_config import (
 )
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
-from obsolete import loadprofilegenerator_connector
 
 
 def cleanup_old_result_folders():
@@ -240,17 +239,15 @@ def setup_function(
         )
 
     else:
-        # Build occupancy
-        my_occupancy_config = loadprofilegenerator_connector.OccupancyConfig(
-            "Occupancy",
-            occupancy_profile or "",  # type: ignore
-            location,
-            not smart_devices_included,
-            number_of_apartments=my_building_information.number_of_apartments,
-            predictive=False,
-            predictive_control=False,
+        # Build occupancy with predefined profile
+        my_occupancy_config = (
+            loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
         )
-        my_occupancy = loadprofilegenerator_connector.Occupancy(
+        my_occupancy_config.data_acquisition_mode = (
+            loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
+        )
+
+        my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
             config=my_occupancy_config,
             my_simulation_parameters=my_simulation_parameters,
         )
@@ -390,11 +387,7 @@ def setup_function(
             lt.HeatingSystems.HEAT_PUMP,
             lt.HeatingSystems.ELECTRIC_HEATING,
         ]:
-            (
-                _,
-                my_buffer,
-                count,
-            ) = component_connections.configure_heating_with_buffer_electric(
+            (_, my_buffer, count,) = component_connections.configure_heating_with_buffer_electric(
                 my_sim=my_sim,
                 my_simulation_parameters=my_simulation_parameters,
                 my_building=my_building,
@@ -408,11 +401,7 @@ def setup_function(
                 count=count,
             )
         else:
-            (
-                _,
-                my_buffer,
-                count,
-            ) = component_connections.configure_heating_with_buffer(
+            (_, my_buffer, count,) = component_connections.configure_heating_with_buffer(
                 my_sim=my_sim,
                 my_simulation_parameters=my_simulation_parameters,
                 my_building=my_building,

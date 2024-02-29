@@ -28,7 +28,7 @@ from typing import List
 import pandas as pd
 import os
 from hisim import log
-from hisim.components import (controller_predicitve_C4L_electrolyzer_fuelcell, controller_C4L_electrolyzer)
+from hisim.components import (controller_C4L_electrolyzer_fuelcell_1a_1b,controller_predicitve_C4L_electrolyzer_fuelcell, controller_C4L_electrolyzer)
 from hisim import loadtypes
 from hisim import utils
 from hisim import component as cp
@@ -186,7 +186,8 @@ class C4LElectrolyzer(cp.Component):
         #self.add_default_connections(self.get_default_connections_from_h2_storage())
         self.add_default_connections(self.get_default_connections_from_controller_C4L_electrolyzer())
         self.add_default_connections(self.get_default_connections_from_electrolyzerfuelcell_controller())
-        
+        self.add_default_connections(self.get_default_connections_from_electrolyzerfuelcell_nonpredictivecontroller())
+
         # Inputs
         self.electrolyzer_onoff_signal_channel: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -206,6 +207,20 @@ class C4LElectrolyzer(cp.Component):
                 C4LElectrolyzer.ElectrolyzerControllerOnOffSignal ,
                 electrolyzer_classname,
                 controller_C4L_electrolyzer.C4LelectrolyzerController.ElectrolyzerControllerOnOffSignal,
+            )
+        )
+        return connections
+    
+    def get_default_connections_from_electrolyzerfuelcell_nonpredictivecontroller(self) -> List[cp.ComponentConnection]:
+        log.information("setting fuel cell default connections in generic H2 storage")
+        connections: List[cp.ComponentConnection] = []
+        electrolyzer_classname = controller_C4L_electrolyzer_fuelcell_1a_1b.C4Lelectrolyzerfuelcell1a1bController.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+
+                C4LElectrolyzer.ElectrolyzerControllerOnOffSignal ,
+                electrolyzer_classname,
+                controller_C4L_electrolyzer_fuelcell_1a_1b.C4Lelectrolyzerfuelcell1a1bController.ElectrolyzerControllerOnOffSignal,
             )
         )
         return connections
@@ -252,7 +267,7 @@ class C4LElectrolyzer(cp.Component):
             # states are saved after each timestep, outputs after each iteration
             # outputs have to be in line with states, so if convergence is forced outputs are aligned to last known state.
             self.state = self.processed_state.clone()
-            print("Noch etwas zu tun-Static Electrolyzer/Hydrogen Storage Size")
+
         else:
             """Simulates the component."""
 
@@ -260,7 +275,7 @@ class C4LElectrolyzer(cp.Component):
             stsv.set_output_value(self.hydrogen_output_channel, self.state.state * hydrogen_production) 
             stsv.set_output_value(self.output_needed_electricity, self.state.state * self.config.p_el)
             self.processed_state = self.state.clone() #Neu
-              
+
                 
 
         # write values to state

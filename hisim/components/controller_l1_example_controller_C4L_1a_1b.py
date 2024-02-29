@@ -179,7 +179,7 @@ class SimpleController(Component):
             output_description=f"here a description for {self.BatteryLoadingPowerWish} will follow.",
         )
 
-               
+
         self.electricity_to_or_from_gridOutput: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ElectricityToOrFromGrid,
@@ -226,7 +226,7 @@ class SimpleController(Component):
         )
 
 
- 
+
         self.state = 0
         self.previous_state = self.state
 
@@ -340,7 +340,7 @@ class SimpleController(Component):
     ) -> None:
         if force_convergence:
             return
-        	
+
         def electricity_from_CHP_Battery_to_houseFct(CHP_ElectricityDelivery, BatteryAcBatteryPower, electricity_to_or_from_grid, H2Storage_ElectricityConsumption, timestep):
             
             if CHP_ElectricityDelivery>0 and BatteryAcBatteryPower >= 0 and electricity_to_or_from_grid >= 0: #SURPLOS ELECTRICITY from Fuel Cell/CHP is stored in battery and/or fed in grid
@@ -425,7 +425,7 @@ class SimpleController(Component):
 
         
         
-        if self.config.szenario == '1b':
+        if self.config.szenario == '1b' or self.config.szenario == '2a':
             #Abzug aller Stromproduktionen und Verbräuche
 
             

@@ -207,6 +207,8 @@ class C4LelectrolyzerController(cp.Component):
 
                 else:
                     self.state.RunElectrolyzer = 1 #electrolyzer is running "on mode"
+            elif hydrogen_soc_ok:
+                self.state.RunElectrolyzer = 0
 
             self.processed_state = self.state.clone()
         

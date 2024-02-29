@@ -95,7 +95,8 @@ def saveexcelforevaluations(input_variablen, excelfilepathallresults, excel_file
     #------------    
     #Add Input Data to Economic Excel file
     # Select the desired worksheet
-    worksheet = workbook['Anlagendaten']  # 'Anlagendaten' durch den tatsächlichen Namen ersetzen
+    worksheet = workbook['Anlagendaten']  # [x]  Hydrogen Storage Kapazität:  Anpassung des tatsächlich maximal notwendigen Kapazität nötig! Derzeit wird so getan, als würde der Hydrogen storage keine Verluste haben! 
+    #'Anlagendaten' durch den tatsächlichen Namen ersetzen
 
     #In first simulation round, delete all data in worksheet "Anlagendaten"
     if PreResultNumber == 0:

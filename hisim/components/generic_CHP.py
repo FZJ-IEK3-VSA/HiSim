@@ -13,7 +13,7 @@ from hisim import utils
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import log
-from hisim.components import (controller_l1_chp, controller_predicitve_C4L_electrolyzer_fuelcell)
+from hisim.components import (controller_l1_chp, controller_predicitve_C4L_electrolyzer_fuelcell, controller_C4L_electrolyzer_fuelcell_1a_1b)
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Frank Burkrad, Maximilian Hillen,"
@@ -208,7 +208,7 @@ class SimpleCHP(cp.Component):
             )
         self.add_default_connections(self.get_default_connections_from_chp_controller())
         self.add_default_connections(self.get_default_connections_from_electrolyzerfuelcell_controller())
-
+        self.add_default_connections(self.get_default_connections_from_electrolyzerfuelcell_nonpredictivecontroller())
 
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""
@@ -284,6 +284,28 @@ class SimpleCHP(cp.Component):
                 SimpleCHP.CHPControllerHeatingModeSignal ,
                 controller_classname,
                 controller_predicitve_C4L_electrolyzer_fuelcell.C4LelectrolyzerfuelcellpredictiveController.CHPControllerHeatingModeSignal,
+            )
+        )
+        return connections
+    
+    def get_default_connections_from_electrolyzerfuelcell_nonpredictivecontroller(self,) -> List[cp.ComponentConnection]:
+    
+        """Sets default connections for the FuelCell non predictive Controller."""
+        log.information("setting fuel cell controller default connections in L1 CHP/Fuel Cell Controller")
+        connections: List[cp.ComponentConnection] = []
+        controller_classname1 = controller_C4L_electrolyzer_fuelcell_1a_1b.C4Lelectrolyzerfuelcell1a1bController.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                SimpleCHP.CHPControllerOnOffSignal,
+                controller_classname1,
+                controller_C4L_electrolyzer_fuelcell_1a_1b.C4Lelectrolyzerfuelcell1a1bController.FuelCellControllerOnOffSignal,
+            )
+        )
+        connections.append(
+            cp.ComponentConnection(
+                SimpleCHP.CHPControllerHeatingModeSignal ,
+                controller_classname1,
+                controller_C4L_electrolyzer_fuelcell_1a_1b.C4Lelectrolyzerfuelcell1a1bController.CHPControllerHeatingModeSignal,
             )
         )
         return connections

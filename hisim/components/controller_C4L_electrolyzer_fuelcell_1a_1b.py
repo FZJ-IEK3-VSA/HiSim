@@ -31,7 +31,7 @@ __status__ = "development"
 
 @dataclass_json
 @dataclass
-class C4LelectrolyzerfuelcellpredictiveControllerConfig(ConfigBase):
+class C4Lelectrolyzerfuelcell1a1bControllerConfig(ConfigBase):
     """CHP Controller Config."""
 
     #: name of the device
@@ -49,16 +49,16 @@ class C4LelectrolyzerfuelcellpredictiveControllerConfig(ConfigBase):
     off_on_SOEC : int
 
     @staticmethod
-    def get_default_config_electrolyzerfuelcell() -> "C4LelectrolyzerfuelcellpredictiveControllerConfig":
+    def get_default_config_electrolyzerfuelcell() -> "C4Lelectrolyzerfuelcell1a1bControllerConfig":
         """Returns default configuration for the CHP controller."""
-        config = C4LelectrolyzerfuelcellpredictiveControllerConfig(
+        config = C4Lelectrolyzerfuelcell1a1bControllerConfig(
             name="Electrolyzer FuelCell Controller", source_weight=1, use=LoadTypes.GAS,  h2_soc_upper_threshold_electrolyzer=0,h2_soc_lower_threshold_fuelcell = 0 , on_off_SOEC = 0, off_on_SOEC = 0)
         return config
 
 
 
 
-class C4LelectrolyzerfuelcellpredictiveControllerState:
+class C4Lelectrolyzerfuelcell1a1bControllerState:
     """Data class that saves the state of the electrolyzer controller."""
     def __init__(
         self,
@@ -75,9 +75,9 @@ class C4LelectrolyzerfuelcellpredictiveControllerState:
         self.RunFuelCell: int = RunFuelCell
         self.mode: int = mode
  
-    def clone(self) -> "C4LelectrolyzerfuelcellpredictiveControllerState":
+    def clone(self) -> "C4Lelectrolyzerfuelcell1a1bControllerState":
         """Copies the current instance."""
-        return C4LelectrolyzerfuelcellpredictiveControllerState(
+        return C4Lelectrolyzerfuelcell1a1bControllerState(
             RunElectrolyzer=self.RunElectrolyzer,
             RunFuelCell= self.RunFuelCell,
             mode = self.mode,
@@ -100,7 +100,7 @@ class C4LelectrolyzerfuelcellpredictiveControllerState:
     #     self.RunElectrolyzer = 0
 
 
-class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
+class C4Lelectrolyzerfuelcell1a1bController(cp.Component):
     """
     """
 
@@ -114,10 +114,10 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
 
     @utils.measure_execution_time
     def __init__(
-        self, my_simulation_parameters: SimulationParameters, config: C4LelectrolyzerfuelcellpredictiveControllerConfig
+        self, my_simulation_parameters: SimulationParameters, config: C4Lelectrolyzerfuelcell1a1bControllerConfig
     ) -> None:
         """For initializing."""
-        if not config.__class__.__name__ == C4LelectrolyzerfuelcellpredictiveControllerConfig.__name__:
+        if not config.__class__.__name__ == C4Lelectrolyzerfuelcell1a1bControllerConfig.__name__:
             raise ValueError("Wrong config class. Got a " + config.__class__.__name__)
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
@@ -133,9 +133,9 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
         #     / self.my_simulation_parameters.seconds_per_timestep
         # )
 
-        self.state: C4LelectrolyzerfuelcellpredictiveControllerState = C4LelectrolyzerfuelcellpredictiveControllerState(0, 0, 0)
-        self.previous_state: C4LelectrolyzerfuelcellpredictiveControllerState = self.state.clone()
-        self.processed_state: C4LelectrolyzerfuelcellpredictiveControllerState = self.state.clone()
+        self.state: C4Lelectrolyzerfuelcell1a1bControllerState = C4Lelectrolyzerfuelcell1a1bControllerState(0, 0, 0)
+        self.previous_state: C4Lelectrolyzerfuelcell1a1bControllerState = self.state.clone()
+        self.processed_state: C4Lelectrolyzerfuelcell1a1bControllerState = self.state.clone()
 
         # Component Outputs
         self.electrolyzer_onoff_signal_channel: cp.ComponentOutput = self.add_output(
@@ -180,7 +180,7 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
         h2_storage_classname = generic_hydrogen_storage.GenericHydrogenStorage.get_classname()
         connections.append(
             cp.ComponentConnection(
-                C4LelectrolyzerfuelcellpredictiveController.HydrogenSOC,
+                C4Lelectrolyzerfuelcell1a1bController.HydrogenSOC,
                 h2_storage_classname,
                 generic_hydrogen_storage.GenericHydrogenStorage.HydrogenSOC,
             )

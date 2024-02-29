@@ -4,6 +4,7 @@ import pytest
 from hisim.units import Quantity, Watt
 
 
+@pytest.mark.base
 def test_instance_counter():
     """The InstanceCounter should raise RuntimeError if too many Instances of `Quantity` exist."""
     with pytest.raises(RuntimeError):

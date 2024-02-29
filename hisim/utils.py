@@ -452,5 +452,5 @@ class InstanceCounter(metaclass=InstanceCounterMeta):
     def __post_init__(self):
         """Runs after initialization of the dataclass."""
         self.instance_id = next(self.__class__.ids)
-        if self.instance_id > 10e4:
-            raise RuntimeError("Too many instances.")
+        if self.instance_id > 1e3:
+            raise RuntimeError(f"Too many instances of. Consider using a more performant or simpler type (e.g. int, float).")

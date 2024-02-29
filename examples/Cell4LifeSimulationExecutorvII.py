@@ -6,6 +6,7 @@ os.chdir('C://Users//Standard//Desktop//hisim//HiSim//')
 sys.path.append("C://Users//Standard//Desktop//hisim//HiSim//examples")
 sys.path.append("C://Users//Standard//Desktop//hisim//HiSim//")
 import Cell4LifeSzenariovII
+import Cell4LifeSzenario1a_1b
 from hisim.result_path_provider import ResultPathProviderSingleton
 sys.path.append("C://Users//Standard//Desktop//hisim//HiSim//hisim//postprocessing//")
 os.chdir("C://Users//Standard//Desktop//hisim//HiSim//hisim//postprocessing//")
@@ -17,15 +18,41 @@ import math
 
 """This class executes Cell4Life Simulation
     
-    -) "Variation Parameters": Parameters, which should be variied 
+    Script to Start Cell4Life "Gesamtmodell".
+        
+    Executor for Szenario: "1a", "1b"
+    The present script executes the hisim example "Cell4LifeSzenario1a_1b.py"
+
+
+    ###
+    Szenario 1a: Batterie is providing energy for the complete household during the complete year and not only for electrolyzer. 
+                    Electrolyzer and Fuel Cell is seasonal turned on or off (Constant running mode)
+    Szenario 1b: Electrolyzer and Fuel Cell is running constant for a season (as in Szenario 1a). The difference to Szenario 1a is,
+                    that if the electrolyzer is running ,the batterie is only providing energy for the electrolyzer. If the fuel cell is running,
+                    the batterie is providing energy also for the complete household. Please consider, that in the economic excel file, electricity grid tarifs
+                    are considered, if the batterie is providing electricity for the household due to the fact, that household means "apartment house". The electricity
+                    from batterie to each appartment is running over the general grid which means, that tarifs for using the general grid must be paid. 
+    Szenario 2: xxx
+    ### 
+
+    -) Parameters for automatic parameter-variations: Are prepared for variation in the present execution script
+        All other parameters are assumed to be static and can be found in "Cell4LifeSzenario1a_1b.py" or within the components.
  
-    -) Other "static parameters" are seen as static and defined in "Cell4Life-Model-_d3.py" example
+    -) Results of simulation are saved in excel file for economic assessment: 
+        For that, an excel file prepared in advance has to be saved in the path, specified within the present execution script.
+        Original Excel File for economic assessment: Sim_Oek_Assessment_v7.xlsx --> can be found on dropbox: 4ER_Projekte_intern\CELL4LIFE\00_Arbeitsbereich\AP6\Auswertung_ExcelFiles\Einzelauswertung
+    
+    All for the simulation relevant Excel files for e.g economic assessment, which were not part of the original "hisim tool", can be found:
+         4ER_Projekte_intern\CELL4LIFE\00_Arbeitsbereich\AP6\Auswertung_ExcelFiles\Einzelauswertung\
+         
+         
+    Please copy them in folders, specified within the code, according to your local folder structure.
 
 
  """
 
 
-szenario = "2a" 
+szenario = "1b" 
 szenarioUnit = "-"
 
 
@@ -82,7 +109,7 @@ for BatterieFaktor in BatterieFaktorList:
             param_df.to_csv("examples/params_to_loop.csv", sep=",", index= False)
             
                     
-            input_variablen = Cell4LifeSzenariovII.InputParameter()
+            input_variablen = Cell4LifeSzenario1a_1b.InputParameter()
            
 
             charging_rate = input_variablen["p_el_elektrolyzer"]["value"] / (3600*40000) #umrechnung von Watt [=Joule/Sekunde, Leistung) p_el in  kg/s H2
@@ -99,7 +126,7 @@ for BatterieFaktor in BatterieFaktorList:
 
             param_df.to_csv("examples/params_to_loop.csv", sep=",", index= False)
             #del param_df
-            sys.argv = ["hisim_main.py", "examples/Cell4LifeSzenariovII.py", "Cell4Life"]
+            sys.argv = ["hisim_main.py", "examples/Cell4LifeSzenario1a_1b.py", "Cell4Life"]
             with open("C:/Users/Standard/Desktop/hisim/HiSim/hisim/hisim_main.py") as f:        #with --> Handler--> mach etwas mit ... führe es aus...mache es wieder zu -> with kümmert sich um das :)
                 exec(f.read())
             
@@ -138,7 +165,7 @@ for BatterieFaktor in BatterieFaktorList:
             
             
             #Save all Data in the created excel files
-            input_variablen = Cell4LifeSzenariovII.InputParameter()
+            input_variablen = Cell4LifeSzenario1a_1b.InputParameter()
             Cell4Life_Postprocessing.saveInputdata(input_variablen)
             #Cell4Life_Postprocessing.saveexcelforevaluations(input_variablen, excelfilepathallresults1, excel_filename1)
             Cell4Life_Postprocessing.save_data_in_excel_for_economic_assessment(input_variablen, excelfilepathresults2)

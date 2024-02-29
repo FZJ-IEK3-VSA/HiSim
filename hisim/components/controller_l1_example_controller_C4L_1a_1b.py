@@ -425,7 +425,7 @@ class SimpleController(Component):
 
         
         
-        if self.config.szenario == '1b' or self.config.szenario == "2a":
+        if self.config.szenario == '1b':
             #Abzug aller Stromproduktionen und Verbräuche
 
             
@@ -463,7 +463,7 @@ class SimpleController(Component):
                 part_pv_to_grid = 0
             
             #Brennstoffzellenbetrieb oder Brennstoffzelle ist nicht im Betrieb UND Elektrolyseur ist nicht im Betrieb
-            if Electrolyzer_ElectricityConsumption == 0 and CHP_ElectricityDelivery >= 0:  ##Sind wir im Brennstoffzellenebetrieb oder ist gra nichts im Betrieb? -->  Batterie deckt auch Haus Bedarf, wird aber nur von Überschussstrom der CHP aufgeladen!
+            if Electrolyzer_ElectricityConsumption == 0 and CHP_ElectricityDelivery >= 0:  ##Sind wir im Brennstoffzellenebetrieb oder ist gar nichts im Betrieb? -->  Batterie deckt auch Haus Bedarf, wird aber nur von Überschussstrom der CHP aufgeladen!
                 #print(timestep)
                 Estatus_house = General_PhotovoltaicDelivery - General_ElectricityConsumptiom ##Decke zuerst mit der PV den Strombedarf des Hauses // 
                 part_pv_to_grid = 0

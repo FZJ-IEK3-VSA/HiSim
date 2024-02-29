@@ -15,12 +15,37 @@ import math
 
 
 """This class executes Cell4Life Simulation
+       WARNING: OLD VERSION! PLEASE USE Cell4LifeSSimulationExecutorvII.py! In general, theis example is NOT maintenanced since
+            start developing "Cell4LifeSSimulationExecutorvII.py".
     
-    -) "Variation Parameters": Parameters, which should be variied 
+    Script to Start Cell4Life "Gesamtmodell": This is the execution script for the "old" Cell4Life example "Cell4LifeSzenariovI.py"
+        
+    Executor for Szenario: "1a" --> This version is old and not maintenanced anymore. Please use "Cell4LifeSSimulationExecutorvII.py"
+
+    In this old Cell4Life-hisim example "Cell4LifeSzenariovI.py" for starting szenario "1a", the energy management system 
+    component "controller_l2_energy_management_system.L2GenericEnergyManagementSystem" is integrated and used.
+    
+    Due to the code-complexity of this energy management system component, a new Cell4Life Szenario "Cell4LifeSzenario1a_1b.py" was build to integrate
+    new components for electricity management system component:
+    -"controller_l1_example_controller_C4L_1a_1b.SimpleController": which is able to start Szenario 1a, 1b
+    For execution of "Cell4LifeSzenario1a_1b.py" hisim-example, please use the the script "Cell4LifeSSimulationExecutorvII.py"
+    
+    ###
+    Szenario 1a: Batterie is providing energy for the complete household during the complete year and not only for electrolyzer. 
+                    Electrolyzer and Fuel Cell is seasonal turned on or off (Constant running mode)
+    ### 
+
+    -) Parameters for automatic parameter-variations: Are prepared for variation in the present execution script
+        All other parameters are assumed to be static and can be found in "Cell4LifeSzenariovI.py" or within the components.
  
-    -) Other "static parameters" are seen as static and defined in "Cell4Life-Model-_d3.py" example
-
-
+    -) Results of simulation are saved in excel file for economic assessment: 
+        For that, an excel file prepared in advance has to be saved in the path, specified within the present execution script.
+        Original Excel File for economic assessment: Sim_Oek_Assessment_v5.xlsx --> can be found on dropbox: 4ER_Projekte_intern\CELL4LIFE\00_Arbeitsbereich\AP6\Auswertung_ExcelFiles\Einzelauswertung
+    
+    All for the simulation relevant Excel files for e.g economic assessment, which were not part of the original "hisim tool", can be found:
+         4ER_Projekte_intern\CELL4LIFE\00_Arbeitsbereich\AP6\Auswertung_ExcelFiles\Einzelauswertung\
+         
+    Please copy them in folders, specified within this code, according to your local folder structure.
  """
 
 FuelCellPowerW_list = [50000]  #Electricity Power of Fuel Cell Power in Watt
@@ -86,7 +111,7 @@ for BatterieFaktor in BatterieFaktorList:
             with open("C:/Users/Standard/Desktop/hisim/HiSim/hisim/hisim_main.py") as f:        #with --> Handler--> mach etwas mit ... führe es aus...mache es wieder zu -> with kümmert sich um das :)
                 exec(f.read())
             
-
+            #Save Economic Results
             #Do a copy of the economic assessment excel file        
             
             if PreResultNumber == 0:
@@ -107,7 +132,7 @@ for BatterieFaktor in BatterieFaktorList:
             del copytopath2, filepath2, name2,
             
             
-            #Save all Data in the created excel files
+            #Save all Data in the created excel files (also for economic assessment)
             input_variablen = Cell4LifeSzenariovI.InputParameter()
             Cell4Life_Postprocessing.saveInputdata(input_variablen)
             #Cell4Life_Postprocessing.saveexcelforevaluations(input_variablen, excelfilepathallresults1, excel_filename1)

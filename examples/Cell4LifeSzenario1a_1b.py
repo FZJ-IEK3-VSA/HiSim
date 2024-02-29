@@ -72,10 +72,6 @@ def Cell4Life(
     
     my_simulation_parameters.predictive_control = "False"
     
-    # #Just needed if prediciton controlled is activated
-    # if input_variablen["szenario"]["value"] == "2a":
-    #     my_simulation_parameters.predictive_control = "True"
-    #     my_simulation_parameters.prediction_horizon = input_variablen["prediction_horizon"]["value"]  
     
     my_sim.set_simulation_parameters(my_simulation_parameters)
     
@@ -168,16 +164,7 @@ def Cell4Life(
     )
     my_electricity_controller.config.szenario = input_variablen["szenario"]["value"]
     
-    # Prediction Controlled
-    # elif input_variablen["szenario"]["value"] == "2a": #and input_variablen["prediciton_horizon"]["value"] > 0:
-    #     my_electricity_controller_config = (
-    #     controller_l1_example_controller_C4L_2a.SimpleControllerConfig.get_default_config()
-    #     )
-    #     my_electricity_controller = (
-    #         controller_l1_example_controller_C4L_2a.SimpleController(
-    #         name = "Elect_Controller", my_simulation_parameters=my_simulation_parameters, config=my_electricity_controller_config)
-    #     )
-    #     my_electricity_controller.config.szenario = input_variablen["szenario"]["value"]   
+
 
 
 
@@ -200,17 +187,7 @@ def Cell4Life(
         my_electrolyzer_controller = controller_C4L_electrolyzer.C4LelectrolyzerController(
             my_simulation_parameters=my_simulation_parameters, config=electrolyzer_controller_config)
     
-    elif input_variablen["szenario"]["value"] == "2a": #predictive controller of 
-        electrolyzerfuelcell_controller_config = controller_predicitve_C4L_electrolyzer_fuelcell.C4LelectrolyzerfuelcellpredictiveControllerConfig.get_default_config_electrolyzerfuelcell()
-        electrolyzerfuelcell_controller_config.off_on_SOEC = input_variablen["off_on_SOEC"]["value"]
-        electrolyzerfuelcell_controller_config.on_off_SOEC = input_variablen["on_off_SOEC"]["value"]
-        electrolyzerfuelcell_controller_config.h2_soc_upper_threshold_electrolyzer = input_variablen["h2_soc_upper_threshold_electrolyzer"]["value"]
-        electrolyzerfuelcell_controller_config.h2_soc_lower_threshold_fuelcell = input_variablen["h2_soc_lower_threshold_chp"]["value"]
-
-        my_electrolyzerfuelcellcontroller = controller_predicitve_C4L_electrolyzer_fuelcell.C4LelectrolyzerfuelcellpredictiveController(
-            my_simulation_parameters=my_simulation_parameters, config=electrolyzerfuelcell_controller_config)
-
-
+    
 
     #*Electrolyzer*s
     electrolyzer_config = C4L_electrolyzer.C4LElectrolyzerConfig.get_default_config()
@@ -292,20 +269,7 @@ def Cell4Life(
         my_electricity_controller.connect_only_predefined_connections(my_chp)
     
     
-    elif input_variablen["szenario"]["value"] == "2a":
-        my_h2storage.connect_only_predefined_connections(my_chp)
-        my_h2storage.connect_only_predefined_connections(my_electrolyzer)
-        my_electrolyzerfuelcellcontroller.connect_only_predefined_connections(my_h2storage)
-        my_electrolyzerfuelcellcontroller.connect_only_predefined_connections(my_h2storage)
-        my_chp.connect_only_predefined_connections(my_electrolyzerfuelcellcontroller)
-        my_electrolyzer.connect_only_predefined_connections(my_electrolyzerfuelcellcontroller)
-
-        my_electricity_controller.connect_only_predefined_connections(my_h2storage)
-        my_electricity_controller.connect_only_predefined_connections(my_electrolyzer)
-        my_electricity_controller.connect_only_predefined_connections(my_electricityconsumption)
-        my_electricity_controller.connect_only_predefined_connections(my_photovoltaic_system)
-        my_electricity_controller.connect_only_predefined_connections(my_chp)
-
+    
     #battery input connection
     my_electricity_controller.connect_input(
         input_fieldname=my_electricity_controller.BatteryStateOfCharge,
@@ -352,19 +316,7 @@ def Cell4Life(
         my_sim.add_component(my_wartmwater_system)
         my_sim.add_component(my_heatingsystem_system)
         my_sim.add_component(my_sum_of_heat_energy_demand)
-    elif input_variablen["szenario"]["value"] == "2a":
-        my_sim.add_component(my_photovoltaic_system)
-        my_sim.add_component(my_electricityconsumption)
-        my_sim.add_component(my_h2storage)
-        my_sim.add_component(my_advanced_battery)
-        my_sim.add_component(my_electrolyzerfuelcellcontroller)
-        my_sim.add_component(my_electrolyzer)
-        my_sim.add_component(my_chp)
-        my_sim.add_component(my_electricity_controller)
-            
-        my_sim.add_component(my_wartmwater_system)
-        my_sim.add_component(my_heatingsystem_system)
-        my_sim.add_component(my_sum_of_heat_energy_demand)
+
 
 def InputParameter():
     """

@@ -60,12 +60,7 @@ class SystemChart:
         return files
 
     def make_graphviz_chart(
-        self,
-        with_labels: bool,
-        with_class_names: bool,
-        filename: str,
-        caption: str,
-        with_results: bool = False,
+        self, with_labels: bool, with_class_names: bool, filename: str, caption: str, with_results: bool = False,
     ) -> Optional[SystemChartEntry]:
         """Generates the system charts with graphviz."""
 
@@ -75,11 +70,7 @@ class SystemChart:
             """Visualizes the entire system with graphviz."""
             graph = pydot.Dot(graph_type="digraph")
             graph.set_node_defaults(
-                color="lightgray",
-                style="filled",
-                shape="box",
-                fontname="Arial",
-                fontsize="10",
+                color="lightgray", style="filled", shape="box", fontname="Arial", fontsize="10",
             )
             node_dict = {}
             for component in self.ppdt.wrapped_components:

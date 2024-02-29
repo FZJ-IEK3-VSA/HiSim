@@ -32,13 +32,7 @@ class ResultDataCollection:
         """Initialize the class."""
         result_folder = folder_from_which_data_will_be_collected
         self.result_data_folder = os.path.join(
-            os.getcwd(),
-            os.pardir,
-            os.pardir,
-            os.pardir,
-            "system_setups",
-            "results_for_scenario_comparison",
-            "data",
+            os.getcwd(), os.pardir, os.pardir, os.pardir, "system_setups", "results_for_scenario_comparison", "data",
         )
 
         # in each system_setups/results folder should be one system setup that was executed with the default config
@@ -101,13 +95,11 @@ class ResultDataCollection:
             raise ValueError("list_with_csv_files is empty")
 
         all_csv_files = self.import_data_from_file(
-            paths_to_check=list_with_csv_files,
-            analyze_yearly_or_hourly_data=time_resolution_of_data_set,
+            paths_to_check=list_with_csv_files, analyze_yearly_or_hourly_data=time_resolution_of_data_set,
         )
 
         dict_of_csv_data = self.make_dictionaries_with_simulation_duration_keys(
-            simulation_duration_to_check=simulation_duration_to_check,
-            all_csv_files=all_csv_files,
+            simulation_duration_to_check=simulation_duration_to_check, all_csv_files=all_csv_files,
         )
 
         self.read_csv_and_generate_pandas_dataframe(
@@ -130,39 +122,28 @@ class ResultDataCollection:
         # get result folders with result data folder
         list_with_all_paths_to_check = self.get_list_of_all_relevant_scenario_data_folders(result_path=result_path)
         print(
-            "len of list with all paths to containing result data ",
-            len(list_with_all_paths_to_check),
+            "len of list with all paths to containing result data ", len(list_with_all_paths_to_check),
         )
         # filter out results that had buildings that were too hot or too cold
-        list_with_all_paths_to_check_after_filtering = (
-            self.filter_results_that_failed_to_heat_or_cool_building_sufficiently(
-                list_of_result_path_that_contain_scenario_data=list_with_all_paths_to_check
-            )
+        list_with_all_paths_to_check_after_filtering = self.filter_results_that_failed_to_heat_or_cool_building_sufficiently(
+            list_of_result_path_that_contain_scenario_data=list_with_all_paths_to_check
         )
         print(
-            "len of list with all paths after filtering ",
-            len(list_with_all_paths_to_check),
+            "len of list with all paths after filtering ", len(list_with_all_paths_to_check),
         )
         # check if duplicates are existing and ask for deletion
-        list_with_result_data_folders = (
-            self.go_through_all_scenario_data_folders_and_check_if_module_configs_are_double_somewhere(
-                list_of_result_folder_paths_to_check=list_with_all_paths_to_check_after_filtering
-            )
+        list_with_result_data_folders = self.go_through_all_scenario_data_folders_and_check_if_module_configs_are_double_somewhere(
+            list_of_result_folder_paths_to_check=list_with_all_paths_to_check_after_filtering
         )
         print(
-            "len of list with all paths after double checking for duplicates ",
-            len(list_with_result_data_folders),
+            "len of list with all paths after double checking for duplicates ", len(list_with_result_data_folders),
         )
         return list_with_result_data_folders
 
     def clean_result_directory_from_unfinished_results(self, result_path: str) -> None:
         """When a result folder does not contain the finished_flag, it will be removed from the system_setups/result folder."""
         list_of_unfinished_folders = []
-        with open(
-            os.path.join(self.result_data_folder, "failed_simualtions.txt"),
-            "a",
-            encoding="utf-8",
-        ) as file:
+        with open(os.path.join(self.result_data_folder, "failed_simualtions.txt"), "a", encoding="utf-8",) as file:
             file.write(str(datetime.datetime.now()) + "\n")
             file.write("Failed simulations found in the following folders: \n")
 
@@ -199,8 +180,7 @@ class ResultDataCollection:
         list_of_unsuccessful_folders = []
         with open(
             os.path.join(
-                self.result_data_folder,
-                "succeeded_simulations_that_showed_too_high_or_too_low_building_temps.txt",
+                self.result_data_folder, "succeeded_simulations_that_showed_too_high_or_too_low_building_temps.txt",
             ),
             "a",
             encoding="utf-8",
@@ -244,17 +224,17 @@ class ResultDataCollection:
                         kpi_data = json.load(kpi_file)
                         # check if min and max temperatures are too low or too high
                         min_temperature = float(
-                            kpi_data["Minimum building indoor air temperature reached"].get("value")
+                            kpi_data["Building"]["Minimum building indoor air temperature reached"].get("value")
                         )
                         max_temperature = float(
-                            kpi_data["Maximum building indoor air temperature reached"].get("value")
+                            kpi_data["Building"]["Maximum building indoor air temperature reached"].get("value")
                         )
-                        temp_deviation_below_set = kpi_data["Temperature deviation of building indoor air temperature being below set temperature 19.0 Celsius"].get(
-                            "value"
-                        )
-                        temp_deviation_above_set = kpi_data["Temperature deviation of building indoor air temperature being above set temperature 24.0 Celsius"].get(
-                            "value"
-                        )
+                        temp_deviation_below_set = kpi_data["Building"][
+                            "Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius"
+                        ].get("value")
+                        temp_deviation_above_set = kpi_data["Building"][
+                            "Temperature deviation of building indoor air temperature being above set temperature 25.0 Celsius"
+                        ].get("value")
                         if (
                             min_temperature <= set_heating_temperature - 5.0
                             and max_temperature >= set_cooling_temperature + 5.0
@@ -372,9 +352,7 @@ class ResultDataCollection:
         return all_csv_files
 
     def make_dictionaries_with_simulation_duration_keys(
-        self,
-        simulation_duration_to_check: str,
-        all_csv_files: List[str],
+        self, simulation_duration_to_check: str, all_csv_files: List[str],
     ) -> Dict:
         """Make dictionaries containing csv files of hourly or yearly data and according to the simulation duration of the data."""
 
@@ -407,11 +385,7 @@ class ResultDataCollection:
         return dict_of_csv_data
 
     def rename_scenario_name_of_dataframe_with_parameter_key_and_value(
-        self,
-        dataframe: pd.DataFrame,
-        parameter_key: str,
-        list_with_parameter_values: List[Any],
-        index: int,
+        self, dataframe: pd.DataFrame, parameter_key: str, list_with_parameter_values: List[Any], index: int,
     ) -> Any:
         """Rename the scenario of the given dataframe adding parameter key and value."""
         value = list_with_parameter_values[index]
@@ -486,10 +460,7 @@ class ResultDataCollection:
             # write all values that were in module config dict in the dataframe, so that you can use these values later for sorting and searching
             if list_with_module_config_dicts is not None:
                 module_config_dict = list_with_module_config_dicts[index]
-                for (
-                    module_config_key,
-                    module_config_value,
-                ) in module_config_dict.items():
+                for (module_config_key, module_config_value,) in module_config_dict.items():
                     dataframe[module_config_key] = [module_config_value] * len(dataframe["scenario"])
 
             if rename_scenario is True:
@@ -566,8 +537,7 @@ class ResultDataCollection:
         log.information(f"Saving result dataframe in {path_for_file} folder")
 
         filename = os.path.join(
-            path_for_file,
-            f"result_dataframe_for_{simulation_duration_key}_days_{kind_of_data_set}_data.csv",
+            path_for_file, f"result_dataframe_for_{simulation_duration_key}_days_{kind_of_data_set}_data.csv",
         )
 
         return filename

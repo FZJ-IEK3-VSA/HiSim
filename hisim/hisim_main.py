@@ -6,6 +6,7 @@ import os
 import sys
 from datetime import datetime
 from typing import Optional
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -48,7 +49,10 @@ def main(
     path_in_list = normalized_path.split(os.sep)
     module_filename = path_in_list[-1]
     if len(path_in_list) >= 1:
-        path_to_be_added = os.path.join(os.getcwd(), *path_in_list[:-1])
+        if Path(path_to_module).is_absolute():
+            path_to_be_added = os.path.join(os.path.abspath(os.sep), *path_in_list[:-1])
+        else:
+            path_to_be_added = os.path.join(os.getcwd(), *path_in_list[:-1])
         if os.path.isdir(path_to_be_added):
             #  Add current path to PYTHONPATH
             sys.path.append(path_to_be_added)

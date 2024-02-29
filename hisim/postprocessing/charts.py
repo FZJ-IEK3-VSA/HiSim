@@ -228,9 +228,7 @@ class BarChart(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
         plt.subplots(figsize=self.figsize, dpi=self.dpi)
         plt.bar(ind, data, width)
         plt.xticks(
-            ticks=ind,
-            labels=[str(i) for i in self.months_abbrev_uppercase],
-            fontsize=self.fontsize_ticks,
+            ticks=ind, labels=[str(i) for i in self.months_abbrev_uppercase], fontsize=self.fontsize_ticks,
         )
 
         plt.yticks(fontsize=self.fontsize_ticks)

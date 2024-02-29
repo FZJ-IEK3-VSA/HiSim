@@ -58,7 +58,6 @@ from hisim.components.weather import Weather
 from hisim.loadtypes import OutputPostprocessingRules
 from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
 from hisim.simulationparameters import SimulationParameters
-from obsolete import loadprofilegenerator_connector
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"

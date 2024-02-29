@@ -896,10 +896,10 @@ class PostProcessor:
         component_display_in_webtool: list[str] = []
         for output in ppdt.all_outputs:
             if output.postprocessing_flag:
-                if OutputPostprocessingRules.DISPLAY_IN_WEBTOOL not in output.postprocessing_flag:
+                if OutputPostprocessingRules.DISPLAY_IN_WEBTOOL in output.postprocessing_flag:
                     component_display_in_webtool.append(output.get_pretty_name())
-            results_daily = ppdt.results_daily[component_display_in_webtool]
 
+        results_daily = ppdt.results_daily[component_display_in_webtool]
         data = results_daily.to_json(date_format="iso")
 
         # Write to file
@@ -909,7 +909,6 @@ class PostProcessor:
             encoding="utf-8",
         ) as file:
             file.write(data)
-        pass
 
     def write_results_for_webtool_to_json_file(self, ppdt: PostProcessingDataTransfer) -> None:
         """Collect results and write into json for webtool."""

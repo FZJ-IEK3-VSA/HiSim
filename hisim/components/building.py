@@ -41,22 +41,23 @@ The module contains the following classes:
 
 # Generic/Built-in
 import importlib
-from typing import List, Any, Optional, Tuple
-from functools import lru_cache
 import math
 from dataclasses import dataclass
-from dataclasses_json import dataclass_json
-import pvlib
-import pandas as pd
+from functools import lru_cache
+from typing import Any, List, Optional, Tuple
 
-from hisim import utils
+import pandas as pd
+import pvlib
+from dataclasses_json import dataclass_json
+
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim import log
+from hisim import log, utils
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
-from hisim.simulationparameters import SimulationParameters
 from hisim.components.weather import Weather
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.loadtypes import OutputPostprocessingRules
+from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
+from hisim.simulationparameters import SimulationParameters
 from obsolete import loadprofilegenerator_connector
 
 __authors__ = "Vitor Hugo Bellotto Zago"
@@ -347,6 +348,7 @@ class Building(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for {self.SolarGainThroughWindows} will follow.",
+            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL]
         )
         self.internal_heat_gains_from_residents_and_devices_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -354,6 +356,7 @@ class Building(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for {self.InternalHeatGainsFromOccupancy} will follow.",
+            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL]
         )
         self.heat_loss_from_transmission_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -404,6 +407,7 @@ class Building(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for {self.TotalThermalMassHeatFlux} will follow.",
+            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL]
         )
         self.open_window_channel: cp.ComponentOutput = self.add_output(
             self.component_name,

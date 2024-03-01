@@ -42,7 +42,7 @@ __status__ = "development"
 
 
 @dataclass
-class HouseholdAdvancedHPDieselCarOptions:
+class HouseholdMoreAdvancedHPDHWHPDieselCarOptions:
 
     """Set options for the system setup."""
 
@@ -50,7 +50,7 @@ class HouseholdAdvancedHPDieselCarOptions:
 
 
 @dataclass
-class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
+class HouseholdMoreAdvancedHPDHWHPDieselCarConfig(SystemSetupConfigBase):
 
     """Configuration for with advanced heat pump and diesel car."""
 
@@ -72,10 +72,10 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
     @classmethod
     def get_default_options(cls):
         """Get default options."""
-        return HouseholdAdvancedHPDieselCarOptions()
+        return HouseholdMoreAdvancedHPDHWHPDieselCarOptions()
 
     @classmethod
-    def get_default(cls) -> "HouseholdAdvancedHPDieselCarConfig":
+    def get_default(cls) -> "HouseholdMoreAdvancedHPDHWHPDieselCarConfig":
         """Get default HouseholdAdvancedHPDieselCarConfig."""
 
         heating_reference_temperature_in_celsius: float = -7
@@ -97,8 +97,8 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
     def get_scaled_default(
         cls,
         building_config: building.BuildingConfig,
-        options: HouseholdAdvancedHPDieselCarOptions = HouseholdAdvancedHPDieselCarOptions(),
-    ) -> "HouseholdAdvancedHPDieselCarConfig":
+        options: HouseholdMoreAdvancedHPDHWHPDieselCarOptions = HouseholdMoreAdvancedHPDHWHPDieselCarOptions(),
+    ) -> "HouseholdMoreAdvancedHPDHWHPDieselCarConfig":
         """Get scaled default HouseholdAdvancedHPDieselCarConfig."""
 
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0
@@ -114,7 +114,7 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
         my_hds_controller_information = heat_distribution_system.HeatDistributionControllerInformation(
             config=hds_controller_config
         )
-        household_config = HouseholdAdvancedHPDieselCarConfig(
+        household_config = HouseholdMoreAdvancedHPDHWHPDieselCarConfig(
             building_type="blub",
             number_of_apartments=int(my_building_information.number_of_apartments),
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
@@ -221,9 +221,9 @@ def setup_function(
         Path(utils.HISIMPATH["utsp_results"]).mkdir(parents=False, exist_ok=False)
 
     if my_sim.my_module_config_path:
-        my_config = HouseholdAdvancedHPDieselCarConfig.load_from_json(my_sim.my_module_config_path)
+        my_config = HouseholdMoreAdvancedHPDHWHPDieselCarConfig.load_from_json(my_sim.my_module_config_path)
     else:
-        my_config = HouseholdAdvancedHPDieselCarConfig.get_default()
+        my_config = HouseholdMoreAdvancedHPDHWHPDieselCarConfig.get_default()
 
     # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
     # my_config_json = my_config.to_json()

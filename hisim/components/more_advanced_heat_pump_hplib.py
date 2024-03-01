@@ -94,9 +94,9 @@ class HeatPumpHplibWithTwoOutputsConfig(ConfigBase):
             name="AdvancedHeatPumpHPLib",
             model="Generic",
             heat_source="air",
-            group_id=1,
+            group_id=4,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-            flow_temperature_in_celsius=35,
+            flow_temperature_in_celsius=52,
             set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
             cycling_mode=True,
             minimum_running_time_in_seconds=600,
@@ -125,9 +125,9 @@ class HeatPumpHplibWithTwoOutputsConfig(ConfigBase):
             name="AdvancedHeatPumpHPLib",
             model="Generic",
             heat_source="air",
-            group_id=1,
+            group_id=4,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-            flow_temperature_in_celsius=35,
+            flow_temperature_in_celsius=52,
             set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
             cycling_mode=True,
             minimum_running_time_in_seconds=600,
@@ -285,16 +285,15 @@ class HeatPumpHplibWithTwoOutputs(Component):
             field_name=self.OnOffSwitchSH,
             load_type=LoadTypes.ANY,
             unit=Units.ANY,
-            mandatory=True,
+            mandatory=False,
         )
 
-        # Define component inputs
         self.on_off_switch_dhw: ComponentInput = self.add_input(
             object_name=self.component_name,
             field_name=self.OnOffSwitchDHW,
             load_type=LoadTypes.ANY,
             unit=Units.ANY,
-            mandatory=True,
+            mandatory=False,
         )
 
         self.const_thermal_power_truefalse_dhw: ComponentInput = self.add_input(
@@ -302,7 +301,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
             field_name=self.ThermalPowerIsConstantForDHW,
             load_type=LoadTypes.ANY,
             unit=Units.ANY,
-            mandatory=True,
+            mandatory=False,
         )
 
         self.const_thermal_power_value_dhw: ComponentInput = self.add_input(
@@ -310,7 +309,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
             field_name=self.MaxThermalPowerValueForDHW,
             load_type=LoadTypes.ANY,
             unit=Units.ANY,
-            mandatory=True,
+            mandatory=False,
         )
 
         self.t_in_primary: ComponentInput = self.add_input(
@@ -326,7 +325,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
             field_name=self.TemperatureInputSecondary_SH,
             load_type=LoadTypes.TEMPERATURE,
             unit=Units.CELSIUS,
-            mandatory=True,
+            mandatory=False,
         )
 
         self.t_in_secondary_dhw: ComponentInput = self.add_input(
@@ -334,7 +333,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
             field_name=self.TemperatureInputSecondary_DHW,
             load_type=LoadTypes.TEMPERATURE,
             unit=Units.CELSIUS,
-            mandatory=True,
+            mandatory=False,
         )
 
         self.t_amb: ComponentInput = self.add_input(

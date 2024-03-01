@@ -17,7 +17,7 @@ from dataclass_wizard import JSONWizard
 from hisim.component import ComponentOutput
 from hisim.components.heat_distribution_system import HeatDistribution
 from hisim.components.building import Building
-from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib
+from hisim.components.more_advanced_heat_pump_hplib import HeatPumpHplibWithTwoOutputs
 from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
 from hisim.components.electricity_meter import ElectricityMeter
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes
@@ -1307,7 +1307,7 @@ class KpiGenerator(JSONWizard):
         number_of_cycles = 0
         for column in results.columns:
 
-            if all(x in column.split(sep=" ") for x in [HeatPumpHplib.TimeOff, component_name]):
+            if all(x in column.split(sep=" ") for x in [HeatPumpHplibWithTwoOutputs.TimeOff, component_name]):
                 for index, off_time in enumerate(results[column].values):
                     try:
                         if off_time != 0 and results[column].values[index + 1] == 0:
@@ -1374,14 +1374,14 @@ class KpiGenerator(JSONWizard):
         electrical_energy_in_kilowatt_hour = 1.0
 
         for column in results.columns:
-            if all(x in column.split(sep=" ") for x in [HeatPumpHplib.ThermalOutputPower, component_name]):
+            if all(x in column.split(sep=" ") for x in [HeatPumpHplibWithTwoOutputs.ThermalOutputPowerSH, component_name]):
                 # take only output values for heating
                 thermal_output_power_values_in_watt = results[column].loc[results[column] > 0.0]
                 # get energy from power
                 thermal_output_energy_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
                     power_timeseries_in_watt=thermal_output_power_values_in_watt, timeresolution=seconds_per_timestep
                 )
-            if all(x in column.split(sep=" ") for x in [HeatPumpHplib.ElectricalInputPower, component_name]):
+            if all(x in column.split(sep=" ") for x in [HeatPumpHplibWithTwoOutputs.ElectricalInputPowerSH, component_name]):
                 # get electrical energie values
                 electrical_energy_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
                     power_timeseries_in_watt=results[column], timeresolution=seconds_per_timestep
@@ -1422,7 +1422,7 @@ class KpiGenerator(JSONWizard):
         # check if Heat Pump was used in components
         for wrapped_component in self.wrapped_components:
 
-            if isinstance(wrapped_component.my_component, HeatPumpHplib):
+            if isinstance(wrapped_component.my_component, HeatPumpHplibWithTwoOutputs):
 
                 # get number of heat pump cycles over simulated period
                 number_of_heat_pump_cycles = self.get_heatpump_cycles(
@@ -1455,7 +1455,7 @@ class KpiGenerator(JSONWizard):
                     min_temperature_difference_between_flow_and_return_in_celsius,
                 ) = self.get_flow_and_return_temperatures(
                     results=self.results,
-                    output_name_flow_temperature=HeatPumpHplib.TemperatureOutput,
+                    output_name_flow_temperature=HeatPumpHplibWithTwoOutputs.TemperatureOutputSH,
                     output_name_return_temperature=SimpleHotWaterStorage.WaterTemperatureToHeatGenerator
                 )
 
@@ -1478,7 +1478,7 @@ class KpiGenerator(JSONWizard):
             max_return_temperature_in_celsius,
         ):
             log.warning(
-                "KPI values for advanced heat pump HPLib are None. "
+                "KPI values for more advanced heat pump HPLib are None. "
                 "Please check if you have correctly initialized and connected the heat pump in your system setup or ignore this message."
             )
 

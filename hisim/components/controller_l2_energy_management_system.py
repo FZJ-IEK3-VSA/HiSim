@@ -127,6 +127,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
     # Inputs
     ElectricityToElectrolyzerUnused = "ElectricityToElectrolyzerUnused"
+    ElectricityToBuildingFromDistrict = "ElectricityToBuildingFromDistrict"
 
     # Outputs
     ElectricityToElectrolyzerTarget = "ElectricityToElectrolyzerTarget"
@@ -139,6 +140,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     SimpleHotWaterStorageTemperatureModifier = (
         "SimpleHotWaterStorageTemperatureModifier"  # used for HeatPumpHplibController
     )
+    ElectricityToBuildingFromDistrictEMSOutput = "ElectricityToBuildingFromDistrictEMSOutput"
+
 
     CheckPeakShaving = "CheckPeakShaving"
 
@@ -185,6 +188,14 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.electricity_to_electrolyzer_unused: cp.ComponentInput = self.add_input(
             object_name=self.component_name,
             field_name=self.ElectricityToElectrolyzerUnused,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            mandatory=False,
+        )
+
+        self.electricity_to_building_from_district: cp.ComponentInput = self.add_input(
+            object_name=self.component_name,
+            field_name=self.ElectricityToBuildingFromDistrict,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
             mandatory=False,
@@ -253,6 +264,17 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             sankey_flow_direction=False,
             output_description=f"here a description for {self.CheckPeakShaving} will follow.",
         )
+
+        self.electricity_to_building_from_district_output: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricityToBuildingFromDistrictEMSOutput,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.ElectricityToBuildingFromDistrictEMSOutput} will follow.",
+        )
+
+
 
         self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())
         self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
@@ -531,8 +553,12 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         if timestep == 0:
             self.sort_source_weights_and_components()
 
+        district_electricity_unused = stsv.get_input_value(component_input=self.electricity_to_building_from_district)
+
+        stsv.set_output_value(self.electricity_to_building_from_district_output, district_electricity_unused)
+
         # get production
-        self.state.production = sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])
+        self.state.production = sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])+district_electricity_unused
         self.state.consumption_uncontrolled = sum(
             [stsv.get_input_value(component_input=elem) for elem in self.consumption_uncontrolled_inputs]
         )

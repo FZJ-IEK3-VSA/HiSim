@@ -3,12 +3,13 @@
 
 import datetime
 import os
-from typing import Dict, Any, Tuple, Optional, List
+from typing import Dict, Any, Tuple, Optional, List, Union
 import string
 import warnings
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 
 # import plotly
 # from html2image import Html2Image
@@ -43,33 +44,34 @@ class ScenarioChartGeneration:
 
         self.datetime_string = datetime.datetime.now().strftime("%Y%m%d_%H%M")
         self.show_plot_legend: bool = True
+        self.data_processing_mode = data_processing_mode
 
-        if data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA:
+        if self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA:
             data_path_strip = "data_with_all_parameters"
             result_path_strip = "results_for_all_parameters"
             self.show_plot_legend = False
 
-        elif data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES:
+        elif self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES:
             data_path_strip = "data_with_different_building_codes"
             result_path_strip = "results_different_building_codes"
 
-        elif data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_SIZES:
+        elif self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_SIZES:
             data_path_strip = "data_with_different_conditioned_floor_area_in_m2s"
             result_path_strip = "results_different_conditioned_floor_area_in_m2s"
 
-        elif data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_AZIMUTH_ANGLES:
+        elif self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_AZIMUTH_ANGLES:
             data_path_strip = "data_with_different_pv_azimuths"
             result_path_strip = "results_different_pv_azimuths"
 
-        elif data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES:
+        elif self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES:
             data_path_strip = "data_with_different_pv_tilts"
             result_path_strip = "results_different_pv_tilts"
 
-        elif data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_SHARE_OF_MAXIMUM_PV:
+        elif self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_SHARE_OF_MAXIMUM_PV:
             data_path_strip = "data_with_different_share_of_maximum_pv_powers"
             result_path_strip = "results_different_share_of_maximum_pv_powers"
 
-        elif data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_NUMBER_OF_DWELLINGS:
+        elif self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_NUMBER_OF_DWELLINGS:
             data_path_strip = "data_with_different_number_of_dwellings_per_buildings"
             result_path_strip = "results_different_number_of_dwellings_per_buildings"
 
@@ -169,6 +171,7 @@ class ScenarioChartGeneration:
             # get unit of variable
             try:
                 unit = str(filtered_data.unit.values[0])
+                unit = str(filtered_data.unit.values[0])
             except Exception:
                 if "Temperature deviation" in variable_to_check:
                     unit = "°C*h"
@@ -216,6 +219,26 @@ class ScenarioChartGeneration:
                     )
                 except Exception:
                     log.information(f"{variable_to_check} could not be plotted as histogram.")
+
+                if variable_to_check in [
+                    dict_with_extra_information_for_specific_plot["stacked_bar"]["y1_data_variable"],
+                    dict_with_extra_information_for_specific_plot["stacked_bar"]["y2_data_variable"],
+                ]:
+                    y1_data_variable = dict_with_extra_information_for_specific_plot["stacked_bar"]["y1_data_variable"]
+                    y2_data_variable = dict_with_extra_information_for_specific_plot["stacked_bar"]["y2_data_variable"]
+                    use_y1_as_bottom_for_y2 = dict_with_extra_information_for_specific_plot["stacked_bar"][
+                        "use_y1_as_bottom_for_y2"
+                    ]
+                    sort_according_to_y1_or_y2_data = dict_with_extra_information_for_specific_plot["stacked_bar"][
+                        "sort_according_to_y1_or_y2_data"
+                    ]
+                    self.make_stacked_bar_plot_for_pandas_dataframe(
+                        full_pandas_dataframe=pandas_dataframe,
+                        y1_data_variable=y1_data_variable,
+                        y2_data_variable=y2_data_variable,
+                        use_y1_as_bottom_for_y2=use_y1_as_bottom_for_y2,
+                        sort_according_to_y1_or_y2_data=sort_according_to_y1_or_y2_data,
+                    )
 
                 if variable_to_check in [
                     dict_with_extra_information_for_specific_plot["stacked_bar"]["y1_data_variable"],
@@ -285,6 +308,18 @@ class ScenarioChartGeneration:
                 except Exception:
                     log.information(f"{variable_to_check} could not be plotted as line scatter plot.")
 
+                try:
+                    x_data_variable = dict_with_extra_information_for_specific_plot["scatter"]["x_data_variable"]
+                    self.make_line_scatter_plot_for_pandas_dataframe(
+                        full_pandas_dataframe=pandas_dataframe,
+                        filtered_data=filtered_data,
+                        y_data_variable=self.path_addition,
+                        x_data_variable=x_data_variable,
+                        line_plot_marker_size=line_plot_marker_size,
+                    )
+                except Exception:
+                    log.information(f"{variable_to_check} could not be plotted as line scatter plot.")
+
             else:
                 raise ValueError("This kind of data was not found in the datacollectorenum class.")
 
@@ -329,6 +364,16 @@ class ScenarioChartGeneration:
             plot_type_name="line_plot",
             rotate_x_ticks=True,
         )
+        self.set_ticks_labels_legend_and_save_fig(
+            fig=fig,
+            a_x=a_x,
+            x_axis_label=year,
+            y_axis_unit=filtered_data.unit.values[0],
+            show_legend=self.show_plot_legend,
+            title=title,
+            plot_type_name="line_plot",
+            rotate_x_ticks=True,
+        )
 
     def make_bar_plot_for_pandas_dataframe(
         self, filtered_data: pd.DataFrame, title: str, unit: str, alternative_bar_labels: Optional[List[str]] = None,
@@ -356,10 +401,14 @@ class ScenarioChartGeneration:
         x_data = np.arange(0, len(y_data) * 2, step=2)
 
         # sort y_data and labels
-        sorted_zip_lists = sorted(zip(y_data, bar_labels), reverse=True)
-        y_data_sorted = [y for y, bar_label in sorted_zip_lists]
-        bar_labels_sorted = [bar_label for y, bar_label in sorted_zip_lists]
-        a_x.bar(x_data, y_data_sorted, label=bar_labels_sorted)
+        y_data_sorted, bar_labels_sorted = self.sort_y_values_according_to_data_processing_mode(
+            data_processing_mode=self.data_processing_mode, zip_list_one=y_data, zip_list_two=bar_labels
+        )
+
+        color = self.set_plot_colors_according_to_data_processing_mode(
+            number_of_scenarios=len(bar_labels), data_processing_mode=self.data_processing_mode
+        )
+        a_x.bar(x_data, y_data_sorted, label=bar_labels_sorted, color=color)
 
         self.set_ticks_labels_legend_and_save_fig(
             fig=fig,
@@ -382,10 +431,17 @@ class ScenarioChartGeneration:
         if scenario_set is None:
             scenario_set = list(OrderedSet(filtered_data.scenario))
 
-        sns.boxplot(data=filtered_data, x="scenario", y="value")
+        if self.show_plot_legend:
+            hue = "scenario"
+        else:
+            hue = None
+        sns.boxplot(data=filtered_data, x="scenario", y="value", hue=hue)
+        plt.legend(bbox_to_anchor=(1, 1), loc="upper left")
 
         try:
             # this works for yearly data
+            x_axis_label = filtered_data.year.values[0]
+
             x_axis_label = filtered_data.year.values[0]
 
         except Exception:
@@ -398,7 +454,8 @@ class ScenarioChartGeneration:
             a_x=a_x,
             x_axis_label=x_axis_label,
             y_axis_unit=filtered_data.unit.values[0],
-            show_legend=self.show_plot_legend,
+            show_legend=False,
+            legend_labels=scenario_set,
             title=title,
             plot_type_name="box_plot",
             show_x_ticks=False,
@@ -622,17 +679,24 @@ class ScenarioChartGeneration:
 
         # sort values if demanded
         if sort_according_to_y1_or_y2_data == "y1":
-            sorted_zip_lists = sorted(
-                zip(y1_data_mean_value_list_for_all_scenarios, y2_data_mean_value_list_for_all_scenarios)
+            (
+                y1_data_mean_value_list_for_all_scenarios_sorted,
+                y2_data_mean_value_list_for_all_scenarios_sorted,
+            ) = self.sort_y_values_according_to_data_processing_mode(
+                data_processing_mode=self.data_processing_mode,
+                zip_list_one=y1_data_mean_value_list_for_all_scenarios,
+                zip_list_two=y2_data_mean_value_list_for_all_scenarios,
             )
-            y1_data_mean_value_list_for_all_scenarios_sorted = [y1 for y1, y2 in sorted_zip_lists]
-            y2_data_mean_value_list_for_all_scenarios_sorted = [y2 for y1, y2 in sorted_zip_lists]
+
         elif sort_according_to_y1_or_y2_data == "y2":
-            sorted_zip_lists = sorted(
-                zip(y2_data_mean_value_list_for_all_scenarios, y1_data_mean_value_list_for_all_scenarios)
+            (
+                y2_data_mean_value_list_for_all_scenarios_sorted,
+                y1_data_mean_value_list_for_all_scenarios_sorted,
+            ) = self.sort_y_values_according_to_data_processing_mode(
+                data_processing_mode=self.data_processing_mode,
+                zip_list_one=y2_data_mean_value_list_for_all_scenarios,
+                zip_list_two=y1_data_mean_value_list_for_all_scenarios,
             )
-            y2_data_mean_value_list_for_all_scenarios_sorted = [y2 for y2, y1 in sorted_zip_lists]
-            y1_data_mean_value_list_for_all_scenarios_sorted = [y1 for y2, y1 in sorted_zip_lists]
         else:
             y1_data_mean_value_list_for_all_scenarios_sorted = y1_data_mean_value_list_for_all_scenarios
             y2_data_mean_value_list_for_all_scenarios_sorted = y2_data_mean_value_list_for_all_scenarios
@@ -795,13 +859,41 @@ class ScenarioChartGeneration:
             if legend_labels is None:
                 plt.legend(bbox_to_anchor=(1, 1), loc="upper left")
             else:
-                plt.legend(legend_labels)
+                plt.legend(legend_labels,)
 
         # save and close
         fig.savefig(
             os.path.join(self.plot_path_complete, f"{plot_type_name}.png"), bbox_inches="tight",
         )
         plt.close()
+
+    def set_plot_colors_according_to_data_processing_mode(
+        self, data_processing_mode: ResultDataProcessingModeEnum, number_of_scenarios: int
+    ) -> Union[str, List[str]]:
+        """Set plot colors according to data processing mode."""
+        color_palette = list(mcolors.TABLEAU_COLORS.values())
+
+        color: Union[str, List[str]] = []
+        if data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA:
+            color = "b"
+        else:
+            color = []
+            for i in range(0, number_of_scenarios):
+                color.append(color_palette[i])
+        return color
+
+    def sort_y_values_according_to_data_processing_mode(
+        self, data_processing_mode: ResultDataProcessingModeEnum, zip_list_one: List, zip_list_two: List
+    ) -> Tuple[List, List]:
+        """Decide whether to sort y values or not."""
+        # if all data is processed and no scenario is chosen, the y values for plots should be sorted
+        if data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA:
+            sorted_zip_lists = sorted(zip(zip_list_one, zip_list_two), reverse=True)
+            list_one_sorted = [y1 for y1, y2 in sorted_zip_lists]
+            list_two_sorted = [y2 for y1, y2 in sorted_zip_lists]
+            return list_one_sorted, list_two_sorted
+        # otherwise the order of the scenarios should be maintained
+        return zip_list_one, zip_list_two
 
     # def make_sankey_plot_for_pyam_dataframe(
     #     self,

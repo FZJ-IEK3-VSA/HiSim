@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from functools import reduce as freduce
 from functools import wraps
 from timeit import default_timer as timer
-from typing import Any, ClassVar, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 import psutil

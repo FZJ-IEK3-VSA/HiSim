@@ -15,8 +15,8 @@ from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import log, utils
 from hisim.component import ConfigBase
-from hisim.components import (generic_hydrogen_storage, controller_l1_example_controller_C4L_2a)
-from hisim.loadtypes import LoadTypes, Units
+from hisim.components import generic_hydrogen_storage
+from hisim.loadtypes import LoadTypes, Units, ComponentType
 from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "edited Christof Bernsteiner"
@@ -110,7 +110,7 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
     # Outputs
     ElectrolyzerControllerOnOffSignal = "ElectrolyzerControllerOnOffSignal"
     FuelCellControllerOnOffSignal = "FuelCellControllerOnOffSignal"
-    CHPControllerHeatingModeSignal = "CHPControllerHeatingModeSignal" #Dummy Connection because without the generic_CHP.py is not working
+    CHPControllerHeatingModeSignal = "CHPControllerHeatingModeSignal" # [ ] Dummy Connection because without the generic_CHP.py is not working
 
     @utils.measure_execution_time
     def __init__(
@@ -212,6 +212,15 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
             # outputs have to be in line with states, so if convergence is forced outputs are aligned to last known state.
             self.state = self.processed_state.clone()
         else:
+            
+           
+            #Get Predictions 
+            electricityconsumption_prediction = self.simulation_repository.get_dynamic_entry(ComponentType.ELECTRIC_CONSUMPTION, source_weight = 999)
+            pv_prediction = self.simulation_repository.get_dynamic_entry(ComponentType.PV, source_weight = 999) 
+
+            #print(timestep)
+            #print(electricityconsumption_prediction)
+           
             
             #Electrolyzer controller
             if self.hydrogen_soc_channel.source_output is not None:

@@ -15,7 +15,7 @@ from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import log, utils
 from hisim.component import ConfigBase
-from hisim.components import (generic_hydrogen_storage, controller_l1_example_controller_C4L_2a)
+from hisim.components import generic_hydrogen_storage
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 

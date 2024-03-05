@@ -40,7 +40,7 @@ from hisim.components import advanced_battery_bslib
 from hisim.components import generic_hydrogen_storage
 from hisim.components import (C4L_electrolyzer, controller_C4L_electrolyzer_fuelcell_1a_1b)
 from hisim.components import (generic_CHP) 
-from hisim.components import (controller_l1_example_controller_C4L_1a_1b, controller_l1_example_controller_C4L_2a)
+from hisim.components import controller_l1_example_controller_C4L_1a_1b
 from hisim.modular_household import component_connections
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim import loadtypes
@@ -70,12 +70,8 @@ def Cell4Life(
             year=2021, seconds_per_timestep=3600
         )
     
-    my_simulation_parameters.predictive_control = "False"
+    my_simulation_parameters.predictive_control = "False" #Mandatory in this Cell4Life Example! DO NOT CHANGE!!
     
-    # #Just needed if prediciton controlled is activated
-    # if input_variablen["szenario"]["value"] == "2a":
-    #     my_simulation_parameters.predictive_control = "True"
-    #     my_simulation_parameters.prediction_horizon = input_variablen["prediction_horizon"]["value"]  
     
     my_sim.set_simulation_parameters(my_simulation_parameters)
     
@@ -171,16 +167,6 @@ def Cell4Life(
     )
     my_electricity_controller.config.szenario = input_variablen["szenario"]["value"]
     
-    # Prediction Controlled
-    # elif input_variablen["szenario"]["value"] == "2a": #and input_variablen["prediciton_horizon"]["value"] > 0:
-    #     my_electricity_controller_config = (
-    #     controller_l1_example_controller_C4L_2a.SimpleControllerConfig.get_default_config()
-    #     )
-    #     my_electricity_controller = (
-    #         controller_l1_example_controller_C4L_2a.SimpleController(
-    #         name = "Elect_Controller", my_simulation_parameters=my_simulation_parameters, config=my_electricity_controller_config)
-    #     )
-    #     my_electricity_controller.config.szenario = input_variablen["szenario"]["value"]   
 
 
 
@@ -202,7 +188,7 @@ def Cell4Life(
     electrolyzerfuelcell_controller_config.h2_soc_lower_threshold_fuelcell = input_variablen["h2_soc_lower_threshold_chp"]["value"]
 
     my_electrolyzerfuelcellcontroller = controller_C4L_electrolyzer_fuelcell_1a_1b.C4Lelectrolyzerfuelcell1a1bController(
-        my_simulation_parameters=my_simulation_parameters, config=electrolyzerfuelcell_controller_config)  # [ ]  Namen und innerhalb des Controllers entsprechend die Bezeichnungen auf controller_C4L_electrolyzer_fuelcell_1a_1b umändern; NICHT DIE FUNKTION ÄNDERN! 
+        my_simulation_parameters=my_simulation_parameters, config=electrolyzerfuelcell_controller_config)  # [x]  Namen und innerhalb des Controllers entsprechend die Bezeichnungen auf controller_C4L_electrolyzer_fuelcell_1a_1b umändern; NICHT DIE FUNKTION ÄNDERN! 
 
 
 

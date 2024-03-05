@@ -181,7 +181,7 @@ class SimpleController(Component):
             output_description=f"here a description for {self.BatteryLoadingPowerWish} will follow.",
         )
 
-               
+
         self.electricity_to_or_from_gridOutput: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ElectricityToOrFromGrid,
@@ -244,7 +244,7 @@ class SimpleController(Component):
             postprocessing_flag=[lt.InandOutputType.CONTROL_SIGNAL],
             output_description="Fuel Cell On",
         )
- 
+
         self.state = 0
         self.previous_state = self.state
 
@@ -343,7 +343,7 @@ class SimpleController(Component):
     ) -> None:
         if force_convergence:
             return
-        	
+
         def electricity_from_CHP_Battery_to_houseFct(CHP_ElectricityDelivery, BatteryAcBatteryPower, electricity_to_or_from_grid, H2Storage_ElectricityConsumption, timestep):
             
             if CHP_ElectricityDelivery>0 and BatteryAcBatteryPower >= 0 and electricity_to_or_from_grid >= 0: #SURPLOS ELECTRICITY from Fuel Cell/CHP is stored in battery and/or fed in grid
@@ -390,7 +390,7 @@ class SimpleController(Component):
             print("Startprediction controlled energy management system")
             
             #Load Predicted values
-            pv_prediction = self.simulation_repository.get_dynamic_entry(lt.ComponentType.PV, source_weight = 999)
+            pv_prediction = self.simulation_repository.get_dynamic_entry(simulation_repository, source_weight = 999)
             electricityconsumption_prediction = self.simulation_repository.get_dynamic_entry(lt.ComponentType.ELECTRIC_CONSUMPTION, source_weight = 999) #ELECTRIC_BOILER is only a placeholder!  
             
             #print(pv_prediction)
@@ -411,7 +411,7 @@ class SimpleController(Component):
         #     stsv.set_output_value(self.BatteryLoadingPowerWishOutput, electricity_to__or_from_battery_Wish)
         #     BatteryAcBatteryPower = stsv.get_input_value(self.BatteryAcBatteryPowerInput)
 
-           
+
         #     electricity_to_or_from_grid = total_electricity_production - total_electricity_consumption - BatteryAcBatteryPower
             
         #     if CHP_ElectricityDelivery > 0 and Electrolyzer_ElectricityConsumption == 0:

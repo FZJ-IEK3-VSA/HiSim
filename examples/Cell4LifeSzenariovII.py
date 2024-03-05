@@ -40,7 +40,7 @@ from hisim.components import advanced_battery_bslib
 from hisim.components import generic_hydrogen_storage
 from hisim.components import (controller_C4L_electrolyzer, C4L_electrolyzer, controller_predicitve_C4L_electrolyzer_fuelcell)
 from hisim.components import (controller_l1_chp_CB, generic_CHP) 
-from hisim.components import (controller_l1_example_controller_C4L_1a_1b, controller_l1_example_controller_C4L_2a)
+from hisim.components import controller_l1_example_controller_C4L_1a_1b
 from hisim.modular_household import component_connections
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim import loadtypes
@@ -90,7 +90,7 @@ def Cell4Life(
         hash_number=None,
     )
     del name
- 
+
     # Postprocessing Options****
     
     my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.EXPORT_TO_CSV)
@@ -98,7 +98,7 @@ def Cell4Life(
     #my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.MAKE_NETWORK_CHARTS)
     #my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PLOT_CARPET)
     
-  
+
             #******************************************************************
             #***Loading of Input Data****
             #******************************************************************
@@ -106,7 +106,7 @@ def Cell4Life(
     #Loading Electricity consumption in W per m2 NGF****
     #my_electricityconsumptionConfig = CSVLoaderConfig("Current total", "Current needed", "01Simulation.csv", 1, loadtypes.LoadTypes.ELECTRICITY, loadtypes.Units.WATT, "Strom", ";", "," ,input_variablen["NGFm2"]["value"], "CurrentConspumtioninWperm2NGF")
     #my_electricityconsumption = CSVLoader(my_electricityconsumptionConfig, my_simulation_parameters)
-       
+
     my_electricityconsumptionConfig = CSVLoader_electricityconsumptionConfig("Current total", "Current needed", "01Simulation.csv", 1, loadtypes.LoadTypes.ELECTRICITY, loadtypes.Units.WATT, "Strom", ";", "," ,input_variablen["NGFm2"]["value"], "CurrentConspumtioninWperm2NGF")
     my_electricityconsumption = CSVLoader_electricityconsumption(my_electricityconsumptionConfig, my_simulation_parameters)
 

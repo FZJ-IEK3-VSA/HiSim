@@ -52,7 +52,9 @@ from hisim import postprocessingoptions
 def Cell4Life(
     my_sim: Simulator, my_simulation_parameters: Optional[SimulationParameters]
 ) -> None:
-    """hisim example for Cell4Life-Simulation Model: Szenario 1a & 1b new script!
+    """
+    !!!!!WARNING: PLEASE USE NEW Cell for Life Example for Szenario 1a & 1b!!!!
+    hisim example for Cell4Life-Simulation Model: Szenario 1a & 1b 
     
     
 

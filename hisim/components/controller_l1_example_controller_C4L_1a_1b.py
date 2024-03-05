@@ -425,7 +425,7 @@ class SimpleController(Component):
 
         
         
-        if self.config.szenario == '1b' or self.config.szenario == '2a':
+        if self.config.szenario == '1b' or self.config.szenario == '2a': # [ ] Logik des Energieflusses gehört für Szenario 2 angepasst
             #Abzug aller Stromproduktionen und Verbräuche
 
             

@@ -40,7 +40,7 @@ from hisim.components import advanced_battery_bslib
 from hisim.components import generic_hydrogen_storage
 from hisim.components import (C4L_electrolyzer, controller_predicitve_C4L_electrolyzer_fuelcell)
 from hisim.components import (generic_CHP) 
-from hisim.components import (controller_l1_example_controller_C4L_1a_1b, controller_l1_example_controller_C4L_2a)
+from hisim.components import controller_l1_example_controller_C4L_1a_1b
 from hisim.modular_household import component_connections
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim import loadtypes
@@ -70,12 +70,9 @@ def Cell4Life(
             year=2021, seconds_per_timestep=3600
         )
     
-    my_simulation_parameters.predictive_control = "False"
+    my_simulation_parameters.predictive_control = "True"
+    my_simulation_parameters.prediction_horizon = input_variablen["prediction_horizon"]["value"]  
     
-    # #Just needed if prediciton controlled is activated
-    # if input_variablen["szenario"]["value"] == "2a":
-    #     my_simulation_parameters.predictive_control = "True"
-    #     my_simulation_parameters.prediction_horizon = input_variablen["prediction_horizon"]["value"]  
     
     my_sim.set_simulation_parameters(my_simulation_parameters)
     
@@ -166,22 +163,11 @@ def Cell4Life(
     controller_l1_example_controller_C4L_1a_1b.SimpleControllerConfig.get_default_config()
     )
     my_electricity_controller = (
-        controller_l1_example_controller_C4L_1a_1b.SimpleController(
+        controller_l1_example_controller_C4L_1a_1b.SimpleController( # [ ] Energy Managment System in case of szenario 2 needs a new name --> do not delete the old version
         name = "Elect_Controller", my_simulation_parameters=my_simulation_parameters, config=my_electricity_controller_config)
     )
     my_electricity_controller.config.szenario = input_variablen["szenario"]["value"]
     
-    # Prediction Controlled
-    # elif input_variablen["szenario"]["value"] == "2a": #and input_variablen["prediciton_horizon"]["value"] > 0:
-    #     my_electricity_controller_config = (
-    #     controller_l1_example_controller_C4L_2a.SimpleControllerConfig.get_default_config()
-    #     )
-    #     my_electricity_controller = (
-    #         controller_l1_example_controller_C4L_2a.SimpleController(
-    #         name = "Elect_Controller", my_simulation_parameters=my_simulation_parameters, config=my_electricity_controller_config)
-    #     )
-    #     my_electricity_controller.config.szenario = input_variablen["szenario"]["value"]   
-
 
 
     #******************************************************************   

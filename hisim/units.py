@@ -52,6 +52,7 @@ class UnitType(type):
 
 class MetaMeta(UnitType, ABCMeta):
     """Combination of metaclasses to prevent conflicts."""
+
     pass
 
 

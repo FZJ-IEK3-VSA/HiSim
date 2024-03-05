@@ -50,8 +50,6 @@ def test_webtool_results():
     )
 
     # Test quantity
-    print(results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["configuration"]["flow_temperature_in_celsius"])
-    __import__('ipdb').set_trace()
     assert isinstance(
         results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["configuration"]["flow_temperature_in_celsius"]["unit"]["symbol"],
         str,

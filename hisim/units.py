@@ -1,8 +1,12 @@
-""" Contains classes and methods for units. """
+"""Contains classes and methods for units."""
+
 from __future__ import annotations
 
+from abc import ABCMeta
 import dataclasses
 from typing import Any, ClassVar, TypeVar, overload, Generic
+
+from dataclass_wizard import JSONWizard
 from hisim.utils import InstanceCounter
 
 T = TypeVar("T", bound=type)
@@ -46,7 +50,12 @@ class UnitType(type):
         return dim
 
 
-class AbstractUnit(metaclass=UnitType):  # abstract base (no symbol)
+class MetaMeta(UnitType, ABCMeta):
+    """Combination of metaclasses to prevent conflicts."""
+    pass
+
+
+class AbstractUnit(UnitType, metaclass=MetaMeta):  # abstract base (no symbol)
     """Abstract unit class."""
 
     pass
@@ -122,151 +131,176 @@ class Quantity(InstanceCounter, Generic[V, U]):
         return self.value >= other.value
 
 
-class Unitless(AbstractUnit, symbol="-"):
-    """Docstring missing."""
+@dataclasses.dataclass
+class Unitless(AbstractUnit, JSONWizard):
+    """Unitless unit"""
 
-    pass
+    symbol: str = "-"
 
 
-class Percent(AbstractUnit, symbol="%"):
-    """Docstring missing."""
+@dataclasses.dataclass
+class Percent(AbstractUnit, JSONWizard):
+    """Percent unit"""
 
-    pass
+    symbol: str = "%"
 
 
-class Watt(AbstractUnit, symbol="W"):
-    """Docstring missing."""
+@dataclasses.dataclass
+class Watt(AbstractUnit, JSONWizard):
+    """Watt unit"""
 
-    pass
+    symbol: str = "W"
 
 
-class Kilowatt(AbstractUnit, symbol="kW"):
-    """Docstring missing."""
+@dataclasses.dataclass
+class Kilowatt(AbstractUnit, JSONWizard):
+    """Kilowatt unit"""
 
-    pass
+    symbol: str = "kW"
 
 
-class KilowattHourPerTimestep(AbstractUnit, symbol="kWh per timestep"):
-    """Docstring missing."""
+@dataclasses.dataclass
+class KilowattHourPerTimestep(AbstractUnit, JSONWizard):
+    """Kilowatt Hour Per Timestep unit"""
 
-    pass
+    symbol: str = "kWh per timestep"
 
 
-class WattPerSquareMeter(AbstractUnit, symbol="W per square meter"):
-    """Docstring missing."""
+@dataclasses.dataclass
+class WattPerSquareMeter(AbstractUnit, JSONWizard):
+    """Watt Per Square Meter unit"""
 
-    pass
+    symbol: str = "W per square meter"
 
 
-class WattHourPerSquareMeter(AbstractUnit, symbol="Wh per square meter"):
-    """Docstring missing."""
+@dataclasses.dataclass
+class WattHourPerSquareMeter(AbstractUnit, JSONWizard):
+    """Watt Hour Per Square Meter unit"""
 
-    pass
+    symbol: str = "Wh per square meter"
 
 
-class MeterPerSecond(AbstractUnit, symbol="m/s"):
-    """Docstring missing."""
+@dataclasses.dataclass
+class MeterPerSecond(AbstractUnit, JSONWizard):
+    """Meter Per Second unit"""
 
-    pass
+    symbol: str = "m/s"
 
 
-class WattHour(AbstractUnit, symbol="Wh"):
-    """Docstring missing."""
+@dataclasses.dataclass
+class WattHour(AbstractUnit, JSONWizard):
+    """Watt Hour unit"""
 
-    pass
+    symbol: str = "Wh"
 
 
-class KilowattHour(AbstractUnit, symbol="kWh"):
-    """Docstring missing."""
+@dataclasses.dataclass
+class KilowattHour(AbstractUnit, JSONWizard):
+    """Kilowatt Hour unit"""
 
-    pass
+    symbol: str = "kWh"
 
 
-class Liter(AbstractUnit, symbol="L"):
-    """Docstring missing."""
+@dataclasses.dataclass
+class Liter(AbstractUnit, JSONWizard):
+    """Liter unit"""
 
-    pass
+    symbol: str = "L"
 
 
-class CubicMeters(AbstractUnit, symbol="m^3"):
-    """Docstring missing."""
+@dataclasses.dataclass
+class CubicMeters(AbstractUnit, JSONWizard):
+    """Cubic Meters unit"""
 
-    pass
+    symbol: str = "m^3"
 
 
-class LiterPerTimestep(AbstractUnit, symbol="Liter per timestep"):
-    """Docstring missing."""
+@dataclasses.dataclass
+class LiterPerTimestep(AbstractUnit, JSONWizard):
+    """Liter Per Timestep unit"""
 
-    pass
+    symbol: str = "Liter per timestep"
 
 
-class CubicMetersPerSecond(AbstractUnit, symbol="Cubic meters per second"):
-    """Docstring missing."""
+@dataclasses.dataclass
+class CubicMetersPerSecond(AbstractUnit, JSONWizard):
+    """Cubic Meters Per Second unit"""
 
-    pass
+    symbol: str = "Cubic meters per second"
 
 
-class Kilogram(AbstractUnit, symbol="kg"):
-    """Docstring missing."""
+@dataclasses.dataclass
+class Kilogram(AbstractUnit, JSONWizard):
+    """Kilogram unit"""
 
-    pass
+    symbol: str = "kg"
 
 
-class KilogramPerSecond(AbstractUnit, symbol="kg/s"):
-    """Docstring missing."""
+@dataclasses.dataclass
+class KilogramPerSecond(AbstractUnit, JSONWizard):
+    """Kilogram Per Second unit"""
 
-    pass
+    symbol: str = "kg/s"
 
 
-class Celsius(AbstractUnit, symbol="°C"):
-    """Docstring missing."""
+@dataclasses.dataclass
+class Celsius(AbstractUnit, JSONWizard):
+    """Celsius unit"""
 
-    pass
+    symbol: str = "°C"
 
 
-class Kelvin(AbstractUnit, symbol="K"):
-    """Docstring missing."""
+@dataclasses.dataclass
+class Kelvin(AbstractUnit, JSONWizard):
+    """Kelvin unit"""
 
-    pass
+    symbol: str = "K"
 
 
-class Degrees(AbstractUnit, symbol="Degrees"):
-    """Docstring missing."""
+@dataclasses.dataclass
+class Degrees(AbstractUnit, JSONWizard):
+    """Degrees unit"""
 
-    pass
+    symbol: str = "Degrees"
 
 
-class Seconds(AbstractUnit, symbol="s"):
-    """Docstring missing."""
+@dataclasses.dataclass
+class Seconds(AbstractUnit, JSONWizard):
+    """Seconds unit"""
 
-    pass
+    symbol: str = "s"
 
 
-class Hours(AbstractUnit, symbol="h"):
-    """Docstring missing."""
+@dataclasses.dataclass
+class Hours(AbstractUnit, JSONWizard):
+    """Hours unit"""
 
-    pass
+    symbol: str = "h"
 
 
-class Timesteps(AbstractUnit, symbol="timesteps"):
-    """Docstring missing."""
+@dataclasses.dataclass
+class Timesteps(AbstractUnit, JSONWizard):
+    """Timesteps unit"""
 
-    pass
+    symbol: str = "timesteps"
 
 
-class Years(AbstractUnit, symbol="years"):
-    """Docstring missing."""
+@dataclasses.dataclass
+class Years(AbstractUnit, JSONWizard):
+    """Years unit"""
 
-    pass
+    symbol: str = "years"
 
 
-class EurosPerKilowattHour(AbstractUnit, symbol="Euros per kWh"):
-    """Docstring missing."""
+@dataclasses.dataclass
+class EurosPerKilowattHour(AbstractUnit, JSONWizard):
+    """Euros Per Kilowatt Hour unit"""
 
-    pass
+    symbol: str = "Euros per kWh"
 
 
-class Euro(AbstractUnit, symbol="Euro"):
-    """Docstring missing."""
+@dataclasses.dataclass
+class Euro(AbstractUnit, JSONWizard):
+    """Euro unit"""
 
-    pass
+    symbol: str = "Euro"

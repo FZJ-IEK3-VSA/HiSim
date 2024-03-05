@@ -358,9 +358,7 @@ class DynamicComponent(Component):
         return inputs
 
     def get_dynamic_output(
-        self,
-        tags: List[Union[lt.ComponentType, lt.InandOutputType]],
-        weight_counter: int,
+        self, tags: List[Union[lt.ComponentType, lt.InandOutputType]], weight_counter: int, used_outputs: List[Any]
     ) -> Any:
         """Sets all output values with given component type and weight."""
 
@@ -373,5 +371,10 @@ class DynamicComponent(Component):
                 tags_to_search=tags,
                 tags_of_component=element.source_tags,
             ):
-                return getattr(self, element.source_component_class)
+                if element.source_output_field_name in used_outputs:
+                    # Check if output is already used --> important if sourceweights and tags from ems input/target are equal (espacialy usefull on district level)
+                    _ += 1
+                else:
+                    return getattr(self, element.source_component_class)
+
         return None

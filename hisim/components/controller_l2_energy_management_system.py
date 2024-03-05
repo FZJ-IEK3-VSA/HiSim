@@ -136,12 +136,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     TotalElectricityConsumption = "TotalElectricityConsumption"
     FlexibleElectricity = "FlexibleElectricity"
     BuildingTemperatureModifier = "BuildingTemperatureModifier"  # connect to HDS controller and Building
-    StorageTemperatureModifier = "StorageTemperatureModifier"  # used for L1HeatPumpController  # Todo: change name?
-    SimpleHotWaterStorageTemperatureModifier = (
-        "SimpleHotWaterStorageTemperatureModifier"  # used for HeatPumpHplibController
-    )
+    StorageTemperatureModifier = "DHWStorageTemperatureModifier"  # used for L1HeatPumpController
+    SimpleHotWaterStorageTemperatureModifier = "SHStorageTemperatureModifier"  # used for HeatPumpHplibController
     ElectricityToBuildingFromDistrictEMSOutput = "ElectricityToBuildingFromDistrictEMSOutput"
-
 
     CheckPeakShaving = "CheckPeakShaving"
 
@@ -171,6 +168,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.components_sorted: List[lt.ComponentType] = []
         self.inputs_sorted: List[ComponentInput] = []
         self.outputs_sorted: List[ComponentOutput] = []
+        self.used_outputs: List[ComponentOutput] = []
         self.production_inputs: List[ComponentInput] = []
         self.consumption_uncontrolled_inputs: List[ComponentInput] = []
         self.consumption_ems_controlled_inputs: List[ComponentInput] = []
@@ -273,8 +271,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityToBuildingFromDistrictEMSOutput} will follow.",
         )
-
-
 
         self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())
         self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
@@ -402,7 +398,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     def sort_source_weights_and_components(self) -> None:
         """Sorts dynamic Inputs and Outputs according to source weights."""
         inputs = [elem for elem in self.my_component_inputs if elem.source_weight != 999]
-
         source_tags = [elem.source_tags[0] for elem in inputs]
         source_weights = [elem.source_weight for elem in inputs]
         sortindex = sorted(range(len(source_weights)), key=lambda k: source_weights[k])
@@ -411,6 +406,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.components_sorted = [source_tags[i] for i in sortindex]
         self.inputs_sorted = [getattr(self, inputs[i].source_component_class) for i in sortindex]
         self.outputs_sorted = []
+        self.used_outputs = []
 
         for ind, source_weight in enumerate(source_weights):
             output = self.get_dynamic_output(
@@ -419,7 +415,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     lt.InandOutputType.ELECTRICITY_TARGET,
                 ],
                 weight_counter=source_weight,
+                used_outputs=self.used_outputs,
             )
+            self.used_outputs.append(output.full_name.split("#")[1].strip())
 
             if output is not None:
                 self.outputs_sorted.append(output)
@@ -526,6 +524,13 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             else:
                 stsv.set_output_value(output=output, value=deltademand)
 
+        elif component_type == lt.ComponentType.SURPLUS_CONTROLLER_DISTRICT:
+            if deltademand > 0:
+                stsv.set_output_value(output=output, value=deltademand)
+                deltademand = deltademand - previous_signal
+            else:
+                stsv.set_output_value(output=output, value=deltademand)
+
         return deltademand
 
     def optimize_own_consumption_iterative(
@@ -558,7 +563,10 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         stsv.set_output_value(self.electricity_to_building_from_district_output, district_electricity_unused)
 
         # get production
-        self.state.production = sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])+district_electricity_unused
+        self.state.production = (
+            sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])
+            + district_electricity_unused
+        )
         self.state.consumption_uncontrolled = sum(
             [stsv.get_input_value(component_input=elem) for elem in self.consumption_uncontrolled_inputs]
         )

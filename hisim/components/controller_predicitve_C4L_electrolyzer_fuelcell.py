@@ -213,14 +213,14 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
             self.state = self.processed_state.clone()
         else:
             
-           
-            #Get Predictions 
+
+            #Get "real" values of future timestep out of real data within prediciton horizon 
             electricityconsumption_prediction = self.simulation_repository.get_dynamic_entry(ComponentType.ELECTRIC_CONSUMPTION, source_weight = 999)
             pv_prediction = self.simulation_repository.get_dynamic_entry(ComponentType.PV, source_weight = 999) 
 
-            #print(timestep)
-            #print(electricityconsumption_prediction)
-           
+            print(timestep)
+            print(electricityconsumption_prediction)
+
             
             #Electrolyzer controller
             if self.hydrogen_soc_channel.source_output is not None:

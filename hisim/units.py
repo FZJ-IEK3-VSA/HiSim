@@ -133,174 +133,174 @@ class Quantity(InstanceCounter, Generic[V, U]):
 
 @dataclasses.dataclass
 class Unitless(AbstractUnit, JSONWizard):
-    """Unitless unit"""
+    """Unitless unit."""
 
     symbol: str = "-"
 
 
 @dataclasses.dataclass
 class Percent(AbstractUnit, JSONWizard):
-    """Percent unit"""
+    """Percent unit."""
 
     symbol: str = "%"
 
 
 @dataclasses.dataclass
 class Watt(AbstractUnit, JSONWizard):
-    """Watt unit"""
+    """Watt unit."""
 
     symbol: str = "W"
 
 
 @dataclasses.dataclass
 class Kilowatt(AbstractUnit, JSONWizard):
-    """Kilowatt unit"""
+    """Kilowatt unit."""
 
     symbol: str = "kW"
 
 
 @dataclasses.dataclass
 class KilowattHourPerTimestep(AbstractUnit, JSONWizard):
-    """Kilowatt Hour Per Timestep unit"""
+    """Kilowatt Hour Per Timestep unit."""
 
     symbol: str = "kWh per timestep"
 
 
 @dataclasses.dataclass
 class WattPerSquareMeter(AbstractUnit, JSONWizard):
-    """Watt Per Square Meter unit"""
+    """Watt Per Square Meter unit."""
 
     symbol: str = "W per square meter"
 
 
 @dataclasses.dataclass
 class WattHourPerSquareMeter(AbstractUnit, JSONWizard):
-    """Watt Hour Per Square Meter unit"""
+    """Watt Hour Per Square Meter unit."""
 
     symbol: str = "Wh per square meter"
 
 
 @dataclasses.dataclass
 class MeterPerSecond(AbstractUnit, JSONWizard):
-    """Meter Per Second unit"""
+    """Meter Per Second unit."""
 
     symbol: str = "m/s"
 
 
 @dataclasses.dataclass
 class WattHour(AbstractUnit, JSONWizard):
-    """Watt Hour unit"""
+    """Watt Hour unit."""
 
     symbol: str = "Wh"
 
 
 @dataclasses.dataclass
 class KilowattHour(AbstractUnit, JSONWizard):
-    """Kilowatt Hour unit"""
+    """Kilowatt Hour unit."""
 
     symbol: str = "kWh"
 
 
 @dataclasses.dataclass
 class Liter(AbstractUnit, JSONWizard):
-    """Liter unit"""
+    """Liter unit."""
 
     symbol: str = "L"
 
 
 @dataclasses.dataclass
 class CubicMeters(AbstractUnit, JSONWizard):
-    """Cubic Meters unit"""
+    """Cubic Meters unit."""
 
     symbol: str = "m^3"
 
 
 @dataclasses.dataclass
 class LiterPerTimestep(AbstractUnit, JSONWizard):
-    """Liter Per Timestep unit"""
+    """Liter Per Timestep unit."""
 
     symbol: str = "Liter per timestep"
 
 
 @dataclasses.dataclass
 class CubicMetersPerSecond(AbstractUnit, JSONWizard):
-    """Cubic Meters Per Second unit"""
+    """Cubic Meters Per Second unit."""
 
     symbol: str = "Cubic meters per second"
 
 
 @dataclasses.dataclass
 class Kilogram(AbstractUnit, JSONWizard):
-    """Kilogram unit"""
+    """Kilogram unit."""
 
     symbol: str = "kg"
 
 
 @dataclasses.dataclass
 class KilogramPerSecond(AbstractUnit, JSONWizard):
-    """Kilogram Per Second unit"""
+    """Kilogram Per Second unit."""
 
     symbol: str = "kg/s"
 
 
 @dataclasses.dataclass
 class Celsius(AbstractUnit, JSONWizard):
-    """Celsius unit"""
+    """Celsius unit."""
 
     symbol: str = "°C"
 
 
 @dataclasses.dataclass
 class Kelvin(AbstractUnit, JSONWizard):
-    """Kelvin unit"""
+    """Kelvin unit."""
 
     symbol: str = "K"
 
 
 @dataclasses.dataclass
 class Degrees(AbstractUnit, JSONWizard):
-    """Degrees unit"""
+    """Degrees unit."""
 
     symbol: str = "Degrees"
 
 
 @dataclasses.dataclass
 class Seconds(AbstractUnit, JSONWizard):
-    """Seconds unit"""
+    """Seconds unit."""
 
     symbol: str = "s"
 
 
 @dataclasses.dataclass
 class Hours(AbstractUnit, JSONWizard):
-    """Hours unit"""
+    """Hours unit."""
 
     symbol: str = "h"
 
 
 @dataclasses.dataclass
 class Timesteps(AbstractUnit, JSONWizard):
-    """Timesteps unit"""
+    """Timesteps unit."""
 
     symbol: str = "timesteps"
 
 
 @dataclasses.dataclass
 class Years(AbstractUnit, JSONWizard):
-    """Years unit"""
+    """Years unit."""
 
     symbol: str = "years"
 
 
 @dataclasses.dataclass
 class EurosPerKilowattHour(AbstractUnit, JSONWizard):
-    """Euros Per Kilowatt Hour unit"""
+    """Euros Per Kilowatt Hour unit."""
 
     symbol: str = "Euros per kWh"
 
 
 @dataclasses.dataclass
 class Euro(AbstractUnit, JSONWizard):
-    """Euro unit"""
+    """Euro unit."""
 
     symbol: str = "Euro"

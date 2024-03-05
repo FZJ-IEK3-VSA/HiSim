@@ -248,12 +248,12 @@ for BatterieFaktor in BatterieFaktorList:
             
                     
             input_variablen = Cell4LifeSzenario2a.InputParameter()
-           
+
 
             charging_rate = input_variablen["p_el_elektrolyzer"]["value"] / (3600*40000) #umrechnung von Watt [=Joule/Sekunde, Leistung) p_el in  kg/s H2
             power_demand_charging_h2storage = charging_rate * input_variablen["h_fuel"]["value"] * 3.6e3 * 1000 * input_variablen["h2storage_energy_for_charge_based_on_massflow_h_fuel"]["value"]/100 # electricity power_demand of hydrogen storage for compression of H2 in Watt;
             inverte_power_demand_min = power_demand_charging_h2storage  + input_variablen["p_el_elektrolyzer"]["value"]
-           
+
             BatteryCapkWh = math.ceil(inverte_power_demand_min / 1000 * BatterieFaktor) #Befehl Ceil Rundet auf; BatteryCKapazität in kWh..INverterleistung in Watt gerechnet; Minimum Inverterleistung = 0,25 der Batteriekapazität --> folglich ist die Batteriekapazität immer 4* der Inverterleistung
 
             
@@ -315,7 +315,7 @@ for BatterieFaktor in BatterieFaktorList:
             del input_variablen
             PreResultNumber += 1
 
-       
+
 
 print(finishtext)
 

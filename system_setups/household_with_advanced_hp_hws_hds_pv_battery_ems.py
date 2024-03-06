@@ -16,6 +16,7 @@ from hisim.components import (
 from hisim.components import simple_hot_water_storage
 from hisim.components import heat_distribution_system
 from hisim import loadtypes as lt
+from hisim.units import Quantity, Celsius, Watt
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -64,8 +65,8 @@ def setup_function(
 
     # Set Heat Pump
     group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
-    heating_reference_temperature_in_celsius: float = -7  # t_in
-    flow_temperature_in_celsius = 21  # t_out_val
+    heating_reference_temperature_in_celsius: float = -7.0  # t_in
+    flow_temperature_in_celsius: float = 21.0  # t_out_val
 
     # =================================================================================================================================
     # Build Components
@@ -134,11 +135,11 @@ def setup_function(
 
     # Build Heat Pump
     my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+        heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
+        heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius)
     )
     my_heat_pump_config.group_id = group_id
-    my_heat_pump_config.flow_temperature_in_celsius = flow_temperature_in_celsius
+    my_heat_pump_config.flow_temperature_in_celsius = Quantity(float(flow_temperature_in_celsius), Celsius)
 
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
         config=my_heat_pump_config,
@@ -157,7 +158,7 @@ def setup_function(
 
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-        max_thermal_power_in_watt_of_heating_system=my_heat_pump_config.set_thermal_output_power_in_watt,
+        max_thermal_power_in_watt_of_heating_system=my_heat_pump_config.set_thermal_output_power_in_watt.value,
         heating_system_name=my_heat_pump.component_name,
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
         water_mass_flow_rate_from_hds_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,

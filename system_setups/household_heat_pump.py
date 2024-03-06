@@ -27,6 +27,7 @@ from hisim.components import generic_hot_water_storage_modular
 from hisim.components import generic_pv_system
 from hisim.components import electricity_meter
 from hisim import utils
+from hisim.units import Quantity, Watt, Celsius
 
 
 __authors__ = ["Katharina Rieck", "Kevin Knosala", "Markus Blasberg"]
@@ -106,7 +107,7 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
             - Car (Diesel or EV)
         """
 
-        set_heating_threshold_outside_temperature_in_celsius: float = 16.0
+        set_heating_threshold_outside_temperature_in_celsius: Quantity[float, Celsius] = Quantity(16.0, Celsius)
 
         my_building_information = building.BuildingInformation(config=building_config)
 
@@ -154,8 +155,12 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
             ),
             hp_config=(
                 advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-                    heating_reference_temperature_in_celsius=my_building_information.heating_reference_temperature_in_celsius,
+                    heating_load_of_building_in_watt=Quantity(
+                        my_building_information.max_thermal_building_demand_in_watt, Watt
+                    ),
+                    heating_reference_temperature_in_celsius=Quantity(
+                        my_building_information.heating_reference_temperature_in_celsius, Celsius
+                    ),
                 )
             ),
             simple_hot_water_storage_config=(
@@ -184,10 +189,10 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
 
         # set same heating threshold
         household_config.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
-            set_heating_threshold_outside_temperature_in_celsius
+            set_heating_threshold_outside_temperature_in_celsius.value
         )
         household_config.hp_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
-            set_heating_threshold_outside_temperature_in_celsius
+            set_heating_threshold_outside_temperature_in_celsius.value
         )
 
         return household_config

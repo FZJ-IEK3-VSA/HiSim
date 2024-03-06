@@ -1,15 +1,17 @@
 """ Tests for the household with advanced heat pump. """
+
+import json
 import os
 import shutil
 from pathlib import Path
-import json
+
 import pytest
 
-from hisim import utils, hisim_main, log
-from hisim.simulationparameters import SimulationParameters
-from hisim.postprocessingoptions import PostProcessingOptions
-from hisim.system_setup_starter import make_system_setup
+from hisim import hisim_main, log, utils
 from hisim.hisim_main import main
+from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.simulationparameters import SimulationParameters
+from hisim.system_setup_starter import make_system_setup
 
 MY_PATH_TO_MODULE = "../system_setups/household_heat_pump.py"
 MY_SIMULATION_PARAMETERS = {
@@ -110,7 +112,10 @@ def test_household_heat_pump_system_setup_starter_pv():
     # Automatic connections are created with an index, we check the first three indexes here, which should suffice to
     # find the component.
     pv_con_dicts = [
-        {"From": {"Component": "PVSystem_w0", "Field": "ElectricityOutput"}, "To": {"Component": "ElectricityMeter", "Field": f"Input{i}"}}
+        {
+            "From": {"Component": "PVSystem_w0", "Field": "ElectricityOutput"},
+            "To": {"Component": "ElectricityMeter", "Field": f"Input{i}"},
+        }
         for i in range(3)
     ]
     assert any(any(connection == pv_con_dict for connection in connections_list) for pv_con_dict in pv_con_dicts)

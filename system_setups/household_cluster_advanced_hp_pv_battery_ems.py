@@ -355,13 +355,13 @@ def setup_function(
                 source_component_output=my_domnestic_hot_water_heatpump.ElectricityOutput,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
-                source_tags=[lt.ComponentType.HEAT_PUMP_DHW, lt.InandOutputType.ELECTRICITY_REAL,],
+                source_tags=[lt.ComponentType.HEAT_PUMP_DHW, lt.InandOutputType.ELECTRICITY_REAL],
                 source_weight=1,
             )
 
             my_electricity_controller.add_component_output(
                 source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-                source_tags=[lt.ComponentType.HEAT_PUMP_DHW, lt.InandOutputType.ELECTRICITY_TARGET,],
+                source_tags=[lt.ComponentType.HEAT_PUMP_DHW, lt.InandOutputType.ELECTRICITY_TARGET],
                 source_weight=1,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
@@ -380,13 +380,13 @@ def setup_function(
                 source_component_output=my_heat_pump.ElectricalInputPower,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
-                source_tags=[lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.ELECTRICITY_REAL,],
+                source_tags=[lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.ELECTRICITY_REAL],
                 source_weight=2,
             )
 
             my_electricity_controller.add_component_output(
                 source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-                source_tags=[lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.ELECTRICITY_TARGET,],
+                source_tags=[lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.ELECTRICITY_TARGET],
                 source_weight=2,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
@@ -405,7 +405,7 @@ def setup_function(
 
             electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
                 source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-                source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET,],
+                source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
                 source_weight=3,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
@@ -432,7 +432,7 @@ def setup_function(
             # use only default connections of ems and add outputs
             my_electricity_controller.add_component_output(
                 source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-                source_tags=[lt.ComponentType.HEAT_PUMP_DHW, lt.InandOutputType.ELECTRICITY_TARGET,],
+                source_tags=[lt.ComponentType.HEAT_PUMP_DHW, lt.InandOutputType.ELECTRICITY_TARGET],
                 # source_weight=my_domnestic_hot_water_heatpump.config.source_weight,
                 source_weight=1,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
@@ -442,7 +442,7 @@ def setup_function(
 
             my_electricity_controller.add_component_output(
                 source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-                source_tags=[lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.ELECTRICITY_TARGET,],
+                source_tags=[lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.ELECTRICITY_TARGET],
                 source_weight=2,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
@@ -451,7 +451,7 @@ def setup_function(
 
             electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
                 source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-                source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET,],
+                source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
                 source_weight=3,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,

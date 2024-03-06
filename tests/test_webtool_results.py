@@ -34,7 +34,7 @@ def test_webtool_results():
 
     assert isinstance(
         results_daily_operation_for_webtool.loc[
-            "2021-01-01", 'UTSPConnector - ElectricityOutput [Electricity - W]'
+            "2021-01-01", "AdvancedHeatPumpHPLib - ThermalOutputPower [Heating - W]"
         ],
         Number,
     )
@@ -68,6 +68,6 @@ def test_webtool_results():
         profiles_for_webtool = json.load(handle)
 
     assert isinstance(
-        profiles_for_webtool['UTSPConnector - ElectricityOutput [Electricity - W]']["2021-01-01T00:00:00.000"],
+        profiles_for_webtool["PVSystem_w0 - ElectricitityEnergyOutput [Electricity - Wh]"]["2021-01-01T00:00:00.000"],
         Number,
     )

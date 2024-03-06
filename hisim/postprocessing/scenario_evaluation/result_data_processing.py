@@ -130,10 +130,7 @@ class ScenarioDataProcessing:
 
     @staticmethod
     def aggregate_all_values_for_one_scenario(
-        dataframe: pd.DataFrame,
-        list_of_scenarios_to_check: List,
-        column_name_to_check: str,
-        filter_level_index: int,
+        dataframe: pd.DataFrame, list_of_scenarios_to_check: List, column_name_to_check: str, filter_level_index: int,
     ) -> pd.DataFrame:
         """Check for one scenario."""
 
@@ -227,6 +224,7 @@ class FilterClass:
             self.building_type,
             self.building_refurbishment_state,
             self.building_age,
+            self.building_type_and_age,
             self.pv_share,
         ) = self.get_scenarios_to_check()
 
@@ -237,8 +235,8 @@ class FilterClass:
         # kpi data has no time series, so only choose when you analyze yearly data
         kpi_data = [
             "Total electricity consumption",
-            "Total electricity production",
-            "Ratio between total production and total consumption",
+            "PV production",
+            "Ratio between PV production and total consumption",
             "Self-consumption",
             "Self-consumption rate",
             "Autarky rate",
@@ -259,6 +257,7 @@ class FilterClass:
             "Maximum building indoor air temperature reached",
             "Building heating load",
             "Conditioned floor area",
+            "Rooftop area",
             "Specific heating load",
             "Specific heating demand according to TABULA",
             "Thermal output energy of heat distribution system",
@@ -267,34 +266,35 @@ class FilterClass:
             "Thermal output energy of heat pump",
             "Specific thermal output energy of heat pump",
             "Electrical input energy of heat pump",
-            "Mean flow temperature of heat pump",
-            "Mean return temperature of heat pump",
-            "Mean temperature difference of heat pump",
-            "Max flow temperature of heat pump",
-            "Max return temperature of heat pump",
-            "Max temperature difference of heat pump",
-            "Min flow temperature of heat pump",
-            "Min return temperature of heat pump",
-            "Min temperature difference of heat pump",
-            "Mean flow temperature of heat distribution system",
-            "Mean return temperature of heat distribution system",
-            "Mean temperature difference of heat distribution system",
-            "Max flow temperature of heat distribution system",
-            "Max return temperature of heat distribution system",
-            "Max temperature difference of heat distribution system",
-            "Min flow temperature of heat distribution system",
-            "Min return temperature of heat distribution system",
-            "Min temperature difference of heat distribution system",
+            # "Mean flow temperature of heat pump",
+            # "Mean return temperature of heat pump",
+            # "Mean temperature difference of heat pump",
+            # "Max flow temperature of heat pump",
+            # "Max return temperature of heat pump",
+            # "Max temperature difference of heat pump",
+            # "Min flow temperature of heat pump",
+            # "Min return temperature of heat pump",
+            # "Min temperature difference of heat pump",
+            # "Mean flow temperature of heat distribution system",
+            # "Mean return temperature of heat distribution system",
+            # "Mean temperature difference of heat distribution system",
+            # "Max flow temperature of heat distribution system",
+            # "Max return temperature of heat distribution system",
+            # "Max temperature difference of heat distribution system",
+            # "Min flow temperature of heat distribution system",
+            # "Min return temperature of heat distribution system",
+            # "Min temperature difference of heat distribution system",
         ]
 
         electricity_data = [
             "ElectricityMeter|Electricity|ElectricityToGrid",
             "ElectricityMeter|Electricity|ElectricityFromGrid",
             "ElectricityMeter|Electricity|ElectricityAvailable",
-            # if you analyze a house with ems the production and consumption values of the electricity meter are not representative
-            # use the ems production and consumption or the kpi values instead if needed
-            # "ElectricityMeter|Electricity|ElectricityConsumption",
-            # "ElectricityMeter|Electricity|ElectricityProduction",
+            "ElectricityMeter|Electricity|ElectricityConsumption",
+            "UTSPConnector|Electricity|ElectricityOutput",
+            "PVSystem_w0|Electricity|ElectricityOutput",
+            "AdvancedHeatPumpHPLib|Electricity|ElectricalInputPower",
+            "DHWHeatPump_w1|Electricity|ElectricityOutput",
         ]
 
         flow_and_return_temperatures = [
@@ -333,21 +333,68 @@ class FilterClass:
     def get_scenarios_to_check(self):
         """Get scenarios to check for scenario evaluation."""
 
-        (building_type, building_refurbishment_state, building_age,) = self.get_building_properties_to_check()
+        (
+            building_type,
+            building_refurbishment_state,
+            building_age,
+            building_type_and_age,
+        ) = self.get_building_properties_to_check()
 
         pv_share = self.get_pv_properties_to_check()
 
-        return building_type, building_refurbishment_state, building_age, pv_share
+        return building_type, building_refurbishment_state, building_age, building_type_and_age, pv_share
 
     def get_building_properties_to_check(self):
         """Get building properties."""
 
         # system_setups for scenarios to filter
         building_type = [
-            "DE.N.SFH",
-            "DE.N.TH",
-            "DE.N.MFH",
-            "DE.N.AB",
+            "SFH",
+            "TH",
+            "MFH",
+            "AB",
+        ]
+
+        building_type_and_age = [
+            "DE.N.TH.10.Gen.ReEx.001.002",
+            "DE.N.TH.09.Gen.ReEx.001.002",
+            "DE.N.TH.08.Gen.ReEx.001.002",
+            "DE.N.TH.07.Gen.ReEx.001.002",
+            "DE.N.TH.06.Gen.ReEx.001.002",
+            "DE.N.TH.05.Gen.ReEx.001.002",
+            "DE.N.TH.04.Gen.ReEx.001.002",
+            "DE.N.TH.03.Gen.ReEx.001.002",
+            "DE.N.TH.02.Gen.ReEx.001.002",
+            "DE.N.SFH.10.Gen.ReEx.001.002",
+            "DE.N.SFH.09.Gen.ReEx.001.002",
+            "DE.N.SFH.08.Gen.ReEx.001.002",
+            "DE.N.SFH.07.Gen.ReEx.001.002",
+            "DE.N.SFH.06.Gen.ReEx.001.002",
+            "DE.N.SFH.05.Gen.ReEx.001.002",
+            "DE.N.SFH.04.Gen.ReEx.001.002",
+            "DE.N.SFH.03.Gen.ReEx.001.002",
+            "DE.N.SFH.02.Gen.ReEx.001.002",
+            "DE.N.SFH.01.Gen.ReEx.001.002",
+            # "DE.N.MFH.10",
+            # "DE.N.MFH.09",
+            # "DE.N.MFH.08",
+            # "DE.N.MFH.07",
+            # "DE.N.MFH.06",
+            # "DE.N.MFH.05",
+            # "DE.N.MFH.04",
+            # "DE.N.MFH.03",
+            # "DE.N.MFH.02",
+            # "DE.N.MFH.01",
+            # "DE.N.AB.06",
+            # "DE.N.AB.05",
+            # "DE.N.AB.04",
+            # "DE.N.AB.03",
+            # "DE.N.AB.02",
+            # "DE.East.MFH.05",
+            # "DE.East.MFH.04",
+            # "DE.East.AB.08",
+            # "DE.East.AB.07",
+            # "DE.East.AB.06",
         ]
 
         building_refurbishment_state = [
@@ -371,7 +418,7 @@ class FilterClass:
             "12.Gen",
         ]
 
-        return building_type, building_refurbishment_state, building_age
+        return building_type, building_refurbishment_state, building_age, building_type_and_age
 
     def get_pv_properties_to_check(self):
         """Get pv properties."""

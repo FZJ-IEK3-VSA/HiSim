@@ -823,6 +823,10 @@ class KpiGenerator(JSONWizard):
                 wrapped_building_component.my_component, "my_building_information"
             ).scaled_conditioned_floor_area_in_m2
         )
+        # get rooftop area
+        scaled_rooftop_area_in_m2 = float(
+            getattr(wrapped_building_component.my_component, "my_building_information").scaled_rooftop_area_in_m2
+        )
 
         # get specific heating load
         specific_heating_load_in_watt_per_m2 = heating_load_in_watt / scaled_conditioned_floor_area_in_m2
@@ -838,6 +842,9 @@ class KpiGenerator(JSONWizard):
             value=scaled_conditioned_floor_area_in_m2,
             tag=KpiTagEnumClass.BUILDING,
         )
+        scaled_rooftop_area_in_m2_entry = KpiEntry(
+            name="Rooftop area", unit="m2", value=scaled_rooftop_area_in_m2, tag=KpiTagEnumClass.BUILDING,
+        )
         specific_heating_load_in_watt_per_m2_entry = KpiEntry(
             name="Specific heating load",
             unit="W/m2",
@@ -851,6 +858,7 @@ class KpiGenerator(JSONWizard):
                 heating_load_in_watt_entry.name: heating_load_in_watt_entry.to_dict(),
                 scaled_conditioned_floor_area_in_m2_entry.name: scaled_conditioned_floor_area_in_m2_entry.to_dict(),
                 specific_heating_load_in_watt_per_m2_entry.name: specific_heating_load_in_watt_per_m2_entry.to_dict(),
+                scaled_rooftop_area_in_m2_entry.name: scaled_rooftop_area_in_m2_entry.to_dict(),
             }
         )
         # get building temperatures
@@ -1198,7 +1206,7 @@ class KpiGenerator(JSONWizard):
         ) = self.get_flow_and_return_temperatures(
             results=self.results,
             output_name_flow_temperature=SimpleHotWaterStorage.WaterTemperatureToHeatDistribution,
-            output_name_return_temperature=HeatDistribution.WaterTemperatureOutput
+            output_name_return_temperature=HeatDistribution.WaterTemperatureOutput,
         )
 
         if None in (
@@ -1335,17 +1343,23 @@ class KpiGenerator(JSONWizard):
         temperature_diff_flow_and_return_in_celsius = (
             flow_temperature_list_in_celsius - return_temperature_list_in_celsius
         )
-        (mean_temperature_difference_between_flow_and_return_in_celsius,
-         max_temperature_difference_between_flow_and_return_in_celsius,
-         min_temperature_difference_between_flow_and_return_in_celsius) = self.calc_mean_max_min_value(list_or_pandas_series=temperature_diff_flow_and_return_in_celsius)
+        (
+            mean_temperature_difference_between_flow_and_return_in_celsius,
+            max_temperature_difference_between_flow_and_return_in_celsius,
+            min_temperature_difference_between_flow_and_return_in_celsius,
+        ) = self.calc_mean_max_min_value(list_or_pandas_series=temperature_diff_flow_and_return_in_celsius)
 
-        (mean_flow_temperature_in_celsius,
-         max_flow_temperature_in_celsius,
-         min_flow_temperature_in_celsius) = self.calc_mean_max_min_value(list_or_pandas_series=flow_temperature_list_in_celsius)
+        (
+            mean_flow_temperature_in_celsius,
+            max_flow_temperature_in_celsius,
+            min_flow_temperature_in_celsius,
+        ) = self.calc_mean_max_min_value(list_or_pandas_series=flow_temperature_list_in_celsius)
 
-        (mean_return_temperature_in_celsius,
-         max_return_temperature_in_celsius,
-         min_return_temperature_in_celsius) = self.calc_mean_max_min_value(list_or_pandas_series=return_temperature_list_in_celsius)
+        (
+            mean_return_temperature_in_celsius,
+            max_return_temperature_in_celsius,
+            min_return_temperature_in_celsius,
+        ) = self.calc_mean_max_min_value(list_or_pandas_series=return_temperature_list_in_celsius)
 
         return (
             mean_flow_temperature_in_celsius,
@@ -1456,7 +1470,7 @@ class KpiGenerator(JSONWizard):
                 ) = self.get_flow_and_return_temperatures(
                     results=self.results,
                     output_name_flow_temperature=HeatPumpHplib.TemperatureOutput,
-                    output_name_return_temperature=SimpleHotWaterStorage.WaterTemperatureToHeatGenerator
+                    output_name_return_temperature=SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
                 )
 
                 break
@@ -1623,7 +1637,11 @@ class KpiGenerator(JSONWizard):
 
         # now sort kpi dict entries according to tags
         for kpi_name, entry in kpi_collection_dict_unsorted.items():
-            for tag in kpi_collection_dict_sorted.keys():  # pylint: disable=consider-using-dict-items, consider-iterating-dictionary
+            for (
+                tag
+            ) in (
+                kpi_collection_dict_sorted
+            ):
                 if entry["tag"] in tag:
                     kpi_collection_dict_sorted[tag].update({kpi_name: entry})
 

@@ -3,13 +3,12 @@
 
 import datetime
 import os
-from typing import Dict, Any, Tuple, Optional, List, Union
+from typing import Dict, Any, Tuple, Optional, List
 import string
 import warnings
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
 
 # import plotly
 # from html2image import Html2Image
@@ -188,19 +187,19 @@ class ScenarioChartGeneration:
                     kind_of_data_set=kind_of_data_set,
                 )
 
-                try:
-                    self.make_box_plot_for_pandas_dataframe(
-                        filtered_data=filtered_data, title=self.path_addition,
-                    )
-                except Exception:
-                    log.information(f"{variable_to_check} could not be plotted as box plot.")
+                # try:
+                self.make_box_plot_for_pandas_dataframe(
+                    filtered_data=filtered_data, title=self.path_addition,
+                )
+                # except Exception:
+                #     log.information(f"{variable_to_check} could not be plotted as box plot.")
 
-                try:
-                    self.make_bar_plot_for_pandas_dataframe(
-                        filtered_data=filtered_data, title=self.path_addition, unit=unit
-                    )
-                except Exception:
-                    log.information(f"{variable_to_check} could not be plotted as bar plot.")
+                # try:
+                self.make_bar_plot_for_pandas_dataframe(
+                    filtered_data=filtered_data, title=self.path_addition, unit=unit
+                )
+                # except Exception:
+                #     log.information(f"{variable_to_check} could not be plotted as bar plot.")
 
                 try:
                     x_data_variable = dict_with_extra_information_for_specific_plot["scatter"]["x_data_variable"]
@@ -282,14 +281,12 @@ class ScenarioChartGeneration:
                     kind_of_data_set=kind_of_data_set,
                 )
 
-                try:
-                    self.make_line_plot_for_pandas_dataframe(
-                        filtered_data=filtered_data,
-                        title=self.path_addition,
-                        line_plot_marker_size=line_plot_marker_size,
-                    )
-                except Exception:
-                    log.information(f"{variable_to_check} could not be plotted as line plot.")
+                # try:
+                self.make_line_plot_for_pandas_dataframe(
+                    filtered_data=filtered_data, title=self.path_addition, line_plot_marker_size=line_plot_marker_size,
+                )
+                # except Exception:
+                #     log.information(f"{variable_to_check} could not be plotted as line plot.")
                 try:
                     self.make_box_plot_for_pandas_dataframe(filtered_data=filtered_data, title=self.path_addition)
 
@@ -337,8 +334,13 @@ class ScenarioChartGeneration:
             raise ValueError("year could not be determined because time value of filtered data was None.")
 
         x_data_transformed = np.asarray(x_data, dtype="datetime64[D]")
-
-        for scenario in list(OrderedSet(list(filtered_data.scenario))):
+        color, edgecolor = self.set_plot_colors_according_to_data_processing_mode(
+            number_of_scenarios=len(list(OrderedSet(list(filtered_data.scenario)))),
+            data_processing_mode=self.data_processing_mode,
+        )
+        del edgecolor
+        y_data = []
+        for index, scenario in enumerate(list(OrderedSet(list(filtered_data.scenario)))):
             filtered_data_per_scenario = filtered_data.loc[filtered_data["scenario"] == scenario]
             mean_values_aggregated_according_to_scenarios = []
             for time_value in x_data:
@@ -351,19 +353,9 @@ class ScenarioChartGeneration:
             y_data = mean_values_aggregated_according_to_scenarios
 
             plt.plot(
-                x_data_transformed, y_data, "-o", markersize=line_plot_marker_size, label=scenario,
+                x_data_transformed, y_data, "-o", markersize=line_plot_marker_size, label=scenario, color=color[index]
             )
 
-        self.set_ticks_labels_legend_and_save_fig(
-            fig=fig,
-            a_x=a_x,
-            x_axis_label=year,
-            y_axis_unit=filtered_data.unit.values[0],
-            show_legend=self.show_plot_legend,
-            title=title,
-            plot_type_name="line_plot",
-            rotate_x_ticks=True,
-        )
         self.set_ticks_labels_legend_and_save_fig(
             fig=fig,
             a_x=a_x,
@@ -385,6 +377,7 @@ class ScenarioChartGeneration:
 
         y_data = []
         bar_labels = []
+        x_data: Any
 
         for scenario in list(OrderedSet(list(filtered_data.scenario))):
             filtered_data_per_scenario = filtered_data.loc[filtered_data["scenario"] == scenario]
@@ -398,27 +391,40 @@ class ScenarioChartGeneration:
         if alternative_bar_labels is not None:
             bar_labels = alternative_bar_labels
 
-        x_data = np.arange(0, len(y_data) * 2, step=2)
-
         # sort y_data and labels
         y_data_sorted, bar_labels_sorted = self.sort_y_values_according_to_data_processing_mode(
             data_processing_mode=self.data_processing_mode, zip_list_one=y_data, zip_list_two=bar_labels
         )
+        # if no scenarios chosen, make artificial x ticks
+        if self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA:
+            x_data = np.arange(0, len(y_data) * 2, step=2)
+            rotate_x_ticks = False
+            x_axis_label = ""
+            show_x_ticks = False
+        # otherwise choose scenarios as x-ticks
+        else:
+            x_data = bar_labels_sorted
+            rotate_x_ticks = True
+            x_axis_label = ""
+            show_x_ticks = True
 
-        color = self.set_plot_colors_according_to_data_processing_mode(
+        color, edgecolor = self.set_plot_colors_according_to_data_processing_mode(
             number_of_scenarios=len(bar_labels), data_processing_mode=self.data_processing_mode
         )
-        a_x.bar(x_data, y_data_sorted, label=bar_labels_sorted, color=color)
+        a_x.bar(x_data, y_data_sorted, label=bar_labels_sorted, color=color, edgecolor=edgecolor)
 
         self.set_ticks_labels_legend_and_save_fig(
             fig=fig,
             a_x=a_x,
             title=title,
-            show_legend=self.show_plot_legend,
+            show_legend=False,
             plot_type_name="bar_plot",
             y_axis_unit=unit,
-            x_axis_label=filtered_data.year.values[0],
-            show_x_ticks=False,
+            x_axis_label=x_axis_label,
+            show_x_ticks=show_x_ticks,
+            rotate_x_ticks=rotate_x_ticks,
+            x_ticks=np.arange(len(bar_labels)),
+            x_tick_labels=bar_labels_sorted,
         )
 
     def make_box_plot_for_pandas_dataframe(
@@ -431,34 +437,21 @@ class ScenarioChartGeneration:
         if scenario_set is None:
             scenario_set = list(OrderedSet(filtered_data.scenario))
 
-        if self.show_plot_legend:
-            hue = "scenario"
-        else:
-            hue = None
-        sns.boxplot(data=filtered_data, x="scenario", y="value", hue=hue)
-        plt.legend(bbox_to_anchor=(1, 1), loc="upper left")
-
-        try:
-            # this works for yearly data
-            x_axis_label = filtered_data.year.values[0]
-
-            x_axis_label = filtered_data.year.values[0]
-
-        except Exception:
-            # take year from time colum
-            year = str(filtered_data.time.values[0]).split("-", maxsplit=1)[0]
-            x_axis_label = year
+        sns.boxplot(data=filtered_data, x="scenario", y="value", palette="Spectral")
 
         self.set_ticks_labels_legend_and_save_fig(
             fig=fig,
             a_x=a_x,
-            x_axis_label=x_axis_label,
+            x_axis_label="",
             y_axis_unit=filtered_data.unit.values[0],
             show_legend=False,
             legend_labels=scenario_set,
             title=title,
             plot_type_name="box_plot",
-            show_x_ticks=False,
+            show_x_ticks=True,
+            x_ticks=np.arange(len(scenario_set)),
+            x_tick_labels=scenario_set,
+            rotate_x_ticks=True,
         )
 
     def make_histogram_plot_for_pandas_dataframe(
@@ -800,6 +793,8 @@ class ScenarioChartGeneration:
         x_axis_unit: str = "",
         title: str = "",
         legend_labels: Optional[Any] = None,
+        x_ticks: Any = None,
+        x_tick_labels: Any = None,
         show_x_ticks: bool = True,
         rotate_x_ticks: bool = False,
     ) -> None:
@@ -834,10 +829,12 @@ class ScenarioChartGeneration:
             plt.xlabel(
                 xlabel=f"{x_axis_label}", fontsize=self.hisim_chartbase.fontsize_label,
             )
-        else:
+        elif x_axis_label == "" and x_axis_unit != "":
             plt.xlabel(
                 xlabel=f"[{x_axis_unit}]", fontsize=self.hisim_chartbase.fontsize_label,
             )
+        else:
+            pass
 
         # title
         if title != "":
@@ -845,7 +842,11 @@ class ScenarioChartGeneration:
 
         # x-ticks
         if rotate_x_ticks:
-            a_x.tick_params(axis="x", labelrotation=45)
+            if x_ticks is None and x_tick_labels is None:
+                a_x.tick_params(axis="x", labelrotation=45)
+            else:
+                a_x.set_xticks(x_ticks, x_tick_labels, rotation=45, ha="right", rotation_mode="anchor")
+
         if show_x_ticks:
             pass
         else:
@@ -869,18 +870,21 @@ class ScenarioChartGeneration:
 
     def set_plot_colors_according_to_data_processing_mode(
         self, data_processing_mode: ResultDataProcessingModeEnum, number_of_scenarios: int
-    ) -> Union[str, List[str]]:
+    ) -> Tuple[List[str], Optional[str]]:
         """Set plot colors according to data processing mode."""
-        color_palette = list(mcolors.TABLEAU_COLORS.values())
+        # color_palette = list(mcolors.TABLEAU_COLORS.values())
+        color_palette = sns.color_palette("Spectral", n_colors=number_of_scenarios)  #
 
-        color: Union[str, List[str]] = []
+        color: List[str] = []
+        edgecolor: Optional[str] = None
         if data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA:
-            color = "b"
+            for i in range(0, number_of_scenarios):
+                color.append("blue")
         else:
-            color = []
             for i in range(0, number_of_scenarios):
                 color.append(color_palette[i])
-        return color
+            edgecolor = "black"
+        return color, edgecolor
 
     def sort_y_values_according_to_data_processing_mode(
         self, data_processing_mode: ResultDataProcessingModeEnum, zip_list_one: List, zip_list_two: List

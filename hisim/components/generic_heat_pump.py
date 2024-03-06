@@ -656,7 +656,7 @@ class GenericHeatPumpController(cp.Component):
             cp.ComponentConnection(
                 GenericHeatPumpController.ElectricityInput,
                 em_classname,
-                ElectricityMeter.ElectricityToAndFromGrid,
+                ElectricityMeter.ElectricityAvailable,
             )
         )
         return connections

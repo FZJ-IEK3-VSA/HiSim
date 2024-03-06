@@ -1723,8 +1723,8 @@ class KpiGenerator(JSONWizard):
 
         # now sort kpi dict entries according to tags
         for kpi_name, entry in kpi_collection_dict_unsorted.items():
-            for tag in kpi_collection_dict_sorted:
+            for tag, tag_dict in kpi_collection_dict_sorted.items():
                 if entry["tag"] in tag:
-                    kpi_collection_dict_sorted[tag].update({kpi_name: entry})
+                    tag_dict.update({kpi_name: entry})
 
         return kpi_collection_dict_sorted

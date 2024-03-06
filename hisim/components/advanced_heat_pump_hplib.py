@@ -130,7 +130,7 @@ class HeatPumpHplibConfig(ConfigBase):
     ) -> "HeatPumpHplibConfig":
         """Gets a default heat pump with scaling according to heating load of the building."""
 
-        set_thermal_output_power_in_watt = heating_load_of_building_in_watt
+        set_thermal_output_power_in_watt: Quantity[float, Watt] = heating_load_of_building_in_watt
 
         return HeatPumpHplibConfig(
             name="AdvancedHeatPumpHPLib",

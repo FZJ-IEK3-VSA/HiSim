@@ -28,7 +28,7 @@ from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDict
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim import log
-from hisim.units import Quantity, Celsius
+from hisim.units import Quantity, Celsius, Watt
 from system_setups.household_cluster_reference_advanced_hp import (
     BuildingPVWeatherConfig,
 )
@@ -233,7 +233,7 @@ def setup_function(
 
     # Build Heat Pump
     my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+        heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
         heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
     )
     my_heat_pump_config.group_id = group_id
@@ -511,7 +511,7 @@ def setup_function(
 
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
-        model_name=os.path.join(my_sim.module_filename, "27-02-2024-floor-with-cooling-pv-share-1"),
+        model_name=os.path.join(my_sim.module_filename, "06-03-2024-floor-with-cooling-pv-share-1"),
         variant_name="no_surplus_",
         hash_number=hash_number,
         sorting_option=sorting_option,

@@ -1414,7 +1414,10 @@ class KpiGenerator(JSONWizard):
                 )
 
         # calculate SPF
-        spf = output_heating_energy_in_kilowatt_hour / electrical_energy_for_heating_in_kilowatt_hour
+        if electrical_energy_for_heating_in_kilowatt_hour != 0.0:
+            spf = output_heating_energy_in_kilowatt_hour / electrical_energy_for_heating_in_kilowatt_hour
+        else:
+            spf = 0
         # calculate SEER
         if electrical_energy_for_cooling_in_kilowatt_hour != 0.0:
             seer = output_cooling_energy_in_kilowatt_hour / electrical_energy_for_cooling_in_kilowatt_hour

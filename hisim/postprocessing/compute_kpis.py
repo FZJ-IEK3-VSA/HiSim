@@ -1416,7 +1416,10 @@ class KpiGenerator(JSONWizard):
         # calculate SPF
         spf = output_heating_energy_in_kilowatt_hour / electrical_energy_for_heating_in_kilowatt_hour
         # calculate SEER
-        seer = output_cooling_energy_in_kilowatt_hour / electrical_energy_for_cooling_in_kilowatt_hour
+        if electrical_energy_for_cooling_in_kilowatt_hour != 0.0:
+            seer = output_cooling_energy_in_kilowatt_hour / electrical_energy_for_cooling_in_kilowatt_hour
+        else:
+            seer = 0
         # calculate specific heat pump thermal output energy for heating
         specific_heating_output_energy_of_heat_pump_in_kilowatt_hour_per_m2 = (
             output_heating_energy_in_kilowatt_hour / building_conditioned_floor_area_in_m2

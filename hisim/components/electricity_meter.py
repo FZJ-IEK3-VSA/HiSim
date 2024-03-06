@@ -292,7 +292,6 @@ class ElectricityMeter(DynamicComponent):
         )
         # Production of Electricity positve sign
         # Consumption of Electricity negative sign
-        difference_between_production_and_consumption_in_watt = production_in_watt - consumption_uncontrolled_in_watt
 
         # transform watt to watthour
         production_in_watt_hour = production_in_watt * self.seconds_per_timestep / 3600

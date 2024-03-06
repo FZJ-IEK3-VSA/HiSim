@@ -1432,6 +1432,23 @@ class KpiGenerator(JSONWizard):
             specific_heating_output_energy_of_heat_pump_in_kilowatt_hour_per_m2,
         )
 
+    def get_heat_pump_cooling_and_heating_times(
+        self, results: pd.DataFrame, component_name: str,
+    ) -> Tuple[float, float]:
+        """Get heating and cooling times of heat pump."""
+        heating_time_in_hours = 0.0
+        cooling_time_in_hours = 0.0
+
+        for column in results.columns:
+            if all(x in column.split(sep=" ") for x in [HeatPumpHplib.TimeOnHeating, component_name]):
+                heating_time_in_seconds = sum(results[column])
+                heating_time_in_hours = heating_time_in_seconds / 3600
+            if all(x in column.split(sep=" ") for x in [HeatPumpHplib.TimeOnCooling, component_name]):
+                cooling_time_in_seconds = sum(results[column])
+                cooling_time_in_hours = cooling_time_in_seconds / 3600
+
+        return heating_time_in_hours, cooling_time_in_hours
+
     def get_heat_pump_kpis(self, building_conditioned_floor_area_in_m2: float) -> None:
         """Get some KPIs from Heat Pump."""
 
@@ -1443,6 +1460,8 @@ class KpiGenerator(JSONWizard):
         electrical_input_energy_for_heating_in_kilowatt_hour = None
         electrical_input_energy_for_cooling_in_kilowatt_hour = None
         specific_heating_energy_of_heat_pump_in_kilowatt_hour_per_m2 = None
+        heating_time_in_hours = None
+        cooling_time_in_hours = None
         mean_flow_temperature_in_celsius = None
         mean_return_temperature_in_celsius = None
         mean_temperature_difference_between_flow_and_return_in_celsius = None
@@ -1478,6 +1497,10 @@ class KpiGenerator(JSONWizard):
                     component_name=wrapped_component.my_component.component_name,
                     building_conditioned_floor_area_in_m2=building_conditioned_floor_area_in_m2,
                 )
+                # get heating and cooling hours
+                (heating_time_in_hours, cooling_time_in_hours) = self.get_heat_pump_cooling_and_heating_times(
+                    results=self.results, component_name=wrapped_component.my_component.component_name,
+                )
 
                 # get flow and return temperatures
                 (
@@ -1507,6 +1530,8 @@ class KpiGenerator(JSONWizard):
             electrical_input_energy_for_heating_in_kilowatt_hour,
             electrical_input_energy_for_cooling_in_kilowatt_hour,
             specific_heating_energy_of_heat_pump_in_kilowatt_hour_per_m2,
+            heating_time_in_hours,
+            cooling_time_in_hours,
             mean_temperature_difference_between_flow_and_return_in_celsius,
             mean_flow_temperature_in_celsius,
             mean_return_temperature_in_celsius,
@@ -1567,6 +1592,12 @@ class KpiGenerator(JSONWizard):
             unit="kWh",
             value=electrical_input_energy_for_cooling_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP,
+        )
+        heating_hours_entry = KpiEntry(
+            name="Heating hours of heat pump", unit="h", value=heating_time_in_hours, tag=KpiTagEnumClass.HEATPUMP,
+        )
+        cooling_hours_entry = KpiEntry(
+            name="Cooling hours of heat pump", unit="h", value=cooling_time_in_hours, tag=KpiTagEnumClass.HEATPUMP,
         )
         mean_flow_temperature_heatpump_entry = KpiEntry(
             name="Mean flow temperature of heat pump",
@@ -1634,6 +1665,8 @@ class KpiGenerator(JSONWizard):
                 specific_heating_energy_of_heatpump_entry.name: specific_heating_energy_of_heatpump_entry.to_dict(),
                 electrical_input_energy_for_heating_entry.name: electrical_input_energy_for_heating_entry.to_dict(),
                 electrical_input_energy_for_cooling_entry.name: electrical_input_energy_for_cooling_entry.to_dict(),
+                heating_hours_entry.name: heating_hours_entry.to_dict(),
+                cooling_hours_entry.name: cooling_hours_entry.to_dict(),
                 mean_flow_temperature_heatpump_entry.name: mean_flow_temperature_heatpump_entry.to_dict(),
                 mean_return_temperature_heatpump_entry.name: mean_return_temperature_heatpump_entry.to_dict(),
                 mean_temperature_difference_heatpump_entry.name: mean_temperature_difference_heatpump_entry.to_dict(),
@@ -1684,11 +1717,7 @@ class KpiGenerator(JSONWizard):
 
         # now sort kpi dict entries according to tags
         for kpi_name, entry in kpi_collection_dict_unsorted.items():
-            for (
-                tag
-            ) in (
-                kpi_collection_dict_sorted
-            ):
+            for tag in kpi_collection_dict_sorted:
                 if entry["tag"] in tag:
                     kpi_collection_dict_sorted[tag].update({kpi_name: entry})
 

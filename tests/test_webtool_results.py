@@ -49,6 +49,12 @@ def test_webtool_results():
         Number,
     )
 
+    # Test quantity
+    assert isinstance(
+        results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["configuration"]["flow_temperature_in_celsius"]["unit"]["symbol"],
+        str,
+    )
+
     # Test KPIs
     assert isinstance(
         results_for_webtool["kpis"]["Costs and Emissions"]["System operational costs for simulated period"]["value"],

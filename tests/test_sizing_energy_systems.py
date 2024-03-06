@@ -17,6 +17,7 @@ from hisim.components import (
     generic_heat_pump_modular,
     generic_hot_water_storage_modular,
 )
+from hisim.units import Quantity, Watt
 
 from hisim import log
 from hisim import utils
@@ -190,12 +191,12 @@ def simulation_for_one_timestep(
 
     # Set hplib
     my_hplib_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=my_residence_information.max_thermal_building_demand_in_watt
+        heating_load_of_building_in_watt=Quantity(my_residence_information.max_thermal_building_demand_in_watt, Watt)
     )
 
     # Set Hot Water Storage
     my_simple_hot_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-        max_thermal_power_in_watt_of_heating_system=my_hplib_config.set_thermal_output_power_in_watt,
+        max_thermal_power_in_watt_of_heating_system=my_hplib_config.set_thermal_output_power_in_watt.value,
         heating_system_name=my_hplib_config.name,
         water_mass_flow_rate_from_hds_in_kg_per_second=0.787
     )
@@ -230,7 +231,7 @@ def simulation_for_one_timestep(
     return (
         my_residence_information.number_of_apartments,
         pv_power_in_watt,
-        hplib_thermal_power_in_watt,
+        hplib_thermal_power_in_watt.value,
         simple_hot_water_storage_size_in_liter,
         battery_capacity_in_kilowatt_hours,
         hp_for_dhw_thermal_power_in_watt,

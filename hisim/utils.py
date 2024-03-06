@@ -1,13 +1,16 @@
 """ Contains various utility functions and utility classes. """
+
 # clean
 import datetime as dt
 import gc
 import hashlib
 import inspect
+import itertools
 import json
 import os
-from functools import wraps
+from dataclasses import dataclass
 from functools import reduce as freduce
+from functools import wraps
 from timeit import default_timer as timer
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -431,3 +434,26 @@ def get_environment_variable(key: str, default: Optional[str] = None) -> str:
                          or somewhere within your system environment."""
         )
     return value
+
+
+class InstanceCounterMeta(type):
+    """Metaclass to make instance counter not share count with descendants."""
+
+    ids: itertools.count = itertools.count(1)
+
+
+@dataclass
+class InstanceCounter(metaclass=InstanceCounterMeta):
+    """Mixin to add automatic ID generation."""
+
+    def __post_init__(self, reset=False):
+        """Runs after initialization of the dataclass."""
+        if reset:
+            self.instance_id = 0
+        else:
+            self.instance_id = next(self.__class__.ids)
+        if self.instance_id > 1e3:
+            raise RuntimeError(
+                f"""Too many instances of {self.__class__}.
+                Consider using a more performant or simpler type (e.g. int, float)."""
+            )

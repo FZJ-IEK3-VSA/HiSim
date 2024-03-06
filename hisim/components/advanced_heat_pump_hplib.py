@@ -176,12 +176,15 @@ class HeatPumpHplib(Component):
     ThermalOutputPower = "ThermalOutputPower"  # W
     ThermalOutputEnergy = "ThermalOutputEnergy"  # Wh
     ElectricalInputPower = "ElectricalInputPower"  # W
+    ElectricalInputPowerForHeating = "ElectricalInputPowerForHeating"  # W
+    ElectricalInputPowerForCooling = "ElectricalInputPowerForCooling"  # W
     ElectricalInputEnergy = "ElectricalInputEnergy"  # Wh
     COP = "COP"  # -
     EER = "EER"  # -
     TemperatureOutput = "TemperatureOutput"  # °C
     MassFlowOutput = "MassFlowOutput"  # kg/s
-    TimeOn = "TimeOn"  # s
+    TimeOnHeating = "TimeOnHeating"  # s
+    TimeOnCooling = "TimeOnCooling"  # s
     TimeOff = "TimeOff"  # s
 
     def __init__(
@@ -239,7 +242,7 @@ class HeatPumpHplib(Component):
 
         # Component has states
         self.state = HeatPumpState(
-            time_on=0, time_off=0, time_on_cooling=0, on_off_previous=0
+            time_on_heating=0, time_off=0, time_on_cooling=0, on_off_previous=0
         )
         self.previous_state = self.state.self_copy()
 
@@ -312,6 +315,28 @@ class HeatPumpHplib(Component):
             ],
             output_description="Electricity input power in Watt",
         )
+        self.p_el_heating: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricalInputPowerForHeating,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT,
+            postprocessing_flag=[
+                InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+            ],
+            output_description="Electricity input power for heating in Watt",
+        )
+        self.p_el_cooling: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricalInputPowerForCooling,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT,
+            postprocessing_flag=[
+                InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+            ],
+            output_description="Electricity input power for cooling in Watt",
+        )
 
         self.e_el: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -363,12 +388,22 @@ class HeatPumpHplib(Component):
             output_description="Mass flow output",
         )
 
-        self.time_on: ComponentOutput = self.add_output(
+        self.time_on_heating: ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.TimeOn,
+            field_name=self.TimeOnHeating,
             load_type=LoadTypes.TIME,
             unit=Units.SECONDS,
-            output_description="Time turned on",
+            output_description="Time turned on for heating",
+            postprocessing_flag=[
+                OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+            ],
+        )
+        self.time_on_cooling: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.TimeOnCooling,
+            load_type=LoadTypes.TIME,
+            unit=Units.SECONDS,
+            output_description="Time turned on for cooling",
             postprocessing_flag=[
                 OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
             ],
@@ -481,7 +516,7 @@ class HeatPumpHplib(Component):
         t_in_primary = stsv.get_input_value(self.t_in_primary)
         t_in_secondary = stsv.get_input_value(self.t_in_secondary)
         t_amb = stsv.get_input_value(self.t_amb)
-        time_on_heating = self.state.time_on
+        time_on_heating = self.state.time_on_heating
         time_on_cooling = self.state.time_on_cooling
         time_off = self.state.time_off
 
@@ -526,6 +561,8 @@ class HeatPumpHplib(Component):
             p_th = results["P_th"].values[0]
             q_th = p_th * self.my_simulation_parameters.seconds_per_timestep / 3600
             p_el = results["P_el"].values[0]
+            p_el_heating = p_el
+            p_el_cooling = 0
             e_el = p_el * self.my_simulation_parameters.seconds_per_timestep / 3600
             cop = results["COP"].values[0]
             eer = results["EER"].values[0]
@@ -550,6 +587,8 @@ class HeatPumpHplib(Component):
             p_th = results["P_th"].values[0]
             q_th = p_th * self.my_simulation_parameters.seconds_per_timestep / 3600
             p_el = results["P_el"].values[0]
+            p_el_heating = 0
+            p_el_cooling = p_el
             e_el = p_el * self.my_simulation_parameters.seconds_per_timestep / 3600
             cop = results["COP"].values[0]
             eer = results["EER"].values[0]
@@ -559,13 +598,14 @@ class HeatPumpHplib(Component):
                 time_on_cooling + self.my_simulation_parameters.seconds_per_timestep
             )
             time_on_heating = 0
-            time_on_heating = 0
             time_off = 0
         elif on_off == 0:
             # Calulate outputs for off mode
             p_th = 0
             q_th = 0
             p_el = 0
+            p_el_heating = 0
+            p_el_cooling = 0
             e_el = 0
             # None values or nans will cause troubles in post processing, that is why there are not used here
             # cop = None
@@ -585,16 +625,19 @@ class HeatPumpHplib(Component):
         stsv.set_output_value(self.p_th, p_th)
         stsv.set_output_value(self.q_th, q_th)
         stsv.set_output_value(self.p_el, p_el)
+        stsv.set_output_value(self.p_el_heating, p_el_heating)
+        stsv.set_output_value(self.p_el_cooling, p_el_cooling)
         stsv.set_output_value(self.e_el, e_el)
         stsv.set_output_value(self.cop, cop)
         stsv.set_output_value(self.eer, eer)
         stsv.set_output_value(self.t_out, t_out)
         stsv.set_output_value(self.m_dot, m_dot)
-        stsv.set_output_value(self.time_on, time_on_heating)
+        stsv.set_output_value(self.time_on_heating, time_on_heating)
+        stsv.set_output_value(self.time_on_cooling, time_on_cooling)
         stsv.set_output_value(self.time_off, time_off)
 
         # write values to state
-        self.state.time_on = time_on_heating
+        self.state.time_on_heating = time_on_heating
         self.state.time_on_cooling = time_on_cooling
         self.state.time_off = time_off
         self.state.on_off_previous = on_off
@@ -674,7 +717,7 @@ class HeatPumpHplib(Component):
 class HeatPumpState:
     """HeatPumpState class."""
 
-    time_on: int = 0
+    time_on_heating: int = 0
     time_off: int = 0
     time_on_cooling: int = 0
     on_off_previous: float = 0
@@ -684,7 +727,7 @@ class HeatPumpState:
     ):
         """Copy the Heat Pump State."""
         return HeatPumpState(
-            self.time_on, self.time_off, self.time_on_cooling, self.on_off_previous
+            self.time_on_heating, self.time_off, self.time_on_cooling, self.on_off_previous
         )
 
 

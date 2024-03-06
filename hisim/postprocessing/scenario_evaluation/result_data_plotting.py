@@ -188,14 +188,13 @@ class ScenarioChartGeneration:
 
                 # try:
                 self.make_box_plot_for_pandas_dataframe(
-                    filtered_data=filtered_data, title=self.path_addition,
-                )
+                    filtered_data=filtered_data)
                 # except Exception:
                 #     log.information(f"{variable_to_check} could not be plotted as box plot.")
 
                 # try:
                 self.make_bar_plot_for_pandas_dataframe(
-                    filtered_data=filtered_data, title=self.path_addition, unit=unit
+                    filtered_data=filtered_data, unit=unit
                 )
                 # except Exception:
                 #     log.information(f"{variable_to_check} could not be plotted as bar plot.")
@@ -213,7 +212,7 @@ class ScenarioChartGeneration:
 
                 try:
                     self.make_histogram_plot_for_pandas_dataframe(
-                        filtered_data=filtered_data, title=self.path_addition, unit=unit
+                        filtered_data=filtered_data, unit=unit, x_axis_label=self.path_addition
                     )
                 except Exception:
                     log.information(f"{variable_to_check} could not be plotted as histogram.")
@@ -282,12 +281,12 @@ class ScenarioChartGeneration:
 
                 # try:
                 self.make_line_plot_for_pandas_dataframe(
-                    filtered_data=filtered_data, title=self.path_addition, line_plot_marker_size=line_plot_marker_size,
+                    filtered_data=filtered_data, line_plot_marker_size=line_plot_marker_size,
                 )
                 # except Exception:
                 #     log.information(f"{variable_to_check} could not be plotted as line plot.")
                 try:
-                    self.make_box_plot_for_pandas_dataframe(filtered_data=filtered_data, title=self.path_addition)
+                    self.make_box_plot_for_pandas_dataframe(filtered_data=filtered_data)
 
                 except Exception:
                     log.information(f"{variable_to_check} could not be plotted as box plot.")
@@ -320,7 +319,7 @@ class ScenarioChartGeneration:
                 raise ValueError("This kind of data was not found in the datacollectorenum class.")
 
     def make_line_plot_for_pandas_dataframe(
-        self, filtered_data: pd.DataFrame, title: str, line_plot_marker_size: int
+        self, filtered_data: pd.DataFrame, line_plot_marker_size: int
     ) -> None:
         """Make line plot."""
         log.information("Make line plot with data.")
@@ -361,23 +360,14 @@ class ScenarioChartGeneration:
             x_axis_label=year,
             y_axis_unit=filtered_data.unit.values[0],
             show_legend=self.show_plot_legend,
-            title=title,
-            plot_type_name="line_plot",
-            rotate_x_ticks=True,
-        )
-        self.set_ticks_labels_legend_and_save_fig(
-            fig=fig,
-            a_x=a_x,
-            x_axis_label=year,
-            y_axis_unit=filtered_data.unit.values[0],
-            show_legend=self.show_plot_legend,
-            title=title,
+
             plot_type_name="line_plot",
             rotate_x_ticks=True,
         )
 
+
     def make_bar_plot_for_pandas_dataframe(
-        self, filtered_data: pd.DataFrame, title: str, unit: str, alternative_bar_labels: Optional[List[str]] = None,
+        self, filtered_data: pd.DataFrame, unit: str, alternative_bar_labels: Optional[List[str]] = None,
     ) -> None:
         """Make bar plot."""
         log.information("Make bar plot.")
@@ -425,7 +415,6 @@ class ScenarioChartGeneration:
         self.set_ticks_labels_legend_and_save_fig(
             fig=fig,
             a_x=a_x,
-            title=title,
             show_legend=False,
             plot_type_name="bar_plot",
             y_axis_unit=unit,
@@ -437,7 +426,7 @@ class ScenarioChartGeneration:
         )
 
     def make_box_plot_for_pandas_dataframe(
-        self, filtered_data: pd.DataFrame, title: str, scenario_set: Optional[List[str]] = None,
+        self, filtered_data: pd.DataFrame, scenario_set: Optional[List[str]] = None,
     ) -> None:
         """Make box plot."""
         log.information("Make box plot.")
@@ -455,7 +444,6 @@ class ScenarioChartGeneration:
             y_axis_unit=filtered_data.unit.values[0],
             show_legend=False,
             legend_labels=scenario_set,
-            title=title,
             plot_type_name="box_plot",
             show_x_ticks=True,
             x_ticks=np.arange(len(scenario_set)),
@@ -464,7 +452,7 @@ class ScenarioChartGeneration:
         )
 
     def make_histogram_plot_for_pandas_dataframe(
-        self, filtered_data: pd.DataFrame, title: str, unit: str, scenario_set: Optional[List[str]] = None,
+        self, filtered_data: pd.DataFrame, unit: str, x_axis_label: str, scenario_set: Optional[List[str]] = None,
     ) -> None:
         """Make histogram plot."""
         log.information("Make histogram plot.")
@@ -480,7 +468,7 @@ class ScenarioChartGeneration:
         self.set_ticks_labels_legend_and_save_fig(
             fig=fig,
             a_x=a_x,
-            x_axis_label=title,
+            x_axis_label=x_axis_label,
             y_axis_label="Count",
             x_axis_unit=unit,
             show_legend=False,
@@ -800,7 +788,6 @@ class ScenarioChartGeneration:
         y_axis_unit: str = "",
         x_axis_label: str = "",
         x_axis_unit: str = "",
-        title: str = "",
         legend_labels: Optional[Any] = None,
         x_ticks: Any = None,
         x_tick_labels: Any = None,
@@ -844,10 +831,6 @@ class ScenarioChartGeneration:
             )
         else:
             pass
-
-        # title
-        if title != "":
-            plt.title(label=title, fontsize=self.hisim_chartbase.fontsize_title)
 
         # x-ticks
         if rotate_x_ticks:

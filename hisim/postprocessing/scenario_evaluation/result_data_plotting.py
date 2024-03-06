@@ -3,14 +3,12 @@
 
 import datetime
 import os
-from typing import Dict, Any, Tuple, Optional, List, Union
+from typing import Dict, Any, Tuple, Optional, List
 import string
 import warnings
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib.colors as mcolors
-
 # import plotly
 # from html2image import Html2Image
 from ordered_set import OrderedSet

@@ -3,12 +3,13 @@
 
 import datetime
 import os
-from typing import Dict, Any, Tuple, Optional, List
+from typing import Dict, Any, Tuple, Optional, List, Union
 import string
 import warnings
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 
 # import plotly
 # from html2image import Html2Image
@@ -356,6 +357,16 @@ class ScenarioChartGeneration:
                 x_data_transformed, y_data, "-o", markersize=line_plot_marker_size, label=scenario, color=color[index]
             )
 
+        self.set_ticks_labels_legend_and_save_fig(
+            fig=fig,
+            a_x=a_x,
+            x_axis_label=year,
+            y_axis_unit=filtered_data.unit.values[0],
+            show_legend=self.show_plot_legend,
+            title=title,
+            plot_type_name="line_plot",
+            rotate_x_ticks=True,
+        )
         self.set_ticks_labels_legend_and_save_fig(
             fig=fig,
             a_x=a_x,

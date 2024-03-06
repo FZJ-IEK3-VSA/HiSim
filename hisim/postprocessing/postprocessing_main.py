@@ -1,22 +1,25 @@
 """ Main postprocessing module that starts all other modules. """
+
+import copy
+import json
+
 # clean
 import os
-import sys
-import copy
-from typing import Any, Optional, List, Dict, Tuple
-from timeit import default_timer as timer
 import string
-import json
+import sys
+from timeit import default_timer as timer
+from typing import Any, Optional, List, Dict, Tuple
+
 import pandas as pd
 
-from hisim.modular_household.interface_configs.kpi_config import KPIConfig
-from hisim.components import building
-
-from hisim.postprocessing import reportgenerator
-from hisim.postprocessing import charts
 from hisim import log
 from hisim import utils
-from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.component import ComponentOutput
+from hisim.components import building, loadprofilegenerator_utsp_connector
+from hisim.json_generator import JsonConfigurationGenerator
+from hisim.modular_household.interface_configs.kpi_config import KPIConfig
+from hisim.postprocessing import charts
+from hisim.postprocessing import reportgenerator
 from hisim.postprocessing.chart_singleday import ChartSingleDay
 from hisim.postprocessing.compute_kpis import KpiGenerator
 from hisim.postprocessing.generate_csv_for_housing_database import generate_csv_for_database
@@ -24,18 +27,16 @@ from hisim.postprocessing.opex_and_capex_cost_calculation import (
     opex_calculation,
     capex_calculation,
 )
-from hisim.postprocessing.system_chart import SystemChart
-from hisim.component import ComponentOutput
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.report_image_entries import ReportImageEntry, SystemChartEntry
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
-from hisim.json_generator import JsonConfigurationGenerator
+from hisim.postprocessing.system_chart import SystemChart
 from hisim.postprocessing.webtool_entries import WebtoolDict
-from obsolete import loadprofilegenerator_connector
+from hisim.postprocessingoptions import PostProcessingOptions
+from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.loadtypes import OutputPostprocessingRules
 
 
 class PostProcessor:
-
     """Core Post processor class."""
 
     @utils.measure_execution_time
@@ -208,7 +209,7 @@ class PostProcessor:
             for elem in ppdt.wrapped_components:
                 if isinstance(elem.my_component, building.Building):
                     building_data = elem.my_component.my_building_information.buildingdata
-                elif isinstance(elem.my_component, loadprofilegenerator_connector.Occupancy):
+                elif isinstance(elem.my_component, loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig):
                     occupancy_config = elem.my_component.occupancy_config
             if len(building_data) == 0:
                 log.warning("Building needs to be defined to generate csv for housing data base.")
@@ -258,6 +259,11 @@ class PostProcessor:
         if PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL in ppdt.post_processing_options:
             log.information("Make JSON file for webtool.")
             self.write_results_for_webtool_to_json_file(ppdt)
+
+        # Prepare webtool operation results
+        if PostProcessingOptions.MAKE_OPERATION_RESULTS_FOR_WEBTOOL in ppdt.post_processing_options:
+            log.information("Make JSON file for webtool (operation).")
+            self.write_operation_data_for_webtool(ppdt)
 
         if PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON in ppdt.post_processing_options:
             log.information("Writing component configurations to JSON file.")
@@ -880,6 +886,27 @@ class PostProcessor:
         )
 
         dataframe.to_csv(path_or_buf=filename, index=None)  # type: ignore
+
+    def write_operation_data_for_webtool(self, ppdt: PostProcessingDataTransfer) -> None:
+        """Collect daily operation results and write into json for webtool."""
+
+        # Get bools that tells if the output should be displayed in webtool
+        component_display_in_webtool: list[str] = []
+        for output in ppdt.all_outputs:
+            if output.postprocessing_flag:
+                if OutputPostprocessingRules.DISPLAY_IN_WEBTOOL in output.postprocessing_flag:
+                    component_display_in_webtool.append(output.get_pretty_name())
+
+        results_daily = ppdt.results_daily[component_display_in_webtool]
+        data = results_daily.to_json(date_format="iso")
+
+        # Write to file
+        with open(
+            os.path.join(ppdt.simulation_parameters.result_directory, "results_daily_operation_for_webtool.json"),
+            "w",
+            encoding="utf-8",
+        ) as file:
+            file.write(data)
 
     def write_results_for_webtool_to_json_file(self, ppdt: PostProcessingDataTransfer) -> None:
         """Collect results and write into json for webtool."""

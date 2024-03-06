@@ -95,7 +95,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         You can also check the paper:
         https://www.sciencedirect.com/science/article/pii/S2352152X2201533X?via%3Dihub.
 
-        - If the heating system is something else (e.g. gasheater, ...), use approximation: 60l per kW thermal power.
+        - If the heating system is something else (e.g. gasheater, ...), use approximation: 60 l per kW thermal power.
         """
 
         # if the used heating system is a heat pump use formular
@@ -111,7 +111,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
 
         # otherwise use approximation: 60l per kw thermal power
         else:
-            volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system * 1e3 * 60
+            volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 60
 
         config = SimpleHotWaterStorageConfig(
             name="SimpleHotWaterStorage",

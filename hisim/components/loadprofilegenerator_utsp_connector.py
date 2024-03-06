@@ -123,6 +123,7 @@ class UtspLpgConnector(cp.Component):
     HeatingByResidents = "HeatingByResidents"
     HeatingByDevices = "HeatingByDevices"
     ElectricityOutput = "ElectricityOutput"
+    ElectricityEnergyOutput = "ElectricityEnergyOutput"
     WaterConsumption = "WaterConsumption"
 
     Electricity_Demand_Forecast_24h = "Electricity_Demand_Forecast_24h"
@@ -192,6 +193,15 @@ class UtspLpgConnector(cp.Component):
             unit=lt.Units.WATT,
             postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
             output_description=f"here a description for LPG UTSP {self.ElectricityOutput} will follow.",
+        )
+
+        self.electricity_energy_output_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricityEnergyOutput,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT_HOUR,
+            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
+            output_description=f"here a description for LPG UTSP {self.ElectricityEnergyOutput} will follow.",
         )
 
         self.water_consumption_channel: cp.ComponentOutput = self.add_output(
@@ -268,6 +278,7 @@ class UtspLpgConnector(cp.Component):
         stsv.set_output_value(self.heating_by_residents_channel, self.heating_by_residents[timestep])
         stsv.set_output_value(self.heating_by_devices_channel, self.heating_by_devices[timestep])
         stsv.set_output_value(self.electricity_output_channel, self.electricity_consumption[timestep])
+        stsv.set_output_value(self.electricity_energy_output_channel, self.electricity_consumption[timestep] * self.my_simulation_parameters.seconds_per_timestep / 3600)
         stsv.set_output_value(self.water_consumption_channel, self.water_consumption[timestep])
 
         if self.config.predictive_control:

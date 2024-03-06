@@ -250,6 +250,8 @@ class PVSystem(cp.Component):
 
     # Outputs
     ElectricityOutput = "ElectricityOutput"
+    # Additional output channels must not contain 'ElectricityOutput' or dynamic components will fail.
+    ElectricitityEnergyOutput = "ElectricitityEnergyOutput"
 
     # Similar components to connect to:
     # 1. Weather
@@ -349,10 +351,20 @@ class PVSystem(cp.Component):
             unit=lt.Units.WATT,
             postprocessing_flag=[
                 lt.InandOutputType.ELECTRICITY_PRODUCTION,
-                lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
                 lt.ComponentType.PV,
             ],
             output_description=f"here a description for PV {self.ElectricityOutput} will follow.",
+        )
+
+        self.electricity_energy_output_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricitityEnergyOutput,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT_HOUR,
+            postprocessing_flag=[
+                lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+            ],
+            output_description=f"Here a description for PV {self.ElectricitityEnergyOutput} will follow.",
         )
 
         self.add_default_connections(self.get_default_connections_from_weather())
@@ -461,6 +473,13 @@ class PVSystem(cp.Component):
                 self.electricity_output_channel,
                 self.ac_power_ratios_for_all_timesteps_output[timestep] * self.pvconfig.power_in_watt,
             )
+            stsv.set_output_value(
+                self.electricity_energy_output_channel,
+                self.ac_power_ratios_for_all_timesteps_output[timestep]
+                * self.pvconfig.power_in_watt
+                * self.my_simulation_parameters.seconds_per_timestep
+                / 3600,
+            )
 
         # calculate pv system outputs with pvlib
         else:
@@ -492,6 +511,10 @@ class PVSystem(cp.Component):
             # val = self.simulation_repository.get_entry(Weather.Weather_Temperature_Forecast_24h)
 
             stsv.set_output_value(self.electricity_output_channel, ac_power_in_watt)
+            stsv.set_output_value(
+                self.electricity_energy_output_channel,
+                ac_power_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3600,
+            )
 
             # cache results at the end of the simulation
             self.ac_power_ratios_for_all_timesteps_data[timestep] = ac_power_ratio

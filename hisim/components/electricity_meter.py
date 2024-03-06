@@ -123,7 +123,6 @@ class ElectricityMeter(DynamicComponent):
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityConsumption} will follow.",
-            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
 
         self.electricity_production_channel: cp.ComponentOutput = self.add_output(
@@ -133,7 +132,6 @@ class ElectricityMeter(DynamicComponent):
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityProduction} will follow.",
-            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
 
         self.cumulative_electricity_consumption_channel: cp.ComponentOutput = self.add_output(
@@ -143,7 +141,6 @@ class ElectricityMeter(DynamicComponent):
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.CumulativeConsumption} will follow.",
-            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
 
         self.cumulative_electricity_production_channel: cp.ComponentOutput = self.add_output(
@@ -153,7 +150,6 @@ class ElectricityMeter(DynamicComponent):
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.CumulativeProduction} will follow.",
-            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
         self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())
         self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())

@@ -147,7 +147,9 @@ class HeatPumpHplib(Component):
 
     # Outputs
     ThermalOutputPower = "ThermalOutputPower"  # W
+    ThermalOutputEnergy = "ThermalOutputEnergy"  # Wh
     ElectricalInputPower = "ElectricalInputPower"  # W
+    ElectricalInputEnergy = "ElectricalInputEnergy"  # Wh
     COP = "COP"  # -
     EER = "EER"  # -
     TemperatureOutput = "TemperatureOutput"  # °C
@@ -252,6 +254,14 @@ class HeatPumpHplib(Component):
             ],
         )
 
+        self.q_th: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ThermalOutputEnergy,
+            load_type=LoadTypes.HEATING,
+            unit=Units.WATT_HOUR,
+            output_description=("Thermal output enery in Watthours"),
+        )
+
         self.p_el: ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ElectricalInputPower,
@@ -262,6 +272,17 @@ class HeatPumpHplib(Component):
                 OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
             ],
             output_description="Electricity input power in Watt",
+        )
+
+        self.e_el: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricalInputEnergy,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT_HOUR,
+            postprocessing_flag=[
+                OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+            ],
+            output_description="Electricity input energy in Watthours",
         )
 
         self.cop: ComponentOutput = self.add_output(
@@ -457,7 +478,9 @@ class HeatPumpHplib(Component):
 
             # Get outputs for heating mode
             p_th = results["P_th"].values[0]
+            q_th = p_th * self.my_simulation_parameters.seconds_per_timestep / 3600
             p_el = results["P_el"].values[0]
+            e_el = p_el * self.my_simulation_parameters.seconds_per_timestep / 3600
             cop = results["COP"].values[0]
             eer = results["EER"].values[0]
             t_out = results["T_out"].values[0]
@@ -477,7 +500,9 @@ class HeatPumpHplib(Component):
             )
 
             p_th = results["P_th"].values[0]
+            q_th = p_th * self.my_simulation_parameters.seconds_per_timestep / 3600
             p_el = results["P_el"].values[0]
+            e_el = p_el * self.my_simulation_parameters.seconds_per_timestep / 3600
             cop = results["COP"].values[0]
             eer = results["EER"].values[0]
             t_out = results["T_out"].values[0]
@@ -489,7 +514,9 @@ class HeatPumpHplib(Component):
         elif on_off == 0:
             # Calulate outputs for off mode
             p_th = 0
+            q_th = 0
             p_el = 0
+            e_el = 0
             # None values or nans will cause troubles in post processing, that is why there are not used here
             # cop = None
             # t_out = None
@@ -506,7 +533,9 @@ class HeatPumpHplib(Component):
 
         # write values for output time series
         stsv.set_output_value(self.p_th, p_th)
+        stsv.set_output_value(self.q_th, q_th)
         stsv.set_output_value(self.p_el, p_el)
+        stsv.set_output_value(self.e_el, e_el)
         stsv.set_output_value(self.cop, cop)
         stsv.set_output_value(self.eer, eer)
         stsv.set_output_value(self.t_out, t_out)

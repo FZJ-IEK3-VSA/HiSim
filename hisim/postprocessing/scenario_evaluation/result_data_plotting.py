@@ -365,7 +365,6 @@ class ScenarioChartGeneration:
             rotate_x_ticks=True,
         )
 
-
     def make_bar_plot_for_pandas_dataframe(
         self, filtered_data: pd.DataFrame, unit: str, alternative_bar_labels: Optional[List[str]] = None,
     ) -> None:

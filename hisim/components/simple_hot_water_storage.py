@@ -76,7 +76,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
             heat_exchanger_is_present=True,  # until now stratified mode is causing problems, so heat exchanger mode is recommended
             co2_footprint=100,  # Todo: check value
             cost=volume_heating_water_storage_in_liter * 14.51,  # value from emission_factros_and_costs_devices.csv
-            lifetime=100,  # value from emission_factros_and_costs_devices.csv
+            lifetime=25,  # value from emission_factors_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.0,  # Todo: set correct value
         )
         return config

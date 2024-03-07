@@ -1399,9 +1399,10 @@ class KpiGenerator(JSONWizard):
                 output_heating_energy_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
                     power_timeseries_in_watt=heating_output_power_values_in_watt, timeresolution=seconds_per_timestep
                 )
-                output_cooling_energy_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
+                # for cooling enery use absolute value, not negative value
+                output_cooling_energy_in_kilowatt_hour = abs(self.compute_total_energy_from_power_timeseries(
                     power_timeseries_in_watt=cooling_output_power_values_in_watt, timeresolution=seconds_per_timestep
-                )
+                ))
             if all(x in column.split(sep=" ") for x in [HeatPumpHplib.ElectricalInputPowerForHeating, component_name]):
                 # get electrical energie values for heating
                 electrical_energy_for_heating_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(

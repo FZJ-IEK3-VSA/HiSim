@@ -5,11 +5,11 @@
 import importlib
 from dataclasses import dataclass
 from typing import List, Any, Tuple
-
+from enum import Enum
 import numpy as np
 import pandas as pd
 from dataclasses_json import dataclass_json
-from enum import Enum
+
 import hisim.component as cp
 from hisim import loadtypes as lt
 from hisim import utils

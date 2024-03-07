@@ -11,6 +11,7 @@ preparation on district heating for water/water heatpumps
 """
 from typing import Any, List, Optional, Tuple, Dict
 import hashlib
+from collections import deque
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from dataclass_wizard import JSONWizard
@@ -216,6 +217,8 @@ class HeatPumpHplibWithTwoOutputs(Component):
         )
 
         self.calculation_cache: Dict = {}  # caching for hplib simulation
+
+        self.cache_t_in_secondary_list: deque = deque(maxlen=10)  # maximale einträge = 10
 
         self.model = config.model
 
@@ -749,9 +752,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
         time_on_cooling = self.state.time_on_cooling
         time_off = self.state.time_off
 
-        if (
-            on_off_dhw != 0
-        ):
+        if on_off_dhw != 0:
             on_off = on_off_dhw
         else:
             on_off = on_off_sh
@@ -789,22 +790,13 @@ class HeatPumpHplibWithTwoOutputs(Component):
         #     on_off = on_off_dhw
 
         if on_off == 1:  # Calculation for building heating
-            if force_convergence:
-                results = hpl.simulate(
-                    t_in_primary=t_in_primary,
-                    t_in_secondary=t_in_secondary_sh,
-                    parameters=self.parameters,
-                    t_amb=t_amb,
-                    mode=1,
-                )
-            else:
-                results = self.get_cached_results_or_run_hplib_simulation(
-                    t_in_primary=t_in_primary,
-                    t_in_secondary=t_in_secondary_sh,
-                    parameters=self.parameters,
-                    t_amb=t_amb,
-                    mode=1,
-                )
+            results = self.get_cached_results_or_run_hplib_simulation(
+                t_in_primary=t_in_primary,
+                t_in_secondary=t_in_secondary_sh,
+                parameters=self.parameters,
+                t_amb=t_amb,
+                mode=1,
+            )
 
             p_th_sh = results["P_th"].values[0]
             p_th_dhw = 0.0
@@ -821,22 +813,13 @@ class HeatPumpHplibWithTwoOutputs(Component):
             time_off = 0
 
         elif on_off == 2:  # Calculate outputs for dhw mode
-            if force_convergence:
-                results = hpl.simulate(
-                    t_in_primary=t_in_primary,
-                    t_in_secondary=t_in_secondary_dhw,
-                    parameters=self.parameters,
-                    t_amb=t_amb,
-                    mode=1,
-                )
-            else:
-                results = self.get_cached_results_or_run_hplib_simulation(
-                    t_in_primary=t_in_primary,
-                    t_in_secondary=t_in_secondary_dhw,
-                    parameters=self.parameters,
-                    t_amb=t_amb,
-                    mode=1,
-                )
+            results = self.get_cached_results_or_run_hplib_simulation(
+                t_in_primary=t_in_primary,
+                t_in_secondary=t_in_secondary_dhw,
+                parameters=self.parameters,
+                t_amb=t_amb,
+                mode=1,
+            )
 
             p_th_sh = 0.0
             p_el_sh = 0
@@ -1078,6 +1061,8 @@ class HeatPumpHplibWithTwoOutputs(Component):
         t_in_primary = round(t_in_primary, 1)
         t_in_secondary = round(t_in_secondary, 1)
         t_amb = round(t_amb, 1)
+        self.cache_t_in_secondary_list.append(t_in_secondary)
+        cache_t_in_secondary_set_list = list(set(self.cache_t_in_secondary_list))
 
         my_data_class = CalculationRequest(
             t_in_primary=t_in_primary,
@@ -1089,8 +1074,14 @@ class HeatPumpHplibWithTwoOutputs(Component):
         my_hash_key = hashlib.sha256(my_json_key.encode("utf-8")).hexdigest()
 
         if my_hash_key in self.calculation_cache:
-            results = self.calculation_cache[my_hash_key]
-
+            if len(cache_t_in_secondary_set_list) == 2:  # only 2 entries are signal for oszilating in current timestep
+                # prevents oszilating between two cache entries
+                # --> if the last 10 retrievals are between two identical values, then forced new simulation from the average of both values
+                t_in_secondary = (cache_t_in_secondary_set_list[0] + cache_t_in_secondary_set_list[1]) / 2
+                results = hpl.simulate(t_in_primary, t_in_secondary, parameters, t_amb, mode=mode)
+                self.calculation_cache[my_hash_key] = results
+            else:
+                results = self.calculation_cache[my_hash_key]
         else:
             results = hpl.simulate(t_in_primary, t_in_secondary, parameters, t_amb, mode=mode)
             self.calculation_cache[my_hash_key] = results
@@ -1793,20 +1784,17 @@ class HeatPumpHplibControllerDHW(Component):
             if water_temperature_input_from_dhw_storage_in_celsius < t_min_dhw_storage_in_celsius:  # on
                 self.controller_signal = 1
 
-            elif (
+            if (
                 water_temperature_input_from_dhw_storage_in_celsius
                 > t_max_dhw_storage_in_celsius + temperature_modifier
             ):  # off
                 self.controller_signal = 0
 
-            elif (
+            if (
                 temperature_modifier > 0
                 and water_temperature_input_from_dhw_storage_in_celsius < t_max_dhw_storage_in_celsius
             ):  # aktiviren wenn strom überschuss
                 self.controller_signal = 1
-
-            else:
-                pass
 
             if self.controller_signal == 1:
                 self.state_dhw = 2
@@ -1815,8 +1803,8 @@ class HeatPumpHplibControllerDHW(Component):
             else:
                 raise ValueError("Advanced HP Lib DHW Controller State unknown.")
 
-            self.previous_controller_signal = self.controller_signal
-            self.previous_state_dhw = self.state_dhw
+        self.previous_controller_signal = self.controller_signal
+        self.previous_state_dhw = self.state_dhw
 
         stsv.set_output_value(self.state_dhw_channel, self.state_dhw)
         stsv.set_output_value(

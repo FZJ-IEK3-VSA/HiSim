@@ -184,7 +184,7 @@ class DynamicComponent(Component):
     def add_component_inputs_and_connect(
         self,
         source_component_classes: List[Component],
-        outputstring: str,
+        source_component_field_name: str,
         source_load_type: lt.LoadTypes,
         source_unit: lt.Units,
         source_tags: List[Union[lt.ComponentType, lt.InandOutputType]],
@@ -202,7 +202,7 @@ class DynamicComponent(Component):
         # Connect Input and define it as DynamicConnectionInput
         for component in source_component_classes:
             for output_var in component.outputs:
-                if outputstring in output_var.display_name:
+                if source_component_field_name in output_var.display_name:
                     source_component_output = output_var.display_name
 
                     label = f"Input{num_inputs}"

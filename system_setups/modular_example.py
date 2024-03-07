@@ -317,7 +317,7 @@ def setup_function(
 
         my_electricity_controller.add_component_inputs_and_connect(
             source_component_classes=consumption,
-            outputstring="ElectricityOutput",
+            source_component_field_name=consumption[0].ElectricityOutput,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
@@ -325,7 +325,7 @@ def setup_function(
         )
         my_electricity_controller.add_component_inputs_and_connect(
             source_component_classes=production,
-            outputstring="ElectricityOutput",
+            source_component_field_name=production[0].ElectricityOutput,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],

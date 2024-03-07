@@ -294,7 +294,7 @@ class FilterClass:
         electricity_data = [
             "ElectricityMeter|Electricity|ElectricityToGrid",
             "ElectricityMeter|Electricity|ElectricityFromGrid",
-            "ElectricityMeter|Electricity|ElectricityAvailable",
+            "ElectricityMeter|Electricity|ElectricityToAndFromGrid",
             "ElectricityMeter|Electricity|ElectricityConsumption",
             "UTSPConnector|Electricity|ElectricityOutput",
             "PVSystem_w0|Electricity|ElectricityOutput",

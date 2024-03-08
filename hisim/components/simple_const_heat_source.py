@@ -112,29 +112,32 @@ class SimpleHeatSource(cp.Component):
         self.previous_state = SimpleHeatSourceState()
 
         # Outputs
-        self.thermal_power_delivered_channel: cp.ComponentOutput = self.add_output(
-            object_name=self.component_name,
-            field_name=self.ThermalPowerDelivered,
-            load_type=lt.LoadTypes.HEATING,
-            unit=lt.Units.WATT,
-            output_description="Thermal Power Delivered",
-        )
-
-        self.temperature_delivered_channel: cp.ComponentOutput = self.add_output(
-            object_name=self.component_name,
-            field_name=self.TemperatureDelivered,
-            load_type=lt.LoadTypes.TEMPERATURE,
-            unit=lt.Units.CELSIUS,
-            output_description="Temperature Delivered",
-        )
+        if self.config.const_source == SimpleHeatSourceType.THERMALPOWER:
+            self.thermal_power_delivered_channel: cp.ComponentOutput = self.add_output(
+                object_name=self.component_name,
+                field_name=self.ThermalPowerDelivered,
+                load_type=lt.LoadTypes.HEATING,
+                unit=lt.Units.WATT,
+                output_description="Thermal Power Delivered",
+            )
+        if self.config.const_source == SimpleHeatSourceType.TEMPERATURE:
+            self.temperature_delivered_channel: cp.ComponentOutput = self.add_output(
+                object_name=self.component_name,
+                field_name=self.TemperatureDelivered,
+                load_type=lt.LoadTypes.TEMPERATURE,
+                unit=lt.Units.CELSIUS,
+                output_description="Temperature Delivered",
+            )
 
     def write_to_report(self) -> List[str]:
         """Writes relevant data to report."""
         lines = []
         lines.append(f"Name: {self.config.name })")
         lines.append(f"Source: {self.config.const_source})")
-        lines.append(f"Power: {self.config.power_th_in_watt * 1e-3:4.0f} kW")
-        lines.append(f"Temperature : {self.config.temperature_in_celsius} °C")
+        if self.config.const_source == SimpleHeatSourceType.THERMALPOWER:
+            lines.append(f"Power: {self.config.power_th_in_watt * 1e-3:4.0f} kW")
+        if self.config.const_source == SimpleHeatSourceType.TEMPERATURE:
+            lines.append(f"Temperature : {self.config.temperature_in_celsius} °C")
         return lines
 
     def i_prepare_simulation(self) -> None:

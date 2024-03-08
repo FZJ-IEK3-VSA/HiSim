@@ -5,7 +5,8 @@ import glob
 import os
 from typing import Dict, Any, Tuple, Optional, List
 import pandas as pd
-
+from ordered_set import OrderedSet
+import numpy as np
 from hisim.postprocessing.scenario_evaluation.result_data_collection import ResultDataTypeEnum
 from hisim import log
 
@@ -82,7 +83,7 @@ class ScenarioDataProcessing:
 
     @staticmethod
     def get_statistics_of_data_and_write_to_excel(
-        filtered_data: pd.DataFrame, path_to_save: str, kind_of_data_set: str,
+        filtered_data: pd.DataFrame, x_and_y_plot_data: pd.DataFrame, path_to_save: str, kind_of_data_set: str,
     ) -> None:
         """Use pandas describe method to get statistical values of certain data."""
         # create a excel writer object
@@ -93,6 +94,8 @@ class ScenarioDataProcessing:
             statistical_data = filtered_data.describe()
 
             statistical_data.to_excel(excel_writer=writer, sheet_name="statistics")
+            # write also x and y data which is plotted
+            x_and_y_plot_data.to_excel(excel_writer=writer, sheet_name="plotted mean data")
 
     @staticmethod
     def check_if_scenario_exists_and_filter_dataframe_for_scenarios(
@@ -203,6 +206,46 @@ class ScenarioDataProcessing:
                 key_for_scenario_one = list(dict_of_scenarios_to_check.keys())[0]
                 key_for_current_scenario = ""
         return concat_df, key_for_scenario_one, key_for_current_scenario
+
+    @staticmethod
+    def take_mean_values_of_scenarios(filtered_data: pd.DataFrame) -> pd.DataFrame:
+        """Get mean values of scenarios."""
+
+        dict_with_x_and_y_data: Dict = {}
+        # this is for timeseries data like hourly daily monthly
+        try:
+            x_data = list(OrderedSet(list(filtered_data.time)))
+            take_mean_time_values_bool: bool = True
+        # this is for yearly data
+        except Exception:
+            x_data = [filtered_data.year.values[0]]
+            take_mean_time_values_bool = False
+
+        # add x_data as column
+        dict_with_x_and_y_data.update({"time": x_data})
+
+        for scenario in list(OrderedSet(list(filtered_data.scenario))):
+            filtered_data_per_scenario = filtered_data.loc[filtered_data["scenario"] == scenario]
+
+            # if time column exists in dataframe, meaning if hourly, daily or monthly data, take mean values of time also
+            if take_mean_time_values_bool:
+                mean_values_aggregated_according_to_scenarios = []
+                for time_value in x_data:
+                    mean_value_per_scenario_per_timestep = np.mean(
+                        filtered_data_per_scenario.loc[filtered_data_per_scenario["time"] == time_value]["value"]
+                    )
+
+                    mean_values_aggregated_according_to_scenarios.append(mean_value_per_scenario_per_timestep)
+                dict_with_x_and_y_data.update({f"{scenario}": mean_values_aggregated_according_to_scenarios})
+
+            # take mean value directly for yearly data
+            else:
+                mean_value_per_scenario = np.mean(filtered_data_per_scenario.value.values)
+                dict_with_x_and_y_data.update({f"{scenario}": [mean_value_per_scenario]})
+
+        x_and_y_plot_data: pd.DataFrame = pd.DataFrame(dict_with_x_and_y_data)
+
+        return x_and_y_plot_data
 
 
 class FilterClass:
@@ -361,25 +404,25 @@ class FilterClass:
         ]
 
         building_type_and_age = [
-            "DE.N.TH.10.Gen.ReEx.001.002",
-            "DE.N.TH.09.Gen.ReEx.001.002",
-            "DE.N.TH.08.Gen.ReEx.001.002",
-            "DE.N.TH.07.Gen.ReEx.001.002",
-            "DE.N.TH.06.Gen.ReEx.001.002",
-            "DE.N.TH.05.Gen.ReEx.001.002",
-            "DE.N.TH.04.Gen.ReEx.001.002",
-            "DE.N.TH.03.Gen.ReEx.001.002",
-            "DE.N.TH.02.Gen.ReEx.001.002",
-            "DE.N.SFH.10.Gen.ReEx.001.002",
-            "DE.N.SFH.09.Gen.ReEx.001.002",
-            "DE.N.SFH.08.Gen.ReEx.001.002",
-            "DE.N.SFH.07.Gen.ReEx.001.002",
-            "DE.N.SFH.06.Gen.ReEx.001.002",
-            "DE.N.SFH.05.Gen.ReEx.001.002",
-            "DE.N.SFH.04.Gen.ReEx.001.002",
-            "DE.N.SFH.03.Gen.ReEx.001.002",
-            "DE.N.SFH.02.Gen.ReEx.001.002",
-            "DE.N.SFH.01.Gen.ReEx.001.002",
+            "DE.N.TH.10",
+            "DE.N.TH.09",
+            "DE.N.TH.08",
+            "DE.N.TH.07",
+            "DE.N.TH.06",
+            "DE.N.TH.05",
+            "DE.N.TH.04",
+            "DE.N.TH.03",
+            "DE.N.TH.02",
+            "DE.N.SFH.10",
+            "DE.N.SFH.09",
+            "DE.N.SFH.08",
+            "DE.N.SFH.07",
+            "DE.N.SFH.06",
+            "DE.N.SFH.05",
+            "DE.N.SFH.04",
+            "DE.N.SFH.03",
+            "DE.N.SFH.02",
+            "DE.N.SFH.01",
             # "DE.N.MFH.10",
             # "DE.N.MFH.09",
             # "DE.N.MFH.08",

@@ -9,6 +9,7 @@ import warnings
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+
 # import plotly
 # from html2image import Html2Image
 from ordered_set import OrderedSet
@@ -180,22 +181,21 @@ class ScenarioChartGeneration:
                 kind_of_data_set = "yearly"
 
                 # get statistical data
+                x_and_y_plot_data = ScenarioDataProcessing.take_mean_values_of_scenarios(filtered_data=filtered_data)
                 ScenarioDataProcessing.get_statistics_of_data_and_write_to_excel(
                     filtered_data=filtered_data,
                     path_to_save=self.plot_path_complete,
                     kind_of_data_set=kind_of_data_set,
+                    x_and_y_plot_data=x_and_y_plot_data,
                 )
 
                 # try:
-                self.make_box_plot_for_pandas_dataframe(
-                    filtered_data=filtered_data)
+                self.make_box_plot_for_pandas_dataframe(filtered_data=filtered_data)
                 # except Exception:
                 #     log.information(f"{variable_to_check} could not be plotted as box plot.")
 
                 # try:
-                self.make_bar_plot_for_pandas_dataframe(
-                    filtered_data=filtered_data, unit=unit
-                )
+                self.make_bar_plot_for_pandas_dataframe(filtered_data=filtered_data, unit=unit)
                 # except Exception:
                 #     log.information(f"{variable_to_check} could not be plotted as bar plot.")
 
@@ -273,10 +273,12 @@ class ScenarioChartGeneration:
                     line_plot_marker_size = 5
 
                 # get statistical data
+                x_and_y_plot_data = ScenarioDataProcessing.take_mean_values_of_scenarios(filtered_data=filtered_data)
                 ScenarioDataProcessing.get_statistics_of_data_and_write_to_excel(
                     filtered_data=filtered_data,
                     path_to_save=self.plot_path_complete,
                     kind_of_data_set=kind_of_data_set,
+                    x_and_y_plot_data=x_and_y_plot_data,
                 )
 
                 # try:
@@ -318,9 +320,7 @@ class ScenarioChartGeneration:
             else:
                 raise ValueError("This kind of data was not found in the datacollectorenum class.")
 
-    def make_line_plot_for_pandas_dataframe(
-        self, filtered_data: pd.DataFrame, line_plot_marker_size: int
-    ) -> None:
+    def make_line_plot_for_pandas_dataframe(self, filtered_data: pd.DataFrame, line_plot_marker_size: int) -> None:
         """Make line plot."""
         log.information("Make line plot with data.")
 
@@ -360,7 +360,6 @@ class ScenarioChartGeneration:
             x_axis_label=year,
             y_axis_unit=filtered_data.unit.values[0],
             show_legend=self.show_plot_legend,
-
             plot_type_name="line_plot",
             rotate_x_ticks=True,
         )

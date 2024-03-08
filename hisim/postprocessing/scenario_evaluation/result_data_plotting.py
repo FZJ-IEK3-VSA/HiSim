@@ -189,15 +189,9 @@ class ScenarioChartGeneration:
                     x_and_y_plot_data=x_and_y_plot_data,
                 )
 
-                # try:
                 self.make_box_plot_for_pandas_dataframe(filtered_data=filtered_data)
-                # except Exception:
-                #     log.information(f"{variable_to_check} could not be plotted as box plot.")
 
-                # try:
-                self.make_bar_plot_for_pandas_dataframe(filtered_data=filtered_data, unit=unit)
-                # except Exception:
-                #     log.information(f"{variable_to_check} could not be plotted as bar plot.")
+                self.make_bar_plot_for_pandas_dataframe(unit=unit, x_and_y_plot_data=x_and_y_plot_data)
 
                 try:
                     x_data_variable = dict_with_extra_information_for_specific_plot["scatter"]["x_data_variable"]
@@ -210,12 +204,9 @@ class ScenarioChartGeneration:
                 except Exception:
                     log.information(f"{variable_to_check} could not be plotted as scatter plot.")
 
-                try:
-                    self.make_histogram_plot_for_pandas_dataframe(
-                        filtered_data=filtered_data, unit=unit, x_axis_label=self.path_addition
-                    )
-                except Exception:
-                    log.information(f"{variable_to_check} could not be plotted as histogram.")
+                self.make_histogram_plot_for_pandas_dataframe(
+                    filtered_data=filtered_data, unit=unit, x_axis_label=self.path_addition
+                )
 
                 if variable_to_check in [
                     dict_with_extra_information_for_specific_plot["stacked_bar"]["y1_data_variable"],
@@ -281,17 +272,13 @@ class ScenarioChartGeneration:
                     x_and_y_plot_data=x_and_y_plot_data,
                 )
 
-                # try:
                 self.make_line_plot_for_pandas_dataframe(
-                    filtered_data=filtered_data, line_plot_marker_size=line_plot_marker_size,
+                    filtered_data=filtered_data,
+                    x_and_y_plot_data=x_and_y_plot_data,
+                    line_plot_marker_size=line_plot_marker_size,
                 )
-                # except Exception:
-                #     log.information(f"{variable_to_check} could not be plotted as line plot.")
-                try:
-                    self.make_box_plot_for_pandas_dataframe(filtered_data=filtered_data)
 
-                except Exception:
-                    log.information(f"{variable_to_check} could not be plotted as box plot.")
+                self.make_box_plot_for_pandas_dataframe(filtered_data=filtered_data)
 
                 try:
                     x_data_variable = dict_with_extra_information_for_specific_plot["scatter"]["x_data_variable"]
@@ -320,44 +307,34 @@ class ScenarioChartGeneration:
             else:
                 raise ValueError("This kind of data was not found in the datacollectorenum class.")
 
-    def make_line_plot_for_pandas_dataframe(self, filtered_data: pd.DataFrame, line_plot_marker_size: int) -> None:
+    def make_line_plot_for_pandas_dataframe(
+        self, filtered_data: pd.DataFrame, x_and_y_plot_data: pd.DataFrame, line_plot_marker_size: int
+    ) -> None:
         """Make line plot."""
         log.information("Make line plot with data.")
 
         fig, a_x = plt.subplots(figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi)
-        x_data = list(OrderedSet(list(filtered_data.time)))
-        if filtered_data.time.values[0] is not None:
-            year = filtered_data.time.values[0].split("-")[0]
-        else:
-            raise ValueError("year could not be determined because time value of filtered data was None.")
-
+        x_data = x_and_y_plot_data["time"]
         x_data_transformed = np.asarray(x_data, dtype="datetime64[D]")
+
         color, edgecolor = self.set_plot_colors_according_to_data_processing_mode(
-            number_of_scenarios=len(list(OrderedSet(list(filtered_data.scenario)))),
-            data_processing_mode=self.data_processing_mode,
+            number_of_scenarios=len(x_and_y_plot_data.columns[1:]), data_processing_mode=self.data_processing_mode,
         )
         del edgecolor
-        y_data = []
-        for index, scenario in enumerate(list(OrderedSet(list(filtered_data.scenario)))):
-            filtered_data_per_scenario = filtered_data.loc[filtered_data["scenario"] == scenario]
-            mean_values_aggregated_according_to_scenarios = []
-            for time_value in x_data:
-                mean_value_per_scenario_per_timestep = np.mean(
-                    filtered_data_per_scenario.loc[filtered_data_per_scenario["time"] == time_value]["value"]
-                )
-
-                mean_values_aggregated_according_to_scenarios.append(mean_value_per_scenario_per_timestep)
-
-            y_data = mean_values_aggregated_according_to_scenarios
-
+        # make one line for each scenario
+        for index, scenario in enumerate(x_and_y_plot_data.columns[1:]):
             plt.plot(
-                x_data_transformed, y_data, "-o", markersize=line_plot_marker_size, label=scenario, color=color[index]
+                x_data_transformed,
+                x_and_y_plot_data[scenario],
+                "-o",
+                markersize=line_plot_marker_size,
+                label=scenario,
+                color=color[index],
             )
 
         self.set_ticks_labels_legend_and_save_fig(
             fig=fig,
             a_x=a_x,
-            x_axis_label=year,
             y_axis_unit=filtered_data.unit.values[0],
             show_legend=self.show_plot_legend,
             plot_type_name="line_plot",
@@ -365,32 +342,19 @@ class ScenarioChartGeneration:
         )
 
     def make_bar_plot_for_pandas_dataframe(
-        self, filtered_data: pd.DataFrame, unit: str, alternative_bar_labels: Optional[List[str]] = None,
+        self, x_and_y_plot_data: pd.DataFrame, unit: str
     ) -> None:
         """Make bar plot."""
         log.information("Make bar plot.")
 
         fig, a_x = plt.subplots(figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi)
-
-        y_data = []
-        bar_labels = []
         x_data: Any
-
-        for scenario in list(OrderedSet(list(filtered_data.scenario))):
-            filtered_data_per_scenario = filtered_data.loc[filtered_data["scenario"] == scenario]
-
-            mean_value_per_scenario = np.mean(filtered_data_per_scenario.value.values)
-
-            y_data.append(mean_value_per_scenario)
-            bar_labels.append(scenario)
-
-        # choose bar labels
-        if alternative_bar_labels is not None:
-            bar_labels = alternative_bar_labels
+        y_data = x_and_y_plot_data.iloc[0, 1:]
+        bar_labels = x_and_y_plot_data.columns[1:]
 
         # sort y_data and labels
         y_data_sorted, bar_labels_sorted = self.sort_y_values_according_to_data_processing_mode(
-            data_processing_mode=self.data_processing_mode, zip_list_one=y_data, zip_list_two=bar_labels
+            data_processing_mode=self.data_processing_mode, zip_list_one=list(y_data), zip_list_two=list(bar_labels)
         )
         # if no scenarios chosen, make artificial x ticks
         if self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA:

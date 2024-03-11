@@ -28,7 +28,7 @@ from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDict
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim import log
-from hisim.units import Quantity, Celsius
+from hisim.units import Quantity, Celsius, Watt
 from system_setups.household_cluster_reference_advanced_hp import (
     BuildingPVWeatherConfig,
 )
@@ -88,7 +88,7 @@ def setup_function(
     seconds_per_timestep = 60
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(year=year, seconds_per_timestep=seconds_per_timestep)
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
         )
@@ -97,12 +97,13 @@ def setup_function(
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Set ems strategies
-    surplus_control: bool = False  # strategy 2: storage temperature modifier
-    surplus_control_building_temperature_modifier: bool = False  # strategy 3: building temperature modifier
+    surplus_control: bool = True  # strategy 2: storage temperature modifier
+    surplus_control_building_temperature_modifier: bool = True  # strategy 3: building temperature modifier
 
     # Set Photovoltaic System
     azimuth = my_config.pv_azimuth
@@ -116,7 +117,7 @@ def setup_function(
     number_of_apartments = my_config.number_of_dwellings_per_building
 
     # Set occupancy
-    cache_dir_path = "/fast/home/k-rieck/lpg-utsp-data"
+    cache_dir_path = None  #"/fast/home/k-rieck/lpg-utsp-data"
 
     # get household attribute jsonreferences from list of strings
     lpg_households: Union[JsonReference, List[JsonReference]]
@@ -235,7 +236,7 @@ def setup_function(
 
     # Build Heat Pump
     my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+        heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt,Watt),
         heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
     )
     my_heat_pump_config.group_id = group_id
@@ -329,14 +330,14 @@ def setup_function(
             config=my_electricity_controller_config,
         )
 
-        # Build Battery
-        my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
-            total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt
-        )
-        my_advanced_battery = advanced_battery_bslib.Battery(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_advanced_battery_config,
-        )
+        # # Build Battery
+        # my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
+        #     total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt
+        # )
+        # my_advanced_battery = advanced_battery_bslib.Battery(
+        #     my_simulation_parameters=my_simulation_parameters,
+        #     config=my_advanced_battery_config,
+        # )
 
         # -----------------------------------------------------------------------------------------------------------------
         # Add outputs to EMS
@@ -423,26 +424,26 @@ def setup_function(
             )
 
             # connect EMS with Battery
-            my_electricity_controller.add_component_input_and_connect(
-                source_object_name=my_advanced_battery.component_name,
-                source_component_output=my_advanced_battery.AcBatteryPower,
-                source_load_type=lt.LoadTypes.ELECTRICITY,
-                source_unit=lt.Units.WATT,
-                source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_REAL],
-                source_weight=3,
-            )
+            # my_electricity_controller.add_component_input_and_connect(
+            #     source_object_name=my_advanced_battery.component_name,
+            #     source_component_output=my_advanced_battery.AcBatteryPower,
+            #     source_load_type=lt.LoadTypes.ELECTRICITY,
+            #     source_unit=lt.Units.WATT,
+            #     source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_REAL],
+            #     source_weight=3,
+            # )
 
-            electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
-                source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-                source_tags=[
-                    lt.ComponentType.BATTERY,
-                    lt.InandOutputType.ELECTRICITY_TARGET,
-                ],
-                source_weight=3,
-                source_load_type=lt.LoadTypes.ELECTRICITY,
-                source_unit=lt.Units.WATT,
-                output_description="Target electricity for Battery Control. ",
-            )
+            # electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
+            #     source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+            #     source_tags=[
+            #         lt.ComponentType.BATTERY,
+            #         lt.InandOutputType.ELECTRICITY_TARGET,
+            #     ],
+            #     source_weight=3,
+            #     source_load_type=lt.LoadTypes.ELECTRICITY,
+            #     source_unit=lt.Units.WATT,
+            #     output_description="Target electricity for Battery Control. ",
+            # )
 
             # connect EMS BuildingTemperatureModifier with set_heating_temperature_for_building_in_celsius
             if surplus_control_building_temperature_modifier:
@@ -487,24 +488,24 @@ def setup_function(
                 output_description="Target electricity for Heating Heat Pump. ",
             )
 
-            electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
-                source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-                source_tags=[
-                    lt.ComponentType.BATTERY,
-                    lt.InandOutputType.ELECTRICITY_TARGET,
-                ],
-                source_weight=3,
-                source_load_type=lt.LoadTypes.ELECTRICITY,
-                source_unit=lt.Units.WATT,
-                output_description="Target electricity for Battery Control. ",
-            )
+        #     electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
+        #         source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+        #         source_tags=[
+        #             lt.ComponentType.BATTERY,
+        #             lt.InandOutputType.ELECTRICITY_TARGET,
+        #         ],
+        #         source_weight=3,
+        #         source_load_type=lt.LoadTypes.ELECTRICITY,
+        #         source_unit=lt.Units.WATT,
+        #         output_description="Target electricity for Battery Control. ",
+        #     )
 
-        # -----------------------------------------------------------------------------------------------------------------
-        # Connect Battery
-        my_advanced_battery.connect_dynamic_input(
-            input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
-            src_object=electricity_to_or_from_battery_target,
-        )
+        # # -----------------------------------------------------------------------------------------------------------------
+        # # Connect Battery
+        # my_advanced_battery.connect_dynamic_input(
+        #     input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
+        #     src_object=electricity_to_or_from_battery_target,
+        # )
 
         # -----------------------------------------------------------------------------------------------------------------
         # Connect Electricity Meter
@@ -521,7 +522,7 @@ def setup_function(
         # Add Remaining Components to Simulation Parameters
 
         my_sim.add_component(my_electricity_meter)
-        my_sim.add_component(my_advanced_battery)
+        # my_sim.add_component(my_advanced_battery)
         my_sim.add_component(my_electricity_controller, connect_automatically=connect_automatically)
 
     # when no PV is used, connect electricty meter automatically
@@ -551,7 +552,7 @@ def setup_function(
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
         model_name=os.path.join(my_sim.module_filename, "27-02-2024"),
-        variant_name="no_surplus_",
+        variant_name="ems_all_surplus_no_batt",
         hash_number=hash_number,
         sorting_option=sorting_option,
         sampling_mode=sampling_mode,

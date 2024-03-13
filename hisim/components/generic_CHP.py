@@ -171,7 +171,7 @@ class SimpleCHP(cp.Component):
             output_description="Thermal Power output from CHP for arbitrary use in Watt."
         )
 
-      
+
         self.electricity_output_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ElectricityOutput,

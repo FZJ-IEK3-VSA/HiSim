@@ -43,15 +43,15 @@ import math
 
     -) Parameters for automatic parameter-variations: Are prepared for variation in the present execution script
         All other parameters are assumed to be static and can be found in "Cell4LifeSzenario1a_1b.py", "Cell4LifeSzenario2a.py" or within the components.
- 
+
     -) Results of simulation are saved in excel file for economic assessment: 
         For that, an excel file prepared in advance has to be saved in the path, specified within the present execution script.
         Original Excel File for economic assessment: Sim_Oek_Assessment_v7.xlsx --> can be found on dropbox: 4ER_Projekte_intern\CELL4LIFE\00_Arbeitsbereich\AP6\Auswertung_ExcelFiles\Einzelauswertung
     
     All for the simulation relevant Excel files for e.g economic assessment, which were not part of the original "hisim tool", can be found:
          4ER_Projekte_intern\CELL4LIFE\00_Arbeitsbereich\AP6\Auswertung_ExcelFiles\Einzelauswertung\
-         
-         
+
+
     Please copy them in folders, specified within the code, according to your local folder structure.
 
 

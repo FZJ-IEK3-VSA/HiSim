@@ -38,6 +38,9 @@ class SimpleControllerConfig(ConfigBase):
 
     name: str
     szenario: str
+    # SOFC or SOEF timestep when activated (seasonal on or off!)
+    on_off_SOEC : int #SOEC = Electrolyzer is turned off  at this timestep (!) of season
+    off_on_SOEC : int #SOEC = Electrolyzer is turned on at this timestep (!) of season
 
     @classmethod
     def get_main_classname(cls):
@@ -49,13 +52,13 @@ class SimpleControllerConfig(ConfigBase):
         """Returns default config."""
         
         
-        config = SimpleControllerConfig(name="SimpleController",szenario="necessary_to_choose")
+        config = SimpleControllerConfig(name="SimpleController",szenario="necessary_to_choose", on_off_SOEC = 0, off_on_SOEC = 0)
 
         return config
 
 
 class SimpleController(Component):
-  
+
     #Input
     General_ElectricityConsumptiom = "CSV Profile Electricity Consumption Input"
     Electrolyzer_ElectricityConsumption = "ElectricityConsumptionElectrolyzer" #W
@@ -365,7 +368,7 @@ class SimpleController(Component):
                 electricity_from_CHP_to_house = CHP_ElectricityDelivery - H2Storage_ElectricityConsumption - electricity_to_or_from_grid
             
             else: 
-                errormessage([timestep, "Worstcase 3"])
+                errormessage([timestep, "No Energy from CHP and Battery to House"])
                 electricity_from_CHP_to_house = 0
                 electricity_from_Battery_to_house = 0
 
@@ -383,54 +386,17 @@ class SimpleController(Component):
         CHP_ElectricityDelivery = stsv.get_input_value(self.CHP_ElectricityDeliveryInput)
 
         
-        if self.config.szenario == '1a':
-
-            #Production and consumption without Battery
-            total_electricity_production = General_PhotovoltaicDelivery + CHP_ElectricityDelivery
-            total_electricity_consumption = General_ElectricityConsumptiom + Electrolyzer_ElectricityConsumption + H2Storage_ElectricityConsumption
-            electricity_to__or_from_battery_Wish = total_electricity_production - total_electricity_consumption
-            
-            #Integration of Battery
-            stsv.set_output_value(self.BatteryLoadingPowerWishOutput, electricity_to__or_from_battery_Wish)
-            BatteryAcBatteryPower = stsv.get_input_value(self.BatteryAcBatteryPowerInput)
-
-
-            electricity_to_or_from_grid = total_electricity_production - total_electricity_consumption - BatteryAcBatteryPower
-            
-            if CHP_ElectricityDelivery > 0 and Electrolyzer_ElectricityConsumption == 0:
-                electricity_from_CHP_to_house,electricity_from_Battery_to_house= electricity_from_CHP_Battery_to_houseFct(CHP_ElectricityDelivery, BatteryAcBatteryPower, electricity_to_or_from_grid, H2Storage_ElectricityConsumption,timestep)
-            elif CHP_ElectricityDelivery == 0 and Electrolyzer_ElectricityConsumption > 0:
-                electricity_from_CHP_to_house = 0
-                if BatteryAcBatteryPower < 0: #Battery is delivering energy to electrolyzer + h2 storage as well to House
-                    electricity_from_Battery_to_house = -BatteryAcBatteryPower - Electrolyzer_ElectricityConsumption - H2Storage_ElectricityConsumption
-                    
-                    if electricity_from_Battery_to_house < 0: #Consumption of Electrolyzer and H2Storage is more than Battery can deliver --> so no Battery Energy is delivered to House anyways
-                        electricity_from_Battery_to_house = 0
-
-                elif BatteryAcBatteryPower >= 0:
-                    electricity_from_Battery_to_house = 0
-            
-            
-
-            else:
-                errormessage([timestep, "Fuel Cell and Electrolyzer seems to run at the same time"])
-                breakpoint()
-
-            stsv.set_output_value(self.electricity_to_or_from_gridOutput, electricity_to_or_from_grid)
-            stsv.set_output_value(self.total_electricity_consumptionOutput, total_electricity_consumption)
-            stsv.set_output_value(self.electricity_from_CHP_to_houseOutput, electricity_from_CHP_to_house)
-            stsv.set_output_value(self.electricity_from_Battery_to_houseOutput, electricity_from_Battery_to_house)
-            part_pv_to_grid = 999999999999999999999999 # is not calculated in case 1b!!!!
-            stsv.set_output_value(self.electricity_from_PV_to_gridOutput, part_pv_to_grid)
-
-        
-         
-        if self.config.szenario == '1b': # [x] Logik des Energieflusses gehört für Szenario 2 angepasst
+        if self.config.szenario == '2a': # [ ] Logik des Energieflusses gehört für Szenario 2 angepasst
             #Abzug aller Stromproduktionen und Verbräuche
-
             
-            #Elektrolysebetrieb
-            if Electrolyzer_ElectricityConsumption > 0 and CHP_ElectricityDelivery == 0:  ##Sind wir im Electrolysebetrieb? Wenn ja, dann...
+            #Decision parameter: Is fuel cell season or electrolyzer season --> Decision is the same like in Electrolyzer and fuel cell controller!!! 
+            electrolyzer_or_fuelcell_mode = ((timestep >= self.config.on_off_SOEC) and (timestep <= self.config.off_on_SOEC))  #is the season of the year, where the electrolyzer is allowed to run?
+                    #electrolyzer_or_fuelcell_mode = False --> Electrolyzer Season
+                    #electrolyzer_or_fuelcell_mode = True --> Fuel Cell Season
+            
+            #Elektrolysebetrieb # [x] Ich muss abhängig von der Saison diesmal entscheiden --> Szenarion 1b war nämlich Elektrolyseur immer eingeschaltet
+            if electrolyzer_or_fuelcell_mode == False: ##Sind wir im Electrolysebetrieb? Wenn ja, dann...
+           
                 electricity_from_Battery_to_house = 0 # Batterie beliefert ausschließlich Elektrolyseur auf einer direkt Leitung (nicht über allgemeine Netz)
                 electricity_from_CHP_to_house     = 0 #Da CHP/Fuel Cell nicht läuft, kann kein Strom von CHP zu den Wohnungen geliefert werden! 
                 
@@ -441,6 +407,7 @@ class SimpleController(Component):
                                     
                     status_batteryWish = Estatus_house - electricity_electH2stor_consumption_system #Brauche ich Energie von der Batterie, oder kann ich dieser welche zukommen lassen?          
                     
+
 
                     stsv.set_output_value(self.BatteryLoadingPowerWishOutput, status_batteryWish) 
                     BatteryAcBatteryPower = stsv.get_input_value(self.BatteryAcBatteryPowerInput) #Falls ich Energie von der Batterie brauche, wieviel kann mir diese liefern?
@@ -463,8 +430,11 @@ class SimpleController(Component):
                     breakpoint()
                 part_pv_to_grid = 0
             
-            #Brennstoffzellenbetrieb oder Brennstoffzelle ist nicht im Betrieb UND Elektrolyseur ist nicht im Betrieb
-            if Electrolyzer_ElectricityConsumption == 0 and CHP_ElectricityDelivery >= 0:  ##Sind wir im Brennstoffzellenebetrieb oder ist gar nichts im Betrieb? -->  Batterie deckt auch Haus Bedarf, wird aber nur von Überschussstrom der CHP aufgeladen!
+            #Brennstoffzellenbetrieb oder Brennstoffzelle ist nicht im Betrieb UND Elektrolyseur ist nicht im Betrieb [
+            # [x] Ich muss BRennstoffzellenbetrieb in Abhängigkeit von der Saison feststellen --> im Szenario 1b war dies durch die Energieflüsse schon gegeben!
+            else:  #Fuel Cell season is --> Fuel Cell is on!
+                
+                ##Sind wir im Brennstoffzellenebetrieb oder ist gar nichts im Betrieb? -->  Batterie deckt auch Haus Bedarf, wird aber nur von Überschussstrom der CHP aufgeladen!
                 #print(timestep)
                 Estatus_house = General_PhotovoltaicDelivery - General_ElectricityConsumptiom ##Decke zuerst mit der PV den Strombedarf des Hauses // 
                 part_pv_to_grid = 0
@@ -485,8 +455,7 @@ class SimpleController(Component):
                 electricity_to_or_from_grid = Estatus_total + part_pv_to_grid
                 electricity_from_CHP_to_house,electricity_from_Battery_to_house= electricity_from_CHP_Battery_to_houseFct(CHP_ElectricityDelivery, BatteryAcBatteryPower, electricity_to_or_from_grid, H2Storage_ElectricityConsumption,timestep)
 
-   
-           
+
             stsv.set_output_value(self.electricity_to_or_from_gridOutput, electricity_to_or_from_grid)
             stsv.set_output_value(self.electricity_from_CHP_to_houseOutput, electricity_from_CHP_to_house)
             stsv.set_output_value(self.electricity_from_Battery_to_houseOutput, electricity_from_Battery_to_house)

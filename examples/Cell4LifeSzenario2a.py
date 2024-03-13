@@ -40,7 +40,7 @@ from hisim.components import advanced_battery_bslib
 from hisim.components import generic_hydrogen_storage
 from hisim.components import (C4L_electrolyzer, controller_predicitve_C4L_electrolyzer_fuelcell)
 from hisim.components import (generic_CHP) 
-from hisim.components import controller_l1_example_controller_C4L_1a_1b
+from hisim.components import controller_l1_example_controller_C4L_2a
 from hisim.modular_household import component_connections
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim import loadtypes
@@ -160,14 +160,18 @@ def Cell4Life(
     #Defines where the energies flow in the system.
 
     my_electricity_controller_config = (
-    controller_l1_example_controller_C4L_1a_1b.SimpleControllerConfig.get_default_config()
+    controller_l1_example_controller_C4L_2a.SimpleControllerConfig.get_default_config()
     )
+    
+    my_electricity_controller_config.off_on_SOEC = input_variablen["off_on_SOEC"]["value"]
+    my_electricity_controller_config.on_off_SOEC = input_variablen["on_off_SOEC"]["value"]
+
+
     my_electricity_controller = (
-        controller_l1_example_controller_C4L_1a_1b.SimpleController( # [ ] Energy Managment System in case of szenario 2 needs a new name --> do not delete the old version
+        controller_l1_example_controller_C4L_2a.SimpleController( # [x] Energy Managment System in case of szenario 2 needs a new name --> do not delete the old version
         name = "Elect_Controller", my_simulation_parameters=my_simulation_parameters, config=my_electricity_controller_config)
     )
     my_electricity_controller.config.szenario = input_variablen["szenario"]["value"]
-    
 
 
     #******************************************************************   
@@ -186,6 +190,8 @@ def Cell4Life(
     electrolyzerfuelcell_controller_config.on_off_SOEC = input_variablen["on_off_SOEC"]["value"]
     electrolyzerfuelcell_controller_config.h2_soc_upper_threshold_electrolyzer = input_variablen["h2_soc_upper_threshold_electrolyzer"]["value"]
     electrolyzerfuelcell_controller_config.h2_soc_lower_threshold_fuelcell = input_variablen["h2_soc_lower_threshold_chp"]["value"]
+    electrolyzerfuelcell_controller_config.p_el_elektrolyzer = input_variablen["p_el_elektrolyzer"]["value"]
+    electrolyzerfuelcell_controller_config.fuel_cell_power = input_variablen["fuel_cell_power"]["value"]
 
     my_electrolyzerfuelcellcontroller = controller_predicitve_C4L_electrolyzer_fuelcell.C4LelectrolyzerfuelcellpredictiveController(
         my_simulation_parameters=my_simulation_parameters, config=electrolyzerfuelcell_controller_config)
@@ -241,7 +247,7 @@ def Cell4Life(
     my_h2storage.connect_only_predefined_connections(my_chp)
     my_h2storage.connect_only_predefined_connections(my_electrolyzer)
     my_electrolyzerfuelcellcontroller.connect_only_predefined_connections(my_h2storage)
-    my_electrolyzerfuelcellcontroller.connect_only_predefined_connections(my_h2storage)
+    my_electrolyzerfuelcellcontroller.connect_only_predefined_connections(my_advanced_battery)
     my_chp.connect_only_predefined_connections(my_electrolyzerfuelcellcontroller)
     my_electrolyzer.connect_only_predefined_connections(my_electrolyzerfuelcellcontroller)
 
@@ -249,9 +255,10 @@ def Cell4Life(
     my_electricity_controller.connect_only_predefined_connections(my_electrolyzer)
     my_electricity_controller.connect_only_predefined_connections(my_electricityconsumption)
     my_electricity_controller.connect_only_predefined_connections(my_photovoltaic_system)
-    my_electricity_controller.connect_only_predefined_connections(my_chp)
+    my_electricity_controller.connect_only_predefined_connections(my_chp) 
 
     #battery input connection
+
     my_electricity_controller.connect_input(
         input_fieldname=my_electricity_controller.BatteryStateOfCharge,
         src_object_name=my_advanced_battery.component_name,
@@ -276,6 +283,8 @@ def Cell4Life(
         src_object_name=my_electricity_controller.component_name,
         src_field_name=my_electricity_controller.BatteryLoadingPowerWish,
     )
+
+
 
 
 
@@ -324,7 +333,7 @@ def InputParameter():
         electricity_threshold = 0 #Minium required power to activate fuel cell
         init_source_weight_hydrogenstorage = 999 #init_source_weight_electrolyzer
         init_source_weight_chp = 2
-        p_el_elektrolyzer = fuel_cell_power*2 #Electrical Operating Power in Watt
+        p_el_elektrolyzer = fuel_cell_power*2.1 #Electrical Operating Power in Watt
         electrolyzer_source_weight = 999
         h2_storage_capacity_max = 12000  #Maximum of hydrogen storage in kg
         h2_storage_losses = 0 # % of Hydrogen Losses per day in %
@@ -402,9 +411,7 @@ def InputParameter():
     
     electrolyzer_source_weight = 999
     electrolyzer_source_weightUnit = "-"
-    
 
-    
     min_operation_time_in_seconds_chp = 0 #It is not working well so let it be "0"
     min_operation_time_in_seconds_chpUnit = "s"
     
@@ -426,17 +433,17 @@ def InputParameter():
     on_off_SOEC = 4391 #timestep: Turn off Electrolyzer and turn on Fuel Cell // Variable name should be read: turn SOEC from "on" to "off" // timestep Depends on starting date: e.g. timestep 10 of the year 2021 is 10. Januar if the simulation year starts with 1st Jannuar;
     on_off_SOECUnit = "timesteps (Defines season where Electrolyzer or Fuel Cell is running: Turn off Electrolyzer and turn on Fuel Cell)"
     
-    off_on_SOEC = 100000 #timestep: Turn on Electrolyzer and turn off on Fuel Cell
+    off_on_SOEC = 100000 #timestep: Turn on Electrolyzer and turn off on Fuel Cell 
     off_on_SOECUnit = "timesteps (Turn on Electrolyzer and turn off on Fuel Cell"
     
     #h2_storage_capacity_max = 50000  #Maximum of hydrogen storage in kg
-    h2_storage_capacity_max = p_el_elektrolyzer / (3600*40000) *3600 * (on_off_SOEC+96) #Storage Capacity based on Electrolyzer Production Rate --> + some storage capacity of 96 hours more
+    h2_storage_capacity_max = p_el_elektrolyzer / (3600*40000) *3600 * (on_off_SOEC+96) #[ ] Just an estimation used!  Storage Capacity estimation based on Electrolyzer Production Rate --> + some storage capacity of 96 hours more
     
     h2_storage_capacity_maxUnit = "kg"
     h2_storage_losses = 0 # % of Hydrogen Losses per day in %
     h2_storage_lossesUnit = "%"
     
-    h2_soc_upper_threshold_electrolyzer = 50  #Electrolyzer works just until H2 storage goes up to this threshold
+    h2_soc_upper_threshold_electrolyzer = 100  #Electrolyzer works just until H2 storage goes up to this threshold
     h2_soc_upper_threshold_electrolyzerUnit = "%"
 
     #H2 storage energy demands; the energy demand is covered by electricit; 

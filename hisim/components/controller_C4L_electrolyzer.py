@@ -201,7 +201,7 @@ class C4LelectrolyzerController(cp.Component):
 
             if not hydrogen_soc_ok: 
                 calc_electrolyzer = ((timestep >= self.config.on_off_SOEC) and (timestep <= self.config.off_on_SOEC))         
-      
+
                 if calc_electrolyzer:
                     self.state.RunElectrolyzer = 0 #electrolyzer is not running"off"
 

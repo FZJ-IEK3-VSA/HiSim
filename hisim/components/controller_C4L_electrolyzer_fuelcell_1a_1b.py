@@ -32,7 +32,7 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class C4Lelectrolyzerfuelcell1a1bControllerConfig(ConfigBase):
-    """CHP Controller Config."""
+    """CHP & Fuel cell Controller non-predictive Config."""
 
     #: name of the device
     name: str
@@ -59,7 +59,7 @@ class C4Lelectrolyzerfuelcell1a1bControllerConfig(ConfigBase):
 
 
 class C4Lelectrolyzerfuelcell1a1bControllerState:
-    """Data class that saves the state of the electrolyzer controller."""
+    """Data class that saves the state of the electrolyzer & fuel cell controller non-predictive."""
     def __init__(
         self,
         RunElectrolyzer: int,

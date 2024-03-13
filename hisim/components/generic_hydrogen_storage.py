@@ -295,7 +295,6 @@ class GenericHydrogenStorage(cp.Component):
                 amount_stored / self.my_simulation_parameters.seconds_per_timestep
             )
 
-        #power_demand = charging_rate * self.config.energy_for_charge * 3.6e3
         
         #Calculation of power demand:
         #h_fuel: heat value of fuel in kWh/kg
@@ -305,7 +304,6 @@ class GenericHydrogenStorage(cp.Component):
         # conversion of kg/s * kWh/kg * % --> in Watt: kWh * 3600 s/h: 3600 kWs * 1000 = 3.6e6 Ws ---> Ws * kg/s = Watt 
         power_demand = charging_rate * self.config.h_fuel * 3.6e3 * 1000 * self.config.energy_for_charge_based_on_massflow_h_fuel/100
         
-        #power_demand = 100.1
         return charging_rate, power_demand, delta_not_stored
 
     def withdraw(self, discharging_rate: float) -> Tuple[float, float, float]:
@@ -346,7 +344,6 @@ class GenericHydrogenStorage(cp.Component):
                 amount_released / self.my_simulation_parameters.seconds_per_timestep
             )
 
-       # power_demand = discharging_rate * self.config.energy_for_discharge * 3.6e3 # original until 8.11.2023
         
         power_demand = discharging_rate * self.config.h_fuel * 3.6e3 * 1000 * self.config.energy_for_discharge_based_on_massflow_h_fuel/100
         return discharging_rate, power_demand, delta_not_released
@@ -391,11 +388,11 @@ class GenericHydrogenStorage(cp.Component):
 
         power_demand = 0 #Initialisierung        
         if charging_rate > 0:
-#            _, _, _ = self.store(charging_rate) #original until 08.11.2023
+
             _, power_demand, _ = self.store(charging_rate)
         #print(power_demand)
         if discharging_rate > 0:
-#            _, _, _ = self.withdraw(discharging_rate) 
+
             _, power_demand, _ = self.withdraw(discharging_rate)
 
         if (100 * self.state.fill / self.config.max_capacity) > 0.01: #If storage tank is not empty, then add operation energy needed....

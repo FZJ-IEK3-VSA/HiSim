@@ -5,7 +5,7 @@
 import importlib
 from dataclasses import dataclass
 from typing import List, Any, Tuple
-
+from enum import Enum
 import numpy as np
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -26,6 +26,14 @@ __version__ = ""
 __maintainer__ = "Katharina Rieck"
 __email__ = "k.rieck@fz-juelich.de"
 __status__ = "dev"
+
+
+class HotWaterStorageSizingEnum(Enum):
+
+    """Set Simple Hot Water Storage sizing options."""
+
+    SIZE_ACCORDING_TO_HEAT_PUMP = 1
+    SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM = 2
 
 
 @dataclass_json
@@ -79,7 +87,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         max_thermal_power_in_watt_of_heating_system: float,
         water_mass_flow_rate_from_hds_in_kg_per_second: float,
         temperature_difference_between_flow_and_return_in_celsius: float = 7.0,
-        heating_system_name: str = "AdvancedHeatPumpHPLib",
+        sizing_option: HotWaterStorageSizingEnum = HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM
     ) -> "SimpleHotWaterStorageConfig":
         """Gets a default storage with scaling according to heating load of the building.
 
@@ -99,7 +107,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         """
 
         # if the used heating system is a heat pump use formular
-        if "HeatPump" in heating_system_name:
+        if sizing_option == HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP:
             volume_heating_water_storage_in_liter: float = (
                 max_thermal_power_in_watt_of_heating_system
                 * 1e-3
@@ -110,8 +118,11 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
             ) * 1000  # 1m3 = 1000l
 
         # otherwise use approximation: 60l per kw thermal power
-        else:
+        elif sizing_option == HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM:
             volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 60
+
+        else:
+            raise ValueError(f"Sizing option for Simple Hot Water Storage {sizing_option} is unvalid.")
 
         config = SimpleHotWaterStorageConfig(
             name="SimpleHotWaterStorage",

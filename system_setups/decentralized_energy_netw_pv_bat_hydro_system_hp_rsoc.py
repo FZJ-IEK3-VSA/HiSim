@@ -184,7 +184,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     # Connect Component Inputs with Outputs
     my_cl2.add_component_inputs_and_connect(
         source_component_classes=[my_occupancy],
-        outputstring="ElectricityOutput",
+        source_component_field_name=my_occupancy.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
@@ -192,7 +192,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
     my_cl2.add_component_inputs_and_connect(
         source_component_classes=[my_photovoltaic_system],
-        outputstring="ElectricityOutput",
+        source_component_field_name=my_photovoltaic_system.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],

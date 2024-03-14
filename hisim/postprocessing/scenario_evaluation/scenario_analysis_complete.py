@@ -55,7 +55,7 @@ def main():
 
     folder_from_which_data_will_be_collected = os.path.join(
         cluster_storage_path,
-        "repositories/HiSim/system_setups/results/household_cluster_advanced_hp_pv_battery_ems/27-02-2024-floor-with-cooling-pv-share-1/monte_carlo_20240227_1627",
+        "repositories/HiSim/system_setups/results/household_cluster_advanced_hp_pv_battery_ems/06-03-2024-floor-without-cooling-pv-share-0/monte_carlo_20240306_1451",
     )
 
     path_to_default_config = os.path.join(
@@ -64,7 +64,7 @@ def main():
     )
     simulation_duration_to_check = str(365)
 
-    data_processing_mode = result_data_collection.ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES
+    data_processing_mode = result_data_collection.ResultDataProcessingModeEnum.PROCESS_ALL_DATA
     filterclass = result_data_processing.FilterClass()
     # list_with_variables_to_check = (
     #     filterclass.electricity_data + filterclass.variables_for_debugging_purposes
@@ -73,9 +73,9 @@ def main():
 
     # TODO: filter several scenario parameters (eg pv and building code together) not working yet, need to be fixed
     # dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share}
-    dict_with_scenarios_to_check = {"building_code": filterclass.building_type_and_age}
+    # dict_with_scenarios_to_check = {"building_code": filterclass.building_type}
 
-    # dict_with_scenarios_to_check = None
+    dict_with_scenarios_to_check = None
 
     dict_with_extra_information_for_specific_plot: Dict[str, Dict] = {
         "scatter": {

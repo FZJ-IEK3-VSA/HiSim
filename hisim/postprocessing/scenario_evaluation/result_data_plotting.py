@@ -203,10 +203,12 @@ class ScenarioChartGeneration:
                     )
                 except Exception:
                     log.information(f"{variable_to_check} could not be plotted as scatter plot.")
-
-                self.make_histogram_plot_for_pandas_dataframe(
-                    filtered_data=filtered_data, unit=unit, x_axis_label=self.path_addition
-                )
+                try:
+                    self.make_histogram_plot_for_pandas_dataframe(
+                        filtered_data=filtered_data, unit=unit, x_axis_label=self.path_addition
+                    )
+                except Exception:
+                    log.information(f"{variable_to_check} could not be plotted as histogram plot.")
 
                 if variable_to_check in [
                     dict_with_extra_information_for_specific_plot["stacked_bar"]["y1_data_variable"],

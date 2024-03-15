@@ -55,7 +55,7 @@ def main():
 
     folder_from_which_data_will_be_collected = os.path.join(
         cluster_storage_path,
-        "repositories/HiSim/system_setups/results/household_cluster_advanced_hp_pv_battery_ems/23-02-2024/monte_carlo_20240208_1637",
+        "repositories/HiSim/system_setups/results/household_cluster_advanced_hp_pv_battery_ems/06-03-2024-floor-without-cooling-pv-share-0/monte_carlo_20240306_1451",
     )
 
     path_to_default_config = os.path.join(
@@ -65,22 +65,15 @@ def main():
     simulation_duration_to_check = str(365)
 
     data_processing_mode = result_data_collection.ResultDataProcessingModeEnum.PROCESS_ALL_DATA
-
     filterclass = result_data_processing.FilterClass()
-    list_with_variables_to_check = (
-        filterclass.kpi_data
-    )  # filterclass.flow_and_return_temperatures  # +filterclass.kpi_data  #
+    # list_with_variables_to_check = (
+    #     filterclass.electricity_data + filterclass.variables_for_debugging_purposes
+    # )  # filterclass.flow_and_return_temperatures  # +filterclass.kpi_data  #
+    list_with_variables_to_check = filterclass.kpi_data
 
     # TODO: filter several scenario parameters (eg pv and building code together) not working yet, need to be fixed
     # dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share}
-    # dict_with_scenarios_to_check = {
-    #     "building_code": [
-    #         "DE.N.SFH",
-    #         "DE.N.TH",
-    #         "DE.N.MFH",
-    #         "DE.N.AB",
-    #     ]
-    # }
+    # dict_with_scenarios_to_check = {"building_code": filterclass.building_type}
 
     dict_with_scenarios_to_check = None
 

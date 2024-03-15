@@ -168,7 +168,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.components_sorted: List[lt.ComponentType] = []
         self.inputs_sorted: List[ComponentInput] = []
         self.outputs_sorted: List[ComponentOutput] = []
-        self.used_outputs: List[ComponentOutput] = []
         self.production_inputs: List[ComponentInput] = []
         self.consumption_uncontrolled_inputs: List[ComponentInput] = []
         self.consumption_ems_controlled_inputs: List[ComponentInput] = []
@@ -406,24 +405,21 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.components_sorted = [source_tags[i] for i in sortindex]
         self.inputs_sorted = [getattr(self, inputs[i].source_component_class) for i in sortindex]
         self.outputs_sorted = []
-        self.used_outputs = []
 
         for ind, source_weight in enumerate(source_weights):
-            output = self.get_dynamic_output(
+            outputs = self.get_all_dynamic_outputs(
                 tags=[
                     self.components_sorted[ind],
                     lt.InandOutputType.ELECTRICITY_TARGET,
                 ],
                 weight_counter=source_weight,
-                used_outputs=self.used_outputs,
             )
-            self.used_outputs.append(output.full_name.split("#")[1].strip())
 
-            if output is not None:
-                self.outputs_sorted.append(output)
-            else:
-                raise Exception("Dynamic input is not conncted to dynamic output")
-
+            for output in outputs:
+                if output is not None:
+                    self.outputs_sorted.append(output)
+                else:
+                    raise Exception("Dynamic input is not conncted to dynamic output")
         self.production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
         self.consumption_uncontrolled_inputs = self.get_dynamic_inputs(
             tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]

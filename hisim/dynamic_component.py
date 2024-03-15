@@ -357,24 +357,41 @@ class DynamicComponent(Component):
                 continue
         return inputs
 
-    def get_dynamic_output(
-        self, tags: List[Union[lt.ComponentType, lt.InandOutputType]], weight_counter: int, used_outputs: List[Any]
+    def get_first_dynamic_output(
+        self,
+        tags: List[Union[lt.ComponentType, lt.InandOutputType]],
+        weight_counter: int,
     ) -> Any:
         """Sets all output values with given component type and weight."""
 
         # check if component of component type is available
 
-        for _, element in enumerate(self.my_component_outputs):  # loop over all inputs
+        for _, element in enumerate(self.my_component_outputs):  # loop over all outputs
             if search_and_compare(
                 weight_to_search=weight_counter,
                 weight_of_component=element.source_weight,
                 tags_to_search=tags,
                 tags_of_component=element.source_tags,
             ):
-                if element.source_output_field_name in used_outputs:
-                    # Check if output is already used --> important if sourceweights and tags from ems input/target are equal (espacialy usefull on district level)
-                    _ += 1
-                else:
-                    return getattr(self, element.source_component_class)
+                return getattr(self, element.source_component_class)
 
         return None
+
+    def get_all_dynamic_outputs(
+        self, tags: List[Union[lt.ComponentType, lt.InandOutputType]], weight_counter: int
+    ) -> Any:
+        """Sets all output values with given component type and weight."""
+        outputs = []
+
+        for _, element in enumerate(self.my_component_outputs):  # loop over all outputs
+            if search_and_compare(
+                weight_to_search=weight_counter,
+                weight_of_component=element.source_weight,
+                tags_to_search=tags,
+                tags_of_component=element.source_tags,
+            ):
+                outputs.append(getattr(self, element.source_component_class))
+            else:
+                continue
+
+        return outputs

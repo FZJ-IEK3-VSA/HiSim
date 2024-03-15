@@ -11,7 +11,6 @@ preparation on district heating for water/water heatpumps
 """
 from typing import Any, List, Optional, Tuple, Dict
 import hashlib
-from collections import deque
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from dataclass_wizard import JSONWizard
@@ -217,8 +216,6 @@ class HeatPumpHplibWithTwoOutputs(Component):
         )
 
         self.calculation_cache: Dict = {}  # caching for hplib simulation
-
-        self.cache_t_in_secondary_list: deque = deque(maxlen=10)  # maximale einträge = 10
 
         self.model = config.model
 
@@ -791,6 +788,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
 
         if on_off == 1:  # Calculation for building heating
             results = self.get_cached_results_or_run_hplib_simulation(
+                force_convergence=force_convergence,
                 t_in_primary=t_in_primary,
                 t_in_secondary=t_in_secondary_sh,
                 parameters=self.parameters,
@@ -814,6 +812,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
 
         elif on_off == 2:  # Calculate outputs for dhw mode
             results = self.get_cached_results_or_run_hplib_simulation(
+                force_convergence=force_convergence,
                 t_in_primary=t_in_primary,
                 t_in_secondary=t_in_secondary_dhw,
                 parameters=self.parameters,
@@ -844,6 +843,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
         elif on_off == -1:
             # Calulate outputs for cooling mode
             results = self.get_cached_results_or_run_hplib_simulation(
+                force_convergence=force_convergence,
                 t_in_primary=t_in_primary,
                 t_in_secondary=t_in_secondary_sh,
                 parameters=self.parameters,
@@ -1049,6 +1049,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
 
     def get_cached_results_or_run_hplib_simulation(
         self,
+        force_convergence: bool,
         t_in_primary: float,
         t_in_secondary: float,
         parameters: pd.DataFrame,
@@ -1058,11 +1059,10 @@ class HeatPumpHplibWithTwoOutputs(Component):
         """Use caching of results of hplib simulation."""
 
         # rounding of variable values
-        t_in_primary = round(t_in_primary, 1)
-        t_in_secondary = round(t_in_secondary, 1)
-        t_amb = round(t_amb, 1)
-        self.cache_t_in_secondary_list.append(t_in_secondary)
-        cache_t_in_secondary_set_list = list(set(self.cache_t_in_secondary_list))
+        if not force_convergence:
+            t_in_primary = round(t_in_primary, 1)
+            t_in_secondary = round(t_in_secondary, 1)
+            t_amb = round(t_amb, 1)
 
         my_data_class = CalculationRequest(
             t_in_primary=t_in_primary,
@@ -1074,14 +1074,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
         my_hash_key = hashlib.sha256(my_json_key.encode("utf-8")).hexdigest()
 
         if my_hash_key in self.calculation_cache:
-            if len(cache_t_in_secondary_set_list) == 2:  # only 2 entries are signal for oszilating in current timestep
-                # prevents oszilating between two cache entries
-                # --> if the last 10 retrievals are between two identical values, then forced new simulation from the average of both values
-                t_in_secondary = (cache_t_in_secondary_set_list[0] + cache_t_in_secondary_set_list[1]) / 2
-                results = hpl.simulate(t_in_primary, t_in_secondary, parameters, t_amb, mode=mode)
-                self.calculation_cache[my_hash_key] = results
-            else:
-                results = self.calculation_cache[my_hash_key]
+            results = self.calculation_cache[my_hash_key]
         else:
             results = hpl.simulate(t_in_primary, t_in_secondary, parameters, t_amb, mode=mode)
             self.calculation_cache[my_hash_key] = results

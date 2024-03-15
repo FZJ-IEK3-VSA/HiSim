@@ -68,7 +68,7 @@ class HeatPumpHplibWithTwoOutputsConfig(ConfigBase):
     cycling_mode: bool
     minimum_running_time_in_seconds: Optional[int]
     minimum_idle_time_in_seconds: Optional[int]
-    hx_building_temp_diff: float  # to be used, if water/water or brine/water heatpump
+    temperature_difference_primary_side: float  # to be used, if water/water or brine/water heatpump
     #: CO2 footprint of investment in kg
     co2_footprint: float
     #: cost for investment in Euro
@@ -102,7 +102,7 @@ class HeatPumpHplibWithTwoOutputsConfig(ConfigBase):
             cycling_mode=True,
             minimum_running_time_in_seconds=600,
             minimum_idle_time_in_seconds=600,
-            hx_building_temp_diff=2,
+            temperature_difference_primary_side=2,
             co2_footprint=set_thermal_output_power_in_watt
             * 1e-3
             * 165.84,  # value from emission_factros_and_costs_devices.csv
@@ -133,7 +133,7 @@ class HeatPumpHplibWithTwoOutputsConfig(ConfigBase):
             cycling_mode=True,
             minimum_running_time_in_seconds=600,
             minimum_idle_time_in_seconds=600,
-            hx_building_temp_diff=2,
+            temperature_difference_primary_side=2,
             co2_footprint=set_thermal_output_power_in_watt
             * 1e-3
             * 165.84,  # value from emission_factros_and_costs_devices.csv
@@ -236,7 +236,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
 
         self.minimum_idle_time_in_seconds = config.minimum_idle_time_in_seconds
 
-        self.hx_building_temp_diff = config.hx_building_temp_diff
+        self.temperature_difference_primary_side = config.temperature_difference_primary_side
 
         self.heat_source = config.heat_source
 
@@ -605,14 +605,14 @@ class HeatPumpHplibWithTwoOutputs(Component):
                 unit=Units.KG_PER_SEC,
                 output_description="Massflow of Water from District Heating Net",
             )
-            self.temp_water_primary_hx_in: ComponentOutput = self.add_output(
+            self.temp_water_primary_side_in: ComponentOutput = self.add_output(
                 object_name=self.component_name,
                 field_name=self.WaterTemperaturePrimaryIn,
                 load_type=LoadTypes.TEMPERATURE,
                 unit=Units.CELSIUS,
                 output_description="Temperature of Water from District Heating Net In HX",
             )
-            self.temp_water_primary_hx_out: ComponentOutput = self.add_output(
+            self.temp_water_primary_side_out: ComponentOutput = self.add_output(
                 object_name=self.component_name,
                 field_name=self.WaterTemperaturePrimaryOut,
                 load_type=LoadTypes.TEMPERATURE,
@@ -941,12 +941,12 @@ class HeatPumpHplibWithTwoOutputs(Component):
             # todo: variability of massflow. now there is a fix temperaturdiffernz between inlet and outlet which calculate the massflow
 
             m_dot_water_primary = thermal_power_from_environment / (
-                self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius * self.hx_building_temp_diff
+                self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius * self.temperature_difference_primary_side
             )
-            t_out_primary = t_in_primary - self.hx_building_temp_diff
+            t_out_primary = t_in_primary - self.temperature_difference_primary_side
             stsv.set_output_value(self.m_dot_water_primary_dhnet, m_dot_water_primary)
-            stsv.set_output_value(self.temp_water_primary_hx_in, t_in_primary)
-            stsv.set_output_value(self.temp_water_primary_hx_out, t_out_primary)
+            stsv.set_output_value(self.temp_water_primary_side_in, t_in_primary)
+            stsv.set_output_value(self.temp_water_primary_side_out, t_out_primary)
 
         # write values for output time series
         stsv.set_output_value(self.p_th_sh, p_th_sh)

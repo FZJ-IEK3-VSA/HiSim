@@ -61,7 +61,7 @@ def test_heat_pump_hplib_new():
         flow_temperature_in_celsius=t_out,
         set_thermal_output_power_in_watt=p_th_set,
         cycling_mode=True,
-        hx_building_temp_diff=2,
+        temperature_difference_primary_side=2,
         minimum_idle_time_in_seconds=600,
         minimum_running_time_in_seconds=600,
         co2_footprint=p_th_set * 1e-3 * 165.84,

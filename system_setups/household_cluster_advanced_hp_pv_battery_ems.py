@@ -88,7 +88,7 @@ def setup_function(
     seconds_per_timestep = 60
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
+        my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         my_simulation_parameters.post_processing_options.append(
@@ -155,7 +155,7 @@ def setup_function(
     temperature_offset_for_state_conditions_in_celsius = 5.0
 
     # Set Heat Pump
-    group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
+    group_id: int = 4  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
     heating_reference_temperature_in_celsius: float = -7  # t_in #TODO: get real heating ref temps according to location
     flow_temperature_in_celsius = 52  # t_out_val
 
@@ -560,8 +560,8 @@ def setup_function(
 
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
-        model_name=os.path.join(my_sim.module_filename, "27-02-2024"),
-        variant_name="ems_all_surplus_",
+        model_name=os.path.join(my_sim.module_filename, "hplib_testing"),
+        variant_name=f"hp_mode_{hp_controller_mode}_group_id_{group_id}_",
         hash_number=hash_number,
         sorting_option=sorting_option,
         sampling_mode=sampling_mode,

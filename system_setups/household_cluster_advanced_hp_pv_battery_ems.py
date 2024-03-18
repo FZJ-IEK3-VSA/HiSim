@@ -119,7 +119,13 @@ def setup_function(
     number_of_apartments = my_config.number_of_dwellings_per_building
 
     # Set occupancy
-    cache_dir_path = None  # "/fast/home/k-rieck/lpg-utsp-data"
+    # try to get profiles from cluster directory
+    cache_dir_path: Optional[str] = "/fast/home/k-rieck/lpg-utsp-data"
+    if cache_dir_path is not None and os.path.exists(cache_dir_path):
+        pass
+    # else use default specific cache_dir_path
+    else:
+        cache_dir_path = None
 
     # get household attribute jsonreferences from list of strings
     lpg_households: Union[JsonReference, List[JsonReference]]

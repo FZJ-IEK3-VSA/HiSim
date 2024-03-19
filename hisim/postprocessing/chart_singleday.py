@@ -58,8 +58,12 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         self.day = day
         self.data = data
         self.plot_title: str
+        # self.filename = (
+        #     f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}_m"
+        #     f"{self.month}_d{self.day}{self.figure_format}"
+        # )
         self.filename = (
-            f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}_m"
+            f"{self.type.lower()}_m"
             f"{self.month}_d{self.day}{self.figure_format}"
         )
 

@@ -9,7 +9,7 @@ The component with the lowest source weight is activated first.
 # clean
 from dataclasses import dataclass
 
-from typing import Any, List
+from typing import Any, List, Tuple
 
 from dataclasses_json import dataclass_json
 
@@ -135,7 +135,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     TotalElectricityConsumption = "TotalElectricityConsumption"
     ElectricityAvailable = "ElectricityAvailable"
     BuildingIndoorTemperatureModifier = "BuildingIndoorTemperatureModifier"  # connect to HDS controller and Building
-    DomesticHotWaterStorageTemperatureModifier = "DomesticHotWaterStorageTemperatureModifier"  # used for L1HeatPumpController  # Todo: change name?
+    DomesticHotWaterStorageTemperatureModifier = (
+        "DomesticHotWaterStorageTemperatureModifier"  # used for L1HeatPumpController  # Todo: change name?
+    )
     SpaceHeatingWaterStorageTemperatureModifier = (
         "SpaceHeatingWaterStorageTemperatureModifier"  # used for HeatPumpHplibController
     )
@@ -176,7 +178,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.strategy = self.ems_config.strategy
         self.limit_to_shave = self.ems_config.limit_to_shave
         self.building_indoor_temperature_offset_value = self.ems_config.building_indoor_temperature_offset_value
-        self.domestic_hot_water_storage_temperature_offset_value = self.ems_config.domestic_hot_water_storage_temperature_offset_value
+        self.domestic_hot_water_storage_temperature_offset_value = (
+            self.ems_config.domestic_hot_water_storage_temperature_offset_value
+        )
         self.space_heating_water_storage_temperature_offset_value = (
             self.ems_config.space_heating_water_storage_temperature_offset_value
         )
@@ -402,7 +406,16 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
         return dynamic_connections
 
-    def sort_source_weights_and_components(self) -> None:
+    def sort_source_weights_and_components(
+        self,
+    ) -> Tuple[
+        List[ComponentInput],
+        List[lt.ComponentType],
+        List[ComponentOutput],
+        List[ComponentInput],
+        List[ComponentInput],
+        List[ComponentInput],
+    ]:
         """Sorts dynamic Inputs and Outputs according to source weights."""
         inputs = [elem for elem in self.my_component_inputs if elem.source_weight != 999]
 
@@ -411,29 +424,37 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         sortindex = sorted(range(len(source_weights)), key=lambda k: source_weights[k])
         source_weights = [source_weights[i] for i in sortindex]
 
-        self.components_sorted = [source_tags[i] for i in sortindex]
-        self.inputs_sorted = [getattr(self, inputs[i].source_component_class) for i in sortindex]
-        self.outputs_sorted = []
+        components_sorted = [source_tags[i] for i in sortindex]
+        inputs_sorted = [getattr(self, inputs[i].source_component_class) for i in sortindex]
+        outputs_sorted = []
 
         for ind, source_weight in enumerate(source_weights):
             output = self.get_dynamic_output(
                 tags=[
-                    self.components_sorted[ind],
+                    components_sorted[ind],
                     lt.InandOutputType.ELECTRICITY_TARGET,
                 ],
                 weight_counter=source_weight,
             )
 
             if output is not None:
-                self.outputs_sorted.append(output)
+                outputs_sorted.append(output)
             else:
                 raise Exception("Dynamic input is not conncted to dynamic output")
 
-        self.production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
-        self.consumption_uncontrolled_inputs = self.get_dynamic_inputs(
+        production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
+        consumption_uncontrolled_inputs = self.get_dynamic_inputs(
             tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
         )
-        self.consumption_ems_controlled_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_REAL])
+        consumption_ems_controlled_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_REAL])
+        return (
+            inputs_sorted,
+            components_sorted,
+            outputs_sorted,
+            production_inputs,
+            consumption_uncontrolled_inputs,
+            consumption_ems_controlled_inputs,
+        )
 
     def write_to_report(self):
         """Writes relevant information to report."""
@@ -554,10 +575,19 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates iteration of surplus controller."""
         if timestep == 0:
-            self.sort_source_weights_and_components()
+            (
+                self.inputs_sorted,
+                self.components_sorted,
+                self.outputs_sorted,
+                self.production_inputs,
+                self.consumption_uncontrolled_inputs,
+                self.consumption_ems_controlled_inputs,
+            ) = self.sort_source_weights_and_components()
 
         # get production
-        self.state.production_in_watt = sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])
+        self.state.production_in_watt = sum(
+            [stsv.get_input_value(component_input=elem) for elem in self.production_inputs]
+        )
         self.state.consumption_uncontrolled_in_watt = sum(
             [stsv.get_input_value(component_input=elem) for elem in self.consumption_uncontrolled_inputs]
         )
@@ -575,10 +605,12 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             )
 
         # Set other output values
-        electricity_to_grid_in_watt = (
-            self.state.production_in_watt - self.state.consumption_uncontrolled_in_watt - self.state.consumption_ems_controlled_in_watt
+        electricity_to_or_from_grid_in_watt = (
+            self.state.production_in_watt
+            - self.state.consumption_uncontrolled_in_watt
+            - self.state.consumption_ems_controlled_in_watt
         )
-        stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_grid_in_watt)
+        stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_or_from_grid_in_watt)
         stsv.set_output_value(self.electricity_availbale_channel, electricity_available_in_watt)
         stsv.set_output_value(
             self.total_electricity_consumption_channel,

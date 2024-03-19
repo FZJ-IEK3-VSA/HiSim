@@ -492,7 +492,7 @@ def setup_function(
         my_domnestic_hot_water_heatpump_controller.connect_input(
             my_domnestic_hot_water_heatpump_controller.StorageTemperatureModifier,
             my_electricity_controller.component_name,
-            my_electricity_controller.StorageTemperatureModifier,
+            my_electricity_controller.DomesticHotWaterStorageTemperatureModifier,
         )
         my_electricity_controller.add_component_input_and_connect(
             source_object_name=my_domnestic_hot_water_heatpump.component_name,
@@ -535,7 +535,7 @@ def setup_function(
         my_heat_pump_controller.connect_input(
             my_heat_pump_controller.SimpleHotWaterStorageTemperatureModifier,
             my_electricity_controller.component_name,
-            my_electricity_controller.SimpleHotWaterStorageTemperatureModifier,
+            my_electricity_controller.SpaceHeatingWaterStorageTemperatureModifier,
         )
 
         my_electricity_controller.add_component_input_and_connect(
@@ -577,12 +577,12 @@ def setup_function(
         my_heat_distribution_controller.connect_input(
             my_heat_distribution_controller.BuildingTemperatureModifier,
             my_electricity_controller.component_name,
-            my_electricity_controller.BuildingTemperatureModifier,
+            my_electricity_controller.BuildingIndoorTemperatureModifier,
         )
         my_building.connect_input(
             my_building.BuildingTemperatureModifier,
             my_electricity_controller.component_name,
-            my_electricity_controller.BuildingTemperatureModifier,
+            my_electricity_controller.BuildingIndoorTemperatureModifier,
         )
 
     # connect EMS with PV

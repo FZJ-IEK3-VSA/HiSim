@@ -614,7 +614,7 @@ def configure_water_heating_electric(
         my_heatpump_controller_l1.connect_input(
             my_heatpump_controller_l1.StorageTemperatureModifier,
             my_electricity_controller.component_name,
-            my_electricity_controller.StorageTemperatureModifier,
+            my_electricity_controller.DomesticHotWaterStorageTemperatureModifier,
         )
         my_electricity_controller.add_component_input_and_connect(
             source_object_name=my_heatpump.component_name,
@@ -796,7 +796,7 @@ def configure_heating_electric(
         my_heatpump_controller_l1.connect_input(
             my_heatpump_controller_l1.StorageTemperatureModifier,
             my_electricity_controller.component_name,
-            my_electricity_controller.BuildingTemperatureModifier,
+            my_electricity_controller.BuildingIndoorTemperatureModifier,
         )
         my_electricity_controller.add_component_input_and_connect(
             source_object_name=my_heatpump.component_name,
@@ -952,12 +952,12 @@ def configure_heating_with_buffer_electric(
         my_heatpump_controller_l1.connect_input(
             my_heatpump_controller_l1.StorageTemperatureModifier,
             my_electricity_controller.component_name,
-            my_electricity_controller.StorageTemperatureModifier,
+            my_electricity_controller.DomesticHotWaterStorageTemperatureModifier,
         )
         my_buffer_controller.connect_input(
             my_buffer_controller.BuildingTemperatureModifier,
             my_electricity_controller.component_name,
-            my_electricity_controller.BuildingTemperatureModifier,
+            my_electricity_controller.BuildingIndoorTemperatureModifier,
         )
 
         my_electricity_controller.add_component_input_and_connect(

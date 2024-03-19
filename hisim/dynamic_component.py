@@ -116,8 +116,7 @@ class DynamicComponent(Component):
     ) -> ComponentOutput:
         """Adds an output channel to a component."""
         # Label Output and generate variable
-        num_inputs = len(self.outputs)
-        label = f"Output{num_inputs + 1}"
+        label = f"{source_weight}"
         vars(self)[label] = label
 
         # Define Output as Component Input and add it to inputs
@@ -157,7 +156,7 @@ class DynamicComponent(Component):
         """Adds a component input and connects it at once."""
         # Label Input and generate variable
         num_inputs = len(self.inputs)
-        label = f"Input{num_inputs}"
+        label = f"Input_{source_object_name}_{source_component_output}_{num_inputs}"
         vars(self)[label] = label
 
         log.trace("Added component input and connect: " + source_object_name + " - " + source_component_output)
@@ -205,7 +204,7 @@ class DynamicComponent(Component):
                 if source_component_field_name in output_var.display_name:
                     source_component_output = output_var.display_name
 
-                    label = f"Input{num_inputs}"
+                    label = label = f"Input_{component.component_name}_{source_component_output}_{num_inputs}"
                     vars(self)[label] = label
 
                     # Define Input as Component Input and add it to inputs

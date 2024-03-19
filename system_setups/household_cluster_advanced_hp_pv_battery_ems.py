@@ -355,34 +355,8 @@ def setup_function(
 
         # -----------------------------------------------------------------------------------------------------------------
         # Add outputs to EMS
-        # use only default connections of ems and add outputs
-        my_electricity_controller.add_component_output(
-            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-            source_tags=[
-                lt.ComponentType.HEAT_PUMP_DHW,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            # source_weight=my_domnestic_hot_water_heatpump.config.source_weight,
-            source_weight=1,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target electricity for dhw heat pump.",
-        )
-
-        my_electricity_controller.add_component_output(
-            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-            source_tags=[
-                lt.ComponentType.HEAT_PUMP_BUILDING,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_weight=2,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target electricity for Heating Heat Pump. ",
-        )
-
         electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
-            source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+            source_output_name="ElectrictyToOrFromBattery_",
             source_tags=[
                 lt.ComponentType.BATTERY,
                 lt.InandOutputType.ELECTRICITY_TARGET,
@@ -397,7 +371,7 @@ def setup_function(
         # Connect Battery
         my_advanced_battery.connect_dynamic_input(
             input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
-            src_object=electricity_to_or_from_battery_target,
+            src_object=electricity_to_or_from_battery_target
         )
 
         # -----------------------------------------------------------------------------------------------------------------
@@ -444,7 +418,7 @@ def setup_function(
 
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
-        model_name=os.path.join(my_sim.module_filename, "27-02-2024"),
+        model_name=os.path.join(my_sim.module_filename, "ems_test"),
         variant_name=f"ems_dhw_{domestic_hot_water_storage_temperature_offset_value}_"
                      f"sh_{space_heating_water_storage_temperature_offset_value}_building_{building_indoor_temperature_offset_value}",
         hash_number=hash_number,

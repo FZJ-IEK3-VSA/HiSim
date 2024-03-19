@@ -80,16 +80,16 @@ class EMSState:
         consumption_ems_controlled: float,
     ) -> None:
         """Initialize the heat pump controller state."""
-        self.production = production
-        self.consumption_uncontrolled = consumption_uncontrolled
-        self.consumption_ems_controlled = consumption_ems_controlled
+        self.production_in_watt = production
+        self.consumption_uncontrolled_in_watt = consumption_uncontrolled
+        self.consumption_ems_controlled_in_watt = consumption_ems_controlled
 
     def clone(self) -> "EMSState":
         """Copy EMSState efficiently."""
         return EMSState(
-            production=self.production,
-            consumption_uncontrolled=self.consumption_uncontrolled,
-            consumption_ems_controlled=self.consumption_ems_controlled,
+            production=self.production_in_watt,
+            consumption_uncontrolled=self.consumption_uncontrolled_in_watt,
+            consumption_ems_controlled=self.consumption_ems_controlled_in_watt,
         )
 
 
@@ -331,6 +331,19 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 source_weight=1,
             )
         )
+
+        self.add_component_output(
+            source_output_name=f"ElectricityTo{dhw_heat_pump_class_name}_",
+            source_tags=[
+                lt.ComponentType.HEAT_PUMP_DHW,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            # source_weight=my_domnestic_hot_water_heatpump.config.source_weight,
+            source_weight=1,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for dhw heat pump.",
+        )
         return dynamic_connections
 
     def get_default_connections_from_advanced_heat_pump(
@@ -352,6 +365,17 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 source_tags=[lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.ELECTRICITY_REAL],
                 source_weight=2,
             )
+        )
+        self.add_component_output(
+            source_output_name=f"ElectricityTo{advanced_heat_pump_class_name}_",
+            source_tags=[
+                lt.ComponentType.HEAT_PUMP_BUILDING,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_weight=2,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for Heating Heat Pump. ",
         )
         return dynamic_connections
 
@@ -375,6 +399,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 source_weight=3,
             )
         )
+
         return dynamic_connections
 
     def sort_source_weights_and_components(self) -> None:
@@ -532,32 +557,32 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             self.sort_source_weights_and_components()
 
         # get production
-        self.state.production = sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])
-        self.state.consumption_uncontrolled = sum(
+        self.state.production_in_watt = sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])
+        self.state.consumption_uncontrolled_in_watt = sum(
             [stsv.get_input_value(component_input=elem) for elem in self.consumption_uncontrolled_inputs]
         )
-        self.state.consumption_ems_controlled = sum(
+        self.state.consumption_ems_controlled_in_watt = sum(
             [stsv.get_input_value(component_input=elem) for elem in self.consumption_ems_controlled_inputs]
         )
 
         # Production of Electricity positve sign
         # Consumption of Electricity negative sign
-        flexible_electricity = self.state.production - self.state.consumption_uncontrolled
+        electricity_available_in_watt = self.state.production_in_watt - self.state.consumption_uncontrolled_in_watt
         if self.strategy == "optimize_own_consumption":
             self.optimize_own_consumption_iterative(
-                delta_demand=flexible_electricity,
+                delta_demand=electricity_available_in_watt,
                 stsv=stsv,
             )
 
         # Set other output values
-        electricity_to_grid = (
-            self.state.production - self.state.consumption_uncontrolled - self.state.consumption_ems_controlled
+        electricity_to_grid_in_watt = (
+            self.state.production_in_watt - self.state.consumption_uncontrolled_in_watt - self.state.consumption_ems_controlled_in_watt
         )
-        stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_grid)
-        stsv.set_output_value(self.electricity_availbale_channel, flexible_electricity)
+        stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_grid_in_watt)
+        stsv.set_output_value(self.electricity_availbale_channel, electricity_available_in_watt)
         stsv.set_output_value(
             self.total_electricity_consumption_channel,
-            self.state.consumption_uncontrolled + self.state.consumption_ems_controlled,
+            self.state.consumption_uncontrolled_in_watt + self.state.consumption_ems_controlled_in_watt,
         )
         """
         elif self.strategy == "seasonal_storage":

@@ -131,7 +131,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     # Outputs
     ElectricityToElectrolyzerTarget = "ElectricityToElectrolyzerTarget"
 
-    ElectricityToOrFromGrid = "ElectricityToOrFromGrid"
+    TotalElectricityToOrFromGrid = "TotalElectricityToOrFromGrid"
     TotalElectricityConsumption = "TotalElectricityConsumption"
     ElectricityAvailable = "ElectricityAvailable"
     BuildingIndoorTemperatureModifier = "BuildingIndoorTemperatureModifier"  # connect to HDS controller and Building
@@ -167,7 +167,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.state = EMSState(production=0, consumption_uncontrolled=0, consumption_ems_controlled=0)
         self.previous_state = self.state.clone()
 
-        self.components_sorted: List[lt.ComponentType] = []
+        self.component_types_sorted: List[lt.ComponentType] = []
         self.inputs_sorted: List[ComponentInput] = []
         self.outputs_sorted: List[ComponentOutput] = []
         self.production_inputs: List[ComponentInput] = []
@@ -195,13 +195,13 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         )
 
         # Outputs
-        self.electricity_to_or_from_grid: cp.ComponentOutput = self.add_output(
+        self.total_electricity_to_or_from_grid: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.ElectricityToOrFromGrid,
+            field_name=self.TotalElectricityToOrFromGrid,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
             sankey_flow_direction=False,
-            output_description=f"here a description for {self.ElectricityToOrFromGrid} will follow.",
+            output_description=f"here a description for {self.TotalElectricityToOrFromGrid} will follow.",
         )
 
         self.total_electricity_consumption_channel: cp.ComponentOutput = self.add_output(
@@ -213,7 +213,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             output_description=f"here a description for {self.TotalElectricityConsumption} will follow.",
         )
 
-        self.electricity_availbale_channel: cp.ComponentOutput = self.add_output(
+        self.electricity_available_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ElectricityAvailable,
             load_type=lt.LoadTypes.ELECTRICITY,
@@ -337,7 +337,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         )
 
         self.add_component_output(
-            source_output_name=f"ElectricityTo{dhw_heat_pump_class_name}_",
+            source_output_name=f"ElectricityToOrFromGridOf{dhw_heat_pump_class_name}_",
             source_tags=[
                 lt.ComponentType.HEAT_PUMP_DHW,
                 lt.InandOutputType.ELECTRICITY_TARGET,
@@ -371,7 +371,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             )
         )
         self.add_component_output(
-            source_output_name=f"ElectricityTo{advanced_heat_pump_class_name}_",
+            source_output_name=f"ElectricityToOrFromGridOf{advanced_heat_pump_class_name}_",
             source_tags=[
                 lt.ComponentType.HEAT_PUMP_BUILDING,
                 lt.InandOutputType.ELECTRICITY_TARGET,
@@ -424,14 +424,14 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         sortindex = sorted(range(len(source_weights)), key=lambda k: source_weights[k])
         source_weights = [source_weights[i] for i in sortindex]
 
-        components_sorted = [source_tags[i] for i in sortindex]
+        component_types_sorted = [source_tags[i] for i in sortindex]
         inputs_sorted = [getattr(self, inputs[i].source_component_class) for i in sortindex]
         outputs_sorted = []
 
         for ind, source_weight in enumerate(source_weights):
             output = self.get_dynamic_output(
                 tags=[
-                    components_sorted[ind],
+                    component_types_sorted[ind],
                     lt.InandOutputType.ELECTRICITY_TARGET,
                 ],
                 weight_counter=source_weight,
@@ -449,7 +449,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         consumption_ems_controlled_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_REAL])
         return (
             inputs_sorted,
-            components_sorted,
+            component_types_sorted,
             outputs_sorted,
             production_inputs,
             consumption_uncontrolled_inputs,
@@ -479,45 +479,56 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
     def control_electricity_component_iterative(
         self,
-        deltademand: float,
+        available_surplus_electricity_in_watt: float,
         stsv: cp.SingleTimeStepValues,
-        component_type: lt.ComponentType,
-        input_channel: cp.ComponentInput,
-        output: cp.ComponentOutput,
+        current_component_type: lt.ComponentType,
+        current_input: cp.ComponentInput,
+        current_output: cp.ComponentOutput,
     ) -> float:
         """Calculates available surplus electricity.
 
         Subtracts the electricity consumption signal of the component from the previous iteration,
         and sends updated signal back.
         """
-        # get previous signal and substract from total balance
-        previous_signal = stsv.get_input_value(component_input=input_channel)
+        # get electricity demand from input component and substract from available surplus electricity
+        electricity_demand_from_current_input_component_in_watt = stsv.get_input_value(component_input=current_input)
 
-        # control from substracted balance
-        if component_type == lt.ComponentType.BATTERY:
-            stsv.set_output_value(output=output, value=deltademand)
-            # deltademand = deltademand - previous_signal
+        # if available_surplus_electricity > 0: electricity is fed into battery
+        # if available_surplus_electricity < 0: electricity is taken from battery
+        # TODO: how much can battery take or need to have soc=1 and how much available surplus electricty is left then?
+        if current_component_type == lt.ComponentType.BATTERY:
+            stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
+            # available_surplus_electricity_in_watt = available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
 
-        elif component_type == lt.ComponentType.CHP:
-            stsv.set_output_value(output=output, value=deltademand)
+        # CHP produces electricity which is added to available surplus electricity
+        elif current_component_type == lt.ComponentType.CHP:
+            available_surplus_electricity_in_watt = (
+                available_surplus_electricity_in_watt + electricity_demand_from_current_input_component_in_watt
+            )
+            stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
 
-        elif component_type in [
+        elif current_component_type in [
             lt.ComponentType.HEAT_PUMP_DHW,
             lt.ComponentType.HEAT_PUMP,
         ]:  # Todo: lt.ComponentType.HEAT_PUMP is from old version, kept here just to avoid errors
-            if deltademand > 0:
+            if available_surplus_electricity_in_watt > 0:
                 stsv.set_output_value(
                     self.domestic_hot_water_storage_temperature_modifier,
                     self.domestic_hot_water_storage_temperature_offset_value,
                 )
-                stsv.set_output_value(output=output, value=deltademand)
-                deltademand = deltademand - previous_signal
+                available_surplus_electricity_in_watt = (
+                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
+                )
+                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
+
             else:
                 stsv.set_output_value(self.domestic_hot_water_storage_temperature_modifier, 0)
-                stsv.set_output_value(output=output, value=deltademand)
+                stsv.set_output_value(
+                    output=current_output, value=-electricity_demand_from_current_input_component_in_watt
+                )
 
-        elif component_type == lt.ComponentType.HEAT_PUMP_BUILDING:
-            if deltademand > 0:
+        elif current_component_type == lt.ComponentType.HEAT_PUMP_BUILDING:
+            if available_surplus_electricity_in_watt > 0:
                 stsv.set_output_value(
                     self.building_indoor_temperature_modifier,
                     self.building_indoor_temperature_offset_value,
@@ -526,50 +537,65 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     self.space_heating_water_storage_temperature_modifier,
                     self.space_heating_water_storage_temperature_offset_value,
                 )
-                stsv.set_output_value(output=output, value=deltademand)
-                deltademand = deltademand - previous_signal
+                available_surplus_electricity_in_watt = (
+                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
+                )
+                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
+
             else:
                 stsv.set_output_value(self.building_indoor_temperature_modifier, 0)
                 stsv.set_output_value(self.space_heating_water_storage_temperature_modifier, 0)
-                stsv.set_output_value(output=output, value=deltademand)
-        elif component_type == lt.ComponentType.ELECTROLYZER:
-            if deltademand > 0:
-                stsv.set_output_value(output=output, value=deltademand)
-                deltademand = deltademand + previous_signal
-            else:
-                stsv.set_output_value(output=output, value=0)
+                stsv.set_output_value(
+                    output=current_output, value=-electricity_demand_from_current_input_component_in_watt
+                )
 
-        elif component_type in [
-            # lt.ComponentType.ELECTROLYZER,
+        elif current_component_type == lt.ComponentType.ELECTROLYZER:
+            if available_surplus_electricity_in_watt > 0:
+                available_surplus_electricity_in_watt = (
+                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
+                )
+                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
+            else:
+                stsv.set_output_value(
+                    output=current_output, value=-electricity_demand_from_current_input_component_in_watt
+                )
+
+        elif current_component_type in [
             lt.ComponentType.SMART_DEVICE,
             lt.ComponentType.CAR_BATTERY,
         ]:
-            if deltademand > 0:
-                stsv.set_output_value(output=output, value=deltademand)
-                deltademand = deltademand - previous_signal
+            if available_surplus_electricity_in_watt > 0:
+                available_surplus_electricity_in_watt = (
+                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
+                )
+                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
             else:
-                stsv.set_output_value(output=output, value=deltademand)
+                stsv.set_output_value(
+                    output=current_output, value=-electricity_demand_from_current_input_component_in_watt
+                )
 
-        return deltademand
+        return available_surplus_electricity_in_watt
 
     def optimize_own_consumption_iterative(
         self,
-        delta_demand: float,
+        available_surplus_electricity_in_watt: float,
         stsv: cp.SingleTimeStepValues,
+        inputs_sorted: List[ComponentInput],
+        component_types_sorted: List[lt.ComponentType],
+        outputs_sorted: List[ComponentOutput],
     ) -> None:
         """Evaluates available suplus electricity component by component, iteratively, and sends updated signals back."""
 
-        for ind, input_sorted in enumerate(self.inputs_sorted):
-            component_type = self.components_sorted[ind]
-            single_input = input_sorted
-            output = self.outputs_sorted[ind]
+        for index, single_input_sorted in enumerate(inputs_sorted):
+            single_component_type_sorted = component_types_sorted[index]
+            single_output_sorted = outputs_sorted[index]
 
-            delta_demand = self.control_electricity_component_iterative(
-                deltademand=delta_demand,
+            available_surplus_electricity_in_watt = self.control_electricity_component_iterative(
+                available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
                 stsv=stsv,
-                component_type=component_type,
-                input_channel=single_input,
-                output=output,
+                current_component_type=single_component_type_sorted,
+                current_input=single_input_sorted,
+                current_output=single_output_sorted,
             )
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
@@ -577,14 +603,14 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         if timestep == 0:
             (
                 self.inputs_sorted,
-                self.components_sorted,
+                self.component_types_sorted,
                 self.outputs_sorted,
                 self.production_inputs,
                 self.consumption_uncontrolled_inputs,
                 self.consumption_ems_controlled_inputs,
             ) = self.sort_source_weights_and_components()
 
-        # get production
+        # get total production and consumptions
         self.state.production_in_watt = sum(
             [stsv.get_input_value(component_input=elem) for elem in self.production_inputs]
         )
@@ -597,21 +623,26 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
         # Production of Electricity positve sign
         # Consumption of Electricity negative sign
-        electricity_available_in_watt = self.state.production_in_watt - self.state.consumption_uncontrolled_in_watt
+        available_surplus_electricity_in_watt = (
+            self.state.production_in_watt - self.state.consumption_uncontrolled_in_watt
+        )
         if self.strategy == "optimize_own_consumption":
             self.optimize_own_consumption_iterative(
-                delta_demand=electricity_available_in_watt,
+                available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
                 stsv=stsv,
+                inputs_sorted=self.inputs_sorted,
+                component_types_sorted=self.component_types_sorted,
+                outputs_sorted=self.outputs_sorted,
             )
 
         # Set other output values
-        electricity_to_or_from_grid_in_watt = (
+        total_electricity_to_or_from_grid_in_watt = (
             self.state.production_in_watt
             - self.state.consumption_uncontrolled_in_watt
             - self.state.consumption_ems_controlled_in_watt
         )
-        stsv.set_output_value(self.electricity_to_or_from_grid, electricity_to_or_from_grid_in_watt)
-        stsv.set_output_value(self.electricity_availbale_channel, electricity_available_in_watt)
+        stsv.set_output_value(self.total_electricity_to_or_from_grid, total_electricity_to_or_from_grid_in_watt)
+        stsv.set_output_value(self.electricity_available_channel, available_surplus_electricity_in_watt)
         stsv.set_output_value(
             self.total_electricity_consumption_channel,
             self.state.consumption_uncontrolled_in_watt + self.state.consumption_ems_controlled_in_watt,

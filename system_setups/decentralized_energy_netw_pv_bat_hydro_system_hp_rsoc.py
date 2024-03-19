@@ -225,7 +225,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.ElectricityInput,
         my_cl2.component_name,
-        my_cl2.ElectricityToOrFromGrid,
+        my_cl2.TotalElectricityToOrFromGrid,
     )
     my_heat_pump.connect_only_predefined_connections(my_weather, my_heat_pump_controller)
     my_heat_pump.get_default_connections_heatpump_controller()

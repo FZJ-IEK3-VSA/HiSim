@@ -88,7 +88,7 @@ def setup_function(
     seconds_per_timestep = 60
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only_with_only_plots(
+        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         my_simulation_parameters.post_processing_options.append(
@@ -378,7 +378,7 @@ def setup_function(
         # Connect Electricity Meter
         my_electricity_meter.add_component_input_and_connect(
             source_object_name=my_electricity_controller.component_name,
-            source_component_output=my_electricity_controller.ElectricityToOrFromGrid,
+            source_component_output=my_electricity_controller.TotalElectricityToOrFromGrid,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],

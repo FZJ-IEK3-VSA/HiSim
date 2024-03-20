@@ -132,9 +132,20 @@ class ReportGenerator:
             "Developers:",
             "\n",
             "Dr. Noah Pflugradt",
-            "Vitor Hugo Bellotto Zago",
+            "Dr. Sebastian Dickler",
+            "Kevin Knosala",
             "Katharina Rieck",
+            "Johanna Ganglbauer",
+            "David Neuroth",
+            "Tjarko Tjaden",
+            "Vitor Hugo Bellotto Zago",
+            "Maximilian Hillen",
+            "Frank Burkrad",
+            "Marwa Alfouly",
+            "Franz Oldopp",
+            "Markus Blasberg",
         ]
+
         for part in authors:
             ptext = f'<font size="16">{part.strip()}</font>'
             story.append(Paragraph(ptext, self.styles["Normal"]))

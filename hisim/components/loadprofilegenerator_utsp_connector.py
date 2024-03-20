@@ -81,7 +81,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
 
         config = UtspLpgConnectorConfig(
             name="UTSPConnector",
-            data_acquisition_mode=LpgDataAcquisitionMode.USE_UTSP,
+            data_acquisition_mode=LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE,
             household=Households.CHR01_Couple_both_at_Work,
             result_dir_path=utils.HISIMPATH["utsp_results"],
             energy_intensity=EnergyIntensityType.EnergySaving,

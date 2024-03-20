@@ -59,7 +59,7 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         self.data = data
         self.plot_title: str
         self.filename = (
-            f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}_{self.output.split(' # ', 2)[0]}_m"
+            f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}_m"
             f"{self.month}_d{self.day}{self.figure_format}"
         )
 
@@ -103,8 +103,8 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
             self.figure_format,
         )
         my_double.filename = (
-            f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}_{self.output.split(' # ', 2)[0]}"
-            f"_AND_{other.output.split(' # ', 2)[1]}_{other.output.split(' # ', 2)[0]}_m{self.month}_d{self.day}{self.figure_format}"
+            f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}"
+            f"_AND_{other.output.split(' # ', 2)[1]}_m{self.month}_d{self.day}{self.figure_format}"
         )
         my_double.filepath = os.path.join(self.directory_path, my_double.filename)
         my_double.plot(close=False)

@@ -243,9 +243,6 @@ def setup_function(
         my_occupancy_config = (
             loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
         )
-        my_occupancy_config.data_acquisition_mode = (
-            loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
-        )
 
         my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
             config=my_occupancy_config,
@@ -317,7 +314,7 @@ def setup_function(
 
         my_electricity_controller.add_component_inputs_and_connect(
             source_component_classes=consumption,
-            outputstring="ElectricityOutput",
+            source_component_field_name=consumption[0].ElectricityOutput,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
@@ -325,7 +322,7 @@ def setup_function(
         )
         my_electricity_controller.add_component_inputs_and_connect(
             source_component_classes=production,
-            outputstring="ElectricityOutput",
+            source_component_field_name=production[0].ElectricityOutput,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],

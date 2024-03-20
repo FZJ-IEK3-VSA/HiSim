@@ -233,9 +233,7 @@ def air_conditioned_house(
 
     """ Occupancy Profile """
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
-    my_occupancy_config.data_acquisition_mode = (
-        loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
-    )
+
     my_occupancy_config.predictive_control = predictive_control
     my_occupancy_config.predictive = predictive
 

@@ -6,7 +6,7 @@ from typing import Any, List, Union, Dict, cast, Optional
 import dataclasses as dc
 import hisim.loadtypes as lt
 from hisim import log
-from hisim.component import Component, ComponentInput, ComponentOutput, ConfigBase, SingleTimeStepValues, DisplayConfig
+from hisim.component import Component, ComponentInput, ComponentOutput, ConfigBase, DisplayConfig
 from hisim.simulationparameters import SimulationParameters
 
 
@@ -184,7 +184,7 @@ class DynamicComponent(Component):
     def add_component_inputs_and_connect(
         self,
         source_component_classes: List[Component],
-        outputstring: str,
+        source_component_field_name: str,
         source_load_type: lt.LoadTypes,
         source_unit: lt.Units,
         source_tags: List[Union[lt.ComponentType, lt.InandOutputType]],
@@ -202,7 +202,7 @@ class DynamicComponent(Component):
         # Connect Input and define it as DynamicConnectionInput
         for component in source_component_classes:
             for output_var in component.outputs:
-                if outputstring in output_var.display_name:
+                if source_component_field_name in output_var.display_name:
                     source_component_output = output_var.display_name
 
                     label = f"Input{num_inputs}"
@@ -286,64 +286,6 @@ class DynamicComponent(Component):
             connection_copy.source_instance_name = source_component.component_name
             new_connections.append(connection_copy)
         return new_connections
-
-    def obsolete_get_dynamic_input_value(
-        self,
-        stsv: SingleTimeStepValues,
-        tags: List[Union[lt.ComponentType, lt.InandOutputType]],
-        weight_counter: int,
-    ) -> Any:
-        """Returns input value from first dynamic input with component type and weight."""
-        inputvalue = None
-
-        # check if component of component type is available
-        for _, element in enumerate(self.my_component_inputs):  # loop over all inputs
-            if search_and_compare(
-                weight_to_search=weight_counter,
-                weight_of_component=element.source_weight,
-                tags_to_search=tags,
-                tags_of_component=element.source_tags,
-            ):
-                inputvalue = stsv.get_input_value(getattr(self, element.source_component_class))
-                break
-        return inputvalue
-
-    def obsolete_get_dynamic_input_values(
-        self,
-        stsv: SingleTimeStepValues,
-        tags: List[Union[lt.ComponentType, lt.InandOutputType]],
-    ) -> List:
-        """Returns input values from all dynamic inputs with component type and weight."""
-        inputvalues = []
-
-        # check if component of component type is available
-        for _, element in enumerate(self.my_component_inputs):  # loop over all inputs
-            if tags_search_and_compare(tags_to_search=tags, tags_of_component=element.source_tags):
-                inputvalues.append(stsv.get_input_value(getattr(self, element.source_component_class)))
-            else:
-                continue
-        return inputvalues
-
-    def obsolete_set_dynamic_output_value(
-        self,
-        stsv: SingleTimeStepValues,
-        tags: List[Union[lt.ComponentType, lt.InandOutputType]],
-        weight_counter: int,
-        output_value: float,
-    ) -> None:
-        """Sets all output values with given component type and weight."""
-
-        # check if component of component type is available
-        for _, element in enumerate(self.my_component_outputs):  # loop over all inputs
-            if search_and_compare(
-                weight_to_search=weight_counter,
-                weight_of_component=element.source_weight,
-                tags_to_search=tags,
-                tags_of_component=element.source_tags,
-            ):
-                stsv.set_output_value(getattr(self, element.source_component_class), output_value)
-            else:
-                continue
 
     def get_dynamic_inputs(self, tags: List[Union[lt.ComponentType, lt.InandOutputType]]) -> List[ComponentInput]:
         """Returns inputs from all dynamic inputs with component type and weight."""

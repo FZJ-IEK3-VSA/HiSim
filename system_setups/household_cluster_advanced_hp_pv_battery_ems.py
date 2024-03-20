@@ -28,7 +28,7 @@ from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDict
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim import log
-from hisim.units import Quantity, Celsius
+from hisim.units import Quantity, Celsius, Watt
 from system_setups.household_cluster_reference_advanced_hp import (
     BuildingPVWeatherConfig,
 )
@@ -88,7 +88,9 @@ def setup_function(
     seconds_per_timestep = 60
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
+            year=year, seconds_per_timestep=seconds_per_timestep
+        )
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
         )
@@ -97,12 +99,13 @@ def setup_function(
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Set ems strategies
-    surplus_control: bool = False  # strategy 2: storage temperature modifier
-    surplus_control_building_temperature_modifier: bool = False  # strategy 3: building temperature modifier
+    surplus_control: bool = True  # strategy 2: storage temperature modifier
+    surplus_control_building_temperature_modifier: bool = True  # strategy 3: building temperature modifier
 
     # Set Photovoltaic System
     azimuth = my_config.pv_azimuth
@@ -116,7 +119,7 @@ def setup_function(
     number_of_apartments = my_config.number_of_dwellings_per_building
 
     # Set occupancy
-    cache_dir_path = "/fast/home/k-rieck/lpg-utsp-data"
+    cache_dir_path = None  # "/fast/home/k-rieck/lpg-utsp-data"
 
     # get household attribute jsonreferences from list of strings
     lpg_households: Union[JsonReference, List[JsonReference]]
@@ -169,6 +172,7 @@ def setup_function(
 
     # Build Occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    my_occupancy_config.data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP
     my_occupancy_config.household = lpg_households
     my_occupancy_config.cache_dir_path = cache_dir_path
 
@@ -188,7 +192,7 @@ def setup_function(
     # Build PV
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
         rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2,
-        share_of_maximum_pv_power=share_of_maximum_pv_power
+        share_of_maximum_pv_power=share_of_maximum_pv_power,
     )
     my_photovoltaic_system_config.azimuth = azimuth
     my_photovoltaic_system_config.tilt = tilt
@@ -235,7 +239,7 @@ def setup_function(
 
     # Build Heat Pump
     my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+        heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
         heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
     )
     my_heat_pump_config.group_id = group_id
@@ -264,7 +268,7 @@ def setup_function(
     my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_heat_pump_config.set_thermal_output_power_in_watt.value,
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
-        heating_system_name=my_heat_pump.component_name,
+        sizing_option=simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
         water_mass_flow_rate_from_hds_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
     )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
@@ -539,7 +543,7 @@ def setup_function(
 
         SingletonSimRepository().set_entry(
             key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
-            entry=f"no_surplus_{hash_number}",
+            entry=f"ems_all_surplus_{hash_number}",
         )
 
     # if config_filename is not given, make result path with index enumeration
@@ -551,7 +555,7 @@ def setup_function(
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
         model_name=os.path.join(my_sim.module_filename, "27-02-2024"),
-        variant_name="no_surplus_",
+        variant_name="ems_all_surplus_",
         hash_number=hash_number,
         sorting_option=sorting_option,
         sampling_mode=sampling_mode,

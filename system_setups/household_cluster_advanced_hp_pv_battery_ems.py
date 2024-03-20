@@ -88,7 +88,7 @@ def setup_function(
     seconds_per_timestep = 60
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(
+        my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         my_simulation_parameters.post_processing_options.append(
@@ -355,7 +355,7 @@ def setup_function(
 
         # -----------------------------------------------------------------------------------------------------------------
         # Add outputs to EMS
-        electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
+        loading_power_input_for_battery_in_watt = my_electricity_controller.add_component_output(
             source_output_name="LoadingPowerInputForBattery_",
             source_tags=[
                 lt.ComponentType.BATTERY,
@@ -371,7 +371,7 @@ def setup_function(
         # Connect Battery
         my_advanced_battery.connect_dynamic_input(
             input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
-            src_object=electricity_to_or_from_battery_target
+            src_object=loading_power_input_for_battery_in_watt
         )
 
         # -----------------------------------------------------------------------------------------------------------------

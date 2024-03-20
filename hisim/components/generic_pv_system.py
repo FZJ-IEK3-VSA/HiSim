@@ -107,7 +107,7 @@ class PVSystemConfig(ConfigBase):
             integrate_inverter=True,
             module_database=PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
             inverter_database=PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,
-            module_name="Trina Solar TSM-410DE09",
+            module_name="Hanwha HSL60P6-PA-4-250T [2013]",
             inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
             name="PVSystem",
             azimuth=180,
@@ -115,7 +115,7 @@ class PVSystemConfig(ConfigBase):
             source_weight=0,
             location="Aachen",
             co2_footprint=power_in_watt * 1e-3 * 330.51,  # value from emission_factros_and_costs_devices.csv
-            cost=power_in_watt * 1e-3 * 794.41,  # value from emission_factors_and_costs_devices.csv
+            cost=power_in_watt * 1e-3 * 794.41,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
             lifetime=25,  # value from emission_factros_and_costs_devices.csv
             predictive=False,
@@ -128,7 +128,7 @@ class PVSystemConfig(ConfigBase):
         cls,
         rooftop_area_in_m2: float,
         share_of_maximum_pv_power: float = 1.0,
-        module_name: str = "Trina Solar TSM-410DE09",
+        module_name: str = "Hanwha HSL60P6-PA-4-250T [2013]",
         module_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
         load_module_data: bool = False,
     ) -> "PVSystemConfig":

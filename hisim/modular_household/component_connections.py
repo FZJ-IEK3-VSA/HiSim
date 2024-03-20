@@ -406,7 +406,7 @@ def configure_battery(
 
     my_electricity_controller.add_component_input_and_connect(
         source_object_name=my_advanced_battery.component_name,
-        source_component_output=my_advanced_battery.AcBatteryPower,
+        source_component_output=my_advanced_battery.AcBatteryPowerUsed,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_REAL],

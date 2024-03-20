@@ -396,7 +396,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             dynamic_component.DynamicComponentConnection(
                 source_component_class=Battery,
                 source_class_name=advanced_battery_class_name,
-                source_component_field_name=Battery.AcBatteryPower,
+                source_component_field_name=Battery.AcBatteryPowerUsed,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_REAL],
@@ -495,10 +495,12 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
         # if available_surplus_electricity > 0: electricity is fed into battery
         # if available_surplus_electricity < 0: electricity is taken from battery
-        # TODO: how much can battery take or need to have soc=1 and how much available surplus electricty is left then?
         if current_component_type == lt.ComponentType.BATTERY:
             stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
-            # available_surplus_electricity_in_watt = available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
+            # difference between what is fed into battery and what battery really used
+            available_surplus_electricity_in_watt = (
+                available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
+            )
 
         # CHP produces electricity which is added to available surplus electricity
         elif current_component_type == lt.ComponentType.CHP:

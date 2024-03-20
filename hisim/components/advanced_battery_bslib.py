@@ -138,7 +138,7 @@ class Battery(Component):
     LoadingPowerInput = "LoadingPowerInput"  # W
 
     # Outputs
-    AcBatteryPower = "AcBatteryPower"  # W
+    AcBatteryPowerUsed = "AcBatteryPower"  # W
     DcBatteryPower = "DcBatteryPower"  # W
     StateOfCharge = "StateOfCharge"  # [0..1]
 
@@ -190,14 +190,14 @@ class Battery(Component):
         # Define component outputs
         self.ac_battery_power_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.AcBatteryPower,
+            field_name=self.AcBatteryPowerUsed,
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             postprocessing_flag=[
                 InandOutputType.CHARGE_DISCHARGE,
                 ComponentType.BATTERY,
             ],
-            output_description=f"here a description for {self.AcBatteryPower} will follow.",
+            output_description=f"here a description for {self.AcBatteryPowerUsed} will follow.",
         )
 
         self.dc_battery_power_channel: ComponentOutput = self.add_output(

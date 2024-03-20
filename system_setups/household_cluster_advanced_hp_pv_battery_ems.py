@@ -88,7 +88,7 @@ def setup_function(
     seconds_per_timestep = 60
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(
+        my_simulation_parameters = SimulationParameters.full_year_all_options(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         my_simulation_parameters.post_processing_options.append(
@@ -356,7 +356,7 @@ def setup_function(
         # -----------------------------------------------------------------------------------------------------------------
         # Add outputs to EMS
         electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
-            source_output_name="ElectrictyToOrFromBattery_",
+            source_output_name="LoadingPowerInputForBattery_",
             source_tags=[
                 lt.ComponentType.BATTERY,
                 lt.InandOutputType.ELECTRICITY_TARGET,
@@ -420,7 +420,7 @@ def setup_function(
         module_directory=my_sim.module_directory,
         model_name=os.path.join(my_sim.module_filename, "ems_test"),
         variant_name=f"ems_dhw_{domestic_hot_water_storage_temperature_offset_value}_"
-                     f"sh_{space_heating_water_storage_temperature_offset_value}_building_{building_indoor_temperature_offset_value}",
+                     f"sh_{space_heating_water_storage_temperature_offset_value}_building_{building_indoor_temperature_offset_value}_all_options",
         hash_number=hash_number,
         sorting_option=sorting_option,
         sampling_mode=sampling_mode,

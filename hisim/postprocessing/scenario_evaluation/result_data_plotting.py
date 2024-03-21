@@ -701,7 +701,7 @@ class ScenarioChartGeneration:
             scatter_plot_marker_size = 1
         return scatter_plot_marker_size
 
-    def set_axis_scale(self, a_x: Any, x_or_y: Any, unit: Any) -> Tuple[float, str, Any]:
+    def set_axis_scale(self, a_x: Any, x_or_y: Any, unit: Any) -> Tuple[Any, str, Any]:
         """Get axis and unit and scale it properly."""
 
         if x_or_y == "x":

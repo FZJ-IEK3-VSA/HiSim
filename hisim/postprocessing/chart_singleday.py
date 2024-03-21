@@ -52,9 +52,9 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
                 output_description=output_description,
                 figure_format=figure_format,
             )
-        self.axis: plt.axis
-        self.ax2: plt.axis
-        self.line2: plt.axis
+
+        # self.ax2: Any
+        # self.line2: Any
         self.month = month
         self.day = day
         self.data = data
@@ -90,36 +90,36 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
             return data
         return self.data
 
-    def __add__(self, other):
-        """Adds another chart to this one."""
-        my_double: ChartSingleDay = ChartSingleDay(
-            self.output,
-            self.component_name,
-            self.directory_path,
-            self.time_correction_factor,
-            self.day,
-            self.month,
-            self.data,
-            self.output_description,
-            self.figure_format,
-        )
-        my_double.filename = (
-            f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}"
-            f"_AND_{other.output.split(' # ', 2)[1]}_m{self.month}_d{self.day}{self.figure_format}"
-        )
-        my_double.filepath = os.path.join(self.directory_path, my_double.filename)
-        my_double.plot(close=False)
+    # def __add__(self, other):
+    #     """Adds another chart to this one."""
+    #     my_double: ChartSingleDay = ChartSingleDay(
+    #         self.output,
+    #         self.component_name,
+    #         self.directory_path,
+    #         self.time_correction_factor,
+    #         self.day,
+    #         self.month,
+    #         self.data,
+    #         self.output_description,
+    #         self.figure_format,
+    #     )
+    #     my_double.filename = (
+    #         f"{self.type.lower()}_{self.output.split(' # ', 2)[1]}"
+    #         f"_AND_{other.output.split(' # ', 2)[1]}_m{self.month}_d{self.day}{self.figure_format}"
+    #     )
+    #     my_double.filepath = os.path.join(self.directory_path, my_double.filename)
+    #     my_double.plot(close=False)
 
-        #  twin object for two different y-axis on the sample plot
-        my_double.ax2 = my_double.axis.twinx()
-        #  make a plot with different y-axis using second axis object
-        my_double.line2 = my_double.ax2.plot(self.data.index, other.data, label=other.property, linewidth=5)
-        return my_double
+    #     #  twin object for two different y-axis on the sample plot
+    #     my_double.ax2 = my_double.axis.twinx()
+    #     #  make a plot with different y-axis using second axis object
+    #     my_double.line2 = my_double.ax2.plot(self.data.index, other.data, label=other.property, linewidth=5)
+    #     return my_double
 
     def close(self):
         """Closes a chart and saves."""
-        if hasattr(self, "line2"):
-            Axis.set_major_formatter(self.ax2.xaxis, DateFormatter("%H:%M"))
+        # if hasattr(self, "line2"):
+        #     Axis.set_major_formatter(self.ax2.xaxis, DateFormatter("%H:%M"))
 
         plt.savefig(self.filepath2)
         plt.close()
@@ -129,7 +129,7 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         single_day_data = self.get_day_data()
         plt.rcParams["font.size"] = "30"
         plt.rcParams["agg.path.chunksize"] = 10000
-        _fig, self.axis = plt.subplots(figsize=self.figsize, dpi=self.dpi)
+        _fig, ax = plt.subplots(figsize=self.figsize, dpi=self.dpi)
         plt.xticks(fontsize=self.fontsize_ticks)
         plt.yticks(fontsize=self.fontsize_ticks)
 
@@ -142,7 +142,7 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         plt.xlabel("Time [hours]", fontsize=self.fontsize_label)
         plt.ylabel(f"[{self.units}]", fontsize=self.fontsize_label)
         plt.tight_layout()
-        Axis.set_major_formatter(self.axis.xaxis, DateFormatter("%H:%M"))
+        Axis.set_major_formatter(ax.xaxis, DateFormatter("%H:%M"))
         if close:
             self.close()
         return ReportImageEntry(

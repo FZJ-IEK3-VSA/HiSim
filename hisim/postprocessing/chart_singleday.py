@@ -3,6 +3,7 @@
 import os
 from typing import Any
 import matplotlib.pyplot as plt
+from matplotlib.axis import Axis
 from matplotlib.dates import DateFormatter
 
 from hisim.postprocessing.chartbase import Chart, ChartFontsAndSize
@@ -118,7 +119,7 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
     def close(self):
         """Closes a chart and saves."""
         if hasattr(self, "line2"):
-            self.ax2.xaxis.set_major_formatter(DateFormatter("%H:%M"))
+            Axis.set_major_formatter(self.ax2.xaxis, DateFormatter("%H:%M"))
 
         plt.savefig(self.filepath2)
         plt.close()
@@ -141,7 +142,7 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         plt.xlabel("Time [hours]", fontsize=self.fontsize_label)
         plt.ylabel(f"[{self.units}]", fontsize=self.fontsize_label)
         plt.tight_layout()
-        self.axis.xaxis.set_major_formatter(DateFormatter("%H:%M"))
+        Axis.set_major_formatter(self.axis.xaxis, DateFormatter("%H:%M"))
         if close:
             self.close()
         return ReportImageEntry(

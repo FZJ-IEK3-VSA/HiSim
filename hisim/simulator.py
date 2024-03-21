@@ -193,7 +193,7 @@ class Simulator:
                     module_directory=self.module_directory,
                     model_name=self.module_filename,
                     variant_name=None,
-                    scenario_hash_number=None,
+                    scenario_hash_string=None,
                     sorting_option=SortingOptionEnum.FLAT,
                 )
                 self._simulation_parameters.result_directory = ResultPathProviderSingleton().get_result_directory_name()

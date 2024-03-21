@@ -386,19 +386,19 @@ def setup_function(
     # if config_filename is given, get hash number and sampling mode for result path
     if config_filename is not None:
         config_filename_splitted = config_filename.split("/")
-        scenario_hash_number = re.findall(r"\-?\d+", config_filename_splitted[-1])[0]
+        scenario_hash_string = re.findall(r"\-?\d+", config_filename_splitted[-1])[0]
         further_result_folder_description = config_filename_splitted[-2]
 
         sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION
 
     # if config_filename is not given, make result path with index enumeration
     else:
-        scenario_hash_number = "default_scenario"
+        scenario_hash_string = "default_scenario"
         sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION
         further_result_folder_description = "default_config"
 
     SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME, entry=f"{scenario_hash_number}",
+        key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME, entry=f"{scenario_hash_string}",
     )
 
     ResultPathProviderSingleton().set_important_result_path_information(
@@ -406,6 +406,6 @@ def setup_function(
         model_name=my_sim.module_filename,
         further_result_folder_description=os.path.join(further_result_folder_description, "hplib_testing"),
         variant_name=f"hp_mode_{hp_controller_mode}_group_id_{group_id}_",
-        scenario_hash_number=scenario_hash_number,
+        scenario_hash_string=scenario_hash_string,
         sorting_option=sorting_option,
     )

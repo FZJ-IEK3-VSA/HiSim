@@ -24,7 +24,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         self.base_path: Optional[str] = None
         self.model_name: Optional[str] = None
         self.variant_name: Optional[str] = None
-        self.scenario_hash_number: Optional[str] = None
+        self.scenario_hash_string: Optional[str] = None
         self.further_result_folder_description: Optional[str] = None
         self.sorting_option: Any = SortingOptionEnum.FLAT
         self.time_resolution_in_seconds: Optional[int] = None
@@ -36,7 +36,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         module_directory: str,
         model_name: str,
         variant_name: Optional[str],
-        scenario_hash_number: Optional[int],
+        scenario_hash_string: Optional[str],
         sorting_option: Any,
         further_result_folder_description: Optional[str] = None,
     ) -> None:
@@ -45,7 +45,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         self.set_model_name(model_name=model_name)
         self.set_variant_name(variant_name=variant_name)
         self.set_sorting_option(sorting_option=sorting_option)
-        self.set_scenario_hash_number(scenario_hash_number=scenario_hash_number)
+        self.set_scenario_hash_string(scenario_hash_string=scenario_hash_string)
         self.set_further_result_folder_description(further_result_folder_description=further_result_folder_description)
 
     def set_base_path(self, module_directory: str) -> None:
@@ -62,13 +62,12 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
             variant_name = ""
         self.variant_name = variant_name
 
-    def set_scenario_hash_number(self, scenario_hash_number: Optional[int]) -> None:
-        """Set scenario hash number."""
-        if scenario_hash_number is None:
-            scenario_hash_number_str = ""
-        else:
-            scenario_hash_number_str = str(scenario_hash_number)
-        self.scenario_hash_number = scenario_hash_number_str
+    def set_scenario_hash_string(self, scenario_hash_string: Optional[str]) -> None:
+        """Set scenario hash string."""
+        if scenario_hash_string is None:
+            scenario_hash_string = ""
+
+        self.scenario_hash_string = scenario_hash_string
 
     def set_further_result_folder_description(self, further_result_folder_description: Optional[str]) -> None:
         """Set further result folder description."""
@@ -94,7 +93,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
             and self.model_name is not None
             and self.variant_name is not None
             and self.datetime_string is not None
-            and self.scenario_hash_number is not None
+            and self.scenario_hash_string is not None
         ):
             if self.sorting_option == SortingOptionEnum.DEEP:
                 path = os.path.join(
@@ -141,13 +140,13 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
                         self.base_path,
                         self.model_name,
                         self.further_result_folder_description,
-                        self.variant_name + "_" + self.scenario_hash_number,
+                        self.variant_name + "_" + self.scenario_hash_string,
                     )
                 else:
                     path = os.path.join(
                         self.base_path,
                         self.model_name,
-                        self.variant_name + "_" + self.scenario_hash_number,
+                        self.variant_name + "_" + self.scenario_hash_string,
                     )
 
             elif self.sorting_option == SortingOptionEnum.FLAT:

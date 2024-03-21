@@ -213,7 +213,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
         module_directory=my_sim.module_directory,
         model_name=my_sim.module_filename,
         variant_name=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_{electrolyzer_name}_{operation_mode}",
-        scenario_hash_number=None,
+        scenario_hash_string=None,
         sorting_option=SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION,
     )
 

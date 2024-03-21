@@ -129,7 +129,7 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         single_day_data = self.get_day_data()
         plt.rcParams["font.size"] = "30"
         plt.rcParams["agg.path.chunksize"] = 10000
-        _fig, ax = plt.subplots(figsize=self.figsize, dpi=self.dpi)
+        _fig, a_x = plt.subplots(figsize=self.figsize, dpi=self.dpi)
         plt.xticks(fontsize=self.fontsize_ticks)
         plt.yticks(fontsize=self.fontsize_ticks)
 
@@ -142,7 +142,7 @@ class ChartSingleDay(Chart, ChartFontsAndSize):
         plt.xlabel("Time [hours]", fontsize=self.fontsize_label)
         plt.ylabel(f"[{self.units}]", fontsize=self.fontsize_label)
         plt.tight_layout()
-        Axis.set_major_formatter(ax.xaxis, DateFormatter("%H:%M"))
+        Axis.set_major_formatter(a_x.xaxis, DateFormatter("%H:%M"))
         if close:
             self.close()
         return ReportImageEntry(

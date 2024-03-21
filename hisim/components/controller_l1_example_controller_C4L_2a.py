@@ -60,7 +60,7 @@ class SimpleControllerConfig(ConfigBase):
 class SimpleController(Component):
 
     #Input
-    General_ElectricityConsumptiom = "CSV Profile Electricity Consumption Input"
+    General_ElectricityConsumptiom = "CSV Profile Electricity Consumption Input" 
     Electrolyzer_ElectricityConsumption = "ElectricityConsumptionElectrolyzer" #W
     H2Storage_ElectricityConsumption = "StorageElectricityConsumption" #W (richtig??)
     General_PhotovoltaicDelivery = "CSV Profile Photovoltaic Electricity Delivery Input" #W
@@ -236,9 +236,9 @@ class SimpleController(Component):
         self.add_default_connections(self.get_default_connections_from_C4L_electrolyzer())
         self.add_default_connections(self.get_default_connections_from_static_electrolyzer())
         self.add_default_connections(self.get_default_connections_from_h2_storage())
-        self.add_default_connections(self.get_default_connections_from_general_electricity_consumption()) # Wie verbinden?
-        self.add_default_connections(self.get_default_connections_from_general_photovoltaic_delivery()) # Wie verbinden?
-        self.add_default_connections(self.get_default_connections_from_chp_electricity_delivery()) # Wie verbinden?
+        self.add_default_connections(self.get_default_connections_from_general_electricity_consumption()) 
+        self.add_default_connections(self.get_default_connections_from_general_photovoltaic_delivery()) 
+        self.add_default_connections(self.get_default_connections_from_chp_electricity_delivery()) 
 
 
     def get_default_connections_from_C4L_electrolyzer(self):

@@ -330,7 +330,7 @@ def InputParameter():
         h2_storage_losses = 0 # % of Hydrogen Losses per day in %
         h2_soc_upper_threshold_electrolyzer = 0  #Electrolyzer works just until H2 storage goes up to this threshold
         min_operation_time_in_seconds_chp = 0 #It is not working well so let it be "0"
-        min_resting_time_in_seconds_chp = 0 # This does not work well so let it be 0
+        minstandbytime_fuelcell = 0 # This does not work well so let it be 0
         h2_soc_lower_threshold_chp = 0 # Minimum state of charge to start operating the fuel cell in %
         on_off_SOEC = 183 #timestep: Turn off Electrolyzer and turn on Fuel Cell // Variable name should be read: turn SOEC from "on" to "off" // Day Depends on starting date: e.g. timestep of the year 2021 is 10. Januar if the simulation year starts with 1st Jannuar;
         off_on_SOEC = 500 #timestep: Turn on Electrolyzer and turn off on Fuel Cell
@@ -405,17 +405,17 @@ def InputParameter():
     
 
     
-    min_operation_time_in_seconds_chp = 0 #It is not working well so let it be "0"
-    min_operation_time_in_seconds_chpUnit = "s"
+    min_operation_time_in_seconds_chp = 0 #It is not working in Szenario 1: DO NOT DELETE BECAUSE OF EXCEL ECONOMIC ASSESSMENT
+    min_operation_time_in_seconds_chpUnit = "s --> is not used in Szenario 1"
     
-    min_resting_time_in_seconds_chp = 0 # This does not work well so let it be 0
-    min_resting_time_in_seconds_chpUnit = "s"
+    minstandbytime_fuelcell = 0 #It is not working in Szenario 1: DO NOT DELETE BECAUSE OF EXCEL ECONOMIC ASSESSMENT
+    minstandbytime_fuelcellUnit = "s --> is not used in Szenario 1"
     
-    min_operation_time_in_seconds_electrolyzer = 0 #It is not working well so let it be "0"
-    min_operation_time_in_seconds_electrolyzerUnit = "s"
+    min_operation_time_in_seconds_electrolyzer = 0 #It is not working in Szenario 1: DO NOT DELETE BECAUSE OF EXCEL ECONOMIC ASSESSMENT
+    min_operation_time_in_seconds_electrolyzerUnit = "s --> is not used in Szenario 1"
     
-    min_resting_time_in_seconds_electrolyzer  = 0 # This does not work well so let it be 0
-    min_resting_time_in_seconds_electrolyzerUnit = "s"
+    minstandbytime_electrolyzer  = 0 #It is not working in Szenario 1: DO NOT DELETE BECAUSE OF EXCEL ECONOMIC ASSESSMENT
+    minstandbytime_electrolyzerUnit = "s --> is not used in Szenario 1"
 
     h2_soc_lower_threshold_chp = 0 # Minimum state of charge to start operating the fuel cell in %
     h2_soc_lower_threshold_chpUnit = "%"
@@ -530,18 +530,18 @@ def InputParameter():
             "value": min_operation_time_in_seconds_chp,
             "unit": min_operation_time_in_seconds_chpUnit,
         },
-        "min_resting_time_in_seconds_chp": {
-            "value": min_resting_time_in_seconds_chp,
-            "unit": min_resting_time_in_seconds_chpUnit,
+        "minstandbytime_fuelcell": {
+            "value": minstandbytime_fuelcell,
+            "unit": minstandbytime_fuelcellUnit,
         },
 
         "min_operation_time_in_seconds_electrolyzer": {
             "value": min_operation_time_in_seconds_electrolyzer,
             "unit": min_operation_time_in_seconds_electrolyzerUnit,
         },
-        "min_resting_time_in_seconds_electrolyzer": {
-            "value": min_resting_time_in_seconds_electrolyzer,
-            "unit": min_resting_time_in_seconds_electrolyzerUnit,
+        "minstandbytime_electrolyzer": {
+            "value": minstandbytime_electrolyzer,
+            "unit": minstandbytime_electrolyzerUnit,
         },
 
         "h2_soc_lower_threshold_chp": {

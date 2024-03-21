@@ -250,7 +250,7 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
             EnergyInputData5.append(row[1])
 
 
-  
+
 
 
     #Add all data in prepared list
@@ -279,7 +279,7 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
     #         worksheet.cell(row=row_idx, column=7).value = f"Electr. Result. = -Current needed + PV Component"  # Summe der Werte in der ersten und zweiten Spalte
     #     else: 
     #         worksheet.cell(row=row_idx, column=7).value = f"=-C{row_idx}+D{row_idx}"  # Summe der Werte in der ersten und zweiten Spalte
- 
+
 
     del csv_datei1, csv_datei2, csv_datei3, csv_datei4, model_energy_input_data, EnergyInputData2, EnergyInputData3, EnergyInputData4, EnergyInputData5,izaehler
     #----------------------------------------------

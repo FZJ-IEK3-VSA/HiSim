@@ -188,7 +188,7 @@ def Cell4Life(
     chp_controller_config.source_weight = input_variablen["init_source_weight_chp"]["value"]
     chp_controller_config.electricity_threshold = input_variablen["electricity_threshold"]["value"]
     chp_controller_config.min_operation_time_in_seconds = input_variablen["min_operation_time_in_seconds_chp"]["value"]
-    chp_controller_config.min_idle_time_in_seconds = input_variablen["min_resting_time_in_seconds_chp"]["value"]
+    chp_controller_config.min_idle_time_in_seconds = input_variablen["minstandbytime_fuelcell"]["value"]
     chp_controller_config.h2_soc_threshold = input_variablen["h2_soc_lower_threshold_chp"]["value"]
     chp_controller_config.off_on_SOEC = input_variablen["off_on_SOEC"]["value"]
     chp_controller_config.on_off_SOEC = input_variablen["on_off_SOEC"]["value"]
@@ -395,7 +395,7 @@ def InputParameter():
         h2_storage_losses = 0 # % of Hydrogen Losses per day in %
         h2_soc_upper_threshold_electrolyzer = 0  #Electrolyzer works just until H2 storage goes up to this threshold
         min_operation_time_in_seconds_chp = 0 #It is not working well so let it be "0"
-        min_resting_time_in_seconds_chp = 0 # This does not work well so let it be 0
+        minstandbytime_fuelcell = 0 # This does not work well so let it be 0
         h2_soc_lower_threshold_chp = 0 # Minimum state of charge to start operating the fuel cell in %
         on_off_SOEC = 183 #Day: Turn off Electrolyzer and turn on Fuel Cell // Variable name should be read: turn SOEC from "on" to "off" // Day Depends on starting date: e.g. day 10 of the year 2021 is 10. Januar if the simulation year starts with 1st Jannuar;
         off_on_SOEC = 500 #Day: Turn on Electrolyzer and turn off on Fuel Cell
@@ -469,8 +469,8 @@ def InputParameter():
     min_operation_time_in_seconds_chp = 0 #It is not working well so let it be "0"
     min_operation_time_in_seconds_chpUnit = "s"
     
-    min_resting_time_in_seconds_chp = 0 # This does not work well so let it be 0
-    min_resting_time_in_seconds_chpUnit = "s"
+    minstandbytime_fuelcell = 0 # This does not work well so let it be 0
+    minstandbytime_fuelcellUnit = "s"
     
     h2_soc_lower_threshold_chp = 0 # Minimum state of charge to start operating the fuel cell in %
     h2_soc_lower_threshold_chpUnit = "%"
@@ -586,9 +586,9 @@ def InputParameter():
             "value": min_operation_time_in_seconds_chp,
             "unit": min_operation_time_in_seconds_chpUnit,
         },
-        "min_resting_time_in_seconds_chp": {
-            "value": min_resting_time_in_seconds_chp,
-            "unit": min_resting_time_in_seconds_chpUnit,
+        "minstandbytime_fuelcell": {
+            "value": minstandbytime_fuelcell,
+            "unit": minstandbytime_fuelcellUnit,
         },
         "h2_soc_lower_threshold_chp": {
             "value": h2_soc_lower_threshold_chp,

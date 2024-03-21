@@ -192,6 +192,17 @@ def Cell4Life(
     electrolyzerfuelcell_controller_config.h2_soc_lower_threshold_fuelcell = input_variablen["h2_soc_lower_threshold_chp"]["value"]
     electrolyzerfuelcell_controller_config.p_el_elektrolyzer = input_variablen["p_el_elektrolyzer"]["value"]
     electrolyzerfuelcell_controller_config.fuel_cell_power = input_variablen["fuel_cell_power"]["value"]
+    electrolyzerfuelcell_controller_config.Electrical_power_surplus_related_to_elecrolzyer_percentage = input_variablen["Electrical_power_surplus_related_to_elecrolzyer_percentage"]["value"]
+    
+    electrolyzerfuelcell_controller_config.Electrical_amount_in_prediction_horizon_surplus_related_to_electrolzyer_percentage = input_variablen["Electrical_amount_in_prediction_horizon_surplus_related_to_electrolzyer_percentage"]["value"] 
+    electrolyzerfuelcell_controller_config.Electrical_amount_in_minimum_standby_time_surplus_related_to_electrolzyer_percentage = input_variablen["Electrical_amount_in_minimum_standby_time_surplus_related_to_electrolzyer_percentage"]["value"]
+
+
+    electrolyzerfuelcell_controller_config.minruntime_electrolyzer = input_variablen["min_operation_time_in_seconds_electrolyzer"]["value"] # [x]  gehört nicht zu input variablen hinzugefügt
+    electrolyzerfuelcell_controller_config.minstandbytime_electrolyzer = input_variablen["minstandbytime_electrolyzer"]["value"] # [x] gehört noch zu input variablen hinzugefügt
+    electrolyzerfuelcell_controller_config.minbatterystateofcharge_electrolyzer_turnon = input_variablen["minbatterystateofcharge_electrolyzer_turnon"]["value"]  #minimal battery state of charge, which is necessary, to turn on electrolyzer... in % 
+    electrolyzerfuelcell_controller_config.minbatterystateofcharge_let_electrolyzer_staysturnedon = input_variablen["minbatterystateofcharge_let_electrolyzer_staysturnedon"]["value"] #Minimal battery state of charge, which is necessary, that electrolyzer stays turned on, in %
+    
 
     my_electrolyzerfuelcellcontroller = controller_predicitve_C4L_electrolyzer_fuelcell.C4LelectrolyzerfuelcellpredictiveController(
         my_simulation_parameters=my_simulation_parameters, config=electrolyzerfuelcell_controller_config)
@@ -246,8 +257,12 @@ def Cell4Life(
 
     my_h2storage.connect_only_predefined_connections(my_chp)
     my_h2storage.connect_only_predefined_connections(my_electrolyzer)
+    
     my_electrolyzerfuelcellcontroller.connect_only_predefined_connections(my_h2storage)
     my_electrolyzerfuelcellcontroller.connect_only_predefined_connections(my_advanced_battery)
+    my_electrolyzerfuelcellcontroller.connect_only_predefined_connections(my_electricityconsumption)
+    my_electrolyzerfuelcellcontroller.connect_only_predefined_connections(my_photovoltaic_system)
+
     my_chp.connect_only_predefined_connections(my_electrolyzerfuelcellcontroller)
     my_electrolyzer.connect_only_predefined_connections(my_electrolyzerfuelcellcontroller)
 
@@ -339,7 +354,7 @@ def InputParameter():
         h2_storage_losses = 0 # % of Hydrogen Losses per day in %
         h2_soc_upper_threshold_electrolyzer = 0  #Electrolyzer works just until H2 storage goes up to this threshold
         min_operation_time_in_seconds_chp = 0 #It is not working well so let it be "0"
-        min_resting_time_in_seconds_chp = 0 # This does not work well so let it be 0
+        minstandbytime_fuelcell = 0 # This does not work well so let it be 0
         h2_soc_lower_threshold_chp = 0 # Minimum state of charge to start operating the fuel cell in %
         on_off_SOEC = 183 #timestep: Turn off Electrolyzer and turn on Fuel Cell // Variable name should be read: turn SOEC from "on" to "off" // Day Depends on starting date: e.g. timestep of the year 2021 is 10. Januar if the simulation year starts with 1st Jannuar;
         off_on_SOEC = 500 #timestep: Turn on Electrolyzer and turn off on Fuel Cell
@@ -377,9 +392,7 @@ def InputParameter():
     fuel_cell_power  = FuelCellPowerW #Electricity Power of Fuel Cell Power in Watt
     fuel_cell_powerUnit = FuelCellPowerWUnit
     
-    
 
-    
     del BatteryCapkWh, FuelCellPowerW, BatteryCapkWhUnit, FuelCellPowerWUnit 
     
     #Following parameter depends on a "variation parameter"
@@ -415,14 +428,14 @@ def InputParameter():
     min_operation_time_in_seconds_chp = 0 #It is not working well so let it be "0"
     min_operation_time_in_seconds_chpUnit = "s"
     
-    min_resting_time_in_seconds_chp = 0 # This does not work well so let it be 0
-    min_resting_time_in_seconds_chpUnit = "s"
+    minstandbytime_fuelcell = 0 # This does not work well so let it be 0
+    minstandbytime_fuelcellUnit = "s"
     
     min_operation_time_in_seconds_electrolyzer = 0 #It is not working well so let it be "0"
     min_operation_time_in_seconds_electrolyzerUnit = "s"
     
-    min_resting_time_in_seconds_electrolyzer  = 0 # This does not work well so let it be 0
-    min_resting_time_in_seconds_electrolyzerUnit = "s"
+    minstandbytime_electrolyzer  = 0 # This does not work well so let it be 0
+    minstandbytime_electrolyzerUnit = "s"
 
     h2_soc_lower_threshold_chp = 0 # Minimum state of charge to start operating the fuel cell in %
     h2_soc_lower_threshold_chpUnit = "%"
@@ -461,7 +474,30 @@ def InputParameter():
     h2storage_energy_for_operation = 0 #in Watt, energy demand just for operation, if there isb fuel stored in the tank; this energy amount is always added to charging & discharging energy; if no fuel is in the tank, this energy is not considered! (h2 storage does not need energy)
     h2storage_energy_for_operationUnit = "W" 
 
+    #Predictive Controller Fuel Cell Electrolyzer factors
+    Electrical_power_surplus_related_to_elecrolzyer_percentage = 100 
+    Electrical_power_surplus_related_to_elecrolzyer_percentageUnit = "%" #Faktor in % which represents the ratio  between [PV-HouseConsumption]/Electrolzyer ...--> 100 % means, that the surpluse energy (PV-houseconsumption) is equivalent to electrolyzer
     
+    minbatterystateofcharge_electrolyzer_turnon = 80 #minimal battery state of charge, which is necessary, to turn on electrolyzer... in % 
+    minbatterystateofcharge_electrolyzer_turnonUnit = "%" 
+
+    minbatterystateofcharge_let_electrolyzer_staysturnedon = 0 #Minimal battery state of charge, which is necessary, that electrolyzer stays turned on, in %
+    minbatterystateofcharge_let_electrolyzer_staysturnedonUnit = "%"
+
+    #FOLLOWING FACTORS:
+    #****
+    Electrical_amount_in_prediction_horizon_surplus_related_to_electrolzyer_percentage = 100 
+    Electrical_amount_in_prediction_horizon_surplus_related_to_electrolzyer_percentageUnit = "%" 
+
+    Electrical_amount_in_minimum_standby_time_surplus_related_to_electrolzyer_percentage = Electrical_amount_in_prediction_horizon_surplus_related_to_electrolzyer_percentage
+    Electrical_amount_in_minimum_standby_time_surplus_related_to_electrolzyer_percentageUnit = "%"
+
+    #Faktor in % which represents the ratio between useable surplus energy amount and electricity consumption electrolyzer amount, both for prediction horizon OR minimum standby time of electrolyzer;
+    #100 means, in the prediciton horizion, the useable energy amout pv production fully covers the energy demand of the electrolyzer
+    #Please consider the controller-predicitve for fuel cell & electrolyzer, where it is explained, what useable energy amount of pv production means!
+
+
+
     input_variablen = {
         "PreResultNumber": {
             "value": PreResultNumber,
@@ -537,18 +573,18 @@ def InputParameter():
             "value": min_operation_time_in_seconds_chp,
             "unit": min_operation_time_in_seconds_chpUnit,
         },
-        "min_resting_time_in_seconds_chp": {
-            "value": min_resting_time_in_seconds_chp,
-            "unit": min_resting_time_in_seconds_chpUnit,
+        "minstandbytime_fuelcell": {
+            "value": minstandbytime_fuelcell,
+            "unit": minstandbytime_fuelcellUnit,
         },
 
         "min_operation_time_in_seconds_electrolyzer": {
             "value": min_operation_time_in_seconds_electrolyzer,
             "unit": min_operation_time_in_seconds_electrolyzerUnit,
         },
-        "min_resting_time_in_seconds_electrolyzer": {
-            "value": min_resting_time_in_seconds_electrolyzer,
-            "unit": min_resting_time_in_seconds_electrolyzerUnit,
+        "minstandbytime_electrolyzer": {
+            "value": minstandbytime_electrolyzer,
+            "unit": minstandbytime_electrolyzerUnit,
         },
 
         "h2_soc_lower_threshold_chp": {
@@ -595,7 +631,36 @@ def InputParameter():
             "value": prediction_horizon,
             "unit": prediction_horizonUnit,
         },
-        
+
+
+        "Electrical_power_surplus_related_to_elecrolzyer_percentage": {
+            "value": Electrical_power_surplus_related_to_elecrolzyer_percentage,
+            "unit": Electrical_power_surplus_related_to_elecrolzyer_percentageUnit,
+        },
+
+        "Electrical_amount_in_prediction_horizon_surplus_related_to_electrolzyer_percentage": {
+            "value": Electrical_amount_in_prediction_horizon_surplus_related_to_electrolzyer_percentage,
+            "unit": Electrical_amount_in_prediction_horizon_surplus_related_to_electrolzyer_percentageUnit,
+        },
+
+        "Electrical_amount_in_minimum_standby_time_surplus_related_to_electrolzyer_percentage": {
+            "value": Electrical_amount_in_minimum_standby_time_surplus_related_to_electrolzyer_percentage,
+            "unit": Electrical_amount_in_minimum_standby_time_surplus_related_to_electrolzyer_percentageUnit,
+        },
+
+
+        "minbatterystateofcharge_electrolyzer_turnon": {
+            "value": minbatterystateofcharge_electrolyzer_turnon,
+            "unit": minbatterystateofcharge_electrolyzer_turnonUnit,
+        },
+
+        "minbatterystateofcharge_let_electrolyzer_staysturnedon": {
+            "value": minbatterystateofcharge_let_electrolyzer_staysturnedon,
+            "unit": minbatterystateofcharge_let_electrolyzer_staysturnedonUnit,
+        },
+
+
+
     }
         
 

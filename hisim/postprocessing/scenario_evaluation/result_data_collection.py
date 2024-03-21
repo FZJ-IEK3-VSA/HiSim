@@ -451,15 +451,17 @@ class ResultDataCollection:
 
         for csv_file in csv_data_list:
             dataframe = pd.read_csv(csv_file)
+            # convert scenario column to str-type just in case it has no string values
+            dataframe["scenario"] = dataframe["scenario"].astype(str)
             scenario_name_of_current_dataframe = dataframe["scenario"][0]
             # check if scenario column is empty or not
-            if not isinstance(scenario_name_of_current_dataframe, str):
-                raise ValueError(f"The scenario variable of the current dataframe is {scenario_name_of_current_dataframe} but it should be a string value. "
+            if scenario_name_of_current_dataframe == "" or not isinstance(scenario_name_of_current_dataframe, str):
+                raise ValueError(f"The scenario variable of the current dataframe is {scenario_name_of_current_dataframe} but it should be a non-empty string value. "
                                  "Please set a scenario name for your simulations.")
 
             # try to find hash number in scenario name
             try:
-                hash_number = re.findall(r"\-?\d+", dataframe["scenario"][0])[-1]
+                hash_number = re.findall(r"\-?\d+", scenario_name_of_current_dataframe)[-1]
 
             # this is when no hash number could be determined in the scenario name
             except Exception:

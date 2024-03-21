@@ -54,12 +54,11 @@ def main():
     time_resolution_of_data_set = result_data_collection.ResultDataTypeEnum.YEARLY
     cluster_storage_path = "/fast/home/k-rieck/"
     module_results_directory = "repositories/HiSim/system_setups/results/household_cluster_advanced_hp_pv_battery_ems/"
-    result_folder_description_one = "06-03-2024-floor-with-cooling-pv-share-0"
-    result_folder_description_two = "monte_carlo_20240306_1451"
+    result_folder_description_one = "monte_carlo_20240306_1451/hplib_testing"
+    result_folder_description_two = "hp_mode2"
     folder_from_which_data_will_be_collected = os.path.join(
         *[cluster_storage_path, module_results_directory, result_folder_description_one, result_folder_description_two]
     )
-    print(folder_from_which_data_will_be_collected)
 
     path_to_default_config = os.path.join(
         cluster_storage_path,
@@ -72,7 +71,7 @@ def main():
     # list_with_variables_to_check = (
     #     filterclass.electricity_data + filterclass.variables_for_debugging_purposes
     # )  # filterclass.flow_and_return_temperatures  # +filterclass.kpi_data  #
-    list_with_variables_to_check = filterclass.variables_for_debugging_purposes
+    list_with_variables_to_check = filterclass.kpi_data
 
     # TODO: filter several scenario parameters (eg pv and building code together) not working yet, need to be fixed
     # dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share}

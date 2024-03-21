@@ -36,7 +36,7 @@ class ScenarioDataProcessing:
             raise ValueError("This kind of data was not found in the datacollectorenum class.")
         log.information(f"Read csv files and create one big dataframe for {kind_of_data_set} data.")
 
-        csv_data_file_path = os.path.join(data_folder_path, "**", f"*{kind_of_data_set}*.csv")
+        csv_data_file_path = os.path.join(data_folder_path, f"*{kind_of_data_set}*.csv")
         list_of_possible_data_csv_files = glob.glob(csv_data_file_path)
         file: str = ""
         if not list_of_possible_data_csv_files:
@@ -286,23 +286,23 @@ class FilterClass:
             # "Total energy from grid",
             # "Total energy to grid",
             # "Relative electricity demand from grid",
-            "Self-consumption rate according to solar htw berlin",
-            "Autarky rate according to solar htw berlin",
-            "Investment costs for equipment per simulated period",
-            "CO2 footprint for equipment per simulated period",
-            "System operational costs for simulated period",
-            "System operational emissions for simulated period",
-            "Total costs for simulated period",
-            "Total CO2 emissions for simulated period",
-            "Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius",
-            "Minimum building indoor air temperature reached",
-            "Temperature deviation of building indoor air temperature being above set temperature 25.0 Celsius",
-            "Maximum building indoor air temperature reached",
-            "Building heating load",
-            "Conditioned floor area",
-            "Rooftop area",
-            "Specific heating load",
-            "Specific heating demand according to TABULA",
+            # "Self-consumption rate according to solar htw berlin",
+            # "Autarky rate according to solar htw berlin",
+            # "Investment costs for equipment per simulated period",
+            # "CO2 footprint for equipment per simulated period",
+            # "System operational costs for simulated period",
+            # "System operational emissions for simulated period",
+            # "Total costs for simulated period",
+            # "Total CO2 emissions for simulated period",
+            # "Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius",
+            # "Minimum building indoor air temperature reached",
+            # "Temperature deviation of building indoor air temperature being above set temperature 25.0 Celsius",
+            # "Maximum building indoor air temperature reached",
+            # "Building heating load",
+            # "Conditioned floor area",
+            # "Rooftop area",
+            # "Specific heating load",
+            # "Specific heating demand according to TABULA",
             "Thermal output energy of heat distribution system",
             "Number of heat pump cycles",
             "Seasonal performance factor of heat pump",
@@ -364,9 +364,13 @@ class FilterClass:
         ]
         variables_for_debugging_purposes = [
             "AdvancedHeatPumpHPLib|Heating|ThermalOutputPower",
+            "AdvancedHeatPumpHPLib|Electricity|ElectricalInputPowerForHeating",
+            "AdvancedHeatPumpHPLib|Electricity|ElectricalInputPowerForCooling",
             "Building|Temperature|TemperatureIndoorAir",
             "AdvancedHeatPumpHPLib|Any|COP",
-            "Battery_w1|Any|StateOfCharge",
+            "Weather|Temperature|DailyAverageOutsideTemperatures",
+            "HeatDistributionController|Temperature|HeatingFlowTemperature",
+
         ]
 
         return (

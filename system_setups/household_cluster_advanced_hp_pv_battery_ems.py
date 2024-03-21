@@ -70,7 +70,7 @@ def setup_function(
     # Set System Parameters from Config
 
     # household-pv-config
-    config_filename = my_sim.my_module_config_path
+    config_filename = my_sim.my_module_config
 
     my_config: BuildingPVWeatherConfig
     if isinstance(config_filename, str) and os.path.exists(config_filename.rstrip("\r")):
@@ -82,6 +82,7 @@ def setup_function(
     else:
         my_config = BuildingPVWeatherConfig.get_default()
         log.information("No module config path from the simulator was given. Use default config.")
+        my_sim.my_module_config = my_config.to_dict()
 
     # Set Simulation Parameters
     year = 2021
@@ -392,27 +393,27 @@ def setup_function(
     # if config_filename is given, get hash number and sampling mode for result path
     if config_filename is not None:
         config_filename_splitted = config_filename.split("/")
-        hash_number = re.findall(r"\-?\d+", config_filename_splitted[-1])[0]
-        sampling_mode = config_filename_splitted[-2]
+        scenario_hash_number = re.findall(r"\-?\d+", config_filename_splitted[-1])[0]
+        further_result_folder_description = config_filename_splitted[-2]
 
         sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION
 
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
-            entry=f"ems_all_surplus_{hash_number}",
-        )
-
     # if config_filename is not given, make result path with index enumeration
     else:
-        hash_number = None
+        scenario_hash_number = "default_scenario"
         sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION
-        sampling_mode = None
+        further_result_folder_description = "default_config"
+
+    SingletonSimRepository().set_entry(
+            key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
+            entry=f"{scenario_hash_number}",
+        )
 
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
-        model_name=os.path.join(my_sim.module_filename, "hplib_testing"),
+        model_name=my_sim.module_filename,
+        further_result_folder_description=os.path.join(further_result_folder_description, "hplib_testing"),
         variant_name=f"hp_mode_{hp_controller_mode}_group_id_{group_id}_",
-        hash_number=hash_number,
+        scenario_hash_number=scenario_hash_number,
         sorting_option=sorting_option,
-        sampling_mode=sampling_mode,
     )

@@ -120,7 +120,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
     my_cl2.add_component_input_and_connect(
         source_object_name=my_advanced_battery_1.component_name,
-        source_component_output=my_advanced_battery_1.AcBatteryPower,
+        source_component_output=my_advanced_battery_1.AcBatteryPowerUsed,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_REAL],
@@ -128,7 +128,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
     my_cl2.add_component_input_and_connect(
         source_object_name=my_advanced_battery_2.component_name,
-        source_component_output=my_advanced_battery_2.AcBatteryPower,
+        source_component_output=my_advanced_battery_2.AcBatteryPowerUsed,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_REAL],

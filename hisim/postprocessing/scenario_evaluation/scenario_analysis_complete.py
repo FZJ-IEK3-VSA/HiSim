@@ -24,6 +24,7 @@ class ScenarioAnalysis:
         variables_to_check: List[str],
         dict_with_extra_information_for_specific_plot: Dict[str, Dict],
         dict_with_scenarios_to_check: Optional[Dict[str, List[str]]] = None,
+        result_folder_description: Optional[str] = None
     ) -> None:
         """Initialize the class."""
 
@@ -41,6 +42,7 @@ class ScenarioAnalysis:
             variables_to_check=variables_to_check,
             dict_of_scenarios_to_check=dict_with_scenarios_to_check,
             dict_with_extra_information_for_specific_plot=dict_with_extra_information_for_specific_plot,
+            result_folder_description=result_folder_description
         )
 
 
@@ -51,12 +53,13 @@ def main():
     # -------------------------------------------------------------------------------------------------------------------------------------
     time_resolution_of_data_set = result_data_collection.ResultDataTypeEnum.YEARLY
     cluster_storage_path = "/fast/home/k-rieck/"
-    # cluster_storage_path = "/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/hisim_results/results/"
-
+    module_results_directory = "repositories/HiSim/system_setups/results/household_cluster_advanced_hp_pv_battery_ems/"
+    result_folder_description_one = "06-03-2024-floor-with-cooling-pv-share-0"
+    result_folder_description_two = "monte_carlo_20240306_1451"
     folder_from_which_data_will_be_collected = os.path.join(
-        cluster_storage_path,
-        "repositories/HiSim/system_setups/results/household_cluster_advanced_hp_pv_battery_ems/06-03-2024-floor-without-cooling-pv-share-0/monte_carlo_20240306_1451",
+        *[cluster_storage_path, module_results_directory, result_folder_description_one, result_folder_description_two]
     )
+    print(folder_from_which_data_will_be_collected)
 
     path_to_default_config = os.path.join(
         cluster_storage_path,
@@ -69,7 +72,7 @@ def main():
     # list_with_variables_to_check = (
     #     filterclass.electricity_data + filterclass.variables_for_debugging_purposes
     # )  # filterclass.flow_and_return_temperatures  # +filterclass.kpi_data  #
-    list_with_variables_to_check = filterclass.kpi_data
+    list_with_variables_to_check = filterclass.variables_for_debugging_purposes
 
     # TODO: filter several scenario parameters (eg pv and building code together) not working yet, need to be fixed
     # dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share}
@@ -79,8 +82,8 @@ def main():
 
     dict_with_extra_information_for_specific_plot: Dict[str, Dict] = {
         "scatter": {
-            "x_data_variable": "Specific heating demand according to TABULA"
-        },  # "SimpleHotWaterStorage|Water|WaterTemperatureToHeatGenerator" "Weather|Temperature|DailyAverageOutsideTemperatures"
+            "x_data_variable": "Weather|Temperature|DailyAverageOutsideTemperatures"
+        },  # "Specific heating demand according to TABULA" "Building|Temperature|TemperatureIndoorAir"   "HeatDistributionController|Temperature|HeatingFlowTemperature"
         "stacked_bar": {
             "y1_data_variable": "Mean flow temperature of heat pump",
             "y2_data_variable": "Mean return temperature of heat pump",
@@ -100,6 +103,7 @@ def main():
         variables_to_check=list_with_variables_to_check,
         dict_with_scenarios_to_check=dict_with_scenarios_to_check,
         dict_with_extra_information_for_specific_plot=dict_with_extra_information_for_specific_plot,
+        result_folder_description=result_folder_description_two
     )
 
 

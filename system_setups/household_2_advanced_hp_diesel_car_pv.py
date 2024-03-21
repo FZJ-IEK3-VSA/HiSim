@@ -233,8 +233,8 @@ def setup_function(
     # my_config = utils.create_configuration(my_sim, HouseholdAdvancedHPDieselCarPVConfig)
 
     # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
-    if my_sim.my_module_config_path:
-        my_config = HouseholdAdvancedHPDieselCarPVConfig.load_from_json(my_sim.my_module_config_path)
+    if my_sim.my_module_config:
+        my_config = HouseholdAdvancedHPDieselCarPVConfig.load_from_json(my_sim.my_module_config)
     else:
         my_config = HouseholdAdvancedHPDieselCarPVConfig.get_default()
 
@@ -389,7 +389,7 @@ def setup_function(
         my_domnestic_hot_water_heatpump_controller.connect_input(
             my_domnestic_hot_water_heatpump_controller.StorageTemperatureModifier,
             my_electricity_controller.component_name,
-            my_electricity_controller.StorageTemperatureModifier,
+            my_electricity_controller.DomesticHotWaterStorageTemperatureModifier,
         )
         my_electricity_controller.add_component_input_and_connect(
             source_object_name=my_domnestic_hot_water_heatpump.component_name,
@@ -432,7 +432,7 @@ def setup_function(
         my_heat_pump_controller.connect_input(
             my_heat_pump_controller.SimpleHotWaterStorageTemperatureModifier,
             my_electricity_controller.component_name,
-            my_electricity_controller.SimpleHotWaterStorageTemperatureModifier,
+            my_electricity_controller.SpaceHeatingWaterStorageTemperatureModifier,
         )
 
         my_electricity_controller.add_component_input_and_connect(
@@ -474,12 +474,12 @@ def setup_function(
         my_heat_distribution_controller.connect_input(
             my_heat_distribution_controller.BuildingTemperatureModifier,
             my_electricity_controller.component_name,
-            my_electricity_controller.BuildingTemperatureModifier,
+            my_electricity_controller.BuildingIndoorTemperatureModifier,
         )
         my_building.connect_input(
             my_building.BuildingTemperatureModifier,
             my_electricity_controller.component_name,
-            my_electricity_controller.BuildingTemperatureModifier,
+            my_electricity_controller.BuildingIndoorTemperatureModifier,
         )
 
     # connect EMS with PV
@@ -496,7 +496,7 @@ def setup_function(
     # connect Electricity Meter
     my_electricity_meter.add_component_input_and_connect(
         source_object_name=my_electricity_controller.component_name,
-        source_component_output=my_electricity_controller.ElectricityToOrFromGrid,
+        source_component_output=my_electricity_controller.TotalElectricityToOrFromGrid,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],

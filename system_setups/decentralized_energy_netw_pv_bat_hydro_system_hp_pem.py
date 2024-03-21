@@ -249,7 +249,7 @@ def setup_function(
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.ElectricityInput,
         my_cl2.component_name,
-        my_cl2.ElectricityToOrFromGrid,
+        my_cl2.TotalElectricityToOrFromGrid,
     )
     my_heat_pump.connect_only_predefined_connections(my_weather, my_heat_pump_controller)
     my_heat_pump.get_default_connections_heatpump_controller()
@@ -387,7 +387,7 @@ def setup_function(
         module_directory=my_sim.module_directory,
         model_name=my_sim.my_sim.module_filename,
         variant_name=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_PEM_{operation_mode}",
-        hash_number=None,
+        scenario_hash_number=None,
         sorting_option=SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION,
     )
 

@@ -36,6 +36,7 @@ class ScenarioChartGeneration:
         dict_with_extra_information_for_specific_plot: Dict[str, Dict],
         variables_to_check: Optional[List[str]] = None,
         dict_of_scenarios_to_check: Optional[Dict[str, List[str]]] = None,
+        result_folder_description: Optional[str] = None
     ) -> None:
         """Initialize the class."""
 
@@ -86,6 +87,7 @@ class ScenarioChartGeneration:
             "results_for_scenario_comparison",
             "data",
             data_path_strip,
+            f"{simulation_duration_to_check}_days"
         )
 
         self.result_folder = os.path.join(
@@ -97,6 +99,7 @@ class ScenarioChartGeneration:
             "results_for_scenario_comparison",
             "results",
             result_path_strip,
+            f"{simulation_duration_to_check}_days"
         )
 
         self.hisim_chartbase = ChartFontsAndSize()
@@ -126,6 +129,7 @@ class ScenarioChartGeneration:
                 simulation_duration_key=simulation_duration_to_check,
                 variables_to_check=variables_to_check,
                 dict_with_extra_information_for_specific_plot=dict_with_extra_information_for_specific_plot,
+                result_folder_description=result_folder_description
             )
 
         else:
@@ -138,6 +142,7 @@ class ScenarioChartGeneration:
         simulation_duration_key: str,
         variables_to_check: List[str],
         dict_with_extra_information_for_specific_plot: Dict[str, Dict],
+        result_folder_description: Optional[str],
     ) -> None:
         """Make plots for different kind of data."""
 
@@ -146,10 +151,11 @@ class ScenarioChartGeneration:
         if pandas_dataframe.empty:
             raise ValueError("Dataframe is empty.")
 
-        sub_results_folder = f"simulation_duration_of_{simulation_duration_key}_days"
-        sub_sub_results_folder = f"scenario_comparison_{time_resolution_of_data_set.value}_{self.datetime_string}"
+        sub_results_folder = f"{time_resolution_of_data_set.value}_{self.datetime_string}"
+        if result_folder_description is not None:
+            sub_results_folder = sub_results_folder + f"_{result_folder_description}"
 
-        self.path_for_plots = os.path.join(self.result_folder, sub_results_folder, sub_sub_results_folder)
+        self.path_for_plots = os.path.join(self.result_folder, sub_results_folder)
 
         for variable_to_check in variables_to_check:
             log.information("Check variable " + str(variable_to_check))

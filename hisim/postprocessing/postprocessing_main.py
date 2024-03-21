@@ -780,8 +780,9 @@ class PostProcessor:
         # write json config with all component configs, module config, pyam information dict and simulation parameters
         json_generator_config = JsonConfigurationGenerator(name=f"{self.scenario}")
         json_generator_config.set_simulation_parameters(my_simulation_parameters=ppdt.simulation_parameters)
-        if ppdt.my_module_config_path is not None:
-            json_generator_config.set_module_config(my_module_config_path=ppdt.my_module_config_path)
+        if ppdt.my_module_config is not None:
+            print(ppdt.my_module_config)
+            json_generator_config.set_module_config(my_module_config=ppdt.my_module_config)
         json_generator_config.set_scenario_data_information_dict(scenario_data_information_dict=data_information_dict)
         for component in ppdt.wrapped_components:
             json_generator_config.add_component(config=component.my_component.config)

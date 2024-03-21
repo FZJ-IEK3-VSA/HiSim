@@ -24,8 +24,8 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         self.base_path: Optional[str] = None
         self.model_name: Optional[str] = None
         self.variant_name: Optional[str] = None
-        self.hash_number: Optional[str] = None
-        self.sampling_mode: Optional[str] = None
+        self.scenario_hash_number: Optional[str] = None
+        self.further_result_folder_description: Optional[str] = None
         self.sorting_option: Any = SortingOptionEnum.FLAT
         self.time_resolution_in_seconds: Optional[int] = None
         self.simulation_duration_in_days: Optional[int] = None
@@ -36,17 +36,17 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
         module_directory: str,
         model_name: str,
         variant_name: Optional[str],
-        hash_number: Optional[int],
+        scenario_hash_number: Optional[int],
         sorting_option: Any,
-        sampling_mode: Optional[str] = None,
+        further_result_folder_description: Optional[str] = None,
     ) -> None:
         """Set important result path information."""
         self.set_base_path(module_directory=module_directory)
         self.set_model_name(model_name=model_name)
         self.set_variant_name(variant_name=variant_name)
         self.set_sorting_option(sorting_option=sorting_option)
-        self.set_hash_number(hash_number=hash_number)
-        self.set_sampling_mode(sampling_mode=sampling_mode)
+        self.set_scenario_hash_number(scenario_hash_number=scenario_hash_number)
+        self.set_further_result_folder_description(further_result_folder_description=further_result_folder_description)
 
     def set_base_path(self, module_directory: str) -> None:
         """Set base path."""
@@ -62,17 +62,17 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
             variant_name = ""
         self.variant_name = variant_name
 
-    def set_hash_number(self, hash_number: Optional[int]) -> None:
-        """Set hash number."""
-        if hash_number is None:
-            hash_number_str = ""
+    def set_scenario_hash_number(self, scenario_hash_number: Optional[int]) -> None:
+        """Set scenario hash number."""
+        if scenario_hash_number is None:
+            scenario_hash_number_str = ""
         else:
-            hash_number_str = str(hash_number)
-        self.hash_number = hash_number_str
+            scenario_hash_number_str = str(scenario_hash_number)
+        self.scenario_hash_number = scenario_hash_number_str
 
-    def set_sampling_mode(self, sampling_mode: Optional[str]) -> None:
-        """Set sampling mode."""
-        self.sampling_mode = sampling_mode
+    def set_further_result_folder_description(self, further_result_folder_description: Optional[str]) -> None:
+        """Set further result folder description."""
+        self.further_result_folder_description = further_result_folder_description
 
     def set_sorting_option(self, sorting_option: Any) -> None:
         """Set sorting option."""
@@ -94,7 +94,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
             and self.model_name is not None
             and self.variant_name is not None
             and self.datetime_string is not None
-            and self.hash_number is not None
+            and self.scenario_hash_number is not None
         ):
             if self.sorting_option == SortingOptionEnum.DEEP:
                 path = os.path.join(
@@ -107,11 +107,11 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
                 # schauen ob verzeichnis schon da und aufsteigende nummer anhängen
                 idx = 1
 
-                if self.sampling_mode is not None:
+                if self.further_result_folder_description is not None:
                     path = os.path.join(
                         self.base_path,
                         self.model_name,
-                        self.sampling_mode,
+                        self.further_result_folder_description,
                         self.variant_name + "_" + str(idx),
                     )
                     while os.path.exists(path):
@@ -119,7 +119,7 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
                         path = os.path.join(
                             self.base_path,
                             self.model_name,
-                            self.sampling_mode,
+                            self.further_result_folder_description,
                             self.variant_name + "_" + str(idx),
                         )
                 else:
@@ -136,18 +136,18 @@ class ResultPathProviderSingleton(metaclass=SingletonMeta):
                             self.variant_name + "_" + str(idx),
                         )
             elif self.sorting_option == SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION:
-                if self.sampling_mode is not None:
+                if self.further_result_folder_description is not None:
                     path = os.path.join(
                         self.base_path,
                         self.model_name,
-                        self.sampling_mode,
-                        self.variant_name + "_" + self.hash_number,
+                        self.further_result_folder_description,
+                        self.variant_name + "_" + self.scenario_hash_number,
                     )
                 else:
                     path = os.path.join(
                         self.base_path,
                         self.model_name,
-                        self.variant_name + "_" + self.hash_number,
+                        self.variant_name + "_" + self.scenario_hash_number,
                     )
 
             elif self.sorting_option == SortingOptionEnum.FLAT:

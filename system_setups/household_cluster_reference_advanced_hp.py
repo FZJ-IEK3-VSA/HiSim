@@ -96,7 +96,7 @@ def setup_function(
     # Set System Parameters from Config
 
     # household-pv-config
-    config_filename = my_sim.my_module_config_path
+    config_filename = my_sim.my_module_config
 
     my_config: BuildingPVWeatherConfig
     if isinstance(config_filename, str) and os.path.exists(config_filename.rstrip("\r")):

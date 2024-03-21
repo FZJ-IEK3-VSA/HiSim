@@ -260,8 +260,8 @@ def setup_function(
     # my_config = utils.create_configuration(my_sim, HouseholdAdvancedHpEvPvBatteryConfig)
 
     # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
-    if my_sim.my_module_config_path:
-        my_config = HouseholdAdvancedHpEvPvBatteryConfig.load_from_json(my_sim.my_module_config_path)
+    if my_sim.my_module_config:
+        my_config = HouseholdAdvancedHpEvPvBatteryConfig.load_from_json(my_sim.my_module_config)
     else:
         my_config = HouseholdAdvancedHpEvPvBatteryConfig.get_default()
     # =================================================================================================================================

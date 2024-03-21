@@ -387,7 +387,7 @@ def setup_function(
         module_directory=my_sim.module_directory,
         model_name=my_sim.my_sim.module_filename,
         variant_name=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_PEM_{operation_mode}",
-        hash_number=None,
+        scenario_hash_number=None,
         sorting_option=SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION,
     )
 

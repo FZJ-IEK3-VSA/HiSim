@@ -29,9 +29,7 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim import log
 from hisim.units import Quantity, Celsius, Watt
-from system_setups.household_cluster_reference_advanced_hp import (
-    BuildingPVWeatherConfig,
-)
+from system_setups.household_cluster_reference_advanced_hp import BuildingPVWeatherConfig
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -89,9 +87,7 @@ def setup_function(
     seconds_per_timestep = 60
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(
-            year=year, seconds_per_timestep=seconds_per_timestep
-        )
+        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
         )
@@ -350,10 +346,7 @@ def setup_function(
         # Add outputs to EMS
         loading_power_input_for_battery_in_watt = my_electricity_controller.add_component_output(
             source_output_name="LoadingPowerInputForBattery_",
-            source_tags=[
-                lt.ComponentType.BATTERY,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
+            source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
             source_weight=3,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
@@ -364,7 +357,7 @@ def setup_function(
         # Connect Battery
         my_advanced_battery.connect_dynamic_input(
             input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
-            src_object=loading_power_input_for_battery_in_watt
+            src_object=loading_power_input_for_battery_in_watt,
         )
 
         # -----------------------------------------------------------------------------------------------------------------
@@ -405,9 +398,8 @@ def setup_function(
         further_result_folder_description = "default_config"
 
     SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
-            entry=f"{scenario_hash_number}",
-        )
+        key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME, entry=f"{scenario_hash_number}",
+    )
 
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,

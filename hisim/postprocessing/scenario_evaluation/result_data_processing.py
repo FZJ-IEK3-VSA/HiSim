@@ -283,7 +283,7 @@ class FilterClass:
             # "Self-consumption",
             # "Self-consumption rate",
             # "Autarky rate",
-            # "Total energy from grid",
+            "Total energy from grid",
             # "Total energy to grid",
             # "Relative electricity demand from grid",
             # "Self-consumption rate according to solar htw berlin",

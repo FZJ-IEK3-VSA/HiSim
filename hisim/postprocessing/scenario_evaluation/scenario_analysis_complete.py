@@ -55,7 +55,7 @@ def main():
     cluster_storage_path = "/fast/home/k-rieck/"
     module_results_directory = "repositories/HiSim/system_setups/results/household_cluster_advanced_hp_pv_battery_ems/"
     result_folder_description_one = "monte_carlo_20240306_1451/hplib_testing"
-    result_folder_description_two = "hp_mode2"
+    result_folder_description_two = "hp_mode2_no_offset_but_idle_time_1h_1h"
     folder_from_which_data_will_be_collected = os.path.join(
         *[cluster_storage_path, module_results_directory, result_folder_description_one, result_folder_description_two]
     )

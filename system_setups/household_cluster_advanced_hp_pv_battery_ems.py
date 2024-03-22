@@ -100,15 +100,13 @@ def setup_function(
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
-    # Set Energy Management System (only used when PV is used)
-    building_indoor_temperature_offset_value = 2
-    domestic_hot_water_storage_temperature_offset_value = 10
-    space_heating_water_storage_temperature_offset_value = 10
+    # =================================================================================================================================
+    # Set System Parameters
 
     # Set Photovoltaic System
     azimuth = my_config.pv_azimuth
     tilt = my_config.pv_tilt
-    share_of_maximum_pv_power = 1  # my_config.share_of_maximum_pv_power
+    share_of_maximum_pv_power = 0  # my_config.share_of_maximum_pv_power
 
     # Set Building (scale building according to total base area and not absolute floor area)
     building_code = my_config.building_code
@@ -116,7 +114,7 @@ def setup_function(
     absolute_conditioned_floor_area_in_m2 = my_config.conditioned_floor_area_in_m2
     number_of_apartments = my_config.number_of_dwellings_per_building
 
-    # Set occupancy
+    # Set Occupancy
     # try to get profiles from cluster directory
     cache_dir_path: Optional[str] = "/fast/home/k-rieck/lpg-utsp-data"
     if cache_dir_path is not None and os.path.exists(cache_dir_path):
@@ -127,7 +125,6 @@ def setup_function(
 
     # get household attribute jsonreferences from list of strings
     lpg_households: Union[JsonReference, List[JsonReference]]
-
     if isinstance(my_config.lpg_households, List):
         if len(my_config.lpg_households) == 1:
             lpg_households = getattr(Households, my_config.lpg_households[0])
@@ -139,23 +136,17 @@ def setup_function(
                     lpg_households.append(lpg_household)
         else:
             raise ValueError("Config list with lpg household is empty.")
-
     else:
         raise TypeError(f"Type {type(my_config.lpg_households)} is incompatible. Should be List[str].")
 
-    # =================================================================================================================================
-    # Set Fix System Parameters
-
     # Set Heat Pump Controller
-    hp_controller_mode = 2  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
-    set_heating_threshold_outside_temperature_for_heat_pump_in_celsius = 16.0
-    set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = 22.0
-    temperature_offset_for_state_conditions_in_celsius = 5.0
+    hp_controller_mode = 2  # mode 1 for on/off and mode 2 for heating/cooling/off
+    heating_reference_temperature_in_celsius = -7.0
 
-    # Set Heat Pump
-    group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
-    heating_reference_temperature_in_celsius: float = -7  # t_in #TODO: get real heating ref temps according to location
-    flow_temperature_in_celsius = 52  # t_out_val
+    # Set Energy Management System (only used when PV is used)
+    building_indoor_temperature_offset_value = 2
+    domestic_hot_water_storage_temperature_offset_value = 10
+    space_heating_water_storage_temperature_offset_value = 10
 
     # =================================================================================================================================
     # Build Basic Components
@@ -225,16 +216,13 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
     # Build Heat Pump Controller
+    my_heat_pump_controller_config = advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(
+        heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
+    )
+    my_heat_pump_controller_config.mode = hp_controller_mode
+
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
-        config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config(
-            name="HeatPumpController",
-            mode=hp_controller_mode,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_pump_in_celsius,
-            set_cooling_threshold_outside_temperature_in_celsius=set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius,
-            temperature_offset_for_state_conditions_in_celsius=temperature_offset_for_state_conditions_in_celsius,
-            heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
-        ),
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_distribution_controller_config, my_simulation_parameters=my_simulation_parameters,
     )
     # Add to simulator
     my_sim.add_component(my_heat_pump_controller, connect_automatically=True)
@@ -244,8 +232,6 @@ def setup_function(
         heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
         heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
     )
-    my_heat_pump_config.group_id = group_id
-    my_heat_pump_config.flow_temperature_in_celsius = Quantity(flow_temperature_in_celsius, Celsius)
 
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
         config=my_heat_pump_config, my_simulation_parameters=my_simulation_parameters,
@@ -404,8 +390,14 @@ def setup_function(
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory=my_sim.module_directory,
         model_name=my_sim.module_filename,
-        further_result_folder_description=os.path.join(further_result_folder_description, "hplib_testing"),
-        variant_name=f"hp_mode_{hp_controller_mode}_group_id_{group_id}_",
+        further_result_folder_description=os.path.join(
+            *[
+                further_result_folder_description,
+                "hplib_testing",
+                f"hp_mode{hp_controller_mode}_no_offset_but_idle_time_1h_1h",
+            ]
+        ),
+        variant_name=f"hp_mode_{hp_controller_mode}",
         scenario_hash_string=scenario_hash_string,
         sorting_option=sorting_option,
     )

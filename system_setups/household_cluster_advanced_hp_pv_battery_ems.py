@@ -222,7 +222,7 @@ def setup_function(
     my_heat_pump_controller_config.mode = hp_controller_mode
 
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
-        config=my_heat_distribution_controller_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_pump_controller_config, my_simulation_parameters=my_simulation_parameters,
     )
     # Add to simulator
     my_sim.add_component(my_heat_pump_controller, connect_automatically=True)

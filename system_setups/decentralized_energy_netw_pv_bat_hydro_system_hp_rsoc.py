@@ -225,7 +225,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     my_heat_pump_controller.connect_input(
         my_heat_pump_controller.ElectricityInput,
         my_cl2.component_name,
-        my_cl2.ElectricityToOrFromGrid,
+        my_cl2.TotalElectricityToOrFromGrid,
     )
     my_heat_pump.connect_only_predefined_connections(my_weather, my_heat_pump_controller)
     my_heat_pump.get_default_connections_heatpump_controller()
@@ -303,7 +303,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
 
     my_cl2.add_component_input_and_connect(
         source_object_name=my_advanced_battery_1.component_name,
-        source_component_output=my_advanced_battery_1.AcBatteryPower,
+        source_component_output=my_advanced_battery_1.AcBatteryPowerUsed,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_REAL],

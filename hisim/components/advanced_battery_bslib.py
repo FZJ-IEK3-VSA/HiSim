@@ -138,8 +138,8 @@ class Battery(Component):
     LoadingPowerInput = "LoadingPowerInput"  # W
 
     # Outputs
-    AcBatteryPower = "AcBatteryPower"  # W
-    DcBatteryPower = "DcBatteryPower"  # W
+    AcBatteryPowerUsed = "AcBatteryPowerUsed"  # W
+    DcBatteryPowerUsed = "DcBatteryPowerUsed"  # W
     StateOfCharge = "StateOfCharge"  # [0..1]
 
     def __init__(
@@ -190,22 +190,22 @@ class Battery(Component):
         # Define component outputs
         self.ac_battery_power_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.AcBatteryPower,
+            field_name=self.AcBatteryPowerUsed,
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             postprocessing_flag=[
                 InandOutputType.CHARGE_DISCHARGE,
                 ComponentType.BATTERY,
             ],
-            output_description=f"here a description for {self.AcBatteryPower} will follow.",
+            output_description=f"here a description for {self.AcBatteryPowerUsed} will follow.",
         )
 
         self.dc_battery_power_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.DcBatteryPower,
+            field_name=self.DcBatteryPowerUsed,
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
-            output_description=f"here a description for {self.DcBatteryPower} will follow.",
+            output_description=f"here a description for {self.DcBatteryPowerUsed} will follow.",
         )
 
         self.state_of_charge_channel: ComponentOutput = self.add_output(
@@ -248,13 +248,14 @@ class Battery(Component):
             soc=state_of_charge,
             dt=time_increment_in_seconds,
         )
-        ac_battery_power_in_watt = results[0]
-        dc_battery_power_in_watt = results[1]
+        # The bslib simulation returns how much of loading power input was actually used for charging and discharging and the resulting state of charge
+        ac_battery_power_used_for_charging_or_discharging_in_watt = results[0]
+        dc_battery_power_used_for_charging_or_discharging_in_watt = results[1]
         state_of_charge = results[2]
 
         # write values for output time series
-        stsv.set_output_value(self.ac_battery_power_channel, ac_battery_power_in_watt)
-        stsv.set_output_value(self.dc_battery_power_channel, dc_battery_power_in_watt)
+        stsv.set_output_value(self.ac_battery_power_channel, ac_battery_power_used_for_charging_or_discharging_in_watt)
+        stsv.set_output_value(self.dc_battery_power_channel, dc_battery_power_used_for_charging_or_discharging_in_watt)
         stsv.set_output_value(self.state_of_charge_channel, state_of_charge)
 
         # write values to state

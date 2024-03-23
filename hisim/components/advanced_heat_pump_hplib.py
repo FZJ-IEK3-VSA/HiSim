@@ -321,7 +321,6 @@ class HeatPumpHplib(Component):
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             postprocessing_flag=[
-                InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
                 OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
             ],
             output_description="Electricity input power for heating in Watt",
@@ -332,7 +331,6 @@ class HeatPumpHplib(Component):
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             postprocessing_flag=[
-                InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
                 OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
             ],
             output_description="Electricity input power for cooling in Watt",

@@ -343,7 +343,8 @@ def setup_function(
     # Add Components to Simulation Parameters
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_weather)
-    my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
+    if my_config.options.photovoltaic:
+        my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
     my_sim.add_component(my_building, connect_automatically=True)
     my_sim.add_component(my_heat_pump, connect_automatically=True)
     my_sim.add_component(my_heat_pump_controller, connect_automatically=True)

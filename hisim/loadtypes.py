@@ -177,6 +177,7 @@ class ComponentType(str, enum.Enum):
     PV = "PV"
     SMART_DEVICE = "SmartDevice"
     SURPLUS_CONTROLLER = "SurplusController"
+    SURPLUS_CONTROLLER_DISTRICT = "SurplusControllerOnDistrictLevel"
     PREDICTIVE_CONTROLLER = "PredictiveControllerforSmartDevices"
     HEAT_PUMP = "HeatPump"
     GAS_HEATER = "GasHeater"

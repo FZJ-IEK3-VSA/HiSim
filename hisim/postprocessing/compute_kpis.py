@@ -1996,6 +1996,8 @@ class KpiGenerator(JSONWizard):
         wrapped_occupancy_component = None
         occupancy_total_electricity_consumption_in_kilowatt_hour: Optional[float] = None
         share_of_occupancy_on_total_electricity_consumption_in_percent: Optional[float] = None
+        relative_electricity_demand_in_percent: Optional[float] = None
+        share_of_occupancy_on_total_consumption_from_grid_in_percent: Optional[float] = None
 
         for wrapped_component in self.wrapped_components:
             if isinstance(wrapped_component.my_component, UtspLpgConnector):
@@ -2040,15 +2042,15 @@ class KpiGenerator(JSONWizard):
             and total_electricity_consumption_from_grid_in_kilowatt_hour is not None
         ):
 
-            # get relative electricity demand of dhw heat pump
+            # get relative electricity demand of occupancy
             relative_electricity_demand_in_percent = float(
                 occupancy_electricity_from_grid_in_kilowatt_hour
                 / occupancy_total_electricity_consumption_in_kilowatt_hour
                 * 100
             )
 
-            # share of dhw heat pump on total electricity consumption
-            share_of_dhw_heat_pump_on_total_consumption_from_grid_in_percent = float(
+            # share of occupancy on total electricity consumption
+            share_of_occupancy_on_total_consumption_from_grid_in_percent = float(
                 occupancy_electricity_from_grid_in_kilowatt_hour
                 / total_electricity_consumption_from_grid_in_kilowatt_hour
                 * 100
@@ -2077,7 +2079,7 @@ class KpiGenerator(JSONWizard):
         occupancy_share_on_grid_consumption_entry = KpiEntry(
             name="Share of residents on total grid consumption",
             unit="%",
-            value=share_of_dhw_heat_pump_on_total_consumption_from_grid_in_percent,
+            value=share_of_occupancy_on_total_consumption_from_grid_in_percent,
             tag=KpiTagEnumClass.RESIDENTS,
         )
 

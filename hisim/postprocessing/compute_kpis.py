@@ -1624,7 +1624,6 @@ class KpiGenerator(JSONWizard):
         if (
             sh_heat_pump_electricity_consumption_from_grid_in_kilowatt_hour is not None
             and total_electrical_energy_input_in_kilowatt_hour is not None
-            and total_electricity_consumption_in_kilowatt_hour is not None
             and total_electricity_consumption_from_grid_in_kilowatt_hour is not None
         ):
 
@@ -1635,14 +1634,18 @@ class KpiGenerator(JSONWizard):
                 * 100
             )
             # share of sh heat pump on total electricity consumption
-            share_of_sh_heat_pump_on_total_electricity_consumption_in_percent = float(
-                total_electrical_energy_input_in_kilowatt_hour / total_electricity_consumption_in_kilowatt_hour * 100
-            )
-            # share of sh heat pump on total electricity consumption
             share_of_sh_heat_pump_on_total_consumption_from_grid_in_percent = float(
                 sh_heat_pump_electricity_consumption_from_grid_in_kilowatt_hour
                 / total_electricity_consumption_from_grid_in_kilowatt_hour
                 * 100
+            )
+        if (
+            total_electrical_energy_input_in_kilowatt_hour is not None
+            and total_electricity_consumption_in_kilowatt_hour is not None
+        ):
+            # share of sh heat pump on total electricity consumption
+            share_of_sh_heat_pump_on_total_electricity_consumption_in_percent = float(
+                total_electrical_energy_input_in_kilowatt_hour / total_electricity_consumption_in_kilowatt_hour * 100
             )
 
         # make kpi entry
@@ -1879,7 +1882,6 @@ class KpiGenerator(JSONWizard):
         if (
             dhw_heat_pump_electricity_consumption_from_grid_in_kilowatt_hour is not None
             and dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour is not None
-            and total_electricity_consumption_in_kilowatt_hour is not None
             and total_electricity_consumption_from_grid_in_kilowatt_hour is not None
         ):
 
@@ -1889,16 +1891,21 @@ class KpiGenerator(JSONWizard):
                 / dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour
                 * 100
             )
-            # share of dhw heat pump on total electricity consumption
-            share_of_dhw_heat_pump_on_total_electricity_consumption_in_percent = float(
-                dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour
-                / total_electricity_consumption_in_kilowatt_hour
-                * 100
-            )
+
             # share of dhw heat pump on total electricity consumption
             share_of_dhw_heat_pump_on_total_consumption_from_grid_in_percent = float(
                 dhw_heat_pump_electricity_consumption_from_grid_in_kilowatt_hour
                 / total_electricity_consumption_from_grid_in_kilowatt_hour
+                * 100
+            )
+        if (
+            dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour is not None
+            and total_electricity_consumption_in_kilowatt_hour is not None
+        ):
+            # share of dhw heat pump on total electricity consumption
+            share_of_dhw_heat_pump_on_total_electricity_consumption_in_percent = float(
+                dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour
+                / total_electricity_consumption_in_kilowatt_hour
                 * 100
             )
 

@@ -192,10 +192,16 @@ def Cell4Life(
     electrolyzerfuelcell_controller_config.h2_soc_lower_threshold_fuelcell = input_variablen["h2_soc_lower_threshold_chp"]["value"]
     electrolyzerfuelcell_controller_config.p_el_elektrolyzer = input_variablen["p_el_elektrolyzer"]["value"]
     electrolyzerfuelcell_controller_config.fuel_cell_power = input_variablen["fuel_cell_power"]["value"]
-    electrolyzerfuelcell_controller_config.Electrical_power_surplus_related_to_elecrolzyer_percentage = input_variablen["Electrical_power_surplus_related_to_elecrolzyer_percentage"]["value"]
-    
-    electrolyzerfuelcell_controller_config.Electrical_amount_in_prediction_horizon_surplus_related_to_electrolzyer_percentage = input_variablen["Electrical_amount_in_prediction_horizon_surplus_related_to_electrolzyer_percentage"]["value"] 
-    electrolyzerfuelcell_controller_config.Electrical_amount_in_minimum_standby_time_surplus_related_to_electrolzyer_percentage = input_variablen["Electrical_amount_in_minimum_standby_time_surplus_related_to_electrolzyer_percentage"]["value"]
+
+    electrolyzerfuelcell_controller_config.Electrical_power_surplus_related_to_electrolzyer_percentage = input_variablen["Electrical_power_surplus_related_to_electrolzyer_percentage"]["value"]
+    electrolyzerfuelcell_controller_config.Electrical_power_demand_related_to_fuelcell_percentage = input_variablen["Electrical_power_demand_related_to_fuelcell_percentage"]["value"]
+
+
+    electrolyzerfuelcell_controller_config.Surplus_electrical_amount_related_to_electrolzyer_in_prediction_horizon_in_percentage = input_variablen["Surplus_electrical_amount_related_to_electrolzyer_in_prediction_horizon_in_percentage"]["value"] 
+    electrolyzerfuelcell_controller_config.Surplus_electrical_amount_related_to_electrolzyer_in_minimum_standby_time_in_percentage = input_variablen["Surplus_electrical_amount_related_to_electrolzyer_in_minimum_standby_time_in_percentage"]["value"]
+
+    electrolyzerfuelcell_controller_config.Usebale_electrical_amount_of_fuelcell_related_to_fuelcell_output_in_prediction_horizon_in_percentage = input_variablen["Usebale_electrical_amount_of_fuelcell_related_to_fuelcell_output_in_prediction_horizon_in_percentage"]["value"]
+    electrolyzerfuelcell_controller_config.Usebale_electrical_amount_of_fuelcell_related_to_fuelcell_output_in_minimum_standby_time_in_percentage = input_variablen["Usebale_electrical_amount_of_fuelcell_related_to_fuelcell_output_in_minimum_standby_time_in_percentage"]["value"]
 
 
     electrolyzerfuelcell_controller_config.minruntime_electrolyzer = input_variablen["min_operation_time_in_seconds_electrolyzer"]["value"] # [x]  gehört nicht zu input variablen hinzugefügt
@@ -203,6 +209,11 @@ def Cell4Life(
     electrolyzerfuelcell_controller_config.minbatterystateofcharge_electrolyzer_turnon = input_variablen["minbatterystateofcharge_electrolyzer_turnon"]["value"]  #minimal battery state of charge, which is necessary, to turn on electrolyzer... in % 
     electrolyzerfuelcell_controller_config.minbatterystateofcharge_let_electrolyzer_staysturnedon = input_variablen["minbatterystateofcharge_let_electrolyzer_staysturnedon"]["value"] #Minimal battery state of charge, which is necessary, that electrolyzer stays turned on, in %
     
+    electrolyzerfuelcell_controller_config.maxbatterystateofcharge_fuelcell_turnon = input_variablen["maxbatterystateofcharge_fuelcell_turnon"]["value"] #maximum battery state of charge (upper threshold) --> to turn on fuel cell..if the actual state of charge of battery is above this state of charge, than to not turn on fuel cell, in %
+    electrolyzerfuelcell_controller_config.minruntime_fuelcell = input_variablen["min_operation_time_in_seconds_chp"]["value"]
+    electrolyzerfuelcell_controller_config.minstandbytime_fuelcell = input_variablen["minstandbytime_fuelcell"]["value"]
+    
+    electrolyzerfuelcell_controller_config.maxbatterystateofcharge_let_fuelcell_staysturnedon = input_variablen["maxbatterystateofcharge_let_fuelcell_staysturnedon"]["value"]
 
     my_electrolyzerfuelcellcontroller = controller_predicitve_C4L_electrolyzer_fuelcell.C4LelectrolyzerfuelcellpredictiveController(
         my_simulation_parameters=my_simulation_parameters, config=electrolyzerfuelcell_controller_config)
@@ -475,28 +486,45 @@ def InputParameter():
     h2storage_energy_for_operationUnit = "W" 
 
     #Predictive Controller Fuel Cell Electrolyzer factors
-    Electrical_power_surplus_related_to_elecrolzyer_percentage = 100 
-    Electrical_power_surplus_related_to_elecrolzyer_percentageUnit = "%" #Faktor in % which represents the ratio  between [PV-HouseConsumption]/Electrolzyer ...--> 100 % means, that the surpluse energy (PV-houseconsumption) is equivalent to electrolyzer
+    Electrical_power_surplus_related_to_electrolzyer_percentage = 100 
+    Electrical_power_surplus_related_to_electrolzyer_percentageUnit = "%" #Faktor in % which represents the ratio  between [PV-HouseConsumption]/Electrolzyer ...--> 100 % means, that the surpluse energy (PV-houseconsumption) is equivalent to electrolyzer; at this ratio, the electrolyzer could be turned on if the next decisions in the decision tree are answered positively 
     
+    Electrical_power_demand_related_to_fuelcell_percentage = 100
+    Electrical_power_demand_related_to_fuelcell_percentageUnit = "%" #Faktor in % which represents the ratio  between [HouseConsumption-PV]/FuelCell (each in Watt)...--> 100 % means, that the  energy demand (houseconsumption-PV) is equivalent to fuel cell output; at this ratio, the fuel cell could be turned on if the next decisions in the decision tree are answered positively, or the Fuel Cell stays turned on if it is already running
+
     minbatterystateofcharge_electrolyzer_turnon = 80 #minimal battery state of charge, which is necessary, to turn on electrolyzer... in % 
     minbatterystateofcharge_electrolyzer_turnonUnit = "%" 
 
     minbatterystateofcharge_let_electrolyzer_staysturnedon = 0 #Minimal battery state of charge, which is necessary, that electrolyzer stays turned on, in %
     minbatterystateofcharge_let_electrolyzer_staysturnedonUnit = "%"
 
-    #FOLLOWING FACTORS:
-    #****
-    Electrical_amount_in_prediction_horizon_surplus_related_to_electrolzyer_percentage = 100 
-    Electrical_amount_in_prediction_horizon_surplus_related_to_electrolzyer_percentageUnit = "%" 
+    maxbatterystateofcharge_fuelcell_turnon = 80 #maximum battery state of charge; if the actual battery state of charge is above this level, then the fuel cell will not be turned on
+    maxbatterystateofcharge_fuelcell_turnonUnit = "%"
 
-    Electrical_amount_in_minimum_standby_time_surplus_related_to_electrolzyer_percentage = Electrical_amount_in_prediction_horizon_surplus_related_to_electrolzyer_percentage
-    Electrical_amount_in_minimum_standby_time_surplus_related_to_electrolzyer_percentageUnit = "%"
+    maxbatterystateofcharge_let_fuelcell_staysturnedon = 100 #Maximum battery state of charge; if that threshold is exceeded, then 
+    maxbatterystateofcharge_let_fuelcell_staysturnedonUnit = "%"
+    #FOLLOWING FACTORS Electrolyzer:
+    #****
+    Surplus_electrical_amount_related_to_electrolzyer_in_prediction_horizon_in_percentage = 75 
+    Surplus_electrical_amount_related_to_electrolzyer_in_prediction_horizon_in_percentageUnit = "%" 
+    
+    Surplus_electrical_amount_related_to_electrolzyer_in_minimum_standby_time_in_percentage = Surplus_electrical_amount_related_to_electrolzyer_in_prediction_horizon_in_percentage
+    Surplus_electrical_amount_related_to_electrolzyer_in_minimum_standby_time_in_percentageUnit = "%"
 
     #Faktor in % which represents the ratio between useable surplus energy amount and electricity consumption electrolyzer amount, both for prediction horizon OR minimum standby time of electrolyzer;
     #100 means, in the prediciton horizion, the useable energy amout pv production fully covers the energy demand of the electrolyzer
     #Please consider the controller-predicitve for fuel cell & electrolyzer, where it is explained, what useable energy amount of pv production means!
 
+    #Following Factors  are for fuel cell:
+    Usebale_electrical_amount_of_fuelcell_related_to_fuelcell_output_in_prediction_horizon_in_percentage = 75
+    Usebale_electrical_amount_of_fuelcell_related_to_fuelcell_output_in_prediction_horizon_in_percentageUnit = "%"
 
+    Usebale_electrical_amount_of_fuelcell_related_to_fuelcell_output_in_minimum_standby_time_in_percentage = Usebale_electrical_amount_of_fuelcell_related_to_fuelcell_output_in_prediction_horizon_in_percentage
+    Usebale_electrical_amount_of_fuelcell_related_to_fuelcell_output_in_minimum_standby_time_in_percentageUnit = "%"
+    
+    #Factro in % represents how much energy from the fuel cell delivered within the prediction horizon can be used to cover the energy demand; if the energy demand in one time step is smaller than
+    #the energy delivered by the fuel cell, only a part of the fuel cell energy can be used directy to cover the energy demand of the house (rest will be stored in battery or in the grid)
+    #if the energy demand is higher than or is equal to that what the fuel cell delivers at a timestep, all energy delivered by the fuel cell can be used to cover the energy demand of the house.
 
     input_variablen = {
         "PreResultNumber": {
@@ -633,19 +661,24 @@ def InputParameter():
         },
 
 
-        "Electrical_power_surplus_related_to_elecrolzyer_percentage": {
-            "value": Electrical_power_surplus_related_to_elecrolzyer_percentage,
-            "unit": Electrical_power_surplus_related_to_elecrolzyer_percentageUnit,
+        "Electrical_power_surplus_related_to_electrolzyer_percentage": {
+            "value": Electrical_power_surplus_related_to_electrolzyer_percentage,
+            "unit": Electrical_power_surplus_related_to_electrolzyer_percentageUnit,
         },
 
-        "Electrical_amount_in_prediction_horizon_surplus_related_to_electrolzyer_percentage": {
-            "value": Electrical_amount_in_prediction_horizon_surplus_related_to_electrolzyer_percentage,
-            "unit": Electrical_amount_in_prediction_horizon_surplus_related_to_electrolzyer_percentageUnit,
+        "Surplus_electrical_amount_related_to_electrolzyer_in_prediction_horizon_in_percentage": {
+            "value": Surplus_electrical_amount_related_to_electrolzyer_in_prediction_horizon_in_percentage,
+            "unit": Surplus_electrical_amount_related_to_electrolzyer_in_prediction_horizon_in_percentageUnit,
         },
 
-        "Electrical_amount_in_minimum_standby_time_surplus_related_to_electrolzyer_percentage": {
-            "value": Electrical_amount_in_minimum_standby_time_surplus_related_to_electrolzyer_percentage,
-            "unit": Electrical_amount_in_minimum_standby_time_surplus_related_to_electrolzyer_percentageUnit,
+        "Surplus_electrical_amount_related_to_electrolzyer_in_minimum_standby_time_in_percentage": {
+            "value": Surplus_electrical_amount_related_to_electrolzyer_in_minimum_standby_time_in_percentage,
+            "unit": Surplus_electrical_amount_related_to_electrolzyer_in_minimum_standby_time_in_percentageUnit,
+        },
+
+        "Electrical_power_demand_related_to_fuelcell_percentage": {
+            "value": Electrical_power_demand_related_to_fuelcell_percentage,
+            "unit": Electrical_power_demand_related_to_fuelcell_percentageUnit,
         },
 
 
@@ -657,6 +690,27 @@ def InputParameter():
         "minbatterystateofcharge_let_electrolyzer_staysturnedon": {
             "value": minbatterystateofcharge_let_electrolyzer_staysturnedon,
             "unit": minbatterystateofcharge_let_electrolyzer_staysturnedonUnit,
+        },
+
+        "maxbatterystateofcharge_fuelcell_turnon": {
+            "value": maxbatterystateofcharge_fuelcell_turnon,
+            "unit": maxbatterystateofcharge_fuelcell_turnonUnit,
+        },
+
+        "maxbatterystateofcharge_let_fuelcell_staysturnedon": {
+            "value": maxbatterystateofcharge_let_fuelcell_staysturnedon,
+            "unit": maxbatterystateofcharge_let_fuelcell_staysturnedonUnit,
+        },
+
+
+        "Usebale_electrical_amount_of_fuelcell_related_to_fuelcell_output_in_prediction_horizon_in_percentage": {
+            "value": Usebale_electrical_amount_of_fuelcell_related_to_fuelcell_output_in_prediction_horizon_in_percentage,
+            "unit": Usebale_electrical_amount_of_fuelcell_related_to_fuelcell_output_in_prediction_horizon_in_percentageUnit,
+        },
+
+        "Usebale_electrical_amount_of_fuelcell_related_to_fuelcell_output_in_minimum_standby_time_in_percentage": {
+            "value": Usebale_electrical_amount_of_fuelcell_related_to_fuelcell_output_in_minimum_standby_time_in_percentage,
+            "unit": Usebale_electrical_amount_of_fuelcell_related_to_fuelcell_output_in_minimum_standby_time_in_percentageUnit,
         },
 
 

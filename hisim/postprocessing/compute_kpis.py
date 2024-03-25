@@ -1538,6 +1538,9 @@ class KpiGenerator(JSONWizard):
         max_flow_temperature_in_celsius = None
         max_return_temperature_in_celsius = None
         max_temperature_difference_between_flow_and_return_in_celsius = None
+        relative_electricity_demand_in_percent: Optional[float] = None
+        share_of_sh_heat_pump_on_total_electricity_consumption_in_percent: Optional[float] = None
+        share_of_sh_heat_pump_on_total_consumption_from_grid_in_percent: Optional[float] = None
 
         # check if Heat Pump was used in components
         for wrapped_component in self.wrapped_components:
@@ -1837,8 +1840,11 @@ class KpiGenerator(JSONWizard):
                     dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour = None
                 break
         if not wrapped_dhw_heat_pump_component:
-            raise ValueError("Could not find the Modular Heat Pump component.")
-
+            log.warning(
+                "KPI values for DHW heatpump are None. "
+                "Please check if you have correctly initialized and connected the dhw heat pump in your system setup or ignore this message."
+            )
+            return
         for column in self.results.columns:
             if all(
                 x in column.split(sep=" ")
@@ -1955,7 +1961,11 @@ class KpiGenerator(JSONWizard):
                 wrapped_occupancy_component = wrapped_component
                 break
         if not wrapped_occupancy_component:
-            raise ValueError("Could not find the UtspLpgConnector component.")
+            log.warning(
+                "KPI values for occupancy are None. "
+                "Please check if you have correctly initialized and connected the occupancy in your system setup or ignore this message."
+            )
+            return
 
         for column in self.results.columns:
             if all(
@@ -2018,7 +2028,8 @@ class KpiGenerator(JSONWizard):
                 wrapped_ems_component = wrapped_component
                 break
         if not wrapped_ems_component:
-            raise ValueError("Could not find the Energy Management System component.")
+            log.information("Could not find the Energy Management System component.")
+            return None, None
 
         for column in self.results.columns:
             if all(x in column.split(sep=" ") for x in [wrapped_ems_component.my_component.component_name]):
@@ -2046,8 +2057,9 @@ class KpiGenerator(JSONWizard):
             sh_heatpump_electricity_from_grid_in_kilowatt_hour,
             dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
         ):
-            log.information(
-                "The EMS outputs for the domestic hot water and space heating heat pump could not be found."
+            log.warning(
+                "KPI values for the energy management system are None. "
+                "Please check if you have correctly initialized and connected the EMS in your system setup or ignore this message."
             )
 
         # make kpi entry

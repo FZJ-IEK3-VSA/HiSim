@@ -37,6 +37,7 @@ class KpiTagEnumClass(Enum):
     GENERAL = "General"
     COSTS_AND_EMISSIONS = "Costs and Emissions"
     BUILDING = "Building"
+    BATTERY = "Battery"
     HEATDISTRIBUTIONSYSTEM = "Heat Distribution System"
     HEATPUMP_SPACE_HEATING = "Heat Pump For Space Heating"
     HEATPUMP_DOMESTIC_HOT_WATER = "Heat Pump For Domestic Hot Water"
@@ -159,6 +160,7 @@ class KpiGenerator(JSONWizard):
         (
             sh_heatpump_electricity_from_grid_in_kilowatt_hour,
             dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
+            occupancy_electricity_from_grid_in_kilowatt_hour,
         ) = self.get_grid_consumptions_of_heat_pumps_via_energy_management_kpis()
 
         # get space heating heat pump performance indicators
@@ -178,6 +180,7 @@ class KpiGenerator(JSONWizard):
         self.get_occupancy_electricity_kpis(
             total_electricity_consumption_from_grid_in_kilowatt_hour=total_electricity_from_grid_in_kwh,
             total_electricity_consumption_in_kilowatt_hour=total_electricity_consumption_in_kilowatt_hour,
+            occupancy_electricity_from_grid_in_kilowatt_hour=occupancy_electricity_from_grid_in_kilowatt_hour,
         )
 
     def filter_results_according_to_postprocessing_flags(
@@ -363,8 +366,12 @@ class KpiGenerator(JSONWizard):
                     "The autarky rate should not be over 100 %. Something is wrong here. Please check your code."
                 )
 
-            # compute battery losses
-            battery_losses_in_kilowatt_hour = self.compute_battery_losses(result_dataframe=result_dataframe)
+            # compute battery kpis
+            (
+                battery_charging_energy_in_kilowatt_hour,
+                battery_discharging_energy_in_kilowatt_hour,
+                battery_losses_in_kilowatt_hour,
+            ) = self.compute_battery_kpis(result_dataframe=result_dataframe)
 
         else:
             self_consumption_series_in_watt = pd.Series([])
@@ -373,6 +380,8 @@ class KpiGenerator(JSONWizard):
             grid_injection_in_kilowatt_hour = 0
             self_consumption_rate_in_percent = 0
             autarky_rate_in_percent = 0
+            battery_charging_energy_in_kilowatt_hour = 0
+            battery_discharging_energy_in_kilowatt_hour = 0
             battery_losses_in_kilowatt_hour = 0
 
         # add injection and self-consumption timeseries to result dataframe
@@ -392,8 +401,20 @@ class KpiGenerator(JSONWizard):
         autarkie_rate_entry = KpiEntry(
             name="Autarky rate", unit="%", value=autarky_rate_in_percent, tag=KpiTagEnumClass.GENERAL
         )
+        battery_charging_entry = KpiEntry(
+            name="Battery charging energy",
+            unit="kWh",
+            value=battery_charging_energy_in_kilowatt_hour,
+            tag=KpiTagEnumClass.BATTERY,
+        )
+        battery_discharging_entry = KpiEntry(
+            name="Battery discharging energy",
+            unit="kWh",
+            value=battery_discharging_energy_in_kilowatt_hour,
+            tag=KpiTagEnumClass.BATTERY,
+        )
         battery_losses_entry = KpiEntry(
-            name="Battery losses", unit="kWh", value=battery_losses_in_kilowatt_hour, tag=KpiTagEnumClass.GENERAL
+            name="Battery losses", unit="kWh", value=battery_losses_in_kilowatt_hour, tag=KpiTagEnumClass.BATTERY
         )
 
         # update kpi collection dict
@@ -403,26 +424,38 @@ class KpiGenerator(JSONWizard):
                 self_consumption_entry.name: self_consumption_entry.to_dict(),
                 self_consumption_rate_entry.name: self_consumption_rate_entry.to_dict(),
                 autarkie_rate_entry.name: autarkie_rate_entry.to_dict(),
+                battery_charging_entry.name: battery_charging_entry.to_dict(),
+                battery_discharging_entry.name: battery_discharging_entry.to_dict(),
                 battery_losses_entry.name: battery_losses_entry.to_dict(),
             }
         )
         return grid_injection_in_kilowatt_hour, self_consumption_in_kilowatt_hour, result_dataframe
 
-    def compute_battery_losses(self, result_dataframe: pd.DataFrame) -> float:
-        """Compute battery losses."""
+    def compute_battery_kpis(self, result_dataframe: pd.DataFrame) -> Tuple[float, float, float]:
+        """Compute battery kpis."""
 
         if not result_dataframe["battery_charge"].empty:
-            battery_losses_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
+            battery_charging_energy_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
                 power_timeseries_in_watt=result_dataframe["battery_charge"],
                 timeresolution=self.simulation_parameters.seconds_per_timestep,
-            ) - self.compute_total_energy_from_power_timeseries(
+            )
+            battery_discharging_energy_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
                 power_timeseries_in_watt=result_dataframe["battery_discharge"],
                 timeresolution=self.simulation_parameters.seconds_per_timestep,
             )
+            battery_losses_in_kilowatt_hour = (
+                battery_charging_energy_in_kilowatt_hour - battery_discharging_energy_in_kilowatt_hour
+            )
         else:
+            battery_charging_energy_in_kilowatt_hour = 0.0
+            battery_discharging_energy_in_kilowatt_hour = 0.0
             battery_losses_in_kilowatt_hour = 0.0
 
-        return battery_losses_in_kilowatt_hour
+        return (
+            battery_charging_energy_in_kilowatt_hour,
+            battery_discharging_energy_in_kilowatt_hour,
+            battery_losses_in_kilowatt_hour,
+        )
 
     def get_electricity_to_and_from_grid_from_electricty_meter(self) -> Tuple[Optional[float], Optional[float]]:
         """Get the electricity injected into the grid or taken from grid measured by the electricity meter."""
@@ -1956,6 +1989,7 @@ class KpiGenerator(JSONWizard):
         self,
         total_electricity_consumption_in_kilowatt_hour: Optional[float],
         total_electricity_consumption_from_grid_in_kilowatt_hour: Optional[float],
+        occupancy_electricity_from_grid_in_kilowatt_hour: Optional[float],
     ) -> None:
         """Check electricity kpi values of occupancy."""
 
@@ -1991,7 +2025,6 @@ class KpiGenerator(JSONWizard):
         if (
             occupancy_total_electricity_consumption_in_kilowatt_hour is not None
             and total_electricity_consumption_in_kilowatt_hour is not None
-            and total_electricity_consumption_from_grid_in_kilowatt_hour is not None
         ):
 
             # share of occupancy on total electricity consumption
@@ -2000,6 +2033,27 @@ class KpiGenerator(JSONWizard):
                 / total_electricity_consumption_in_kilowatt_hour
                 * 100
             )
+
+        if (
+            occupancy_electricity_from_grid_in_kilowatt_hour is not None
+            and occupancy_total_electricity_consumption_in_kilowatt_hour is not None
+            and total_electricity_consumption_from_grid_in_kilowatt_hour is not None
+        ):
+
+            # get relative electricity demand of dhw heat pump
+            relative_electricity_demand_in_percent = float(
+                occupancy_electricity_from_grid_in_kilowatt_hour
+                / occupancy_total_electricity_consumption_in_kilowatt_hour
+                * 100
+            )
+
+            # share of dhw heat pump on total electricity consumption
+            share_of_dhw_heat_pump_on_total_consumption_from_grid_in_percent = float(
+                occupancy_electricity_from_grid_in_kilowatt_hour
+                / total_electricity_consumption_from_grid_in_kilowatt_hour
+                * 100
+            )
+
         # make kpi entry
         occupancy_total_electricity_consumption_entry = KpiEntry(
             name="Residents' total electricity consumption",
@@ -2008,10 +2062,22 @@ class KpiGenerator(JSONWizard):
             tag=KpiTagEnumClass.RESIDENTS,
         )
 
-        dhw_heatpump_share_on_total_consumption_entry = KpiEntry(
+        occupancy_share_on_total_consumption_entry = KpiEntry(
             name="Share of residents on total electricity consumption",
             unit="%",
             value=share_of_occupancy_on_total_electricity_consumption_in_percent,
+            tag=KpiTagEnumClass.RESIDENTS,
+        )
+        relative_electricity_demand_entry = KpiEntry(
+            name="Relative electricity demand of residents",
+            unit="%",
+            value=relative_electricity_demand_in_percent,
+            tag=KpiTagEnumClass.RESIDENTS,
+        )
+        occupancy_share_on_grid_consumption_entry = KpiEntry(
+            name="Share of residents on total grid consumption",
+            unit="%",
+            value=share_of_dhw_heat_pump_on_total_consumption_from_grid_in_percent,
             tag=KpiTagEnumClass.RESIDENTS,
         )
 
@@ -2019,16 +2085,21 @@ class KpiGenerator(JSONWizard):
         self.kpi_collection_dict_unsorted.update(
             {
                 occupancy_total_electricity_consumption_entry.name: occupancy_total_electricity_consumption_entry.to_dict(),
-                dhw_heatpump_share_on_total_consumption_entry.name: dhw_heatpump_share_on_total_consumption_entry.to_dict(),
+                occupancy_share_on_total_consumption_entry.name: occupancy_share_on_total_consumption_entry.to_dict(),
+                relative_electricity_demand_entry.name: relative_electricity_demand_entry.to_dict(),
+                occupancy_share_on_grid_consumption_entry.name: occupancy_share_on_grid_consumption_entry.to_dict(),
             }
         )
 
-    def get_grid_consumptions_of_heat_pumps_via_energy_management_kpis(self) -> Tuple[Optional[float], Optional[float]]:
+    def get_grid_consumptions_of_heat_pumps_via_energy_management_kpis(
+        self,
+    ) -> Tuple[Optional[float], Optional[float], Optional[float]]:
         """Check ems kpi values and get from grid consumptions of heat pumps."""
 
         wrapped_ems_component = None
         sh_heatpump_electricity_from_grid_in_kilowatt_hour = None
         dhw_heatpump_electricity_from_grid_in_kilowatt_hour = None
+        occupancy_electricity_from_grid_in_kilowatt_hour = None
 
         for wrapped_component in self.wrapped_components:
             if isinstance(wrapped_component.my_component, L2GenericEnergyManagementSystem):
@@ -2036,7 +2107,7 @@ class KpiGenerator(JSONWizard):
                 break
         if not wrapped_ems_component:
             log.information("Could not find the Energy Management System component.")
-            return None, None
+            return None, None, None
 
         for column in self.results.columns:
             if all(x in column.split(sep=" ") for x in [wrapped_ems_component.my_component.component_name]):
@@ -2060,9 +2131,21 @@ class KpiGenerator(JSONWizard):
                                 timeresolution=self.simulation_parameters.seconds_per_timestep,
                             )
                         )
+                    if "ElectricityToOrFromGridOfUtspLpgConnector" in string.split(sep="_"):
+                        occupancy_electricity_from_grid_in_watt_series = self.results[column].loc[
+                            self.results[column] < 0.0
+                        ]
+
+                        occupancy_electricity_from_grid_in_kilowatt_hour = abs(
+                            self.compute_total_energy_from_power_timeseries(
+                                power_timeseries_in_watt=occupancy_electricity_from_grid_in_watt_series,
+                                timeresolution=self.simulation_parameters.seconds_per_timestep,
+                            )
+                        )
         if None in (
             sh_heatpump_electricity_from_grid_in_kilowatt_hour,
             dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
+            occupancy_electricity_from_grid_in_kilowatt_hour,
         ):
             log.warning(
                 "KPI values for the energy management system are None. "
@@ -2082,14 +2165,26 @@ class KpiGenerator(JSONWizard):
             value=dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
         )
+        occupancy_electricity_from_grid_entry = KpiEntry(
+            name="Residents' electricity consumption from grid",
+            unit="kWh",
+            value=occupancy_electricity_from_grid_in_kilowatt_hour,
+            tag=KpiTagEnumClass.RESIDENTS,
+        )
+
         # update kpi collection dict
         self.kpi_collection_dict_unsorted.update(
             {
                 sh_heatpump_electricity_from_grid_entry.name: sh_heatpump_electricity_from_grid_entry.to_dict(),
                 dhw_heatpump_electricity_from_grid_entry.name: dhw_heatpump_electricity_from_grid_entry.to_dict(),
+                occupancy_electricity_from_grid_entry.name: occupancy_electricity_from_grid_entry.to_dict(),
             }
         )
-        return sh_heatpump_electricity_from_grid_in_kilowatt_hour, dhw_heatpump_electricity_from_grid_in_kilowatt_hour
+        return (
+            sh_heatpump_electricity_from_grid_in_kilowatt_hour,
+            dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
+            occupancy_electricity_from_grid_in_kilowatt_hour,
+        )
 
     def calc_mean_max_min_value(self, list_or_pandas_series: Union[List, pd.Series]) -> Tuple[float, float, float]:
         """Calc mean, max and min values from List or pd.Series with numpy."""

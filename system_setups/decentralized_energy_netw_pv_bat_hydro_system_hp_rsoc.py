@@ -249,7 +249,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         source_unit=lt.Units.WATT,
         source_tags=[
             lt.ComponentType.ELECTROLYZER,
-            lt.InandOutputType.ELECTRICITY_REAL,
+            lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
         ],
         source_weight=1,  # maybe change the weigth
     )
@@ -306,7 +306,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         source_component_output=my_advanced_battery_1.AcBatteryPowerUsed,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_REAL],
+        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
         source_weight=1,
     )
 

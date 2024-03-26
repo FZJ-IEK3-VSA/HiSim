@@ -96,7 +96,8 @@ def setup_function(
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
@@ -106,7 +107,7 @@ def setup_function(
     # Set Photovoltaic System
     azimuth = my_config.pv_azimuth
     tilt = my_config.pv_tilt
-    share_of_maximum_pv_power = 0  # my_config.share_of_maximum_pv_power
+    share_of_maximum_pv_power = 1  # my_config.share_of_maximum_pv_power
 
     # Set Building (scale building according to total base area and not absolute floor area)
     building_code = my_config.building_code
@@ -333,7 +334,7 @@ def setup_function(
         loading_power_input_for_battery_in_watt = my_electricity_controller.add_component_output(
             source_output_name="LoadingPowerInputForBattery_",
             source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-            source_weight=3,
+            source_weight=4,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for Battery Control. ",
@@ -393,8 +394,8 @@ def setup_function(
         further_result_folder_description=os.path.join(
             *[
                 further_result_folder_description,
-                "hplib_testing",
-                f"hp_mode{hp_controller_mode}_no_offset_but_idle_time_1h_1h",
+                "ems_occ-prio-avail-up",
+                f"bui-{building_indoor_temperature_offset_value}-dhw-{domestic_hot_water_storage_temperature_offset_value}-sh-{space_heating_water_storage_temperature_offset_value}",
             ]
         ),
         variant_name=f"hp_mode_{hp_controller_mode}",

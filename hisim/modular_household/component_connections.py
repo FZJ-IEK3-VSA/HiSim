@@ -286,7 +286,7 @@ def configure_ev_batteries(
                 source_unit=lt.Units.WATT,
                 source_tags=[
                     lt.ComponentType.CAR_BATTERY,
-                    lt.InandOutputType.ELECTRICITY_REAL,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 ],
                 source_weight=my_carbattery.source_weight,
             )
@@ -334,7 +334,7 @@ def configure_smart_controller_for_smart_devices(
             source_unit=lt.Units.WATT,
             source_tags=[
                 lt.ComponentType.SMART_DEVICE,
-                lt.InandOutputType.ELECTRICITY_REAL,
+                lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
             ],
             source_weight=elem.source_weight,
         )
@@ -409,7 +409,7 @@ def configure_battery(
         source_component_output=my_advanced_battery.AcBatteryPowerUsed,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_REAL],
+        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
         source_weight=my_advanced_battery.source_weight,
     )
 
@@ -623,7 +623,7 @@ def configure_water_heating_electric(
             source_unit=lt.Units.WATT,
             source_tags=[
                 lt.ComponentType.HEAT_PUMP,
-                lt.InandOutputType.ELECTRICITY_REAL,
+                lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
             ],
             source_weight=my_heatpump.config.source_weight,
         )
@@ -805,7 +805,7 @@ def configure_heating_electric(
             source_unit=lt.Units.WATT,
             source_tags=[
                 lt.ComponentType.HEAT_PUMP,
-                lt.InandOutputType.ELECTRICITY_REAL,
+                lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
             ],
             source_weight=my_heatpump.config.source_weight,
         )
@@ -967,7 +967,7 @@ def configure_heating_with_buffer_electric(
             source_unit=lt.Units.WATT,
             source_tags=[
                 lt.ComponentType.HEAT_PUMP,
-                lt.InandOutputType.ELECTRICITY_REAL,
+                lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
             ],
             source_weight=my_heatpump.config.source_weight,
         )
@@ -1408,7 +1408,7 @@ def configure_electrolyzer_and_h2_storage(
         source_unit=lt.Units.WATT,
         source_tags=[
             lt.ComponentType.ELECTROLYZER,
-            lt.InandOutputType.ELECTRICITY_REAL,
+            lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
         ],
         source_weight=my_electrolyzer.config.source_weight,
     )

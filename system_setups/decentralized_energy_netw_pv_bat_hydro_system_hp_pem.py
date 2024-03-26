@@ -260,7 +260,7 @@ def setup_function(
         source_component_output=my_fuel_cell.PowerOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        source_tags=[lt.ComponentType.FUEL_CELL, lt.InandOutputType.ELECTRICITY_REAL],
+        source_tags=[lt.ComponentType.FUEL_CELL, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
         source_weight=2,
     )
 
@@ -271,7 +271,7 @@ def setup_function(
         source_unit=lt.Units.WATT,
         source_tags=[
             lt.ComponentType.ELECTROLYZER,
-            lt.InandOutputType.ELECTRICITY_REAL,
+            lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
         ],
         source_weight=1,
     )

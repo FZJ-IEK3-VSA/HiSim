@@ -440,7 +440,7 @@ def setup_function(
                 source_unit=lt.Units.WATT,
                 source_tags=[
                     lt.ComponentType.CAR_BATTERY,
-                    lt.InandOutputType.ELECTRICITY_REAL,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 ],
                 # source_weight=car_battery.source_weight,
                 source_weight=1,
@@ -501,7 +501,7 @@ def setup_function(
             source_unit=lt.Units.WATT,
             source_tags=[
                 lt.ComponentType.HEAT_PUMP_DHW,
-                lt.InandOutputType.ELECTRICITY_REAL,
+                lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
             ],
             # source_weight=my_dhw_heatpump_config.source_weight,
             source_weight=2,
@@ -545,7 +545,7 @@ def setup_function(
             source_unit=lt.Units.WATT,
             source_tags=[
                 lt.ComponentType.HEAT_PUMP_BUILDING,
-                lt.InandOutputType.ELECTRICITY_REAL,
+                lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
             ],
             source_weight=3,
         )

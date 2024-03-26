@@ -493,7 +493,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         This function controls how surplus electricity is distributed and how much of each components'
         electricity need is covered onsite or from grid.
         """
-        # get electricity demand from input component and substract from available surplus electricity
+        # get electricity demand from input component and substract from (or add to) available surplus electricity
         electricity_demand_from_current_input_component_in_watt = stsv.get_input_value(component_input=current_input)
 
         # if available_surplus_electricity > 0: electricity is fed into battery
@@ -505,14 +505,19 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
             )
 
-        elif current_component_type == lt.ComponentType.RESIDENTS:
-            # if surplus electricity available a part of resident consumption can be covered onsite
+        elif current_component_type in [
+            lt.ComponentType.RESIDENTS,
+            lt.ComponentType.ELECTROLYZER,
+            lt.ComponentType.SMART_DEVICE,
+            lt.ComponentType.CAR_BATTERY,
+        ]:
+            # if surplus electricity is available a part of the component's consumption can be covered onsite
             if available_surplus_electricity_in_watt > 0:
                 available_surplus_electricity_in_watt = (
                     available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
                 )
                 stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
-            # otherwise all residents consumption is taken from grid
+            # otherwise all of the component's consumption is taken from grid
             else:
                 stsv.set_output_value(
                     output=current_output, value=-electricity_demand_from_current_input_component_in_watt
@@ -532,6 +537,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             lt.ComponentType.HEAT_PUMP_DHW,
             lt.ComponentType.HEAT_PUMP,
         ]:  # Todo: lt.ComponentType.HEAT_PUMP is from old version, kept here just to avoid errors
+            # if surplus electricity is available the set temperature for the dhw storage is increased
             if available_surplus_electricity_in_watt > 0:
                 stsv.set_output_value(
                     self.domestic_hot_water_storage_temperature_modifier,
@@ -541,7 +547,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
                 )
                 stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
-
+            # otherwise set temperatures are not increased and all of the component's consumption is taken from grid
             else:
                 stsv.set_output_value(self.domestic_hot_water_storage_temperature_modifier, 0)
                 stsv.set_output_value(
@@ -552,6 +558,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 )
 
         elif current_component_type == lt.ComponentType.HEAT_PUMP_BUILDING:
+            # if surplus electricity is available the set temperatures for the space heating storage and for the building indoor temperature are increased
             if available_surplus_electricity_in_watt > 0:
                 stsv.set_output_value(
                     self.building_indoor_temperature_modifier,
@@ -565,41 +572,10 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
                 )
                 stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
-
+            # otherwise set temperatures are not increased and all of the component's consumption is taken from grid
             else:
                 stsv.set_output_value(self.building_indoor_temperature_modifier, 0)
                 stsv.set_output_value(self.space_heating_water_storage_temperature_modifier, 0)
-                stsv.set_output_value(
-                    output=current_output, value=-electricity_demand_from_current_input_component_in_watt
-                )
-                available_surplus_electricity_in_watt = (
-                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
-                )
-
-        elif current_component_type == lt.ComponentType.ELECTROLYZER:
-            if available_surplus_electricity_in_watt > 0:
-                available_surplus_electricity_in_watt = (
-                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
-                )
-                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
-            else:
-                stsv.set_output_value(
-                    output=current_output, value=-electricity_demand_from_current_input_component_in_watt
-                )
-                available_surplus_electricity_in_watt = (
-                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
-                )
-
-        elif current_component_type in [
-            lt.ComponentType.SMART_DEVICE,
-            lt.ComponentType.CAR_BATTERY,
-        ]:
-            if available_surplus_electricity_in_watt > 0:
-                available_surplus_electricity_in_watt = (
-                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
-                )
-                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
-            else:
                 stsv.set_output_value(
                     output=current_output, value=-electricity_demand_from_current_input_component_in_watt
                 )

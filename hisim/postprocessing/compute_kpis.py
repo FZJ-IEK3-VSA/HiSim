@@ -86,12 +86,12 @@ class KpiGenerator(JSONWizard):
             all_outputs=self.all_outputs, results=self.results
         )
 
-        # get consumption and production and store in kpi collection
+        # get consumption and production and battery kpis
         (
             total_electricity_consumption_in_kilowatt_hour,
             total_electricity_production_in_kilowatt_hour,
             pv_production_in_kilowatt_hour,
-        ) = self.compute_electricity_consumption_and_production(result_dataframe=self.filtered_result_dataframe)
+        ) = self.compute_electricity_consumption_and_production_and_battery_kpis(result_dataframe=self.filtered_result_dataframe)
 
         # get ratio between total production and total consumption
         self.compute_ratio_between_two_values_and_set_as_kpi(
@@ -106,12 +106,12 @@ class KpiGenerator(JSONWizard):
             kpi_name="Ratio between PV production and total consumption",
         )
 
-        # get self-consumption, autarkie, injection, battery losses
+        # get self-consumption, autarkie, injection
         (
             grid_injection_in_kilowatt_hour,
             self_consumption_in_kilowatt_hour,
             self.filtered_result_dataframe,
-        ) = self.compute_self_consumption_injection_autarky_and_battery_losses(
+        ) = self.compute_self_consumption_injection_autarky(
             result_dataframe=self.filtered_result_dataframe,
             electricity_consumption_in_kilowatt_hour=total_electricity_consumption_in_kilowatt_hour,
             electricity_production_in_kilowatt_hour=total_electricity_production_in_kilowatt_hour,
@@ -259,10 +259,10 @@ class KpiGenerator(JSONWizard):
         energy_in_kilowatt_hour = float(power_timeseries_in_watt.sum() * timeresolution / 3.6e6)
         return energy_in_kilowatt_hour
 
-    def compute_electricity_consumption_and_production(
+    def compute_electricity_consumption_and_production_and_battery_kpis(
         self, result_dataframe: pd.DataFrame
     ) -> Tuple[float, float, float]:
-        """Compute electricity consumption and production."""
+        """Compute electricity consumption and production and battery kpis."""
 
         # sum consumption and production over time
         total_electricity_consumption_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
@@ -278,6 +278,16 @@ class KpiGenerator(JSONWizard):
             power_timeseries_in_watt=result_dataframe["pv_production"],
             timeresolution=self.simulation_parameters.seconds_per_timestep,
         )
+
+        # compute battery kpis
+        (
+            battery_charging_energy_in_kilowatt_hour,
+            battery_discharging_energy_in_kilowatt_hour,
+            battery_losses_in_kilowatt_hour,
+        ) = self.compute_battery_kpis(result_dataframe=result_dataframe)
+
+        # if battery losses are not zero, add to total consumption because this is what is consumed by battery indepently from charging and discharging
+        total_electricity_consumption_in_kilowatt_hour = total_electricity_consumption_in_kilowatt_hour + battery_losses_in_kilowatt_hour
 
         # make kpi entry
         total_consumtion_entry = KpiEntry(
@@ -295,6 +305,21 @@ class KpiGenerator(JSONWizard):
         pv_production_entry = KpiEntry(
             name="PV production", unit="kWh", value=pv_production_in_kilowatt_hour, tag=KpiTagEnumClass.GENERAL
         )
+        battery_charging_entry = KpiEntry(
+            name="Battery charging energy",
+            unit="kWh",
+            value=battery_charging_energy_in_kilowatt_hour,
+            tag=KpiTagEnumClass.BATTERY,
+        )
+        battery_discharging_entry = KpiEntry(
+            name="Battery discharging energy",
+            unit="kWh",
+            value=battery_discharging_energy_in_kilowatt_hour,
+            tag=KpiTagEnumClass.BATTERY,
+        )
+        battery_losses_entry = KpiEntry(
+            name="Battery losses", unit="kWh", value=battery_losses_in_kilowatt_hour, tag=KpiTagEnumClass.BATTERY
+        )
 
         # update kpi collection dict
         self.kpi_collection_dict_unsorted.update(
@@ -302,6 +327,9 @@ class KpiGenerator(JSONWizard):
                 total_consumtion_entry.name: total_consumtion_entry.to_dict(),
                 total_production_entry.name: total_production_entry.to_dict(),
                 pv_production_entry.name: pv_production_entry.to_dict(),
+                battery_charging_entry.name: battery_charging_entry.to_dict(),
+                battery_discharging_entry.name: battery_discharging_entry.to_dict(),
+                battery_losses_entry.name: battery_losses_entry.to_dict(),
             }
         )
 
@@ -311,7 +339,7 @@ class KpiGenerator(JSONWizard):
             pv_production_in_kilowatt_hour,
         )
 
-    def compute_self_consumption_injection_autarky_and_battery_losses(
+    def compute_self_consumption_injection_autarky(
         self,
         result_dataframe: pd.DataFrame,
         electricity_production_in_kilowatt_hour: float,
@@ -366,13 +394,6 @@ class KpiGenerator(JSONWizard):
                     "The autarky rate should not be over 100 %. Something is wrong here. Please check your code."
                 )
 
-            # compute battery kpis
-            (
-                battery_charging_energy_in_kilowatt_hour,
-                battery_discharging_energy_in_kilowatt_hour,
-                battery_losses_in_kilowatt_hour,
-            ) = self.compute_battery_kpis(result_dataframe=result_dataframe)
-
         else:
             self_consumption_series_in_watt = pd.Series([])
             grid_injection_series_in_watt = pd.Series([])
@@ -380,9 +401,6 @@ class KpiGenerator(JSONWizard):
             grid_injection_in_kilowatt_hour = 0
             self_consumption_rate_in_percent = 0
             autarky_rate_in_percent = 0
-            battery_charging_energy_in_kilowatt_hour = 0
-            battery_discharging_energy_in_kilowatt_hour = 0
-            battery_losses_in_kilowatt_hour = 0
 
         # add injection and self-consumption timeseries to result dataframe
         result_dataframe["self_consumption_in_watt"] = self_consumption_series_in_watt
@@ -401,21 +419,6 @@ class KpiGenerator(JSONWizard):
         autarkie_rate_entry = KpiEntry(
             name="Autarky rate", unit="%", value=autarky_rate_in_percent, tag=KpiTagEnumClass.GENERAL
         )
-        battery_charging_entry = KpiEntry(
-            name="Battery charging energy",
-            unit="kWh",
-            value=battery_charging_energy_in_kilowatt_hour,
-            tag=KpiTagEnumClass.BATTERY,
-        )
-        battery_discharging_entry = KpiEntry(
-            name="Battery discharging energy",
-            unit="kWh",
-            value=battery_discharging_energy_in_kilowatt_hour,
-            tag=KpiTagEnumClass.BATTERY,
-        )
-        battery_losses_entry = KpiEntry(
-            name="Battery losses", unit="kWh", value=battery_losses_in_kilowatt_hour, tag=KpiTagEnumClass.BATTERY
-        )
 
         # update kpi collection dict
         self.kpi_collection_dict_unsorted.update(
@@ -424,9 +427,6 @@ class KpiGenerator(JSONWizard):
                 self_consumption_entry.name: self_consumption_entry.to_dict(),
                 self_consumption_rate_entry.name: self_consumption_rate_entry.to_dict(),
                 autarkie_rate_entry.name: autarkie_rate_entry.to_dict(),
-                battery_charging_entry.name: battery_charging_entry.to_dict(),
-                battery_discharging_entry.name: battery_discharging_entry.to_dict(),
-                battery_losses_entry.name: battery_losses_entry.to_dict(),
             }
         )
         return grid_injection_in_kilowatt_hour, self_consumption_in_kilowatt_hour, result_dataframe

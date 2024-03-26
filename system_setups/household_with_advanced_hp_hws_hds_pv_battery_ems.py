@@ -183,38 +183,10 @@ def setup_function(
 
     # -----------------------------------------------------------------------------------------------------------------
     # Add outputs to EMS
-
-    my_electricity_controller.add_component_output(
-        source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-        source_tags=[
-            lt.ComponentType.HEAT_PUMP_DHW,
-            lt.InandOutputType.ELECTRICITY_TARGET,
-        ],
-        source_weight=1,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        output_description="Target electricity for Heat Pump. ",
-    )
-
-    my_electricity_controller.add_component_output(
-        source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-        source_tags=[
-            lt.ComponentType.HEAT_PUMP_BUILDING,
-            lt.InandOutputType.ELECTRICITY_TARGET,
-        ],
-        source_weight=2,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        output_description="Target electricity for Heat Pump. ",
-    )
-
-    electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
-        source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-        source_tags=[
-            lt.ComponentType.BATTERY,
-            lt.InandOutputType.ELECTRICITY_TARGET,
-        ],
-        source_weight=3,
+    loading_power_input_for_battery_in_watt = my_electricity_controller.add_component_output(
+        source_output_name="LoadingPowerInputForBattery_",
+        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
+        source_weight=4,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         output_description="Target electricity for Battery Control. ",
@@ -224,7 +196,7 @@ def setup_function(
     # Connect Battery
     my_advanced_battery.connect_dynamic_input(
         input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
-        src_object=electricity_to_or_from_battery_target,
+        src_object=loading_power_input_for_battery_in_watt,
     )
 
     # =================================================================================================================================

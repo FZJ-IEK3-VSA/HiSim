@@ -441,7 +441,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             if output is not None:
                 outputs_sorted.append(output)
             else:
-                raise Exception("Dynamic input is not connected to dynamic output")
+                raise Exception(f"Dynamic input with source weight {source_weight} is not connected to dynamic output")
 
         production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
         consumption_uncontrolled_inputs = self.get_dynamic_inputs(

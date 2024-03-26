@@ -44,7 +44,8 @@ class CHPConfig(cp.ConfigBase):
     p_fuel: float
     #: demanded lower or upper heat vaule "Brennwert/Heizwert" of fuel input in kWh / kg
     h_fuel: float
-    
+    #: if fuel cell runs in standby, than it needs "p_el_percentage_standby_fuelcell" (%) electricity power of the fuelcell production power in %
+    p_el_percentage_standby_fuelcell: int 
 
     
     @staticmethod
@@ -68,7 +69,7 @@ class CHPConfig(cp.ConfigBase):
         
         config = CHPConfig(
          #   name="CHP", source_weight=1, use=lt.LoadTypes.HYDROGEN, p_el = fuel_cell_power, p_th = fuel_cell_power * (0.43 / 0.48), p_fuel=(1 / 0.43) * (fuel_cell_power * (0.43 / 0.48)),
-        name="CHP", source_weight=1, use=lt.LoadTypes.HYDROGEN, p_el = fuel_cell_power, p_th = fuel_cell_power * 0.5, p_fuel= (fuel_cell_power* (1 / 0.58)), h_fuel = 0.0, 
+        name="CHP", source_weight=1, use=lt.LoadTypes.HYDROGEN, p_el = fuel_cell_power, p_th = fuel_cell_power * 0.5, p_fuel= (fuel_cell_power* (1 / 0.58)), h_fuel = 0.0, p_el_percentage_standby_fuelcell = 0
 
         )
         return config
@@ -242,8 +243,16 @@ class SimpleCHP(cp.Component):
         elif mode == 2:     # Gives  the global Thermal Power of the Fuel Cell back, if fuel cell is turned on
             stsv.set_output_value(self.thermal_power_output_channel, self.state.state * self.config.p_th)
 
-        stsv.set_output_value(self.electricity_output_channel, self.state.state * self.config.p_el)
-        stsv.set_output_value(self.fuel_consumption_channel, self.state.state * self.p_fuel)
+
+        #fuel cell is turned off, is running, or is in standby: Decision, in which mode fuel cell is running:
+        if self.state.state == 99: #Fuel Cell is on standby, fuel cell is NOT heating in standby!
+        
+            stsv.set_output_value(self.electricity_output_channel,  self.config.p_el*self.config.p_el_percentage_standby_fuelcell/100)
+            stsv.set_output_value(self.fuel_consumption_channel,  0)
+        
+        else: # Fuel Cell is running OR is turned off! if running, fuel cell is ALSO heating
+            stsv.set_output_value(self.electricity_output_channel, self.state.state * self.config.p_el)
+            stsv.set_output_value(self.fuel_consumption_channel, self.state.state * self.p_fuel)
 
     def get_default_connections_from_chp_controller(self,) -> List[cp.ComponentConnection]:
         """Sets default connections of the controller in the Fuel Cell / CHP."""

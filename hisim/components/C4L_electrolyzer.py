@@ -56,9 +56,9 @@ class C4LElectrolyzerConfig(cp.ConfigBase):
     name: str
     loadtype: loadtypes.LoadTypes
     unit: loadtypes.Units
-    p_el: float #Electricity consumption of Electrolyzer in Watt
+    p_el: float #Electricity consumption of Electrolyzer if electrolyzer is in operating, in Watt
     output_description: str
-
+    p_el_percentage_standby_electrolyzer: int #if electrolyzer runs in standby, than it needs "p_el_percentage_standby_electrolyzer" (%) electricity power of the electrolyzer operating power 
     
     @staticmethod
     def get_default_config() -> "C4LElectrolyzerConfig":
@@ -69,6 +69,7 @@ class C4LElectrolyzerConfig(cp.ConfigBase):
             loadtype=loadtypes.LoadTypes.HEATING,
             unit=loadtypes.Units.WATT,
             output_description = "Electrolyzer E-Consumption",
+            p_el_percentage_standby_electrolyzer = 0,
 
         )
         return config
@@ -270,13 +271,20 @@ class C4LElectrolyzer(cp.Component):
 
         else:
             """Simulates the component."""
+            #Electrolyzer is running, is turned off, or is in standby:
 
-            hydrogen_production = self.config.p_el / (3600*40000) #umrechnung von Watt [=Joule/Sekunde, Leistung) p_el in  kg/s H2
-            stsv.set_output_value(self.hydrogen_output_channel, self.state.state * hydrogen_production) 
-            stsv.set_output_value(self.output_needed_electricity, self.state.state * self.config.p_el)
-            self.processed_state = self.state.clone() #Neu
-
-                
+            if self.state.state ==  0 or self.state.state == 1:
+                #Running or turned off
+                hydrogen_production = self.config.p_el / (3600*40000) #umrechnung von Watt [=Joule/Sekunde, Leistung) p_el in  kg/s H2
+                stsv.set_output_value(self.hydrogen_output_channel, self.state.state * hydrogen_production) 
+                stsv.set_output_value(self.output_needed_electricity, self.state.state * self.config.p_el)
+                self.processed_state = self.state.clone() #Neu
+            elif self.state.state == 99: #Standby Electrolyzer
+                #Running in standby, so electrolyzer is NOT producing hydrogen
+                hydrogen_production = 0
+                stsv.set_output_value(self.hydrogen_output_channel,  hydrogen_production) 
+                stsv.set_output_value(self.output_needed_electricity,  self.config.p_el*self.config.p_el_percentage_standby_electrolyzer/100)
+                self.processed_state = self.state.clone() #Neu
 
         # write values to state
 

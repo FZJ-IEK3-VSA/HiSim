@@ -79,7 +79,7 @@ class C4LelectrolyzerfuelcellpredictiveControllerConfig(ConfigBase):
     def get_default_config_electrolyzerfuelcell() -> "C4LelectrolyzerfuelcellpredictiveControllerConfig":
         """Returns default configuration for the CHP controller."""
         config = C4LelectrolyzerfuelcellpredictiveControllerConfig(                                                                                                                                                                                                                                                                                          
-            name="Electrolyzer FuelCell Controller", source_weight=1, use=LoadTypes.GAS,  h2_soc_upper_threshold_electrolyzer=0,h2_soc_lower_threshold_fuelcell = 0 , on_off_SOEC = 0, off_on_SOEC = 0, p_el_elektrolyzer = 0, fuel_cell_power = 0,minstandbytime_electrolyzer=0, minruntime_electrolyzer = 0,minstandbytime_fuelcell = 0,minruntime_fuelcell = 0,minbatterystateofcharge_electrolyzer_turnon=0, maxbatterystateofcharge_fuelcell_turnon = 0, Electrical_power_surplus_related_to_electrolzyer_percentage = 0, Surplus_electrical_amount_related_to_electrolzyer_in_prediction_horizon_in_percentage = 0, usebale_electrical_amount_of_fuelcell_related_to_fuelcell_output_in_prediction_horizon_in_percentage= 0,minbatterystateofcharge_let_electrolyzer_staysturnedon = 0, maxbatterystateofcharge_let_fuelcell_staysturnedon = 0, Surplus_electrical_amount_related_to_electrolzyer_in_minimum_standby_time_in_percentage = 0, Electrical_power_demand_related_to_fuelcell_percentage = 0, Usebale_electrical_amount_of_fuelcell_related_to_fuelcell_output_in_minimum_standby_time_in_percentage = 0)
+            name="Electrolyzer FuelCell Controller", source_weight=1, use=LoadTypes.GAS,  h2_soc_upper_threshold_electrolyzer=0,h2_soc_lower_threshold_fuelcell = 0 , on_off_SOEC = 0, off_on_SOEC = 0, p_el_elektrolyzer = 0, fuel_cell_power = 0,minstandbytime_electrolyzer=0, minruntime_electrolyzer = 0,minstandbytime_fuelcell = 0,minruntime_fuelcell = 0,minbatterystateofcharge_electrolyzer_turnon=0, maxbatterystateofcharge_fuelcell_turnon = 0, Electrical_power_surplus_related_to_electrolzyer_percentage = 0, Surplus_electrical_amount_related_to_electrolzyer_in_prediction_horizon_in_percentage = 0, Usebale_electrical_amount_of_fuelcell_related_to_fuelcell_output_in_prediction_horizon_in_percentage= 0,minbatterystateofcharge_let_electrolyzer_staysturnedon = 0, maxbatterystateofcharge_let_fuelcell_staysturnedon = 0, Surplus_electrical_amount_related_to_electrolzyer_in_minimum_standby_time_in_percentage = 0, Electrical_power_demand_related_to_fuelcell_percentage = 0, Usebale_electrical_amount_of_fuelcell_related_to_fuelcell_output_in_minimum_standby_time_in_percentage = 0)
         return config
 
 
@@ -408,9 +408,9 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
                         
                         if hydrogen_soc > self.config.h2_soc_upper_threshold_electrolyzer: #Is the hydrogen storage tank already filled above the upper limit?
                             '''Hydrogen tank is already filled up!'''
-                            self.state.RunElectrolyzer = 0 #electrolyzer is not running"off" because, there is not enough fuel cell in the tank
+                            self.state.RunElectrolyzer = 99 #electrolyzer is not running"off" because, there is not enough fuel cell in the tank
                             print('Hydrogen tank is already full')
-                            self.state.RunElectrolyzer = 0
+                            self.state.RunElectrolyzer = 99
                             self.state.deactivation_timestep_electrolyzer = timestep   
                             sys.exit()
                             
@@ -422,15 +422,15 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
 
 
                     else:
-                        #Elektrolyseur wird abgeschalten
+                        #Elektrolyseur wird in den Standby geschalten
                         '''
-                        There is NOT enoug useable electricity amount in the prediction horizon, which is min stand by time in this case, 
-                        to run the electrolyzer, so turn on if there is not to much hydrogen in the tank
+                        There is NOT enoug useable electricity amount in the prediction horizon/minimum stand by time in this case, 
+                        to run the electrolyzer
 
-                        So turn off Electrolyzer and save deactivation timestep!
+                        So turn Electrolyzer in standby mode and save deactivation timestep!
                         '''
                         self.state.deactivation_timestep_electrolyzer = timestep  
-                        self.state.RunElectrolyzer = 0 
+                        self.state.RunElectrolyzer = 99 
 
                 else:
                     
@@ -529,7 +529,7 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
                         
                         if hydrogen_soc > self.config.h2_soc_upper_threshold_electrolyzer: #Is the hydrogen storage tank already filled above the upper limit?
                             '''Hydrogen tank is already filled up!'''
-                            self.state.RunElectrolyzer = 0 #electrolyzer is not running"off" because, there is not enough fuel cell in the tank
+                            self.state.RunElectrolyzer = 0 #electrolyzer is not running"off" because, there is enough fuel cell in the tank
                             print('Hydrogen tank is already full')
                             self.state.RunElectrolyzer = 0 
                             sys.exit()
@@ -546,22 +546,22 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
         
                     else:
                         #Elektrolyseur läuft weiterhin auf Standby
-                        self.state.RunElectrolyzer = 0 
+                        self.state.RunElectrolyzer = 99 
 
 
                 else:
                     #Elektrolyseur läuft weiterhin auf Standby
-                    self.state.RunElectrolyzer = 0 
+                    self.state.RunElectrolyzer = 99 
                     
 
             else: 
                 #Elektrolyseur läuft weiterhin auf Standby
-                self.state.RunElectrolyzer = 0
+                self.state.RunElectrolyzer = 99
                 
 
         else:
             #Elektrolyseur läuft weiterhin auf Standby
-            self.state.RunElectrolyzer = 0
+            self.state.RunElectrolyzer = 99
 
     def turn_off_procedure_fuelcell(self, timestep, pv_prediction_watt, el_consumption_pred_onlyhouse_watt, BatteryStateOfCharge, General_PhotovoltaicDelivery, General_ElectricityConsumptiom, hydrogen_soc):
         ''' Turn off procedure started because Fuel Cell is already running
@@ -578,7 +578,7 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
             
             Is the Minimum state of charge of battery already reached to turn off Electrolyzer?
             '''
-            if BatteryStateOfCharge*100 < self.config.maxbatterystateofcharge_let_fuelcell_staysturnedon:
+            if BatteryStateOfCharge*100 < self.config.maxbatterystateofcharge_let_fuelcell_staysturnedon: # [ ]
                 '''
                 Fuel Cell stays turned on because battery state of charge threshold to turn off fuel cell is not reached
                 '''
@@ -666,7 +666,7 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
 
 
                     else:
-                        #Fuel Cell wird abgeschalten
+                        #Fuel Cell wird in Standby geschalten
                         '''
                         There is NOT enough electricity demand amount in the minimum standby time of fuel cell, 
                         which means, that the fuel cell will be turned off
@@ -674,7 +674,7 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
                 
                         '''
                         self.state.deactivation_timestep_fuelcell = timestep  
-                        self.state.RunFuelCell = 0
+                        self.state.RunFuelCell = 99 
                         self.state.mode = 0 #Needs the fuel cell: then the global thermal power is calculated; 0 means that global thermal power fuel cell is NOT calculated, 2 means, that the global thermal power is calculated
 
 
@@ -769,7 +769,7 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
                     ratio_inpercentage_useableenergyfromfuelcell = 0
                     ratio_inpercentage_useableenergyfromfuelcell = total_useable_fuelcell_energy_amount_in_prediction_horizon_wh/total_fuelcell_energy_output_amount_in_prediction_horizon_Wh *100
                     
-                    if ratio_inpercentage_useableenergyfromfuelcell >= self.config.usebale_electrical_amount_of_fuelcell_related_to_fuelcell_output_in_prediction_horizon_in_percentage:
+                    if ratio_inpercentage_useableenergyfromfuelcell >= self.config.Usebale_electrical_amount_of_fuelcell_related_to_fuelcell_output_in_prediction_horizon_in_percentage:
                         '''There is enough electricity demand amount in the prediction horizon, to run the fuel cell, so turn fuel cell on
                         
                         Start Fuel Cell and save the timestep when Fuel cell is started!
@@ -783,26 +783,26 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
         
                     else:
                         #Fuel Cell  läuft weiterhin auf Standby
-                        self.state.RunFuelCell = 0
+                        self.state.RunFuelCell = 99
                         self.state.mode = 0 #Needs the fuel cell: then the global thermal power is calculated; 0 means that global thermal power fuel cell is NOT calculated, 2 means, that the global thermal power is calculated
 
 
                 else:
                     #Fuel Cell  läuft weiterhin auf Standby
-                    self.state.RunFuelCell = 0 
+                    self.state.RunFuelCell = 99 
                     self.state.mode = 0 #Needs the fuel cell: then the global thermal power is calculated; 0 means that global thermal power fuel cell is NOT calculated, 2 means, that the global thermal power is calculated
 
 
             else: 
                 #Fuel Cell  läuft weiterhin auf Standby
-                self.state.RunFuelCell = 0
+                self.state.RunFuelCell = 99
                 self.state.mode = 0 #Needs the fuel cell: then the global thermal power is calculated; 0 means that global thermal power fuel cell is NOT calculated, 2 means, that the global thermal power is calculated
 
                 
 
         else:
             #Fuel Cell läuft weiterhin auf Standby
-            self.state.RunFuelCell = 0
+            self.state.RunFuelCell = 99
             self.state.mode = 0 #Needs the fuel cell: then the global thermal power is calculated; 0 means that global thermal power fuel cell is NOT calculated, 2 means, that the global thermal power is calculated
 
 
@@ -861,10 +861,9 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
                     #electrolyzer_or_fuelcell_mode = False --> Electrolyzer Season
                     #electrolyzer_or_fuelcell_mode = True --> Fuel Cell Season
             
-            prediction_timesteps = [6]
 
             if electrolyzer_or_fuelcell_mode == False: #ELECTROLYZER SEASON!!! 
-                self.state.RunFuelCell = 0
+                self.state.RunFuelCell = 0 #Fuel Cell is completely turned off
 
                 
                 if self.state.RunElectrolyzer == 1:
@@ -875,7 +874,7 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
                     
 
 
-                elif self.state.RunElectrolyzer == 0:
+                elif self.state.RunElectrolyzer == 0 or self.state.RunElectrolyzer == 99:
                     ##Turn On Procedure 
                     '''
                     The following turn_off_procedure function manipulates the 
@@ -893,28 +892,26 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
             
             else:    
                 #FUEL CELL SEASON!!!         
-                self.state.RunElectrolyzer = 0 #electrolyzer is not running"off" because, it is not the season, where the electrolyzer is allowed to run or there is not enough fuel cell in the tank
+                self.state.RunElectrolyzer = 0 # Electrolyzer is completely turned off which means, it is NOT running in standby
                 '''
                 Predictive Controll Fuel Cell: 
-                # [ ] Fuel Cell --> implementation of prediciton is not done until now
+                # [x] Fuel Cell --> implementation of prediciton is not done until now
                 '''
                 #Forecast needed       
                 if hydrogen_soc > self.config.h2_soc_lower_threshold_fuelcell:
                     
                     if self.state.RunFuelCell == 1:
                         self.turn_off_procedure_electrolyzer(timestep, pv_prediction_watt, el_consumption_pred_onlyhouse_watt, BatteryStateOfCharge, General_PhotovoltaicDelivery, General_ElectricityConsumptiom, hydrogen_soc)
-                        self.state.RunFuelCell = 1 #turn on
-                        self.state.mode = 2 #Needs the fuel cell: then the global thermal power is calculated
-                        stsv.set_output_value(self.chp_heatingmode_signal_channel, self.state.mode)
-                    elif self.state.RunFuellCell == 0:
-                        self.turn_on_procedure_fuelcell(self, timestep, pv_prediction_watt, el_consumption_pred_onlyhouse_watt, BatteryStateOfCharge, General_PhotovoltaicDelivery, General_ElectricityConsumptiom, hydrogen_soc):
+
+                    elif self.state.RunFuelCell == 0 or self.state.RunFuelCell == 99:
+                        self.turn_on_procedure_fuelcell(timestep, pv_prediction_watt, el_consumption_pred_onlyhouse_watt, BatteryStateOfCharge, General_PhotovoltaicDelivery, General_ElectricityConsumptiom, hydrogen_soc)
 
 
 
 
                 else:
                     #There is not enough Hydrogen available in storage
-                    self.state.RunFuelCell = 0
+                    self.state.RunFuelCell = 0 #Fuel Cell wird abgeschalten!
                     self.state.mode = 0 #Needs the fuel cell: then the global thermal power is calculated
 
 

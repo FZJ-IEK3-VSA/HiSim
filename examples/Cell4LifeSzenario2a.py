@@ -224,7 +224,7 @@ def Cell4Life(
     electrolyzer_config = C4L_electrolyzer.C4LElectrolyzerConfig.get_default_config()
     electrolyzer_config.source_weight = input_variablen["electrolyzer_source_weight"]["value"]
     electrolyzer_config.p_el = input_variablen["p_el_elektrolyzer"]["value"]
-
+    electrolyzer_config.p_el_percentage_standby_electrolyzer = input_variablen["p_el_percentage_standby_electrolyzer"]["value"]
     my_electrolyzer = C4L_electrolyzer.C4LElectrolyzer(
         my_simulation_parameters=my_simulation_parameters, config=electrolyzer_config
     )
@@ -234,7 +234,7 @@ def Cell4Life(
     chp_config = generic_CHP.CHPConfig.get_default_config_fuelcell_p_el_based(fuel_cell_power=input_variablen["fuel_cell_power"]["value"])
     chp_config.source_weight = input_variablen["init_source_weight_chp"]["value"]
     chp_config.h_fuel = input_variablen["h_fuel"]["value"]
-
+    chp_config.p_el_percentage_standby_fuelcell = input_variablen["p_el_percentage_standby_fuelcell"]["value"]
 
     my_chp = generic_CHP.SimpleCHP(
         my_simulation_parameters=my_simulation_parameters, config=chp_config, 
@@ -403,6 +403,8 @@ def InputParameter():
     fuel_cell_power  = FuelCellPowerW #Electricity Power of Fuel Cell Power in Watt
     fuel_cell_powerUnit = FuelCellPowerWUnit
     
+    p_el_percentage_standby_fuelcell = 10 #If fuel cell is running in standby, it needs so much electricity power in % of its electricitiy production power if it is running
+    p_el_percentage_standby_fuelcellUnit = "%"
 
     del BatteryCapkWh, FuelCellPowerW, BatteryCapkWhUnit, FuelCellPowerWUnit 
     
@@ -432,6 +434,9 @@ def InputParameter():
     
     p_el_elektrolyzer = fuel_cell_power*2.1 #Electrical Operating Power in Watt
     p_el_elektrolyzerUnit = "W"
+
+    p_el_percentage_standby_electrolyzer = 10 #if electrolyzer runs in standby, than it needs "p_el_percentage_standby_electrolyzer" (%) electricity power of the operating power 
+    p_el_percentage_standby_electrolyzerUnit = "%"
     
     electrolyzer_source_weight = 999
     electrolyzer_source_weightUnit = "-"
@@ -713,6 +718,15 @@ def InputParameter():
             "unit": Usebale_electrical_amount_of_fuelcell_related_to_fuelcell_output_in_minimum_standby_time_in_percentageUnit,
         },
 
+        "p_el_percentage_standby_electrolyzer": {
+            "value": p_el_percentage_standby_electrolyzer,
+            "unit": p_el_percentage_standby_electrolyzerUnit,
+        },
+
+        "p_el_percentage_standby_fuelcell": {
+            "value": p_el_percentage_standby_fuelcell,
+            "unit": p_el_percentage_standby_fuelcellUnit,
+        },
 
 
     }

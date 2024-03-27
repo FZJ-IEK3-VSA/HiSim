@@ -53,7 +53,7 @@ def test_heat_pump_hplib():
         consumption=Quantity(0, KilowattHour),
     )
     heatpump = HeatPumpHplib(config=heatpump_config, my_simulation_parameters=simpars)
-    heatpump.state = HeatPumpState(time_on=0, time_off=0, time_on_cooling=0, on_off_previous=1)
+    heatpump.state = HeatPumpState(time_on_heating=0, time_off=0, time_on_cooling=0, on_off_previous=1)
 
     number_of_outputs = fft.get_number_of_outputs([on_off_switch, t_in_primary, t_in_secondary, t_amb, heatpump])
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
@@ -79,5 +79,5 @@ def test_heat_pump_hplib():
     assert 1.4136206588052005 == stsv.values[heatpump.cop.global_index]
     assert t_out.value == stsv.values[heatpump.t_out.global_index]
     assert 0.47619047619047616 == stsv.values[heatpump.m_dot.global_index]
-    assert 60 == stsv.values[heatpump.time_on.global_index]
+    assert 60 == stsv.values[heatpump.time_on_heating.global_index]
     assert 0 == stsv.values[heatpump.time_off.global_index]

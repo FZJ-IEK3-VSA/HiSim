@@ -42,7 +42,7 @@ class Simulator:
         module_filename: str,
         my_simulation_parameters: Optional[SimulationParameters],
         setup_function: str = "setup_function",
-        my_module_config_path: Optional[str] = None,
+        my_module_config: Optional[str] = None,
     ) -> None:
         """Initializes the simulator class and creates the result directory."""
 
@@ -56,7 +56,7 @@ class Simulator:
         self.setup_function = setup_function
         self.module_filename = module_filename
         self.module_directory = module_directory
-        self.my_module_config_path = my_module_config_path
+        self.my_module_config = my_module_config
         self.simulation_repository = sim_repository.SimRepository()
         self.results_data_frame: pd.DataFrame
         self.iteration_logging_path: str = ""
@@ -193,7 +193,7 @@ class Simulator:
                     module_directory=self.module_directory,
                     model_name=self.module_filename,
                     variant_name=None,
-                    hash_number=None,
+                    scenario_hash_string=None,
                     sorting_option=SortingOptionEnum.FLAT,
                 )
                 self._simulation_parameters.result_directory = ResultPathProviderSingleton().get_result_directory_name()
@@ -337,7 +337,7 @@ class Simulator:
             mode=1,
             setup_function=self.setup_function,
             module_filename=self.module_filename,
-            my_module_config_path=self.my_module_config_path,
+            my_module_config=self.my_module_config,
             execution_time=execution_time,
             results_monthly=results_merged_monthly,
             results_cumulative=results_merged_cumulative,

@@ -221,8 +221,8 @@ def setup_function(
     else:
         Path(utils.HISIMPATH["utsp_results"]).mkdir(parents=False, exist_ok=False)
 
-    if my_sim.my_module_config_path:
-        my_config = HouseholdAdvancedHPDieselCarConfig.load_from_json(my_sim.my_module_config_path)
+    if my_sim.my_module_config:
+        my_config = HouseholdAdvancedHPDieselCarConfig.load_from_json(my_sim.my_module_config)
     else:
         my_config = HouseholdAdvancedHPDieselCarConfig.get_default()
 

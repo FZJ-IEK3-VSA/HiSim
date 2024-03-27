@@ -20,7 +20,7 @@ class PostProcessingDataTransfer:  # noqa: too-few-public-methods
         mode: Any,
         setup_function: Any,
         module_filename: Any,
-        my_module_config_path: Any,
+        my_module_config: Any,
         execution_time: Any,
         results_monthly: Any,
         results_hourly: Any,
@@ -38,7 +38,7 @@ class PostProcessingDataTransfer:  # noqa: too-few-public-methods
         self.mode = mode
         self.setup_function = setup_function
         self.module_filename = module_filename
-        self.my_module_config_path = my_module_config_path
+        self.my_module_config = my_module_config
         self.execution_time = execution_time
         self.results_monthly = results_monthly
         self.results_hourly = results_hourly

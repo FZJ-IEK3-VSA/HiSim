@@ -198,8 +198,8 @@ def setup_function(
     """
     Load system setup parameters from json or take defaults.
     """
-    if my_sim.my_module_config_path:
-        my_config = HouseholdGasHeaterConfig.load_from_json(my_sim.my_module_config_path)
+    if my_sim.my_module_config:
+        my_config = HouseholdGasHeaterConfig.load_from_json(my_sim.my_module_config)
     else:
         my_config = HouseholdGasHeaterConfig.get_default()
 

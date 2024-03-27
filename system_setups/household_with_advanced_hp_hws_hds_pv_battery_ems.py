@@ -61,8 +61,6 @@ def setup_function(
     hp_controller_mode = 2  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
     set_heating_threshold_outside_temperature_for_heat_pump_in_celsius = 16.0
     set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = 22.0
-    temperature_offset_for_state_conditions_in_celsius = 5.0
-
     # Set Heat Pump
     group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
     heating_reference_temperature_in_celsius: float = -7.0  # t_in
@@ -127,7 +125,6 @@ def setup_function(
             mode=hp_controller_mode,
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_pump_in_celsius,
             set_cooling_threshold_outside_temperature_in_celsius=set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius,
-            temperature_offset_for_state_conditions_in_celsius=temperature_offset_for_state_conditions_in_celsius,
             heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
         ),
         my_simulation_parameters=my_simulation_parameters,
@@ -186,38 +183,10 @@ def setup_function(
 
     # -----------------------------------------------------------------------------------------------------------------
     # Add outputs to EMS
-
-    my_electricity_controller.add_component_output(
-        source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-        source_tags=[
-            lt.ComponentType.HEAT_PUMP_DHW,
-            lt.InandOutputType.ELECTRICITY_TARGET,
-        ],
-        source_weight=1,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        output_description="Target electricity for Heat Pump. ",
-    )
-
-    my_electricity_controller.add_component_output(
-        source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-        source_tags=[
-            lt.ComponentType.HEAT_PUMP_BUILDING,
-            lt.InandOutputType.ELECTRICITY_TARGET,
-        ],
-        source_weight=2,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        output_description="Target electricity for Heat Pump. ",
-    )
-
-    electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
-        source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-        source_tags=[
-            lt.ComponentType.BATTERY,
-            lt.InandOutputType.ELECTRICITY_TARGET,
-        ],
-        source_weight=3,
+    loading_power_input_for_battery_in_watt = my_electricity_controller.add_component_output(
+        source_output_name="LoadingPowerInputForBattery_",
+        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
+        source_weight=4,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         output_description="Target electricity for Battery Control. ",
@@ -227,7 +196,7 @@ def setup_function(
     # Connect Battery
     my_advanced_battery.connect_dynamic_input(
         input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
-        src_object=electricity_to_or_from_battery_target,
+        src_object=loading_power_input_for_battery_in_watt,
     )
 
     # =================================================================================================================================

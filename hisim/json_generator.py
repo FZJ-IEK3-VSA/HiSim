@@ -1,6 +1,6 @@
 """ Generates a Json file for the json executor. """
 # clean
-from typing import Any, Optional, List, Type, Dict
+from typing import Any, Optional, List, Type, Dict, Union
 import json
 from dataclasses import dataclass, field
 from dataclass_wizard import JSONWizard
@@ -59,10 +59,15 @@ class JsonConfigurationGenerator:
         """Sets the simulation parameters."""
         self.config_file.my_simulation_parameters = my_simulation_parameters
 
-    def set_module_config(self, my_module_config_path: str) -> None:
+    def set_module_config(self, my_module_config: Union[str, Dict]) -> None:
         """Sets the module config which is was used to configure the example module."""
-        with open(my_module_config_path.rstrip("\r"), encoding="unicode_escape") as openfile:  # type: ignore
-            config_dict = json.load(openfile)
+        if isinstance(my_module_config, str):
+            with open(my_module_config.rstrip("\r"), encoding="unicode_escape") as openfile:  # type: ignore
+                config_dict = json.load(openfile)
+        elif isinstance(my_module_config, Dict):
+            config_dict = my_module_config
+        else:
+            raise TypeError(f"The passed argument has type {type(my_module_config)} but a str or Dict is expected.")
         self.config_file.my_module_config = config_dict
 
     def set_scenario_data_information_dict(

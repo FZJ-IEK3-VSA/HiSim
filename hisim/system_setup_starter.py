@@ -107,11 +107,11 @@ if __name__ == "__main__":
     (
         my_path_to_module,
         my_simulation_parameters,
-        my_module_config_path,
+        my_module_config,
     ) = make_system_setup(parameters_json=my_parameters_json, result_directory=RESULT_DIRECTORY)
 
     main(
         my_path_to_module,
         my_simulation_parameters,
-        my_module_config_path,
+        my_module_config,
     )

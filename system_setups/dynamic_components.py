@@ -120,18 +120,18 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
     my_cl2.add_component_input_and_connect(
         source_object_name=my_advanced_battery_1.component_name,
-        source_component_output=my_advanced_battery_1.AcBatteryPower,
+        source_component_output=my_advanced_battery_1.AcBatteryPowerUsed,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_REAL],
+        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
         source_weight=1,
     )
     my_cl2.add_component_input_and_connect(
         source_object_name=my_advanced_battery_2.component_name,
-        source_component_output=my_advanced_battery_2.AcBatteryPower,
+        source_component_output=my_advanced_battery_2.AcBatteryPowerUsed,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_REAL],
+        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
         source_weight=2,
     )
 
@@ -166,7 +166,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         source_component_output=my_advanced_fuel_cell_1.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        source_tags=[lt.ComponentType.FUEL_CELL, lt.InandOutputType.ELECTRICITY_REAL],
+        source_tags=[lt.ComponentType.FUEL_CELL, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
         source_weight=3,
     )
     my_cl2.add_component_input_and_connect(
@@ -174,7 +174,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         source_component_output=my_advanced_fuel_cell_2.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        source_tags=[lt.ComponentType.FUEL_CELL, lt.InandOutputType.ELECTRICITY_REAL],
+        source_tags=[lt.ComponentType.FUEL_CELL, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
         source_weight=4,
     )
 

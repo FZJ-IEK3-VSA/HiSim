@@ -331,7 +331,10 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 source_component_field_name=HeatPumpHplib.ElectricalInputPower,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
-                source_tags=[lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
+                source_tags=[
+                    lt.ComponentType.HEAT_PUMP_BUILDING,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
+                ],
                 source_weight=2,
             )
         )
@@ -447,7 +450,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         consumption_uncontrolled_inputs = self.get_dynamic_inputs(
             tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
         )
-        consumption_ems_controlled_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED])
+        consumption_ems_controlled_inputs = self.get_dynamic_inputs(
+            tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+        )
         return (
             inputs_sorted,
             component_types_sorted,
@@ -505,13 +510,17 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
             )
 
+        # these are electricity CONSUMERS
         elif current_component_type in [
             lt.ComponentType.RESIDENTS,
             lt.ComponentType.ELECTROLYZER,
             lt.ComponentType.SMART_DEVICE,
             lt.ComponentType.CAR_BATTERY,
+            lt.ComponentType.HEAT_PUMP_DHW,
+            lt.ComponentType.HEAT_PUMP,
+            lt.ComponentType.HEAT_PUMP_BUILDING,
         ]:
-            # if surplus electricity is available a part of the component's consumption can be covered onsite
+            # if surplus electricity is available, a part of the component's consumption can be covered onsite
             if available_surplus_electricity_in_watt > 0:
                 available_surplus_electricity_in_watt = (
                     available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
@@ -526,66 +535,59 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
                 )
 
-        # CHP produces electricity which is added to available surplus electricity
+        # these are electricity PRODUCERS
         elif current_component_type == lt.ComponentType.CHP:
             available_surplus_electricity_in_watt = (
                 available_surplus_electricity_in_watt + electricity_demand_from_current_input_component_in_watt
             )
             stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
 
-        elif current_component_type in [
-            lt.ComponentType.HEAT_PUMP_DHW,
-            lt.ComponentType.HEAT_PUMP,
-        ]:  # Todo: lt.ComponentType.HEAT_PUMP is from old version, kept here just to avoid errors
-            # if surplus electricity is available the set temperature for the dhw storage is increased
-            if available_surplus_electricity_in_watt > 0:
-                stsv.set_output_value(
-                    self.domestic_hot_water_storage_temperature_modifier,
-                    self.domestic_hot_water_storage_temperature_offset_value,
-                )
-                available_surplus_electricity_in_watt = (
-                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
-                )
-                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
-            # otherwise set temperatures are not increased and all of the component's consumption is taken from grid
-            else:
-                stsv.set_output_value(self.domestic_hot_water_storage_temperature_modifier, 0)
-                stsv.set_output_value(
-                    output=current_output, value=-electricity_demand_from_current_input_component_in_watt
-                )
-                available_surplus_electricity_in_watt = (
-                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
-                )
-
-        elif current_component_type == lt.ComponentType.HEAT_PUMP_BUILDING:
-            # if surplus electricity is available the set temperatures for the space heating storage and for the building indoor temperature are increased
-            if available_surplus_electricity_in_watt > 0:
-                stsv.set_output_value(
-                    self.building_indoor_temperature_modifier,
-                    self.building_indoor_temperature_offset_value,
-                )
-                stsv.set_output_value(
-                    self.space_heating_water_storage_temperature_modifier,
-                    self.space_heating_water_storage_temperature_offset_value,
-                )
-                available_surplus_electricity_in_watt = (
-                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
-                )
-                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
-            # otherwise set temperatures are not increased and all of the component's consumption is taken from grid
-            else:
-                stsv.set_output_value(self.building_indoor_temperature_modifier, 0)
-                stsv.set_output_value(self.space_heating_water_storage_temperature_modifier, 0)
-                stsv.set_output_value(
-                    output=current_output, value=-electricity_demand_from_current_input_component_in_watt
-                )
-                available_surplus_electricity_in_watt = (
-                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
-                )
-
         return available_surplus_electricity_in_watt
 
-    def optimize_own_consumption_iterative(
+    def modify_set_temperatures_for_components_in_case_of_surplus_electricity(
+        self,
+        available_surplus_electricity_in_watt: float,
+        stsv: cp.SingleTimeStepValues,
+        inputs_sorted: List[ComponentInput],
+        component_types_sorted: List[lt.ComponentType],
+    ) -> None:
+        """In case surplus electricity is available, modify set temperatures for space heating and domestic hot water heat pumps.
+
+        Like this, the heat pumps will start heating up the water storages and the surplus energy can be stored as thermal energy.
+        See also SG-ready heatpumps: https://de.gridx.ai/wissen/sg-ready.
+
+        The temperature modification outputs go to the heat pumps, the heat distribution system and the building component (see network charts).
+        """
+        for index in range(len(inputs_sorted)):
+            current_component_type = component_types_sorted[index]
+
+            if current_component_type == lt.ComponentType.HEAT_PUMP_BUILDING:
+                if available_surplus_electricity_in_watt > 0:
+                    stsv.set_output_value(
+                        self.building_indoor_temperature_modifier,
+                        self.building_indoor_temperature_offset_value,
+                    )
+                    stsv.set_output_value(
+                        self.space_heating_water_storage_temperature_modifier,
+                        self.space_heating_water_storage_temperature_offset_value,
+                    )
+                else:
+                    stsv.set_output_value(self.building_indoor_temperature_modifier, 0)
+                    stsv.set_output_value(self.space_heating_water_storage_temperature_modifier, 0)
+
+            elif current_component_type in [
+                lt.ComponentType.HEAT_PUMP_DHW,
+                lt.ComponentType.HEAT_PUMP,
+            ]:
+                if available_surplus_electricity_in_watt > 0:
+                    stsv.set_output_value(
+                        self.domestic_hot_water_storage_temperature_modifier,
+                        self.domestic_hot_water_storage_temperature_offset_value,
+                    )
+                else:
+                    stsv.set_output_value(self.domestic_hot_water_storage_temperature_modifier, 0)
+
+    def distribute_available_surplus_electricity_iterative(
         self,
         available_surplus_electricity_in_watt: float,
         stsv: cp.SingleTimeStepValues,
@@ -593,7 +595,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         component_types_sorted: List[lt.ComponentType],
         outputs_sorted: List[ComponentOutput],
     ) -> float:
-        """Evaluates available suplus electricity component by component, iteratively, and sends updated signals back."""
+        """Evaluates available surplus electricity component by component, iteratively, and sends updated signals back."""
 
         for index, single_input_sorted in enumerate(inputs_sorted):
             single_component_type_sorted = component_types_sorted[index]
@@ -606,6 +608,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 current_input=single_input_sorted,
                 current_output=single_output_sorted,
             )
+
         return available_surplus_electricity_in_watt
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
@@ -637,12 +640,18 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             self.state.production_in_watt - self.state.consumption_uncontrolled_in_watt
         )
         if self.strategy == "optimize_own_consumption":
-            available_surplus_electricity_in_watt = self.optimize_own_consumption_iterative(
+            available_surplus_electricity_in_watt = self.distribute_available_surplus_electricity_iterative(
                 available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
                 stsv=stsv,
                 inputs_sorted=self.inputs_sorted,
                 component_types_sorted=self.component_types_sorted,
                 outputs_sorted=self.outputs_sorted,
+            )
+            self.modify_set_temperatures_for_components_in_case_of_surplus_electricity(
+                available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
+                stsv=stsv,
+                inputs_sorted=self.inputs_sorted,
+                component_types_sorted=self.component_types_sorted,
             )
 
         stsv.set_output_value(self.total_electricity_to_or_from_grid, available_surplus_electricity_in_watt)

@@ -309,6 +309,7 @@ def test_house(
     print("battery charging energy ", battery_charging_energy_in_kilowatt_hour)
     print("battery discharging energy ", battery_discharging_energy_in_kilowatt_hour)
     print("battery losses ", battery_losses_in_kilowatt_hour)
+    print("\n")
 
     # Get total consumptions of components
     residents_total_consumption_kpi_in_kilowatt_hour = jsondata["Residents"][
@@ -327,6 +328,10 @@ def test_house(
         + domestic_hot_water_heatpump_total_consumption_kpi_in_kilowatt_hour
         + battery_losses_in_kilowatt_hour
     )
+    print("occupancy total consumption ", residents_total_consumption_kpi_in_kilowatt_hour)
+    print("sh hp total consumption ", space_heating_heatpump_total_consumption_kpi_in_kilowatt_hour)
+    print("dhw hp total consumption ", domestic_hot_water_heatpump_total_consumption_kpi_in_kilowatt_hour)
+    print("\n")
 
     # Get grid consumptions of components
     residents_grid_consumption_kpi_in_kilowatt_hour = jsondata["Residents"][
@@ -344,6 +349,11 @@ def test_house(
         + domestic_hot_water_heatpump_grid_consumption_kpi_in_kilowatt_hour
         - battery_discharging_energy_in_kilowatt_hour
     )
+
+    print("occupancy grid consumption ", residents_grid_consumption_kpi_in_kilowatt_hour)
+    print("sh hp grid consumption ", space_heating_heatpump_grid_consumption_kpi_in_kilowatt_hour)
+    print("dhw hp grid consumption ", domestic_hot_water_heatpump_grid_consumption_kpi_in_kilowatt_hour)
+    print("\n")
 
     # Get EMS output TotalElectricityConsumption
     simulation_results_ems_total_consumption_in_watt = my_sim.results_data_frame[

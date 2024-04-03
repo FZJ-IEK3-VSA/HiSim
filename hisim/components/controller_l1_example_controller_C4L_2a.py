@@ -65,7 +65,7 @@ class SimpleController(Component):
     H2Storage_ElectricityConsumption = "StorageElectricityConsumption" #W (richtig??)
     General_PhotovoltaicDelivery = "CSV Profile Photovoltaic Electricity Delivery Input" #W
     CHP_ElectricityDelivery = "Fuel Cell/CHP Electricity Delivery Input" #W
-    
+    CHP_ElectricityStandbyConsumption = "Fuel Cell/CHP Electricity Standby Consumption Input" #W
     
     #Battery Inputs
     BatteryStateOfCharge = "Battery State of Charge 0...1" # [0..1] State of charge
@@ -105,6 +105,15 @@ class SimpleController(Component):
         )
 
         #Electrolyzer Electricity Consumption 
+        self.Electrolyzer_ElectricityConsumptionInput: ComponentInput = self.add_input(
+            self.component_name,
+            SimpleController.Electrolyzer_ElectricityConsumption,
+            lt.LoadTypes.ELECTRICITY,
+            lt.Units.WATT,
+            True,
+        )
+
+        #Fuel Cell Standby Electricity Consumption 
         self.Electrolyzer_ElectricityConsumptionInput: ComponentInput = self.add_input(
             self.component_name,
             SimpleController.Electrolyzer_ElectricityConsumption,

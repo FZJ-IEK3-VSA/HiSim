@@ -403,6 +403,7 @@ def InputParameter():
     fuel_cell_power  = FuelCellPowerW #Electricity Power of Fuel Cell Power in Watt
     fuel_cell_powerUnit = FuelCellPowerWUnit
     
+    # [ ] Change to fuel consumption if it is in standby!
     p_el_percentage_standby_fuelcell = 10 #If fuel cell is running in standby, it needs so much electricity power in % of its electricitiy production power if it is running
     p_el_percentage_standby_fuelcellUnit = "%"
 
@@ -487,7 +488,7 @@ def InputParameter():
     h2storage_energy_for_discharge_based_on_massflow_h_fuel = 0
     h2storage_energy_for_discharge_based_on_massflow_h_fuelUnit = "%" #of given h_fuel heat value
     #operation
-    h2storage_energy_for_operation = 0 #in Watt, energy demand just for operation, if there isb fuel stored in the tank; this energy amount is always added to charging & discharging energy; if no fuel is in the tank, this energy is not considered! (h2 storage does not need energy)
+    h2storage_energy_for_operation = 0 #in Watt, energy demand just for operation, if there is fuel stored in the tank; this energy amount is always added to charging & discharging energy; if no fuel is in the tank, this energy is not considered! (h2 storage does not need energy)
     h2storage_energy_for_operationUnit = "W" 
 
     #Predictive Controller Fuel Cell Electrolyzer factors
@@ -500,13 +501,13 @@ def InputParameter():
     minbatterystateofcharge_electrolyzer_turnon = 80 #minimal battery state of charge, which is necessary, to turn on electrolyzer... in % 
     minbatterystateofcharge_electrolyzer_turnonUnit = "%" 
 
-    minbatterystateofcharge_let_electrolyzer_staysturnedon = 0 #Minimal battery state of charge, which is necessary, that electrolyzer stays turned on, in %
+    minbatterystateofcharge_let_electrolyzer_staysturnedon = 0.1 #Minimal battery state of charge, which is necessary, that electrolyzer stays turned on, in %
     minbatterystateofcharge_let_electrolyzer_staysturnedonUnit = "%"
 
     maxbatterystateofcharge_fuelcell_turnon = 80 #maximum battery state of charge; if the actual battery state of charge is above this level, then the fuel cell will not be turned on
     maxbatterystateofcharge_fuelcell_turnonUnit = "%"
 
-    maxbatterystateofcharge_let_fuelcell_staysturnedon = 100 #Maximum battery state of charge; if that threshold is exceeded, then 
+    maxbatterystateofcharge_let_fuelcell_staysturnedon = 100 #Maximum battery state of charge; if that threshold is exceeded, then the electrolyseur will be turned off
     maxbatterystateofcharge_let_fuelcell_staysturnedonUnit = "%"
     #FOLLOWING FACTORS Electrolyzer:
     #****

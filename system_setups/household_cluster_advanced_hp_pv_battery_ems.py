@@ -194,8 +194,7 @@ def setup_function(
     my_photovoltaic_system_config.tilt = tilt
 
     my_photovoltaic_system = generic_pv_system.PVSystem(
-        config=my_photovoltaic_system_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_photovoltaic_system_config, my_simulation_parameters=my_simulation_parameters,
     )
     # Add to simulator
     my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
@@ -207,10 +206,10 @@ def setup_function(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
+    # my_heat_distribution_controller_config.heating_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_heat_distribution_controller_config,
+        my_simulation_parameters=my_simulation_parameters, config=my_heat_distribution_controller_config,
     )
     my_hds_controller_information = heat_distribution_system.HeatDistributionControllerInformation(
         config=my_heat_distribution_controller_config
@@ -219,16 +218,13 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
     # Build Heat Pump Controller
-    my_heat_pump_controller_config = (
-        advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(
-            heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
-        )
+    my_heat_pump_controller_config = advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(
+        heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
     )
     my_heat_pump_controller_config.mode = hp_controller_mode
 
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
-        config=my_heat_pump_controller_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_pump_controller_config, my_simulation_parameters=my_simulation_parameters,
     )
     # Add to simulator
     my_sim.add_component(my_heat_pump_controller, connect_automatically=True)
@@ -240,8 +236,7 @@ def setup_function(
     )
 
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
-        config=my_heat_pump_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_pump_config, my_simulation_parameters=my_simulation_parameters,
     )
     # Add to simulator
     my_sim.add_component(my_heat_pump, connect_automatically=True)
@@ -252,8 +247,7 @@ def setup_function(
         water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
-        config=my_heat_distribution_system_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_distribution_system_config, my_simulation_parameters=my_simulation_parameters,
     )
     # Add to simulator
     my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
@@ -266,29 +260,22 @@ def setup_function(
         water_mass_flow_rate_from_hds_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
     )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
-        config=my_simple_heat_water_storage_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_simple_heat_water_storage_config, my_simulation_parameters=my_simulation_parameters,
     )
     # Add to simulator
     my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)
 
     # Build DHW (this is taken from household_3_advanced_hp_diesel-car_pv_battery.py)
     my_dhw_heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
-        number_of_apartments=my_building_information.number_of_apartments,
-        default_power_in_watt=6000,
+        number_of_apartments=my_building_information.number_of_apartments, default_power_in_watt=6000,
     )
 
-    my_dhw_heatpump_controller_config = (
-        controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-            name="DHWHeatpumpController"
-        )
+    my_dhw_heatpump_controller_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
+        name="DHWHeatpumpController"
     )
 
-    my_dhw_storage_config = (
-        generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
-            number_of_apartments=my_building_information.number_of_apartments,
-            default_volume_in_liter=450,
-        )
+    my_dhw_storage_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
+        number_of_apartments=my_building_information.number_of_apartments, default_volume_in_liter=450,
     )
     my_dhw_storage_config.compute_default_cycle(
         temperature_difference_in_kelvin=my_dhw_heatpump_controller_config.t_max_heating_in_celsius
@@ -300,8 +287,7 @@ def setup_function(
     )
 
     my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_dhw_heatpump_controller_config,
+        my_simulation_parameters=my_simulation_parameters, config=my_dhw_heatpump_controller_config,
     )
 
     my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
@@ -333,8 +319,7 @@ def setup_function(
         )
 
         my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_electricity_controller_config,
+            my_simulation_parameters=my_simulation_parameters, config=my_electricity_controller_config,
         )
 
         # Build Battery
@@ -342,8 +327,7 @@ def setup_function(
             total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt
         )
         my_advanced_battery = advanced_battery_bslib.Battery(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_advanced_battery_config,
+            my_simulation_parameters=my_simulation_parameters, config=my_advanced_battery_config,
         )
 
         # -----------------------------------------------------------------------------------------------------------------
@@ -402,8 +386,7 @@ def setup_function(
         further_result_folder_description = "default_config"
 
     SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
-        entry=f"{scenario_hash_string}",
+        key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME, entry=f"{scenario_hash_string}",
     )
 
     ResultPathProviderSingleton().set_important_result_path_information(
@@ -412,13 +395,13 @@ def setup_function(
         further_result_folder_description=os.path.join(
             *[
                 further_result_folder_description,
-                f"PV_{share_of_maximum_pv_power}",
+                f"PV-{share_of_maximum_pv_power}-hds-{my_hds_controller_information.heat_distribution_system_type}-hpc-mode-{hp_controller_mode}",
                 f"bui-{building_indoor_temperature_offset_value}-"
                 f"dhw-{domestic_hot_water_storage_temperature_offset_value}-"
                 f"sh-{space_heating_water_storage_temperature_offset_value}",
             ]
         ),
-        variant_name=f"{my_hds_controller_information.heat_distribution_system_type}-hp_mode_{hp_controller_mode}",
+        variant_name="_",
         scenario_hash_string=scenario_hash_string,
         sorting_option=sorting_option,
     )

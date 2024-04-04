@@ -2140,7 +2140,6 @@ class BuildingInformation:
         ) = self.scaling_over_conditioned_floor_area(
             conditioned_floor_area_in_m2=conditioned_floor_area_in_m2_reference,
             rooftop_area_in_m2=rooftop_area_in_m2_reference,
-            number_of_storeys=number_of_storeys,
             room_height_in_m=room_height_in_m,
             buildingdata=self.buildingdata,
         )
@@ -2225,7 +2224,6 @@ class BuildingInformation:
         self,
         conditioned_floor_area_in_m2: float,
         rooftop_area_in_m2: float,
-        number_of_storeys: float,
         room_height_in_m: float,
         buildingdata: Any,
     ) -> Tuple[float, List, List, float, List, float, Any]:
@@ -2350,7 +2348,6 @@ class BuildingInformation:
             scaled_rooftop_area_in_m2,
             buildingdata,
         )
-
 
     def get_some_reference_data_from_tabula(
         self, buildingdata: Any, scaled_conditioned_floor_area_in_m2: float

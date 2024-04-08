@@ -75,6 +75,7 @@ class PostProcessor:
                 PostProcessingOptions.COMPUTE_OPEX,
                 PostProcessingOptions.COMPUTE_CAPEX,
                 PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL,
+                PostProcessingOptions.MAKE_OPERATION_RESULTS_FOR_WEBTOOL,
                 PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON,
                 PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON,
             }

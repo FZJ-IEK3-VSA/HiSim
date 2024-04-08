@@ -35,7 +35,7 @@ def ControllSheetExcel(excelfilepathresults3):
     EnergyInputData9 = []
     EnergyInputData10 = []
     EnergyInputData11 = []
-
+    EnergyInputData12 = []
     # Load data from "-_Current" (column 1 & 2) and add the collected data to list
     csv_datei1 = os.path.join(path, 'CSV_PVComponent.csv')
     with open(csv_datei1, 'r') as csvfile:
@@ -128,12 +128,18 @@ def ControllSheetExcel(excelfilepathresults3):
         for row in csvreader:
             EnergyInputData11.append(row[1])
 
+    # Load data from "PV to grid if CHP is running" (column 2) and add the collected data to list
+    csv_datei12 = os.path.join(path, 'FuelCellElectricityInputStandby_CHP_w2.csv')
+    with open(csv_datei12, 'r') as csvfile:
+        csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        for row in csvreader:
+            EnergyInputData12.append(row[1])
 
 
 
 
     #Add all data in prepared list
-    model_energy_input_data = [(x[0], x[1], x[2], EnergyInputData2[i], EnergyInputData3[i], EnergyInputData4[i], EnergyInputData5[i], EnergyInputData6[i], EnergyInputData7[i], EnergyInputData8[i], EnergyInputData9[i], EnergyInputData10[i], EnergyInputData11[i]) for i, x in enumerate(model_energy_input_data)]
+    model_energy_input_data = [(x[0], x[1], x[2], EnergyInputData2[i], EnergyInputData3[i], EnergyInputData4[i], EnergyInputData5[i], EnergyInputData6[i], EnergyInputData7[i], EnergyInputData8[i], EnergyInputData9[i], EnergyInputData10[i], EnergyInputData11[i], EnergyInputData12[i]) for i, x in enumerate(model_energy_input_data)]
 
 
     # Durchlaufen der Daten und Einfügen in die Excel-Datei

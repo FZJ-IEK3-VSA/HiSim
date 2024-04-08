@@ -215,7 +215,7 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
         )
         
         #csv Input Electricity Consumption
-        self.General_ElectricityConsumptiomInput: ComponentInput = self.add_input(
+        self.General_ElectricityConsumptiomInput: cp.ComponentInput = self.add_input(
             self.component_name,
             self.General_ElectricityConsumptiom,
             LoadTypes.ELECTRICITY,
@@ -224,7 +224,7 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
         )
 
         #Photovoltaik Delivery
-        self.General_PhotovoltaicDeliveryInput: ComponentInput = self.add_input(
+        self.General_PhotovoltaicDeliveryInput: cp.ComponentInput = self.add_input(
             self.component_name,
             self.General_PhotovoltaicDelivery,
             LoadTypes.ELECTRICITY,
@@ -400,7 +400,7 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
                     
                     
                     #Step 5
-                    ratio_inpercentage = 0
+                    ratio_inpercentage = 0.0
                     ratio_inpercentage = total_useable_surplus_energy_in_minstandbytime_Wh/total_electrolyzer_energy_consumption_in_minstandbytime_Wh*100
                     
                     if ratio_inpercentage >= self.config.Surplus_electrical_amount_related_to_electrolzyer_in_minimum_standby_time_in_percentage:
@@ -573,6 +573,8 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
         1. Question: Is the minimum runtime of the electrolyzer reached? 
         '''
         runtimefuelcell = (timestep-self.state.activation_timestep_fuelcell)*self.my_simulation_parameters.seconds_per_timestep
+        
+        
         if runtimefuelcell>= self.config.minruntime_fuelcell:
             '''Yes, minimum runtime of fuel cell is reached
             
@@ -584,7 +586,6 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
                 '''
                 self.state.RunFuelCell = 1
                 self.state.mode = 2 #Needs the fuel cell: then the global thermal power is calculated; 0 means that global thermal power fuel cell is NOT calculated, 2 means, that the global thermal power is calculated
-
             else:
                 '''
                 Upper battery state of charge threshold is reached so go further in turn off Fuel Cell procedure
@@ -653,7 +654,7 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
                     
                     
                     #Step 5
-                    ratio_in_percentage_useableenergyfromfuelcell = 0
+                    ratio_in_percentage_useableenergyfromfuelcell = 0.0
                     ratio_in_percentage_useableenergyfromfuelcell = total_useable_fuelcell_energy_amount_in_minimum_standbytime_fuelcell_wh/total_fuelcell_energy_output_amount_in_minimum_standbytime_fuelcell_Wh*100
                     
                     if ratio_in_percentage_useableenergyfromfuelcell >= self.config.Usebale_electrical_amount_of_fuelcell_related_to_fuelcell_output_in_minimum_standby_time_in_percentage:
@@ -882,7 +883,7 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
                     self.state.activation_timestep_electrolyzer
                     '''   
                     self.turn_on_procedure_electrolyzer(timestep, pv_prediction_watt, el_consumption_pred_onlyhouse_watt, BatteryStateOfCharge, General_PhotovoltaicDelivery, General_ElectricityConsumptiom, hydrogen_soc)
-                print('Zeitschritt ', timestep, 'Einschalten/Ausschalteb ',self.state.RunElectrolyzer, 'Activation Timestep ', self.state.activation_timestep_electrolyzer, 'Deactivation Timestep  ', self.state.deactivation_timestep_electrolyzer)
+                #print('Zeitschritt ', timestep, 'Einschalten/Ausschalteb ',self.state.RunElectrolyzer, 'Activation Timestep ', self.state.activation_timestep_electrolyzer, 'Deactivation Timestep  ', self.state.deactivation_timestep_electrolyzer)
             
             #*********************
                             
@@ -897,11 +898,13 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
                 Predictive Controll Fuel Cell: 
                 # [x] Fuel Cell --> implementation of prediciton is not done until now
                 '''
-                #Forecast needed       
+                #Forecast needed
+
+
                 if hydrogen_soc > self.config.h2_soc_lower_threshold_fuelcell:
                     
                     if self.state.RunFuelCell == 1:
-                        self.turn_off_procedure_electrolyzer(timestep, pv_prediction_watt, el_consumption_pred_onlyhouse_watt, BatteryStateOfCharge, General_PhotovoltaicDelivery, General_ElectricityConsumptiom, hydrogen_soc)
+                        self.turn_off_procedure_fuelcell(timestep, pv_prediction_watt, el_consumption_pred_onlyhouse_watt, BatteryStateOfCharge, General_PhotovoltaicDelivery, General_ElectricityConsumptiom, hydrogen_soc)
 
                     elif self.state.RunFuelCell == 0 or self.state.RunFuelCell == 99:
                         self.turn_on_procedure_fuelcell(timestep, pv_prediction_watt, el_consumption_pred_onlyhouse_watt, BatteryStateOfCharge, General_PhotovoltaicDelivery, General_ElectricityConsumptiom, hydrogen_soc)

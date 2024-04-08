@@ -283,6 +283,12 @@ def Cell4Life(
     my_electricity_controller.connect_only_predefined_connections(my_photovoltaic_system)
     my_electricity_controller.connect_only_predefined_connections(my_chp) 
 
+    my_electricity_controller.connect_input(
+        input_fieldname=my_electricity_controller.FuelCellElectricityInputStandby,
+        src_object_name=my_chp.component_name,
+        src_field_name=my_chp.FuelCellElectricityInputStandby,
+    )
+
     #battery input connection
 
     my_electricity_controller.connect_input(
@@ -442,19 +448,19 @@ def InputParameter():
     electrolyzer_source_weight = 999
     electrolyzer_source_weightUnit = "-"
 
-    min_operation_time_in_seconds_chp = 0 #It is not working well so let it be "0"
+    min_operation_time_in_seconds_chp = 0.00000001 #
     min_operation_time_in_seconds_chpUnit = "s"
     
-    minstandbytime_fuelcell = 0 # This does not work well so let it be 0
+    minstandbytime_fuelcell = 0.00000001 # 
     minstandbytime_fuelcellUnit = "s"
     
-    min_operation_time_in_seconds_electrolyzer = 0 #It is not working well so let it be "0"
+    min_operation_time_in_seconds_electrolyzer = 0.00000001 #
     min_operation_time_in_seconds_electrolyzerUnit = "s"
     
-    minstandbytime_electrolyzer  = 0 # This does not work well so let it be 0
+    minstandbytime_electrolyzer  = 0.00000001 #
     minstandbytime_electrolyzerUnit = "s"
 
-    h2_soc_lower_threshold_chp = 0 # Minimum state of charge to start operating the fuel cell in %
+    h2_soc_lower_threshold_chp = 0.1 # Minimum state of charge to start operating the fuel cell in %
     h2_soc_lower_threshold_chpUnit = "%"
     
     h_fuel = 33.3 #heatng value ("Heizwert/Brennwert") of the choosen fuel in kWh/kg; upper value for H2 = 39,39 kWh/kg (3.939e4 Wh/kg); lower value for H2 = 33,3 
@@ -473,7 +479,7 @@ def InputParameter():
     h2_storage_losses = 0 # % of Hydrogen Losses per day in %
     h2_storage_lossesUnit = "%"
     
-    h2_soc_upper_threshold_electrolyzer = 100  #Electrolyzer works just until H2 storage goes up to this threshold
+    h2_soc_upper_threshold_electrolyzer = 99.9  #Electrolyzer works just until H2 storage goes up to this threshold
     h2_soc_upper_threshold_electrolyzerUnit = "%"
 
     #H2 storage energy demands; the energy demand is covered by electricit; 
@@ -507,7 +513,7 @@ def InputParameter():
     maxbatterystateofcharge_fuelcell_turnon = 80 #maximum battery state of charge; if the actual battery state of charge is above this level, then the fuel cell will not be turned on
     maxbatterystateofcharge_fuelcell_turnonUnit = "%"
 
-    maxbatterystateofcharge_let_fuelcell_staysturnedon = 100 #Maximum battery state of charge; if that threshold is exceeded, then the electrolyseur will be turned off
+    maxbatterystateofcharge_let_fuelcell_staysturnedon = 95 #Maximum battery state of charge; if that threshold is exceeded, then the fuel cell will be turned off
     maxbatterystateofcharge_let_fuelcell_staysturnedonUnit = "%"
     #FOLLOWING FACTORS Electrolyzer:
     #****

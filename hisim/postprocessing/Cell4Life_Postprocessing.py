@@ -298,7 +298,7 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
     Data9 = []
     Data10 = []
     Data11 = []
-
+    Data12 = []
 
     # Lade Daten aus dem ersten CSV-Datei "Electricity TO or FROM Grid Ergebnisse" (Spalte 1 und Spalte 2) und füge sie zur Liste hinzu
     csv_datei1 = os.path.join(path, 'ElectricityToOrFromGrid_L2EMSElectricityController.csv')
@@ -398,10 +398,17 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
     with open(csv_datei11, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
         for row in csvreader:
-            Data11.append(row[1])      
+            Data11.append(row[1])
+
+    # Load data from "from Fuel Cell Standby" (column 2) and add the collected data to list
+    csv_datei12 = os.path.join(path, 'FuelCellElectricityInputStandby_CHP_w2.csv')
+    with open(csv_datei12, 'r') as csvfile:
+        csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        for row in csvreader:
+            Data12.append(row[1])            
 
     #Zusammenfuehren der Daten
-    zusammengefuegte_daten = [(x[0], x[1], x[2], Data2[i], Data3[i], Data4[i], Data5[i], Data6[i], Data7[i], Data8[i], Data9[i], Data10[i], Data11[i]) for i, x in enumerate(zusammengefuegte_daten)]
+    zusammengefuegte_daten = [(x[0], x[1], x[2], Data2[i], Data3[i], Data4[i], Data5[i], Data6[i], Data7[i], Data8[i], Data9[i], Data10[i], Data11[i], Data12[i]) for i, x in enumerate(zusammengefuegte_daten)]
 
     
 

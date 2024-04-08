@@ -1,0 +1,17 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: HiSim - House Infrastructure Simulator
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Noah
+    family-names: Pflugradt
+    email: n.pflugradt@fz-juelich.de
+    orcid: 'https://orcid.org/0000-0002-1982-8794'
+    affiliation: Forschungszentrum Jülich
+repository-code: 'https://github.com/FZJ-IEK3-VSA/HiSim'
+license: MIT

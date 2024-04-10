@@ -77,46 +77,6 @@ class HeatDistributionConfig(cp.ConfigBase):
         )
         return config
 
-
-@dataclass_json
-@dataclass
-class HeatDistributionControllerConfig(cp.ConfigBase):
-
-    """HeatDistribution Controller Config Class."""
-
-    @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return HeatDistributionController.get_full_classname()
-
-    name: str
-    heating_system: HeatDistributionSystemType
-    set_heating_threshold_outside_temperature_in_celsius: Optional[float]
-    heating_reference_temperature_in_celsius: float
-    set_heating_temperature_for_building_in_celsius: float
-    set_cooling_temperature_for_building_in_celsius: float
-    heating_load_of_building_in_watt: float
-
-    @classmethod
-    def get_default_heat_distribution_controller_config(
-        cls,
-        heating_load_of_building_in_watt: float,
-        set_heating_temperature_for_building_in_celsius: float,
-        set_cooling_temperature_for_building_in_celsius: float,
-        heating_reference_temperature_in_celsius: float = -7.0,
-    ) -> "HeatDistributionControllerConfig":
-        """Gets a default HeatDistribution Controller."""
-        return HeatDistributionControllerConfig(
-            name="HeatDistributionController",
-            heating_system=HeatDistributionSystemType.FLOORHEATING,
-            set_heating_threshold_outside_temperature_in_celsius=16.0,
-            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-            set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
-            set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
-            heating_load_of_building_in_watt=heating_load_of_building_in_watt,
-        )
-
-
 @dataclass
 class HeatDistributionSystemState:
 
@@ -149,11 +109,11 @@ class HeatDistribution(cp.Component):
     WaterMassFlow = "WaterMassFlow"
 
     # Outputs
-    WaterTemperatureInput = "WaterTemperatureInput"
+    WaterTemperatureInlet = "WaterTemperatureInlet"
     WaterTemperatureOutput = "WaterTemperatureOutput"
     WaterTemperatureDifference = "WaterTemperatureDifference"
     ThermalPowerDelivered = "ThermalPowerDelivered"
-    WaterMassFlow = "WaterMassFlow"
+    WaterMassFlowHDS = "WaterMassFlowHDS"
 
     # Similar components to connect to:
     # 1. Building
@@ -222,7 +182,7 @@ class HeatDistribution(cp.Component):
         self.water_mass_flow_rate_hp_in_kg_per_second_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.WaterMassFlow,
-            lt.LoadTypes.VOLUME,
+            lt.LoadTypes.WATER,
             lt.Units.KG_PER_SEC,
             False,
         )
@@ -230,10 +190,10 @@ class HeatDistribution(cp.Component):
         # Outputs
         self.water_temperature_inlet_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
-            self.WaterTemperatureInput,
+            self.WaterTemperatureInlet,
             lt.LoadTypes.WATER,
             lt.Units.CELSIUS,
-            output_description=f"here a description for {self.WaterTemperatureInput} will follow.",
+            output_description=f"here a description for {self.WaterTemperatureInlet} will follow.",
         )
         self.water_temperature_outlet_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -258,10 +218,10 @@ class HeatDistribution(cp.Component):
         )
         self.water_mass_flow_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
-            self.WaterMassFlow,
+            self.WaterMassFlowHDS,
             lt.LoadTypes.VOLUME,
             lt.Units.KG_PER_SEC,
-            output_description=f"here a description for {self.WaterMassFlow} will follow.",
+            output_description=f"here a description for {self.WaterMassFlowHDS} will follow.",
         )
 
         self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
@@ -516,6 +476,43 @@ class HeatDistribution(cp.Component):
 
         return opex_cost_data_class
 
+@dataclass_json
+@dataclass
+class HeatDistributionControllerConfig(cp.ConfigBase):
+
+    """HeatDistribution Controller Config Class."""
+
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return HeatDistributionController.get_full_classname()
+
+    name: str
+    heating_system: HeatDistributionSystemType
+    set_heating_threshold_outside_temperature_in_celsius: Optional[float]
+    heating_reference_temperature_in_celsius: float
+    set_heating_temperature_for_building_in_celsius: float
+    set_cooling_temperature_for_building_in_celsius: float
+    heating_load_of_building_in_watt: float
+
+    @classmethod
+    def get_default_heat_distribution_controller_config(
+        cls,
+        heating_load_of_building_in_watt: float,
+        set_heating_temperature_for_building_in_celsius: float,
+        set_cooling_temperature_for_building_in_celsius: float,
+        heating_reference_temperature_in_celsius: float = -7.0,
+    ) -> "HeatDistributionControllerConfig":
+        """Gets a default HeatDistribution Controller."""
+        return HeatDistributionControllerConfig(
+            name="HeatDistributionController",
+            heating_system=HeatDistributionSystemType.FLOORHEATING,
+            set_heating_threshold_outside_temperature_in_celsius=16.0,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+            set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
+            set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
+            heating_load_of_building_in_watt=heating_load_of_building_in_watt,
+        )
 
 class HeatDistributionController(cp.Component):
 

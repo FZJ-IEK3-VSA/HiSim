@@ -95,7 +95,7 @@ def Cell4Life(
     
     my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.EXPORT_TO_CSV)
     my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PLOT_LINE)
-    #my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.MAKE_NETWORK_CHARTS)
+    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.MAKE_NETWORK_CHARTS)
     my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PLOT_CARPET)
     
 
@@ -327,11 +327,13 @@ def Cell4Life(
     my_sim.add_component(my_photovoltaic_system)
     my_sim.add_component(my_electricityconsumption)
     my_sim.add_component(my_h2storage)
-    my_sim.add_component(my_advanced_battery)
+    #my_sim.add_component(my_advanced_battery)
     my_sim.add_component(my_electrolyzerfuelcellcontroller)
     my_sim.add_component(my_electrolyzer)
     my_sim.add_component(my_chp)
+    my_sim.add_component(my_advanced_battery)
     my_sim.add_component(my_electricity_controller)
+
             
     my_sim.add_component(my_wartmwater_system)
     my_sim.add_component(my_heatingsystem_system)

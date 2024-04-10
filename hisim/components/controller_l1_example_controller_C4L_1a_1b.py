@@ -485,8 +485,7 @@ class SimpleController(Component):
                 electricity_to_or_from_grid = Estatus_total + part_pv_to_grid
                 electricity_from_CHP_to_house,electricity_from_Battery_to_house= electricity_from_CHP_Battery_to_houseFct(CHP_ElectricityDelivery, BatteryAcBatteryPower, electricity_to_or_from_grid, H2Storage_ElectricityConsumption,timestep)
 
-   
-           
+
             stsv.set_output_value(self.electricity_to_or_from_gridOutput, electricity_to_or_from_grid)
             stsv.set_output_value(self.electricity_from_CHP_to_houseOutput, electricity_from_CHP_to_house)
             stsv.set_output_value(self.electricity_from_Battery_to_houseOutput, electricity_from_Battery_to_house)

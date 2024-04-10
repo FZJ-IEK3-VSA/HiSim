@@ -580,7 +580,7 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
             
             Is the Minimum state of charge of battery already reached to turn off Electrolyzer?
             '''
-            if BatteryStateOfCharge*100 < self.config.maxbatterystateofcharge_let_fuelcell_staysturnedon: # [ ]
+            if BatteryStateOfCharge*100 < self.config.maxbatterystateofcharge_let_fuelcell_staysturnedon: 
                 '''
                 Fuel Cell stays turned on because battery state of charge threshold to turn off fuel cell is not reached
                 '''
@@ -813,10 +813,15 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
         self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool
     ) -> None:
         """Core Simulation function."""
+        if timestep == 7549:
+            print('Start der Iteration')
         if force_convergence:
             # states are saved after each timestep, outputs after each iteration
             # outputs have to be in line with states, so if convergence is forced outputs are aligned to last known state.
             self.state = self.processed_state.clone()
+
+            if timestep == 7549:
+                print('Fuel Cell State in Fuel Cell Controller',self.state.RunFuelCell)
         else:
             '''
             From Deliverable 2.1: 
@@ -923,7 +928,8 @@ class C4LelectrolyzerfuelcellpredictiveController(cp.Component):
 
 
             self.processed_state = self.state.clone()
-        
+        if timestep == 7549:
+            print('Fuel Cell State in Fuel Cell Controller' ,self.state.RunFuelCell)
         stsv.set_output_value(self.electrolyzer_onoff_signal_channel,self.state.RunElectrolyzer) 
         stsv.set_output_value(self.fuelcell_onoff_signal_channel,self.state.RunFuelCell) 
         stsv.set_output_value(self.chp_heatingmode_signal_channel, self.state.mode)

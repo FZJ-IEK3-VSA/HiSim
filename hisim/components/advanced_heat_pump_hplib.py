@@ -749,12 +749,12 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
 
     @classmethod
     def get_default_generic_heat_pump_controller_config(
-        cls, heat_distribution_system_type: Any
+        cls, heat_distribution_system_type: Any, mode: int = 2
     ) -> "HeatPumpHplibControllerL1Config":
         """Gets a default Generic Heat Pump Controller."""
         return HeatPumpHplibControllerL1Config(
             name="HeatPumpController",
-            mode=2,
+            mode=mode,
             set_heating_threshold_outside_temperature_in_celsius=16.0,
             set_cooling_threshold_outside_temperature_in_celsius=20.0,
             heat_distribution_system_type=heat_distribution_system_type,

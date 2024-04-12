@@ -386,6 +386,12 @@ class WeatherConfig(ConfigBase):
     @classmethod
     def get_default(cls, location_entry: Any) -> Any:
         """Gets the default configuration for Aachen."""
+        if not isinstance(location_entry, LocationEnum):
+            if location_entry in LocationEnum._member_names_:  # pylint: disable=W0212
+                location_entry = getattr(LocationEnum, location_entry)
+            else:
+                raise ValueError(f"The location_entry {location_entry} could not be found in the Weather Location Enum class.")
+
         path = os.path.join(
             utils.get_input_directory(),
             "weather",

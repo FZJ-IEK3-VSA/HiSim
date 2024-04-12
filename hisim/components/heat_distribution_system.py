@@ -2,7 +2,7 @@
 # clean
 import importlib
 from enum import IntEnum
-from typing import List, Any, Optional, Tuple
+from typing import List, Any, Optional, Tuple, Union
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -90,7 +90,7 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
         return HeatDistributionController.get_full_classname()
 
     name: str
-    heating_system: HeatDistributionSystemType
+    heating_system: Union[HeatDistributionSystemType, int]
     set_heating_threshold_outside_temperature_in_celsius: Optional[float]
     heating_reference_temperature_in_celsius: float
     set_heating_temperature_for_building_in_celsius: float
@@ -104,11 +104,13 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
         set_heating_temperature_for_building_in_celsius: float,
         set_cooling_temperature_for_building_in_celsius: float,
         heating_reference_temperature_in_celsius: float = -7.0,
+        heating_system: Union[HeatDistributionSystemType, int] = HeatDistributionSystemType.FLOORHEATING,
     ) -> "HeatDistributionControllerConfig":
         """Gets a default HeatDistribution Controller."""
+
         return HeatDistributionControllerConfig(
             name="HeatDistributionController",
-            heating_system=HeatDistributionSystemType.FLOORHEATING,
+            heating_system=heating_system,
             set_heating_threshold_outside_temperature_in_celsius=16.0,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
             set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
@@ -643,7 +645,7 @@ class HeatDistributionController(cp.Component):
         self,
         set_heating_threshold_temperature_in_celsius: Optional[float],
         heating_reference_temperature_in_celsius: float,
-        heat_distribution_system_type: HeatDistributionSystemType,
+        heat_distribution_system_type: Union[HeatDistributionSystemType, int],
         max_flow_temperature_in_celsius: float,
         min_flow_temperature_in_celsius: float,
         max_return_temperature_in_celsius: float,
@@ -901,7 +903,7 @@ class HeatDistributionControllerInformation:
         self,
         set_heating_threshold_temperature_in_celsius: Optional[float],
         heating_reference_temperature_in_celsius: float,
-        heat_distribution_system_type: HeatDistributionSystemType,
+        heat_distribution_system_type: Union[HeatDistributionSystemType, int],
         set_heating_temperature_for_building_in_celsius: float,
         set_cooling_temperature_for_building_in_celsius: float,
     ) -> None:

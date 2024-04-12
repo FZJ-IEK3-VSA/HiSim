@@ -86,6 +86,7 @@ class ScenarioDataProcessing:
         filtered_data: pd.DataFrame, x_and_y_plot_data: pd.DataFrame, path_to_save: str, kind_of_data_set: str,
     ) -> None:
         """Use pandas describe method to get statistical values of certain data."""
+
         # create a excel writer object
         with pd.ExcelWriter(  # pylint: disable=abstract-class-instantiated
             path=os.path.join(path_to_save, f"{kind_of_data_set}_statistics.xlsx"), mode="w",
@@ -277,8 +278,8 @@ class FilterClass:
         # system_setups for variables to check (check names of your variables before your evaluation, if they are correct)
         # kpi data has no time series, so only choose when you analyze yearly data
         kpi_data = [
-            "Total electricity consumption",
-            "PV production",
+            # "Total electricity consumption",
+            # "PV production",
             # "Ratio between PV production and total consumption",
             # "Self-consumption",
             # "Self-consumption rate",
@@ -287,7 +288,7 @@ class FilterClass:
             # "Total energy to grid",
             # "Relative electricity demand from grid",
             # "Self-consumption rate according to solar htw berlin",
-            "Autarky rate according to solar htw berlin",
+            # "Autarky rate according to solar htw berlin",
             # "Investment costs for equipment per simulated period",
             # "CO2 footprint for equipment per simulated period",
             # "System operational costs for simulated period",
@@ -300,19 +301,27 @@ class FilterClass:
             # "Maximum building indoor air temperature reached",
             # "Building heating load",
             # "Conditioned floor area",
-            "Rooftop area",
+            # "Rooftop area",
             # "Specific heating load",
             # "Specific heating demand according to TABULA",
             # "Thermal output energy of heat distribution system",
             # "Number of SH heat pump cycles",
-            # "Seasonal performance factor of SH heat pump",
-            # "Seasonal energy efficiency ratio of SH heat pump",
+            "Seasonal performance factor of SH heat pump",
+            "Seasonal energy efficiency ratio of SH heat pump",
+            "Heating hours of SH heat pump",
+            "Cooling hours of SH heat pump",
+            "Max flow temperature of SH heat pump",
+            "Max return temperature of SH heat pump",
+            "Max temperature difference of SH heat pump",
+            "Min flow temperature of SH heat pump",
+            "Min return temperature of SH heat pump",
+            "Min temperature difference of SH heat pump",
             # "Heating output energy of SH heat pump",
             # "Cooling output energy of SH heat pump",
             # "Specific heating energy of SH heat pump",
-            # "Electrical input energy for heating of SH heat pump",
-            # "Electrical input energy for cooling of SH heat pump",
-            # "Total electrical input energy of SH heat pump",
+            "Electrical input energy for heating of SH heat pump",
+            "Electrical input energy for cooling of SH heat pump",
+            "Total electrical input energy of SH heat pump",
             # "Space heating heat pump electricity from grid",
             # "Relative electricity demand of SH heat pump",
             # "DHW heat pump total electricity consumption",
@@ -336,6 +345,8 @@ class FilterClass:
             "PVSystem_w0|Electricity|ElectricityOutput",
             "AdvancedHeatPumpHPLib|Electricity|ElectricalInputPower",
             "DHWHeatPump_w1|Electricity|ElectricityOutput",
+            "Weather|Temperature|DailyAverageOutsideTemperatures",
+            "HeatDistributionController|Temperature|HeatingFlowTemperature",
         ]
 
         flow_and_return_temperatures = [

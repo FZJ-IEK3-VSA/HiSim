@@ -456,8 +456,10 @@ class ResultDataCollection:
             scenario_name_of_current_dataframe = dataframe["scenario"][0]
             # check if scenario column is empty or not
             if scenario_name_of_current_dataframe == "" or not isinstance(scenario_name_of_current_dataframe, str):
-                raise ValueError(f"The scenario variable of the current dataframe is {scenario_name_of_current_dataframe} but it should be a non-empty string value. "
-                                 "Please set a scenario name for your simulations.")
+                raise ValueError(
+                    f"The scenario variable of the current dataframe is {scenario_name_of_current_dataframe} but it should be a non-empty string value. "
+                    "Please set a scenario name for your simulations."
+                )
 
             # try to find hash number in scenario name
             try:
@@ -535,15 +537,11 @@ class ResultDataCollection:
 
         if parameter_key is not None:
             path_for_file = os.path.join(
-                result_data_folder,
-                f"data_with_different_{parameter_key}s",
-                f"{simulation_duration_key}_days",
+                result_data_folder, f"data_with_different_{parameter_key}s", f"{simulation_duration_key}_days",
             )
         else:
             path_for_file = os.path.join(
-                result_data_folder,
-                "data_with_all_parameters",
-                f"{simulation_duration_key}_days",
+                result_data_folder, "data_with_all_parameters", f"{simulation_duration_key}_days",
             )
         if os.path.exists(path_for_file) is False:
             os.makedirs(path_for_file)
@@ -732,9 +730,13 @@ class ResultDataCollection:
                                 {"duration in days": config_dict["scenarioDataInformation"].get("duration in days")}
                             )
                             my_module_config_dict.update({"model": config_dict["scenarioDataInformation"].get("model")})
-                            my_module_config_dict.update({"model": config_dict["scenarioDataInformation"].get("scenario")})
+                            my_module_config_dict.update(
+                                {"model": config_dict["scenarioDataInformation"].get("scenario")}
+                            )
                         except Exception as exc:
-                            raise KeyError(f"The file {filename} does not contain any key called myModuleConfig.") from exc
+                            raise KeyError(
+                                f"The file {filename} does not contain any key called myModuleConfig."
+                            ) from exc
                         # prevent to add modules with same module config and same simulation duration twice
                         if my_module_config_dict not in list_of_all_module_configs:
                             list_of_all_module_configs.append(my_module_config_dict)

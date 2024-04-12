@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 from os import listdir
+import os
+import re
 from typing import List, Optional, Any
 from dataclasses_json import dataclass_json
 from utspclient.helpers.lpgdata import (
@@ -26,9 +28,10 @@ from hisim.components import controller_l1_heatpump
 from hisim.components import generic_hot_water_storage_modular
 from hisim.components import generic_pv_system
 from hisim.components import electricity_meter
-from hisim import utils
+from hisim.components import controller_l2_energy_management_system, advanced_battery_bslib
+from hisim import utils, loadtypes
 from hisim.units import Quantity, Watt, Celsius
-
+from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 
 __authors__ = ["Katharina Rieck", "Kevin Knosala", "Markus Blasberg"]
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
@@ -44,7 +47,10 @@ class HouseholdHeatPumpOptions:
     """Set options for the system setup."""
 
     photovoltaic: bool = False
+    energy_management_and_battery: bool = False
     diesel_car: bool = False
+    heat_distribution_system: int = 2  # 2 = Floorheating, 1 = Radiator
+    heat_pump_controller_mode: int = 2  # 2 = cooling possible, 1 = cooling not possible
 
 
 @dataclass_json
@@ -68,6 +74,9 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
     dhw_heatpump_controller_config: controller_l1_heatpump.L1HeatPumpConfig
     dhw_storage_config: generic_hot_water_storage_modular.StorageConfig
     electricity_meter_config: electricity_meter.ElectricityMeterConfig
+    weather_location: str
+    # heating_system: int
+    # heat_pump_controller_mode: int
 
     # Optional components
     pv_config: Optional[generic_pv_system.PVSystemConfig]
@@ -87,9 +96,7 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
 
     @classmethod
     def get_scaled_default(
-        cls,
-        building_config: building.BuildingConfig,
-        options: HouseholdHeatPumpOptions = HouseholdHeatPumpOptions(),
+        cls, building_config: building.BuildingConfig, options: HouseholdHeatPumpOptions = HouseholdHeatPumpOptions()
     ) -> "HouseholdHeatPumpConfig":
         """Get scaled HouseholdHeatPumpConfig.
 
@@ -108,6 +115,9 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
         """
 
         set_heating_threshold_outside_temperature_in_celsius: Quantity[float, Celsius] = Quantity(16.0, Celsius)
+        weather_location = "AACHEN"
+        # heating_system = 2
+        # heat_pump_controller_mode = 2
 
         my_building_information = building.BuildingInformation(config=building_config)
 
@@ -116,14 +126,18 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
             set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
             heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
             heating_reference_temperature_in_celsius=my_building_information.heating_reference_temperature_in_celsius,
+            heating_system=options.heat_distribution_system,
         )
         my_hds_controller_information = heat_distribution_system.HeatDistributionControllerInformation(
             config=hds_controller_config
         )
 
+        # initialize HouseholdHeatPumpConfig
         household_config = HouseholdHeatPumpConfig(
             building_type="residential",
             number_of_apartments=my_building_information.number_of_apartments,
+            # heating_system=heating_system,
+            # heat_pump_controller_mode=heat_pump_controller_mode,
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
                 data_acquisition_mode=loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP,
                 household=Households.CHR01_Couple_both_at_Work,
@@ -140,7 +154,9 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
             ),
             pv_config=generic_pv_system.PVSystemConfig.get_scaled_pv_system(
                 rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
-            ),
+            )
+            if options.photovoltaic
+            else None,
             options=options,
             building_config=building_config,
             hds_controller_config=hds_controller_config,
@@ -151,7 +167,8 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
                 )
             ),
             hp_controller_config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(
-                heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
+                heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
+                mode=options.heat_pump_controller_mode,
             ),
             hp_config=(
                 advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
@@ -185,6 +202,7 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
             ),
             car_config=generic_car.CarConfig.get_default_diesel_config() if options.diesel_car else None,
             electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
+            weather_location=weather_location,
         )
 
         # set same heating threshold
@@ -220,6 +238,7 @@ def setup_function(
         my_simulation_parameters = SimulationParameters.full_year_all_options(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
+
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     """
@@ -227,8 +246,7 @@ def setup_function(
     """
     # Heat Distribution System Controller
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        config=my_config.hds_controller_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.hds_controller_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # Occupancy
@@ -239,16 +257,9 @@ def setup_function(
 
     # Weather
     my_weather = weather.Weather(
-        config=weather.WeatherConfig.get_default(weather.LocationEnum.AACHEN),
+        config=weather.WeatherConfig.get_default(location_entry=my_config.weather_location),
         my_simulation_parameters=my_simulation_parameters,
         my_display_config=DisplayConfig.show("Wetter"),
-    )
-
-    # Photovoltaic
-    my_photovoltaic_system = generic_pv_system.PVSystem(
-        config=my_config.pv_config,
-        my_simulation_parameters=my_simulation_parameters,
-        my_display_config=DisplayConfig.show("Photovoltaik"),
     )
 
     # Building
@@ -260,8 +271,7 @@ def setup_function(
 
     # Advanced Heat Pump Controller
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
-        config=my_config.hp_controller_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.hp_controller_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # Advanced Heat Pump
@@ -298,8 +308,7 @@ def setup_function(
         my_display_config=DisplayConfig.show("Warmwasserspeicher"),
     )
     my_domestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_dhw_heatpump_controller_config,
+        my_simulation_parameters=my_simulation_parameters, config=my_dhw_heatpump_controller_config,
     )
     my_domestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
         config=my_dhw_heatpump_config,
@@ -339,11 +348,81 @@ def setup_function(
         my_display_config=DisplayConfig.show("Stromzähler"),
     )
 
+    # Initialize PV
+    if my_config.options.photovoltaic and my_config.pv_config is not None:
+
+        # Build Photovoltaic
+        my_photovoltaic_system = generic_pv_system.PVSystem(
+            config=my_config.pv_config,
+            my_simulation_parameters=my_simulation_parameters,
+            my_display_config=DisplayConfig.show("Photovoltaik"),
+        )
+        # Initialize EMS and battery
+        if my_config.options.energy_management_and_battery:
+            # Build EMS
+            my_electricity_controller_config = controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
+            my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
+                my_simulation_parameters=my_simulation_parameters, config=my_electricity_controller_config,
+            )
+
+            # Build Battery
+            my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
+                total_pv_power_in_watt_peak=my_config.pv_config.power_in_watt
+            )
+            my_advanced_battery = advanced_battery_bslib.Battery(
+                my_simulation_parameters=my_simulation_parameters, config=my_advanced_battery_config,
+            )
+
+            # -----------------------------------------------------------------------------------------------------------------
+            # Add outputs to EMS
+            loading_power_input_for_battery_in_watt = my_electricity_controller.add_component_output(
+                source_output_name="LoadingPowerInputForBattery_",
+                source_tags=[loadtypes.ComponentType.BATTERY, loadtypes.InandOutputType.ELECTRICITY_TARGET],
+                source_weight=4,
+                source_load_type=loadtypes.LoadTypes.ELECTRICITY,
+                source_unit=loadtypes.Units.WATT,
+                output_description="Target electricity for Battery Control. ",
+            )
+
+            # -----------------------------------------------------------------------------------------------------------------
+            # Connect Battery
+            my_advanced_battery.connect_dynamic_input(
+                input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
+                src_object=loading_power_input_for_battery_in_watt,
+            )
+
+            # -----------------------------------------------------------------------------------------------------------------
+            # Connect Electricity Meter
+            my_electricity_meter.add_component_input_and_connect(
+                source_object_name=my_electricity_controller.component_name,
+                source_component_output=my_electricity_controller.TotalElectricityToOrFromGrid,
+                source_load_type=loadtypes.LoadTypes.ELECTRICITY,
+                source_unit=loadtypes.Units.WATT,
+                source_tags=[loadtypes.InandOutputType.ELECTRICITY_PRODUCTION],
+                source_weight=999,
+            )
+
+            # =================================================================================================================================
+            # Add Remaining Components to Simulation Parameters
+
+            my_sim.add_component(my_electricity_meter)
+            my_sim.add_component(my_advanced_battery)
+            my_sim.add_component(my_electricity_controller, connect_automatically=True)
+            my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
+
+        # when no EMS and battery is used, connect only PV and Electricity Meter automatically
+        else:
+            my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
+            my_sim.add_component(my_electricity_meter, connect_automatically=True)
+
+    # when no PV is used, connect electricty meter automatically
+    else:
+        my_sim.add_component(my_electricity_meter, connect_automatically=True)
+
     # =================================================================================================================================
     # Add Components to Simulation Parameters
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_weather)
-    my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
     my_sim.add_component(my_building, connect_automatically=True)
     my_sim.add_component(my_heat_pump, connect_automatically=True)
     my_sim.add_component(my_heat_pump_controller, connect_automatically=True)
@@ -353,8 +432,29 @@ def setup_function(
     my_sim.add_component(my_domestic_hot_water_storage, connect_automatically=True)
     my_sim.add_component(my_domestic_hot_water_heatpump_controller, connect_automatically=True)
     my_sim.add_component(my_domestic_hot_water_heatpump, connect_automatically=True)
-    my_sim.add_component(my_electricity_meter, connect_automatically=True)
 
     if my_config.options.diesel_car:
         for my_car in my_cars:
             my_sim.add_component(my_car)
+
+    # Set result directory, this is useful when you run the system setup with different module configurations
+    try:
+        scenario_hash_string = re.findall(r"\-?\d+", my_sim.my_module_config)[-1]
+        sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION
+    except Exception:
+        scenario_hash_string = ""
+        sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION
+    ResultPathProviderSingleton().set_important_result_path_information(
+        module_directory=my_sim.module_directory,
+        model_name=my_sim.module_filename,
+        further_result_folder_description=os.path.join(
+            *[
+                f"location-{my_config.weather_location}",
+                f"hds-type-{my_config.hds_controller_config.heating_system}",
+                f"PV-{my_config.options.photovoltaic}-EMS-and-Batt-{my_config.options.energy_management_and_battery}-hp-mode-{my_config.hp_controller_config.mode}",
+            ]
+        ),
+        variant_name="_",
+        sorting_option=sorting_option,
+        scenario_hash_string=scenario_hash_string,
+    )

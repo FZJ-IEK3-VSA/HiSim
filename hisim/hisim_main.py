@@ -101,7 +101,11 @@ def main(
     log.information("")
 
     # At the end put new logging files into result directory
-    my_sim.put_log_files_into_result_path()
+    try:
+        my_sim.put_log_files_into_result_path()
+    # sometimes when running many simulations at once this leads to errors, so ignore
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":

@@ -107,7 +107,7 @@ def setup_function(
     # Set Photovoltaic System
     azimuth = my_config.pv_azimuth
     tilt = my_config.pv_tilt
-    share_of_maximum_pv_power = 1  # my_config.share_of_maximum_pv_power
+    share_of_maximum_pv_power = 0  # my_config.share_of_maximum_pv_power
 
     # Set Building (scale building according to total base area and not absolute floor area)
     building_code = my_config.building_code
@@ -141,13 +141,13 @@ def setup_function(
         raise TypeError(f"Type {type(my_config.lpg_households)} is incompatible. Should be List[str].")
 
     # Set Heat Pump Controller
-    hp_controller_mode = 2  # mode 1 for on/off and mode 2 for heating/cooling/off
+    hp_controller_mode = 1  # mode 1 for heating/off and mode 2 for heating/cooling/off
     heating_reference_temperature_in_celsius = -7.0
 
     # Set Energy Management System (only used when PV is used)
-    building_indoor_temperature_offset_value = 2
-    domestic_hot_water_storage_temperature_offset_value = 10
-    space_heating_water_storage_temperature_offset_value = 10
+    building_indoor_temperature_offset_value = 0
+    domestic_hot_water_storage_temperature_offset_value = 0
+    space_heating_water_storage_temperature_offset_value = 0
 
     # =================================================================================================================================
     # Build Basic Components
@@ -390,7 +390,7 @@ def setup_function(
     )
 
     ResultPathProviderSingleton().set_important_result_path_information(
-        module_directory=my_sim.module_directory,
+        module_directory="/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/hisim_results",  # my_sim.module_directory,
         model_name=my_sim.module_filename,
         further_result_folder_description=os.path.join(
             *[

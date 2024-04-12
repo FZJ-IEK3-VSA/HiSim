@@ -245,13 +245,6 @@ def setup_function(
         my_display_config=DisplayConfig.show("Wetter"),
     )
 
-    # Photovoltaic
-    my_photovoltaic_system = generic_pv_system.PVSystem(
-        config=my_config.pv_config,
-        my_simulation_parameters=my_simulation_parameters,
-        my_display_config=DisplayConfig.show("Photovoltaik"),
-    )
-
     # Building
     my_building = building.Building(
         config=my_config.building_config,

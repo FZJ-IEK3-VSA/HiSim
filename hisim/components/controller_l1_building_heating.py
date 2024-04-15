@@ -201,7 +201,7 @@ class L1BuildingHeatController(cp.Component):
             cp.ComponentConnection(
                 L1BuildingHeatController.BuildingTemperatureModifier,
                 ems_classname,
-                controller_l2_energy_management_system.L2GenericEnergyManagementSystem.BuildingTemperatureModifier,
+                controller_l2_energy_management_system.L2GenericEnergyManagementSystem.BuildingIndoorTemperatureModifier,
             )
         )
         return connections

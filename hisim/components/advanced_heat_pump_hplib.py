@@ -824,6 +824,9 @@ class HeatPumpHplibController(Component):
         self.add_default_connections(
             self.get_default_connections_from_simple_hot_water_storage()
         )
+        self.add_default_connections(
+            self.get_default_connections_from_energy_management_system()
+        )
 
     def get_default_connections_from_heat_distribution_controller(
         self,
@@ -868,6 +871,25 @@ class HeatPumpHplibController(Component):
                 HeatPumpHplibController.WaterTemperatureInputFromHeatWaterStorage,
                 hws_classname,
                 simple_hot_water_storage.SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_energy_management_system(
+        self,
+    ):
+        """Get energy management system default connections."""
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.controller_l2_energy_management_system"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "L2GenericEnergyManagementSystem")
+        connections = []
+        ems_classname = component_class.get_classname()
+        connections.append(
+            ComponentConnection(
+                HeatPumpHplibController.SimpleHotWaterStorageTemperatureModifier,
+                ems_classname,
+                component_class.SpaceHeatingWaterStorageTemperatureModifier,
             )
         )
         return connections

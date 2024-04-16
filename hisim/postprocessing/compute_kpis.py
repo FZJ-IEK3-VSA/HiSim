@@ -823,6 +823,10 @@ class KpiGenerator(JSONWizard):
                 wrapped_building_component.my_component, "my_building_information"
             ).scaled_conditioned_floor_area_in_m2
         )
+        # get rooftop area
+        scaled_rooftop_area_in_m2 = float(
+            getattr(wrapped_building_component.my_component, "my_building_information").scaled_rooftop_area_in_m2
+        )
 
         # get specific heating load
         specific_heating_load_in_watt_per_m2 = heating_load_in_watt / scaled_conditioned_floor_area_in_m2
@@ -838,6 +842,9 @@ class KpiGenerator(JSONWizard):
             value=scaled_conditioned_floor_area_in_m2,
             tag=KpiTagEnumClass.BUILDING,
         )
+        scaled_rooftop_area_in_m2_entry = KpiEntry(
+            name="Rooftop area", unit="m2", value=scaled_rooftop_area_in_m2, tag=KpiTagEnumClass.BUILDING,
+        )
         specific_heating_load_in_watt_per_m2_entry = KpiEntry(
             name="Specific heating load",
             unit="W/m2",
@@ -851,6 +858,7 @@ class KpiGenerator(JSONWizard):
                 heating_load_in_watt_entry.name: heating_load_in_watt_entry.to_dict(),
                 scaled_conditioned_floor_area_in_m2_entry.name: scaled_conditioned_floor_area_in_m2_entry.to_dict(),
                 specific_heating_load_in_watt_per_m2_entry.name: specific_heating_load_in_watt_per_m2_entry.to_dict(),
+                scaled_rooftop_area_in_m2_entry.name: scaled_rooftop_area_in_m2_entry.to_dict(),
             }
         )
         # get building temperatures
@@ -1198,7 +1206,7 @@ class KpiGenerator(JSONWizard):
         ) = self.get_flow_and_return_temperatures(
             results=self.results,
             output_name_flow_temperature=SimpleHotWaterStorage.WaterTemperatureToHeatDistribution,
-            output_name_return_temperature=HeatDistribution.WaterTemperatureOutput
+            output_name_return_temperature=HeatDistribution.WaterTemperatureOutput,
         )
 
         if None in (
@@ -1335,17 +1343,23 @@ class KpiGenerator(JSONWizard):
         temperature_diff_flow_and_return_in_celsius = (
             flow_temperature_list_in_celsius - return_temperature_list_in_celsius
         )
-        (mean_temperature_difference_between_flow_and_return_in_celsius,
-         max_temperature_difference_between_flow_and_return_in_celsius,
-         min_temperature_difference_between_flow_and_return_in_celsius) = self.calc_mean_max_min_value(list_or_pandas_series=temperature_diff_flow_and_return_in_celsius)
+        (
+            mean_temperature_difference_between_flow_and_return_in_celsius,
+            max_temperature_difference_between_flow_and_return_in_celsius,
+            min_temperature_difference_between_flow_and_return_in_celsius,
+        ) = self.calc_mean_max_min_value(list_or_pandas_series=temperature_diff_flow_and_return_in_celsius)
 
-        (mean_flow_temperature_in_celsius,
-         max_flow_temperature_in_celsius,
-         min_flow_temperature_in_celsius) = self.calc_mean_max_min_value(list_or_pandas_series=flow_temperature_list_in_celsius)
+        (
+            mean_flow_temperature_in_celsius,
+            max_flow_temperature_in_celsius,
+            min_flow_temperature_in_celsius,
+        ) = self.calc_mean_max_min_value(list_or_pandas_series=flow_temperature_list_in_celsius)
 
-        (mean_return_temperature_in_celsius,
-         max_return_temperature_in_celsius,
-         min_return_temperature_in_celsius) = self.calc_mean_max_min_value(list_or_pandas_series=return_temperature_list_in_celsius)
+        (
+            mean_return_temperature_in_celsius,
+            max_return_temperature_in_celsius,
+            min_return_temperature_in_celsius,
+        ) = self.calc_mean_max_min_value(list_or_pandas_series=return_temperature_list_in_celsius)
 
         return (
             mean_flow_temperature_in_celsius,
@@ -1365,50 +1379,96 @@ class KpiGenerator(JSONWizard):
         seconds_per_timestep: int,
         component_name: str,
         building_conditioned_floor_area_in_m2: float,
-    ) -> Tuple[float, float, float, float]:
+    ) -> Tuple[float, float, float, float, float, float, float]:
         """Get energy performance kpis from heat pump over simulated period.
 
         Transform thermal and electrical power from heat pump in energies.
         """
-        thermal_output_energy_in_kilowatt_hour = 0.0
-        electrical_energy_in_kilowatt_hour = 1.0
+        output_heating_energy_in_kilowatt_hour = 0.0
+        output_cooling_energy_in_kilowatt_hour = 0.0
+        electrical_energy_for_heating_in_kilowatt_hour = 1.0
+        electrical_energy_for_cooling_in_kilowatt_hour = 1.0
 
         for column in results.columns:
             if all(x in column.split(sep=" ") for x in [HeatPumpHplib.ThermalOutputPower, component_name]):
                 # take only output values for heating
-                thermal_output_power_values_in_watt = results[column].loc[results[column] > 0.0]
+                heating_output_power_values_in_watt = results[column].loc[results[column] > 0.0]
+                # take only output values for cooling
+                cooling_output_power_values_in_watt = results[column].loc[results[column] < 0.0]
                 # get energy from power
-                thermal_output_energy_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
-                    power_timeseries_in_watt=thermal_output_power_values_in_watt, timeresolution=seconds_per_timestep
+                output_heating_energy_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
+                    power_timeseries_in_watt=heating_output_power_values_in_watt, timeresolution=seconds_per_timestep
                 )
-            if all(x in column.split(sep=" ") for x in [HeatPumpHplib.ElectricalInputPower, component_name]):
-                # get electrical energie values
-                electrical_energy_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
+                # for cooling enery use absolute value, not negative value
+                output_cooling_energy_in_kilowatt_hour = abs(self.compute_total_energy_from_power_timeseries(
+                    power_timeseries_in_watt=cooling_output_power_values_in_watt, timeresolution=seconds_per_timestep
+                ))
+            if all(x in column.split(sep=" ") for x in [HeatPumpHplib.ElectricalInputPowerForHeating, component_name]):
+                # get electrical energie values for heating
+                electrical_energy_for_heating_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
+                    power_timeseries_in_watt=results[column], timeresolution=seconds_per_timestep
+                )
+            if all(x in column.split(sep=" ") for x in [HeatPumpHplib.ElectricalInputPowerForCooling, component_name]):
+                # get electrical energie values for cooling
+                electrical_energy_for_cooling_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
                     power_timeseries_in_watt=results[column], timeresolution=seconds_per_timestep
                 )
 
         # calculate SPF
-        spf = thermal_output_energy_in_kilowatt_hour / electrical_energy_in_kilowatt_hour
-        # calculate specific heat pump thermal output energy
-        specific_thermal_output_energy_of_heat_pump_in_kilowatt_hour_per_m2 = (
-            thermal_output_energy_in_kilowatt_hour / building_conditioned_floor_area_in_m2
+        if electrical_energy_for_heating_in_kilowatt_hour != 0.0:
+            spf = output_heating_energy_in_kilowatt_hour / electrical_energy_for_heating_in_kilowatt_hour
+        else:
+            spf = 0
+        # calculate SEER
+        if electrical_energy_for_cooling_in_kilowatt_hour != 0.0:
+            seer = output_cooling_energy_in_kilowatt_hour / electrical_energy_for_cooling_in_kilowatt_hour
+        else:
+            seer = 0
+        # calculate specific heat pump thermal output energy for heating
+        specific_heating_output_energy_of_heat_pump_in_kilowatt_hour_per_m2 = (
+            output_heating_energy_in_kilowatt_hour / building_conditioned_floor_area_in_m2
         )
 
         return (
             spf,
-            thermal_output_energy_in_kilowatt_hour,
-            electrical_energy_in_kilowatt_hour,
-            specific_thermal_output_energy_of_heat_pump_in_kilowatt_hour_per_m2,
+            seer,
+            output_heating_energy_in_kilowatt_hour,
+            output_cooling_energy_in_kilowatt_hour,
+            electrical_energy_for_heating_in_kilowatt_hour,
+            electrical_energy_for_cooling_in_kilowatt_hour,
+            specific_heating_output_energy_of_heat_pump_in_kilowatt_hour_per_m2,
         )
+
+    def get_heat_pump_cooling_and_heating_times(
+        self, results: pd.DataFrame, component_name: str,
+    ) -> Tuple[float, float]:
+        """Get heating and cooling times of heat pump."""
+        heating_time_in_hours = 0.0
+        cooling_time_in_hours = 0.0
+
+        for column in results.columns:
+            if all(x in column.split(sep=" ") for x in [HeatPumpHplib.TimeOnHeating, component_name]):
+                heating_time_in_seconds = sum(results[column])
+                heating_time_in_hours = heating_time_in_seconds / 3600
+            if all(x in column.split(sep=" ") for x in [HeatPumpHplib.TimeOnCooling, component_name]):
+                cooling_time_in_seconds = sum(results[column])
+                cooling_time_in_hours = cooling_time_in_seconds / 3600
+
+        return heating_time_in_hours, cooling_time_in_hours
 
     def get_heat_pump_kpis(self, building_conditioned_floor_area_in_m2: float) -> None:
         """Get some KPIs from Heat Pump."""
 
         number_of_heat_pump_cycles = None
         seasonal_performance_factor = None
-        thermal_output_energy_heatpump_in_kilowatt_hour = None
-        electrical_input_energy_heatpump_in_kilowatt_hour = None
-        specific_thermal_output_energy_of_heat_pump_in_kilowatt_hour_per_m2 = None
+        seasonal_energy_efficiency_ratio = None
+        heating_output_energy_heatpump_in_kilowatt_hour = None
+        cooling_output_energy_heatpump_in_kilowatt_hour = None
+        electrical_input_energy_for_heating_in_kilowatt_hour = None
+        electrical_input_energy_for_cooling_in_kilowatt_hour = None
+        specific_heating_energy_of_heat_pump_in_kilowatt_hour_per_m2 = None
+        heating_time_in_hours = None
+        cooling_time_in_hours = None
         mean_flow_temperature_in_celsius = None
         mean_return_temperature_in_celsius = None
         mean_temperature_difference_between_flow_and_return_in_celsius = None
@@ -1429,17 +1489,24 @@ class KpiGenerator(JSONWizard):
                     results=self.results, component_name=wrapped_component.my_component.component_name
                 )
 
-                # get SPF
+                # get SPF, SEER and other outputs
                 (
                     seasonal_performance_factor,
-                    thermal_output_energy_heatpump_in_kilowatt_hour,
-                    electrical_input_energy_heatpump_in_kilowatt_hour,
-                    specific_thermal_output_energy_of_heat_pump_in_kilowatt_hour_per_m2,
+                    seasonal_energy_efficiency_ratio,
+                    heating_output_energy_heatpump_in_kilowatt_hour,
+                    cooling_output_energy_heatpump_in_kilowatt_hour,
+                    electrical_input_energy_for_heating_in_kilowatt_hour,
+                    electrical_input_energy_for_cooling_in_kilowatt_hour,
+                    specific_heating_energy_of_heat_pump_in_kilowatt_hour_per_m2,
                 ) = self.get_heat_pump_energy_performance(
                     results=self.results,
                     seconds_per_timestep=self.simulation_parameters.seconds_per_timestep,
                     component_name=wrapped_component.my_component.component_name,
                     building_conditioned_floor_area_in_m2=building_conditioned_floor_area_in_m2,
+                )
+                # get heating and cooling hours
+                (heating_time_in_hours, cooling_time_in_hours) = self.get_heat_pump_cooling_and_heating_times(
+                    results=self.results, component_name=wrapped_component.my_component.component_name,
                 )
 
                 # get flow and return temperatures
@@ -1456,7 +1523,7 @@ class KpiGenerator(JSONWizard):
                 ) = self.get_flow_and_return_temperatures(
                     results=self.results,
                     output_name_flow_temperature=HeatPumpHplib.TemperatureOutput,
-                    output_name_return_temperature=SimpleHotWaterStorage.WaterTemperatureToHeatGenerator
+                    output_name_return_temperature=SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
                 )
 
                 break
@@ -1464,9 +1531,14 @@ class KpiGenerator(JSONWizard):
         if None in (
             number_of_heat_pump_cycles,
             seasonal_performance_factor,
-            thermal_output_energy_heatpump_in_kilowatt_hour,
-            electrical_input_energy_heatpump_in_kilowatt_hour,
-            specific_thermal_output_energy_of_heat_pump_in_kilowatt_hour_per_m2,
+            seasonal_energy_efficiency_ratio,
+            heating_output_energy_heatpump_in_kilowatt_hour,
+            cooling_output_energy_heatpump_in_kilowatt_hour,
+            electrical_input_energy_for_heating_in_kilowatt_hour,
+            electrical_input_energy_for_cooling_in_kilowatt_hour,
+            specific_heating_energy_of_heat_pump_in_kilowatt_hour_per_m2,
+            heating_time_in_hours,
+            cooling_time_in_hours,
             mean_temperature_difference_between_flow_and_return_in_celsius,
             mean_flow_temperature_in_celsius,
             mean_return_temperature_in_celsius,
@@ -1492,23 +1564,47 @@ class KpiGenerator(JSONWizard):
             value=seasonal_performance_factor,
             tag=KpiTagEnumClass.HEATPUMP,
         )
-        thermal_output_energy_heatpump_entry = KpiEntry(
-            name="Thermal output energy of heat pump",
-            unit="kWh",
-            value=thermal_output_energy_heatpump_in_kilowatt_hour,
+        seasonal_energy_efficiency_entry = KpiEntry(
+            name="Seasonal energy efficiency ratio of heat pump",
+            unit="-",
+            value=seasonal_energy_efficiency_ratio,
             tag=KpiTagEnumClass.HEATPUMP,
         )
-        specific_thermal_output_energy_of_heatpump_entry = KpiEntry(
-            name="Specific thermal output energy of heat pump",
+        heating_output_energy_heatpump_entry = KpiEntry(
+            name="Heating output energy of heat pump",
+            unit="kWh",
+            value=heating_output_energy_heatpump_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP,
+        )
+        cooling_output_energy_heatpump_entry = KpiEntry(
+            name="Cooling output energy of heat pump",
+            unit="kWh",
+            value=cooling_output_energy_heatpump_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP,
+        )
+        specific_heating_energy_of_heatpump_entry = KpiEntry(
+            name="Specific heating energy of heat pump",
             unit="kWh/m2",
-            value=specific_thermal_output_energy_of_heat_pump_in_kilowatt_hour_per_m2,
+            value=specific_heating_energy_of_heat_pump_in_kilowatt_hour_per_m2,
             tag=KpiTagEnumClass.HEATPUMP,
         )
-        electrical_input_energy_heatpump_entry = KpiEntry(
-            name="Electrical input energy of heat pump",
+        electrical_input_energy_for_heating_entry = KpiEntry(
+            name="Electrical input energy for heating of heat pump",
             unit="kWh",
-            value=electrical_input_energy_heatpump_in_kilowatt_hour,
+            value=electrical_input_energy_for_heating_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP,
+        )
+        electrical_input_energy_for_cooling_entry = KpiEntry(
+            name="Electrical input energy for cooling of heat pump",
+            unit="kWh",
+            value=electrical_input_energy_for_cooling_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP,
+        )
+        heating_hours_entry = KpiEntry(
+            name="Heating hours of heat pump", unit="h", value=heating_time_in_hours, tag=KpiTagEnumClass.HEATPUMP,
+        )
+        cooling_hours_entry = KpiEntry(
+            name="Cooling hours of heat pump", unit="h", value=cooling_time_in_hours, tag=KpiTagEnumClass.HEATPUMP,
         )
         mean_flow_temperature_heatpump_entry = KpiEntry(
             name="Mean flow temperature of heat pump",
@@ -1570,9 +1666,14 @@ class KpiGenerator(JSONWizard):
             {
                 number_of_heat_pump_cycles_entry.name: number_of_heat_pump_cycles_entry.to_dict(),
                 seasonal_performance_factor_entry.name: seasonal_performance_factor_entry.to_dict(),
-                thermal_output_energy_heatpump_entry.name: thermal_output_energy_heatpump_entry.to_dict(),
-                specific_thermal_output_energy_of_heatpump_entry.name: specific_thermal_output_energy_of_heatpump_entry.to_dict(),
-                electrical_input_energy_heatpump_entry.name: electrical_input_energy_heatpump_entry.to_dict(),
+                seasonal_energy_efficiency_entry.name: seasonal_energy_efficiency_entry.to_dict(),
+                heating_output_energy_heatpump_entry.name: heating_output_energy_heatpump_entry.to_dict(),
+                cooling_output_energy_heatpump_entry.name: cooling_output_energy_heatpump_entry.to_dict(),
+                specific_heating_energy_of_heatpump_entry.name: specific_heating_energy_of_heatpump_entry.to_dict(),
+                electrical_input_energy_for_heating_entry.name: electrical_input_energy_for_heating_entry.to_dict(),
+                electrical_input_energy_for_cooling_entry.name: electrical_input_energy_for_cooling_entry.to_dict(),
+                heating_hours_entry.name: heating_hours_entry.to_dict(),
+                cooling_hours_entry.name: cooling_hours_entry.to_dict(),
                 mean_flow_temperature_heatpump_entry.name: mean_flow_temperature_heatpump_entry.to_dict(),
                 mean_return_temperature_heatpump_entry.name: mean_return_temperature_heatpump_entry.to_dict(),
                 mean_temperature_difference_heatpump_entry.name: mean_temperature_difference_heatpump_entry.to_dict(),
@@ -1623,8 +1724,8 @@ class KpiGenerator(JSONWizard):
 
         # now sort kpi dict entries according to tags
         for kpi_name, entry in kpi_collection_dict_unsorted.items():
-            for tag in kpi_collection_dict_sorted.keys():  # pylint: disable=consider-using-dict-items, consider-iterating-dictionary
+            for tag, tag_dict in kpi_collection_dict_sorted.items():
                 if entry["tag"] in tag:
-                    kpi_collection_dict_sorted[tag].update({kpi_name: entry})
+                    tag_dict.update({kpi_name: entry})
 
         return kpi_collection_dict_sorted

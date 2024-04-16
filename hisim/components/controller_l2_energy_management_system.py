@@ -133,7 +133,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     ElectricityToElectrolyzerTarget = "ElectricityToElectrolyzerTarget"
 
     TotalElectricityToOrFromGrid = "TotalElectricityToOrFromGrid"
-    TotalElectricityToOrFromGrid = "TotalElectricityToOrFromGrid"
     TotalElectricityConsumption = "TotalElectricityConsumption"
     BuildingIndoorTemperatureModifier = "BuildingIndoorTemperatureModifier"  # connect to HDS controller and Building
     DomesticHotWaterStorageTemperatureModifier = (
@@ -450,8 +449,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
         production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
         consumption_uncontrolled_inputs = self.get_dynamic_inputs(
-        production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
-        consumption_uncontrolled_inputs = self.get_dynamic_inputs(
             tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
         )
         consumption_ems_controlled_inputs = self.get_dynamic_inputs(
@@ -550,7 +547,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
     def modify_set_temperatures_for_components_in_case_of_surplus_electricity(
         self,
-        available_surplus_electricity_in_watt: float,
         available_surplus_electricity_in_watt: float,
         stsv: cp.SingleTimeStepValues,
         inputs_sorted: List[ComponentInput],

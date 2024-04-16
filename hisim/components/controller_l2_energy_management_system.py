@@ -10,8 +10,6 @@ The component with the lowest source weight is activated first.
 from dataclasses import dataclass
 
 from typing import Any, List, Tuple
-from typing import Any, List, Tuple
-
 from dataclasses_json import dataclass_json
 
 from hisim import component as cp

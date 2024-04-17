@@ -50,6 +50,8 @@ class HeatDistributionConfig(cp.ConfigBase):
     name: str
     temperature_difference_between_flow_and_return_in_celsius: float
     water_mass_flow_rate_in_kg_per_second: float
+    absolute_conditioned_floor_area_in_m2: float
+    with_hot_water_storage: bool
     #: CO2 footprint of investment in kg
     co2_footprint: float
     #: cost for investment in Euro
@@ -64,12 +66,16 @@ class HeatDistributionConfig(cp.ConfigBase):
         cls,
         temperature_difference_between_flow_and_return_in_celsius: float,
         water_mass_flow_rate_in_kg_per_second: float,
+        absolute_conditioned_floor_area_in_m2: float,
+        with_hot_water_storage: bool,
     ) -> Any:
         """Get a default heat distribution system config."""
         config = HeatDistributionConfig(
             name="HeatDistributionSystem",
             temperature_difference_between_flow_and_return_in_celsius=temperature_difference_between_flow_and_return_in_celsius,
             water_mass_flow_rate_in_kg_per_second=water_mass_flow_rate_in_kg_per_second,
+            absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
+            with_hot_water_storage=with_hot_water_storage,
             co2_footprint=0,  # Todo: check value
             cost=8000,  # SOURCE: https://www.hausjournal.net/heizungsrohre-verlegen-kosten  # Todo: use price per m2 in system_setups instead
             lifetime=50,  # SOURCE: VDI2067-1
@@ -146,6 +152,10 @@ class HeatDistribution(cp.Component):
             self.heat_distribution_system_config.water_mass_flow_rate_in_kg_per_second
         )
 
+        self.absolute_conditioned_floor_area_in_m2 = self.heat_distribution_system_config.absolute_conditioned_floor_area_in_m2
+
+        self.heat_distribution_system_with_storage = self.heat_distribution_system_config.with_hot_water_storage
+
         self.build()
 
         self.state: HeatDistributionSystemState = HeatDistributionSystemState(
@@ -163,6 +173,7 @@ class HeatDistribution(cp.Component):
             lt.Units.ANY,
             True
         )
+
         self.theoretical_thermal_building_demand_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.TheoreticalThermalBuildingDemand,
@@ -187,14 +198,15 @@ class HeatDistribution(cp.Component):
             True,
         )
 
-        #just important for heating system without bufferstorage
-        self.water_mass_flow_rate_hp_in_kg_per_second_channel: cp.ComponentInput = self.add_input(
-            self.component_name,
-            self.WaterMassFlow,
-            lt.LoadTypes.WATER,
-            lt.Units.KG_PER_SEC,
-            False,
-        )
+        if not self.heat_distribution_system_with_storage:
+            # just important for heating system without bufferstorage
+            self.water_mass_flow_rate_hp_in_kg_per_second_channel: cp.ComponentInput = self.add_input(
+                self.component_name,
+                self.WaterMassFlow,
+                lt.LoadTypes.WATER,
+                lt.Units.KG_PER_SEC,
+                True,
+            )
 
         # Outputs
         self.water_temperature_inlet_channel: cp.ComponentOutput = self.add_output(
@@ -306,6 +318,7 @@ class HeatDistribution(cp.Component):
         self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = (
             PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
         )
+        self.density_of_water = PhysicsConfig.water_density
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -331,41 +344,37 @@ class HeatDistribution(cp.Component):
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the heat distribution system."""
-        print("---------------------------------------------------")
+
         # Get inputs ------------------------------------------------------------------------------------------------------------
         state_controller = stsv.get_input_value(self.state_channel)
         theoretical_thermal_building_demand_in_watt = stsv.get_input_value(self.theoretical_thermal_building_demand_channel)
         residence_temperature_input_in_celsius = stsv.get_input_value(self.residence_temperature_input_channel)
 
+        if self.heat_distribution_system_with_storage:
+            water_mass_flow_rate_in_kg_per_second = self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second
+        else:
+            # important for heating system without bufferstorage
+            water_mass_flow_rate_hp_in_kg_per_second = stsv.get_input_value(
+                self.water_mass_flow_rate_hp_in_kg_per_second_channel)
+            water_mass_flow_rate_in_kg_per_second = water_mass_flow_rate_hp_in_kg_per_second
 
-        # just important for heating system without bufferstorage
-        # #todo: abfrage ob speoihcer verbunden, wenn nein massenstrom so sosnt wie vorher self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second
-        water_mass_flow_rate_hp_in_kg_per_second = stsv.get_input_value(self.water_mass_flow_rate_hp_in_kg_per_second_channel)
-
-        # if water_mass_flow_rate_hp_in_kg_per_second == 0:
-        #     water_mass_flow_rate_in_kg_per_second = self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second
-        # else:
-        water_mass_flow_rate_in_kg_per_second = water_mass_flow_rate_hp_in_kg_per_second
-
-        print(water_mass_flow_rate_in_kg_per_second)
+        #todo: alle variablen namen universell umbenennen, nicht iurgendwas from oder to storage oder sowas
 
 
         if water_mass_flow_rate_in_kg_per_second == 0:
-
+            # important for heating system without bufferstorage
             (water_temperature_input_in_celsius,
             water_temperature_output_in_celsius,
             thermal_power_delivered_in_watt,
                 ) = self.determine_water_temperature_input_output_effective_thermal_power_without_massflow(
-                theoretical_thermal_buiding_demand_in_watt = theoretical_thermal_building_demand_in_watt,
                 residence_temperature_in_celsius = residence_temperature_input_in_celsius,
+                theoretical_thermal_buiding_demand_in_watt=theoretical_thermal_building_demand_in_watt,
             )
 
         else:
             water_temperature_input_in_celsius = stsv.get_input_value(self.water_temperature_input_channel)
-
                 # if state_controller == 1:
             if state_controller in (1, -1):
-                print("state=1")
                 (
                     water_temperature_output_in_celsius,
                     thermal_power_delivered_in_watt,
@@ -377,14 +386,15 @@ class HeatDistribution(cp.Component):
                 )
 
             elif state_controller == 0:
-                thermal_power_delivered_in_watt = 0.0
-
-                water_temperature_output_in_celsius = water_temperature_input_in_celsius
+                if self.heat_distribution_system_with_storage:
+                    thermal_power_delivered_in_watt = 0.0
+                    water_temperature_output_in_celsius = water_temperature_input_in_celsius
+                else:
+                    # if no hot water storage, state is transfer to HP model to turn hp off due to no thermal demand
+                    pass
 
             else:
                 raise ValueError("unknown hds controller mode")
-
-
 
         # Set outputs -----------------------------------------------------------------------------------------------------------
         stsv.set_output_value(
@@ -399,7 +409,7 @@ class HeatDistribution(cp.Component):
         )
         stsv.set_output_value(
             self.water_temperature_difference_channel,
-           # water_temperature_input_in_celsius-water_temperature_output_in_celsius
+        #    water_temperature_input_in_celsius-water_temperature_output_in_celsius
             self.state.water_input_temperature_in_celsius-self.state.water_output_temperature_in_celsius
         )
         stsv.set_output_value(
@@ -417,125 +427,46 @@ class HeatDistribution(cp.Component):
         self.state.water_input_temperature_in_celsius = water_temperature_input_in_celsius
         self.state.thermal_power_delivered_in_watt = thermal_power_delivered_in_watt
 
-
     def determine_water_temperature_input_output_effective_thermal_power_without_massflow(
         self,
-        theoretical_thermal_buiding_demand_in_watt: float,
         residence_temperature_in_celsius: float,
+        theoretical_thermal_buiding_demand_in_watt: float
     ) -> Any:
-        """Calculate cooled or heated water temperature after heat exchange between heat distribution system and building without massflow."""
-        # freie Konvektion
-        # quelle1: https://www.mdpi.com/1996-1073/16/15/5850
-        # quelle2: https://www.researchgate.net/publication/305659004_Modelling_and_Simulation_of_Underfloor_Heating_System_Supplied_from_Heat_Pump
-        # quelle3: https://www.sciencedirect.com/science/article/pii/S0378778816312749?via%3Dihub
-        # annahme: Wärmeleitung nur richtung Raum --> andere Richtung adiabat
+        """Calculate cooled or heated water temperature due to free convection after heat exchange between heat distribution system and building without massflow."""
 
-        thermal_resistance_heatingsystem = 0.02    #quelle 1 und 2
+        # source1: https://www.mdpi.com/1996-1073/16/15/5850
+        # source2: https://www.researchgate.net/publication/305659004_Modelling_and_Simulation_of_Underfloor_Heating_System_Supplied_from_Heat_Pump
+        # source3: https://www.sciencedirect.com/science/article/pii/S0378778816312749?via%3Dihub
+        # assumption: https://www.heizsparer.de/heizung/heizkorper/fussbodenheizung/fussbodenheizung-planen-heizkreise-berechnen
+        # assumption: heat transfer direction just to the room --> other direction is adiabatic
 
+        heat_resistance_coefficient_hds_pipe_to_air = 0.07 # 0.02  # (m^2*K)/W   # source 1 and 2  # todo: Wert raussuchen bzw aus daten berechnen
 
-        #Annahmen: https://www.heizsparer.de/heizung/heizkorper/fussbodenheizung/fussbodenheizung-planen-heizkreise-berechnen #todo: wissenschaftliche Quelle raussuchen
-        # Verlegeabstand = 10 cm zwischen Rohren --> 8,8 m ROhr pro m^2
+        inner_pipe_diameter = 17/1000 # in m  # source 1
+        outer_pipe_diameter = (17+4.4)/1000 # in m  # source 1
+        lenght_of_hds_pipe = 8.8*self.absolute_conditioned_floor_area_in_m2 # in m # todo: andere Werte für verlege abstand etc auch mit rein nehmen und entweder mittelwert bilden aus allen oder abfreage welche genutzt werden soll in config --> hier dann sowas wie medium,low,high analog zu building capacity class
 
-        # Fläche geb = 140m^2 todo: A aus building übergeben
+        inner_volume_of_hds = ((np.pi/4)*((inner_pipe_diameter)**2)*lenght_of_hds_pipe) # in m^3
 
-        inner_pipe_diameter = 17/1000 #m # Rohrinnendurchmesser = 17
-        outer_pipe_diameter = (17+2.2)/1000 # m # Rohraußendurchmesser = 17+2,2mm
-        lenght_of_hds = 8.8*140
+        outer_surface_of_hds_pipe = np.pi*outer_pipe_diameter*lenght_of_hds_pipe # in m^2
 
-        dichte_wasser = 997 #kg/m^3
+        heating_surface_hds_pipe = outer_pipe_diameter*lenght_of_hds_pipe  # in m^2 --> projezierte fläche??#todo: macht das sinn?
 
-        volume_of_hds = ((np.pi/4)*((inner_pipe_diameter)**2)*lenght_of_hds)  # in m^3  #todo: annahmen für rohrleitungdimensionen um volumen zu bestimme nin abhängigkeit von fgeb gfläche
+        mass_of_water_in_hds = inner_volume_of_hds * self.density_of_water
 
-        rohroberfläche_hds = np.pi*outer_pipe_diameter*lenght_of_hds     # in m^2
+        time_constant_hds = (mass_of_water_in_hds * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius) * (
+                                        heat_resistance_coefficient_hds_pipe_to_air / outer_surface_of_hds_pipe)
 
-        mass_of_water_in_hds = volume_of_hds * dichte_wasser
-        # ggf aus vorherigen volumenstrom und fläche des gebäudes auf wassermasse im heizkreis schließen
+        water_temperature_input_in_celsius = residence_temperature_in_celsius + ((self.state.water_input_temperature_in_celsius - residence_temperature_in_celsius) * np.exp(-(self.my_simulation_parameters.seconds_per_timestep) / time_constant_hds))
+        water_temperature_output_in_celsius = residence_temperature_in_celsius + ((self.state.water_output_temperature_in_celsius - residence_temperature_in_celsius) * np.exp(-(self.my_simulation_parameters.seconds_per_timestep) / time_constant_hds))
 
-        time_constant_hds=(mass_of_water_in_hds*self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius)*(thermal_resistance_heatingsystem/rohroberfläche_hds)  # /3600
-
-        print(time_constant_hds)
-
-        #water_temperature_input_in_celsius = self.state.water_input_temperature_in_celsius-0.5#theoretical_thermal_buiding_demand_in_watt/thermal_resistance_heatingsystem
-
-       # water_temperature_input_in_celsius = ((self.state.water_input_temperature_in_celsius-residence_temperature_in_celsius)*np.exp(-time_constant_hds))+residence_temperature_in_celsius # -1
-
-     #   water_temperature_input_in_celsius = ((self.state.water_input_temperature_in_celsius - 20) * np.exp(-(self.my_simulation_parameters.seconds_per_timestep) /time_constant_hds)) + 20  # -1
-
-       # water_temperature_input_in_celsius = ((self.state.water_input_temperature_in_celsius-residence_temperature_in_celsius) +
-       #                                       ((residence_temperature_in_celsius) * np.exp(-(self.my_simulation_parameters.seconds_per_timestep)*3600 / time_constant_hds)))
-
-        water_temperature_input_in_celsius = residence_temperature_in_celsius +((self.state.water_input_temperature_in_celsius - residence_temperature_in_celsius) * np.exp(-(self.my_simulation_parameters.seconds_per_timestep) / time_constant_hds))
-
-        # todo: falls annahme genommen wird werte für tau raussuchen und mit literatur belegen bzw gucken wie berechnen anhand von geb daten etc.
-
-        #todo: zeit irgencddeas /3600 teilen damit ggf tau besser wird???
-
-        #todo: mehr e-funktion verlauf hin krtiegfebn --> porobieren wie
-
-       # water_temperature_output_in_celsius= self.state.water_output_temperature_in_celsius-0.5#theoretical_thermal_buiding_demand_in_watt/thermal_resistance_heatingsystem
-
-        #water_temperature_output_in_celsius = ((self.state.water_output_temperature_in_celsius - residence_temperature_in_celsius) * np.exp(-time_constant_hds)) + residence_temperature_in_celsius
-       # water_temperature_output_in_celsius = ((self.state.water_output_temperature_in_celsius - residence_temperature_in_celsius) + ((residence_temperature_in_celsius) * np.exp(-( self.my_simulation_parameters.seconds_per_timestep)*3600 / time_constant_hds))
-        water_temperature_output_in_celsius = (residence_temperature_in_celsius) + ((self.state.water_output_temperature_in_celsius - residence_temperature_in_celsius) * np.exp(-(self.my_simulation_parameters.seconds_per_timestep) / time_constant_hds))
-
-        if theoretical_thermal_buiding_demand_in_watt > 0:
-            # water in hds must be warmer than the building in order to exchange heat
-            if water_temperature_input_in_celsius > residence_temperature_in_celsius:
-                # prevent that water output temperature in hds gets colder than residence temperature in building when heating
-                water_temperature_output_in_celsius = max(
-                    water_temperature_output_in_celsius,
-                    residence_temperature_in_celsius,
-                )
-                thermal_power_delivered_effective_in_watt = thermal_resistance_heatingsystem*(water_temperature_input_in_celsius - water_temperature_output_in_celsius)
-
-            else:
-                # water in hds is not warmer than the building, therefore heat exchange is not possible
-                water_temperature_input_in_celsius = self.state.water_input_temperature_in_celsius
-                water_temperature_output_in_celsius = self.state.water_output_temperature_in_celsius
-                thermal_power_delivered_effective_in_watt = 0
-
-        elif theoretical_thermal_buiding_demand_in_watt < 0:
-            # water in hds must be cooler than the building in order to cool building down
-            if water_temperature_input_in_celsius < residence_temperature_in_celsius:
-                # prevent that water output temperature in hds gets hotter than residence temperature in building when cooling
-                water_temperature_output_in_celsius = min(
-                    water_temperature_output_in_celsius,
-                    residence_temperature_in_celsius,
-                )
-                thermal_power_delivered_effective_in_watt = thermal_resistance_heatingsystem * (
-                            water_temperature_input_in_celsius - water_temperature_output_in_celsius)
-
-            else:
-                # water in hds is not colder than building and therefore cooling is not possible
-                water_temperature_input_in_celsius = self.state.water_input_temperature_in_celsius
-                water_temperature_output_in_celsius = self.state.water_output_temperature_in_celsius
-                thermal_power_delivered_effective_in_watt = 0
-
-        # in case no heating or cooling needed, water output is equal to water input
-        elif theoretical_thermal_buiding_demand_in_watt == 0:
-            water_temperature_input_in_celsius = self.state.water_input_temperature_in_celsius
-            water_temperature_output_in_celsius = self.state.water_output_temperature_in_celsius
-            thermal_power_delivered_effective_in_watt = 0
-        else:
-            raise ValueError(
-                f"Theoretical thermal demand has unacceptable value here {theoretical_thermal_buiding_demand_in_watt}."
-            )
-
-        print("+++++++++++++++++++++++++++++")
-        print(self.state.water_input_temperature_in_celsius)
-        print(water_temperature_input_in_celsius)
-        print("------")
-        print(self.state.water_output_temperature_in_celsius)
-        print(water_temperature_output_in_celsius)
-        print("+++++++++++++++++++++++++++++")
-
+        thermal_power_delivered_effective_in_watt = self.state.thermal_power_delivered_in_watt*np.exp(-(self.my_simulation_parameters.seconds_per_timestep) / time_constant_hds)
 
         return (
             water_temperature_input_in_celsius,
             water_temperature_output_in_celsius,
             thermal_power_delivered_effective_in_watt,
         )
-
 
     def determine_water_temperature_output_after_heat_exchange_with_building_and_effective_thermal_power(
         self,
@@ -683,7 +614,6 @@ class HeatDistributionController(cp.Component):
     State = "State"
     HeatingFlowTemperature = "HeatingFlowTemperature"
     HeatingReturnTemperature = "HeatingReturnTemperature"
-    HeatingTemperatureDifference = "HeatingTemperatureDifference"
 
     # Similar components to connect to:
     # 1. Building
@@ -771,13 +701,6 @@ class HeatDistributionController(cp.Component):
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.HeatingReturnTemperature} will follow.",
-        )
-        self.heating_temperature_difference_channel: cp.ComponentOutput = self.add_output(
-            self.component_name,
-            self.HeatingTemperatureDifference,
-            lt.LoadTypes.TEMPERATURE,
-            lt.Units.KELVIN,
-            output_description=f"here a description for {self.HeatingTemperatureDifference} will follow.",
         )
 
         self.controller_heat_distribution_mode: str = "off"
@@ -907,9 +830,6 @@ class HeatDistributionController(cp.Component):
                 )
             )
 
-            set_temperature_difference = list_of_heating_distribution_system_flow_and_return_temperatures[0] - list_of_heating_distribution_system_flow_and_return_temperatures[1]
-
-
             self.conditions_for_opening_or_shutting_heat_distribution(
                 theoretical_thermal_building_demand_in_watt=theoretical_thermal_building_demand_in_watt,
             )
@@ -949,8 +869,6 @@ class HeatDistributionController(cp.Component):
                 self.heating_return_temperature_channel,
                 list_of_heating_distribution_system_flow_and_return_temperatures[1],
             )
-            stsv.set_output_value(
-                self.heating_temperature_difference_channel,set_temperature_difference)
 
     def conditions_for_opening_or_shutting_heat_distribution(
         self,

@@ -5,7 +5,8 @@ import glob
 import os
 from typing import Dict, Any, Tuple, Optional, List
 import pandas as pd
-
+from ordered_set import OrderedSet
+import numpy as np
 from hisim.postprocessing.scenario_evaluation.result_data_collection import ResultDataTypeEnum
 from hisim import log
 
@@ -82,7 +83,7 @@ class ScenarioDataProcessing:
 
     @staticmethod
     def get_statistics_of_data_and_write_to_excel(
-        filtered_data: pd.DataFrame, path_to_save: str, kind_of_data_set: str,
+        filtered_data: pd.DataFrame, x_and_y_plot_data: pd.DataFrame, path_to_save: str, kind_of_data_set: str,
     ) -> None:
         """Use pandas describe method to get statistical values of certain data."""
         # create a excel writer object
@@ -93,6 +94,8 @@ class ScenarioDataProcessing:
             statistical_data = filtered_data.describe()
 
             statistical_data.to_excel(excel_writer=writer, sheet_name="statistics")
+            # write also x and y data which is plotted
+            x_and_y_plot_data.to_excel(excel_writer=writer, sheet_name="plotted mean data")
 
     @staticmethod
     def check_if_scenario_exists_and_filter_dataframe_for_scenarios(
@@ -130,10 +133,7 @@ class ScenarioDataProcessing:
 
     @staticmethod
     def aggregate_all_values_for_one_scenario(
-        dataframe: pd.DataFrame,
-        list_of_scenarios_to_check: List,
-        column_name_to_check: str,
-        filter_level_index: int,
+        dataframe: pd.DataFrame, list_of_scenarios_to_check: List, column_name_to_check: str, filter_level_index: int,
     ) -> pd.DataFrame:
         """Check for one scenario."""
 
@@ -207,6 +207,46 @@ class ScenarioDataProcessing:
                 key_for_current_scenario = ""
         return concat_df, key_for_scenario_one, key_for_current_scenario
 
+    @staticmethod
+    def take_mean_values_of_scenarios(filtered_data: pd.DataFrame) -> pd.DataFrame:
+        """Get mean values of scenarios."""
+
+        dict_with_x_and_y_data: Dict = {}
+        # this is for timeseries data like hourly daily monthly
+        try:
+            x_data = list(OrderedSet(list(filtered_data.time)))
+            take_mean_time_values_bool: bool = True
+        # this is for yearly data
+        except Exception:
+            x_data = [filtered_data.year.values[0]]
+            take_mean_time_values_bool = False
+
+        # add x_data as column
+        dict_with_x_and_y_data.update({"time": x_data})
+
+        for scenario in list(OrderedSet(list(filtered_data.scenario))):
+            filtered_data_per_scenario = filtered_data.loc[filtered_data["scenario"] == scenario]
+
+            # if time column exists in dataframe, meaning if hourly, daily or monthly data, take mean values of time also
+            if take_mean_time_values_bool:
+                mean_values_aggregated_according_to_scenarios = []
+                for time_value in x_data:
+                    mean_value_per_scenario_per_timestep = np.mean(
+                        filtered_data_per_scenario.loc[filtered_data_per_scenario["time"] == time_value]["value"]
+                    )
+
+                    mean_values_aggregated_according_to_scenarios.append(mean_value_per_scenario_per_timestep)
+                dict_with_x_and_y_data.update({f"{scenario}": mean_values_aggregated_according_to_scenarios})
+
+            # take mean value directly for yearly data
+            else:
+                mean_value_per_scenario = np.mean(filtered_data_per_scenario.value.values)
+                dict_with_x_and_y_data.update({f"{scenario}": [mean_value_per_scenario]})
+
+        x_and_y_plot_data: pd.DataFrame = pd.DataFrame(dict_with_x_and_y_data)
+
+        return x_and_y_plot_data
+
 
 class FilterClass:
 
@@ -227,6 +267,7 @@ class FilterClass:
             self.building_type,
             self.building_refurbishment_state,
             self.building_age,
+            self.building_type_and_age,
             self.pv_share,
         ) = self.get_scenarios_to_check()
 
@@ -236,15 +277,15 @@ class FilterClass:
         # system_setups for variables to check (check names of your variables before your evaluation, if they are correct)
         # kpi data has no time series, so only choose when you analyze yearly data
         kpi_data = [
-            "Total electricity consumption",
-            "Total electricity production",
-            "Ratio between total production and total consumption",
-            "Self-consumption",
-            "Self-consumption rate",
-            "Autarky rate",
-            "Total energy from grid",
-            "Total energy to grid",
-            "Relative electricity demand from grid",
+            # "Total electricity consumption",
+            # "PV production",
+            # "Ratio between PV production and total consumption",
+            # "Self-consumption",
+            # "Self-consumption rate",
+            # "Autarky rate",
+            # "Total energy from grid",
+            # "Total energy to grid",
+            # "Relative electricity demand from grid",
             "Self-consumption rate according to solar htw berlin",
             "Autarky rate according to solar htw berlin",
             "Investment costs for equipment per simulated period",
@@ -259,42 +300,49 @@ class FilterClass:
             "Maximum building indoor air temperature reached",
             "Building heating load",
             "Conditioned floor area",
+            "Rooftop area",
             "Specific heating load",
             "Specific heating demand according to TABULA",
             "Thermal output energy of heat distribution system",
             "Number of heat pump cycles",
             "Seasonal performance factor of heat pump",
-            "Thermal output energy of heat pump",
-            "Specific thermal output energy of heat pump",
-            "Electrical input energy of heat pump",
-            "Mean flow temperature of heat pump",
-            "Mean return temperature of heat pump",
-            "Mean temperature difference of heat pump",
-            "Max flow temperature of heat pump",
-            "Max return temperature of heat pump",
-            "Max temperature difference of heat pump",
-            "Min flow temperature of heat pump",
-            "Min return temperature of heat pump",
-            "Min temperature difference of heat pump",
-            "Mean flow temperature of heat distribution system",
-            "Mean return temperature of heat distribution system",
-            "Mean temperature difference of heat distribution system",
-            "Max flow temperature of heat distribution system",
-            "Max return temperature of heat distribution system",
-            "Max temperature difference of heat distribution system",
-            "Min flow temperature of heat distribution system",
-            "Min return temperature of heat distribution system",
-            "Min temperature difference of heat distribution system",
+            "Seasonal energy efficiency ratio of heat pump",
+            "Heating output energy of heat pump",
+            "Cooling output energy of heat pump",
+            "Specific heating energy of heat pump",
+            "Electrical input energy for heating of heat pump",
+            "Electrical input energy for cooling of heat pump",
+            "Heating hours of heat pump",
+            "Cooling hours of heat pump",
+            # "Mean flow temperature of heat pump",
+            # "Mean return temperature of heat pump",
+            # "Mean temperature difference of heat pump",
+            # "Max flow temperature of heat pump",
+            # "Max return temperature of heat pump",
+            # "Max temperature difference of heat pump",
+            # "Min flow temperature of heat pump",
+            # "Min return temperature of heat pump",
+            # "Min temperature difference of heat pump",
+            # "Mean flow temperature of heat distribution system",
+            # "Mean return temperature of heat distribution system",
+            # "Mean temperature difference of heat distribution system",
+            # "Max flow temperature of heat distribution system",
+            # "Max return temperature of heat distribution system",
+            # "Max temperature difference of heat distribution system",
+            # "Min flow temperature of heat distribution system",
+            # "Min return temperature of heat distribution system",
+            # "Min temperature difference of heat distribution system",
         ]
 
         electricity_data = [
             "ElectricityMeter|Electricity|ElectricityToGrid",
             "ElectricityMeter|Electricity|ElectricityFromGrid",
-            "ElectricityMeter|Electricity|ElectricityAvailable",
-            # if you analyze a house with ems the production and consumption values of the electricity meter are not representative
-            # use the ems production and consumption or the kpi values instead if needed
-            # "ElectricityMeter|Electricity|ElectricityConsumption",
-            # "ElectricityMeter|Electricity|ElectricityProduction",
+            "ElectricityMeter|Electricity|ElectricityToAndFromGrid",
+            "ElectricityMeter|Electricity|ElectricityConsumption",
+            "UTSPConnector|Electricity|ElectricityOutput",
+            "PVSystem_w0|Electricity|ElectricityOutput",
+            "AdvancedHeatPumpHPLib|Electricity|ElectricalInputPower",
+            "DHWHeatPump_w1|Electricity|ElectricityOutput",
         ]
 
         flow_and_return_temperatures = [
@@ -333,21 +381,68 @@ class FilterClass:
     def get_scenarios_to_check(self):
         """Get scenarios to check for scenario evaluation."""
 
-        (building_type, building_refurbishment_state, building_age,) = self.get_building_properties_to_check()
+        (
+            building_type,
+            building_refurbishment_state,
+            building_age,
+            building_type_and_age,
+        ) = self.get_building_properties_to_check()
 
         pv_share = self.get_pv_properties_to_check()
 
-        return building_type, building_refurbishment_state, building_age, pv_share
+        return building_type, building_refurbishment_state, building_age, building_type_and_age, pv_share
 
     def get_building_properties_to_check(self):
         """Get building properties."""
 
         # system_setups for scenarios to filter
         building_type = [
-            "DE.N.SFH",
-            "DE.N.TH",
-            "DE.N.MFH",
-            "DE.N.AB",
+            "SFH",
+            "TH",
+            "MFH",
+            "AB",
+        ]
+
+        building_type_and_age = [
+            "DE.N.TH.10",
+            "DE.N.TH.09",
+            "DE.N.TH.08",
+            "DE.N.TH.07",
+            "DE.N.TH.06",
+            "DE.N.TH.05",
+            "DE.N.TH.04",
+            "DE.N.TH.03",
+            "DE.N.TH.02",
+            "DE.N.SFH.10",
+            "DE.N.SFH.09",
+            "DE.N.SFH.08",
+            "DE.N.SFH.07",
+            "DE.N.SFH.06",
+            "DE.N.SFH.05",
+            "DE.N.SFH.04",
+            "DE.N.SFH.03",
+            "DE.N.SFH.02",
+            "DE.N.SFH.01",
+            # "DE.N.MFH.10",
+            # "DE.N.MFH.09",
+            # "DE.N.MFH.08",
+            # "DE.N.MFH.07",
+            # "DE.N.MFH.06",
+            # "DE.N.MFH.05",
+            # "DE.N.MFH.04",
+            # "DE.N.MFH.03",
+            # "DE.N.MFH.02",
+            # "DE.N.MFH.01",
+            # "DE.N.AB.06",
+            # "DE.N.AB.05",
+            # "DE.N.AB.04",
+            # "DE.N.AB.03",
+            # "DE.N.AB.02",
+            # "DE.East.MFH.05",
+            # "DE.East.MFH.04",
+            # "DE.East.AB.08",
+            # "DE.East.AB.07",
+            # "DE.East.AB.06",
         ]
 
         building_refurbishment_state = [
@@ -371,7 +466,7 @@ class FilterClass:
             "12.Gen",
         ]
 
-        return building_type, building_refurbishment_state, building_age
+        return building_type, building_refurbishment_state, building_age, building_type_and_age
 
     def get_pv_properties_to_check(self):
         """Get pv properties."""

@@ -712,7 +712,6 @@ class PostProcessor:
         self.write_filename_and_save_to_csv(
             dataframe=dataframe_hourly_data,
             folder=self.result_data_folder_for_scenario_evaluation,
-            module_filename=ppdt.module_filename,
             simulation_duration=ppdt.simulation_parameters.duration.days,
             simulation_year=ppdt.simulation_parameters.year,
             region=self.region,
@@ -725,7 +724,6 @@ class PostProcessor:
         self.write_filename_and_save_to_csv(
             dataframe=dataframe_daily_data,
             folder=self.result_data_folder_for_scenario_evaluation,
-            module_filename=ppdt.module_filename,
             simulation_duration=ppdt.simulation_parameters.duration.days,
             simulation_year=ppdt.simulation_parameters.year,
             region=self.region,
@@ -738,7 +736,6 @@ class PostProcessor:
         self.write_filename_and_save_to_csv(
             dataframe=dataframe_monthly_data,
             folder=self.result_data_folder_for_scenario_evaluation,
-            module_filename=ppdt.module_filename,
             simulation_duration=ppdt.simulation_parameters.duration.days,
             simulation_year=ppdt.simulation_parameters.year,
             region=self.region,
@@ -764,7 +761,6 @@ class PostProcessor:
         self.write_filename_and_save_to_csv(
             dataframe=simple_df_yearly_data,
             folder=self.result_data_folder_for_scenario_evaluation,
-            module_filename=ppdt.module_filename,
             time_resolution_of_data="yearly",
             simulation_duration=ppdt.simulation_parameters.duration.days,
             simulation_year=ppdt.simulation_parameters.year,
@@ -872,7 +868,6 @@ class PostProcessor:
         self,
         dataframe: pd.DataFrame,
         folder: str,
-        module_filename: str,
         time_resolution_of_data: str,
         simulation_duration: int,
         simulation_year: int,
@@ -882,7 +877,7 @@ class PostProcessor:
 
         filename = os.path.join(
             folder,
-            f"{module_filename}_{time_resolution_of_data}_results_for_{simulation_duration}_days_in_year_{simulation_year}_in_{region}.csv",
+            f"{time_resolution_of_data}_results_for_{simulation_duration}_days_in_year_{simulation_year}_in_{region}.csv",
         )
 
         dataframe.to_csv(path_or_buf=filename, index=None)  # type: ignore
@@ -894,10 +889,10 @@ class PostProcessor:
         component_display_in_webtool: list[str] = []
         for output in ppdt.all_outputs:
             if output.postprocessing_flag:
-                if OutputPostprocessingRules.DISPLAY_IN_WEBTOOL not in output.postprocessing_flag:
+                if OutputPostprocessingRules.DISPLAY_IN_WEBTOOL in output.postprocessing_flag:
                     component_display_in_webtool.append(output.get_pretty_name())
-            results_daily = ppdt.results_daily[component_display_in_webtool]
 
+        results_daily = ppdt.results_daily[component_display_in_webtool]
         data = results_daily.to_json(date_format="iso")
 
         # Write to file
@@ -907,7 +902,6 @@ class PostProcessor:
             encoding="utf-8",
         ) as file:
             file.write(data)
-        pass
 
     def write_results_for_webtool_to_json_file(self, ppdt: PostProcessingDataTransfer) -> None:
         """Collect results and write into json for webtool."""

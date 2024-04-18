@@ -75,9 +75,16 @@ class SystemChart:
             node_dict = {}
             for component in self.ppdt.wrapped_components:
                 node_name = component.my_component.component_name
+
+                # for non-physical components (controller) use darker color
+                if "Controller" in node_name:
+                    fillcolor = "lightgray"
+                else:
+                    fillcolor = "darkgray"
+
                 if with_class_names:
                     node_name = node_name + "\n" + component.my_component.__class__.__name__
-                my_node = pydot.Node(node_name)
+                my_node = pydot.Node(node_name, fillcolor=fillcolor)
                 node_dict[component.my_component.component_name] = my_node
                 graph.add_node(my_node)
             edge_labels = {}

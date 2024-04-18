@@ -204,7 +204,7 @@ Happy coding!
 
 MIT License
 
-Copyright (C) 2020-2021 Noah Pflugradt, Vitor Zago, Frank Burkard, Tjarko Tjaden, Leander Kotzur, Detlef Stolten
+Copyright (C) 2020-2021 Noah Pflugradt, Leander Kotzur, Detlef Stolten, Tjarko Tjaden, Kevin Knosala, Sebastian Dickler, Katharina Rieck, David Neuroth, Johanna Ganglbauer, Vitor Zago, Frank Burkard, Maximilian Hillen, Marwa Alfouly, Franz Oldopp, Markus Blasberg
 
 You should have received a copy of the MIT License along with this program.
 If not, see https://opensource.org/licenses/MIT

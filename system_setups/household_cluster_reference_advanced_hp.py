@@ -27,6 +27,7 @@ from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptio
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import log
+from hisim.units import Quantity, Celsius
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -183,6 +184,7 @@ def setup_function(
 
     # Build Occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    my_occupancy_config.data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP
     my_occupancy_config.household = lpg_households
     my_occupancy_config.cache_dir_path = cache_dir_path
 
@@ -229,10 +231,10 @@ def setup_function(
     # Build Heat Pump
     my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+        heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
     )
     my_heat_pump_config.group_id = group_id
-    my_heat_pump_config.flow_temperature_in_celsius = flow_temperature_in_celsius
+    my_heat_pump_config.flow_temperature_in_celsius = Quantity(flow_temperature_in_celsius, Celsius)
 
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
         config=my_heat_pump_config,
@@ -250,9 +252,9 @@ def setup_function(
     )
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-        max_thermal_power_in_watt_of_heating_system=my_heat_pump_config.set_thermal_output_power_in_watt,
+        max_thermal_power_in_watt_of_heating_system=my_heat_pump_config.set_thermal_output_power_in_watt.value,
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
-        heating_system_name=my_heat_pump.component_name,
+        sizing_option=simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
         water_mass_flow_rate_from_hds_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
     )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(

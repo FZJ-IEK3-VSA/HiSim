@@ -644,9 +644,9 @@ class Weather(Component):
             self.wind_speed_list = my_weather["Wspd"].tolist()
             try:
                 self.pressure_list = my_weather["Pressure"].tolist()
-            except:
+            except Exception:
                 log.information("Weather key Pressure could not be found.")
-                self.pressure_list = [0]*len(self.wind_speed_list)
+                self.pressure_list = [0] * len(self.wind_speed_list)
         else:
             tmy_data = read_test_reference_year_data(
                 weatherconfig=self.weather_config,

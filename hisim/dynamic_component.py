@@ -116,7 +116,9 @@ class DynamicComponent(Component):
     ) -> ComponentOutput:
         """Adds an output channel to a component."""
         # Label Output and generate variable
-        label = f"{source_weight}"
+        num_inputs = len(self.outputs)
+        # label = f"{source_weight}"
+        label = f"Output{num_inputs + 1}"
         vars(self)[label] = label
 
         # Define Output as Component Input and add it to inputs

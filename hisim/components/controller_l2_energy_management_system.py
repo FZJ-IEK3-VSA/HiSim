@@ -144,7 +144,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     )
     ElectricityToBuildingFromDistrictEMSOutput = "ElectricityToBuildingFromDistrictEMSOutput"
 
-
     CheckPeakShaving = "CheckPeakShaving"
 
     @utils.measure_execution_time
@@ -598,7 +597,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         elif current_component_type == lt.ComponentType.SURPLUS_CONTROLLER_DISTRICT:
             if available_surplus_electricity_in_watt > 0:
                 available_surplus_electricity_in_watt = (
-                        available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
+                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
                 )
                 stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
             else:
@@ -646,8 +645,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         stsv.set_output_value(self.electricity_to_building_from_district_output, district_electricity_unused)
 
         # get total production and consumptions
-        self.state.production_in_watt = sum(
-            [stsv.get_input_value(component_input=elem) for elem in self.production_inputs]
+        self.state.production_in_watt = (
+            sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])
             + district_electricity_unused
         )
         self.state.consumption_uncontrolled_in_watt = sum(

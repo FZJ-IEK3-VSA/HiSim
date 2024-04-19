@@ -390,7 +390,7 @@ def setup_function(
     )
 
     ResultPathProviderSingleton().set_important_result_path_information(
-        module_directory="/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/hisim_results",  # my_sim.module_directory,
+        module_directory=my_sim.module_directory,  # "/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/hisim_results",
         model_name=my_sim.module_filename,
         further_result_folder_description=os.path.join(
             *[

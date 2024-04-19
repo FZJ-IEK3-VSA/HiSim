@@ -591,7 +591,6 @@ class PVSystem(cp.Component):
 
     def i_prepare_simulation(self) -> None:
         """Prepares the component for the simulation."""
-        log.information(self.pvconfig.to_json())  # type: ignore
         file_exists, self.cache_filepath = utils.get_cache_file(
             "PVSystem", self.pvconfig, self.my_simulation_parameters
         )
@@ -610,12 +609,8 @@ class PVSystem(cp.Component):
                     + str(len(self.ac_power_ratios_for_all_timesteps_output))
                 )
         else:
-            if SingletonSimRepository().exist_entry(
-                    key=SingletonDictKeyEnum.LOCATION
-                ):
-                    SingletonSimRepository().get_entry(
-                        key=SingletonDictKeyEnum.LOCATION
-                    )
+            if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.LOCATION):
+                SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
             else:
                 raise KeyError(
                     "The key weather_location was not found in the singleton sim repository."

@@ -393,7 +393,9 @@ class WeatherConfig(ConfigBase):
             if location_entry in LocationEnum._member_names_:  # pylint: disable=W0212
                 location_entry = getattr(LocationEnum, location_entry)
             else:
-                raise ValueError(f"The location_entry {location_entry} could not be found in the Weather Location Enum class.")
+                raise ValueError(
+                    f"The location_entry {location_entry} could not be found in the Weather Location Enum class."
+                )
 
         path = os.path.join(
             utils.get_input_directory(),
@@ -620,8 +622,7 @@ class Weather(Component):
     def i_prepare_simulation(self) -> None:
         """Generates the lists to be used later."""
         seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
-        log.information(self.weather_config.location)
-        log.information(self.weather_config.to_json())  # type: ignore
+        log.information("Weather config: " + self.weather_config.to_json())  # type: ignore
         location_dict = get_coordinates(
             filepath=self.weather_config.source_path,
             source_enum=self.weather_config.data_source,

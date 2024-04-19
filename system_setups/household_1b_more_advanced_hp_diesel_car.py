@@ -26,7 +26,8 @@ from hisim.components import generic_hot_water_storage_modular
 from hisim.components import electricity_meter
 from hisim.system_setup_configuration import SystemSetupConfigBase
 from hisim import utils
-from hisim import loadtypes as lt
+from hisim.units import Quantity, Watt, Celsius, Seconds
+import hisim.loadtypes as lt
 
 from system_setups.modular_example import cleanup_old_lpg_requests
 
@@ -67,23 +68,26 @@ class HouseholdMoreAdvancedHPDieselCarConfig(SystemSetupConfigBase):
     electricity_meter_config: electricity_meter.ElectricityMeterConfig
 
     @classmethod
+    def get_default_options(cls):
+        """Get default options."""
+        return HouseholdMoreAdvancedHPDieselCarOptions()
+
+    @classmethod
     def get_default(cls) -> "HouseholdMoreAdvancedHPDieselCarConfig":
         """Get default HouseholdMoreAdvancedHPDieselCarConfig."""
 
         heating_reference_temperature_in_celsius: float = -7
 
-        building_config = (
-            building.BuildingConfig.get_default_german_single_family_home(heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius)
+        building_config = building.BuildingConfig.get_default_german_single_family_home(
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
         )
 
         household_config = cls.get_scaled_default(building_config)
 
-        household_config.hp_config.set_thermal_output_power_in_watt = (
-            6000  # default value leads to switching on-off very often
+        household_config.hp_config.set_thermal_output_power_in_watt = Quantity(
+            6000, Watt  # default value leads to switching on-off very often
         )
-        household_config.dhw_storage_config.volume = (
-            250  # default(volume = 230) leads to an error
-        )
+        household_config.dhw_storage_config.volume = 250  # default(volume = 230) leads to an error
 
         return household_config
 
@@ -103,12 +107,10 @@ class HouseholdMoreAdvancedHPDieselCarConfig(SystemSetupConfigBase):
             set_heating_temperature_for_building_in_celsius=my_building_information.set_heating_temperature_for_building_in_celsius,
             set_cooling_temperature_for_building_in_celsius=my_building_information.set_cooling_temperature_for_building_in_celsius,
             heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-            heating_reference_temperature_in_celsius=my_building_information.heating_reference_temperature_in_celsius
+            heating_reference_temperature_in_celsius=my_building_information.heating_reference_temperature_in_celsius,
         )
-        my_hds_controller_information = (
-            heat_distribution_system.HeatDistributionControllerInformation(
-                config=hds_controller_config
-            )
+        my_hds_controller_information = heat_distribution_system.HeatDistributionControllerInformation(
+            config=hds_controller_config
         )
         household_config = HouseholdMoreAdvancedHPDieselCarConfig(
             building_type="blub",
@@ -139,13 +141,15 @@ class HouseholdMoreAdvancedHPDieselCarConfig(SystemSetupConfigBase):
                 heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
             ),
             hp_config=more_advanced_heat_pump_hplib.HeatPumpHplibWithTwoOutputsConfig.get_scaled_advanced_hp_lib(
-                heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-                heating_reference_temperature_in_celsius=my_building_information.heating_reference_temperature_in_celsius
+                heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt,
+                                                          Watt),
+                heating_reference_temperature_in_celsius=Quantity(
+                    my_building_information.heating_reference_temperature_in_celsius, Celsius),
             ),
             simple_hot_water_storage_config=simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
                 max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
                 temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
-                heating_system_name="AdvancedHeatPumpHPLib",
+                sizing_option=simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
                 water_mass_flow_rate_from_hds_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
             ),
             dhw_heatpump_controller_config=more_advanced_heat_pump_hplib.HeatPumpHplibControllerDHWConfig.get_default_dhw_controller_config(),
@@ -161,11 +165,11 @@ class HouseholdMoreAdvancedHPDieselCarConfig(SystemSetupConfigBase):
         household_config.sh_controller_config.mode = (
             2  # use heating and cooling as default
         )
-        household_config.hp_config.minimum_idle_time_in_seconds = (
-            900  # default value leads to switching on-off very often
+        household_config.hp_config.minimum_idle_time_in_seconds = Quantity(
+            900, Seconds  # default value leads to switching on-off very often
         )
-        household_config.hp_config.minimum_running_time_in_seconds = (
-            900  # default value leads to switching on-off very often
+        household_config.hp_config.minimum_running_time_in_seconds = Quantity(
+            900, Seconds  # default value leads to switching on-off very often
         )
 
         # set same heating threshold
@@ -176,7 +180,7 @@ class HouseholdMoreAdvancedHPDieselCarConfig(SystemSetupConfigBase):
             set_heating_threshold_outside_temperature_in_celsius
         )
 
-        household_config.hp_config.flow_temperature_in_celsius = 21  # Todo: check value
+        household_config.hp_config.flow_temperature_in_celsius = Quantity(21, Celsius)  # Todo: check value
 
         return household_config
 
@@ -210,6 +214,8 @@ def setup_function(
     # Todo: change cleanup-function if result_path from occupancy is not utils.HISIMPATH["results"]
     if Path(utils.HISIMPATH["utsp_results"]).exists():
         cleanup_old_lpg_requests()
+    else:
+        Path(utils.HISIMPATH["utsp_results"]).mkdir(parents=False, exist_ok=False)
 
     if my_sim.my_module_config_path:
         my_config = HouseholdMoreAdvancedHPDieselCarConfig.load_from_json(
@@ -236,16 +242,14 @@ def setup_function(
     # Build Simulation Parameters
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year_all_options(
-            year=year, seconds_per_timestep=seconds_per_timestep)
-
+            year=year, seconds_per_timestep=seconds_per_timestep
+        )
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # Build heat Distribution System Controller
-    my_heat_distribution_controller = (
-        heat_distribution_system.HeatDistributionController(
-            config=my_config.hds_controller_config,
-            my_simulation_parameters=my_simulation_parameters,
-        )
+    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
+        config=my_config.hds_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Occupancy

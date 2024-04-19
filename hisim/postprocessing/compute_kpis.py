@@ -1307,7 +1307,7 @@ class KpiGenerator(JSONWizard):
         number_of_cycles = 0
         for column in results.columns:
 
-            if all(x in column.split(sep=" ") for x in [HeatPumpHplib.TimeOff, component_name]):
+            if all(x in column.split(sep=" ") for x in [HeatPumpHplibWithTwoOutputs.TimeOff, component_name]):
                 for index, off_time in enumerate(results[column].values):
                     try:
                         if off_time != 0 and results[column].values[index + 1] == 0:
@@ -1439,10 +1439,10 @@ class KpiGenerator(JSONWizard):
         cooling_time_in_hours = 0.0
 
         for column in results.columns:
-            if all(x in column.split(sep=" ") for x in [HeatPumpHplib.TimeOnHeating, component_name]):
+            if all(x in column.split(sep=" ") for x in [HeatPumpHplibWithTwoOutputs.TimeOnHeating, component_name]):
                 heating_time_in_seconds = sum(results[column])
                 heating_time_in_hours = heating_time_in_seconds / 3600
-            if all(x in column.split(sep=" ") for x in [HeatPumpHplib.TimeOnCooling, component_name]):
+            if all(x in column.split(sep=" ") for x in [HeatPumpHplibWithTwoOutputs.TimeOnCooling, component_name]):
                 cooling_time_in_seconds = sum(results[column])
                 cooling_time_in_hours = cooling_time_in_seconds / 3600
 

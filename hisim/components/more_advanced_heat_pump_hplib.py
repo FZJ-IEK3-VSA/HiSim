@@ -9,13 +9,19 @@ priority on dhw, if there is a demand from both in one timestep
 preparation on district heating for water/water heatpumps
 
 """
-from typing import Any, List, Optional, Tuple, Dict
 import hashlib
+
+# clean
+import importlib
 from dataclasses import dataclass
-from dataclasses_json import dataclass_json
-from dataclass_wizard import JSONWizard
+from typing import Any, List, Optional, Tuple, Dict
+
 import pandas as pd
+from dataclass_wizard import JSONWizard
+from dataclasses_json import dataclass_json
 from hplib import hplib as hpl
+
+# Import modules from HiSim
 from hisim.component import (
     Component,
     ComponentInput,
@@ -26,16 +32,22 @@ from hisim.component import (
     OpexCostDataClass,
     DisplayConfig,
 )
-from hisim.components import (
-    weather,
-    simple_hot_water_storage,
-    generic_hot_water_storage_modular,
-    heat_distribution_system,
-)
-from hisim.loadtypes import LoadTypes, Units, InandOutputType, OutputPostprocessingRules
-from hisim.simulationparameters import SimulationParameters
+from hisim.components import weather, simple_hot_water_storage, heat_distribution_system
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
+from hisim.loadtypes import LoadTypes, Units, InandOutputType, OutputPostprocessingRules
+from hisim.units import (
+    Quantity,
+    Watt,
+    Celsius,
+    Seconds,
+    Kilogram,
+    Euro,
+    Years,
+    KilowattHour,
+)
 from hisim.components.configuration import PhysicsConfig
+
+from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Jonas Hoppe"
 __copyright__ = ""
@@ -61,29 +73,32 @@ class HeatPumpHplibWithTwoOutputsConfig(ConfigBase):
     model: str
     heat_source: str
     group_id: int
-    heating_reference_temperature_in_celsius: float  # before t_in
-    flow_temperature_in_celsius: float  # before t_out_val
-    set_thermal_output_power_in_watt: float  # before p_th_set
+    heating_reference_temperature_in_celsius: Quantity[float, Celsius]  # before t_in
+    flow_temperature_in_celsius: Quantity[float, Celsius]  # before t_out_val
+    set_thermal_output_power_in_watt: Quantity[float, Watt]  # before p_th_set
     cycling_mode: bool
-    minimum_running_time_in_seconds: Optional[int]
-    minimum_idle_time_in_seconds: Optional[int]
-    temperature_difference_primary_side: float  # to be used, if water/water or brine/water heatpump
+    minimum_running_time_in_seconds: Optional[Quantity[int, Seconds]]
+    minimum_idle_time_in_seconds: Optional[Quantity[int, Seconds]]
+    temperature_difference_primary_side: float
+    with_hot_water_storage: bool
     #: CO2 footprint of investment in kg
-    co2_footprint: float
+    co2_footprint: Quantity[float, Kilogram]
     #: cost for investment in Euro
-    cost: float
+    cost: Quantity[float, Euro]
     #: lifetime in years
-    lifetime: float
+    lifetime: Quantity[float, Years]
     # maintenance cost as share of investment [0..1]
     maintenance_cost_as_percentage_of_investment: float
     #: consumption of the heatpump in kWh
-    consumption: float
+    consumption: Quantity[float, KilowattHour]
 
     @classmethod
     def get_default_generic_advanced_hp_lib(
-        cls,
-        set_thermal_output_power_in_watt: float = 8000,
-        heating_reference_temperature_in_celsius: float = -7.0,
+            cls,
+            set_thermal_output_power_in_watt: Quantity[float, Watt] = Quantity(8000, Watt),
+            heating_reference_temperature_in_celsius: Quantity[float, Celsius] = Quantity(
+                -7.0, Celsius
+            ),
     ) -> "HeatPumpHplibWithTwoOutputsConfig":
         """Gets a default HPLib Heat Pump.
 
@@ -96,30 +111,38 @@ class HeatPumpHplibWithTwoOutputsConfig(ConfigBase):
             heat_source="air",
             group_id=4,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-            flow_temperature_in_celsius=52,
+            flow_temperature_in_celsius=Quantity(52, Celsius),
             set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
             cycling_mode=True,
-            minimum_running_time_in_seconds=600,
-            minimum_idle_time_in_seconds=600,
+            minimum_running_time_in_seconds=Quantity(600, Seconds),
+            minimum_idle_time_in_seconds=Quantity(600, Seconds),
             temperature_difference_primary_side=2,
-            co2_footprint=set_thermal_output_power_in_watt
-            * 1e-3
-            * 165.84,  # value from emission_factros_and_costs_devices.csv
-            cost=set_thermal_output_power_in_watt * 1e-3 * 1513.74,  # value from emission_factros_and_costs_devices.csv
-            lifetime=10,  # value from emission_factros_and_costs_devices.csv
+            with_hot_water_storage=True,
+            co2_footprint=Quantity(
+                set_thermal_output_power_in_watt.value * 1e-3 * 165.84, Kilogram
+            ),
+            # value from emission_factors_and_costs_devices.csv
+            cost=Quantity(
+                set_thermal_output_power_in_watt.value * 1e-3 * 1513.74, Euro
+            ),
+            lifetime=Quantity(
+                10, Years
+            ),  # value from emission_factors_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
-            consumption=0,
+            consumption=Quantity(0, KilowattHour),
         )
 
     @classmethod
     def get_scaled_advanced_hp_lib(
         cls,
-        heating_load_of_building_in_watt: float,
-        heating_reference_temperature_in_celsius: float = -7.0,
+        heating_load_of_building_in_watt: Quantity[float, Watt],
+        heating_reference_temperature_in_celsius: Quantity[float, Celsius] = Quantity(
+            -7.0, Celsius
+        ),
     ) -> "HeatPumpHplibWithTwoOutputsConfig":
         """Gets a default heat pump with scaling according to heating load of the building."""
 
-        set_thermal_output_power_in_watt = heating_load_of_building_in_watt
+        set_thermal_output_power_in_watt: Quantity[float, Watt] = heating_load_of_building_in_watt
 
         return HeatPumpHplibWithTwoOutputsConfig(
             name="AdvancedHeatPumpHPLib",
@@ -127,19 +150,25 @@ class HeatPumpHplibWithTwoOutputsConfig(ConfigBase):
             heat_source="air",
             group_id=4,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-            flow_temperature_in_celsius=52,
+            flow_temperature_in_celsius=Quantity(52, Celsius),
             set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
             cycling_mode=True,
-            minimum_running_time_in_seconds=600,
-            minimum_idle_time_in_seconds=600,
+            minimum_running_time_in_seconds=Quantity(600, Seconds),
+            minimum_idle_time_in_seconds=Quantity(600, Seconds),
             temperature_difference_primary_side=2,
-            co2_footprint=set_thermal_output_power_in_watt
-            * 1e-3
-            * 165.84,  # value from emission_factros_and_costs_devices.csv
-            cost=set_thermal_output_power_in_watt * 1e-3 * 1513.74,  # value from emission_factros_and_costs_devices.csv
-            lifetime=10,  # value from emission_factros_and_costs_devices.csv
+            with_hot_water_storage=True,
+            # value from emission_factros_and_costs_devices.csv
+            co2_footprint=Quantity(
+                set_thermal_output_power_in_watt.value * 1e-3 * 165.84, Kilogram
+            ),
+            # value from emission_factros_and_costs_devices.csv
+            cost=Quantity(
+                set_thermal_output_power_in_watt.value * 1e-3 * 1513.74, Euro
+            ),
+            # value from emission_factros_and_costs_devices.csv
+            lifetime=Quantity(10, Years),
             maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
-            consumption=0,
+            consumption=Quantity(0, KilowattHour),
         )
 
 
@@ -163,12 +192,14 @@ class HeatPumpHplibWithTwoOutputs(Component):
     TemperatureInputSecondary_SH = "TemperatureInputSecondarySpaceHeating"  # °C
     TemperatureInputSecondary_DHW = "TemperatureInputSecondaryDWH"  # °C
     TemperatureAmbient = "TemperatureAmbient"  # °C
+    OnOffHDSController = "OnOffHDSController"  # °C
 
     # Outputs
     ThermalOutputPowerSH = "ThermalOutputPowerSpaceHeating"  # W
     ThermalOutputPowerDHW = "ThermalOutputPowerDHW"  # W
     ThermalOutputPowerTotal = "ThermalOutputPowerTotalHeatpump"  # W
     ElectricalInputPowerSH = "ElectricalInputPowerSpaceHeating"  # W
+    ElectricalInputPowerForCooling = "ElectricalInputPowerForCooling"  # W
     ElectricalInputPowerDHW = "ElectricalInputPowerDHW"  # W
     ElectricalInputPowerTotal = "ElectricalInputPowerTotalHeatpump"
     COP = "COP"  # -
@@ -178,7 +209,8 @@ class HeatPumpHplibWithTwoOutputs(Component):
     TemperatureOutputDHW = "TemperatureOutputDHW"  # °C
     MassFlowOutputSH = "MassFlowOutputSpaceHeating"  # kg/s
     MassFlowOutputDHW = "MassFlowOutputDHW"  # kg/s
-    TimeOn = "TimeOn"  # s
+    TimeOnHeating = "TimeOnHeating"  # s
+    TimeOnCooling = "TimeOnCooling"  # s
     TimeOff = "TimeOff"  # s
     ThermalEnergyTotal = "ThermalEnergyTotal"  # Wh
     ThermalEnergySH = "ThermalEnergySH"  # Wh
@@ -214,38 +246,47 @@ class HeatPumpHplibWithTwoOutputs(Component):
             my_config=config,
             my_display_config=my_display_config,
         )
-
-        self.calculation_cache: Dict = {}  # caching for hplib simulation
+        # caching for hplib simulation
+        self.calculation_cache: Dict = {}
 
         self.model = config.model
 
         self.group_id = config.group_id
 
-        self.t_in = config.heating_reference_temperature_in_celsius
+        self.t_in = int(config.heating_reference_temperature_in_celsius.value)
 
-        self.t_out_val = config.flow_temperature_in_celsius
+        self.t_out_val = int(config.flow_temperature_in_celsius.value)
 
-        self.p_th_set = config.set_thermal_output_power_in_watt
+        self.p_th_set = int(config.set_thermal_output_power_in_watt.value)
 
         self.cycling_mode = config.cycling_mode
 
-        self.minimum_running_time_in_seconds = config.minimum_running_time_in_seconds
-
-        self.minimum_idle_time_in_seconds = config.minimum_idle_time_in_seconds
-
-        self.temperature_difference_primary_side = config.temperature_difference_primary_side
+        self.with_hot_water_storage = config.with_hot_water_storage
 
         self.heat_source = config.heat_source
 
-        self.seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
+        self.temperature_difference_primary_side = config.temperature_difference_primary_side
 
-        # self.on_off: int = 0
+        self.minimum_running_time_in_seconds = (
+            config.minimum_running_time_in_seconds.value
+            if config.minimum_running_time_in_seconds
+            else config.minimum_running_time_in_seconds
+        )
 
-        postprocessing_flag = [InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
+        self.minimum_idle_time_in_seconds = (
+            config.minimum_idle_time_in_seconds.value
+            if config.minimum_idle_time_in_seconds
+            else config.minimum_idle_time_in_seconds
+        )
+
+        postprocessing_flag = [
+            InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+            OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+        ]
 
         # Component has states
         self.state = HeatPumpWithTwoOutputsState(
-            time_on=0,
+            time_on_heating=0,
             time_off=0,
             time_on_cooling=0,
             on_off_previous=0,
@@ -262,7 +303,9 @@ class HeatPumpHplibWithTwoOutputs(Component):
         self.previous_state = self.state.self_copy()
 
         # Load parameters from heat pump database
-        self.parameters = hpl.get_parameters(self.model, self.group_id, self.t_in, self.t_out_val, self.p_th_set)
+        self.parameters = hpl.get_parameters(
+            self.model, self.group_id, self.t_in, self.t_out_val, self.p_th_set
+        )
 
         self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = (
             PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
@@ -271,13 +314,13 @@ class HeatPumpHplibWithTwoOutputs(Component):
         # protect erros for Water/Water Heatpumps
         if self.parameters["Group"].iloc[0] == 1.0 or self.parameters["Group"].iloc[0] == 4.0:
             if self.heat_source != "air":
-                raise KeyError("WP Modell passt nicht zu in Eingangsparameter angegebenen HeatSource!")
+                raise KeyError("HP modell does not fit to heat source in config!")
         if self.parameters["Group"].iloc[0] == 2.0 or self.parameters["Group"].iloc[0] == 5.0:
             if self.heat_source != "brine":
-                raise KeyError("WP Modell passt nicht zu in Eingangsparameter angegebenen HeatSource!")
+                raise KeyError("HP modell does not fit to heat source in config!")
         if self.parameters["Group"].iloc[0] == 3.0 or self.parameters["Group"].iloc[0] == 6.0:
             if self.heat_source != "water":
-                raise KeyError("WP Modell passt nicht zu in Eingangsparameter angegebenen HeatSource!")
+                raise KeyError("HP modell does not fit to heat source in config!")
 
         # Define component inputs
         self.on_off_switch_sh: ComponentInput = self.add_input(
@@ -344,6 +387,15 @@ class HeatPumpHplibWithTwoOutputs(Component):
             mandatory=True,
         )
 
+        if not self.with_hot_water_storage:
+            self.onoff_hds_controller: ComponentInput = self.add_input(
+                object_name=self.component_name,
+                field_name=self.OnOffHDSController,
+                load_type=LoadTypes.TEMPERATURE,
+                unit=Units.CELSIUS,
+                mandatory=True,
+            )
+
         # Define component outputs
         self.p_th_sh: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -386,6 +438,18 @@ class HeatPumpHplibWithTwoOutputs(Component):
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             output_description="Electricity input power for DHW in Watt",
+        )
+
+        self.p_el_cooling: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricalInputPowerForCooling,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT,
+            postprocessing_flag=[
+                InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+            ],
+            output_description="Electricity input power for cooling in Watt",
         )
 
         self.p_el_tot: ComponentOutput = self.add_output(
@@ -450,12 +514,20 @@ class HeatPumpHplibWithTwoOutputs(Component):
             output_description="Mass flow output",
         )
 
-        self.time_on: ComponentOutput = self.add_output(
+        self.time_on_heating: ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.TimeOn,
+            field_name=self.TimeOnHeating,
             load_type=LoadTypes.TIME,
             unit=Units.SECONDS,
-            output_description="Time turned on",
+            output_description="Time turned on for heating",
+        )
+
+        self.time_on_cooling: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.TimeOnCooling,
+            load_type=LoadTypes.TIME,
+            unit=Units.SECONDS,
+            output_description="Time turned on for cooling",
         )
 
         self.time_off: ComponentOutput = self.add_output(
@@ -686,8 +758,12 @@ class HeatPumpHplibWithTwoOutputs(Component):
         self,
     ):
         """Get simple hot water storage default connections."""
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.simple_hot_water_storage"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "SimpleHotWaterStorage")
         connections = []
-        hws_classname = simple_hot_water_storage.SimpleHotWaterStorage.get_classname()
+        hws_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
                 HeatPumpHplibWithTwoOutputs.TemperatureInputSecondary_SH,
@@ -701,13 +777,17 @@ class HeatPumpHplibWithTwoOutputs(Component):
         self,
     ):
         """Get simple hot water storage default connections."""
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.generic_hot_water_storage_modular"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "HotWaterStorage")
         connections = []
-        dhw_classname = generic_hot_water_storage_modular.HotWaterStorage.get_classname()
+        dhw_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
                 HeatPumpHplibWithTwoOutputs.TemperatureInputSecondary_DHW,
                 dhw_classname,
-                generic_hot_water_storage_modular.HotWaterStorage.TemperatureMean,
+                component_class.TemperatureMean,
             )
         )
         return connections
@@ -719,10 +799,12 @@ class HeatPumpHplibWithTwoOutputs(Component):
     def i_save_state(self) -> None:
         """Save state."""
         self.previous_state = self.state.self_copy()
+        # pass
 
     def i_restore_state(self) -> None:
         """Restore state."""
         self.state = self.previous_state.self_copy()
+        # pass
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         """Doubelcheck."""
@@ -732,7 +814,9 @@ class HeatPumpHplibWithTwoOutputs(Component):
         """Prepare simulation."""
         pass
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+    def i_simulate(
+        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
+    ) -> None:
         """Simulate the component."""
 
         # Load input values
@@ -745,15 +829,20 @@ class HeatPumpHplibWithTwoOutputs(Component):
         t_in_secondary_sh = stsv.get_input_value(self.t_in_secondary_sh)
         t_in_secondary_dhw = stsv.get_input_value(self.t_in_secondary_dhw)
         t_amb = stsv.get_input_value(self.t_amb)
-        time_on_heating = self.state.time_on
+        time_on_heating = self.state.time_on_heating
         time_on_cooling = self.state.time_on_cooling
         time_off = self.state.time_off
+
+        if not self.with_hot_water_storage:
+            onoff_hds_controller = stsv.get_input_value(self.onoff_hds_controller)
 
         if on_off_dhw != 0:
             on_off = on_off_dhw
         else:
             on_off = on_off_sh
-        # on_off=self.state.on_off_previous
+            if not self.with_hot_water_storage:
+                if onoff_hds_controller == 0:
+                    on_off = 0
 
         # cycling means periodic turning on and off of the heat pump
         if self.cycling_mode is True:
@@ -764,7 +853,8 @@ class HeatPumpHplibWithTwoOutputs(Component):
 
             if time_on_min is None or time_off_min is None:
                 raise ValueError(
-                    "When the cycling mode is true, the minimum running time and minimum idle time of the heat pump must be given an integer value."
+                    """When the cycling mode is true, the minimum running time and minimum idle time of the heat pump
+                    must be given an integer value."""
                 )
 
             # Overwrite on_off to realize minimum time of or time off
@@ -800,6 +890,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
             p_th_dhw = 0.0
             p_el_sh = results["P_el"].values[0]
             p_el_dhw = 0
+            p_el_cooling = 0
             cop = results["COP"].values[0]
             eer = results["EER"].values[0]
             t_out_sh = results["T_out"].values[0]
@@ -822,6 +913,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
 
             p_th_sh = 0.0
             p_el_sh = 0
+            p_el_cooling = 0
             cop = results["COP"].values[0]
             eer = results["EER"].values[0]
             t_out_sh = t_in_secondary_sh
@@ -854,6 +946,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
             p_th_dhw = 0.0
             p_el_sh = results["P_el"].values[0]
             p_el_dhw = 0
+            p_el_cooling = p_el_sh
             cop = results["COP"].values[0]
             eer = results["EER"].values[0]
             t_out_sh = results["T_out"].values[0]
@@ -870,6 +963,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
             p_th_dhw = 0
             p_el_sh = 0
             p_el_dhw = 0
+            p_el_cooling = 0
             # None values or nans will cause troubles in post processing, that is why there are not used here
             # cop = None
             # t_out = None
@@ -887,17 +981,17 @@ class HeatPumpHplibWithTwoOutputs(Component):
             raise ValueError("Unknown mode for Advanced HPLib On_Off.")
 
         p_th_tot_in_watt = p_th_dhw + p_th_sh
-        p_el_tot_in_watt = p_el_dhw + p_el_sh
+        p_el_tot_in_watt = p_el_dhw + p_el_sh + p_el_cooling
 
         thermal_power_from_environment = (p_th_dhw + p_th_sh) - (p_el_dhw + p_el_sh)
 
-        thermal_energy_hp_tot_in_watt_hour = p_th_tot_in_watt * self.seconds_per_timestep / 3600
-        thermal_energy_hp_sh_in_watt_hour = p_th_sh * self.seconds_per_timestep / 3600
-        thermal_energy_hp_dhw_in_watt_hour = p_th_dhw * self.seconds_per_timestep / 3600
+        thermal_energy_hp_tot_in_watt_hour = p_th_tot_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3600
+        thermal_energy_hp_sh_in_watt_hour = p_th_sh * self.my_simulation_parameters.seconds_per_timestep / 3600
+        thermal_energy_hp_dhw_in_watt_hour = p_th_dhw * self.my_simulation_parameters.seconds_per_timestep / 3600
 
-        electrical_energy_hp_tot_in_watt_hour = p_el_tot_in_watt * self.seconds_per_timestep / 3600
-        electrical_energy_hp_sh_in_watt_hour = p_el_sh * self.seconds_per_timestep / 3600
-        electrical_energy_hp_dhw_in_watt_hour = p_el_dhw * self.seconds_per_timestep / 3600
+        electrical_energy_hp_tot_in_watt_hour = p_el_tot_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3600
+        electrical_energy_hp_sh_in_watt_hour = p_el_sh * self.my_simulation_parameters.seconds_per_timestep / 3600
+        electrical_energy_hp_dhw_in_watt_hour = p_el_dhw * self.my_simulation_parameters.seconds_per_timestep / 3600
 
         cumulative_hp_thermal_energy_tot_in_watt_hour = (
             self.state.cumulative_thermal_energy_tot_in_watt_hour + thermal_energy_hp_tot_in_watt_hour
@@ -954,6 +1048,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
         stsv.set_output_value(self.p_th_tot, p_th_tot_in_watt)
         stsv.set_output_value(self.p_el_sh, p_el_sh)
         stsv.set_output_value(self.p_el_dhw, p_el_dhw)
+        stsv.set_output_value(self.p_el_cooling, p_el_cooling)
         stsv.set_output_value(self.p_el_tot, p_el_tot_in_watt)
         stsv.set_output_value(self.cop, cop)
         stsv.set_output_value(self.eer, eer)
@@ -962,7 +1057,8 @@ class HeatPumpHplibWithTwoOutputs(Component):
         stsv.set_output_value(self.t_out_dhw, t_out_dhw)
         stsv.set_output_value(self.m_dot_sh, m_dot_sh)
         stsv.set_output_value(self.m_dot_dhw, m_dot_dhw)
-        stsv.set_output_value(self.time_on, time_on_heating)
+        stsv.set_output_value(self.time_on_heating, time_on_heating)
+        stsv.set_output_value(self.time_on_cooling, time_on_cooling)
         stsv.set_output_value(self.time_off, time_off)
         stsv.set_output_value(self.thermal_power_from_environment, thermal_power_from_environment)
 
@@ -998,7 +1094,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
         stsv.set_output_value(self.counter_on_off_channel, counter_onoff)
 
         # write values to state
-        self.state.time_on = time_on_heating
+        self.state.time_on_heating = time_on_heating
         self.state.time_on_cooling = time_on_cooling
         self.state.time_off = time_off
         self.state.on_off_previous = on_off
@@ -1013,11 +1109,10 @@ class HeatPumpHplibWithTwoOutputs(Component):
         self.state.counter_onoff = counter_onoff
 
     @staticmethod
-    def get_cost_capex(
-        config: HeatPumpHplibWithTwoOutputsConfig,
-    ) -> Tuple[float, float, float]:
+    @staticmethod
+    def get_cost_capex(config: HeatPumpHplibWithTwoOutputsConfig) -> Tuple[float, float, float]:
         """Returns investment cost, CO2 emissions and lifetime."""
-        return config.cost, config.co2_footprint, config.lifetime
+        return config.cost.value, config.co2_footprint.value, config.lifetime.value
 
     def get_cost_opex(
         self,
@@ -1076,7 +1171,10 @@ class HeatPumpHplibWithTwoOutputs(Component):
         if my_hash_key in self.calculation_cache:
             results = self.calculation_cache[my_hash_key]
         else:
-            results = hpl.simulate(t_in_primary, t_in_secondary, parameters, t_amb, mode=mode)
+            results = hpl.simulate(
+                t_in_primary, t_in_secondary, parameters, t_amb, mode=mode
+            )
+
             self.calculation_cache[my_hash_key] = results
 
         return results
@@ -1087,7 +1185,7 @@ class HeatPumpWithTwoOutputsState:
 
     """HeatPumpWithTwoOutputsState class."""
 
-    time_on: int
+    time_on_heating: int
     time_off: int
     time_on_cooling: int
     on_off_previous: float
@@ -1106,7 +1204,7 @@ class HeatPumpWithTwoOutputsState:
     ):
         """Copy the Heat Pump State."""
         return HeatPumpWithTwoOutputsState(
-            self.time_on,
+            self.time_on_heating,
             self.time_off,
             self.time_on_cooling,
             self.on_off_previous,
@@ -1124,7 +1222,6 @@ class HeatPumpWithTwoOutputsState:
 
 @dataclass
 class CalculationRequest(JSONWizard):
-
     """Class for caching hplib parameters so that hplib.simulate does not need to run so often."""
 
     t_in_primary: float
@@ -1135,10 +1232,17 @@ class CalculationRequest(JSONWizard):
     def get_key(self):
         """Get key of class with important parameters."""
 
-        return str(self.t_in_primary) + " " + str(self.t_in_secondary) + " " + str(self.t_amb) + " " + str(self.mode)
+        return (
+            str(self.t_in_primary)
+            + " "
+            + str(self.t_in_secondary)
+            + " "
+            + str(self.t_amb)
+            + " "
+            + str(self.mode)
+        )
 
 
-# ===========================================================================
 @dataclass_json
 @dataclass
 class HeatPumpHplibControllerSpaceHeatingConfig(ConfigBase):
@@ -1154,7 +1258,8 @@ class HeatPumpHplibControllerSpaceHeatingConfig(ConfigBase):
     mode: int
     set_heating_threshold_outside_temperature_in_celsius: Optional[float]
     set_cooling_threshold_outside_temperature_in_celsius: Optional[float]
-    temperature_offset_for_state_conditions_in_celsius: float
+    upper_temperature_offset_for_state_conditions_in_celsius: float
+    lower_temperature_offset_for_state_conditions_in_celsius: float
     heat_distribution_system_type: Any
 
     @classmethod
@@ -1167,7 +1272,8 @@ class HeatPumpHplibControllerSpaceHeatingConfig(ConfigBase):
             mode=1,
             set_heating_threshold_outside_temperature_in_celsius=16.0,
             set_cooling_threshold_outside_temperature_in_celsius=20.0,
-            temperature_offset_for_state_conditions_in_celsius=5.0,
+            upper_temperature_offset_for_state_conditions_in_celsius=5.0,
+            lower_temperature_offset_for_state_conditions_in_celsius=5.0,
             heat_distribution_system_type=heat_distribution_system_type,
         )
 
@@ -1196,12 +1302,18 @@ class HeatPumpHplibControllerSpaceHeating(Component):
     """
 
     # Inputs
-    WaterTemperatureInputFromHeatWaterStorage = "WaterTemperatureInputFromHeatWaterStorage"
-    HeatingFlowTemperatureFromHeatDistributionSystem = "HeatingFlowTemperatureFromHeatDistributionSystem"
+    WaterTemperatureInputFromHeatWaterStorage = (
+        "WaterTemperatureInputFromHeatWaterStorage"
+    )
+    HeatingFlowTemperatureFromHeatDistributionSystem = (
+        "HeatingFlowTemperatureFromHeatDistributionSystem"
+    )
 
     DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
 
-    SimpleHotWaterStorageTemperatureModifier = "SimpleHotWaterStorageTemperatureModifier"
+    SimpleHotWaterStorageTemperatureModifier = (
+        "SimpleHotWaterStorageTemperatureModifier"
+    )
 
     # Outputs
     State_SH = "State_SpaceHeating"
@@ -1221,10 +1333,13 @@ class HeatPumpHplibControllerSpaceHeating(Component):
             my_display_config=my_display_config,
         )
 
-        self.heat_distribution_system_type = self.heatpump_controller_config.heat_distribution_system_type
+        self.heat_distribution_system_type = (
+            self.heatpump_controller_config.heat_distribution_system_type
+        )
         self.build(
             mode=self.heatpump_controller_config.mode,
-            temperature_offset_for_state_conditions_in_celsius=self.heatpump_controller_config.temperature_offset_for_state_conditions_in_celsius,
+            upper_temperature_offset_for_state_conditions_in_celsius=self.heatpump_controller_config.upper_temperature_offset_for_state_conditions_in_celsius,
+            lower_temperature_offset_for_state_conditions_in_celsius=self.heatpump_controller_config.lower_temperature_offset_for_state_conditions_in_celsius,
         )
 
         self.water_temperature_input_channel: ComponentInput = self.add_input(
@@ -1242,20 +1357,24 @@ class HeatPumpHplibControllerSpaceHeating(Component):
             Units.CELSIUS,
             True,
         )
-        self.daily_avg_outside_temperature_input_channel: ComponentInput = self.add_input(
-            self.component_name,
-            self.DailyAverageOutsideTemperature,
-            LoadTypes.TEMPERATURE,
-            Units.CELSIUS,
-            True,
+        self.daily_avg_outside_temperature_input_channel: ComponentInput = (
+            self.add_input(
+                self.component_name,
+                self.DailyAverageOutsideTemperature,
+                LoadTypes.TEMPERATURE,
+                Units.CELSIUS,
+                True,
+            )
         )
 
-        self.simple_hot_water_storage_temperature_modifier_channel: ComponentInput = self.add_input(
-            self.component_name,
-            self.SimpleHotWaterStorageTemperatureModifier,
-            LoadTypes.TEMPERATURE,
-            Units.CELSIUS,
-            mandatory=False,
+        self.simple_hot_water_storage_temperature_modifier_channel: ComponentInput = (
+            self.add_input(
+                self.component_name,
+                self.SimpleHotWaterStorageTemperatureModifier,
+                LoadTypes.TEMPERATURE,
+                Units.CELSIUS,
+                mandatory=False,
+            )
         )
 
         self.state_channel: ComponentOutput = self.add_output(
@@ -1269,16 +1388,22 @@ class HeatPumpHplibControllerSpaceHeating(Component):
         self.controller_heatpumpmode: Any
         self.previous_heatpump_mode: Any
 
-        self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
+        self.add_default_connections(
+            self.get_default_connections_from_heat_distribution_controller()
+        )
         self.add_default_connections(self.get_default_connections_from_weather())
-        self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
+        self.add_default_connections(
+            self.get_default_connections_from_simple_hot_water_storage()
+        )
 
     def get_default_connections_from_heat_distribution_controller(
         self,
     ):
         """Get default connections."""
         connections = []
-        hdsc_classname = heat_distribution_system.HeatDistributionController.get_classname()
+        hdsc_classname = (
+            heat_distribution_system.HeatDistributionController.get_classname()
+        )
         connections.append(
             ComponentConnection(
                 HeatPumpHplibControllerSpaceHeating.HeatingFlowTemperatureFromHeatDistributionSystem,
@@ -1304,7 +1429,7 @@ class HeatPumpHplibControllerSpaceHeating(Component):
         return connections
 
     def get_default_connections_from_simple_hot_water_storage(
-        self,
+            self,
     ):
         """Get simple hot water storage default connections."""
         connections = []
@@ -1321,7 +1446,8 @@ class HeatPumpHplibControllerSpaceHeating(Component):
     def build(
         self,
         mode: float,
-        temperature_offset_for_state_conditions_in_celsius: float,
+        upper_temperature_offset_for_state_conditions_in_celsius: float,
+        lower_temperature_offset_for_state_conditions_in_celsius: float,
     ) -> None:
         """Build function.
 
@@ -1333,7 +1459,12 @@ class HeatPumpHplibControllerSpaceHeating(Component):
 
         # Configuration
         self.mode = mode
-        self.temperature_offset_for_state_conditions_in_celsius = temperature_offset_for_state_conditions_in_celsius
+        self.upper_temperature_offset_for_state_conditions_in_celsius = (
+            upper_temperature_offset_for_state_conditions_in_celsius
+        )
+        self.lower_temperature_offset_for_state_conditions_in_celsius = (
+            lower_temperature_offset_for_state_conditions_in_celsius
+        )
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -1355,7 +1486,9 @@ class HeatPumpHplibControllerSpaceHeating(Component):
         """Write important variables to report."""
         return self.heatpump_controller_config.get_string_dict()
 
-    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+    def i_simulate(
+        self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool
+    ) -> None:
         """Simulate the heat pump comtroller."""
 
         if force_convergence:
@@ -1363,12 +1496,14 @@ class HeatPumpHplibControllerSpaceHeating(Component):
         else:
             # Retrieves inputs
 
-            water_temperature_input_from_heat_water_storage_in_celsius = stsv.get_input_value(
-                self.water_temperature_input_channel
+            water_temperature_input_from_heat_water_storage_in_celsius = (
+                stsv.get_input_value(self.water_temperature_input_channel)
             )
 
-            heating_flow_temperature_from_heat_distribution_system = stsv.get_input_value(
-                self.heating_flow_temperature_from_heat_distribution_system_channel
+            heating_flow_temperature_from_heat_distribution_system = (
+                stsv.get_input_value(
+                    self.heating_flow_temperature_from_heat_distribution_system_channel
+                )
             )
 
             daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
@@ -1392,11 +1527,16 @@ class HeatPumpHplibControllerSpaceHeating(Component):
                     set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
                     summer_heating_mode=summer_heating_mode,
                     storage_temperature_modifier=storage_temperature_modifier,
-                    temperature_offset_for_state_conditions_in_celsius=self.temperature_offset_for_state_conditions_in_celsius,
+                    upper_temperature_offset_for_state_conditions_in_celsius=self.upper_temperature_offset_for_state_conditions_in_celsius,
+                    lower_temperature_offset_for_state_conditions_in_celsius=self.lower_temperature_offset_for_state_conditions_in_celsius,
                 )
 
             # mode 2 is regulated controller (meaning heating, cooling, off). this is only possible if heating system is floor heating
-            elif self.mode == 2 and self.heat_distribution_system_type == HeatDistributionSystemType.FLOORHEATING:
+            elif (
+                self.mode == 2
+                and self.heat_distribution_system_type
+                == HeatDistributionSystemType.FLOORHEATING
+            ):
                 # turning heat pump cooling mode off when the average daily outside temperature is below a certain threshold
                 summer_cooling_mode = self.summer_cooling_condition(
                     daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
@@ -1408,7 +1548,8 @@ class HeatPumpHplibControllerSpaceHeating(Component):
                     summer_heating_mode=summer_heating_mode,
                     summer_cooling_mode=summer_cooling_mode,
                     storage_temperature_modifier=storage_temperature_modifier,
-                    temperature_offset_for_state_conditions_in_celsius=self.temperature_offset_for_state_conditions_in_celsius,
+                    upper_temperature_offset_for_state_conditions_in_celsius=self.upper_temperature_offset_for_state_conditions_in_celsius,
+                    lower_temperature_offset_for_state_conditions_in_celsius=self.lower_temperature_offset_for_state_conditions_in_celsius,
                 )
 
             else:
@@ -1434,7 +1575,8 @@ class HeatPumpHplibControllerSpaceHeating(Component):
         set_heating_flow_temperature_in_celsius: float,
         summer_heating_mode: str,
         storage_temperature_modifier: float,
-        temperature_offset_for_state_conditions_in_celsius: float,
+        upper_temperature_offset_for_state_conditions_in_celsius: float,
+        lower_temperature_offset_for_state_conditions_in_celsius: float,
     ) -> None:
         """Set conditions for the heat pump controller mode."""
 
@@ -1444,7 +1586,7 @@ class HeatPumpHplibControllerSpaceHeating(Component):
                 > (
                     set_heating_flow_temperature_in_celsius
                     # + 0.5
-                    + temperature_offset_for_state_conditions_in_celsius
+                    + upper_temperature_offset_for_state_conditions_in_celsius
                     + storage_temperature_modifier
                 )
                 or summer_heating_mode == "off"
@@ -1460,7 +1602,7 @@ class HeatPumpHplibControllerSpaceHeating(Component):
                 < (
                     set_heating_flow_temperature_in_celsius
                     # - 1.0
-                    - temperature_offset_for_state_conditions_in_celsius
+                    - lower_temperature_offset_for_state_conditions_in_celsius
                     + storage_temperature_modifier
                 )
                 and summer_heating_mode == "on"
@@ -1478,7 +1620,8 @@ class HeatPumpHplibControllerSpaceHeating(Component):
         summer_heating_mode: str,
         summer_cooling_mode: str,
         storage_temperature_modifier: float,
-        temperature_offset_for_state_conditions_in_celsius: float,
+        upper_temperature_offset_for_state_conditions_in_celsius: float,
+        lower_temperature_offset_for_state_conditions_in_celsius: float,
     ) -> None:
         """Set conditions for the heat pump controller mode according to the flow temperature."""
         # Todo: storage temperature modifier is only working for heating so far. Implement for cooling similar
@@ -1495,7 +1638,10 @@ class HeatPumpHplibControllerSpaceHeating(Component):
                 self.controller_heatpumpmode = "off"
                 return
         elif self.controller_heatpumpmode == "cooling":
-            if water_temperature_input_in_celsius <= cooling_set_temperature or summer_cooling_mode == "off":
+            if (
+                water_temperature_input_in_celsius <= cooling_set_temperature
+                or summer_cooling_mode == "off"
+            ):
                 self.controller_heatpumpmode = "off"
                 return
 
@@ -1506,7 +1652,7 @@ class HeatPumpHplibControllerSpaceHeating(Component):
                 water_temperature_input_in_celsius
                 < (
                     heating_set_temperature
-                    - temperature_offset_for_state_conditions_in_celsius
+                    - lower_temperature_offset_for_state_conditions_in_celsius
                     + storage_temperature_modifier
                 )
                 and summer_heating_mode == "on"
@@ -1518,7 +1664,10 @@ class HeatPumpHplibControllerSpaceHeating(Component):
             # and if the avg daily outside temperature is warm enough (summer cooling mode on)
             if (
                 water_temperature_input_in_celsius
-                > (cooling_set_temperature + temperature_offset_for_state_conditions_in_celsius)
+                > (
+                    cooling_set_temperature
+                    + upper_temperature_offset_for_state_conditions_in_celsius
+                )
                 and summer_cooling_mode == "on"
             ):
                 self.controller_heatpumpmode = "cooling"
@@ -1539,11 +1688,17 @@ class HeatPumpHplibControllerSpaceHeating(Component):
             heating_mode = "on"
 
         # it is too hot for heating
-        elif daily_average_outside_temperature_in_celsius > set_heating_threshold_temperature_in_celsius:
+        elif (
+            daily_average_outside_temperature_in_celsius
+            > set_heating_threshold_temperature_in_celsius
+        ):
             heating_mode = "off"
 
         # it is cold enough for heating
-        elif daily_average_outside_temperature_in_celsius < set_heating_threshold_temperature_in_celsius:
+        elif (
+            daily_average_outside_temperature_in_celsius
+            < set_heating_threshold_temperature_in_celsius
+        ):
             heating_mode = "on"
 
         else:
@@ -1565,11 +1720,17 @@ class HeatPumpHplibControllerSpaceHeating(Component):
             cooling_mode = "on"
 
         # it is hot enough for cooling
-        elif daily_average_outside_temperature_in_celsius > set_cooling_threshold_temperature_in_celsius:
+        elif (
+            daily_average_outside_temperature_in_celsius
+            > set_cooling_threshold_temperature_in_celsius
+        ):
             cooling_mode = "on"
 
         # it is too cold for cooling
-        elif daily_average_outside_temperature_in_celsius < set_cooling_threshold_temperature_in_celsius:
+        elif (
+            daily_average_outside_temperature_in_celsius
+            < set_cooling_threshold_temperature_in_celsius
+        ):
             cooling_mode = "off"
 
         else:
@@ -1581,7 +1742,6 @@ class HeatPumpHplibControllerSpaceHeating(Component):
         return cooling_mode
 
 
-# ===========================================================================
 # implement a hplib controller l1 for dhw storage (tww)
 @dataclass_json
 @dataclass
@@ -1702,16 +1862,20 @@ class HeatPumpHplibControllerDHW(Component):
         self.add_default_connections(self.get_default_connections_from_dhw_storage())
 
     def get_default_connections_from_dhw_storage(
-        self,
+            self,
     ):
         """Get simple hot water storage default connections."""
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.generic_hot_water_storage_modular"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "HotWaterStorage")
         connections = []
-        dhw_classname = generic_hot_water_storage_modular.HotWaterStorage.get_classname()
+        dhw_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
                 HeatPumpHplibControllerDHW.WaterTemperatureInputFromDHWStorage,
                 dhw_classname,
-                generic_hot_water_storage_modular.HotWaterStorage.TemperatureMean,
+                component_class.TemperatureMean,
             )
         )
         return connections

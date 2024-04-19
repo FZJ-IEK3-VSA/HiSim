@@ -13,6 +13,7 @@ from hisim.components import simple_hot_water_storage
 from hisim.components import generic_hot_water_storage_modular
 from hisim.components import heat_distribution_system
 from hisim import loadtypes as lt
+from hisim.units import Quantity, Celsius, Watt
 
 __authors__ = "Jonas Hoppe"
 __copyright__ = ""
@@ -60,11 +61,8 @@ def setup_function(
 
     # Set Heat Pump
     group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
-    heating_reference_temperature_in_celsius: float = -7  # t_in
-    flow_temperature_in_celsius = 35  # t_out_val
-    set_thermal_output_power_in_watt = 8500
-    minimum_running_time_in_seconds = 20 * 60
-    minimum_idle_time_in_seconds = 10 * 60
+    heating_reference_temperature_in_celsius: float = -7.0  # t_in
+    flow_temperature_in_celsius: float = 21.0  # t_out_val
 
     # =================================================================================================================================
     # Build Components
@@ -103,9 +101,9 @@ def setup_function(
     )
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        my_simulation_parameters=my_simulation_parameters, config=my_heat_distribution_controller_config
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_distribution_controller_config,
     )
-
     my_hds_controller_information = heat_distribution_system.HeatDistributionControllerInformation(
         config=my_heat_distribution_controller_config
     )
@@ -122,7 +120,8 @@ def setup_function(
         mode=hp_controller_mode,
         set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_pump_in_celsius,
         set_cooling_threshold_outside_temperature_in_celsius=set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius,
-        temperature_offset_for_state_conditions_in_celsius=temperature_offset_for_state_conditions_in_celsius,
+        upper_temperature_offset_for_state_conditions_in_celsius=temperature_offset_for_state_conditions_in_celsius,
+        lower_temperature_offset_for_state_conditions_in_celsius=temperature_offset_for_state_conditions_in_celsius,
         heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
     )
 
@@ -140,16 +139,12 @@ def setup_function(
     )
 
     # Build Heat Pump
-    my_heatpump_config = (
-        more_advanced_heat_pump_hplib.HeatPumpHplibWithTwoOutputsConfig.get_default_generic_advanced_hp_lib()
+    my_heatpump_config = more_advanced_heat_pump_hplib.HeatPumpHplibWithTwoOutputsConfig.get_scaled_advanced_hp_lib(
+        heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
+        heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
     )
-
     my_heatpump_config.group_id = group_id
-    my_heatpump_config.heating_reference_temperature_in_celsius = heating_reference_temperature_in_celsius
-    my_heatpump_config.flow_temperature_in_celsius = flow_temperature_in_celsius
-    my_heatpump_config.set_thermal_output_power_in_watt = set_thermal_output_power_in_watt
-    my_heatpump_config.minimum_running_time_in_seconds = minimum_running_time_in_seconds
-    my_heatpump_config.minimum_idle_time_in_seconds = minimum_idle_time_in_seconds
+    my_heatpump_config.flow_temperature_in_celsius = Quantity(float(flow_temperature_in_celsius), Celsius)
 
     my_heatpump = more_advanced_heat_pump_hplib.HeatPumpHplibWithTwoOutputs(
         config=my_heatpump_config,
@@ -169,8 +164,8 @@ def setup_function(
 
     # Build Heat Water Storage
     my_hot_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-        max_thermal_power_in_watt_of_heating_system=my_heatpump_config.set_thermal_output_power_in_watt,
-        heating_system_name=my_heatpump.component_name,
+        max_thermal_power_in_watt_of_heating_system=my_heatpump_config.set_thermal_output_power_in_watt.value,
+        sizing_option=simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
         water_mass_flow_rate_from_hds_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
     )

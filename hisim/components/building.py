@@ -41,22 +41,23 @@ The module contains the following classes:
 
 # Generic/Built-in
 import importlib
-from typing import List, Any, Optional, Tuple
-from functools import lru_cache
 import math
 from dataclasses import dataclass
-from dataclasses_json import dataclass_json
-import pvlib
-import pandas as pd
+from functools import lru_cache
+from typing import Any, List, Optional, Tuple
 
-from hisim import utils
+import pandas as pd
+import pvlib
+from dataclasses_json import dataclass_json
+
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim import log
+from hisim import log, utils
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
-from hisim.simulationparameters import SimulationParameters
 from hisim.components.weather import Weather
-from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.loadtypes import OutputPostprocessingRules
+from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
+from hisim.simulationparameters import SimulationParameters
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -389,6 +390,7 @@ class Building(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for {self.SolarGainThroughWindows} will follow.",
+            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL]
         )
         self.internal_heat_gains_from_residents_and_devices_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -396,6 +398,7 @@ class Building(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for {self.InternalHeatGainsFromOccupancy} will follow.",
+            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL]
         )
         self.heat_loss_from_transmission_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -446,6 +449,7 @@ class Building(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for {self.TotalThermalMassHeatFlux} will follow.",
+            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL]
         )
         self.open_window_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -461,6 +465,7 @@ class Building(cp.Component):
         self.add_default_connections(self.get_default_connections_from_weather())
         self.add_default_connections(self.get_default_connections_from_utsp_occupancy())
         self.add_default_connections(self.get_default_connections_from_hds())
+        self.add_default_connections(self.get_default_connections_from_energy_management_system())
 
     def get_default_connections_from_weather(
         self,
@@ -567,6 +572,25 @@ class Building(cp.Component):
                 Building.ThermalPowerDelivered,
                 hds_classname,
                 component_class.ThermalPowerDelivered,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_energy_management_system(
+        self,
+    ):
+        """Get energy management system default connections."""
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.controller_l2_energy_management_system"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "L2GenericEnergyManagementSystem")
+        connections = []
+        ems_classname = component_class.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                Building.BuildingTemperatureModifier,
+                ems_classname,
+                component_class.BuildingIndoorTemperatureModifier,
             )
         )
         return connections

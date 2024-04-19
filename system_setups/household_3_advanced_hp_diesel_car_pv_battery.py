@@ -2,36 +2,41 @@
 
 # clean
 
-from typing import List, Optional, Any
-from pathlib import Path
 from dataclasses import dataclass
 from os import listdir
+from pathlib import Path
+from typing import Any, List, Optional
+
 from dataclasses_json import dataclass_json
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,
+    EnergyIntensityType,
     Households,
     TransportationDeviceSets,
     TravelRouteSets,
-    EnergyIntensityType,
 )
-from hisim.system_setup_configuration import SystemSetupConfigBase
-from hisim.simulator import SimulationParameters
-from hisim.components import loadprofilegenerator_utsp_connector
-from hisim.components import weather
-from hisim.components import advanced_heat_pump_hplib
-from hisim.components import heat_distribution_system
-from hisim.components import building
-from hisim.components import simple_hot_water_storage
-from hisim.components import generic_car
-from hisim.components import generic_heat_pump_modular
-from hisim.components import controller_l1_heatpump
-from hisim.components import generic_hot_water_storage_modular
-from hisim.components import electricity_meter
-from hisim.components import generic_pv_system
-from hisim.components import advanced_battery_bslib
-from hisim.components import controller_l2_energy_management_system
-from hisim import utils
+
 from hisim import loadtypes as lt
+from hisim import utils
+from hisim.components import (
+    advanced_battery_bslib,
+    advanced_heat_pump_hplib,
+    building,
+    controller_l1_heatpump,
+    controller_l2_energy_management_system,
+    electricity_meter,
+    generic_car,
+    generic_heat_pump_modular,
+    generic_hot_water_storage_modular,
+    generic_pv_system,
+    heat_distribution_system,
+    loadprofilegenerator_utsp_connector,
+    simple_hot_water_storage,
+    weather,
+)
+from hisim.simulator import SimulationParameters
+from hisim.system_setup_configuration import SystemSetupConfigBase
+from hisim.units import Celsius, Quantity, Seconds, Watt
 from system_setups.modular_example import cleanup_old_lpg_requests
 
 __authors__ = "Markus Blasberg"
@@ -134,15 +139,15 @@ class HouseholdAdvancedHPDieselCarPVBatteryConfig(SystemSetupConfigBase):
             ),
             hp_config=(
                 advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
-                    heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+                    heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
+                    heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
                 )
             ),
             simple_hot_water_storage_config=(
                 simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
                     max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
                     temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
-                    heating_system_name="AdvancedHeatPumpHPLib",
+                    sizing_option=simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
                     water_mass_flow_rate_from_hds_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
                 )
             ),
@@ -172,11 +177,11 @@ class HouseholdAdvancedHPDieselCarPVBatteryConfig(SystemSetupConfigBase):
         # household_config.hp_config.set_thermal_output_power_in_watt = (
         #     6000  # default value leads to switching on-off very often
         # )
-        household_config.hp_config.minimum_idle_time_in_seconds = (
-            900  # default value leads to switching on-off very often
+        household_config.hp_config.minimum_idle_time_in_seconds = Quantity(
+            900, Seconds  # default value leads to switching on-off very often
         )
-        household_config.hp_config.minimum_running_time_in_seconds = (
-            900  # default value leads to switching on-off very often
+        household_config.hp_config.minimum_running_time_in_seconds = Quantity(
+            900, Seconds  # default value leads to switching on-off very often
         )
 
         # set same heating threshold
@@ -187,7 +192,7 @@ class HouseholdAdvancedHPDieselCarPVBatteryConfig(SystemSetupConfigBase):
             set_heating_threshold_outside_temperature_in_celsius
         )
 
-        household_config.hp_config.flow_temperature_in_celsius = 21  # Todo: check value
+        household_config.hp_config.flow_temperature_in_celsius = Quantity(21, Celsius)  # Todo: check value
 
         # set dhw storage volume, because default(volume = 230) leads to an error
         household_config.dhw_storage_config.volume = 250
@@ -393,7 +398,7 @@ def setup_function(
         my_domnestic_hot_water_heatpump_controller.connect_input(
             my_domnestic_hot_water_heatpump_controller.StorageTemperatureModifier,
             my_electricity_controller.component_name,
-            my_electricity_controller.StorageTemperatureModifier,
+            my_electricity_controller.DomesticHotWaterStorageTemperatureModifier,
         )
         my_electricity_controller.add_component_input_and_connect(
             source_object_name=my_domnestic_hot_water_heatpump.component_name,
@@ -436,7 +441,7 @@ def setup_function(
         my_heat_pump_controller.connect_input(
             my_heat_pump_controller.SimpleHotWaterStorageTemperatureModifier,
             my_electricity_controller.component_name,
-            my_electricity_controller.SimpleHotWaterStorageTemperatureModifier,
+            my_electricity_controller.SpaceHeatingWaterStorageTemperatureModifier,
         )
 
         my_electricity_controller.add_component_input_and_connect(
@@ -478,12 +483,12 @@ def setup_function(
         my_heat_distribution_controller.connect_input(
             my_heat_distribution_controller.BuildingTemperatureModifier,
             my_electricity_controller.component_name,
-            my_electricity_controller.BuildingTemperatureModifier,
+            my_electricity_controller.BuildingIndoorTemperatureModifier,
         )
         my_building.connect_input(
             my_building.BuildingTemperatureModifier,
             my_electricity_controller.component_name,
-            my_electricity_controller.BuildingTemperatureModifier,
+            my_electricity_controller.BuildingIndoorTemperatureModifier,
         )
 
     # connect EMS with PV
@@ -499,7 +504,7 @@ def setup_function(
     # connect EMS with Battery
     my_electricity_controller.add_component_input_and_connect(
         source_object_name=my_advanced_battery.component_name,
-        source_component_output=my_advanced_battery.AcBatteryPower,
+        source_component_output=my_advanced_battery.AcBatteryPowerUsed,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_REAL],
@@ -529,7 +534,7 @@ def setup_function(
     # connect Electricity Meter
     my_electricity_meter.add_component_input_and_connect(
         source_object_name=my_electricity_controller.component_name,
-        source_component_output=my_electricity_controller.ElectricityToOrFromGrid,
+        source_component_output=my_electricity_controller.TotalElectricityToOrFromGrid,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION],

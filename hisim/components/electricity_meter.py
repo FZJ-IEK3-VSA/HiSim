@@ -53,6 +53,7 @@ class ElectricityMeter(DynamicComponent):
 
     # Outputs
     ElectricityAvailable = "ElectricityAvailable"
+    ElectricityToAndFromGrid = "ElectricityToAndFromGrid"
     ElectricityToGrid = "ElectricityToGrid"
     ElectricityFromGrid = "ElectricityFromGrid"
     ElectricityConsumption = "ElectricityConsumption"
@@ -89,7 +90,7 @@ class ElectricityMeter(DynamicComponent):
         self.previous_state = self.state.self_copy()
 
         # Outputs
-        self.electricity_available: cp.ComponentOutput = self.add_output(
+        self.electricity_available_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ElectricityAvailable,
             load_type=lt.LoadTypes.ELECTRICITY,
@@ -97,7 +98,15 @@ class ElectricityMeter(DynamicComponent):
             sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityAvailable} will follow.",
         )
-        self.electricity_to_grid: cp.ComponentOutput = self.add_output(
+        self.electricity_to_and_from_grid_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricityToAndFromGrid,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT_HOUR,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.ElectricityToAndFromGrid} will follow.",
+        )
+        self.electricity_to_grid_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ElectricityToGrid,
             load_type=lt.LoadTypes.ELECTRICITY,
@@ -106,7 +115,7 @@ class ElectricityMeter(DynamicComponent):
             output_description=f"here a description for {self.ElectricityToGrid} will follow.",
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
-        self.electricity_from_grid: cp.ComponentOutput = self.add_output(
+        self.electricity_from_grid_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ElectricityFromGrid,
             load_type=lt.LoadTypes.ELECTRICITY,
@@ -123,7 +132,6 @@ class ElectricityMeter(DynamicComponent):
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityConsumption} will follow.",
-            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
 
         self.electricity_production_channel: cp.ComponentOutput = self.add_output(
@@ -133,7 +141,6 @@ class ElectricityMeter(DynamicComponent):
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityProduction} will follow.",
-            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
 
         self.cumulative_electricity_consumption_channel: cp.ComponentOutput = self.add_output(
@@ -143,7 +150,6 @@ class ElectricityMeter(DynamicComponent):
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.CumulativeConsumption} will follow.",
-            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
 
         self.cumulative_electricity_production_channel: cp.ComponentOutput = self.add_output(
@@ -153,7 +159,6 @@ class ElectricityMeter(DynamicComponent):
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.CumulativeProduction} will follow.",
-            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
         self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())
         self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
@@ -328,11 +333,15 @@ class ElectricityMeter(DynamicComponent):
 
         # set outputs
         stsv.set_output_value(
-            self.electricity_available,
+            self.electricity_available_channel,
             difference_between_production_and_consumption_in_watt,
         )
-        stsv.set_output_value(self.electricity_to_grid, electricity_to_grid_in_watt_hour)
-        stsv.set_output_value(self.electricity_from_grid, electricity_from_grid_in_watt_hour)
+        stsv.set_output_value(
+            self.electricity_to_and_from_grid_channel,
+            difference_between_production_and_consumption_in_watt_hour,
+        )
+        stsv.set_output_value(self.electricity_to_grid_channel, electricity_to_grid_in_watt_hour)
+        stsv.set_output_value(self.electricity_from_grid_channel, electricity_from_grid_in_watt_hour)
         stsv.set_output_value(
             self.electricity_consumption_channel,
             consumption_uncontrolled_in_watt_hour,

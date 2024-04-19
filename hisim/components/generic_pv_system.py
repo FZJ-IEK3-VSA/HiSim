@@ -610,11 +610,15 @@ class PVSystem(cp.Component):
                     + str(len(self.ac_power_ratios_for_all_timesteps_output))
                 )
         else:
-            if self.simulation_repository.exist_entry("weather_location"):
-                self.coordinates = self.simulation_repository.get_entry("weather_location")
+            if SingletonSimRepository().exist_entry(
+                    key=SingletonDictKeyEnum.LOCATION
+                ):
+                    SingletonSimRepository().get_entry(
+                        key=SingletonDictKeyEnum.LOCATION
+                    )
             else:
                 raise KeyError(
-                    "The key weather_location was not found in the repository."
+                    "The key weather_location was not found in the singleton sim repository."
                     "Please check in your system setup if the weather component was added to the simulator before the pv system."
                 )
 

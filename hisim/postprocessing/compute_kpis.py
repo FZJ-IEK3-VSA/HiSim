@@ -1770,13 +1770,13 @@ class KpiGenerator(JSONWizard):
             name="Electrical input energy for cooling of heat pump",
             unit="kWh",
             value=electrical_input_energy_for_cooling_in_kilowatt_hour,
-            tag=KpiTagEnumClass.HEATPUMP,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
         )
         heating_hours_entry = KpiEntry(
-            name="Heating hours of heat pump", unit="h", value=heating_time_in_hours, tag=KpiTagEnumClass.HEATPUMP,
+            name="Heating hours of heat pump", unit="h", value=heating_time_in_hours, tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
         )
         cooling_hours_entry = KpiEntry(
-            name="Cooling hours of heat pump", unit="h", value=cooling_time_in_hours, tag=KpiTagEnumClass.HEATPUMP,
+            name="Cooling hours of heat pump", unit="h", value=cooling_time_in_hours, tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
         )
         mean_flow_temperature_heatpump_entry = KpiEntry(
             name="Mean flow temperature of SH heat pump",

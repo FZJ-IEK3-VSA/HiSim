@@ -98,13 +98,13 @@ class HeatPumpHplibConfig(ConfigBase):
         return HeatPumpHplibConfig(
             name="AdvancedHeatPumpHPLib",
             model="Generic",
-            group_id=4,
+            group_id=1,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
             flow_temperature_in_celsius=Quantity(52, Celsius),
             set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
             cycling_mode=True,
-            minimum_running_time_in_seconds=Quantity(600, Seconds),
-            minimum_idle_time_in_seconds=Quantity(600, Seconds),
+            minimum_running_time_in_seconds=Quantity(3600, Seconds),
+            minimum_idle_time_in_seconds=Quantity(3600, Seconds),
             # value from emission_factors_and_costs_devices.csv
             co2_footprint=Quantity(
                 set_thermal_output_power_in_watt.value * 1e-3 * 165.84, Kilogram
@@ -130,18 +130,18 @@ class HeatPumpHplibConfig(ConfigBase):
     ) -> "HeatPumpHplibConfig":
         """Gets a default heat pump with scaling according to heating load of the building."""
 
-        set_thermal_output_power_in_watt: Quantity[float, Watt] = heating_load_of_building_in_watt
+        set_thermal_output_power_in_watt: Quantity[float, Watt]: Quantity[float, Watt] = heating_load_of_building_in_watt
 
         return HeatPumpHplibConfig(
             name="AdvancedHeatPumpHPLib",
             model="Generic",
-            group_id=4,
+            group_id=1,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
             flow_temperature_in_celsius=Quantity(52, Celsius),
             set_thermal_output_power_in_watt=set_thermal_output_power_in_watt,
             cycling_mode=True,
-            minimum_running_time_in_seconds=Quantity(600, Seconds),
-            minimum_idle_time_in_seconds=Quantity(600, Seconds),
+            minimum_running_time_in_seconds=Quantity(3600, Seconds),
+            minimum_idle_time_in_seconds=Quantity(3600, Seconds),
             # value from emission_factros_and_costs_devices.csv
             co2_footprint=Quantity(
                 set_thermal_output_power_in_watt.value * 1e-3 * 165.84, Kilogram
@@ -321,7 +321,6 @@ class HeatPumpHplib(Component):
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             postprocessing_flag=[
-                InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
                 OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
             ],
             output_description="Electricity input power for heating in Watt",
@@ -332,7 +331,6 @@ class HeatPumpHplib(Component):
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             postprocessing_flag=[
-                InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
                 OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
             ],
             output_description="Electricity input power for cooling in Watt",
@@ -747,20 +745,18 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
     mode: int
     set_heating_threshold_outside_temperature_in_celsius: Optional[float]
     set_cooling_threshold_outside_temperature_in_celsius: Optional[float]
-    temperature_offset_for_state_conditions_in_celsius: float
     heat_distribution_system_type: Any
 
     @classmethod
     def get_default_generic_heat_pump_controller_config(
-        cls, heat_distribution_system_type: Any
+        cls, heat_distribution_system_type: Any, mode: int = 2
     ) -> "HeatPumpHplibControllerL1Config":
         """Gets a default Generic Heat Pump Controller."""
         return HeatPumpHplibControllerL1Config(
             name="HeatPumpController",
-            mode=1,
+            mode=mode,
             set_heating_threshold_outside_temperature_in_celsius=16.0,
             set_cooling_threshold_outside_temperature_in_celsius=20.0,
-            temperature_offset_for_state_conditions_in_celsius=5.0,
             heat_distribution_system_type=heat_distribution_system_type,
         )
 
@@ -811,7 +807,6 @@ class HeatPumpHplibController(Component):
         )
         self.build(
             mode=self.heatpump_controller_config.mode,
-            temperature_offset_for_state_conditions_in_celsius=self.heatpump_controller_config.temperature_offset_for_state_conditions_in_celsius,
         )
 
         self.water_temperature_input_channel: ComponentInput = self.add_input(
@@ -940,7 +935,6 @@ class HeatPumpHplibController(Component):
     def build(
         self,
         mode: float,
-        temperature_offset_for_state_conditions_in_celsius: float,
     ) -> None:
         """Build function.
 
@@ -952,9 +946,6 @@ class HeatPumpHplibController(Component):
 
         # Configuration
         self.mode = mode
-        self.temperature_offset_for_state_conditions_in_celsius = (
-            temperature_offset_for_state_conditions_in_celsius
-        )
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -1017,7 +1008,6 @@ class HeatPumpHplibController(Component):
                     set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
                     summer_heating_mode=summer_heating_mode,
                     storage_temperature_modifier=storage_temperature_modifier,
-                    temperature_offset_for_state_conditions_in_celsius=self.temperature_offset_for_state_conditions_in_celsius,
                 )
 
             # mode 2 is regulated controller (meaning heating, cooling, off). this is only possible if heating system is floor heating
@@ -1037,7 +1027,6 @@ class HeatPumpHplibController(Component):
                     summer_heating_mode=summer_heating_mode,
                     summer_cooling_mode=summer_cooling_mode,
                     storage_temperature_modifier=storage_temperature_modifier,
-                    temperature_offset_for_state_conditions_in_celsius=self.temperature_offset_for_state_conditions_in_celsius,
                 )
 
             else:
@@ -1063,7 +1052,6 @@ class HeatPumpHplibController(Component):
         set_heating_flow_temperature_in_celsius: float,
         summer_heating_mode: str,
         storage_temperature_modifier: float,
-        temperature_offset_for_state_conditions_in_celsius: float,
     ) -> None:
         """Set conditions for the heat pump controller mode."""
 
@@ -1072,12 +1060,10 @@ class HeatPumpHplibController(Component):
                 water_temperature_input_in_celsius
                 > (
                     set_heating_flow_temperature_in_celsius
-                    # + 0.5
-                    + temperature_offset_for_state_conditions_in_celsius
                     + storage_temperature_modifier
                 )
                 or summer_heating_mode == "off"
-            ):  # + 1:
+            ):
                 self.controller_heatpumpmode = "off"
                 return
 
@@ -1088,12 +1074,10 @@ class HeatPumpHplibController(Component):
                 water_temperature_input_in_celsius
                 < (
                     set_heating_flow_temperature_in_celsius
-                    # - 1.0
-                    - temperature_offset_for_state_conditions_in_celsius
                     + storage_temperature_modifier
                 )
                 and summer_heating_mode == "on"
-            ):  # - 1:
+            ):
                 self.controller_heatpumpmode = "heating"
                 return
 
@@ -1107,7 +1091,6 @@ class HeatPumpHplibController(Component):
         summer_heating_mode: str,
         summer_cooling_mode: str,
         storage_temperature_modifier: float,
-        temperature_offset_for_state_conditions_in_celsius: float,
     ) -> None:
         """Set conditions for the heat pump controller mode according to the flow temperature."""
         # Todo: storage temperature modifier is only working for heating so far. Implement for cooling similar
@@ -1138,7 +1121,6 @@ class HeatPumpHplibController(Component):
                 water_temperature_input_in_celsius
                 < (
                     heating_set_temperature
-                    - temperature_offset_for_state_conditions_in_celsius
                     + storage_temperature_modifier
                 )
                 and summer_heating_mode == "on"
@@ -1152,7 +1134,6 @@ class HeatPumpHplibController(Component):
                 water_temperature_input_in_celsius
                 > (
                     cooling_set_temperature
-                    + temperature_offset_for_state_conditions_in_celsius
                 )
                 and summer_cooling_mode == "on"
             ):

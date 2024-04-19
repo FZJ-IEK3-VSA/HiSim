@@ -29,9 +29,7 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim import log
 from hisim.units import Quantity, Celsius, Watt
-from system_setups.household_cluster_reference_advanced_hp import (
-    BuildingPVWeatherConfig,
-)
+from system_setups.household_cluster_reference_advanced_hp import BuildingPVWeatherConfig
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -70,7 +68,7 @@ def setup_function(
     # Set System Parameters from Config
 
     # household-pv-config
-    config_filename = my_sim.my_module_config_path
+    config_filename = my_sim.my_module_config
 
     my_config: BuildingPVWeatherConfig
     if isinstance(config_filename, str) and os.path.exists(config_filename.rstrip("\r")):
@@ -82,15 +80,14 @@ def setup_function(
     else:
         my_config = BuildingPVWeatherConfig.get_default()
         log.information("No module config path from the simulator was given. Use default config.")
+        my_sim.my_module_config = my_config.to_dict()
 
     # Set Simulation Parameters
     year = 2021
     seconds_per_timestep = 60
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(
-            year=year, seconds_per_timestep=seconds_per_timestep
-        )
+        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
         )
@@ -99,19 +96,18 @@ def setup_function(
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
-    # Set Energy Management System (only used when PV is used)
-    building_indoor_temperature_offset_value = 2
-    domestic_hot_water_storage_temperature_offset_value = 10
-    space_heating_water_storage_temperature_offset_value = 10
+    # =================================================================================================================================
+    # Set System Parameters
 
     # Set Photovoltaic System
     azimuth = my_config.pv_azimuth
     tilt = my_config.pv_tilt
-    share_of_maximum_pv_power = 1  # my_config.share_of_maximum_pv_power
+    share_of_maximum_pv_power = 0  # my_config.share_of_maximum_pv_power
 
     # Set Building (scale building according to total base area and not absolute floor area)
     building_code = my_config.building_code
@@ -119,12 +115,17 @@ def setup_function(
     absolute_conditioned_floor_area_in_m2 = my_config.conditioned_floor_area_in_m2
     number_of_apartments = my_config.number_of_dwellings_per_building
 
-    # Set occupancy
-    cache_dir_path = None  # "/fast/home/k-rieck/lpg-utsp-data"
+    # Set Occupancy
+    # try to get profiles from cluster directory
+    cache_dir_path: Optional[str] = "/fast/home/k-rieck/lpg-utsp-data"
+    if cache_dir_path is not None and os.path.exists(cache_dir_path):
+        pass
+    # else use default specific cache_dir_path
+    else:
+        cache_dir_path = None
 
     # get household attribute jsonreferences from list of strings
     lpg_households: Union[JsonReference, List[JsonReference]]
-
     if isinstance(my_config.lpg_households, List):
         if len(my_config.lpg_households) == 1:
             lpg_households = getattr(Households, my_config.lpg_households[0])
@@ -136,23 +137,17 @@ def setup_function(
                     lpg_households.append(lpg_household)
         else:
             raise ValueError("Config list with lpg household is empty.")
-
     else:
         raise TypeError(f"Type {type(my_config.lpg_households)} is incompatible. Should be List[str].")
 
-    # =================================================================================================================================
-    # Set Fix System Parameters
-
     # Set Heat Pump Controller
-    hp_controller_mode = 2  # mode 1 for on/off and mode 2 for heating/cooling/off (regulated)
-    set_heating_threshold_outside_temperature_for_heat_pump_in_celsius = 16.0
-    set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius = 22.0
-    temperature_offset_for_state_conditions_in_celsius = 5.0
+    hp_controller_mode = 1  # mode 1 for heating/off and mode 2 for heating/cooling/off
+    heating_reference_temperature_in_celsius = -7.0
 
-    # Set Heat Pump
-    group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
-    heating_reference_temperature_in_celsius: float = -7  # t_in #TODO: get real heating ref temps according to location
-    flow_temperature_in_celsius = 52  # t_out_val
+    # Set Energy Management System (only used when PV is used)
+    building_indoor_temperature_offset_value = 0
+    domestic_hot_water_storage_temperature_offset_value = 0
+    space_heating_water_storage_temperature_offset_value = 0
 
     # =================================================================================================================================
     # Build Basic Components
@@ -211,6 +206,7 @@ def setup_function(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
+    # my_heat_distribution_controller_config.heating_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
         my_simulation_parameters=my_simulation_parameters, config=my_heat_distribution_controller_config,
@@ -222,16 +218,13 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
     # Build Heat Pump Controller
+    my_heat_pump_controller_config = advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(
+        heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
+    )
+    my_heat_pump_controller_config.mode = hp_controller_mode
+
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
-        config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config(
-            name="HeatPumpController",
-            mode=hp_controller_mode,
-            set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_pump_in_celsius,
-            set_cooling_threshold_outside_temperature_in_celsius=set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius,
-            temperature_offset_for_state_conditions_in_celsius=temperature_offset_for_state_conditions_in_celsius,
-            heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
-        ),
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_pump_controller_config, my_simulation_parameters=my_simulation_parameters,
     )
     # Add to simulator
     my_sim.add_component(my_heat_pump_controller, connect_automatically=True)
@@ -241,8 +234,6 @@ def setup_function(
         heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
         heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
     )
-    my_heat_pump_config.group_id = group_id
-    my_heat_pump_config.flow_temperature_in_celsius = Quantity(flow_temperature_in_celsius, Celsius)
 
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
         config=my_heat_pump_config, my_simulation_parameters=my_simulation_parameters,
@@ -343,11 +334,8 @@ def setup_function(
         # Add outputs to EMS
         loading_power_input_for_battery_in_watt = my_electricity_controller.add_component_output(
             source_output_name="LoadingPowerInputForBattery_",
-            source_tags=[
-                lt.ComponentType.BATTERY,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_weight=3,
+            source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
+            source_weight=4,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for Battery Control. ",
@@ -357,7 +345,7 @@ def setup_function(
         # Connect Battery
         my_advanced_battery.connect_dynamic_input(
             input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
-            src_object=loading_power_input_for_battery_in_watt
+            src_object=loading_power_input_for_battery_in_watt,
         )
 
         # -----------------------------------------------------------------------------------------------------------------
@@ -386,28 +374,34 @@ def setup_function(
     # if config_filename is given, get hash number and sampling mode for result path
     if config_filename is not None:
         config_filename_splitted = config_filename.split("/")
-        hash_number = re.findall(r"\-?\d+", config_filename_splitted[-1])[0]
-        sampling_mode = config_filename_splitted[-2]
+        scenario_hash_string = re.findall(r"\-?\d+", config_filename_splitted[-1])[0]
+        further_result_folder_description = config_filename_splitted[-2]
 
         sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION
 
-        SingletonSimRepository().set_entry(
-            key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
-            entry=f"ems_all_surplus_{hash_number}",
-        )
-
     # if config_filename is not given, make result path with index enumeration
     else:
-        hash_number = None
+        scenario_hash_string = "default_scenario"
         sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION
-        sampling_mode = None
+        further_result_folder_description = "default_config"
+
+    SingletonSimRepository().set_entry(
+        key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME, entry=f"{scenario_hash_string}",
+    )
 
     ResultPathProviderSingleton().set_important_result_path_information(
-        module_directory=my_sim.module_directory,
-        model_name=os.path.join(my_sim.module_filename, "ems_test"),
-        variant_name=f"ems_dhw_{domestic_hot_water_storage_temperature_offset_value}_"
-                     f"sh_{space_heating_water_storage_temperature_offset_value}_building_{building_indoor_temperature_offset_value}_all_options",
-        hash_number=hash_number,
+        module_directory=my_sim.module_directory,  # "/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/hisim_results",
+        model_name=my_sim.module_filename,
+        further_result_folder_description=os.path.join(
+            *[
+                further_result_folder_description,
+                f"PV-{share_of_maximum_pv_power}-hds-{my_hds_controller_information.heat_distribution_system_type}-hpc-mode-{hp_controller_mode}",
+                f"bui-{building_indoor_temperature_offset_value}-"
+                f"dhw-{domestic_hot_water_storage_temperature_offset_value}-"
+                f"sh-{space_heating_water_storage_temperature_offset_value}",
+            ]
+        ),
+        variant_name="_",
+        scenario_hash_string=scenario_hash_string,
         sorting_option=sorting_option,
-        sampling_mode=sampling_mode,
     )

@@ -130,6 +130,7 @@ class PVSystemConfig(ConfigBase):
         share_of_maximum_pv_power: float = 1.0,
         module_name: str = "Hanwha HSL60P6-PA-4-250T [2013]",
         module_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
+        location: str = "Aachen",
         load_module_data: bool = False,
     ) -> "PVSystemConfig":
         """Gets a default PV system with scaling according to rooftop area."""
@@ -152,7 +153,7 @@ class PVSystemConfig(ConfigBase):
             azimuth=180,
             tilt=30,
             source_weight=0,
-            location="Aachen",
+            location=location,
             co2_footprint=total_pv_power_in_watt * 1e-3 * 330.51,  # value from emission_factros_and_costs_devices.csv
             cost=total_pv_power_in_watt * 1e-3 * 794.41,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise

@@ -143,7 +143,8 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
                 predictive=False,
             ),
             pv_config=generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-                rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
+                rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2,
+                location=weather_location
             )
             if options.photovoltaic
             else None,

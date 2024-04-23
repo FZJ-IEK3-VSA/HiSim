@@ -78,14 +78,13 @@ def Cell4Life(
     
 
     # Build Results Path
-    name = "VII_" + input_variablen["szenario"]["value"] +  "_S" + str(input_variablen["PreResultNumber"]["value"])+"_BCap._" + str(math.ceil(input_variablen["battery_capacity"]["value"])) + "kWh_Inv_" + str(math.ceil(input_variablen["battery_inverter_power"]["value"]/1000)) + "kW_FCPow_" + str(math.ceil(input_variablen["fuel_cell_power"]["value"]/1000)) +"kW"
+    name = input_variablen["szenario"]["value"] +  "_S" + str(input_variablen["PreResultNumber"]["value"])+"_BCap._" + str(math.ceil(input_variablen["battery_capacity"]["value"])) + "kWh_Inv_" + str(math.ceil(input_variablen["battery_inverter_power"]["value"]/1000)) + "kW_FCPow_" + str(math.ceil(input_variablen["fuel_cell_power"]["value"]/1000)) +"kW"
     
-    name = "TestvII2"
-
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory = "C://Users//Standard//Desktop//hisim//C4LResults",
         model_name= name,
-        variant_name=my_sim.setup_function,
+        #variant_name=my_sim.setup_function,
+        variant_name = '',
         sorting_option=SortingOptionEnum.VARPARAMETERNAMED,
         hash_number=None,
     )

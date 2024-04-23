@@ -77,14 +77,15 @@ def Cell4Life(
     
 
     # Build Results Path
-    name = "VII_" + input_variablen["szenario"]["value"] +  "_S" + str(input_variablen["PreResultNumber"]["value"])+"_BCap._" + str(math.ceil(input_variablen["battery_capacity"]["value"])) + "kWh_Inv_" + str(math.ceil(input_variablen["battery_inverter_power"]["value"]/1000)) + "kW_FCPow_" + str(math.ceil(input_variablen["fuel_cell_power"]["value"]/1000)) +"kW"
+    name = input_variablen["szenario"]["value"] +  "_S" + str(input_variablen["PreResultNumber"]["value"])+"_BCap._" + str(math.ceil(input_variablen["battery_capacity"]["value"])) + "kWh_Inv_" + str(math.ceil(input_variablen["battery_inverter_power"]["value"]/1000)) + "kW_FCPow_" + str(math.ceil(input_variablen["fuel_cell_power"]["value"]/1000)) +"kW"
     
-    name = "TestvI1"
+    
 
     ResultPathProviderSingleton().set_important_result_path_information(
         module_directory = "C://Users//Standard//Desktop//hisim//C4LResults",
         model_name= name,
-        variant_name=my_sim.setup_function,
+        #variant_name=my_sim.setup_function,
+        variant_name = '',
         sorting_option=SortingOptionEnum.VARPARAMETERNAMED,
         hash_number=None,
     )
@@ -94,7 +95,7 @@ def Cell4Life(
     
     my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.EXPORT_TO_CSV)
     my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PLOT_LINE)
-    #my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.MAKE_NETWORK_CHARTS)
+    my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.MAKE_NETWORK_CHARTS)
     my_simulation_parameters.post_processing_options.append(postprocessingoptions.PostProcessingOptions.PLOT_CARPET)
     
 
@@ -436,7 +437,7 @@ def InputParameter():
     h2_storage_losses = 0 # % of Hydrogen Losses per day in %
     h2_storage_lossesUnit = "%"
     
-    h2_soc_upper_threshold_electrolyzer = 50  #Electrolyzer works just until H2 storage goes up to this threshold
+    h2_soc_upper_threshold_electrolyzer = 99.9  #Electrolyzer works just until H2 storage goes up to this threshold
     h2_soc_upper_threshold_electrolyzerUnit = "%"
 
     #H2 storage energy demands; the energy demand is covered by electricit; 

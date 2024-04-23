@@ -268,8 +268,7 @@ class SimpleCHP(cp.Component):
             stsv.set_output_value(self.fuel_consumption_channel, self.state.state * self.p_fuel)
             stsv.set_output_value(self.FuelCellElectricityInputStandby_channel, 0)
 
-        if timestep == 7549:
-            print('Fuel Cell state in Fuel Cell ', self.state.state)
+
 
     def get_default_connections_from_chp_controller(self,) -> List[cp.ComponentConnection]:
         """Sets default connections of the controller in the Fuel Cell / CHP."""

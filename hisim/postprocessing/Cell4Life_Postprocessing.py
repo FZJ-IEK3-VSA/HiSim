@@ -400,7 +400,7 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
         for row in csvreader:
             Data11.append(row[1])
 
-    # Load data from "from Fuel Cell Standby" (column 2) and add the collected data to list
+    # Load data from "Fuel Cell Standby" (column 2) and add the collected data to list
     csv_datei12 = os.path.join(path, 'FuelCellElectricityInputStandby_CHP_w2.csv')
     with open(csv_datei12, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen

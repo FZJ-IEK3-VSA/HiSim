@@ -7,7 +7,6 @@ sys.path.append("C://Users//Standard//Desktop//hisim//HiSim//examples")
 sys.path.append("C://Users//Standard//Desktop//hisim//HiSim//")
 
 #Import of different hisim examples for the Cell4Life project ("Gesamtmodelle" in HiSim)
-import Cell4LifeSzenariovII
 import Cell4LifeSzenario1a_1b
 import Cell4LifeSzenario2a
 from hisim.result_path_provider import ResultPathProviderSingleton
@@ -178,7 +177,7 @@ import math
 #             Cell4Life_Postprocessing.saveInputdata(input_variablen)
 #             #Cell4Life_Postprocessing.saveexcelforevaluations(input_variablen, excelfilepathallresults1, excel_filename1)
 #             Cell4Life_Postprocessing.save_data_in_excel_for_economic_assessment(input_variablen, excelfilepathresults2)
-#             Cell4Life_ControllExcelSheet.ControllSheetExcel(excelfilepathresults3)
+#             Cell4Life_ControllExcelSheet.ControllSheetExcel(excelfilepathresults3, input_variablen)
 
 #             del excelfilepathresults2, excelfilepathresults3
 #             finishtext = "---Parametervariation  --vII: " + input_variablen["szenario"]["value"] + "--  abgeschlossen---"
@@ -307,7 +306,7 @@ for BatterieFaktor in BatterieFaktorList:
             Cell4Life_Postprocessing.saveInputdata(input_variablen)
             #Cell4Life_Postprocessing.saveexcelforevaluations(input_variablen, excelfilepathallresults1, excel_filename1)
             Cell4Life_Postprocessing.save_data_in_excel_for_economic_assessment(input_variablen, excelfilepathresults2)
-            Cell4Life_ControllExcelSheet.ControllSheetExcel(excelfilepathresults3)
+            Cell4Life_ControllExcelSheet.ControllSheetExcel(excelfilepathresults3, input_variablen)
 
             del excelfilepathresults2, excelfilepathresults3
             finishtext = "---Parametervariation  --vII: " + input_variablen["szenario"]["value"] + "--  abgeschlossen---"

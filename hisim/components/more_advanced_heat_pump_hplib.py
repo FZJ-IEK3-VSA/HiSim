@@ -1812,8 +1812,8 @@ class HeatPumpHplibControllerDHW(Component):
 
         self.state_dhw: int
         self.previous_state_dhw: int
-        self.controller_signal: int
-        self.previous_controller_signal: int
+        self.water_temperature_input_from_dhw_storage_in_celsius_previous: float
+        self.water_temperature_input_from_dhw_storage_in_celsius: float
         self.thermalpower_dhw_is_constant: bool
         self.p_th_max_dhw: float
 
@@ -1888,9 +1888,9 @@ class HeatPumpHplibControllerDHW(Component):
         The function sets important constants and parameters for the calculations.
         """
 
-        self.controller_signal = 0
         self.state_dhw = 0
-        self.previous_controller_signal = self.controller_signal
+        self.water_temperature_input_from_dhw_storage_in_celsius = 50.0
+        self.water_temperature_input_from_dhw_storage_in_celsius_previous = 50.0
         self.thermalpower_dhw_is_constant = self.config.thermalpower_dhw_is_constant
         self.p_th_max_dhw = self.config.p_th_max_dhw_in_watt
 
@@ -1906,13 +1906,13 @@ class HeatPumpHplibControllerDHW(Component):
 
     def i_save_state(self) -> None:
         """Save the current state."""
-        self.previous_controller_signal = self.controller_signal
         self.previous_state_dhw = self.state_dhw
+        self.water_temperature_input_from_dhw_storage_in_celsius_previous = self.water_temperature_input_from_dhw_storage_in_celsius
 
     def i_restore_state(self) -> None:
         """Restore the previous state."""
-        self.controller_signal = self.previous_controller_signal
         self.state_dhw = self.previous_state_dhw
+        self.water_temperature_input_from_dhw_storage_in_celsius = self.water_temperature_input_from_dhw_storage_in_celsius_previous
 
     def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
         """Doublecheck."""
@@ -1926,42 +1926,37 @@ class HeatPumpHplibControllerDHW(Component):
         """Simulate the heat pump controller for dhw."""
 
         if force_convergence:
-            # self.controller_signal = self.previous_controller_signal
             # self.state_dhw = self.previous_state_dhw
             pass
         else:
             water_temperature_input_from_dhw_storage_in_celsius = stsv.get_input_value(
                 self.water_temperature_input_channel
             )
+            if self.water_temperature_input_from_dhw_storage_in_celsius == 0:
+                self.water_temperature_input_from_dhw_storage_in_celsius = self.water_temperature_input_from_dhw_storage_in_celsius_previous
+
             temperature_modifier = stsv.get_input_value(self.storage_temperature_modifier_channel)
 
             t_min_dhw_storage_in_celsius = self.config.t_min_dhw_storage_in_celsius
             t_max_dhw_storage_in_celsius = self.config.t_max_dhw_storage_in_celsius
 
             if water_temperature_input_from_dhw_storage_in_celsius < t_min_dhw_storage_in_celsius:  # on
-                self.controller_signal = 1
+                self.state_dhw = 2
 
             if (
                 water_temperature_input_from_dhw_storage_in_celsius
                 > t_max_dhw_storage_in_celsius + temperature_modifier
             ):  # off
-                self.controller_signal = 0
+                self.state_dhw = 0
 
             if (
                 temperature_modifier > 0
                 and water_temperature_input_from_dhw_storage_in_celsius < t_max_dhw_storage_in_celsius
             ):  # aktiviren wenn strom überschuss
-                self.controller_signal = 1
-
-            if self.controller_signal == 1:
                 self.state_dhw = 2
-            elif self.controller_signal == 0:
-                self.state_dhw = 0
-            else:
-                raise ValueError("Advanced HP Lib DHW Controller State unknown.")
 
-        self.previous_controller_signal = self.controller_signal
         self.previous_state_dhw = self.state_dhw
+        self.water_temperature_input_from_dhw_storage_in_celsius_previous = self.water_temperature_input_from_dhw_storage_in_celsius
 
         stsv.set_output_value(self.state_dhw_channel, self.state_dhw)
         stsv.set_output_value(

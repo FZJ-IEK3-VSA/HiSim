@@ -433,15 +433,19 @@ class HeatDistribution(cp.Component):
         # source1: https://www.mdpi.com/1996-1073/16/15/5850
         # source2: https://www.researchgate.net/publication/305659004_Modelling_and_Simulation_of_Underfloor_Heating_System_Supplied_from_Heat_Pump
         # source3: https://www.sciencedirect.com/science/article/pii/S0378778816312749?via%3Dihub
-        # assumption: https://www.heizsparer.de/heizung/heizkorper/fussbodenheizung/fussbodenheizung-planen-heizkreise-berechnen
-        # assumption: heat transfer direction just to the room --> other direction is adiabatic
+        # assumption1: https://www.heizsparer.de/heizung/heizkorper/fussbodenheizung/fussbodenheizung-planen-heizkreise-berechnen
+        # assumption2: heat transfer direction just to the room --> other direction is adiabatic
+        # assumption3: still air and no floor covering considered
 
-        heat_resistance_coefficient_hds_pipe_to_air = 0.07 # 0.02  # (m^2*K)/W   # source 1 and 2  # todo: Wert raussuchen bzw aus daten berechnen
+        height_of_screed = 45/1000  # in m
+        thermal_conductivity_screed = 1.4  # in W/(m^2K)
+        heat_transfer_coefficient_screed_to_air = 5.8  # assumption3
+        inner_pipe_diameter = 17 / 1000  # in m  # source 1
+        outer_pipe_diameter = (17 + 4.4) / 1000  # in m  # source 1
 
-        inner_pipe_diameter = 17/1000 # in m  # source 1
-        outer_pipe_diameter = (17+4.4)/1000 # in m  # source 1
-        lenght_of_hds_pipe = 8.8*self.absolute_conditioned_floor_area_in_m2 # in m # todo: andere Werte für verlege abstand etc auch mit rein nehmen und entweder mittelwert bilden aus allen oder abfreage welche genutzt werden soll in config --> hier dann sowas wie medium,low,high analog zu building capacity class
+        heat_resistance_coefficient_hds_pipe_to_air = height_of_screed/thermal_conductivity_screed + 1 / heat_transfer_coefficient_screed_to_air
 
+        lenght_of_hds_pipe = 8.8 * self.absolute_conditioned_floor_area_in_m2  # in m -> assumption1
         inner_volume_of_hds = ((np.pi/4)*((inner_pipe_diameter)**2)*lenght_of_hds_pipe) # in m^3
 
         outer_surface_of_hds_pipe = np.pi*outer_pipe_diameter*lenght_of_hds_pipe # in m^2

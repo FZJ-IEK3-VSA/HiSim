@@ -161,7 +161,7 @@ class HeatDistribution(cp.Component):
         self.state: HeatDistributionSystemState = HeatDistributionSystemState(
             water_output_temperature_in_celsius=21.0,
             water_input_temperature_in_celsius=21.0,
-            thermal_power_delivered_in_watt=0.0,
+            thermal_power_delivered_in_watt=0,
         )
         self.previous_state = self.state.self_copy()
 
@@ -386,12 +386,8 @@ class HeatDistribution(cp.Component):
                 )
 
             elif state_controller == 0:
-                if self.heat_distribution_system_with_storage:
-                    thermal_power_delivered_in_watt = 0.0
-                    water_temperature_output_in_celsius = water_temperature_input_in_celsius
-                else:
-                    # if no hot water storage, state is transfer to HP model to turn hp off due to no thermal demand
-                    pass
+                thermal_power_delivered_in_watt = 0.0
+                water_temperature_output_in_celsius = water_temperature_input_in_celsius
 
             else:
                 raise ValueError("unknown hds controller mode")
@@ -449,8 +445,6 @@ class HeatDistribution(cp.Component):
         inner_volume_of_hds = ((np.pi/4)*((inner_pipe_diameter)**2)*lenght_of_hds_pipe) # in m^3
 
         outer_surface_of_hds_pipe = np.pi*outer_pipe_diameter*lenght_of_hds_pipe # in m^2
-
-        heating_surface_hds_pipe = outer_pipe_diameter*lenght_of_hds_pipe  # in m^2 --> projezierte fläche??#todo: macht das sinn?
 
         mass_of_water_in_hds = inner_volume_of_hds * self.density_of_water
 
@@ -614,6 +608,7 @@ class HeatDistributionController(cp.Component):
     State = "State"
     HeatingFlowTemperature = "HeatingFlowTemperature"
     HeatingReturnTemperature = "HeatingReturnTemperature"
+    HeatingTemperatureDifference = "HeatingTemperatureDifference"
 
     # Similar components to connect to:
     # 1. Building
@@ -701,6 +696,13 @@ class HeatDistributionController(cp.Component):
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.HeatingReturnTemperature} will follow.",
+        )
+        self.heating_temperature_difference_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatingTemperatureDifference,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            output_description=f"here a description for {self.HeatingTemperatureDifference} will follow.",
         )
 
         self.controller_heat_distribution_mode: str = "off"
@@ -888,6 +890,11 @@ class HeatDistributionController(cp.Component):
             stsv.set_output_value(
                 self.heating_return_temperature_channel,
                 list_of_heating_distribution_system_flow_and_return_temperatures[1],
+            )
+
+            stsv.set_output_value(
+                self.heating_temperature_difference_channel,
+                list_of_heating_distribution_system_flow_and_return_temperatures[0]-list_of_heating_distribution_system_flow_and_return_temperatures[1],
             )
 
     def conditions_for_opening_or_shutting_heat_distribution(

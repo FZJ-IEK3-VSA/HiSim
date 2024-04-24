@@ -120,7 +120,7 @@ class ResultDataCollection:
         self.clean_result_directory_from_unfinished_results(result_path=result_path)
 
         # get result folders with result data folder
-        list_with_all_paths_to_check = self.get_list_of_all_relevant_scenario_data_folders(result_path=result_path)
+        list_with_all_paths_to_check = self.get_list_of_all_relevant_folders_or_files(result_path=result_path, folder_or_filename="result_data_for_scenario_evaluation")
         print(
             "len of list with all paths to containing result data ", len(list_with_all_paths_to_check),
         )
@@ -146,11 +146,12 @@ class ResultDataCollection:
         with open(os.path.join(self.result_data_folder, "failed_simualtions.txt"), "a", encoding="utf-8",) as file:
             file.write(str(datetime.datetime.now()) + "\n")
             file.write("Failed simulations found in the following folders: \n")
+            list_with_all_potential_finsihed_flag_files = self.get_list_of_all_relevant_folders_or_files(result_path=result_path, folder_or_filename="finished.flag")
+            for filename in list_with_all_potential_finsihed_flag_files:
+                if not os.path.exists(filename):
+                    file.write(os.path.join(filename) + "\n")
+                    list_of_unfinished_folders.append(filename)
 
-            for folder in os.listdir(result_path):
-                if not os.path.exists(os.path.join(result_path, folder, "finished.flag")):
-                    file.write(os.path.join(result_path, folder) + "\n")
-                    list_of_unfinished_folders.append(os.path.join(result_path, folder))
             file.write(
                 f"Total number of failed simulations in path {result_path}: {len(list_of_unfinished_folders)}"
                 + "\n"
@@ -165,8 +166,8 @@ class ResultDataCollection:
         if list_of_unfinished_folders:
             answer = input("Do you want to delete them?")
             if answer.upper() in ["Y", "YES"]:
-                for folder in list_of_unfinished_folders:
-                    shutil.rmtree(os.path.join(result_path, folder))
+                for filename in list_of_unfinished_folders:
+                    shutil.rmtree(os.path.join(result_path, filename))
                 print("All folders with failed simulations deleted.")
             elif answer.upper() in ["N", "NO"]:
                 print("The folders won't be deleted.")
@@ -305,19 +306,19 @@ class ResultDataCollection:
 
         return list_of_result_path_that_contain_scenario_data
 
-    def get_list_of_all_relevant_scenario_data_folders(self, result_path: str) -> List[str]:
-        """Get a list of all scenario data folders which you want to analyze."""
+    def get_list_of_all_relevant_folders_or_files(self, result_path: str, folder_or_filename: str) -> List[str]:
+        """Get a list of all folders or files which you want to analyze."""
 
         # choose which path to check
-        path_to_check = os.path.join(result_path, "**", "result_data_for_scenario_evaluation")
+        path_to_check = os.path.join(result_path, "**", folder_or_filename)
 
         list_of_paths_first_order = list(glob.glob(path_to_check))
 
         # if in these paths no result data folder can be found check in subfolders for it
-        path_to_check = os.path.join(result_path, "**", "**", "result_data_for_scenario_evaluation")  # type: ignore
+        path_to_check = os.path.join(result_path, "**", "**", folder_or_filename)  # type: ignore
         list_of_paths_second_order = list(glob.glob(path_to_check))
 
-        path_to_check = os.path.join(result_path, "**", "**", "**", "result_data_for_scenario_evaluation")  # type: ignore
+        path_to_check = os.path.join(result_path, "**", "**", "**", folder_or_filename)  # type: ignore
         list_of_paths_third_order = list(glob.glob(path_to_check))
 
         list_with_all_paths_to_check = (

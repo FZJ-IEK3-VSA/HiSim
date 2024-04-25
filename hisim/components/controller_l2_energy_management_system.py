@@ -10,7 +10,6 @@ The component with the lowest source weight is activated first.
 from dataclasses import dataclass
 
 from typing import Any, List, Tuple
-
 from dataclasses_json import dataclass_json
 
 from hisim import component as cp
@@ -133,7 +132,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
     TotalElectricityToOrFromGrid = "TotalElectricityToOrFromGrid"
     TotalElectricityConsumption = "TotalElectricityConsumption"
-    ElectricityAvailable = "ElectricityAvailable"
     BuildingIndoorTemperatureModifier = "BuildingIndoorTemperatureModifier"  # connect to HDS controller and Building
     DomesticHotWaterStorageTemperatureModifier = (
         "DomesticHotWaterStorageTemperatureModifier"  # used for L1HeatPumpController  # Todo: change name?
@@ -213,15 +211,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             output_description=f"here a description for {self.TotalElectricityConsumption} will follow.",
         )
 
-        self.electricity_available_channel: cp.ComponentOutput = self.add_output(
-            object_name=self.component_name,
-            field_name=self.ElectricityAvailable,
-            load_type=lt.LoadTypes.ELECTRICITY,
-            unit=lt.Units.WATT,
-            sankey_flow_direction=False,
-            output_description=f"here a description for {self.ElectricityAvailable} will follow.",
-        )
-
         self.building_indoor_temperature_modifier: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.BuildingIndoorTemperatureModifier,
@@ -264,30 +253,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.add_dynamic_default_connections(self.get_default_connections_from_advanced_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_advanced_battery())
 
-    def get_default_connections_from_utsp_occupancy(
-        self,
-    ):
-        """Get utsp occupancy default connections."""
-
-        from hisim.components.loadprofilegenerator_utsp_connector import (  # pylint: disable=import-outside-toplevel
-            UtspLpgConnector,
-        )
-
-        dynamic_connections = []
-        occupancy_class_name = UtspLpgConnector.get_classname()
-        dynamic_connections.append(
-            dynamic_component.DynamicComponentConnection(
-                source_component_class=UtspLpgConnector,
-                source_class_name=occupancy_class_name,
-                source_component_field_name=UtspLpgConnector.ElectricityOutput,
-                source_load_type=lt.LoadTypes.ELECTRICITY,
-                source_unit=lt.Units.WATT,
-                source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-                source_weight=999,
-            )
-        )
-        return dynamic_connections
-
     def get_default_connections_from_pv_system(
         self,
     ):
@@ -311,6 +276,78 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 source_weight=999,
             )
         )
+
+        return dynamic_connections
+
+    def get_default_connections_from_utsp_occupancy(
+        self,
+    ):
+        """Get utsp occupancy default connections."""
+
+        from hisim.components.loadprofilegenerator_utsp_connector import (  # pylint: disable=import-outside-toplevel
+            UtspLpgConnector,
+        )
+
+        dynamic_connections = []
+        occupancy_class_name = UtspLpgConnector.get_classname()
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=UtspLpgConnector,
+                source_class_name=occupancy_class_name,
+                source_component_field_name=UtspLpgConnector.ElectricityOutput,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[lt.ComponentType.RESIDENTS, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
+                source_weight=1,
+            )
+        )
+        self.add_component_output(
+            source_output_name=f"ElectricityToOrFromGridOf{occupancy_class_name}_",
+            source_tags=[
+                lt.ComponentType.RESIDENTS,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_weight=1,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for Occupancy. ",
+        )
+        return dynamic_connections
+
+    def get_default_connections_from_advanced_heat_pump(
+        self,
+    ):
+        """Get advanced heat pump default connections."""
+
+        from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib  # pylint: disable=import-outside-toplevel
+
+        dynamic_connections = []
+        advanced_heat_pump_class_name = HeatPumpHplib.get_classname()
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=HeatPumpHplib,
+                source_class_name=advanced_heat_pump_class_name,
+                source_component_field_name=HeatPumpHplib.ElectricalInputPower,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.ComponentType.HEAT_PUMP_BUILDING,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
+                ],
+                source_weight=2,
+            )
+        )
+        self.add_component_output(
+            source_output_name=f"ElectricityToOrFromGridOf{advanced_heat_pump_class_name}_",
+            source_tags=[
+                lt.ComponentType.HEAT_PUMP_BUILDING,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_weight=2,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for Heating Heat Pump. ",
+        )
         return dynamic_connections
 
     def get_default_connections_from_dhw_heat_pump(
@@ -331,8 +368,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 source_component_field_name=ModularHeatPump.ElectricityOutput,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
-                source_tags=[lt.ComponentType.HEAT_PUMP_DHW, lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-                source_weight=1,
+                source_tags=[lt.ComponentType.HEAT_PUMP_DHW, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
+                source_weight=3,
             )
         )
 
@@ -342,44 +379,10 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 lt.ComponentType.HEAT_PUMP_DHW,
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
-            # source_weight=my_domnestic_hot_water_heatpump.config.source_weight,
-            source_weight=1,
+            source_weight=3,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for dhw heat pump.",
-        )
-        return dynamic_connections
-
-    def get_default_connections_from_advanced_heat_pump(
-        self,
-    ):
-        """Get advanced heat pump default connections."""
-
-        from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib  # pylint: disable=import-outside-toplevel
-
-        dynamic_connections = []
-        advanced_heat_pump_class_name = HeatPumpHplib.get_classname()
-        dynamic_connections.append(
-            dynamic_component.DynamicComponentConnection(
-                source_component_class=HeatPumpHplib,
-                source_class_name=advanced_heat_pump_class_name,
-                source_component_field_name=HeatPumpHplib.ElectricalInputPower,
-                source_load_type=lt.LoadTypes.ELECTRICITY,
-                source_unit=lt.Units.WATT,
-                source_tags=[lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.ELECTRICITY_REAL],
-                source_weight=2,
-            )
-        )
-        self.add_component_output(
-            source_output_name=f"ElectricityToOrFromGridOf{advanced_heat_pump_class_name}_",
-            source_tags=[
-                lt.ComponentType.HEAT_PUMP_BUILDING,
-                lt.InandOutputType.ELECTRICITY_TARGET,
-            ],
-            source_weight=2,
-            source_load_type=lt.LoadTypes.ELECTRICITY,
-            source_unit=lt.Units.WATT,
-            output_description="Target electricity for Heating Heat Pump. ",
         )
         return dynamic_connections
 
@@ -399,8 +402,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 source_component_field_name=Battery.AcBatteryPowerUsed,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
-                source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_REAL],
-                source_weight=3,
+                source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
+                source_weight=4,
             )
         )
 
@@ -440,13 +443,15 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             if output is not None:
                 outputs_sorted.append(output)
             else:
-                raise Exception("Dynamic input is not conncted to dynamic output")
+                raise Exception(f"Dynamic input with source weight {source_weight} is not connected to dynamic output")
 
         production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
         consumption_uncontrolled_inputs = self.get_dynamic_inputs(
             tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
         )
-        consumption_ems_controlled_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_REAL])
+        consumption_ems_controlled_inputs = self.get_dynamic_inputs(
+            tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
+        )
         return (
             inputs_sorted,
             component_types_sorted,
@@ -489,8 +494,10 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
         Subtracts the electricity consumption signal of the component from the previous iteration,
         and sends updated signal back.
+        This function controls how surplus electricity is distributed and how much of each components'
+        electricity need is covered onsite or from grid.
         """
-        # get electricity demand from input component and substract from available surplus electricity
+        # get electricity demand from input component and substract from (or add to) available surplus electricity
         electricity_demand_from_current_input_component_in_watt = stsv.get_input_value(component_input=current_input)
 
         # if available_surplus_electricity > 0: electricity is fed into battery
@@ -502,91 +509,92 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
             )
 
-        # CHP produces electricity which is added to available surplus electricity
+        # these are electricity CONSUMERS
+        elif current_component_type in [
+            lt.ComponentType.RESIDENTS,
+            lt.ComponentType.ELECTROLYZER,
+            lt.ComponentType.SMART_DEVICE,
+            lt.ComponentType.CAR_BATTERY,
+            lt.ComponentType.HEAT_PUMP_DHW,
+            lt.ComponentType.HEAT_PUMP,
+            lt.ComponentType.HEAT_PUMP_BUILDING,
+        ]:
+            # if surplus electricity is available, a part of the component's consumption can be covered onsite
+            if available_surplus_electricity_in_watt > 0:
+                available_surplus_electricity_in_watt = (
+                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
+                )
+                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
+            # otherwise all of the component's consumption is taken from grid
+            else:
+                stsv.set_output_value(
+                    output=current_output, value=-electricity_demand_from_current_input_component_in_watt
+                )
+                available_surplus_electricity_in_watt = (
+                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
+                )
+
+        # these are electricity PRODUCERS
         elif current_component_type == lt.ComponentType.CHP:
             available_surplus_electricity_in_watt = (
                 available_surplus_electricity_in_watt + electricity_demand_from_current_input_component_in_watt
             )
             stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
 
-        elif current_component_type in [
-            lt.ComponentType.HEAT_PUMP_DHW,
-            lt.ComponentType.HEAT_PUMP,
-        ]:  # Todo: lt.ComponentType.HEAT_PUMP is from old version, kept here just to avoid errors
-            if available_surplus_electricity_in_watt > 0:
-                stsv.set_output_value(
-                    self.domestic_hot_water_storage_temperature_modifier,
-                    self.domestic_hot_water_storage_temperature_offset_value,
-                )
-                available_surplus_electricity_in_watt = (
-                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
-                )
-                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
-
-            else:
-                stsv.set_output_value(self.domestic_hot_water_storage_temperature_modifier, 0)
-                stsv.set_output_value(
-                    output=current_output, value=-electricity_demand_from_current_input_component_in_watt
-                )
-
-        elif current_component_type == lt.ComponentType.HEAT_PUMP_BUILDING:
-            if available_surplus_electricity_in_watt > 0:
-                stsv.set_output_value(
-                    self.building_indoor_temperature_modifier,
-                    self.building_indoor_temperature_offset_value,
-                )
-                stsv.set_output_value(
-                    self.space_heating_water_storage_temperature_modifier,
-                    self.space_heating_water_storage_temperature_offset_value,
-                )
-                available_surplus_electricity_in_watt = (
-                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
-                )
-                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
-
-            else:
-                stsv.set_output_value(self.building_indoor_temperature_modifier, 0)
-                stsv.set_output_value(self.space_heating_water_storage_temperature_modifier, 0)
-                stsv.set_output_value(
-                    output=current_output, value=-electricity_demand_from_current_input_component_in_watt
-                )
-
-        elif current_component_type == lt.ComponentType.ELECTROLYZER:
-            if available_surplus_electricity_in_watt > 0:
-                available_surplus_electricity_in_watt = (
-                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
-                )
-                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
-            else:
-                stsv.set_output_value(
-                    output=current_output, value=-electricity_demand_from_current_input_component_in_watt
-                )
-
-        elif current_component_type in [
-            lt.ComponentType.SMART_DEVICE,
-            lt.ComponentType.CAR_BATTERY,
-        ]:
-            if available_surplus_electricity_in_watt > 0:
-                available_surplus_electricity_in_watt = (
-                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
-                )
-                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
-            else:
-                stsv.set_output_value(
-                    output=current_output, value=-electricity_demand_from_current_input_component_in_watt
-                )
-
         return available_surplus_electricity_in_watt
 
-    def optimize_own_consumption_iterative(
+    def modify_set_temperatures_for_components_in_case_of_surplus_electricity(
+        self,
+        available_surplus_electricity_in_watt: float,
+        stsv: cp.SingleTimeStepValues,
+        inputs_sorted: List[ComponentInput],
+        component_types_sorted: List[lt.ComponentType],
+    ) -> None:
+        """In case surplus electricity is available, modify set temperatures for space heating and domestic hot water heat pumps.
+
+        Like this, the heat pumps will start heating up the water storages and the surplus energy can be stored as thermal energy.
+        See also SG-ready heatpumps: https://de.gridx.ai/wissen/sg-ready.
+
+        The temperature modification outputs go to the heat pumps, the heat distribution system and the building component (see network charts).
+        """
+        for index in range(len(inputs_sorted)):
+            current_component_type = component_types_sorted[index]
+
+            if current_component_type == lt.ComponentType.HEAT_PUMP_BUILDING:
+                if available_surplus_electricity_in_watt > 0:
+                    stsv.set_output_value(
+                        self.building_indoor_temperature_modifier,
+                        self.building_indoor_temperature_offset_value,
+                    )
+                    stsv.set_output_value(
+                        self.space_heating_water_storage_temperature_modifier,
+                        self.space_heating_water_storage_temperature_offset_value,
+                    )
+                else:
+                    stsv.set_output_value(self.building_indoor_temperature_modifier, 0)
+                    stsv.set_output_value(self.space_heating_water_storage_temperature_modifier, 0)
+
+            elif current_component_type in [
+                lt.ComponentType.HEAT_PUMP_DHW,
+                lt.ComponentType.HEAT_PUMP,
+            ]:
+                if available_surplus_electricity_in_watt > 0:
+                    stsv.set_output_value(
+                        self.domestic_hot_water_storage_temperature_modifier,
+                        self.domestic_hot_water_storage_temperature_offset_value,
+                    )
+                else:
+                    stsv.set_output_value(self.domestic_hot_water_storage_temperature_modifier, 0)
+
+    def distribute_available_surplus_electricity_iterative(
         self,
         available_surplus_electricity_in_watt: float,
         stsv: cp.SingleTimeStepValues,
         inputs_sorted: List[ComponentInput],
         component_types_sorted: List[lt.ComponentType],
         outputs_sorted: List[ComponentOutput],
-    ) -> None:
-        """Evaluates available suplus electricity component by component, iteratively, and sends updated signals back."""
+    ) -> float:
+        """Evaluates available surplus electricity component by component, iteratively, and sends updated signals back."""
 
         for index, single_input_sorted in enumerate(inputs_sorted):
             single_component_type_sorted = component_types_sorted[index]
@@ -599,6 +607,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 current_input=single_input_sorted,
                 current_output=single_output_sorted,
             )
+
+        return available_surplus_electricity_in_watt
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates iteration of surplus controller."""
@@ -629,22 +639,21 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             self.state.production_in_watt - self.state.consumption_uncontrolled_in_watt
         )
         if self.strategy == "optimize_own_consumption":
-            self.optimize_own_consumption_iterative(
+            available_surplus_electricity_in_watt = self.distribute_available_surplus_electricity_iterative(
                 available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
                 stsv=stsv,
                 inputs_sorted=self.inputs_sorted,
                 component_types_sorted=self.component_types_sorted,
                 outputs_sorted=self.outputs_sorted,
             )
+            self.modify_set_temperatures_for_components_in_case_of_surplus_electricity(
+                available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
+                stsv=stsv,
+                inputs_sorted=self.inputs_sorted,
+                component_types_sorted=self.component_types_sorted,
+            )
 
-        # Set other output values
-        total_electricity_to_or_from_grid_in_watt = (
-            self.state.production_in_watt
-            - self.state.consumption_uncontrolled_in_watt
-            - self.state.consumption_ems_controlled_in_watt
-        )
-        stsv.set_output_value(self.total_electricity_to_or_from_grid, total_electricity_to_or_from_grid_in_watt)
-        stsv.set_output_value(self.electricity_available_channel, available_surplus_electricity_in_watt)
+        stsv.set_output_value(self.total_electricity_to_or_from_grid, available_surplus_electricity_in_watt)
         stsv.set_output_value(
             self.total_electricity_consumption_channel,
             self.state.consumption_uncontrolled_in_watt + self.state.consumption_ems_controlled_in_watt,

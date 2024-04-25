@@ -561,6 +561,17 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             )
             stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
 
+        elif current_component_type == lt.ComponentType.SURPLUS_CONTROLLER_DISTRICT:
+            if available_surplus_electricity_in_watt > 0:
+                available_surplus_electricity_in_watt = (
+                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
+                )
+                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
+            else:
+                stsv.set_output_value(
+                    output=current_output, value=-electricity_demand_from_current_input_component_in_watt
+                )
+
         return available_surplus_electricity_in_watt
 
     def modify_set_temperatures_for_components_in_case_of_surplus_electricity(
@@ -605,17 +616,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     )
                 else:
                     stsv.set_output_value(self.domestic_hot_water_storage_temperature_modifier, 0)
-
-            elif current_component_type == lt.ComponentType.SURPLUS_CONTROLLER_DISTRICT:
-                if available_surplus_electricity_in_watt > 0:
-                    available_surplus_electricity_in_watt = (
-                        available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
-                    )
-                    stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
-                else:
-                    stsv.set_output_value(
-                        output=current_output, value=-electricity_demand_from_current_input_component_in_watt
-                    )
 
     def distribute_available_surplus_electricity_iterative(
         self,

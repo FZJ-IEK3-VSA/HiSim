@@ -83,7 +83,7 @@ class HouseholdMoreAdvancedHPDieselCarConfig(SystemSetupConfigBase):
         )
 
         household_config = cls.get_scaled_default(building_config)
-
+        household_config.hp_config.with_domestic_hot_water_preparation = True
         household_config.hp_config.set_thermal_output_power_in_watt = Quantity(
             6000, Watt  # default value leads to switching on-off very often
         )
@@ -145,6 +145,7 @@ class HouseholdMoreAdvancedHPDieselCarConfig(SystemSetupConfigBase):
                                                           Watt),
                 heating_reference_temperature_in_celsius=Quantity(
                     my_building_information.heating_reference_temperature_in_celsius, Celsius),
+
             ),
             simple_hot_water_storage_config=simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
                 max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
@@ -171,6 +172,7 @@ class HouseholdMoreAdvancedHPDieselCarConfig(SystemSetupConfigBase):
         household_config.hp_config.minimum_running_time_in_seconds = Quantity(
             900, Seconds  # default value leads to switching on-off very often
         )
+        household_config.hp_config.with_domestic_hot_water_preparation = True
 
         # set same heating threshold
         household_config.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
@@ -217,10 +219,8 @@ def setup_function(
     else:
         Path(utils.HISIMPATH["utsp_results"]).mkdir(parents=False, exist_ok=False)
 
-    if my_sim.my_module_config_path:
-        my_config = HouseholdMoreAdvancedHPDieselCarConfig.load_from_json(
-            my_sim.my_module_config_path
-        )
+    if my_sim.my_module_config:
+        my_config = HouseholdMoreAdvancedHPDieselCarConfig.load_from_json(my_sim.my_module_config)
     else:
         my_config = HouseholdMoreAdvancedHPDieselCarConfig.get_default()
 

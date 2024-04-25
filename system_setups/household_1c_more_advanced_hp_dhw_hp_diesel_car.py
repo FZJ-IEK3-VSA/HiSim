@@ -90,6 +90,8 @@ class HouseholdMoreAdvancedHPDHWHPDieselCarConfig(SystemSetupConfigBase):
         household_config.hp_config.set_thermal_output_power_in_watt = Quantity(
             6000, Watt  # default value leads to switching on-off very often
         )
+        household_config.hp_config.with_domestic_hot_water_preparation = False
+
         household_config.dhw_storage_config.volume = 250  # default(volume = 230) leads to an error
 
         return household_config
@@ -179,6 +181,7 @@ class HouseholdMoreAdvancedHPDHWHPDieselCarConfig(SystemSetupConfigBase):
         household_config.hp_config.minimum_running_time_in_seconds = Quantity(
             900, Seconds  # default value leads to switching on-off very often
         )
+        household_config.hp_config.with_domestic_hot_water_preparation = False
 
         # set same heating threshold
         household_config.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
@@ -225,8 +228,8 @@ def setup_function(
     else:
         Path(utils.HISIMPATH["utsp_results"]).mkdir(parents=False, exist_ok=False)
 
-    if my_sim.my_module_config_path:
-        my_config = HouseholdMoreAdvancedHPDHWHPDieselCarConfig.load_from_json(my_sim.my_module_config_path)
+    if my_sim.my_module_config:
+        my_config = HouseholdMoreAdvancedHPDHWHPDieselCarConfig.load_from_json(my_sim.my_module_config)
     else:
         my_config = HouseholdMoreAdvancedHPDHWHPDieselCarConfig.get_default()
 

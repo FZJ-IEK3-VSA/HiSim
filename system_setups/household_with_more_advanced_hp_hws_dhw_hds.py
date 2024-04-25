@@ -63,6 +63,7 @@ def setup_function(
     group_id: int = 1  # outdoor/air heat pump (choose 1 for regulated or 4 for on/off)
     heating_reference_temperature_in_celsius: float = -7.0  # t_in
     flow_temperature_in_celsius: float = 21.0  # t_out_val
+    with_domestic_hot_water_preparation: bool = True
 
     # =================================================================================================================================
     # Build Components
@@ -145,6 +146,7 @@ def setup_function(
     )
     my_heatpump_config.group_id = group_id
     my_heatpump_config.flow_temperature_in_celsius = Quantity(float(flow_temperature_in_celsius), Celsius)
+    my_heatpump_config.with_domestic_hot_water_preparation = with_domestic_hot_water_preparation
 
     my_heatpump = more_advanced_heat_pump_hplib.HeatPumpHplibWithTwoOutputs(
         config=my_heatpump_config,

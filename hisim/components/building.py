@@ -2140,7 +2140,6 @@ class BuildingInformation:
         ) = self.scaling_over_conditioned_floor_area(
             conditioned_floor_area_in_m2=conditioned_floor_area_in_m2_reference,
             rooftop_area_in_m2=rooftop_area_in_m2_reference,
-            number_of_storeys=number_of_storeys,
             room_height_in_m=room_height_in_m,
             buildingdata=self.buildingdata,
         )
@@ -2225,7 +2224,6 @@ class BuildingInformation:
         self,
         conditioned_floor_area_in_m2: float,
         rooftop_area_in_m2: float,
-        number_of_storeys: float,
         room_height_in_m: float,
         buildingdata: Any,
     ) -> Tuple[float, List, List, float, List, float, Any]:
@@ -2339,14 +2337,7 @@ class BuildingInformation:
             else:
                 scaled_window_areas_in_m2.append(window_area_in_m2)
 
-        # scale rooftop area with the same factor as conditioned floor area
-        scaled_rooftop_area_in_m2 = self.scale_rooftop_area(
-            rooftop_area_from_tabula_in_m2=rooftop_area_in_m2,
-            total_base_area_in_m2_from_config=self.buildingconfig.total_base_area_in_m2,
-            absolute_floor_area_in_m2_from_config=self.buildingconfig.absolute_conditioned_floor_area_in_m2,
-            scaling_factor=scaling_factor,
-            number_of_storeys=number_of_storeys,
-        )
+        scaled_rooftop_area_in_m2 = rooftop_area_in_m2 * scaling_factor
 
         return (
             scaling_factor,
@@ -2357,31 +2348,6 @@ class BuildingInformation:
             scaled_rooftop_area_in_m2,
             buildingdata,
         )
-
-    def scale_rooftop_area(
-        self,
-        rooftop_area_from_tabula_in_m2: float,
-        total_base_area_in_m2_from_config: Optional[float],
-        absolute_floor_area_in_m2_from_config: Optional[float],
-        scaling_factor: float,
-        number_of_storeys: float,
-    ) -> float:
-        """Scale rooftop area of building according to floor area and number of storeys."""
-
-        if total_base_area_in_m2_from_config is not None:
-            # rooftop area scales linearly with base area
-            scaling_factor_for_rooftop = scaling_factor
-        elif absolute_floor_area_in_m2_from_config is not None:
-            # rooftop area scales linearly with floor area but divided by number of storeys
-            scaling_factor_for_rooftop = scaling_factor / number_of_storeys
-
-        else:
-            # both total base area and absolute floor area from config are None
-            # in this case the floor area from tabula or 500m2 default is taken
-            # rooftop area scales linearly with floor area but divided by number of storeys
-            scaling_factor_for_rooftop = scaling_factor / number_of_storeys
-
-        return rooftop_area_from_tabula_in_m2 * scaling_factor_for_rooftop
 
     def get_some_reference_data_from_tabula(
         self, buildingdata: Any, scaled_conditioned_floor_area_in_m2: float

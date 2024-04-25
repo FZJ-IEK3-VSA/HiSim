@@ -68,6 +68,6 @@ def test_webtool_results():
         profiles_for_webtool = json.load(handle)
 
     assert isinstance(
-        profiles_for_webtool["PVSystem_w0 - ElectricitityEnergyOutput [Electricity - Wh]"]["2021-01-01T00:00:00.000"],
+        profiles_for_webtool["ElectricityMeter - ElectricityToGrid [Electricity - Wh]"]["2021-01-01T00:00:00.000"],
         Number,
     )

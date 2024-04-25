@@ -389,6 +389,14 @@ class WeatherConfig(ConfigBase):
     @classmethod
     def get_default(cls, location_entry: Any) -> Any:
         """Gets the default configuration for Aachen."""
+        if not isinstance(location_entry, LocationEnum):
+            if location_entry in LocationEnum._member_names_:  # pylint: disable=W0212
+                location_entry = getattr(LocationEnum, location_entry)
+            else:
+                raise ValueError(
+                    f"The location_entry {location_entry} could not be found in the Weather Location Enum class."
+                )
+
         path = os.path.join(
             utils.get_input_directory(),
             "weather",
@@ -614,8 +622,7 @@ class Weather(Component):
     def i_prepare_simulation(self) -> None:
         """Generates the lists to be used later."""
         seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
-        log.information(self.weather_config.location)
-        log.information(self.weather_config.to_json())  # type: ignore
+        log.information("Weather config: " + self.weather_config.to_json())  # type: ignore
         location_dict = get_coordinates(
             filepath=self.weather_config.source_path,
             source_enum=self.weather_config.data_source,
@@ -636,7 +643,11 @@ class Weather(Component):
             self.azimuth_list = my_weather["azimuth"].tolist()
             self.apparent_zenith_list = my_weather["apparent_zenith"].tolist()
             self.wind_speed_list = my_weather["Wspd"].tolist()
-            self.pressure_list = my_weather["Pressure"].tolist()
+            try:
+                self.pressure_list = my_weather["Pressure"].tolist()
+            except Exception:
+                log.information("Weather key Pressure could not be found.")
+                self.pressure_list = [0] * len(self.wind_speed_list)
         else:
             tmy_data = read_test_reference_year_data(
                 weatherconfig=self.weather_config,

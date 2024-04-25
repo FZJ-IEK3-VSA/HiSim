@@ -120,7 +120,7 @@ class ResultDataCollection:
         self.clean_result_directory_from_unfinished_results(result_path=result_path)
 
         # get result folders with result data folder
-        list_with_all_paths_to_check = self.get_list_of_all_relevant_scenario_data_folders(result_path=result_path)
+        list_with_all_paths_to_check = self.get_list_of_all_relevant_folders_or_files(result_path=result_path, folder_or_filename="result_data_for_scenario_evaluation")
         print(
             "len of list with all paths to containing result data ", len(list_with_all_paths_to_check),
         )
@@ -146,11 +146,12 @@ class ResultDataCollection:
         with open(os.path.join(self.result_data_folder, "failed_simualtions.txt"), "a", encoding="utf-8",) as file:
             file.write(str(datetime.datetime.now()) + "\n")
             file.write("Failed simulations found in the following folders: \n")
+            list_with_all_potential_finsihed_flag_files = self.get_list_of_all_relevant_folders_or_files(result_path=result_path, folder_or_filename="finished.flag")
+            for filename in list_with_all_potential_finsihed_flag_files:
+                if not os.path.exists(filename):
+                    file.write(os.path.join(filename) + "\n")
+                    list_of_unfinished_folders.append(filename)
 
-            for folder in os.listdir(result_path):
-                if not os.path.exists(os.path.join(result_path, folder, "finished.flag")):
-                    file.write(os.path.join(result_path, folder) + "\n")
-                    list_of_unfinished_folders.append(os.path.join(result_path, folder))
             file.write(
                 f"Total number of failed simulations in path {result_path}: {len(list_of_unfinished_folders)}"
                 + "\n"
@@ -165,8 +166,8 @@ class ResultDataCollection:
         if list_of_unfinished_folders:
             answer = input("Do you want to delete them?")
             if answer.upper() in ["Y", "YES"]:
-                for folder in list_of_unfinished_folders:
-                    shutil.rmtree(os.path.join(result_path, folder))
+                for filename in list_of_unfinished_folders:
+                    shutil.rmtree(os.path.join(result_path, filename))
                 print("All folders with failed simulations deleted.")
             elif answer.upper() in ["N", "NO"]:
                 print("The folders won't be deleted.")
@@ -305,19 +306,19 @@ class ResultDataCollection:
 
         return list_of_result_path_that_contain_scenario_data
 
-    def get_list_of_all_relevant_scenario_data_folders(self, result_path: str) -> List[str]:
-        """Get a list of all scenario data folders which you want to analyze."""
+    def get_list_of_all_relevant_folders_or_files(self, result_path: str, folder_or_filename: str) -> List[str]:
+        """Get a list of all folders or files which you want to analyze."""
 
         # choose which path to check
-        path_to_check = os.path.join(result_path, "**", "result_data_for_scenario_evaluation")
+        path_to_check = os.path.join(result_path, "**", folder_or_filename)
 
         list_of_paths_first_order = list(glob.glob(path_to_check))
 
         # if in these paths no result data folder can be found check in subfolders for it
-        path_to_check = os.path.join(result_path, "**", "**", "result_data_for_scenario_evaluation")  # type: ignore
+        path_to_check = os.path.join(result_path, "**", "**", folder_or_filename)  # type: ignore
         list_of_paths_second_order = list(glob.glob(path_to_check))
 
-        path_to_check = os.path.join(result_path, "**", "**", "**", "result_data_for_scenario_evaluation")  # type: ignore
+        path_to_check = os.path.join(result_path, "**", "**", "**", folder_or_filename)  # type: ignore
         list_of_paths_third_order = list(glob.glob(path_to_check))
 
         list_with_all_paths_to_check = (
@@ -451,10 +452,25 @@ class ResultDataCollection:
 
         for csv_file in csv_data_list:
             dataframe = pd.read_csv(csv_file)
+            # convert scenario column to str-type just in case it has no string values
+            dataframe["scenario"] = dataframe["scenario"].astype(str)
+            scenario_name_of_current_dataframe = dataframe["scenario"][0]
+            # check if scenario column is empty or not
+            if scenario_name_of_current_dataframe == "" or not isinstance(scenario_name_of_current_dataframe, str):
+                raise ValueError(
+                    f"The scenario variable of the current dataframe is {scenario_name_of_current_dataframe} but it should be a non-empty string value. "
+                    "Please set a scenario name for your simulations."
+                )
 
+            # try to find hash number in scenario name
+            try:
+                hash_number = re.findall(r"\-?\d+", scenario_name_of_current_dataframe)[-1]
+
+            # this is when no hash number could be determined in the scenario name
+            except Exception:
+                hash_number = 1
+                rename_scenario = False
             # add hash colum to dataframe so hash does not get lost when scenario is renamed
-            # TODO: make this optional in case hash does not exist in scenario name
-            hash_number = re.findall(r"\-?\d+", dataframe["scenario"][0])[-1]
             dataframe["hash"] = [hash_number] * len(dataframe["scenario"])
 
             # write all values that were in module config dict in the dataframe, so that you can use these values later for sorting and searching
@@ -522,15 +538,11 @@ class ResultDataCollection:
 
         if parameter_key is not None:
             path_for_file = os.path.join(
-                result_data_folder,
-                f"data_with_different_{parameter_key}s",
-                f"simulation_duration_of_{simulation_duration_key}_days",
+                result_data_folder, f"data_with_different_{parameter_key}s", f"{simulation_duration_key}_days",
             )
         else:
             path_for_file = os.path.join(
-                result_data_folder,
-                "data_with_all_parameters",
-                f"simulation_duration_of_{simulation_duration_key}_days",
+                result_data_folder, "data_with_all_parameters", f"{simulation_duration_key}_days",
             )
         if os.path.exists(path_for_file) is False:
             os.makedirs(path_for_file)
@@ -710,15 +722,22 @@ class ResultDataCollection:
         for folder in list_of_result_folder_paths_to_check:
             for file in os.listdir(folder):
                 if ".json" in file:
-                    with open(os.path.join(folder, file), "r", encoding="utf-8") as openfile:  # type: ignore
+                    filename = os.path.join(folder, file)
+                    with open(filename, "r", encoding="utf-8") as openfile:  # type: ignore
                         config_dict = json.load(openfile)
-                        my_module_config_dict = config_dict["myModuleConfig"]
-                        my_module_config_dict.update(
-                            {"duration in days": config_dict["scenarioDataInformation"].get("duration in days")}
-                        )
-                        my_module_config_dict.update({"model": config_dict["scenarioDataInformation"].get("model")})
-                        my_module_config_dict.update({"model": config_dict["scenarioDataInformation"].get("scenario")})
-
+                        try:
+                            my_module_config_dict = config_dict["myModuleConfig"]
+                            my_module_config_dict.update(
+                                {"duration in days": config_dict["scenarioDataInformation"].get("duration in days")}
+                            )
+                            my_module_config_dict.update({"model": config_dict["scenarioDataInformation"].get("model")})
+                            my_module_config_dict.update(
+                                {"model": config_dict["scenarioDataInformation"].get("scenario")}
+                            )
+                        except Exception as exc:
+                            raise KeyError(
+                                f"The file {filename} does not contain any key called myModuleConfig."
+                            ) from exc
                         # prevent to add modules with same module config and same simulation duration twice
                         if my_module_config_dict not in list_of_all_module_configs:
                             list_of_all_module_configs.append(my_module_config_dict)

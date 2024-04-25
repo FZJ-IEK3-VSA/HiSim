@@ -200,6 +200,7 @@ class ComponentType(str, enum.Enum):
     BOILER = "Boiler"
     BUFFER = "Buffer"
     HEATERS = [HEAT_PUMP, GAS_HEATER]
+    RESIDENTS = "Residents"
 
     # different heat_pump types
     HEAT_PUMP_BUILDING = "HeatPumpBuilding"  # Heatpump for heating the house
@@ -226,7 +227,6 @@ class InandOutputType(str, enum.Enum):
     MASS_FLOW = "Massflow"
     CONTROL_SIGNAL = "ControlSignal"
     ELECTRICITY_TARGET = "ElectricityTarget"
-    ELECTRICITY_REAL = "ElectricityReal"
 
     # L3
     LAST_ACTIVATION = "LastActivation"

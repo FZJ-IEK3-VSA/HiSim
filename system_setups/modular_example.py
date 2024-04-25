@@ -94,7 +94,7 @@ def setup_function(
     year = 2021
     seconds_per_timestep = 60 * 60
 
-    household_config = read_in_configs(my_sim.my_module_config_path)
+    household_config = read_in_configs(my_sim.my_module_config)
 
     assert household_config.archetype_config_ is not None
     assert household_config.system_config_ is not None

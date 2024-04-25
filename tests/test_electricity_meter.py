@@ -54,6 +54,9 @@ def test_house(
             PostProcessingOptions.EXPORT_TO_CSV
         )
         my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.COMPUTE_OPEX
+        )
+        my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT
         )
         my_simulation_parameters.post_processing_options.append(
@@ -83,7 +86,7 @@ def test_house(
     )
     # Build PV
     my_photovoltaic_system_config = (
-        generic_pv_system.PVSystemConfig.get_default_pv_system()
+        generic_pv_system.PVSystemConfig.get_scaled_pv_system(share_of_maximum_pv_power=1, rooftop_area_in_m2=120)
     )
 
     my_photovoltaic_system = generic_pv_system.PVSystem(
@@ -181,6 +184,8 @@ def test_house(
 
     cumulative_production_kpi_in_kilowatt_hour = jsondata["General"]["Total electricity production"].get("value")
 
+    electricity_from_grid_kpi_in_kilowatt_hour = jsondata["General"]["Total energy from grid"].get("value")
+
     # simualtion results from grid energy balancer (last entry)
     simulation_results_electricity_meter_cumulative_production_in_watt_hour = (
         my_sim.results_data_frame[
@@ -192,6 +197,18 @@ def test_house(
             "ElectricityMeter - CumulativeConsumption [Electricity - Wh]"
         ][-1]
     )
+    simulation_results_electricity_from_grid_in_watt_hour = (
+        my_sim.results_data_frame[
+            "ElectricityMeter - ElectricityFromGrid [Electricity - Wh]"
+        ]
+    )
+    simulation_results_electricity_consumption_in_watt_hour = (
+        my_sim.results_data_frame[
+            "ElectricityMeter - ElectricityConsumption [Electricity - Wh]"
+        ]
+    )
+    sum_electricity_from_grid_in_kilowatt_hour = sum(simulation_results_electricity_from_grid_in_watt_hour) / 1000
+    sum_electricity_consumption_in_kilowatt_hour = sum(simulation_results_electricity_consumption_in_watt_hour) / 1000
 
     log.information(
         "kpi cumulative production [kWh] "
@@ -200,6 +217,10 @@ def test_house(
     log.information(
         "kpi cumulative consumption [kWh] "
         + str(cumulative_consumption_kpi_in_kilowatt_hour)
+    )
+    log.information(
+        "kpi energy from grid [kWh] "
+        + str(electricity_from_grid_kpi_in_kilowatt_hour)
     )
     log.information(
         "ElectricityMeter cumulative production [kWh] "
@@ -215,6 +236,18 @@ def test_house(
             * 1e-3
         )
     )
+    log.information(
+        "ElectricityMeter energy from grid [kWh] "
+        + str(
+            sum_electricity_from_grid_in_kilowatt_hour
+        )
+    )
+    log.information(
+        "ElectricityMeter consumption [kWh] "
+        + str(
+            sum_electricity_consumption_in_kilowatt_hour
+        )
+    )
 
     # test and compare with relative error of 10%
     np.testing.assert_allclose(
@@ -226,5 +259,11 @@ def test_house(
     np.testing.assert_allclose(
         cumulative_consumption_kpi_in_kilowatt_hour,
         simulation_results_electricity_meter_cumulative_consumption_in_watt_hour * 1e-3,
+        rtol=0.1,
+    )
+
+    np.testing.assert_allclose(
+        electricity_from_grid_kpi_in_kilowatt_hour,
+        sum_electricity_from_grid_in_kilowatt_hour,
         rtol=0.1,
     )

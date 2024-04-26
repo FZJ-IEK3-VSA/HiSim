@@ -20,7 +20,7 @@ load_dotenv()
 def main(
     path_to_module: str,
     my_simulation_parameters: Optional[SimulationParameters] = None,
-    my_module_config_path: Optional[str] = None,
+    my_module_config: Optional[str] = None,
 ) -> None:
     """Core function."""
     # filter warnings due to pvlib, pvlib generates warnings during simulation within pvlib package
@@ -79,7 +79,7 @@ def main(
         module_filename=module_filename,
         setup_function=function_in_module,
         my_simulation_parameters=my_simulation_parameters,
-        my_module_config_path=my_module_config_path,
+        my_module_config=my_module_config,
     )
 
     # Build method
@@ -101,7 +101,11 @@ def main(
     log.information("")
 
     # At the end put new logging files into result directory
-    my_sim.put_log_files_into_result_path()
+    try:
+        my_sim.put_log_files_into_result_path()
+    # sometimes when running many simulations at once this leads to errors, so ignore
+    except Exception:
+        pass
 
 
 if __name__ == "__main__":
@@ -118,5 +122,5 @@ if __name__ == "__main__":
         log.information("calling " + FUNCTION_NAME + " from " + FILE_NAME + " with module config " + MODULE_CONFIG)
         main(
             path_to_module=FILE_NAME,
-            my_module_config_path=MODULE_CONFIG,
+            my_module_config=MODULE_CONFIG,
         )

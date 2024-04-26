@@ -130,6 +130,7 @@ class PVSystemConfig(ConfigBase):
         share_of_maximum_pv_power: float = 1.0,
         module_name: str = "Hanwha HSL60P6-PA-4-250T [2013]",
         module_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
+        location: str = "Aachen",
         load_module_data: bool = False,
     ) -> "PVSystemConfig":
         """Gets a default PV system with scaling according to rooftop area."""
@@ -152,7 +153,7 @@ class PVSystemConfig(ConfigBase):
             azimuth=180,
             tilt=30,
             source_weight=0,
-            location="Aachen",
+            location=location,
             co2_footprint=total_pv_power_in_watt * 1e-3 * 330.51,  # value from emission_factros_and_costs_devices.csv
             cost=total_pv_power_in_watt * 1e-3 * 794.41,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
@@ -591,7 +592,6 @@ class PVSystem(cp.Component):
 
     def i_prepare_simulation(self) -> None:
         """Prepares the component for the simulation."""
-        log.information(self.pvconfig.to_json())  # type: ignore
         file_exists, self.cache_filepath = utils.get_cache_file(
             "PVSystem", self.pvconfig, self.my_simulation_parameters
         )
@@ -610,11 +610,11 @@ class PVSystem(cp.Component):
                     + str(len(self.ac_power_ratios_for_all_timesteps_output))
                 )
         else:
-            if self.simulation_repository.exist_entry("weather_location"):
-                self.coordinates = self.simulation_repository.get_entry("weather_location")
+            if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.LOCATION):
+                SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
             else:
                 raise KeyError(
-                    "The key weather_location was not found in the repository."
+                    "The key weather_location was not found in the singleton sim repository."
                     "Please check in your system setup if the weather component was added to the simulator before the pv system."
                 )
 

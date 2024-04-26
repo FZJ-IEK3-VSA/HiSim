@@ -36,6 +36,7 @@ class ScenarioChartGeneration:
         dict_with_extra_information_for_specific_plot: Dict[str, Dict],
         variables_to_check: Optional[List[str]] = None,
         dict_of_scenarios_to_check: Optional[Dict[str, List[str]]] = None,
+        result_folder_description: Optional[str] = None,
     ) -> None:
         """Initialize the class."""
 
@@ -86,6 +87,7 @@ class ScenarioChartGeneration:
             "results_for_scenario_comparison",
             "data",
             data_path_strip,
+            f"{simulation_duration_to_check}_days",
         )
 
         self.result_folder = os.path.join(
@@ -97,6 +99,7 @@ class ScenarioChartGeneration:
             "results_for_scenario_comparison",
             "results",
             result_path_strip,
+            f"{simulation_duration_to_check}_days",
         )
 
         self.hisim_chartbase = ChartFontsAndSize()
@@ -126,6 +129,7 @@ class ScenarioChartGeneration:
                 simulation_duration_key=simulation_duration_to_check,
                 variables_to_check=variables_to_check,
                 dict_with_extra_information_for_specific_plot=dict_with_extra_information_for_specific_plot,
+                result_folder_description=result_folder_description,
             )
 
         else:
@@ -138,6 +142,7 @@ class ScenarioChartGeneration:
         simulation_duration_key: str,
         variables_to_check: List[str],
         dict_with_extra_information_for_specific_plot: Dict[str, Dict],
+        result_folder_description: Optional[str],
     ) -> None:
         """Make plots for different kind of data."""
 
@@ -146,10 +151,11 @@ class ScenarioChartGeneration:
         if pandas_dataframe.empty:
             raise ValueError("Dataframe is empty.")
 
-        sub_results_folder = f"simulation_duration_of_{simulation_duration_key}_days"
-        sub_sub_results_folder = f"scenario_comparison_{time_resolution_of_data_set.value}_{self.datetime_string}"
+        sub_results_folder = f"{time_resolution_of_data_set.value}_{self.datetime_string}"
+        if result_folder_description is not None:
+            sub_results_folder = sub_results_folder + f"_{result_folder_description}"
 
-        self.path_for_plots = os.path.join(self.result_folder, sub_results_folder, sub_sub_results_folder)
+        self.path_for_plots = os.path.join(self.result_folder, sub_results_folder)
 
         for variable_to_check in variables_to_check:
             log.information("Check variable " + str(variable_to_check))
@@ -222,33 +228,13 @@ class ScenarioChartGeneration:
                     sort_according_to_y1_or_y2_data = dict_with_extra_information_for_specific_plot["stacked_bar"][
                         "sort_according_to_y1_or_y2_data"
                     ]
-                    self.make_stacked_bar_plot_for_pandas_dataframe(
-                        full_pandas_dataframe=pandas_dataframe,
-                        y1_data_variable=y1_data_variable,
-                        y2_data_variable=y2_data_variable,
-                        use_y1_as_bottom_for_y2=use_y1_as_bottom_for_y2,
-                        sort_according_to_y1_or_y2_data=sort_according_to_y1_or_y2_data,
-                    )
-
-                if variable_to_check in [
-                    dict_with_extra_information_for_specific_plot["stacked_bar"]["y1_data_variable"],
-                    dict_with_extra_information_for_specific_plot["stacked_bar"]["y2_data_variable"],
-                ]:
-                    y1_data_variable = dict_with_extra_information_for_specific_plot["stacked_bar"]["y1_data_variable"]
-                    y2_data_variable = dict_with_extra_information_for_specific_plot["stacked_bar"]["y2_data_variable"]
-                    use_y1_as_bottom_for_y2 = dict_with_extra_information_for_specific_plot["stacked_bar"][
-                        "use_y1_as_bottom_for_y2"
-                    ]
-                    sort_according_to_y1_or_y2_data = dict_with_extra_information_for_specific_plot["stacked_bar"][
-                        "sort_according_to_y1_or_y2_data"
-                    ]
-                    self.make_stacked_bar_plot_for_pandas_dataframe(
-                        full_pandas_dataframe=pandas_dataframe,
-                        y1_data_variable=y1_data_variable,
-                        y2_data_variable=y2_data_variable,
-                        use_y1_as_bottom_for_y2=use_y1_as_bottom_for_y2,
-                        sort_according_to_y1_or_y2_data=sort_according_to_y1_or_y2_data,
-                    )
+                self.make_stacked_bar_plot_for_pandas_dataframe(
+                    full_pandas_dataframe=pandas_dataframe,
+                    y1_data_variable=y1_data_variable,
+                    y2_data_variable=y2_data_variable,
+                    use_y1_as_bottom_for_y2=use_y1_as_bottom_for_y2,
+                    sort_according_to_y1_or_y2_data=sort_according_to_y1_or_y2_data,
+                )
 
             elif time_resolution_of_data_set in (
                 ResultDataTypeEnum.HOURLY,
@@ -281,18 +267,6 @@ class ScenarioChartGeneration:
                 )
 
                 self.make_box_plot_for_pandas_dataframe(filtered_data=filtered_data)
-
-                try:
-                    x_data_variable = dict_with_extra_information_for_specific_plot["scatter"]["x_data_variable"]
-                    self.make_line_scatter_plot_for_pandas_dataframe(
-                        full_pandas_dataframe=pandas_dataframe,
-                        filtered_data=filtered_data,
-                        y_data_variable=self.path_addition,
-                        x_data_variable=x_data_variable,
-                        line_plot_marker_size=line_plot_marker_size,
-                    )
-                except Exception:
-                    log.information(f"{variable_to_check} could not be plotted as line scatter plot.")
 
                 try:
                     x_data_variable = dict_with_extra_information_for_specific_plot["scatter"]["x_data_variable"]
@@ -343,9 +317,7 @@ class ScenarioChartGeneration:
             rotate_x_ticks=True,
         )
 
-    def make_bar_plot_for_pandas_dataframe(
-        self, x_and_y_plot_data: pd.DataFrame, unit: str
-    ) -> None:
+    def make_bar_plot_for_pandas_dataframe(self, x_and_y_plot_data: pd.DataFrame, unit: str) -> None:
         """Make bar plot."""
         log.information("Make bar plot.")
 
@@ -695,7 +667,7 @@ class ScenarioChartGeneration:
             scatter_plot_marker_size = 1
         return scatter_plot_marker_size
 
-    def set_axis_scale(self, a_x: Any, x_or_y: Any, unit: Any) -> Tuple[float, str, Any]:
+    def set_axis_scale(self, a_x: Any, x_or_y: Any, unit: Any) -> Tuple[Any, str, Any]:
         """Get axis and unit and scale it properly."""
 
         if x_or_y == "x":

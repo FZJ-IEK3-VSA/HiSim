@@ -249,7 +249,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         source_unit=lt.Units.WATT,
         source_tags=[
             lt.ComponentType.ELECTROLYZER,
-            lt.InandOutputType.ELECTRICITY_REAL,
+            lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
         ],
         source_weight=1,  # maybe change the weigth
     )
@@ -306,7 +306,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         source_component_output=my_advanced_battery_1.AcBatteryPowerUsed,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_REAL],
+        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
         source_weight=1,
     )
 
@@ -345,7 +345,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         module_directory=my_sim.module_directory,
         model_name=my_sim.my_sim.module_filename,
         variant_name=f"{my_simulation_parameters.duration.days}d_{my_simulation_parameters.seconds_per_timestep}s_rSOC_{operation_mode_rsoc}",
-        hash_number=None,
+        scenario_hash_string=None,
         sorting_option=SortingOptionEnum.MASS_SIMULATION_WITH_INDEX_ENUMERATION,
     )
 

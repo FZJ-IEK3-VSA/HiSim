@@ -132,6 +132,8 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
         maintenance_cost_as_percentage_of_investment=0.01,
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
         water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+        with_hot_water_storage=True,
+        absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2
     )
 
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
@@ -219,10 +221,10 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
     # if in hds component the state values are set as output values,
     # then here the water_temp_output and the thermal_power_delivered should be set, not the stsv.values[4] and [5]
     water_output_temperature_in_celsius_from_simulation = (
-        my_heat_distribution_system.water_temperature_output_in_celsius
+        my_heat_distribution_system.state.water_output_temperature_in_celsius
     )  # stsv.values[4]
     effective_thermal_power_delivered_in_watt = (
-        my_heat_distribution_system.thermal_power_delivered_in_watt
+        my_heat_distribution_system.state.thermal_power_delivered_in_watt
     )  # stsv.values[5]
 
     # Test if water output of hds is correct for different theoretical thermal demands from building

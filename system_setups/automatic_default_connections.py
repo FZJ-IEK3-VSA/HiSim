@@ -132,6 +132,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
         water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
+        absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config,

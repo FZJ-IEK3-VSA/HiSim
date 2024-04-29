@@ -665,7 +665,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
                 output_description=f"{self.CounterSwitchToDHW} is a counter of switching the mode to DHW, NOT counting starting of on_off.",
             )
 
-        if self.parameters["Group"].iloc[0] == 3.0 or self.parameters["Group"].iloc[0] == 6.0:
+        if self.parameters["Group"].iloc[0] in (2,3,5,6):
             self.m_dot_water_primary_dhnet: ComponentOutput = self.add_output(
                 object_name=self.component_name,
                 field_name=self.MdotWaterPrimary,
@@ -1025,7 +1025,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
         else:
             counter_onoff = self.state.counter_onoff
 
-        if self.parameters["Group"].iloc[0] == 3.0 or self.parameters["Group"].iloc[0] == 6.0:
+        if self.parameters["Group"].iloc[0] in (2,3,5,6):
             # todo: variability of massflow. now there is a fix temperaturdiffernz between inlet and outlet which calculate the massflow
 
             m_dot_water_primary = thermal_power_from_environment / (

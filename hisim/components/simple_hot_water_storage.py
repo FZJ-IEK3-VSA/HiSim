@@ -52,7 +52,6 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
     heat_exchanger_is_present: bool
     # it should be checked how much energy the storage lost during the simulated period (see guidelines below, p.2, accepted loss in kWh/days)
     # https://www.bdh-industrie.de/fileadmin/user_upload/ISH2019/Infoblaetter/Infoblatt_Nr_74_Energetische_Bewertung_Warmwasserspeicher.pdf
-    water_mass_flow_rate_from_hds_in_kg_per_second: float
     #: CO2 footprint of investment in kg
     co2_footprint: float
     #: cost for investment in Euro
@@ -64,14 +63,13 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
 
     @classmethod
     def get_default_simplehotwaterstorage_config(
-        cls, water_mass_flow_rate_from_hds_in_kg_per_second: float
+        cls,
     ) -> "SimpleHotWaterStorageConfig":
         """Get a default simplehotwaterstorage config."""
         volume_heating_water_storage_in_liter: float = 500
         config = SimpleHotWaterStorageConfig(
             name="SimpleHotWaterStorage",
             volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
-            water_mass_flow_rate_from_hds_in_kg_per_second=water_mass_flow_rate_from_hds_in_kg_per_second,
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,
             heat_exchanger_is_present=True,  # until now stratified mode is causing problems, so heat exchanger mode is recommended
             co2_footprint=100,  # Todo: check value
@@ -85,9 +83,8 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
     def get_scaled_hot_water_storage(
         cls,
         max_thermal_power_in_watt_of_heating_system: float,
-        water_mass_flow_rate_from_hds_in_kg_per_second: float,
         temperature_difference_between_flow_and_return_in_celsius: float = 7.0,
-        sizing_option: HotWaterStorageSizingEnum = HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM
+        sizing_option: HotWaterStorageSizingEnum = HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM,
     ) -> "SimpleHotWaterStorageConfig":
         """Gets a default storage with scaling according to heating load of the building.
 
@@ -126,7 +123,6 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
 
         config = SimpleHotWaterStorageConfig(
             name="SimpleHotWaterStorage",
-            water_mass_flow_rate_from_hds_in_kg_per_second=water_mass_flow_rate_from_hds_in_kg_per_second,
             volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,
             heat_exchanger_is_present=True,  # until now stratified mode is causing problems, so heat exchanger mode is recommended
@@ -163,6 +159,7 @@ class SimpleHotWaterStorage(cp.Component):
     WaterTemperatureFromHeatDistribution = "WaterTemperatureFromHeatDistribution"
     WaterTemperatureFromHeatGenerator = "WaterTemperaturefromHeatGenerator"
     WaterMassFlowRateFromHeatGenerator = "WaterMassFlowRateFromHeatGenerator"
+    WaterMassFlowRateFromHeatDistributionSystem = "WaterMassFlowRateFromHeatDistributionSystem"
     State = "State"
 
     # Output
@@ -202,10 +199,6 @@ class SimpleHotWaterStorage(cp.Component):
 
         self.mean_water_temperature_in_water_storage_in_celsius: float = 21
 
-        self.water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second = (
-            self.waterstorageconfig.water_mass_flow_rate_from_hds_in_kg_per_second
-        )
-
         if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR):
             self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo = (
                 SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.WATERMASSFLOWRATEOFHEATGENERATOR)
@@ -241,6 +234,13 @@ class SimpleHotWaterStorage(cp.Component):
         self.water_mass_flow_rate_heat_generator_input_channel: ComponentInput = self.add_input(
             self.component_name,
             self.WaterMassFlowRateFromHeatGenerator,
+            lt.LoadTypes.WARM_WATER,
+            lt.Units.KG_PER_SEC,
+            False,
+        )
+        self.water_mass_flow_rate_hds_input_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.WaterMassFlowRateFromHeatDistributionSystem,
             lt.LoadTypes.WARM_WATER,
             lt.Units.KG_PER_SEC,
             False,
@@ -335,6 +335,13 @@ class SimpleHotWaterStorage(cp.Component):
                 SimpleHotWaterStorage.WaterTemperatureFromHeatDistribution,
                 hds_classname,
                 component_class.WaterTemperatureOutput,
+            )
+        )
+        connections.append(
+            cp.ComponentConnection(
+                SimpleHotWaterStorage.WaterMassFlowRateFromHeatDistributionSystem,
+                hds_classname,
+                component_class.WaterMassFlowHDS,
             )
         )
         return connections
@@ -435,6 +442,10 @@ class SimpleHotWaterStorage(cp.Component):
                 self.water_mass_flow_rate_heat_generator_input_channel
             )
 
+        water_mass_flow_rate_from_hds_in_kg_per_second = stsv.get_input_value(
+            self.water_mass_flow_rate_hds_input_channel
+        )
+
         # Water Temperature Limit Check  --------------------------------------------------------------------------------------------------------
 
         if (
@@ -454,7 +465,7 @@ class SimpleHotWaterStorage(cp.Component):
             water_mass_from_heat_distribution_system_in_kg,
         ) = self.calculate_masses_of_water_flows(
             water_mass_flow_rate_from_heat_generator_in_kg_per_second=water_mass_flow_rate_from_heat_generator_in_kg_per_second,
-            water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second=self.water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second,
+            water_mass_flow_rate_from_heat_distribution_system_in_kg_per_second=water_mass_flow_rate_from_hds_in_kg_per_second,
             seconds_per_timestep=self.seconds_per_timestep,
         )
 

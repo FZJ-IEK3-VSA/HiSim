@@ -358,10 +358,9 @@ class HeatDistribution(cp.Component):
             )
         else:
             # important for heating system without buffer storage
-            water_mass_flow_rate_hp_in_kg_per_second = stsv.get_input_value(
+            water_mass_flow_rate_in_kg_per_second = stsv.get_input_value(
                 self.water_mass_flow_rate_hp_in_kg_per_second_channel
             )
-            water_mass_flow_rate_in_kg_per_second = water_mass_flow_rate_hp_in_kg_per_second
 
         if water_mass_flow_rate_in_kg_per_second == 0:
             # important for heating system without buffer storage

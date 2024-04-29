@@ -41,7 +41,6 @@ def simulate_simple_water_storage(
     hws_name = "SimpleHeatWaterStorage"
     volume_heating_water_storage_in_liter = 100
 
-    water_mass_flow_rate_from_heat_distribution_system = 0.787
     # ===================================================================================================================
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig(
@@ -53,11 +52,17 @@ def simulate_simple_water_storage(
         cost=volume_heating_water_storage_in_liter * 14.51,
         lifetime=100,
         maintenance_cost_as_percentage_of_investment=0.0,
-        water_mass_flow_rate_from_hds_in_kg_per_second=water_mass_flow_rate_from_heat_distribution_system,
     )
     my_simple_heat_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
+    )
+
+    water_mass_flow_rate_hds = cp.ComponentOutput(
+        "FakeWaterInputTemperatureFromHds",
+        "WaterMassFlowRateFromHeatDistributionSystem",
+        lt.LoadTypes.WARM_WATER,
+        lt.Units.KG_PER_SEC,
     )
 
     water_temperature_input_from_heat_distribution_system = cp.ComponentOutput(
@@ -86,6 +91,9 @@ def simulate_simple_water_storage(
     )
 
     # connect fake inputs to simple hot water storage
+    my_simple_heat_water_storage.water_mass_flow_rate_heat_distribution_system_input_channel.source_output = (
+        water_mass_flow_rate_hds
+    )
     my_simple_heat_water_storage.water_temperature_heat_distribution_system_input_channel.source_output = (
         water_temperature_input_from_heat_distribution_system
     )
@@ -101,6 +109,7 @@ def simulate_simple_water_storage(
 
     number_of_outputs = fft.get_number_of_outputs(
         [
+            water_mass_flow_rate_hds,
             water_temperature_input_from_heat_distribution_system,
             water_temperature_input_from_heat_generator,
             water_mass_flow_rate_from_heat_generator,
@@ -113,6 +122,7 @@ def simulate_simple_water_storage(
     # Add Global Index and set values for fake Inputs
     fft.add_global_index_of_components(
         [
+            water_mass_flow_rate_hds,
             water_temperature_input_from_heat_distribution_system,
             water_temperature_input_from_heat_generator,
             water_mass_flow_rate_from_heat_generator,
@@ -120,7 +130,7 @@ def simulate_simple_water_storage(
             my_simple_heat_water_storage,
         ]
     )
-
+    stsv.values[water_mass_flow_rate_hds.global_index] = 0.787
     stsv.values[water_temperature_input_from_heat_distribution_system.global_index] = 48
     stsv.values[water_temperature_input_from_heat_generator.global_index] = 52
     stsv.values[water_mass_flow_rate_from_heat_generator.global_index] = 0.59
@@ -133,12 +143,13 @@ def simulate_simple_water_storage(
     previous_mean_temperature_in_celsius = 50.0
     my_simple_heat_water_storage.i_simulate(timestep, stsv, False)
 
-    water_temperature_output_in_celsius_to_heat_distribution_system = stsv.values[4]
-    water_temperature_output_in_celsius_to_heat_generator = stsv.values[5]
+    water_temperature_output_in_celsius_to_heat_distribution_system = stsv.values[5]
+    water_temperature_output_in_celsius_to_heat_generator = stsv.values[6]
 
     # test mean water temperature calculation in storage
     mass_water_hds_in_kg = (
-        water_mass_flow_rate_from_heat_distribution_system * seconds_per_timestep
+        stsv.values[water_mass_flow_rate_hds.global_index]
+        * seconds_per_timestep
     )
     mass_water_hp_in_kg = (
         stsv.values[water_mass_flow_rate_from_heat_generator.global_index]

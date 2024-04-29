@@ -153,7 +153,6 @@ class HouseholdAdvancedHPEvPvConfig(SystemSetupConfigBase):
                     max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
                     temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
                     sizing_option=simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
-                    water_mass_flow_rate_from_hds_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
                 )
             ),
             dhw_heatpump_config=(

@@ -198,7 +198,6 @@ def simulation_for_one_timestep(
     my_simple_hot_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_hplib_config.set_thermal_output_power_in_watt.value,
         sizing_option=simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
-        water_mass_flow_rate_from_hds_in_kg_per_second=0.787
     )
 
     # Set Battery

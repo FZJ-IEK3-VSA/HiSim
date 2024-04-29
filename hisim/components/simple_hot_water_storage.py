@@ -238,7 +238,7 @@ class SimpleHotWaterStorage(cp.Component):
             lt.Units.KG_PER_SEC,
             False,
         )
-        self.water_mass_flow_rate_hds_input_channel: ComponentInput = self.add_input(
+        self.water_mass_flow_rate_heat_distribution_system_input_channel: ComponentInput = self.add_input(
             self.component_name,
             self.WaterMassFlowRateFromHeatDistributionSystem,
             lt.LoadTypes.WARM_WATER,
@@ -443,7 +443,7 @@ class SimpleHotWaterStorage(cp.Component):
             )
 
         water_mass_flow_rate_from_hds_in_kg_per_second = stsv.get_input_value(
-            self.water_mass_flow_rate_hds_input_channel
+            self.water_mass_flow_rate_heat_distribution_system_input_channel
         )
 
         # Water Temperature Limit Check  --------------------------------------------------------------------------------------------------------

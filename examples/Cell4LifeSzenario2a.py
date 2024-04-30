@@ -443,8 +443,8 @@ def InputParameter():
     p_el_elektrolyzer = fuel_cell_power*2.1 #Electrical Operating Power in Watt
     p_el_elektrolyzerUnit = "W"
 
-    p_el_percentage_standby_electrolyzer = 10 #if electrolyzer runs in standby, than it needs "p_el_percentage_standby_electrolyzer" (%) electricity power of the operating power 
-    p_el_percentage_standby_electrolyzerUnit = "%"
+    p_el_percentage_standby_electrolyzer = 7 #if electrolyzer runs in standby, than it needs "p_el_percentage_standby_electrolyzer" (%) electricity power of the operating power 
+    p_el_percentage_standby_electrolyzerUnit = "%" #Value for standby energy consumption based on [43] https://pubs.rsc.org/en/content/articlepdf/2023/se/d2se01473d Table 1
     
     electrolyzer_source_weight = 999
     electrolyzer_source_weightUnit = "-"

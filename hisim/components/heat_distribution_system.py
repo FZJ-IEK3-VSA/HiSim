@@ -436,11 +436,11 @@ class HeatDistribution(cp.Component):
         # assumption2: heat transfer direction just to the room --> other direction is adiabatic
         # assumption3: still air and no floor covering considered
 
-        height_of_screed = 45 / 1000  # in m
+        height_of_screed = 40 / 1000  # in m
         thermal_conductivity_screed = 1.4  # in W/(m^2K)
         heat_transfer_coefficient_screed_to_air = 5.8  # assumption3
-        inner_pipe_diameter = 17 / 1000  # in m  # source 1
-        outer_pipe_diameter = (17 + 4.4) / 1000  # in m  # source 1
+        inner_pipe_diameter = 16 / 1000  # in m  # Task 44 IEA Annex 38
+        outer_pipe_diameter = (16 + 2) / 1000  # in m  # Task 44 IEA Annex 38
 
         heat_resistance_coefficient_hds_pipe_to_air = (
             height_of_screed / thermal_conductivity_screed + 1 / heat_transfer_coefficient_screed_to_air

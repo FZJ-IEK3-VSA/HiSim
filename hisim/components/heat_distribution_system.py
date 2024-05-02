@@ -532,11 +532,8 @@ class HeatDistribution(cp.Component):
 
         # in case no heating or cooling needed, water output is equal to water input
         elif theoretical_thermal_buiding_demand_in_watt == 0:
-            print(water_temperature_output_in_celsius)
             water_temperature_output_in_celsius = water_temperature_input_in_celsius
             thermal_power_delivered_effective_in_watt = 0
-            print(water_temperature_input_in_celsius)
-            print(water_temperature_output_in_celsius)
         else:
             raise ValueError(
                 f"Theoretical thermal demand has unacceptable value here {theoretical_thermal_buiding_demand_in_watt}."

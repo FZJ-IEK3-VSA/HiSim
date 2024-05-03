@@ -22,7 +22,6 @@ __status__ = ""
 
 
 class WeatherDataImport:
-
     """Import class for weather data from dwd and era5."""
 
     def __init__(
@@ -408,12 +407,12 @@ class WeatherDataImport:
             weather_df = pd.concat(
                 [
                     time_df,
-                    temperature_air_df["temperature"],
-                    pressure_df["pressure"],
-                    wind_direction_df["wind_direction"],
-                    wind_speed_df["wind_speed"],
-                    diffuse_irradiance_df["diffuse_irradiance"],
-                    global_irradiance_df["global_irradiance"],
+                    temperature_air_df,  # ["temperature"],
+                    pressure_df,  # ["pressure"],
+                    wind_direction_df,  # ["wind_direction"],
+                    wind_speed_df,  # ["wind_speed"],
+                    diffuse_irradiance_df,  # ["diffuse_irradiance"],
+                    global_irradiance_df,  # ["global_irradiance"],
                 ],
                 axis=1,
                 join="outer",
@@ -719,12 +718,12 @@ class WeatherDataImport:
             weather_df = pd.concat(
                 [
                     time_df,
-                    temperature_air_df["temperature"],
-                    pressure_df["pressure"],
-                    wind_direction_df["wind_direction"],
-                    wind_speed_df["wind_speed"],
-                    direct_irradiance_df["direct_irradiance"],
-                    global_irradiance_df["global_irradiance"],
+                    temperature_air_df,  # ["temperature"],
+                    pressure_df,  # ["pressure"],
+                    wind_direction_df,  # ["wind_direction"],
+                    wind_speed_df,  # ["wind_speed"],
+                    direct_irradiance_df,  # ["direct_irradiance"],
+                    global_irradiance_df,  # ["global_irradiance"],
                 ],
                 axis=1,
                 join="outer",

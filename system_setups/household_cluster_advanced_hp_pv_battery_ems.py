@@ -58,7 +58,6 @@ class BuildingPVWeatherConfig(ConfigBase):
     number_of_dwellings_per_building: int
     norm_heating_load_in_kilowatt: float
     lpg_households: List[str]
-    building_location: str
     weather_location: str
 
     @classmethod
@@ -74,9 +73,8 @@ class BuildingPVWeatherConfig(ConfigBase):
             building_code="DE.N.SFH.05.Gen.ReEx.001.002",
             conditioned_floor_area_in_m2=121.2,
             number_of_dwellings_per_building=1,
-            norm_heating_load_in_kilowatt=8,
+            norm_heating_load_in_kilowatt=None,
             lpg_households=["CHR01_Couple_both_at_Work"],
-            building_location="Aachen",
             weather_location="AACHEN",
         )
 
@@ -158,11 +156,13 @@ def setup_function(
 
     # Set Building (scale building according to total base area and not absolute floor area)
     building_code = my_config.building_code
-    building_location = my_config.building_location
     total_base_area_in_m2 = None
     absolute_conditioned_floor_area_in_m2 = my_config.conditioned_floor_area_in_m2
     number_of_apartments = my_config.number_of_dwellings_per_building
-    max_thermal_building_demand_in_watt = my_config.norm_heating_load_in_kilowatt * 1000
+    if my_config.norm_heating_load_in_kilowatt is not None:
+        max_thermal_building_demand_in_watt = my_config.norm_heating_load_in_kilowatt * 1000
+    else:
+        max_thermal_building_demand_in_watt = None
 
     # Set Occupancy
     # try to get profiles from cluster directory
@@ -200,7 +200,6 @@ def setup_function(
     my_building_config = building.BuildingConfig.get_default_german_single_family_home(
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
         max_thermal_building_demand_in_watt=max_thermal_building_demand_in_watt,
-        building_location=building_location,
     )
     my_building_config.building_code = building_code
     my_building_config.total_base_area_in_m2 = total_base_area_in_m2

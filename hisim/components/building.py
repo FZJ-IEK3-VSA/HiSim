@@ -81,7 +81,6 @@ class BuildingConfig(cp.ConfigBase):
         return Building.get_full_classname()
 
     name: str
-    building_location: str
     heating_reference_temperature_in_celsius: float
     building_code: str
     building_heat_capacity_class: str
@@ -102,12 +101,10 @@ class BuildingConfig(cp.ConfigBase):
         set_cooling_temperature_in_celsius: float = 25.0,
         heating_reference_temperature_in_celsius: float = -7.0,
         max_thermal_building_demand_in_watt: Optional[float] = None,
-        building_location: str = "Aachen"
     ) -> Any:
         """Get a default Building."""
         config = BuildingConfig(
             name="Building",
-            building_location=building_location,
             building_code="DE.N.SFH.05.Gen.ReEx.001.002",
             building_heat_capacity_class="medium",
             initial_internal_temperature_in_celsius=22.0,

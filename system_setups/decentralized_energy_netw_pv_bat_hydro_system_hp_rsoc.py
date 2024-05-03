@@ -142,7 +142,6 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     my_building = Building(
         config=BuildingConfig(
             name="Building_1",
-            building_location="Aachen",
             building_code="DE.N.SFH.05.Gen.ReEx.001.002",
             building_heat_capacity_class="medium",
             initial_internal_temperature_in_celsius=23,

@@ -189,7 +189,6 @@ def setup_function(
 
     my_building_config = building.BuildingConfig(
         name="Building_1",
-        building_location="Aachen",
         building_code=building_code,
         building_heat_capacity_class="medium",
         initial_internal_temperature_in_celsius=23,

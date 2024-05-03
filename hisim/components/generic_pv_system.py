@@ -99,7 +99,7 @@ class PVSystemConfig(ConfigBase):
     prediction_horizon: Optional[int]
 
     @classmethod
-    def get_default_pv_system(cls, power_in_watt: float = 10e3, share_of_maximum_pv_potential: float = 1.0) -> "PVSystemConfig":
+    def get_default_pv_system(cls, power_in_watt: float = 10e3, share_of_maximum_pv_potential: float = 1.0, location: str= "Aachen") -> "PVSystemConfig":
         """Gets a default PV system."""
         power_in_watt = power_in_watt * share_of_maximum_pv_potential
         return PVSystemConfig(
@@ -116,7 +116,7 @@ class PVSystemConfig(ConfigBase):
             tilt=30,
             share_of_maximum_pv_potential=share_of_maximum_pv_potential,
             source_weight=0,
-            location="Aachen",
+            location=location,
             co2_footprint=power_in_watt * 1e-3 * 330.51,  # value from emission_factros_and_costs_devices.csv
             cost=power_in_watt * 1e-3 * 794.41,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise

@@ -144,17 +144,21 @@ def setup_function(
 
     # =================================================================================================================================
     # Set System Parameters
+    # Set Weather
+    weather_location = my_config.weather_location
 
     # Set Photovoltaic System
     azimuth = my_config.pv_azimuth
     tilt = my_config.pv_tilt
-    share_of_maximum_pv_power = 0  # my_config.share_of_maximum_pv_power
+    pv_power_in_watt = my_config.pv_rooftop_capacity_in_kilowatt * 1000
+    share_of_maximum_pv_potential = 0  # my_config.share_of_maximum_pv_potential
 
     # Set Building (scale building according to total base area and not absolute floor area)
     building_code = my_config.building_code
     total_base_area_in_m2 = None
     absolute_conditioned_floor_area_in_m2 = my_config.conditioned_floor_area_in_m2
     number_of_apartments = my_config.number_of_dwellings_per_building
+    max_thermal_building_demand_in_watt = my_config.norm_heating_load_in_kilowatt * 1000
 
     # Set Occupancy
     # try to get profiles from cluster directory
@@ -220,17 +224,22 @@ def setup_function(
     my_sim.add_component(my_occupancy)
 
     # Build Weather
-    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather_location)
 
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     # Add to simulator
     my_sim.add_component(my_weather)
 
     # Build PV
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-        rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2,
-        share_of_maximum_pv_potential=share_of_maximum_pv_power,
-    )
+    if pv_power_in_watt is None:
+        my_photovoltaic_system_config = generic_pv_system.PVSysttentialonfig.get_scaled_pv_system(
+            rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2,
+            share_of_maximum_pv_potential=share_of_maximum_pv_potential,
+            location=building_location
+        )
+    else:
+        my_photovoltaic_system_config = generic_pv_system.PVSysttentialonfig.get_default_pv_system(power_in_watt=pv_power_in_watt, share_of_maximum_pv_potential=share_of_maximum_pv_potential, location=building_location)
+    
     my_photovoltaic_system_config.azimuth = azimuth
     my_photovoltaic_system_config.tilt = tilt
 
@@ -346,7 +355,7 @@ def setup_function(
     )
 
     # use ems and battery only when PV is used
-    if share_of_maximum_pv_power != 0:
+    if share_of_maximum_pv_potential != 0:
         # Build EMS
         my_electricity_controller_config = controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
         my_electricity_controller_config.building_indoor_temperature_offset_value = (
@@ -436,7 +445,7 @@ def setup_function(
         further_result_folder_description=os.path.join(
             *[
                 further_result_folder_description,
-                f"PV-{share_of_maximum_pv_power}-hds-{my_hds_controller_information.heat_distribution_system_type}-hpc-mode-{hp_controller_mode}",
+                f"PV-{share_of_maximum_pv_potential}-hds-{my_hds_controller_information.heat_distribution_system_type}-hpc-mode-{hp_controller_mode}",
                 f"bui-{building_indoor_temperature_offset_value}-"
                 f"dhw-{domestic_hot_water_storage_temperature_offset_value}-"
                 f"sh-{space_heating_water_storage_temperature_offset_value}",

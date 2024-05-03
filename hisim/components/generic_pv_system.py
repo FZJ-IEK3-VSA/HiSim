@@ -99,7 +99,7 @@ class PVSystemConfig(ConfigBase):
     prediction_horizon: Optional[int]
 
     @classmethod
-    def get_default_pv_system(cls, power_in_watt: float = 10e3, share_of_maximum_pv_potential: float = 1.0, location: str= "Aachen") -> "PVSystemConfig":
+    def get_default_pv_system(cls, power_in_watt: float = 10e3, share_of_maximum_pv_potential: float = 1.0, location: str = "Aachen") -> "PVSystemConfig":
         """Gets a default PV system."""
         power_in_watt = power_in_watt * share_of_maximum_pv_potential
         return PVSystemConfig(

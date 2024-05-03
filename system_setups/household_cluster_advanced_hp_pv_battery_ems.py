@@ -436,8 +436,12 @@ def setup_function(
     # if config_filename is given, get hash number and sampling mode for result path
     if config_filename is not None:
         config_filename_splitted = config_filename.split("/")
-        scenario_hash_string = re.findall(r"\-?\d+", config_filename_splitted[-1])[0]
-        further_result_folder_description = config_filename_splitted[-2]
+        try:
+            scenario_hash_string = re.findall(r"\-?\d+", config_filename_splitted[-1])[0]
+            further_result_folder_description = config_filename_splitted[-2]
+        except Exception:
+            scenario_hash_string = "-"
+            further_result_folder_description = "-"
 
         sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION
 
@@ -459,7 +463,7 @@ def setup_function(
             *[
                 further_result_folder_description,
                 f"PV-{share_of_maximum_pv_potential}-hds-{my_hds_controller_information.heat_distribution_system_type}-hpc-mode-{hp_controller_mode}",
-                f"weather-location-{weather_location}"
+                f"weather-location-{weather_location}",
             ]
         ),
         variant_name="_",

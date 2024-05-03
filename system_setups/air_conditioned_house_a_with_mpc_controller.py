@@ -214,6 +214,7 @@ def air_conditioned_house(
     """Building (1/2)"""
     my_building_config = building.BuildingConfig(
         name="Building1",
+        building_location="Aachen",
         building_code=building_code,
         building_heat_capacity_class=building_class,
         initial_internal_temperature_in_celsius=initial_temperature,
@@ -225,7 +226,7 @@ def air_conditioned_house(
         number_of_apartments=number_of_apartments,
         predictive=predictive,
         enable_opening_windows=enable_opening_windows,
-        max_building_demand_in_watt=None,
+        max_thermal_building_demand_in_watt=None,
     )
     my_building = building.Building(
         config=my_building_config,

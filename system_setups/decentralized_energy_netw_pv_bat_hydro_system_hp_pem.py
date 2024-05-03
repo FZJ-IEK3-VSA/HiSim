@@ -146,8 +146,7 @@ def setup_function(
     my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
 
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_pv_system()
-    my_photovoltaic_system_config.power_in_watt = pv_power
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_pv_system(power_in_watt=pv_power)
     my_photovoltaic_system_config.time = time
     my_photovoltaic_system_config.co2_footprint = pv_co2_footprint
     my_photovoltaic_system_config.cost = pv_cost
@@ -179,6 +178,7 @@ def setup_function(
             set_heating_temperature_in_celsius=19.0,
             set_cooling_temperature_in_celsius=24.0,
             enable_opening_windows=False,
+            max_thermal_building_demand_in_watt = None
         ),
         my_simulation_parameters=my_simulation_parameters,
     )

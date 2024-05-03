@@ -56,7 +56,7 @@ class BuildingPVWeatherConfig(ConfigBase):
     building_code: str
     conditioned_floor_area_in_m2: float
     number_of_dwellings_per_building: int
-    norm_heating_load_in_kilowatt: float
+    norm_heating_load_in_kilowatt: Optional[float]
     lpg_households: List[str]
     weather_location: str
 

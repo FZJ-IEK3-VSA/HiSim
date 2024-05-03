@@ -5,6 +5,8 @@
 from typing import Optional, Any, Union, List
 import re
 import os
+from dataclasses import dataclass
+from dataclasses_json import dataclass_json
 from utspclient.helpers.lpgdata import Households
 from utspclient.helpers.lpgpythonbindings import JsonReference
 from hisim.simulator import SimulationParameters
@@ -23,13 +25,13 @@ from hisim.components import (
     controller_l1_heatpump,
     electricity_meter,
 )
+from hisim.component import ConfigBase
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim import log
 from hisim.units import Quantity, Celsius, Watt
-from system_setups.household_cluster_reference_advanced_hp import BuildingPVWeatherConfig
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -38,6 +40,39 @@ __license__ = "MIT"
 __version__ = "1.0"
 __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
+
+
+@dataclass_json
+@dataclass
+class BuildingPVWeatherConfig(ConfigBase):
+
+    """Configuration for BuildingPv."""
+
+    name: str
+    pv_size: float
+    pv_azimuth: float
+    pv_tilt: float
+    share_of_maximum_pv_power: float
+    building_code: str
+    conditioned_floor_area_in_m2: float
+    number_of_dwellings_per_building: int
+    lpg_households: List[str]
+
+    @classmethod
+    def get_default(cls):
+        """Get default BuildingPVConfig."""
+
+        return BuildingPVWeatherConfig(
+            name="BuildingPVConfig",
+            pv_size=5,
+            pv_azimuth=180,
+            pv_tilt=30,
+            share_of_maximum_pv_power=1,
+            building_code="DE.N.SFH.05.Gen.ReEx.001.002",
+            conditioned_floor_area_in_m2=121.2,
+            number_of_dwellings_per_building=1,
+            lpg_households=["CHR01_Couple_both_at_Work"],
+        )
 
 
 def setup_function(
@@ -188,7 +223,7 @@ def setup_function(
     # Build PV
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
         rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2,
-        share_of_maximum_pv_power=share_of_maximum_pv_power,
+        share_of_maximum_pv_potential=share_of_maximum_pv_power,
     )
     my_photovoltaic_system_config.azimuth = azimuth
     my_photovoltaic_system_config.tilt = tilt

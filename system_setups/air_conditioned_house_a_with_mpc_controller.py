@@ -276,6 +276,7 @@ def air_conditioned_house(
         predictive=predictive,
         prediction_horizon=prediction_horizon,
         predictive_control=predictive_control,
+        share_of_maximum_pv_potential=1.0
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,

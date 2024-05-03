@@ -49,14 +49,17 @@ class BuildingPVWeatherConfig(ConfigBase):
     """Configuration for BuildingPv."""
 
     name: str
-    pv_size: float
     pv_azimuth: float
     pv_tilt: float
-    share_of_maximum_pv_power: float
+    pv_rooftop_capacity_in_kilowatt: float
+    share_of_maximum_pv_potential: float
     building_code: str
     conditioned_floor_area_in_m2: float
     number_of_dwellings_per_building: int
+    norm_heating_load_in_kilowatt: float
     lpg_households: List[str]
+    building_location: str
+    weather_location: str
 
     @classmethod
     def get_default(cls):
@@ -64,14 +67,17 @@ class BuildingPVWeatherConfig(ConfigBase):
 
         return BuildingPVWeatherConfig(
             name="BuildingPVConfig",
-            pv_size=5,
             pv_azimuth=180,
             pv_tilt=30,
-            share_of_maximum_pv_power=1,
+            pv_rooftop_capacity_in_kilowatt=10,
+            share_of_maximum_pv_potential=1,
             building_code="DE.N.SFH.05.Gen.ReEx.001.002",
             conditioned_floor_area_in_m2=121.2,
             number_of_dwellings_per_building=1,
+            norm_heating_load_in_kilowatt=8,
             lpg_households=["CHR01_Couple_both_at_Work"],
+            building_location="Aachen",
+            weather_location="AACHEN"
         )
 
 

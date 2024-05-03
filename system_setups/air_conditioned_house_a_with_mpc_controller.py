@@ -225,6 +225,7 @@ def air_conditioned_house(
         number_of_apartments=number_of_apartments,
         predictive=predictive,
         enable_opening_windows=enable_opening_windows,
+        max_building_demand_in_watt=None,
     )
     my_building = building.Building(
         config=my_building_config,

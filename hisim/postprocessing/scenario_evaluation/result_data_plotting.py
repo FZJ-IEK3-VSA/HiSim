@@ -228,13 +228,13 @@ class ScenarioChartGeneration:
                     sort_according_to_y1_or_y2_data = dict_with_extra_information_for_specific_plot["stacked_bar"][
                         "sort_according_to_y1_or_y2_data"
                     ]
-                self.make_stacked_bar_plot_for_pandas_dataframe(
-                    full_pandas_dataframe=pandas_dataframe,
-                    y1_data_variable=y1_data_variable,
-                    y2_data_variable=y2_data_variable,
-                    use_y1_as_bottom_for_y2=use_y1_as_bottom_for_y2,
-                    sort_according_to_y1_or_y2_data=sort_according_to_y1_or_y2_data,
-                )
+                    self.make_stacked_bar_plot_for_pandas_dataframe(
+                        full_pandas_dataframe=pandas_dataframe,
+                        y1_data_variable=y1_data_variable,
+                        y2_data_variable=y2_data_variable,
+                        use_y1_as_bottom_for_y2=use_y1_as_bottom_for_y2,
+                        sort_according_to_y1_or_y2_data=sort_according_to_y1_or_y2_data,
+                    )
 
             elif time_resolution_of_data_set in (
                 ResultDataTypeEnum.HOURLY,

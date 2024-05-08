@@ -138,6 +138,7 @@ class HouseholdMoreAdvancedHPDHWHPNoStorageConfig(SystemSetupConfigBase):
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
                     water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
                     absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+                    with_parallel_hot_water_storage=False,
                 )
             ),
             hp_controller_config=more_advanced_heat_pump_hplib.HeatPumpHplibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
@@ -178,7 +179,7 @@ class HouseholdMoreAdvancedHPDHWHPNoStorageConfig(SystemSetupConfigBase):
             900, Seconds  # default value leads to switching on-off very often
         )
         household_config.hp_config.with_domestic_hot_water_preparation = False
-        household_config.hp_config.with_hot_water_storage = False
+        household_config.hp_config.with_parallel_hot_water_storage = False
         household_config.hp_config.cycling_mode = False
 
         # set same heating threshold

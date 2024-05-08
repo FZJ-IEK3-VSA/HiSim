@@ -48,10 +48,9 @@ class HeatDistributionConfig(cp.ConfigBase):
         return HeatDistribution.get_full_classname()
 
     name: str
-    temperature_difference_between_flow_and_return_in_celsius: float
     water_mass_flow_rate_in_kg_per_second: float
     absolute_conditioned_floor_area_in_m2: float
-    with_hot_water_storage: bool
+    with_parallel_hot_water_storage: bool
     #: CO2 footprint of investment in kg
     co2_footprint: float
     #: cost for investment in Euro
@@ -64,18 +63,16 @@ class HeatDistributionConfig(cp.ConfigBase):
     @classmethod
     def get_default_heatdistributionsystem_config(
         cls,
-        temperature_difference_between_flow_and_return_in_celsius: float,
         water_mass_flow_rate_in_kg_per_second: float,
         absolute_conditioned_floor_area_in_m2: float,
-        with_hot_water_storage: bool = True,
+        with_parallel_hot_water_storage: bool = True,
     ) -> Any:
         """Get a default heat distribution system config."""
         config = HeatDistributionConfig(
             name="HeatDistributionSystem",
-            temperature_difference_between_flow_and_return_in_celsius=temperature_difference_between_flow_and_return_in_celsius,
             water_mass_flow_rate_in_kg_per_second=water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
-            with_hot_water_storage=with_hot_water_storage,
+            with_parallel_hot_water_storage=with_parallel_hot_water_storage,
             co2_footprint=0,  # Todo: check value
             cost=8000,  # SOURCE: https://www.hausjournal.net/heizungsrohre-verlegen-kosten  # Todo: use price per m2 in system_setups instead
             lifetime=50,  # SOURCE: VDI2067-1
@@ -145,9 +142,6 @@ class HeatDistribution(cp.Component):
         self.thermal_power_delivered_in_watt: float = 0.0
         self.water_temperature_output_in_celsius: float = 21
         self.water_input_temperature_in_celsius: float = 21
-        self.temperature_difference_between_flow_and_return_in_celsius = (
-            self.heat_distribution_system_config.temperature_difference_between_flow_and_return_in_celsius
-        )
 
         self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second = (
             self.heat_distribution_system_config.water_mass_flow_rate_in_kg_per_second
@@ -157,7 +151,7 @@ class HeatDistribution(cp.Component):
             self.heat_distribution_system_config.absolute_conditioned_floor_area_in_m2
         )
 
-        self.heat_distribution_system_with_storage = self.heat_distribution_system_config.with_hot_water_storage
+        self.heat_distribution_system_with_parallel_storage = self.heat_distribution_system_config.with_parallel_hot_water_storage
 
         self.build()
 
@@ -197,7 +191,7 @@ class HeatDistribution(cp.Component):
             True,
         )
 
-        if not self.heat_distribution_system_with_storage:
+        if not self.heat_distribution_system_with_parallel_storage:
             # just important for heating system without bufferstorage
             self.water_mass_flow_rate_hp_in_kg_per_second_channel: cp.ComponentInput = self.add_input(
                 self.component_name,
@@ -246,7 +240,7 @@ class HeatDistribution(cp.Component):
 
         self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
         self.add_default_connections(self.get_default_connections_from_building())
-        if self.heat_distribution_system_with_storage:
+        if self.heat_distribution_system_with_parallel_storage:
             self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
 
     def get_default_connections_from_heat_distribution_controller(
@@ -352,7 +346,7 @@ class HeatDistribution(cp.Component):
         )
         residence_temperature_input_in_celsius = stsv.get_input_value(self.residence_temperature_input_channel)
 
-        if self.heat_distribution_system_with_storage:
+        if self.heat_distribution_system_with_parallel_storage:
             water_mass_flow_rate_in_kg_per_second = (
                 self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second
             )

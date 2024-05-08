@@ -82,7 +82,7 @@ class HeatPumpHplibWithTwoOutputsConfig(ConfigBase):
     minimum_running_time_in_seconds: Optional[Quantity[int, Seconds]]
     minimum_idle_time_in_seconds: Optional[Quantity[int, Seconds]]
     temperature_difference_primary_side: float
-    with_hot_water_storage: bool
+    with_parallel_hot_water_storage: bool
     with_domestic_hot_water_preparation: bool
     minimum_massflow_secondary_side_in_kg_per_s: Optional[Quantity[float, KilogramPerSecond]]
     maximum_massflow_secondary_side_in_kg_per_s: Optional[Quantity[float, KilogramPerSecond]]
@@ -126,7 +126,7 @@ class HeatPumpHplibWithTwoOutputsConfig(ConfigBase):
             minimum_running_time_in_seconds=Quantity(3600, Seconds),
             minimum_idle_time_in_seconds=Quantity(3600, Seconds),
             temperature_difference_primary_side=2,
-            with_hot_water_storage=True,
+            with_parallel_hot_water_storage=True,
             with_domestic_hot_water_preparation=False,
             minimum_massflow_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
             maximum_massflow_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
@@ -167,7 +167,7 @@ class HeatPumpHplibWithTwoOutputsConfig(ConfigBase):
             minimum_running_time_in_seconds=Quantity(3600, Seconds),
             minimum_idle_time_in_seconds=Quantity(3600, Seconds),
             temperature_difference_primary_side=2,
-            with_hot_water_storage=True,
+            with_parallel_hot_water_storage=True,
             with_domestic_hot_water_preparation=False,
             minimum_massflow_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
             maximum_massflow_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
@@ -203,7 +203,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
     TemperatureInputSecondary_SH = "TemperatureInputSecondarySpaceHeating"  # °C
     TemperatureInputSecondary_DHW = "TemperatureInputSecondaryDWH"  # °C
     TemperatureAmbient = "TemperatureAmbient"  # °C
-    HeatingFlowTemperatureHDSController = "HeatingFlowTemperatureHDSController"
+    SetHeatingTemperatureSpaceHeating = "SetHeatingTemperatureSpaceHeating"
 
     # Outputs
     ThermalOutputPowerSH = "ThermalOutputPowerSpaceHeating"  # W
@@ -273,7 +273,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
 
         self.cycling_mode = config.cycling_mode
 
-        self.with_hot_water_storage = config.with_hot_water_storage
+        self.with_parallel_hot_water_storage = config.with_parallel_hot_water_storage
 
         self.m_dot_ref = (
             config.massflow_nominal_secondary_side_in_kg_per_s.value
@@ -415,10 +415,10 @@ class HeatPumpHplibWithTwoOutputs(Component):
                 mandatory=True,
             )
 
-        if not self.with_hot_water_storage:
-            self.heating_flow_temperature_hds_controller: ComponentInput = self.add_input(
+        if not self.with_parallel_hot_water_storage:
+            self.set_temperature_hp_sh: ComponentInput = self.add_input(
                 self.component_name,
-                self.HeatingFlowTemperatureHDSController,
+                self.SetHeatingTemperatureSpaceHeating,
                 LoadTypes.TEMPERATURE,
                 Units.CELSIUS,
                 True,
@@ -731,7 +731,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
         self.add_default_connections(self.get_default_connections_from_heat_pump_controller_space_heating())
         self.add_default_connections(self.get_default_connections_from_weather())
 
-        if self.with_hot_water_storage:
+        if self.with_parallel_hot_water_storage:
             self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
 
         if self.with_domestic_hot_water_preparation:
@@ -870,8 +870,8 @@ class HeatPumpHplibWithTwoOutputs(Component):
         time_on_cooling = self.state.time_on_cooling
         time_off = self.state.time_off
 
-        if not self.with_hot_water_storage:
-            heating_flow_temperature_hds_controller = stsv.get_input_value(self.heating_flow_temperature_hds_controller)
+        if not self.with_parallel_hot_water_storage:
+            set_temperature_hp_sh = stsv.get_input_value(self.set_temperature_hp_sh)
 
         if self.with_domestic_hot_water_preparation:
             on_off_dhw: float = stsv.get_input_value(self.on_off_switch_dhw)
@@ -919,7 +919,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
             raise ValueError("Cycling mode of the advanced hplib unknown.")
 
         if on_off == 1:  # Calculation for building heating
-            if self.with_hot_water_storage:
+            if self.with_parallel_hot_water_storage:
                 self.heatpump.delta_t = 5
                 results = self.get_cached_results_or_run_hplib_simulation(
                     force_convergence=force_convergence,
@@ -946,11 +946,11 @@ class HeatPumpHplibWithTwoOutputs(Component):
 
             else:
                 m_dot_sh = self.m_dot_ref
-                t_out_set = heating_flow_temperature_hds_controller
 
-                self.heatpump.delta_t = min(t_out_set - t_in_secondary_sh, 5)
+                self.heatpump.delta_t = min(set_temperature_hp_sh - t_in_secondary_sh, 5)
 
-                print(self.heatpump.delta_t)
+                if self.heatpump.delta_t == 0:
+                    self.heatpump.delta_t = 0.00000001
 
                 results = self.get_cached_results_or_run_hplib_simulation(
                     force_convergence=force_convergence,
@@ -983,6 +983,8 @@ class HeatPumpHplibWithTwoOutputs(Component):
                 t_out_sh = t_in_secondary_sh + p_th_sh / (
                     m_dot_sh * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
                 )
+
+                self.heatpump.delta_t = t_out_sh - t_in_secondary_sh
 
                 t_out_dhw = t_in_secondary_dhw
                 p_th_dhw = 0.0
@@ -1389,7 +1391,7 @@ class HeatPumpHplibControllerSpaceHeating(Component):
     """
 
     # Inputs
-    WaterTemperatureInputSecondarySide = "WaterTemperatureInputSecondarySide"
+    WaterTemperatureInput = "WaterTemperatureInput"
     HeatingFlowTemperatureFromHeatDistributionSystem = "HeatingFlowTemperatureFromHeatDistributionSystem"
 
     DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
@@ -1423,7 +1425,7 @@ class HeatPumpHplibControllerSpaceHeating(Component):
 
         self.water_temperature_input_channel: ComponentInput = self.add_input(
             self.component_name,
-            self.WaterTemperatureInputSecondarySide,
+            self.WaterTemperatureInput,
             LoadTypes.TEMPERATURE,
             Units.CELSIUS,
             True,
@@ -1505,7 +1507,7 @@ class HeatPumpHplibControllerSpaceHeating(Component):
         hws_classname = simple_hot_water_storage.SimpleHotWaterStorage.get_classname()
         connections.append(
             ComponentConnection(
-                HeatPumpHplibControllerSpaceHeating.WaterTemperatureInputSecondarySide,
+                HeatPumpHplibControllerSpaceHeating.WaterTemperatureInput,
                 hws_classname,
                 simple_hot_water_storage.SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
             )
@@ -1563,7 +1565,7 @@ class HeatPumpHplibControllerSpaceHeating(Component):
         else:
             # Retrieves inputs
 
-            water_temperature_input_secondary_side_in_celsius = stsv.get_input_value(
+            water_temperature_input_in_celsius = stsv.get_input_value(
                 self.water_temperature_input_channel
             )
 
@@ -1588,7 +1590,7 @@ class HeatPumpHplibControllerSpaceHeating(Component):
             # mode 1 is on/off controller
             if self.mode == 1:
                 self.conditions_on_off(
-                    water_temperature_input_in_celsius=water_temperature_input_secondary_side_in_celsius,
+                    water_temperature_input_in_celsius=water_temperature_input_in_celsius,
                     set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
                     summer_heating_mode=summer_heating_mode,
                     storage_temperature_modifier=storage_temperature_modifier,
@@ -1604,7 +1606,7 @@ class HeatPumpHplibControllerSpaceHeating(Component):
                     set_cooling_threshold_temperature_in_celsius=self.heatpump_controller_config.set_cooling_threshold_outside_temperature_in_celsius,
                 )
                 self.conditions_heating_cooling_off(
-                    water_temperature_input_in_celsius=water_temperature_input_secondary_side_in_celsius,
+                    water_temperature_input_in_celsius=water_temperature_input_in_celsius,
                     set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
                     summer_heating_mode=summer_heating_mode,
                     summer_cooling_mode=summer_cooling_mode,

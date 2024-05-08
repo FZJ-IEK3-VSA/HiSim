@@ -136,7 +136,6 @@ class HouseholdMoreAdvancedHPDHWHPNoStorageConfig(SystemSetupConfigBase):
             hds_controller_config=hds_controller_config,
             hds_config=(
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-                    temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
                     water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
                     absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
                 )
@@ -376,13 +375,13 @@ def setup_function(
     my_heat_pump_controller.connect_only_predefined_connections(my_heat_distribution_controller, my_weather)
 
     my_heat_pump_controller.connect_input(
-        my_heat_pump_controller.WaterTemperatureInputSecondarySide,
+        my_heat_pump_controller.WaterTemperatureInput,
         my_heat_distribution.component_name,
         my_heat_distribution.WaterTemperatureOutput,
     )
 
     my_heat_pump.connect_input(
-        my_heat_pump.HeatingFlowTemperatureHDSController,
+        my_heat_pump.SetHeatingTemperatureSpaceHeating,
         my_heat_distribution_controller.component_name,
         my_heat_distribution_controller.HeatingFlowTemperature,
     )

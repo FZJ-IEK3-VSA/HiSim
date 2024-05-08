@@ -107,7 +107,6 @@ class ReferenceHouseholdConfig(SystemSetupConfigBase):
             hds_controller_config=hds_controller_config,
             hds_config=(
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-                    temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
                     water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
                     absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2
                 )

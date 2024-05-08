@@ -58,7 +58,7 @@ def test_heat_pump_hplib_new():
         minimum_idle_time_in_seconds=Quantity(600, Seconds),
         minimum_running_time_in_seconds=Quantity(600, Seconds),
         temperature_difference_primary_side=2,
-        with_hot_water_storage=True,
+        with_parallel_hot_water_storage=True,
         with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
         minimum_massflow_secondary_side_in_kg_per_s=None,
         maximum_massflow_secondary_side_in_kg_per_s=None,

@@ -65,7 +65,9 @@ class CHPConfig(cp.ConfigBase):
     @staticmethod
     def get_default_config_fuelcell_p_el_based(fuel_cell_power: float) -> "CHPConfig":
         '''
-        Assumption based on Dominik Mail of 4. October 2023: 1 Watt fuel power is converted to 58 % electrical voltage. Thermal power corresponds to 1/2 of the electrical voltage; 1 watt --> 0.58 el. + 0.29 th. = 0.87 total              '''
+        Assumption based on Dominik Mail of 4. October 2023: 1 Watt fuel power is converted to 58 % electrical voltage. Thermal power corresponds to 1/2 of the electrical voltage; 1 watt --> 0.58 el. + 0.29 th. = 0.87 total             
+        Dominik made this assumption based on a SOEC Fuel Cell from Bosch: https://www.bosch-hydrogen-energy.com/de/sofc/nutzen/ 
+        '''
         
         config = CHPConfig(
          #   name="CHP", source_weight=1, use=lt.LoadTypes.HYDROGEN, p_el = fuel_cell_power, p_th = fuel_cell_power * (0.43 / 0.48), p_fuel=(1 / 0.43) * (fuel_cell_power * (0.43 / 0.48)),

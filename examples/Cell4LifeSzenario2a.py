@@ -412,7 +412,7 @@ def InputParameter():
     
     # [ ] Change to fuel consumption if it is in standby!
     p_el_percentage_standby_fuelcell = 10 #If fuel cell is running in standby, it needs so much electricity power in % of its electricitiy production power if it is running
-    p_el_percentage_standby_fuelcellUnit = "%"
+    p_el_percentage_standby_fuelcellUnit = "%" #10 % assumption is based on [42] "Dynamics and control of a thermally self-sustaining energy storage system using integrated solid oxide cells for an islanded building" from Pegah Mottaghizadeh, Mahshid Fardadi, Faryar Jabbari, Jack Brouwer
 
     del BatteryCapkWh, FuelCellPowerW, BatteryCapkWhUnit, FuelCellPowerWUnit 
     
@@ -444,7 +444,7 @@ def InputParameter():
     p_el_elektrolyzerUnit = "W"
 
     p_el_percentage_standby_electrolyzer = 7 #if electrolyzer runs in standby, than it needs "p_el_percentage_standby_electrolyzer" (%) electricity power of the operating power 
-    p_el_percentage_standby_electrolyzerUnit = "%" #Value for standby energy consumption based on [43] https://pubs.rsc.org/en/content/articlepdf/2023/se/d2se01473d Table 1
+    p_el_percentage_standby_electrolyzerUnit = "%" #7 % Value for standby energy consumption based on [43] https://pubs.rsc.org/en/content/articlepdf/2023/se/d2se01473d Table 1 --> "Operation strategies for a flexible megawatt scale electrolysis system for synthesis gas and hydrogen production with direct air capture of carbon dioxide" from markus Thomberg et al 2023
     
     electrolyzer_source_weight = 999
     electrolyzer_source_weightUnit = "-"

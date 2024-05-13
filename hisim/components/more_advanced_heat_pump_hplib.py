@@ -86,8 +86,8 @@ class HeatPumpHplibWithTwoOutputsConfig(ConfigBase):
     with_domestic_hot_water_preparation: bool
     minimum_massflow_secondary_side_in_kg_per_s: Optional[Quantity[float, KilogramPerSecond]]
     maximum_massflow_secondary_side_in_kg_per_s: Optional[Quantity[float, KilogramPerSecond]]
-    massflow_nominal_secondary_side_in_kg_per_s: Optional[Quantity[float, KilogramPerSecond]]
-    minimum_thermal_output_power_in_watt: Optional[Quantity[float, Watt]]
+    massflow_nominal_secondary_side_in_kg_per_s: Quantity[float, KilogramPerSecond]
+    minimum_thermal_output_power_in_watt: Quantity[float, Watt]
     #: CO2 footprint of investment in kg
     co2_footprint: Quantity[float, Kilogram]
     #: cost for investment in Euro
@@ -273,21 +273,38 @@ class HeatPumpHplibWithTwoOutputs(Component):
 
         self.cycling_mode = config.cycling_mode
 
+        self.with_domestic_hot_water_preparation = config.with_domestic_hot_water_preparation
+
         self.with_parallel_hot_water_storage = config.with_parallel_hot_water_storage
 
-        self.m_dot_ref = (
-            config.massflow_nominal_secondary_side_in_kg_per_s.value
-            if config.massflow_nominal_secondary_side_in_kg_per_s
-            else config.massflow_nominal_secondary_side_in_kg_per_s
-        )
+        # self.m_dot_ref = float(
+        #     config.massflow_nominal_secondary_side_in_kg_per_s.value
+        #     if config.massflow_nominal_secondary_side_in_kg_per_s
+        #     else config.massflow_nominal_secondary_side_in_kg_per_s
+        # )
 
-        self.minimum_thermal_output_power = (
-            config.minimum_thermal_output_power_in_watt.value
-            if config.minimum_thermal_output_power_in_watt
-            else config.minimum_thermal_output_power_in_watt
-        )
+        # self.minimum_thermal_output_power = (
+        #     config.minimum_thermal_output_power_in_watt.value
+        #     if config.minimum_thermal_output_power_in_watt
+        #     else config.minimum_thermal_output_power_in_watt
+        # )
 
-        self.with_domestic_hot_water_preparation = config.with_domestic_hot_water_preparation
+        self.m_dot_ref = config.massflow_nominal_secondary_side_in_kg_per_s.value
+
+        self.minimum_thermal_output_power = config.minimum_thermal_output_power_in_watt.value
+
+        if not self.with_parallel_hot_water_storage:
+            if (
+                self.m_dot_ref is None
+                or self.m_dot_ref == 0
+                or self.minimum_thermal_output_power is None
+                or self.minimum_thermal_output_power == 0
+            ):
+                raise ValueError(
+                    """If system setup is without parallel hot water storage, nominal massflow and minimum
+                    thermal power of the heat pump must be given an integer value due to constant massflow
+                    of water pump."""
+                )
 
         self.heat_source = config.heat_source
 
@@ -932,14 +949,14 @@ class HeatPumpHplibWithTwoOutputs(Component):
                 p_th_sh = results["P_th"]
                 p_th_dhw = 0.0
                 p_el_sh = results["P_el"]
-                p_el_dhw = 0
-                p_el_cooling = 0
+                p_el_dhw = 0.0
+                p_el_cooling = 0.0
                 cop = results["COP"]
                 eer = results["EER"]
                 t_out_sh = results["T_out"]
-                t_out_dhw = t_in_secondary_dhw if self.with_domestic_hot_water_preparation else 0
+                t_out_dhw = t_in_secondary_dhw if self.with_domestic_hot_water_preparation else 0.0
                 m_dot_sh = results["m_dot"]
-                m_dot_dhw = 0
+                m_dot_dhw = 0.0
                 time_on_heating = time_on_heating + self.my_simulation_parameters.seconds_per_timestep
                 time_on_cooling = 0
                 time_off = 0
@@ -986,45 +1003,87 @@ class HeatPumpHplibWithTwoOutputs(Component):
 
                 self.heatpump.delta_t = t_out_sh - t_in_secondary_sh
 
-                t_out_dhw = t_in_secondary_dhw
+                t_out_dhw = t_in_secondary_dhw if self.with_domestic_hot_water_preparation else 0.0
                 p_th_dhw = 0.0
-                p_el_dhw = 0
-                p_el_cooling = 0
-                m_dot_dhw = 0
+                p_el_dhw = 0.0
+                p_el_cooling = 0.0
+                m_dot_dhw = 0.0
                 time_on_heating = time_on_heating + self.my_simulation_parameters.seconds_per_timestep
                 time_on_cooling = 0
                 time_off = 0
 
         elif on_off == 2:  # Calculate outputs for dhw mode
             self.heatpump.delta_t = 5
-            results = self.get_cached_results_or_run_hplib_simulation(
-                force_convergence=force_convergence,
-                t_in_primary=t_in_primary,
-                t_in_secondary=t_in_secondary_dhw,
-                t_amb=t_amb,
-                mode=1,
-            )
+            if self.with_parallel_hot_water_storage:
+                results = self.get_cached_results_or_run_hplib_simulation(
+                    force_convergence=force_convergence,
+                    t_in_primary=t_in_primary,
+                    t_in_secondary=t_in_secondary_dhw,
+                    t_amb=t_amb,
+                    mode=1,
+                )
 
-            p_th_sh = 0.0
-            p_el_sh = 0
-            p_el_cooling = 0
-            cop = results["COP"]
-            eer = results["EER"]
-            t_out_sh = t_in_secondary_sh
-            t_out_dhw = results["T_out"]
-            m_dot_sh = 0
-            m_dot_dhw = results["m_dot"]
-            if const_thermal_power_truefalse_dhw is True:  # True = constant thermal power output for dhw
-                p_th_dhw = const_thermal_power_value_dhw
-                p_el_dhw = p_th_dhw / cop
-            if (
-                const_thermal_power_truefalse_dhw is False or const_thermal_power_truefalse_dhw == 0
-            ):  # False = modulation
-                p_th_dhw = results["P_th"]
-                p_el_dhw = results["P_el"]
-            time_on_heating = time_on_heating + self.my_simulation_parameters.seconds_per_timestep
-            time_on_cooling = 0
-            time_off = 0
+                p_th_sh = 0.0
+                p_el_sh = 0.0
+                p_el_cooling = 0.0
+                cop = results["COP"]
+                eer = results["EER"]
+                t_out_sh = t_in_secondary_sh
+                t_out_dhw = results["T_out"]
+                m_dot_sh = 0.0
+                m_dot_dhw = results["m_dot"]
+                if const_thermal_power_truefalse_dhw is True:  # True = constant thermal power output for dhw
+                    p_th_dhw = const_thermal_power_value_dhw
+                    p_el_dhw = p_th_dhw / cop
+                if (
+                    const_thermal_power_truefalse_dhw is False or const_thermal_power_truefalse_dhw == 0
+                ):  # False = modulation
+                    p_th_dhw = results["P_th"]
+                    p_el_dhw = results["P_el"]
+                time_on_heating = time_on_heating + self.my_simulation_parameters.seconds_per_timestep
+                time_on_cooling = 0
+                time_off = 0
+
+            else:
+                m_dot_dhw = self.m_dot_ref
+
+                results = self.heatpump.simulate(
+                    t_in_primary=t_in_primary,
+                    t_in_secondary=t_in_secondary_dhw,
+                    t_amb=t_amb,
+                    mode=1,
+                )
+                cop = results["COP"]
+                eer = results["EER"]
+
+                p_th_dhw_theoretical = (
+                    m_dot_dhw
+                    * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
+                    * self.heatpump.delta_t
+                )
+                p_el_dhw_theoretical = p_th_dhw_theoretical / cop
+
+                if p_th_dhw_theoretical <= self.minimum_thermal_output_power:
+                    p_th_dhw = self.minimum_thermal_output_power
+                    p_el_dhw = p_th_dhw / cop
+                else:
+                    p_el_dhw = p_el_dhw_theoretical
+                    p_th_dhw = p_th_dhw_theoretical
+
+                p_el_dhw = p_el_dhw * (1 - np.exp(-time_on_heating / 360))
+                p_th_dhw = p_th_dhw * (1 - np.exp(-time_on_heating / 360))
+
+                t_out_dhw = t_in_secondary_dhw + p_th_dhw / (
+                    m_dot_dhw * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
+                )
+
+                t_out_sh = t_in_secondary_sh
+                p_th_sh = 0.0
+                p_el_sh = 0.0
+                m_dot_sh = 0.0
+                time_on_heating = time_on_heating + self.my_simulation_parameters.seconds_per_timestep
+                time_on_cooling = 0
+                time_off = 0
 
         elif on_off == -1:
             # Calulate outputs for cooling mode
@@ -1039,34 +1098,34 @@ class HeatPumpHplibWithTwoOutputs(Component):
             p_th_sh = results["P_th"]
             p_th_dhw = 0.0
             p_el_sh = results["P_el"]
-            p_el_dhw = 0
+            p_el_dhw = 0.0
             p_el_cooling = p_el_sh
             cop = results["COP"]
             eer = results["EER"]
             t_out_sh = results["T_out"]
-            t_out_dhw = t_in_secondary_dhw if self.with_domestic_hot_water_preparation else 0
+            t_out_dhw = t_in_secondary_dhw if self.with_domestic_hot_water_preparation else 0.0
             m_dot_sh = results["m_dot"]
-            m_dot_dhw = 0
+            m_dot_dhw = 0.0
             time_on_cooling = time_on_cooling + self.my_simulation_parameters.seconds_per_timestep
             time_on_heating = 0
             time_off = 0
 
         elif on_off == 0:
             # Calulate outputs for off mode
-            p_th_sh = 0
-            p_th_dhw = 0
-            p_el_sh = 0
-            p_el_dhw = 0
-            p_el_cooling = 0
+            p_th_sh = 0.0
+            p_th_dhw = 0.0
+            p_el_sh = 0.0
+            p_el_dhw = 0.0
+            p_el_cooling = 0.0
             # None values or nans will cause troubles in post processing, that is why there are not used here
             # cop = None
             # t_out = None
-            cop = 0
-            eer = 0
+            cop = 0.0
+            eer = 0.0
             t_out_sh = t_in_secondary_sh
-            t_out_dhw = t_in_secondary_dhw if self.with_domestic_hot_water_preparation else 0
-            m_dot_sh = 0
-            m_dot_dhw = 0
+            t_out_dhw = t_in_secondary_dhw if self.with_domestic_hot_water_preparation else 0.0
+            m_dot_sh = 0.0
+            m_dot_dhw = 0.0
             time_off = time_off + self.my_simulation_parameters.seconds_per_timestep
             time_on_heating = 0
             time_on_cooling = 0
@@ -1565,9 +1624,7 @@ class HeatPumpHplibControllerSpaceHeating(Component):
         else:
             # Retrieves inputs
 
-            water_temperature_input_in_celsius = stsv.get_input_value(
-                self.water_temperature_input_channel
-            )
+            water_temperature_input_in_celsius = stsv.get_input_value(self.water_temperature_input_channel)
 
             heating_flow_temperature_from_heat_distribution_system = stsv.get_input_value(
                 self.heating_flow_temperature_from_heat_distribution_system_channel

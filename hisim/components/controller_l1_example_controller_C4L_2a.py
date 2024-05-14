@@ -599,7 +599,7 @@ class SimpleController(Component):
                     self.state.part_pv_to_grid = 0.0
                     self.state.electricity_from_Battery_to_CHP_inStandby = 0.0
                 
-                #Brennstoffzellenbetrieb oder Brennstoffzelle ist nicht im Betrieb UND Elektrolyseur ist nicht im Betrieb [
+
                 # [x] Ich muss BRennstoffzellenbetrieb in Abhängigkeit von der Saison feststellen --> im Szenario 1b war dies durch die Energieflüsse schon gegeben!
                 else:  #Fuel Cell season is --> Fuel Cell is on!
 

@@ -143,7 +143,7 @@ class SimpleController(Component):
     ElectricityToOrFromGrid = "ElectricityToOrFromGrid"
     TotalElectricityConsumption = "TotalElectricityConsumption"
     ElectricityfromCHPtoHouse = "QuantitiyShare_electricity_from_CHP_to_house" #in W ---> the amount of energy which is delivered from the fuel cell/chp to the house
-    electricity_fromPVtogrid = "QuantitiyShare_PV_to_grid_ifCHPisRUNNING" #just for // FOR DEBUGGING"
+    electricity_fromPVtogrid = "QuantitiyShare_PV_to_grid" #just for // FOR DEBUGGING"
     ElectricityfromBatterytoHouse = "QuantitiyShare_electricity_from_Battery_to_house" #in W ---> the amount of energy which is delivered from the fuel cell/chp to the house
     ElectricityfromBatterytoCHPinStandby = "QuantitiyShare_electricity_from_Battery_to_CHPinStandby" #in W ---> the amount of energy which is delivered from the battery to the CHP/Fuel Cell in Standbymode
 
@@ -596,7 +596,13 @@ class SimpleController(Component):
                     else:
                         print("ERROR IM ENERGYMANAGEMENT-SYSTEM")
                         breakpoint()
-                    self.state.part_pv_to_grid = 0.0
+                    #self.state.part_pv_to_grid = self.state.electricity_to_or_from_grid
+                    
+                    if self.state.electricity_to_or_from_grid > 0: 
+                        self.state.part_pv_to_grid = self.state.electricity_to_or_from_grid
+                    else:
+                        self.state.part_pv_to_grid= 0.0
+                    
                     self.state.electricity_from_Battery_to_CHP_inStandby = 0.0
                 
 

@@ -77,7 +77,7 @@ class SimpleController(Component):
     ElectricityToOrFromGrid = "ElectricityToOrFromGrid"
     TotalElectricityConsumption = "TotalElectricityConsumption"
     ElectricityfromCHPtoHouse = "QuantitiyShare_electricity_from_CHP_to_house" #in W ---> the amount of energy which is delivered from the fuel cell/chp to the house
-    electricity_fromPVtogrid = "QuantitiyShare_PV_to_grid_ifCHPisRUNNING" #just for // FOR DEBUGGING"
+    electricity_fromPVtogrid = "QuantitiyShare_PV_to_grid" #just for // FOR DEBUGGING"
     ElectricityfromBatterytoHouse = "QuantitiyShare_electricity_from_Battery_to_house" #in W ---> the amount of energy which is delivered from the fuel cell/chp to the house
     
     def __init__(
@@ -420,7 +420,7 @@ class SimpleController(Component):
             stsv.set_output_value(self.total_electricity_consumptionOutput, total_electricity_consumption)
             stsv.set_output_value(self.electricity_from_CHP_to_houseOutput, electricity_from_CHP_to_house)
             stsv.set_output_value(self.electricity_from_Battery_to_houseOutput, electricity_from_Battery_to_house)
-            part_pv_to_grid = 999999999999999999999999 # is not calculated in case 1b!!!!
+            part_pv_to_grid = 999999999999999999999999.9 # is not calculated in case 1a!!!!
             stsv.set_output_value(self.electricity_from_PV_to_gridOutput, part_pv_to_grid)
 
         
@@ -461,13 +461,17 @@ class SimpleController(Component):
                 else:
                     print("ERROR IM ENERGYMANAGEMENT-SYSTEM")
                     breakpoint()
-                part_pv_to_grid = 0
-            
+                
+                if electricity_to_or_from_grid > 0: 
+                    part_pv_to_grid = electricity_to_or_from_grid
+                else:
+                    part_pv_to_grid= 0.0
+
             #Brennstoffzellenbetrieb oder Brennstoffzelle ist nicht im Betrieb UND Elektrolyseur ist nicht im Betrieb
             if Electrolyzer_ElectricityConsumption == 0 and CHP_ElectricityDelivery >= 0:  ##Sind wir im Brennstoffzellenebetrieb oder ist gar nichts im Betrieb? -->  Batterie deckt auch Haus Bedarf, wird aber nur von Überschussstrom der CHP aufgeladen!
                 #print(timestep)
                 Estatus_house = General_PhotovoltaicDelivery - General_ElectricityConsumptiom ##Decke zuerst mit der PV den Strombedarf des Hauses // 
-                part_pv_to_grid = 0
+                part_pv_to_grid = 0.0
                 if Estatus_house > 0: #Ist ein Überschussstrom vom PV Strom nach Abzug des Strombederafs des Hauses noch vorhanden?
                     part_pv_to_grid = Estatus_house #WEnn ja, dieser PV-Überschussstrom geht ins Netz....
                     Estatus_house = 0 #Haustrombedarf ist damit auch auf jeden Fall gedeckt....

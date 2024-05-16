@@ -124,8 +124,8 @@ def ControllSheetExcel(excelfilepathresults3, input_variablen):
             EnergyInputData10.append(row[1])
 
 
-    # Load data from "PV to grid if CHP is running" (column 2) and add the collected data to list
-    csv_datei11 = os.path.join(path, 'QuantitiyShare_PV_to_grid_ifCHPisRUNNING_Elect_Controller.csv')
+    # Load data from "PV to grid" (column 2) and add the collected data to list
+    csv_datei11 = os.path.join(path, 'QuantitiyShare_PV_to_grid_Elect_Controller.csv')
     with open(csv_datei11, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
         for row in csvreader:

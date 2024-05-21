@@ -378,8 +378,10 @@ class ModularHeatPump(cp.Component):
         # calculate modulation
         if target_percentage > 0:
             power_modifier = target_percentage
-        if target_percentage == 0:
+        elif target_percentage == 0:
             power_modifier = 0
+        else:
+            raise ValueError("`target_modifiert` needs to be a positive number.")
 
         power_modifier = min(1, power_modifier)
 

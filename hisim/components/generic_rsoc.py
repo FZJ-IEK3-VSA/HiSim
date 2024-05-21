@@ -572,6 +572,9 @@ class Rsoc(cp.Component):
             # calculating load input
             new_load = abs(power_to_soec - self.current_state_soec)
 
+            current_sys_eff_soec = 0.0
+            h2_production_rate = 0.0
+
             if rsoc_state == 1:
                 """the ramping process"""
                 if new_load == nominal_load:
@@ -616,16 +619,13 @@ class Rsoc(cp.Component):
                 self.total_ramp_down_count_state_soec += 0
                 self.current_state_soec = 2.315
 
-                current_sys_eff_soec = 0.0
-                h2_production_rate = 0.0
-
             elif rsoc_state == -1:
                 self.total_ramp_up_count_state_soec += 0
                 self.total_ramp_down_count_state_soec += 0
                 self.current_state_soec = 0.0
 
-                current_sys_eff_soec = 0.0
-                h2_production_rate = 0.0
+            else:
+                raise ValueError("`rsoc_state` needs to be one of [-1, 0, 1]")
 
             # current_sys_eff_soec = self.soec_efficiency(name, self.current_state_soec, min_load, self.max_load_soec)
             # h2_production_rate = self.h2_production_rate(current_sys_eff_soec, self.current_state_soec)

@@ -82,10 +82,12 @@ class LoadTypes(str, enum.Enum):
 
     VOLUME = "Volume"
     TEMPERATURE = "Temperature"
+    PRESSURE = "Pressure"
     TIME = "Time"
 
     # Substance
     GAS = "Gas"
+    AIR = "Air"
     HYDROGEN = "Hydrogen"
     OXYGEN = "Oxygen"
     WATER = "Water"
@@ -147,6 +149,10 @@ class Units(str, enum.Enum):
     # Degrees
     DEGREES = "Degrees"
 
+    # Pressure
+    BAR = "bar"
+    PASCAL = "Pa"
+
     # Time
     SECONDS = "s"
     HOURS = "h"
@@ -175,6 +181,7 @@ class ComponentType(str, enum.Enum):
     """Component types for use in dynamic controllers."""
 
     PV = "PV"
+    WINDTURBINE = "Windturbine"
     SMART_DEVICE = "SmartDevice"
     SURPLUS_CONTROLLER = "SurplusController"
     PREDICTIVE_CONTROLLER = "PredictiveControllerforSmartDevices"
@@ -192,6 +199,7 @@ class ComponentType(str, enum.Enum):
     BOILER = "Boiler"
     BUFFER = "Buffer"
     HEATERS = [HEAT_PUMP, GAS_HEATER]
+    RESIDENTS = "Residents"
 
     # different heat_pump types
     HEAT_PUMP_BUILDING = "HeatPumpBuilding"  # Heatpump for heating the house
@@ -218,7 +226,6 @@ class InandOutputType(str, enum.Enum):
     MASS_FLOW = "Massflow"
     CONTROL_SIGNAL = "ControlSignal"
     ELECTRICITY_TARGET = "ElectricityTarget"
-    ELECTRICITY_REAL = "ElectricityReal"
 
     # L3
     LAST_ACTIVATION = "LastActivation"

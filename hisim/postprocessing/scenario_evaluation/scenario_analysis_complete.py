@@ -24,6 +24,7 @@ class ScenarioAnalysis:
         variables_to_check: List[str],
         dict_with_extra_information_for_specific_plot: Dict[str, Dict],
         dict_with_scenarios_to_check: Optional[Dict[str, List[str]]] = None,
+        result_folder_description: Optional[str] = None,
     ) -> None:
         """Initialize the class."""
 
@@ -41,6 +42,7 @@ class ScenarioAnalysis:
             variables_to_check=variables_to_check,
             dict_of_scenarios_to_check=dict_with_scenarios_to_check,
             dict_with_extra_information_for_specific_plot=dict_with_extra_information_for_specific_plot,
+            result_folder_description=result_folder_description,
         )
 
 
@@ -50,44 +52,32 @@ def main():
     # Inputs for scenario analysis
     # -------------------------------------------------------------------------------------------------------------------------------------
     time_resolution_of_data_set = result_data_collection.ResultDataTypeEnum.YEARLY
-    cluster_storage_path = "/fast/home/k-rieck/"
-    # cluster_storage_path = "/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/hisim_results/results/"
-
+    cluster_storage_path = (
+        "/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/hisim_results/"  # "/fast/home/k-rieck/"
+    )
+    module_results_directory = "results/household_cluster_advanced_hp_pv_battery_ems/"
+    result_folder_description_one = "monte_carlo_20240306_1451/PV-0-hds-2-hpc-mode-2"
+    result_folder_description_two = "bui-0-dhw-0-sh-0"
     folder_from_which_data_will_be_collected = os.path.join(
-        cluster_storage_path,
-        "repositories/HiSim/system_setups/results/household_cluster_advanced_hp_pv_battery_ems/23-02-2024/monte_carlo_20240208_1637",
+        *[cluster_storage_path, module_results_directory, result_folder_description_one, result_folder_description_two]
     )
 
-    path_to_default_config = os.path.join(
-        cluster_storage_path,
-        "jobs_hisim/cluster-hisim-paper/job_array_for_hisim_mass_simus/default_building_pv_config.json",
-    )
+    path_to_default_config = "/fast/home/k-rieck/jobs_hisim/cluster-hisim-paper/job_array_for_hisim_mass_simus/default_building_pv_config.json"
     simulation_duration_to_check = str(365)
 
     data_processing_mode = result_data_collection.ResultDataProcessingModeEnum.PROCESS_ALL_DATA
-
     filterclass = result_data_processing.FilterClass()
-    list_with_variables_to_check = (
-        filterclass.kpi_data
-    )  # filterclass.flow_and_return_temperatures  # +filterclass.kpi_data  #
 
-    # TODO: filter several scenario parameters (eg pv and building code together) not working yet, need to be fixed
-    # dict_with_scenarios_to_check = {"share_of_maximum_pv_power": filterclass.pv_share}
-    # dict_with_scenarios_to_check = {
-    #     "building_code": [
-    #         "DE.N.SFH",
-    #         "DE.N.TH",
-    #         "DE.N.MFH",
-    #         "DE.N.AB",
-    #     ]
-    # }
+    list_with_variables_to_check = filterclass.kpi_data
+
+    # dict_with_scenarios_to_check = {"building_code": filterclass.building_type}
 
     dict_with_scenarios_to_check = None
 
     dict_with_extra_information_for_specific_plot: Dict[str, Dict] = {
         "scatter": {
-            "x_data_variable": "Specific heating demand according to TABULA"
-        },  # "SimpleHotWaterStorage|Water|WaterTemperatureToHeatGenerator" "Weather|Temperature|DailyAverageOutsideTemperatures"
+            "x_data_variable": "HeatDistributionController|Temperature|HeatingFlowTemperature"
+        },  # "Building|Temperature|TemperatureIndoorAir"     "Specific heating demand according to TABULA" "Weather|Temperature|DailyAverageOutsideTemperatures"
         "stacked_bar": {
             "y1_data_variable": "Mean flow temperature of heat pump",
             "y2_data_variable": "Mean return temperature of heat pump",
@@ -107,6 +97,7 @@ def main():
         variables_to_check=list_with_variables_to_check,
         dict_with_scenarios_to_check=dict_with_scenarios_to_check,
         dict_with_extra_information_for_specific_plot=dict_with_extra_information_for_specific_plot,
+        result_folder_description=result_folder_description_one,
     )
 
 

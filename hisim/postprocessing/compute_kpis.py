@@ -17,9 +17,12 @@ from dataclass_wizard import JSONWizard
 from hisim.component import ComponentOutput
 from hisim.components.heat_distribution_system import HeatDistribution
 from hisim.components.building import Building
-from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib
+from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
+from hisim.components.more_advanced_heat_pump_hplib import HeatPumpHplibWithTwoOutputs
 from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
 from hisim.components.electricity_meter import ElectricityMeter
+from hisim.components.generic_heat_pump_modular import ModularHeatPump
+from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes
 from hisim.utils import HISIMPATH
 from hisim import log
@@ -34,8 +37,11 @@ class KpiTagEnumClass(Enum):
     GENERAL = "General"
     COSTS_AND_EMISSIONS = "Costs and Emissions"
     BUILDING = "Building"
+    BATTERY = "Battery"
     HEATDISTRIBUTIONSYSTEM = "Heat Distribution System"
-    HEATPUMP = "Heat Pump"
+    HEATPUMP_SPACE_HEATING = "Heat Pump For Space Heating"
+    HEATPUMP_DOMESTIC_HOT_WATER = "Heat Pump For Domestic Hot Water"
+    RESIDENTS = "Residents"
 
 
 @dataclass
@@ -80,12 +86,12 @@ class KpiGenerator(JSONWizard):
             all_outputs=self.all_outputs, results=self.results
         )
 
-        # get consumption and production and store in kpi collection
+        # get consumption and production and battery kpis
         (
             total_electricity_consumption_in_kilowatt_hour,
             total_electricity_production_in_kilowatt_hour,
             pv_production_in_kilowatt_hour,
-        ) = self.compute_electricity_consumption_and_production(result_dataframe=self.filtered_result_dataframe)
+        ) = self.compute_electricity_consumption_and_production_and_battery_kpis(result_dataframe=self.filtered_result_dataframe)
 
         # get ratio between total production and total consumption
         self.compute_ratio_between_two_values_and_set_as_kpi(
@@ -100,12 +106,12 @@ class KpiGenerator(JSONWizard):
             kpi_name="Ratio between PV production and total consumption",
         )
 
-        # get self-consumption, autarkie, injection, battery losses
+        # get self-consumption, autarkie, injection
         (
             grid_injection_in_kilowatt_hour,
             self_consumption_in_kilowatt_hour,
             self.filtered_result_dataframe,
-        ) = self.compute_self_consumption_injection_autarky_and_battery_losses(
+        ) = self.compute_self_consumption_injection_autarky(
             result_dataframe=self.filtered_result_dataframe,
             electricity_consumption_in_kilowatt_hour=total_electricity_consumption_in_kilowatt_hour,
             electricity_production_in_kilowatt_hour=total_electricity_production_in_kilowatt_hour,
@@ -142,14 +148,47 @@ class KpiGenerator(JSONWizard):
         )
         # get capex and opex costs
         self.read_opex_and_capex_costs_from_results()
+
         # get building performance indicators
         building_conditioned_floor_area_in_m2 = self.get_building_kpis()
+
         # get heat distriution system kpis
         self.get_heat_distribution_system_kpis(
             building_conditioned_floor_area_in_m2=building_conditioned_floor_area_in_m2
         )
-        # get heat pump performance indicators
-        self.get_heat_pump_kpis(building_conditioned_floor_area_in_m2=building_conditioned_floor_area_in_m2)
+        # get heat pump grid consumption from energy management system kpis
+        (
+            sh_heatpump_electricity_from_grid_in_kilowatt_hour,
+            dhw_advanced_heatpump_electricity_from_grid_in_kilowatt_hour,
+            dhw_modular_heatpump_electricity_from_grid_in_kilowatt_hour,
+            occupancy_electricity_from_grid_in_kilowatt_hour,
+        ) = self.get_grid_consumptions_of_heat_pumps_via_energy_management_kpis()
+
+        # get space heating heat pump performance indicators
+        self.get_space_heating_heat_pump_kpis(
+            building_conditioned_floor_area_in_m2=building_conditioned_floor_area_in_m2,
+            sh_heat_pump_electricity_consumption_from_grid_in_kilowatt_hour=sh_heatpump_electricity_from_grid_in_kilowatt_hour,
+            total_electricity_consumption_in_kilowatt_hour=total_electricity_consumption_in_kilowatt_hour,
+            total_electricity_consumption_from_grid_in_kilowatt_hour=total_electricity_from_grid_in_kwh,
+        )
+        # get domestic hot water heat pump kpis from modular heat pump
+        self.get_dhw_modular_heat_pump_kpis(
+            dhw_modular_heat_pump_electricity_consumption_from_grid_in_kilowatt_hour=dhw_modular_heatpump_electricity_from_grid_in_kilowatt_hour,
+            total_electricity_consumption_in_kilowatt_hour=total_electricity_consumption_in_kilowatt_hour,
+            total_electricity_consumption_from_grid_in_kilowatt_hour=total_electricity_from_grid_in_kwh,
+        )
+        # get domestic hot water heat pump kpis from more advanced heat pump
+        self.get_advanced_dhw_heat_pump_kpis(
+            dhw_advanced_heat_pump_electricity_consumption_from_grid_in_kilowatt_hour=dhw_advanced_heatpump_electricity_from_grid_in_kilowatt_hour,
+            total_electricity_consumption_in_kilowatt_hour=total_electricity_consumption_in_kilowatt_hour,
+            total_electricity_consumption_from_grid_in_kilowatt_hour=total_electricity_from_grid_in_kwh,
+        )
+        # get occupancy electrictiy kpis
+        self.get_occupancy_electricity_kpis(
+            total_electricity_consumption_from_grid_in_kilowatt_hour=total_electricity_from_grid_in_kwh,
+            total_electricity_consumption_in_kilowatt_hour=total_electricity_consumption_in_kilowatt_hour,
+            occupancy_electricity_from_grid_in_kilowatt_hour=occupancy_electricity_from_grid_in_kilowatt_hour,
+        )
 
     def filter_results_according_to_postprocessing_flags(
         self, all_outputs: List, results: pd.DataFrame
@@ -227,10 +266,10 @@ class KpiGenerator(JSONWizard):
         energy_in_kilowatt_hour = float(power_timeseries_in_watt.sum() * timeresolution / 3.6e6)
         return energy_in_kilowatt_hour
 
-    def compute_electricity_consumption_and_production(
+    def compute_electricity_consumption_and_production_and_battery_kpis(
         self, result_dataframe: pd.DataFrame
     ) -> Tuple[float, float, float]:
-        """Compute electricity consumption and production."""
+        """Compute electricity consumption and production and battery kpis."""
 
         # sum consumption and production over time
         total_electricity_consumption_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
@@ -246,6 +285,16 @@ class KpiGenerator(JSONWizard):
             power_timeseries_in_watt=result_dataframe["pv_production"],
             timeresolution=self.simulation_parameters.seconds_per_timestep,
         )
+
+        # compute battery kpis
+        (
+            battery_charging_energy_in_kilowatt_hour,
+            battery_discharging_energy_in_kilowatt_hour,
+            battery_losses_in_kilowatt_hour,
+        ) = self.compute_battery_kpis(result_dataframe=result_dataframe)
+
+        # if battery losses are not zero, add to total consumption because this is what is consumed by battery indepently from charging and discharging
+        total_electricity_consumption_in_kilowatt_hour = total_electricity_consumption_in_kilowatt_hour + battery_losses_in_kilowatt_hour
 
         # make kpi entry
         total_consumtion_entry = KpiEntry(
@@ -263,6 +312,21 @@ class KpiGenerator(JSONWizard):
         pv_production_entry = KpiEntry(
             name="PV production", unit="kWh", value=pv_production_in_kilowatt_hour, tag=KpiTagEnumClass.GENERAL
         )
+        battery_charging_entry = KpiEntry(
+            name="Battery charging energy",
+            unit="kWh",
+            value=battery_charging_energy_in_kilowatt_hour,
+            tag=KpiTagEnumClass.BATTERY,
+        )
+        battery_discharging_entry = KpiEntry(
+            name="Battery discharging energy",
+            unit="kWh",
+            value=battery_discharging_energy_in_kilowatt_hour,
+            tag=KpiTagEnumClass.BATTERY,
+        )
+        battery_losses_entry = KpiEntry(
+            name="Battery losses", unit="kWh", value=battery_losses_in_kilowatt_hour, tag=KpiTagEnumClass.BATTERY
+        )
 
         # update kpi collection dict
         self.kpi_collection_dict_unsorted.update(
@@ -270,6 +334,9 @@ class KpiGenerator(JSONWizard):
                 total_consumtion_entry.name: total_consumtion_entry.to_dict(),
                 total_production_entry.name: total_production_entry.to_dict(),
                 pv_production_entry.name: pv_production_entry.to_dict(),
+                battery_charging_entry.name: battery_charging_entry.to_dict(),
+                battery_discharging_entry.name: battery_discharging_entry.to_dict(),
+                battery_losses_entry.name: battery_losses_entry.to_dict(),
             }
         )
 
@@ -279,7 +346,7 @@ class KpiGenerator(JSONWizard):
             pv_production_in_kilowatt_hour,
         )
 
-    def compute_self_consumption_injection_autarky_and_battery_losses(
+    def compute_self_consumption_injection_autarky(
         self,
         result_dataframe: pd.DataFrame,
         electricity_production_in_kilowatt_hour: float,
@@ -334,9 +401,6 @@ class KpiGenerator(JSONWizard):
                     "The autarky rate should not be over 100 %. Something is wrong here. Please check your code."
                 )
 
-            # compute battery losses
-            battery_losses_in_kilowatt_hour = self.compute_battery_losses(result_dataframe=result_dataframe)
-
         else:
             self_consumption_series_in_watt = pd.Series([])
             grid_injection_series_in_watt = pd.Series([])
@@ -344,7 +408,6 @@ class KpiGenerator(JSONWizard):
             grid_injection_in_kilowatt_hour = 0
             self_consumption_rate_in_percent = 0
             autarky_rate_in_percent = 0
-            battery_losses_in_kilowatt_hour = 0
 
         # add injection and self-consumption timeseries to result dataframe
         result_dataframe["self_consumption_in_watt"] = self_consumption_series_in_watt
@@ -363,9 +426,6 @@ class KpiGenerator(JSONWizard):
         autarkie_rate_entry = KpiEntry(
             name="Autarky rate", unit="%", value=autarky_rate_in_percent, tag=KpiTagEnumClass.GENERAL
         )
-        battery_losses_entry = KpiEntry(
-            name="Battery losses", unit="kWh", value=battery_losses_in_kilowatt_hour, tag=KpiTagEnumClass.GENERAL
-        )
 
         # update kpi collection dict
         self.kpi_collection_dict_unsorted.update(
@@ -374,26 +434,35 @@ class KpiGenerator(JSONWizard):
                 self_consumption_entry.name: self_consumption_entry.to_dict(),
                 self_consumption_rate_entry.name: self_consumption_rate_entry.to_dict(),
                 autarkie_rate_entry.name: autarkie_rate_entry.to_dict(),
-                battery_losses_entry.name: battery_losses_entry.to_dict(),
             }
         )
         return grid_injection_in_kilowatt_hour, self_consumption_in_kilowatt_hour, result_dataframe
 
-    def compute_battery_losses(self, result_dataframe: pd.DataFrame) -> float:
-        """Compute battery losses."""
+    def compute_battery_kpis(self, result_dataframe: pd.DataFrame) -> Tuple[float, float, float]:
+        """Compute battery kpis."""
 
         if not result_dataframe["battery_charge"].empty:
-            battery_losses_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
+            battery_charging_energy_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
                 power_timeseries_in_watt=result_dataframe["battery_charge"],
                 timeresolution=self.simulation_parameters.seconds_per_timestep,
-            ) - self.compute_total_energy_from_power_timeseries(
+            )
+            battery_discharging_energy_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
                 power_timeseries_in_watt=result_dataframe["battery_discharge"],
                 timeresolution=self.simulation_parameters.seconds_per_timestep,
             )
+            battery_losses_in_kilowatt_hour = (
+                battery_charging_energy_in_kilowatt_hour - battery_discharging_energy_in_kilowatt_hour
+            )
         else:
+            battery_charging_energy_in_kilowatt_hour = 0.0
+            battery_discharging_energy_in_kilowatt_hour = 0.0
             battery_losses_in_kilowatt_hour = 0.0
 
-        return battery_losses_in_kilowatt_hour
+        return (
+            battery_charging_energy_in_kilowatt_hour,
+            battery_discharging_energy_in_kilowatt_hour,
+            battery_losses_in_kilowatt_hour,
+        )
 
     def get_electricity_to_and_from_grid_from_electricty_meter(self) -> Tuple[Optional[float], Optional[float]]:
         """Get the electricity injected into the grid or taken from grid measured by the electricity meter."""
@@ -466,7 +535,8 @@ class KpiGenerator(JSONWizard):
         return relative_electricity_demand_from_grid_in_percent
 
     def compute_autarky_according_to_solar_htw_berlin(
-        self, relative_electricty_demand_in_percent: Optional[float],
+        self,
+        relative_electricty_demand_in_percent: Optional[float],
     ) -> None:
         """Return the autarky rate according to solar htw berlin.
 
@@ -577,7 +647,12 @@ class KpiGenerator(JSONWizard):
         return (float(column["Cost"].iloc[0]), float(column["Footprint"].iloc[0]))
 
     def compute_cost_of_fuel_type(
-        self, results: pd.DataFrame, all_outputs: List, timeresolution: int, price_frame: pd.DataFrame, fuel: LoadTypes,
+        self,
+        results: pd.DataFrame,
+        all_outputs: List,
+        timeresolution: int,
+        price_frame: pd.DataFrame,
+        fuel: LoadTypes,
     ) -> Tuple[float, float]:
         """Computes the cost of the fuel type."""
         fuel_consumption = pd.Series(dtype=pd.Float64Dtype())  # type: pd.Series[float]
@@ -623,9 +698,10 @@ class KpiGenerator(JSONWizard):
 
         price_frame = self.read_in_fuel_costs()
 
-        (electricity_price_consumption, electricity_price_injection,) = self.search_electricity_prices_in_results(
-            all_outputs=self.all_outputs, results=self.results
-        )
+        (
+            electricity_price_consumption,
+            electricity_price_injection,
+        ) = self.search_electricity_prices_in_results(all_outputs=self.all_outputs, results=self.results)
         # Electricity Price
         electricity_price_constant, co2_price_constant = self.get_euro_and_co2(
             fuel_costs=price_frame, fuel=LoadTypes.ELECTRICITY
@@ -796,7 +872,9 @@ class KpiGenerator(JSONWizard):
             }
         )
 
-    def get_building_kpis(self,) -> float:
+    def get_building_kpis(
+        self,
+    ) -> float:
         """Check building kpi values.
 
         Check for all timesteps and count the
@@ -823,6 +901,10 @@ class KpiGenerator(JSONWizard):
                 wrapped_building_component.my_component, "my_building_information"
             ).scaled_conditioned_floor_area_in_m2
         )
+        # get rooftop area
+        scaled_rooftop_area_in_m2 = float(
+            getattr(wrapped_building_component.my_component, "my_building_information").scaled_rooftop_area_in_m2
+        )
 
         # get specific heating load
         specific_heating_load_in_watt_per_m2 = heating_load_in_watt / scaled_conditioned_floor_area_in_m2
@@ -838,6 +920,12 @@ class KpiGenerator(JSONWizard):
             value=scaled_conditioned_floor_area_in_m2,
             tag=KpiTagEnumClass.BUILDING,
         )
+        scaled_rooftop_area_in_m2_entry = KpiEntry(
+            name="Rooftop area",
+            unit="m2",
+            value=scaled_rooftop_area_in_m2,
+            tag=KpiTagEnumClass.BUILDING,
+        )
         specific_heating_load_in_watt_per_m2_entry = KpiEntry(
             name="Specific heating load",
             unit="W/m2",
@@ -851,6 +939,7 @@ class KpiGenerator(JSONWizard):
                 heating_load_in_watt_entry.name: heating_load_in_watt_entry.to_dict(),
                 scaled_conditioned_floor_area_in_m2_entry.name: scaled_conditioned_floor_area_in_m2_entry.to_dict(),
                 specific_heating_load_in_watt_per_m2_entry.name: specific_heating_load_in_watt_per_m2_entry.to_dict(),
+                scaled_rooftop_area_in_m2_entry.name: scaled_rooftop_area_in_m2_entry.to_dict(),
             }
         )
         # get building temperatures
@@ -1096,9 +1185,11 @@ class KpiGenerator(JSONWizard):
             if all(x in column.split(sep=" ") for x in [Building.HeatDemandAccordingToTabula]):
                 heat_demand_values_in_watt = results[column]
                 # get energy from power
-                energy_demand_calculated_based_on_tabula_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
-                    power_timeseries_in_watt=heat_demand_values_in_watt,
-                    timeresolution=self.simulation_parameters.seconds_per_timestep,
+                energy_demand_calculated_based_on_tabula_in_kilowatt_hour = (
+                    self.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=heat_demand_values_in_watt,
+                        timeresolution=self.simulation_parameters.seconds_per_timestep,
+                    )
                 )
                 specific_heat_demand_calculated_with_tabula_method_in_kilowatthour_per_m2 = (
                     energy_demand_calculated_based_on_tabula_in_kilowatt_hour / building_conditioned_floor_area_in_m2
@@ -1198,7 +1289,7 @@ class KpiGenerator(JSONWizard):
         ) = self.get_flow_and_return_temperatures(
             results=self.results,
             output_name_flow_temperature=SimpleHotWaterStorage.WaterTemperatureToHeatDistribution,
-            output_name_return_temperature=HeatDistribution.WaterTemperatureOutput
+            output_name_return_temperature=HeatDistribution.WaterTemperatureOutput,
         )
 
         if None in (
@@ -1307,7 +1398,7 @@ class KpiGenerator(JSONWizard):
         number_of_cycles = 0
         for column in results.columns:
 
-            if all(x in column.split(sep=" ") for x in [HeatPumpHplib.TimeOff, component_name]):
+            if all(x in column.split(sep=" ") for x in [HeatPumpHplibWithTwoOutputs.TimeOff, component_name]):
                 for index, off_time in enumerate(results[column].values):
                     try:
                         if off_time != 0 and results[column].values[index + 1] == 0:
@@ -1335,17 +1426,23 @@ class KpiGenerator(JSONWizard):
         temperature_diff_flow_and_return_in_celsius = (
             flow_temperature_list_in_celsius - return_temperature_list_in_celsius
         )
-        (mean_temperature_difference_between_flow_and_return_in_celsius,
-         max_temperature_difference_between_flow_and_return_in_celsius,
-         min_temperature_difference_between_flow_and_return_in_celsius) = self.calc_mean_max_min_value(list_or_pandas_series=temperature_diff_flow_and_return_in_celsius)
+        (
+            mean_temperature_difference_between_flow_and_return_in_celsius,
+            max_temperature_difference_between_flow_and_return_in_celsius,
+            min_temperature_difference_between_flow_and_return_in_celsius,
+        ) = self.calc_mean_max_min_value(list_or_pandas_series=temperature_diff_flow_and_return_in_celsius)
 
-        (mean_flow_temperature_in_celsius,
-         max_flow_temperature_in_celsius,
-         min_flow_temperature_in_celsius) = self.calc_mean_max_min_value(list_or_pandas_series=flow_temperature_list_in_celsius)
+        (
+            mean_flow_temperature_in_celsius,
+            max_flow_temperature_in_celsius,
+            min_flow_temperature_in_celsius,
+        ) = self.calc_mean_max_min_value(list_or_pandas_series=flow_temperature_list_in_celsius)
 
-        (mean_return_temperature_in_celsius,
-         max_return_temperature_in_celsius,
-         min_return_temperature_in_celsius) = self.calc_mean_max_min_value(list_or_pandas_series=return_temperature_list_in_celsius)
+        (
+            mean_return_temperature_in_celsius,
+            max_return_temperature_in_celsius,
+            min_return_temperature_in_celsius,
+        ) = self.calc_mean_max_min_value(list_or_pandas_series=return_temperature_list_in_celsius)
 
         return (
             mean_flow_temperature_in_celsius,
@@ -1365,50 +1462,113 @@ class KpiGenerator(JSONWizard):
         seconds_per_timestep: int,
         component_name: str,
         building_conditioned_floor_area_in_m2: float,
-    ) -> Tuple[float, float, float, float]:
+    ) -> Tuple[float, float, float, float, float, float, float, float]:
         """Get energy performance kpis from heat pump over simulated period.
 
         Transform thermal and electrical power from heat pump in energies.
         """
-        thermal_output_energy_in_kilowatt_hour = 0.0
-        electrical_energy_in_kilowatt_hour = 1.0
+        output_heating_energy_in_kilowatt_hour = 0.0
+        output_cooling_energy_in_kilowatt_hour = 0.0
+        electrical_energy_for_heating_in_kilowatt_hour = 1.0
+        electrical_energy_for_cooling_in_kilowatt_hour = 1.0
 
         for column in results.columns:
-            if all(x in column.split(sep=" ") for x in [HeatPumpHplib.ThermalOutputPower, component_name]):
+            if all(x in column.split(sep=" ") for x in [HeatPumpHplibWithTwoOutputs.ThermalOutputPowerSH, component_name]):
                 # take only output values for heating
-                thermal_output_power_values_in_watt = results[column].loc[results[column] > 0.0]
+                heating_output_power_values_in_watt = results[column].loc[results[column] > 0.0]
+                # take only output values for cooling
+                cooling_output_power_values_in_watt = results[column].loc[results[column] < 0.0]
                 # get energy from power
-                thermal_output_energy_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
-                    power_timeseries_in_watt=thermal_output_power_values_in_watt, timeresolution=seconds_per_timestep
+                output_heating_energy_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
+                    power_timeseries_in_watt=heating_output_power_values_in_watt, timeresolution=seconds_per_timestep
                 )
-            if all(x in column.split(sep=" ") for x in [HeatPumpHplib.ElectricalInputPower, component_name]):
-                # get electrical energie values
-                electrical_energy_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
+                # for cooling enery use absolute value, not negative value
+                output_cooling_energy_in_kilowatt_hour = abs(
+                    self.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=cooling_output_power_values_in_watt,
+                        timeresolution=seconds_per_timestep,
+                    )
+                )
+            if all(x in column.split(sep=" ") for x in [HeatPumpHplibWithTwoOutputs.ElectricalInputPowerSH, component_name]):
+                # get electrical energie values for heating
+                electrical_energy_for_heating_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
+                    power_timeseries_in_watt=results[column], timeresolution=seconds_per_timestep
+                )
+            if all(x in column.split(sep=" ") for x in [HeatPumpHplibWithTwoOutputs.ElectricalInputPowerForCooling, component_name]):
+                # get electrical energie values for cooling
+                electrical_energy_for_cooling_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
                     power_timeseries_in_watt=results[column], timeresolution=seconds_per_timestep
                 )
 
         # calculate SPF
-        spf = thermal_output_energy_in_kilowatt_hour / electrical_energy_in_kilowatt_hour
-        # calculate specific heat pump thermal output energy
-        specific_thermal_output_energy_of_heat_pump_in_kilowatt_hour_per_m2 = (
-            thermal_output_energy_in_kilowatt_hour / building_conditioned_floor_area_in_m2
+        if electrical_energy_for_heating_in_kilowatt_hour != 0.0:
+            spf = output_heating_energy_in_kilowatt_hour / electrical_energy_for_heating_in_kilowatt_hour
+        else:
+            spf = 0
+        # calculate SEER
+        if electrical_energy_for_cooling_in_kilowatt_hour != 0.0:
+            seer = output_cooling_energy_in_kilowatt_hour / electrical_energy_for_cooling_in_kilowatt_hour
+        else:
+            seer = 0
+        # calculate specific heat pump thermal output energy for heating
+        specific_heating_output_energy_of_heat_pump_in_kilowatt_hour_per_m2 = (
+            output_heating_energy_in_kilowatt_hour / building_conditioned_floor_area_in_m2
+        )
+        # calculate total electricty input energy
+        total_electrical_energy_input_in_kilowatt_hour = (
+            electrical_energy_for_cooling_in_kilowatt_hour + electrical_energy_for_heating_in_kilowatt_hour
         )
 
         return (
             spf,
-            thermal_output_energy_in_kilowatt_hour,
-            electrical_energy_in_kilowatt_hour,
-            specific_thermal_output_energy_of_heat_pump_in_kilowatt_hour_per_m2,
+            seer,
+            output_heating_energy_in_kilowatt_hour,
+            output_cooling_energy_in_kilowatt_hour,
+            electrical_energy_for_heating_in_kilowatt_hour,
+            electrical_energy_for_cooling_in_kilowatt_hour,
+            total_electrical_energy_input_in_kilowatt_hour,
+            specific_heating_output_energy_of_heat_pump_in_kilowatt_hour_per_m2,
         )
 
-    def get_heat_pump_kpis(self, building_conditioned_floor_area_in_m2: float) -> None:
-        """Get some KPIs from Heat Pump."""
+    def get_heat_pump_cooling_and_heating_times(
+        self,
+        results: pd.DataFrame,
+        component_name: str,
+    ) -> Tuple[float, float]:
+        """Get heating and cooling times of heat pump."""
+        heating_time_in_hours = 0.0
+        cooling_time_in_hours = 0.0
+
+        for column in results.columns:
+            if all(x in column.split(sep=" ") for x in [HeatPumpHplibWithTwoOutputs.TimeOnHeating, component_name]):
+                heating_time_in_seconds = sum(results[column])
+                heating_time_in_hours = heating_time_in_seconds / 3600
+            if all(x in column.split(sep=" ") for x in [HeatPumpHplibWithTwoOutputs.TimeOnCooling, component_name]):
+                cooling_time_in_seconds = sum(results[column])
+                cooling_time_in_hours = cooling_time_in_seconds / 3600
+
+        return heating_time_in_hours, cooling_time_in_hours
+
+    def get_space_heating_heat_pump_kpis(
+        self,
+        building_conditioned_floor_area_in_m2: float,
+        sh_heat_pump_electricity_consumption_from_grid_in_kilowatt_hour: Optional[float],
+        total_electricity_consumption_in_kilowatt_hour: Optional[float],
+        total_electricity_consumption_from_grid_in_kilowatt_hour: Optional[float],
+    ) -> None:
+        """Get some KPIs from Space Heating Heat Pump."""
 
         number_of_heat_pump_cycles = None
         seasonal_performance_factor = None
-        thermal_output_energy_heatpump_in_kilowatt_hour = None
-        electrical_input_energy_heatpump_in_kilowatt_hour = None
-        specific_thermal_output_energy_of_heat_pump_in_kilowatt_hour_per_m2 = None
+        seasonal_energy_efficiency_ratio = None
+        heating_output_energy_heatpump_in_kilowatt_hour = None
+        cooling_output_energy_heatpump_in_kilowatt_hour = None
+        electrical_input_energy_for_heating_in_kilowatt_hour = None
+        electrical_input_energy_for_cooling_in_kilowatt_hour = None
+        total_electrical_energy_input_in_kilowatt_hour = None
+        specific_heating_energy_of_heat_pump_in_kilowatt_hour_per_m2 = None
+        heating_time_in_hours = None
+        cooling_time_in_hours = None
         mean_flow_temperature_in_celsius = None
         mean_return_temperature_in_celsius = None
         mean_temperature_difference_between_flow_and_return_in_celsius = None
@@ -1418,28 +1578,40 @@ class KpiGenerator(JSONWizard):
         max_flow_temperature_in_celsius = None
         max_return_temperature_in_celsius = None
         max_temperature_difference_between_flow_and_return_in_celsius = None
+        relative_electricity_demand_in_percent: Optional[float] = None
+        share_of_sh_heat_pump_on_total_electricity_consumption_in_percent: Optional[float] = None
+        share_of_sh_heat_pump_on_total_consumption_from_grid_in_percent: Optional[float] = None
 
         # check if Heat Pump was used in components
         for wrapped_component in self.wrapped_components:
 
-            if isinstance(wrapped_component.my_component, HeatPumpHplib):
+            if isinstance(wrapped_component.my_component, HeatPumpHplibWithTwoOutputs):
 
                 # get number of heat pump cycles over simulated period
                 number_of_heat_pump_cycles = self.get_heatpump_cycles(
                     results=self.results, component_name=wrapped_component.my_component.component_name
                 )
 
-                # get SPF
+                # get SPF, SEER and other outputs
                 (
                     seasonal_performance_factor,
-                    thermal_output_energy_heatpump_in_kilowatt_hour,
-                    electrical_input_energy_heatpump_in_kilowatt_hour,
-                    specific_thermal_output_energy_of_heat_pump_in_kilowatt_hour_per_m2,
+                    seasonal_energy_efficiency_ratio,
+                    heating_output_energy_heatpump_in_kilowatt_hour,
+                    cooling_output_energy_heatpump_in_kilowatt_hour,
+                    electrical_input_energy_for_heating_in_kilowatt_hour,
+                    electrical_input_energy_for_cooling_in_kilowatt_hour,
+                    total_electrical_energy_input_in_kilowatt_hour,
+                    specific_heating_energy_of_heat_pump_in_kilowatt_hour_per_m2,
                 ) = self.get_heat_pump_energy_performance(
                     results=self.results,
                     seconds_per_timestep=self.simulation_parameters.seconds_per_timestep,
                     component_name=wrapped_component.my_component.component_name,
                     building_conditioned_floor_area_in_m2=building_conditioned_floor_area_in_m2,
+                )
+                # get heating and cooling hours
+                (heating_time_in_hours, cooling_time_in_hours) = self.get_heat_pump_cooling_and_heating_times(
+                    results=self.results,
+                    component_name=wrapped_component.my_component.component_name,
                 )
 
                 # get flow and return temperatures
@@ -1455,7 +1627,7 @@ class KpiGenerator(JSONWizard):
                     min_temperature_difference_between_flow_and_return_in_celsius,
                 ) = self.get_flow_and_return_temperatures(
                     results=self.results,
-                    output_name_flow_temperature=HeatPumpHplib.TemperatureOutput,
+                    output_name_flow_temperature=HeatPumpHplibWithTwoOutputs.TemperatureOutputSH,
                     output_name_return_temperature=SimpleHotWaterStorage.WaterTemperatureToHeatGenerator
                 )
 
@@ -1464,9 +1636,15 @@ class KpiGenerator(JSONWizard):
         if None in (
             number_of_heat_pump_cycles,
             seasonal_performance_factor,
-            thermal_output_energy_heatpump_in_kilowatt_hour,
-            electrical_input_energy_heatpump_in_kilowatt_hour,
-            specific_thermal_output_energy_of_heat_pump_in_kilowatt_hour_per_m2,
+            seasonal_energy_efficiency_ratio,
+            heating_output_energy_heatpump_in_kilowatt_hour,
+            cooling_output_energy_heatpump_in_kilowatt_hour,
+            electrical_input_energy_for_heating_in_kilowatt_hour,
+            electrical_input_energy_for_cooling_in_kilowatt_hour,
+            total_electrical_energy_input_in_kilowatt_hour,
+            specific_heating_energy_of_heat_pump_in_kilowatt_hour_per_m2,
+            heating_time_in_hours,
+            cooling_time_in_hours,
             mean_temperature_difference_between_flow_and_return_in_celsius,
             mean_flow_temperature_in_celsius,
             mean_return_temperature_in_celsius,
@@ -1482,87 +1660,184 @@ class KpiGenerator(JSONWizard):
                 "Please check if you have correctly initialized and connected the heat pump in your system setup or ignore this message."
             )
 
+        # calculate some more sh heat pump kpis if possible
+        if (
+            sh_heat_pump_electricity_consumption_from_grid_in_kilowatt_hour is not None
+            and total_electrical_energy_input_in_kilowatt_hour is not None
+            and total_electricity_consumption_from_grid_in_kilowatt_hour is not None
+        ):
+
+            # get relative electricity demand of sh heat pump
+            relative_electricity_demand_in_percent = float(
+                sh_heat_pump_electricity_consumption_from_grid_in_kilowatt_hour
+                / total_electrical_energy_input_in_kilowatt_hour
+                * 100
+            )
+            # share of sh heat pump on total electricity consumption
+            share_of_sh_heat_pump_on_total_consumption_from_grid_in_percent = float(
+                sh_heat_pump_electricity_consumption_from_grid_in_kilowatt_hour
+                / total_electricity_consumption_from_grid_in_kilowatt_hour
+                * 100
+            )
+        if (
+            total_electrical_energy_input_in_kilowatt_hour is not None
+            and total_electricity_consumption_in_kilowatt_hour is not None
+        ):
+            # share of sh heat pump on total electricity consumption
+            share_of_sh_heat_pump_on_total_electricity_consumption_in_percent = float(
+                total_electrical_energy_input_in_kilowatt_hour / total_electricity_consumption_in_kilowatt_hour * 100
+            )
+
         # make kpi entry
         number_of_heat_pump_cycles_entry = KpiEntry(
-            name="Number of heat pump cycles", unit="-", value=number_of_heat_pump_cycles, tag=KpiTagEnumClass.HEATPUMP
+            name="Number of SH heat pump cycles",
+            unit="-",
+            value=number_of_heat_pump_cycles,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
         )
         seasonal_performance_factor_entry = KpiEntry(
-            name="Seasonal performance factor of heat pump",
+            name="Seasonal performance factor of SH heat pump",
             unit="-",
             value=seasonal_performance_factor,
-            tag=KpiTagEnumClass.HEATPUMP,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
         )
-        thermal_output_energy_heatpump_entry = KpiEntry(
-            name="Thermal output energy of heat pump",
+        seasonal_energy_efficiency_entry = KpiEntry(
+            name="Seasonal energy efficiency ratio of SH heat pump",
+            unit="-",
+            value=seasonal_energy_efficiency_ratio,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
+        heating_output_energy_heatpump_entry = KpiEntry(
+            name="Heating output energy of SH heat pump",
             unit="kWh",
-            value=thermal_output_energy_heatpump_in_kilowatt_hour,
-            tag=KpiTagEnumClass.HEATPUMP,
+            value=heating_output_energy_heatpump_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
         )
-        specific_thermal_output_energy_of_heatpump_entry = KpiEntry(
-            name="Specific thermal output energy of heat pump",
+        cooling_output_energy_heatpump_entry = KpiEntry(
+            name="Cooling output energy of SH heat pump",
+            unit="kWh",
+            value=cooling_output_energy_heatpump_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
+        specific_heating_energy_of_heatpump_entry = KpiEntry(
+            name="Specific heating energy of SH heat pump",
             unit="kWh/m2",
-            value=specific_thermal_output_energy_of_heat_pump_in_kilowatt_hour_per_m2,
-            tag=KpiTagEnumClass.HEATPUMP,
+            value=specific_heating_energy_of_heat_pump_in_kilowatt_hour_per_m2,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
         )
-        electrical_input_energy_heatpump_entry = KpiEntry(
-            name="Electrical input energy of heat pump",
+        electrical_input_energy_for_heating_entry = KpiEntry(
+            name="Electrical input energy for heating of SH heat pump",
             unit="kWh",
-            value=electrical_input_energy_heatpump_in_kilowatt_hour,
-            tag=KpiTagEnumClass.HEATPUMP,
+            value=electrical_input_energy_for_heating_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
+        electrical_input_energy_for_cooling_entry = KpiEntry(
+            name="Electrical input energy for cooling of SH heat pump",
+            unit="kWh",
+            value=electrical_input_energy_for_cooling_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
+        electrical_input_energy_total_entry = KpiEntry(
+            name="Total electrical input energy of SH heat pump",
+            unit="kWh",
+            value=total_electrical_energy_input_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
+        sh_heatpump_relative_electricity_demand_entry = KpiEntry(
+            name="Relative electricity demand of SH heat pump",
+            unit="%",
+            value=relative_electricity_demand_in_percent,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
+        sh_heatpump_share_on_total_consumption_entry = KpiEntry(
+            name="Share of SH heat pump on total electricity consumption",
+            unit="%",
+            value=share_of_sh_heat_pump_on_total_electricity_consumption_in_percent,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
+        sh_heatpump_share_on_total_consumption_from_grid_entry = KpiEntry(
+            name="Share of SH heat pump on total grid consumption",
+            unit="%",
+            value=share_of_sh_heat_pump_on_total_consumption_from_grid_in_percent,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
+        heating_hours_entry = KpiEntry(
+            name="Heating hours of SH heat pump",
+            unit="h",
+            value=heating_time_in_hours,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
+        cooling_hours_entry = KpiEntry(
+            name="Cooling hours of SH heat pump",
+            unit="h",
+            value=cooling_time_in_hours,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
+        electrical_input_energy_for_cooling_entry = KpiEntry(
+            name="Electrical input energy for cooling of heat pump",
+            unit="kWh",
+            value=electrical_input_energy_for_cooling_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
+        heating_hours_entry = KpiEntry(
+            name="Heating hours of heat pump", unit="h", value=heating_time_in_hours, tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
+        cooling_hours_entry = KpiEntry(
+            name="Cooling hours of heat pump", unit="h", value=cooling_time_in_hours, tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
         )
         mean_flow_temperature_heatpump_entry = KpiEntry(
-            name="Mean flow temperature of heat pump",
+            name="Mean flow temperature of SH heat pump",
             unit="°C",
             value=mean_flow_temperature_in_celsius,
-            tag=KpiTagEnumClass.HEATPUMP,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
         )
         mean_return_temperature_heatpump_entry = KpiEntry(
-            name="Mean return temperature of heat pump",
+            name="Mean return temperature of SH heat pump",
             unit="°C",
             value=mean_return_temperature_in_celsius,
-            tag=KpiTagEnumClass.HEATPUMP,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
         )
         mean_temperature_difference_heatpump_entry = KpiEntry(
-            name="Mean temperature difference of heat pump",
+            name="Mean temperature difference of SH heat pump",
             unit="°C",
             value=mean_temperature_difference_between_flow_and_return_in_celsius,
-            tag=KpiTagEnumClass.HEATPUMP,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
         )
         max_flow_temperature_heatpump_entry = KpiEntry(
-            name="Max flow temperature of heat pump",
+            name="Max flow temperature of SH heat pump",
             unit="°C",
             value=max_flow_temperature_in_celsius,
-            tag=KpiTagEnumClass.HEATPUMP,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
         )
         max_return_temperature_heatpump_entry = KpiEntry(
-            name="Max return temperature of heat pump",
+            name="Max return temperature of SH heat pump",
             unit="°C",
             value=max_return_temperature_in_celsius,
-            tag=KpiTagEnumClass.HEATPUMP,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
         )
         max_temperature_difference_heatpump_entry = KpiEntry(
-            name="Max temperature difference of heat pump",
+            name="Max temperature difference of SH heat pump",
             unit="°C",
             value=max_temperature_difference_between_flow_and_return_in_celsius,
-            tag=KpiTagEnumClass.HEATPUMP,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
         )
         min_flow_temperature_heatpump_entry = KpiEntry(
-            name="Min flow temperature of heat pump",
+            name="Min flow temperature of SH heat pump",
             unit="°C",
             value=min_flow_temperature_in_celsius,
-            tag=KpiTagEnumClass.HEATPUMP,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
         )
         min_return_temperature_heatpump_entry = KpiEntry(
-            name="Min return temperature of heat pump",
+            name="Min return temperature of SH heat pump",
             unit="°C",
             value=min_return_temperature_in_celsius,
-            tag=KpiTagEnumClass.HEATPUMP,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
         )
         min_temperature_difference_heatpump_entry = KpiEntry(
-            name="Min temperature difference of heat pump",
+            name="Min temperature difference of SH heat pump",
             unit="°C",
             value=min_temperature_difference_between_flow_and_return_in_celsius,
-            tag=KpiTagEnumClass.HEATPUMP,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
         )
 
         # update kpi collection dict
@@ -1570,9 +1845,18 @@ class KpiGenerator(JSONWizard):
             {
                 number_of_heat_pump_cycles_entry.name: number_of_heat_pump_cycles_entry.to_dict(),
                 seasonal_performance_factor_entry.name: seasonal_performance_factor_entry.to_dict(),
-                thermal_output_energy_heatpump_entry.name: thermal_output_energy_heatpump_entry.to_dict(),
-                specific_thermal_output_energy_of_heatpump_entry.name: specific_thermal_output_energy_of_heatpump_entry.to_dict(),
-                electrical_input_energy_heatpump_entry.name: electrical_input_energy_heatpump_entry.to_dict(),
+                seasonal_energy_efficiency_entry.name: seasonal_energy_efficiency_entry.to_dict(),
+                heating_output_energy_heatpump_entry.name: heating_output_energy_heatpump_entry.to_dict(),
+                cooling_output_energy_heatpump_entry.name: cooling_output_energy_heatpump_entry.to_dict(),
+                specific_heating_energy_of_heatpump_entry.name: specific_heating_energy_of_heatpump_entry.to_dict(),
+                electrical_input_energy_for_heating_entry.name: electrical_input_energy_for_heating_entry.to_dict(),
+                electrical_input_energy_for_cooling_entry.name: electrical_input_energy_for_cooling_entry.to_dict(),
+                electrical_input_energy_total_entry.name: electrical_input_energy_total_entry.to_dict(),
+                sh_heatpump_relative_electricity_demand_entry.name: sh_heatpump_relative_electricity_demand_entry.to_dict(),
+                sh_heatpump_share_on_total_consumption_entry.name: sh_heatpump_share_on_total_consumption_entry.to_dict(),
+                sh_heatpump_share_on_total_consumption_from_grid_entry.name: sh_heatpump_share_on_total_consumption_from_grid_entry.to_dict(),
+                heating_hours_entry.name: heating_hours_entry.to_dict(),
+                cooling_hours_entry.name: cooling_hours_entry.to_dict(),
                 mean_flow_temperature_heatpump_entry.name: mean_flow_temperature_heatpump_entry.to_dict(),
                 mean_return_temperature_heatpump_entry.name: mean_return_temperature_heatpump_entry.to_dict(),
                 mean_temperature_difference_heatpump_entry.name: mean_temperature_difference_heatpump_entry.to_dict(),
@@ -1583,6 +1867,494 @@ class KpiGenerator(JSONWizard):
                 min_return_temperature_heatpump_entry.name: min_return_temperature_heatpump_entry.to_dict(),
                 min_temperature_difference_heatpump_entry.name: min_temperature_difference_heatpump_entry.to_dict(),
             }
+        )
+
+    def get_advanced_dhw_heat_pump_kpis(
+        self,
+        dhw_advanced_heat_pump_electricity_consumption_from_grid_in_kilowatt_hour: Optional[float],
+        total_electricity_consumption_in_kilowatt_hour: Optional[float],
+        total_electricity_consumption_from_grid_in_kilowatt_hour: Optional[float],
+    ) -> None:
+        """Check kpi values of domestic hot water heat pump."""
+
+        wrapped_dhw_advanced_heat_pump_component = None
+        dhw_advanced_heat_pump_total_electricity_consumption_in_kilowatt_hour: Optional[float] = None
+        dhw_advanced_heat_pump_heating_energy_output_in_kilowatt_hour: Optional[float] = None
+        relative_electricity_demand_in_percent: Optional[float] = None
+        share_of_dhw_advanced_heat_pump_on_total_electricity_consumption_in_percent: Optional[float] = None
+        share_of_dhw_advanced_heat_pump_on_total_consumption_from_grid_in_percent: Optional[float] = None
+
+        for wrapped_component in self.wrapped_components:
+            if isinstance(wrapped_component.my_component, HeatPumpHplibWithTwoOutputs):
+                wrapped_dhw_advanced_heat_pump_component = wrapped_component
+                if "DHWHeatPump" not in wrapped_dhw_advanced_heat_pump_component.my_component.component_name:
+                    log.information(
+                        f"The dhw more advanced heat pump was used as {wrapped_dhw_advanced_heat_pump_component.my_component.component_name}"
+                        " and not as DHWHeatPump. Therefore no dhw heat pump KPIs can be calculated."
+                    )
+                    dhw_advanced_heat_pump_total_electricity_consumption_in_kilowatt_hour = None
+                break
+        if not wrapped_dhw_advanced_heat_pump_component:
+            log.warning(
+                "KPI values for DHW advanced heatpump are None. "
+                "Please check if you have correctly initialized and connected the dhw heat pump in your system setup or ignore this message."
+            )
+            return
+        for column in self.results.columns:
+            if all(
+                x in column.split(sep=" ")
+                for x in [
+                    wrapped_dhw_advanced_heat_pump_component.my_component.component_name,
+                    HeatPumpHplibWithTwoOutputs.ElectricalInputPowerDHW,
+                ]
+            ):
+
+                dhw_advanced_heat_pump_total_electricity_consumption_in_watt_series = self.results[column]
+                dhw_advanced_heat_pump_total_electricity_consumption_in_kilowatt_hour = (
+                    self.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=dhw_advanced_heat_pump_total_electricity_consumption_in_watt_series,
+                        timeresolution=self.simulation_parameters.seconds_per_timestep,
+                    )
+                )
+            if all(
+                x in column.split(sep=" ")
+                for x in [
+                    wrapped_dhw_advanced_heat_pump_component.my_component.component_name,
+                    HeatPumpHplibWithTwoOutputs.ThermalOutputPowerDHW,
+                ]
+            ):
+
+                dhw_advanced_heat_pump_heating_power_output_in_watt_series = self.results[column]
+                dhw_advanced_heat_pump_heating_energy_output_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
+                    power_timeseries_in_watt=dhw_advanced_heat_pump_heating_power_output_in_watt_series,
+                    timeresolution=self.simulation_parameters.seconds_per_timestep,
+                )
+
+        # calculate some more dhw heat pump kpis if possible
+        if (
+            dhw_advanced_heat_pump_electricity_consumption_from_grid_in_kilowatt_hour is not None
+            and dhw_advanced_heat_pump_total_electricity_consumption_in_kilowatt_hour is not None
+            and total_electricity_consumption_from_grid_in_kilowatt_hour is not None
+        ):
+
+            # get relative electricity demand of dhw heat pump
+            relative_electricity_demand_in_percent = float(
+                dhw_advanced_heat_pump_electricity_consumption_from_grid_in_kilowatt_hour
+                / dhw_advanced_heat_pump_total_electricity_consumption_in_kilowatt_hour
+                * 100
+            )
+
+            # share of dhw heat pump on total electricity consumption
+            share_of_dhw_advanced_heat_pump_on_total_consumption_from_grid_in_percent = float(
+                dhw_advanced_heat_pump_electricity_consumption_from_grid_in_kilowatt_hour
+                / total_electricity_consumption_from_grid_in_kilowatt_hour
+                * 100
+            )
+        if (
+            dhw_advanced_heat_pump_total_electricity_consumption_in_kilowatt_hour is not None
+            and total_electricity_consumption_in_kilowatt_hour is not None
+        ):
+            # share of dhw heat pump on total electricity consumption
+            share_of_dhw_advanced_heat_pump_on_total_electricity_consumption_in_percent = float(
+                dhw_advanced_heat_pump_total_electricity_consumption_in_kilowatt_hour
+                / total_electricity_consumption_in_kilowatt_hour
+                * 100
+            )
+
+        # make kpi entry
+        dhw_advanced_heatpump_total_electricity_consumption_entry = KpiEntry(
+            name="DHW advanced heat pump total electricity consumption",
+            unit="kWh",
+            value=dhw_advanced_heat_pump_total_electricity_consumption_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
+        )
+        dhw_advanced_heatpump_heating_energy_output_entry = KpiEntry(
+            name="Heating output energy of DHW advanced heat pump",
+            unit="kWh",
+            value=dhw_advanced_heat_pump_heating_energy_output_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
+        )
+        dhw_advanced_heatpump_relative_electricity_demand_entry = KpiEntry(
+            name="Relative electricity demand of DHW advanced heat pump",
+            unit="%",
+            value=relative_electricity_demand_in_percent,
+            tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
+        )
+        dhw_advanced_heatpump_share_on_total_consumption_entry = KpiEntry(
+            name="Share of DHW advanced heat pump on total electricity consumption",
+            unit="%",
+            value=share_of_dhw_advanced_heat_pump_on_total_electricity_consumption_in_percent,
+            tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
+        )
+        dhw_advanced_heatpump_share_on_total_consumption_from_grid_entry = KpiEntry(
+            name="Share of DHW advanced heat pump on total grid consumption",
+            unit="%",
+            value=share_of_dhw_advanced_heat_pump_on_total_consumption_from_grid_in_percent,
+            tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
+        )
+
+        # update kpi collection dict
+        self.kpi_collection_dict_unsorted.update(
+            {
+                dhw_advanced_heatpump_total_electricity_consumption_entry.name: dhw_advanced_heatpump_total_electricity_consumption_entry.to_dict(),
+                dhw_advanced_heatpump_heating_energy_output_entry.name: dhw_advanced_heatpump_heating_energy_output_entry.to_dict(),
+                dhw_advanced_heatpump_relative_electricity_demand_entry.name: dhw_advanced_heatpump_relative_electricity_demand_entry.to_dict(),
+                dhw_advanced_heatpump_share_on_total_consumption_entry.name: dhw_advanced_heatpump_share_on_total_consumption_entry.to_dict(),
+                dhw_advanced_heatpump_share_on_total_consumption_from_grid_entry.name: dhw_advanced_heatpump_share_on_total_consumption_from_grid_entry.to_dict(),
+            }
+        )
+
+    def get_dhw_modular_heat_pump_kpis(
+            self,
+            dhw_modular_heat_pump_electricity_consumption_from_grid_in_kilowatt_hour: Optional[float],
+            total_electricity_consumption_in_kilowatt_hour: Optional[float],
+            total_electricity_consumption_from_grid_in_kilowatt_hour: Optional[float],
+    ) -> None:
+        """Check kpi values of domestic hot water heat pump."""
+
+        wrapped_dhw_modular_heat_pump_component = None
+        dhw_modular_heat_pump_total_electricity_consumption_in_kilowatt_hour: Optional[float] = None
+        dhw_modular_heat_pump_heating_energy_output_in_kilowatt_hour: Optional[float] = None
+        relative_electricity_demand_in_percent: Optional[float] = None
+        share_of_dhw_modular_heat_pump_on_total_electricity_consumption_in_percent: Optional[float] = None
+        share_of_dhw_modular_heat_pump_on_total_consumption_from_grid_in_percent: Optional[float] = None
+
+        for wrapped_component in self.wrapped_components:
+            if isinstance(wrapped_component.my_component, ModularHeatPump):
+                wrapped_dhw_modular_heat_pump_component = wrapped_component
+                if "DHWHeatPump" not in wrapped_dhw_modular_heat_pump_component.my_component.component_name:
+                    log.information(
+                        f"The modular heat pump was used as {wrapped_dhw_modular_heat_pump_component.my_component.component_name}"
+                        " and not as DHWHeatPump. Therefore no dhw heat pump KPIs can be calculated."
+                    )
+                    dhw_modular_heat_pump_total_electricity_consumption_in_kilowatt_hour = None
+                break
+        if not wrapped_dhw_modular_heat_pump_component:
+            log.warning(
+                "KPI values for DHW heatpump are None. "
+                "Please check if you have correctly initialized and connected the dhw heat pump in your system setup or ignore this message."
+            )
+            return
+        for column in self.results.columns:
+            if all(
+                    x in column.split(sep=" ")
+                    for x in [
+                        wrapped_dhw_modular_heat_pump_component.my_component.component_name,
+                        ModularHeatPump.ElectricityOutput,
+                    ]
+            ):
+                dhw_modular_heat_pump_total_electricity_consumption_in_watt_series = self.results[column]
+                dhw_modular_heat_pump_total_electricity_consumption_in_kilowatt_hour = (
+                    self.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=dhw_modular_heat_pump_total_electricity_consumption_in_watt_series,
+                        timeresolution=self.simulation_parameters.seconds_per_timestep,
+                    )
+                )
+            if all(
+                    x in column.split(sep=" ")
+                    for x in [
+                        wrapped_dhw_modular_heat_pump_component.my_component.component_name,
+                        ModularHeatPump.ThermalPowerDelivered,
+                    ]
+            ):
+                dhw_modular_heat_pump_heating_power_output_in_watt_series = self.results[column]
+                dhw_modular_heat_pump_heating_energy_output_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
+                    power_timeseries_in_watt=dhw_modular_heat_pump_heating_power_output_in_watt_series,
+                    timeresolution=self.simulation_parameters.seconds_per_timestep,
+                )
+
+        # calculate some more dhw heat pump kpis if possible
+        if (
+                dhw_modular_heat_pump_electricity_consumption_from_grid_in_kilowatt_hour is not None
+                and dhw_modular_heat_pump_total_electricity_consumption_in_kilowatt_hour is not None
+                and total_electricity_consumption_from_grid_in_kilowatt_hour is not None
+        ):
+            # get relative electricity demand of dhw heat pump
+            relative_electricity_demand_in_percent = float(
+                dhw_modular_heat_pump_electricity_consumption_from_grid_in_kilowatt_hour
+                / dhw_modular_heat_pump_total_electricity_consumption_in_kilowatt_hour
+                * 100
+            )
+
+            # share of dhw heat pump on total electricity consumption
+            share_of_dhw_modular_heat_pump_on_total_consumption_from_grid_in_percent = float(
+                dhw_modular_heat_pump_electricity_consumption_from_grid_in_kilowatt_hour
+                / total_electricity_consumption_from_grid_in_kilowatt_hour
+                * 100
+            )
+        if (
+                dhw_modular_heat_pump_total_electricity_consumption_in_kilowatt_hour is not None
+                and total_electricity_consumption_in_kilowatt_hour is not None
+        ):
+            # share of dhw heat pump on total electricity consumption
+            share_of_dhw_modular_heat_pump_on_total_electricity_consumption_in_percent = float(
+                dhw_modular_heat_pump_total_electricity_consumption_in_kilowatt_hour
+                / total_electricity_consumption_in_kilowatt_hour
+                * 100
+            )
+
+        # make kpi entry
+        dhw_modular_heatpump_total_electricity_consumption_entry = KpiEntry(
+            name="DHW modular heat pump total electricity consumption",
+            unit="kWh",
+            value=dhw_modular_heat_pump_total_electricity_consumption_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
+        )
+        dhw_modular_heatpump_heating_energy_output_entry = KpiEntry(
+            name="Heating output energy of DHW modular heat pump",
+            unit="kWh",
+            value=dhw_modular_heat_pump_heating_energy_output_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
+        )
+        dhw_modular_heatpump_relative_electricity_demand_entry = KpiEntry(
+            name="Relative electricity demand of DHW modular heat pump",
+            unit="%",
+            value=relative_electricity_demand_in_percent,
+            tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
+        )
+        dhw_modular_heatpump_share_on_total_consumption_entry = KpiEntry(
+            name="Share of DHW modular heat pump on total electricity consumption",
+            unit="%",
+            value=share_of_dhw_modular_heat_pump_on_total_electricity_consumption_in_percent,
+            tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
+        )
+        dhw_modular_heatpump_share_on_total_consumption_from_grid_entry = KpiEntry(
+            name="Share of DHW modular heat pump on total grid consumption",
+            unit="%",
+            value=share_of_dhw_modular_heat_pump_on_total_consumption_from_grid_in_percent,
+            tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
+        )
+
+        # update kpi collection dict
+        self.kpi_collection_dict_unsorted.update(
+            {
+                dhw_modular_heatpump_total_electricity_consumption_entry.name: dhw_modular_heatpump_total_electricity_consumption_entry.to_dict(),
+                dhw_modular_heatpump_heating_energy_output_entry.name: dhw_modular_heatpump_heating_energy_output_entry.to_dict(),
+                dhw_modular_heatpump_relative_electricity_demand_entry.name: dhw_modular_heatpump_relative_electricity_demand_entry.to_dict(),
+                dhw_modular_heatpump_share_on_total_consumption_entry.name: dhw_modular_heatpump_share_on_total_consumption_entry.to_dict(),
+                dhw_modular_heatpump_share_on_total_consumption_from_grid_entry.name: dhw_modular_heatpump_share_on_total_consumption_from_grid_entry.to_dict(),
+            }
+        )
+
+    def get_occupancy_electricity_kpis(
+        self,
+        total_electricity_consumption_in_kilowatt_hour: Optional[float],
+        total_electricity_consumption_from_grid_in_kilowatt_hour: Optional[float],
+        occupancy_electricity_from_grid_in_kilowatt_hour: Optional[float],
+    ) -> None:
+        """Check electricity kpi values of occupancy."""
+
+        wrapped_occupancy_component = None
+        occupancy_total_electricity_consumption_in_kilowatt_hour: Optional[float] = None
+        share_of_occupancy_on_total_electricity_consumption_in_percent: Optional[float] = None
+        relative_electricity_demand_in_percent: Optional[float] = None
+        share_of_occupancy_on_total_consumption_from_grid_in_percent: Optional[float] = None
+
+        for wrapped_component in self.wrapped_components:
+            if isinstance(wrapped_component.my_component, UtspLpgConnector):
+                wrapped_occupancy_component = wrapped_component
+                break
+        if not wrapped_occupancy_component:
+            log.warning(
+                "KPI values for occupancy are None. "
+                "Please check if you have correctly initialized and connected the occupancy in your system setup or ignore this message."
+            )
+            return
+
+        for column in self.results.columns:
+            if all(
+                x in column.split(sep=" ")
+                for x in [wrapped_occupancy_component.my_component.component_name, UtspLpgConnector.ElectricityOutput]
+            ):
+
+                occupancy_total_electricity_consumption_in_watt_series = self.results[column]
+                occupancy_total_electricity_consumption_in_kilowatt_hour = (
+                    self.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
+                        timeresolution=self.simulation_parameters.seconds_per_timestep,
+                    )
+                )
+        # calculate some more occupancy kpis if possible
+        if (
+            occupancy_total_electricity_consumption_in_kilowatt_hour is not None
+            and total_electricity_consumption_in_kilowatt_hour is not None
+        ):
+
+            # share of occupancy on total electricity consumption
+            share_of_occupancy_on_total_electricity_consumption_in_percent = float(
+                occupancy_total_electricity_consumption_in_kilowatt_hour
+                / total_electricity_consumption_in_kilowatt_hour
+                * 100
+            )
+
+        if (
+            occupancy_electricity_from_grid_in_kilowatt_hour is not None
+            and occupancy_total_electricity_consumption_in_kilowatt_hour is not None
+            and total_electricity_consumption_from_grid_in_kilowatt_hour is not None
+        ):
+
+            # get relative electricity demand of occupancy
+            relative_electricity_demand_in_percent = float(
+                occupancy_electricity_from_grid_in_kilowatt_hour
+                / occupancy_total_electricity_consumption_in_kilowatt_hour
+                * 100
+            )
+
+            # share of occupancy on total electricity consumption
+            share_of_occupancy_on_total_consumption_from_grid_in_percent = float(
+                occupancy_electricity_from_grid_in_kilowatt_hour
+                / total_electricity_consumption_from_grid_in_kilowatt_hour
+                * 100
+            )
+
+        # make kpi entry
+        occupancy_total_electricity_consumption_entry = KpiEntry(
+            name="Residents' total electricity consumption",
+            unit="kWh",
+            value=occupancy_total_electricity_consumption_in_kilowatt_hour,
+            tag=KpiTagEnumClass.RESIDENTS,
+        )
+
+        occupancy_share_on_total_consumption_entry = KpiEntry(
+            name="Share of residents on total electricity consumption",
+            unit="%",
+            value=share_of_occupancy_on_total_electricity_consumption_in_percent,
+            tag=KpiTagEnumClass.RESIDENTS,
+        )
+        relative_electricity_demand_entry = KpiEntry(
+            name="Relative electricity demand of residents",
+            unit="%",
+            value=relative_electricity_demand_in_percent,
+            tag=KpiTagEnumClass.RESIDENTS,
+        )
+        occupancy_share_on_grid_consumption_entry = KpiEntry(
+            name="Share of residents on total grid consumption",
+            unit="%",
+            value=share_of_occupancy_on_total_consumption_from_grid_in_percent,
+            tag=KpiTagEnumClass.RESIDENTS,
+        )
+
+        # update kpi collection dict
+        self.kpi_collection_dict_unsorted.update(
+            {
+                occupancy_total_electricity_consumption_entry.name: occupancy_total_electricity_consumption_entry.to_dict(),
+                occupancy_share_on_total_consumption_entry.name: occupancy_share_on_total_consumption_entry.to_dict(),
+                relative_electricity_demand_entry.name: relative_electricity_demand_entry.to_dict(),
+                occupancy_share_on_grid_consumption_entry.name: occupancy_share_on_grid_consumption_entry.to_dict(),
+            }
+        )
+
+    def get_grid_consumptions_of_heat_pumps_via_energy_management_kpis(
+        self,
+    ) -> Tuple[Optional[float], Optional[float], Optional[float], Optional[float]]:
+        """Check ems kpi values and get from grid consumptions of heat pumps."""
+
+        wrapped_ems_component = None
+        sh_heatpump_electricity_from_grid_in_kilowatt_hour = None
+        dhw_modular_heatpump_electricity_from_grid_in_kilowatt_hour = None
+        dhw_advanced_heatpump_electricity_from_grid_in_kilowatt_hour = None
+        occupancy_electricity_from_grid_in_kilowatt_hour = None
+
+        for wrapped_component in self.wrapped_components:
+            if isinstance(wrapped_component.my_component, L2GenericEnergyManagementSystem):
+                wrapped_ems_component = wrapped_component
+                break
+        if not wrapped_ems_component:
+            log.information("Could not find the Energy Management System component.")
+            return None, None, None, None
+
+        for column in self.results.columns:
+            if all(x in column.split(sep=" ") for x in [wrapped_ems_component.my_component.component_name]):
+                for string in column.split(sep=" "):
+
+                    if "ElectricityToOrFromGridOfModularHeatPump" in string.split(sep="_"):
+                        dhw_modular_hp_electricity_from_grid_in_watt_series = self.results[column].loc[self.results[column] < 0.0]
+                        dhw_modular_heatpump_electricity_from_grid_in_kilowatt_hour = abs(
+                            self.compute_total_energy_from_power_timeseries(
+                                power_timeseries_in_watt=dhw_modular_hp_electricity_from_grid_in_watt_series,
+                                timeresolution=self.simulation_parameters.seconds_per_timestep,
+                            )
+                        )
+
+                    if "ElectricityToOrFromGridOfDHWMoreAdvancedHeatPumpHPLib" in string.split(sep="_"):
+                        dhw_advanced_hp_electricity_from_grid_in_watt_series = self.results[column].loc[self.results[column] < 0.0]
+                        dhw_advanced_heatpump_electricity_from_grid_in_kilowatt_hour = abs(
+                            self.compute_total_energy_from_power_timeseries(
+                                power_timeseries_in_watt=dhw_advanced_hp_electricity_from_grid_in_watt_series,
+                                timeresolution=self.simulation_parameters.seconds_per_timestep,
+                            )
+                        )
+
+                    if "ElectricityToOrFromGridOfSHMoreAdvancedHeatPumpHPLib" in string.split(sep="_"):
+                        sh_electricity_from_grid_in_watt_series = self.results[column].loc[self.results[column] < 0.0]
+                        sh_heatpump_electricity_from_grid_in_kilowatt_hour = abs(
+                            self.compute_total_energy_from_power_timeseries(
+                                power_timeseries_in_watt=sh_electricity_from_grid_in_watt_series,
+                                timeresolution=self.simulation_parameters.seconds_per_timestep,
+                            )
+                        )
+                    if "ElectricityToOrFromGridOfUtspLpgConnector" in string.split(sep="_"):
+                        occupancy_electricity_from_grid_in_watt_series = self.results[column].loc[
+                            self.results[column] < 0.0
+                        ]
+
+                        occupancy_electricity_from_grid_in_kilowatt_hour = abs(
+                            self.compute_total_energy_from_power_timeseries(
+                                power_timeseries_in_watt=occupancy_electricity_from_grid_in_watt_series,
+                                timeresolution=self.simulation_parameters.seconds_per_timestep,
+                            )
+                        )
+        if None in (
+            sh_heatpump_electricity_from_grid_in_kilowatt_hour,
+            dhw_advanced_heatpump_electricity_from_grid_in_kilowatt_hour,
+            dhw_modular_heatpump_electricity_from_grid_in_kilowatt_hour,
+            occupancy_electricity_from_grid_in_kilowatt_hour,
+        ):
+            log.warning(
+                "KPI values for the energy management system are None. "
+                "Please check if you have correctly initialized and connected the EMS in your system setup or ignore this message."
+            )
+
+        # make kpi entry
+        sh_heatpump_electricity_from_grid_entry = KpiEntry(
+            name="Space heating heat pump electricity from grid",
+            unit="kWh",
+            value=sh_heatpump_electricity_from_grid_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
+        dhw_modular_heatpump_electricity_from_grid_entry = KpiEntry(
+            name="Domestic hot water modular heat pump electricity from grid",
+            unit="kWh",
+            value=dhw_modular_heatpump_electricity_from_grid_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
+        )
+        dhw_advanced_heatpump_electricity_from_grid_entry = KpiEntry(
+            name="Domestic hot water advanced heat pump electricity from grid",
+            unit="kWh",
+            value=dhw_advanced_heatpump_electricity_from_grid_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
+        )
+        occupancy_electricity_from_grid_entry = KpiEntry(
+            name="Residents' electricity consumption from grid",
+            unit="kWh",
+            value=occupancy_electricity_from_grid_in_kilowatt_hour,
+            tag=KpiTagEnumClass.RESIDENTS,
+        )
+
+        # update kpi collection dict
+        self.kpi_collection_dict_unsorted.update(
+            {
+                sh_heatpump_electricity_from_grid_entry.name: sh_heatpump_electricity_from_grid_entry.to_dict(),
+                dhw_modular_heatpump_electricity_from_grid_entry.name: dhw_modular_heatpump_electricity_from_grid_entry.to_dict(),
+                dhw_advanced_heatpump_electricity_from_grid_entry.name: dhw_advanced_heatpump_electricity_from_grid_entry.to_dict(),
+                occupancy_electricity_from_grid_entry.name: occupancy_electricity_from_grid_entry.to_dict(),
+            }
+        )
+        return (
+            sh_heatpump_electricity_from_grid_in_kilowatt_hour,
+            dhw_modular_heatpump_electricity_from_grid_in_kilowatt_hour,
+            dhw_advanced_heatpump_electricity_from_grid_in_kilowatt_hour,
+            occupancy_electricity_from_grid_in_kilowatt_hour,
         )
 
     def calc_mean_max_min_value(self, list_or_pandas_series: Union[List, pd.Series]) -> Tuple[float, float, float]:
@@ -1623,8 +2395,8 @@ class KpiGenerator(JSONWizard):
 
         # now sort kpi dict entries according to tags
         for kpi_name, entry in kpi_collection_dict_unsorted.items():
-            for tag in kpi_collection_dict_sorted.keys():  # pylint: disable=consider-using-dict-items, consider-iterating-dictionary
+            for tag, tag_dict in kpi_collection_dict_sorted.items():
                 if entry["tag"] in tag:
-                    kpi_collection_dict_sorted[tag].update({kpi_name: entry})
+                    tag_dict.update({kpi_name: entry})
 
         return kpi_collection_dict_sorted

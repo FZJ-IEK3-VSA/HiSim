@@ -301,6 +301,8 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
     Data12 = []
     Data13 = []
     Data14 = []
+    Data15 = []
+    Data16 = []
 
     # Lade Daten aus dem ersten CSV-Datei "Electricity TO or FROM Grid Ergebnisse" (Spalte 1 und Spalte 2) und füge sie zur Liste hinzu
     csv_datei1 = os.path.join(path, 'ElectricityToOrFromGrid_L2EMSElectricityController.csv')
@@ -421,10 +423,26 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
     with open(csv_datei14, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
         for row in csvreader:
-            Data14.append(row[1])            
+            Data14.append(row[1])
+
+
+    # Load data from "Quantity share chp to battery" (column 2) and add the collected data to list
+    csv_datei15 = os.path.join(path, 'QuantitiyShare_CHP_to_battery_Elect_Controller.csv')
+    with open(csv_datei15, 'r') as csvfile:
+        csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        for row in csvreader:
+            Data15.append(row[1])
+
+
+# Load data from "Quantity share pv to grid" (column 2) and add the collected data to list
+    csv_datei16 = os.path.join(path, 'QuantitiyShare_CHP_to_grid_Elect_Controller.csv')
+    with open(csv_datei16, 'r') as csvfile:
+        csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        for row in csvreader:
+            Data16.append(row[1])
 
     #Zusammenfuehren der Daten
-    zusammengefuegte_daten = [(x[0], x[1], x[2], Data2[i], Data3[i], Data4[i], Data5[i], Data6[i], Data7[i], Data8[i], Data9[i], Data10[i], Data11[i], Data12[i], Data13[i], Data14[i]) for i, x in enumerate(zusammengefuegte_daten)]
+    zusammengefuegte_daten = [(x[0], x[1], x[2], Data2[i], Data3[i], Data4[i], Data5[i], Data6[i], Data7[i], Data8[i], Data9[i], Data10[i], Data11[i], Data12[i], Data13[i], Data14[i], Data15[i], Data16[i]) for i, x in enumerate(zusammengefuegte_daten)]
 
     
 

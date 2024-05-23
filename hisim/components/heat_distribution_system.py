@@ -1,4 +1,5 @@
 """Heat Distribution Module."""
+
 # clean
 import importlib
 from enum import IntEnum
@@ -29,17 +30,34 @@ __status__ = ""
 
 
 class HeatDistributionSystemType(IntEnum):
-
     """Set Heating System Types."""
 
     RADIATOR = 1
     FLOORHEATING = 2
 
 
+class PositionHotWaterStorageInSystemSetup(IntEnum):
+    """Set Postion of Hot Water Storage in system setup.
+
+    PARALLEL:
+    Hot Water Storage is parallel to heatpump and hds, massflow of heatpump and heat distribution system are independent of each other.
+    Heatpump massflow is calculated in hp model, hds massflow is calculated in hds model.
+
+    SERIE:
+    Hot Water Storage in series to hp/hds, massflow if hp is massflow of hds, hot water storage is between output of hds and input of hp
+
+    NO_STORAGE:
+    No Hot Water Storage in system setup for space heating
+    """
+
+    PARALLEL = 1
+    SERIE = 2
+    NO_STORAGE = 3
+
+
 @dataclass_json
 @dataclass
 class HeatDistributionConfig(cp.ConfigBase):
-
     """Configuration of the HeatingWaterStorage class."""
 
     @classmethod
@@ -50,7 +68,7 @@ class HeatDistributionConfig(cp.ConfigBase):
     name: str
     water_mass_flow_rate_in_kg_per_second: float
     absolute_conditioned_floor_area_in_m2: float
-    with_parallel_hot_water_storage: bool
+    position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int]
     #: CO2 footprint of investment in kg
     co2_footprint: float
     #: cost for investment in Euro
@@ -65,14 +83,14 @@ class HeatDistributionConfig(cp.ConfigBase):
         cls,
         water_mass_flow_rate_in_kg_per_second: float,
         absolute_conditioned_floor_area_in_m2: float,
-        with_parallel_hot_water_storage: bool = True,
+        position_hot_water_storage_in_system: int = 1,
     ) -> Any:
         """Get a default heat distribution system config."""
         config = HeatDistributionConfig(
             name="HeatDistributionSystem",
             water_mass_flow_rate_in_kg_per_second=water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
-            with_parallel_hot_water_storage=with_parallel_hot_water_storage,
+            position_hot_water_storage_in_system=position_hot_water_storage_in_system,
             co2_footprint=0,  # Todo: check value
             cost=8000,  # SOURCE: https://www.hausjournal.net/heizungsrohre-verlegen-kosten  # Todo: use price per m2 in system_setups instead
             lifetime=50,  # SOURCE: VDI2067-1
@@ -83,7 +101,6 @@ class HeatDistributionConfig(cp.ConfigBase):
 
 @dataclass
 class HeatDistributionSystemState:
-
     """HeatDistributionSystemState class."""
 
     water_output_temperature_in_celsius: float = 25.0
@@ -100,7 +117,6 @@ class HeatDistributionSystemState:
 
 
 class HeatDistribution(cp.Component):
-
     """Heat Distribution System.
 
     It simulates the heat exchange between heat generator and building.
@@ -151,7 +167,9 @@ class HeatDistribution(cp.Component):
             self.heat_distribution_system_config.absolute_conditioned_floor_area_in_m2
         )
 
-        self.heat_distribution_system_with_parallel_storage = self.heat_distribution_system_config.with_parallel_hot_water_storage
+        self.position_hot_water_storage_in_system = (
+            self.heat_distribution_system_config.position_hot_water_storage_in_system
+        )
 
         self.build()
 
@@ -191,8 +209,11 @@ class HeatDistribution(cp.Component):
             True,
         )
 
-        if not self.heat_distribution_system_with_parallel_storage:
-            # just important for heating system without bufferstorage
+        if self.position_hot_water_storage_in_system in [
+            PositionHotWaterStorageInSystemSetup.SERIE,
+            PositionHotWaterStorageInSystemSetup.NO_STORAGE,
+        ]:
+            # just important for heating system without parallel bufferstorage
             self.water_mass_flow_rate_hp_in_kg_per_second_channel: cp.ComponentInput = self.add_input(
                 self.component_name,
                 self.WaterMassFlow,
@@ -240,7 +261,7 @@ class HeatDistribution(cp.Component):
 
         self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
         self.add_default_connections(self.get_default_connections_from_building())
-        if self.heat_distribution_system_with_parallel_storage:
+        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
             self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
 
     def get_default_connections_from_heat_distribution_controller(
@@ -346,7 +367,7 @@ class HeatDistribution(cp.Component):
         )
         residence_temperature_input_in_celsius = stsv.get_input_value(self.residence_temperature_input_channel)
 
-        if self.heat_distribution_system_with_parallel_storage:
+        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
             water_mass_flow_rate_in_kg_per_second = (
                 self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second
             )
@@ -389,12 +410,12 @@ class HeatDistribution(cp.Component):
         # Set outputs -----------------------------------------------------------------------------------------------------------
         stsv.set_output_value(
             self.water_temperature_inlet_channel,
-            self.state.water_input_temperature_in_celsius
+            self.state.water_input_temperature_in_celsius,
             # water_temperature_input_in_celsius
         )
         stsv.set_output_value(
             self.water_temperature_outlet_channel,
-            self.state.water_output_temperature_in_celsius
+            self.state.water_output_temperature_in_celsius,
             #  water_temperature_output_in_celsius,
         )
         stsv.set_output_value(
@@ -404,7 +425,7 @@ class HeatDistribution(cp.Component):
         )
         stsv.set_output_value(
             self.thermal_power_delivered_channel,
-            self.state.thermal_power_delivered_in_watt
+            self.state.thermal_power_delivered_in_watt,
             #  thermal_power_delivered_in_watt,
         )
         stsv.set_output_value(
@@ -440,10 +461,10 @@ class HeatDistribution(cp.Component):
             height_of_screed / thermal_conductivity_screed + 1 / heat_transfer_coefficient_screed_to_air
         )
 
-        lenght_of_hds_pipe = 8.8 * self.absolute_conditioned_floor_area_in_m2  # in m -> assumption1
-        inner_volume_of_hds = (np.pi / 4) * ((inner_pipe_diameter) ** 2) * lenght_of_hds_pipe  # in m^3
+        length_of_hds_pipe = 8.8 * self.absolute_conditioned_floor_area_in_m2  # in m -> assumption1
+        inner_volume_of_hds = (np.pi / 4) * ((inner_pipe_diameter) ** 2) * length_of_hds_pipe  # in m^3
 
-        outer_surface_of_hds_pipe = np.pi * outer_pipe_diameter * lenght_of_hds_pipe  # in m^2
+        outer_surface_of_hds_pipe = np.pi * outer_pipe_diameter * length_of_hds_pipe  # in m^2
 
         mass_of_water_in_hds = inner_volume_of_hds * self.density_of_water
 
@@ -562,7 +583,6 @@ class HeatDistribution(cp.Component):
 @dataclass_json
 @dataclass
 class HeatDistributionControllerConfig(cp.ConfigBase):
-
     """HeatDistribution Controller Config Class."""
 
     @classmethod
@@ -601,7 +621,6 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
 
 
 class HeatDistributionController(cp.Component):
-
     """Heat Distribution Controller.
 
     It takes data from the building, weather and water storage and sends signal to the heat distribution for
@@ -1011,7 +1030,6 @@ class HeatDistributionController(cp.Component):
 @dataclass_json
 @dataclass
 class HeatDistributionControllerInformation:
-
     """Class for collecting important heat distribution parameters to pass to other components."""
 
     def __init__(self, config: HeatDistributionControllerConfig):

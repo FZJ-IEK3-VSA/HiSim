@@ -14,8 +14,9 @@ import hashlib
 
 # clean
 import importlib
+from enum import IntEnum
 from dataclasses import dataclass
-from typing import Any, List, Optional, Tuple, Dict
+from typing import Any, List, Optional, Tuple, Dict, Union
 
 import pandas as pd
 import numpy as np
@@ -61,6 +62,25 @@ __maintainer__ = ""
 __status__ = ""
 
 
+class PositionHotWaterStorageInSystemSetup(IntEnum):
+    """Set Postion of Hot Water Storage in system setup.
+
+    PARALLEL:
+    Hot Water Storage is parallel to heatpump and hds, massflow of heatpump and heat distribution system are independent of each other.
+    Heatpump massflow is calculated in hp model, hds massflow is calculated in hds model.
+
+    SERIE:
+    Hot Water Storage in series to hp/hds, massflow if hp is massflow of hds, hot water storage is between output of hds and input of hp
+
+    NO_STORAGE:
+    No Hot Water Storage in system setup for space heating
+    """
+
+    PARALLEL = 1
+    SERIE = 2
+    NO_STORAGE = 3
+
+
 @dataclass_json
 @dataclass
 class HeatPumpHplibWithTwoOutputsConfig(ConfigBase):
@@ -82,7 +102,7 @@ class HeatPumpHplibWithTwoOutputsConfig(ConfigBase):
     minimum_running_time_in_seconds: Optional[Quantity[int, Seconds]]
     minimum_idle_time_in_seconds: Optional[Quantity[int, Seconds]]
     temperature_difference_primary_side: float
-    with_parallel_hot_water_storage: bool
+    position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int]
     with_domestic_hot_water_preparation: bool
     minimum_massflow_secondary_side_in_kg_per_s: Optional[Quantity[float, KilogramPerSecond]]
     maximum_massflow_secondary_side_in_kg_per_s: Optional[Quantity[float, KilogramPerSecond]]
@@ -126,7 +146,7 @@ class HeatPumpHplibWithTwoOutputsConfig(ConfigBase):
             minimum_running_time_in_seconds=Quantity(3600, Seconds),
             minimum_idle_time_in_seconds=Quantity(3600, Seconds),
             temperature_difference_primary_side=2,
-            with_parallel_hot_water_storage=True,
+            position_hot_water_storage_in_system=1,
             with_domestic_hot_water_preparation=False,
             minimum_massflow_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
             maximum_massflow_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
@@ -167,7 +187,7 @@ class HeatPumpHplibWithTwoOutputsConfig(ConfigBase):
             minimum_running_time_in_seconds=Quantity(3600, Seconds),
             minimum_idle_time_in_seconds=Quantity(3600, Seconds),
             temperature_difference_primary_side=2,
-            with_parallel_hot_water_storage=True,
+            position_hot_water_storage_in_system=1,
             with_domestic_hot_water_preparation=False,
             minimum_massflow_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
             maximum_massflow_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
@@ -275,7 +295,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
 
         self.with_domestic_hot_water_preparation = config.with_domestic_hot_water_preparation
 
-        self.with_parallel_hot_water_storage = config.with_parallel_hot_water_storage
+        self.position_hot_water_storage_in_system = config.position_hot_water_storage_in_system
 
         # self.m_dot_ref = float(
         #     config.massflow_nominal_secondary_side_in_kg_per_s.value
@@ -293,7 +313,10 @@ class HeatPumpHplibWithTwoOutputs(Component):
 
         self.minimum_thermal_output_power = config.minimum_thermal_output_power_in_watt.value
 
-        if not self.with_parallel_hot_water_storage:
+        if self.position_hot_water_storage_in_system in [
+            PositionHotWaterStorageInSystemSetup.SERIE,
+            PositionHotWaterStorageInSystemSetup.NO_STORAGE,
+        ]:
             if (
                 self.m_dot_ref is None
                 or self.m_dot_ref == 0
@@ -432,7 +455,10 @@ class HeatPumpHplibWithTwoOutputs(Component):
                 mandatory=True,
             )
 
-        if not self.with_parallel_hot_water_storage:
+        if self.position_hot_water_storage_in_system in [
+            PositionHotWaterStorageInSystemSetup.SERIE,
+            PositionHotWaterStorageInSystemSetup.NO_STORAGE,
+        ]:
             self.set_temperature_hp_sh: ComponentInput = self.add_input(
                 self.component_name,
                 self.SetHeatingTemperatureSpaceHeating,
@@ -748,7 +774,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
         self.add_default_connections(self.get_default_connections_from_heat_pump_controller_space_heating())
         self.add_default_connections(self.get_default_connections_from_weather())
 
-        if self.with_parallel_hot_water_storage:
+        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
             self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
 
         if self.with_domestic_hot_water_preparation:
@@ -887,7 +913,10 @@ class HeatPumpHplibWithTwoOutputs(Component):
         time_on_cooling = self.state.time_on_cooling
         time_off = self.state.time_off
 
-        if not self.with_parallel_hot_water_storage:
+        if self.position_hot_water_storage_in_system in [
+            PositionHotWaterStorageInSystemSetup.SERIE,
+            PositionHotWaterStorageInSystemSetup.NO_STORAGE,
+        ]:
             set_temperature_hp_sh = stsv.get_input_value(self.set_temperature_hp_sh)
 
         if self.with_domestic_hot_water_preparation:
@@ -936,7 +965,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
             raise ValueError("Cycling mode of the advanced hplib unknown.")
 
         if on_off == 1:  # Calculation for building heating
-            if self.with_parallel_hot_water_storage:
+            if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
                 self.heatpump.delta_t = 5
                 results = self.get_cached_results_or_run_hplib_simulation(
                     force_convergence=force_convergence,
@@ -1014,7 +1043,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
 
         elif on_off == 2:  # Calculate outputs for dhw mode
             self.heatpump.delta_t = 5
-            if self.with_parallel_hot_water_storage:
+            if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
                 results = self.get_cached_results_or_run_hplib_simulation(
                     force_convergence=force_convergence,
                     t_in_primary=t_in_primary,

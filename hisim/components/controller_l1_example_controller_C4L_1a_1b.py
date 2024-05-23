@@ -548,9 +548,10 @@ class SimpleController(Component):
             stsv.set_output_value(self.electricity_from_electricity_from_CHP_to_gridOutput,   electricity_from_CHP_to_grid)
             
             stsv.set_output_value(self.electricity_frombattery_to_CHP_inStandby,   0)
+            stsv.set_output_value(self.electricity_from_PV_to_gridOutput, part_pv_to_grid)
 
 
-        [ ] pv integrieren
+        #[ ] pv integrieren
     
     
     def write_to_report(self):

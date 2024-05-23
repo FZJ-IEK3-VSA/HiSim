@@ -551,7 +551,6 @@ class SimpleController(Component):
             stsv.set_output_value(self.electricity_from_PV_to_gridOutput, part_pv_to_grid)
 
 
-        #[ ] pv integrieren
     
     
     def write_to_report(self):

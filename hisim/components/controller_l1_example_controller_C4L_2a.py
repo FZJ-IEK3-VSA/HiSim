@@ -72,6 +72,10 @@ class SimpleControllerState:
         electricity_from_Battery_to_house: float,
         part_pv_to_grid:float,
         electricity_from_Battery_to_CHP_inStandby:float,
+        electricity_fromCHP_to_battery:float,
+        electricity_fromCHP_to_grid:float,
+
+
     ) -> None:
         """Initializes electrolyzer Controller state.
 
@@ -92,7 +96,10 @@ class SimpleControllerState:
         self.electricity_from_Battery_to_house: float = electricity_from_Battery_to_house
         self.part_pv_to_grid:float = part_pv_to_grid
         self.electricity_from_Battery_to_CHP_inStandby:float = electricity_from_Battery_to_CHP_inStandby
-        
+                    
+        self.electricity_fromCHP_to_battery:float = electricity_fromCHP_to_battery,
+        self.electricity_fromCHP_to_grid:float = electricity_fromCHP_to_grid,
+    
     def clone(self) -> "SimpleControllerState":
         """Copies the current instance."""
         return SimpleControllerState(
@@ -111,7 +118,8 @@ class SimpleControllerState:
             electricity_from_Battery_to_CHP_inStandby = self.electricity_from_Battery_to_CHP_inStandby,
 
 
- 
+            electricity_fromCHP_to_battery = self.electricity_fromCHP_to_battery,
+            electricity_fromCHP_to_grid = self.electricity_fromCHP_to_grid,
         )
 
     def i_prepare_simulation(self) -> None:
@@ -147,6 +155,9 @@ class SimpleController(Component):
     ElectricityfromBatterytoHouse = "QuantitiyShare_electricity_from_Battery_to_house" #in W ---> the amount of energy which is delivered from the fuel cell/chp to the house
     ElectricityfromBatterytoCHPinStandby = "QuantitiyShare_electricity_from_Battery_to_CHPinStandby" #in W ---> the amount of energy which is delivered from the battery to the CHP/Fuel Cell in Standbymode
 
+    electricity_fromCHP_to_battery = "QuantitiyShare_CHP_to_battery" #in W
+    electricity_fromCHP_to_grid = "QuantitiyShare_CHP_to_grid"  #in W
+
     def __init__(
         self,
         name: str,
@@ -157,7 +168,7 @@ class SimpleController(Component):
             name, my_simulation_parameters=my_simulation_parameters, my_config=config
         )
 
-        self.state: SimpleControllerState = SimpleControllerState(-1, 9999999,9999999,9999999,9999999,9999999)
+        self.state: SimpleControllerState = SimpleControllerState(-1, 9999999,9999999,9999999,9999999,9999999,9999999,9999999)
         self.previous_state: SimpleControllerState = self.state.clone()
         self.processed_state: SimpleControllerState = self.state.clone()
 
@@ -313,6 +324,25 @@ class SimpleController(Component):
             output_description=f"here a description for {self.ElectricityfromBatterytoCHPinStandby} will follow.",
         )
 
+        
+        self.electricity_from_electricity_from_CHP_to_batteryOutput: cp.ComponentOutput = self.add_output(
+            object_name= self.component_name,
+            field_name= self.electricity_fromCHP_to_battery,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.electricity_fromCHP_to_battery} will follow.",
+        )
+
+
+        self.electricity_from_electricity_from_CHP_to_gridOutput: cp.ComponentOutput = self.add_output(
+            object_name= self.component_name,
+            field_name= self.electricity_fromCHP_to_grid,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.electricity_fromCHP_to_grid} will follow.",
+        )
 
 
 
@@ -448,58 +478,94 @@ class SimpleController(Component):
             #Wenn CHP liefert Electricity (CHP_ElectricityDelivery>0), dann braucht diese keine Standby Energie (CHP_ElectricityStandbyEnergy=0)
             ##CHP läuft --> wie schaut da die Stromaufteilung aus?
             if CHP_ElectricityDelivery>0 and BatteryAcBatteryPower >= 0 and electricity_to_or_from_grid >= 0: #CHP Is running; SURPLOS ELECTRICITY from Fuel Cell/CHP is stored in battery and/or fed in grid
+                
                 self.state.electricity_from_CHP_to_house = CHP_ElectricityDelivery - H2Storage_ElectricityConsumption - electricity_to_or_from_grid - BatteryAcBatteryPower 
                 self.state.electricity_from_Battery_to_house = 0
                 self.state.electricity_from_Battery_to_CHP_inStandby = 0
+                
+                if self.state.electricity_from_CHP_to_house < 0:
+                    self.state.electricity_from_CHP_to_house = 0
+
+                self.state.electricity_from_CHP_to_battery = BatteryAcBatteryPower #only chp is loading battery in this simulation case
+                self.state.electricity_from_CHP_to_grid = CHP_ElectricityDelivery - self.state.electricity_from_CHP_to_house - self.state.electricity_from_CHP_to_battery - H2Storage_ElectricityConsumption
+                
+                
                 errormessage([timestep, "Fall1: #CHP Is running; SURPLOS ELECTRICITY from Fuel Cell/CHP is stored in battery and/or fed in grid"])
                 
             elif CHP_ElectricityDelivery>0 and BatteryAcBatteryPower <= 0 and electricity_to_or_from_grid <= 0: #CHP is running; Grid and/or Battery is delivering some electricity! 
                 self.state.electricity_from_CHP_to_house = CHP_ElectricityDelivery - H2Storage_ElectricityConsumption
                 self.state.electricity_from_Battery_to_house = -BatteryAcBatteryPower
                 self.state.electricity_from_Battery_to_CHP_inStandby = 0
+                
+                self.state.electricity_from_CHP_to_battery = 0
+                self.state.electricity_from_CHP_to_grid = 0
+
                 errormessage([timestep, "Fall2: #CHP is running; Grid and/or Battery is delivering some electricity! "])
 
 
             
-            elif CHP_ElectricityDelivery>0 and BatteryAcBatteryPower > 0 and electricity_to_or_from_grid < 0: #WORST CASE: GRID IS DELIVERING AND CHP loads Battery
-                errormessage([timestep,"Can only happen, if battery was overcharged/undercharged --> battery is loaded by chp"])
+            elif CHP_ElectricityDelivery>0 and BatteryAcBatteryPower > 0 and electricity_to_or_from_grid < 0: #Fall 3: is only possible, if battery was unloaded too much --> forces system to get energy!
+                errormessage([timestep,"Fall 3: Can only happen, if battery was overcharged/undercharged --> battery is loaded by chp"])
                 self.state.electricity_from_CHP_to_house = CHP_ElectricityDelivery - H2Storage_ElectricityConsumption - BatteryAcBatteryPower
                 self.state.electricity_from_Battery_to_CHP_inStandby = 0
                 self.state.electricity_from_Battery_to_house = 0
                 
+                self.state.electricity_from_CHP_to_battery = BatteryAcBatteryPower
+                self.state.electricity_from_CHP_to_grid = CHP_ElectricityDelivery - self.state.electricity_from_CHP_to_house - self.state.electricity_from_CHP_to_battery
+
 
             elif CHP_ElectricityDelivery>0 and BatteryAcBatteryPower < 0 and electricity_to_or_from_grid > 0: #WORST CASE: battery is delivering but some electricity goes into grid -> can only happen if h2 storage consumes more energy than CHP is delivering
                 errormessage([timestep,"Worstcase 2: is only possible if h2 storage consumes more energy than CHP is delivering --> possible?"])
                 self.state.electricity_from_Battery_to_house = -BatteryAcBatteryPower
                 self.state.electricity_from_CHP_to_house = CHP_ElectricityDelivery - H2Storage_ElectricityConsumption - electricity_to_or_from_grid
                 self.state.electricity_from_Battery_to_CHP_inStandby = 0
+
+                self.state.electricity_from_CHP_to_battery = 0
+                self.state.electricity_from_CHP_to_grid = 0
+
             
             elif CHP_ElectricityDelivery > 0 and CHP_ElectricityStandbyEnergy > 0:
                 #Wenn CHP liefert Electricity (CHP_ElectricityDelivery>0), dann braucht diese keine Standby Energie (CHP_ElectricityStandbyEnergy=0)
                 errormessage([timestep,"WORSTCASE: Fuel Cell delivers Electricity but is on Standby!!!!"])
+
+
+
 
             ###CHP ist im Standby --> Wie schaut da die Stromaufteilung aus?
             elif CHP_ElectricityDelivery == 0 and CHP_ElectricityStandbyEnergy > 0 and BatteryAcBatteryPower >= 0 and electricity_to_or_from_grid >= 0: #Surplus Energy from PV is fed to CHP Standby and Battery and grid
                 self.state.electricity_from_CHP_to_house = 0 #CHP Is on Standby --> thats why it is not delivering energy to anywhere
                 self.state.electricity_from_Battery_to_CHP_inStandby = 0
                 self.state.electricity_from_Battery_to_house = 0
+                
+                self.state.electricity_from_CHP_to_battery = 0
+                self.state.electricity_from_CHP_to_grid = 0
+
                 errormessage([timestep, "CHP on standby: Battery and/or grid gets energy"])
             elif CHP_ElectricityDelivery == 0 and CHP_ElectricityStandbyEnergy > 0 and BatteryAcBatteryPower <= 0 and electricity_to_or_from_grid <= 0: #Grid and/or Battery is delivering some electricity! 
                 self.state.electricity_from_CHP_to_house = 0 #CHP Is on Standby --> thats why it is not delivering energy to anywhere
                 self.state.electricity_from_Battery_to_CHP_inStandby = min(-1*Estatus_CHP_ElectricityStandbyEnergy, -1*BatteryAcBatteryPower)
                 self.state.electricity_from_Battery_to_house = (-BatteryAcBatteryPower - self.state.electricity_from_Battery_to_CHP_inStandby)
+
+                self.state.electricity_from_CHP_to_battery = 0
+                self.state.electricity_from_CHP_to_grid = 0
                 errormessage([timestep, "CHP on standby: Battery and/or grid delivers energy"])
 
             elif CHP_ElectricityDelivery == 0 and CHP_ElectricityStandbyEnergy > 0 and BatteryAcBatteryPower >= 0 and electricity_to_or_from_grid <= 0: #
                 self.state.electricity_from_CHP_to_house = 0 #CHP Is on Standby --> thats why it is not delivering energy to anywhere
                 self.state.electricity_from_Battery_to_CHP_inStandby = 0
                 self.state.electricity_from_Battery_to_house = 0
+
+                self.state.electricity_from_CHP_to_battery = 0
+                self.state.electricity_from_CHP_to_grid = 0
                 errormessage([timestep, "Worstcase CHP1: CHP on standby: Battery gets energy/grid delivery energy"])
             
             elif CHP_ElectricityDelivery == 0 and CHP_ElectricityStandbyEnergy > 0 and BatteryAcBatteryPower <= 0 and electricity_to_or_from_grid >= 0: #
                 self.state.electricity_from_CHP_to_house = 0 #CHP Is on Standby --> thats why it is not delivering energy to anywhere
                 self.state.electricity_from_Battery_to_CHP_inStandby = 0
                 self.state.electricity_from_Battery_to_house = 0
+
+                self.state.electricity_from_CHP_to_battery = 0
+                self.state.electricity_from_CHP_to_grid = 0
                 errormessage([timestep, "Worstcase CHP2: CHP on standby: Battery delivers energy/grid gets energy"])
 
 
@@ -508,12 +574,16 @@ class SimpleController(Component):
                 self.state.electricity_from_CHP_to_house = 0
                 self.state.electricity_from_Battery_to_house = 0
                 self.state.electricity_from_Battery_to_CHP_inStandby = 0
+                self.state.electricity_from_CHP_to_battery = 0
+                self.state.electricity_from_CHP_to_grid = 0
 
             if self.state.electricity_from_CHP_to_house < 0: #in that case, all electricity from CHP/Fuell cell is going to grid, battery or h2storage
                 self.state.electricity_from_CHP_to_house=0
+                electricity_from_CHP_to_battery = BatteryAcBatteryPower
+                electricity_from_CHP_to_grid = CHP_ElectricityDelivery - self.state.electricity_from_CHP_to_battery - H2Storage_ElectricityConsumption
                 errormessage([timestep, "CHP to House wurde Null gesetzt"])
             
-            return self.state.electricity_from_CHP_to_house, self.state.electricity_from_Battery_to_house, self.state.electricity_from_Battery_to_CHP_inStandby
+            return self.state.electricity_from_CHP_to_house, self.state.electricity_from_Battery_to_house, self.state.electricity_from_Battery_to_CHP_inStandby, self.state.electricity_from_CHP_to_battery,self.state.electricity_from_CHP_to_grid 
         
         '''
         if force_convergence:
@@ -542,6 +612,7 @@ class SimpleController(Component):
             General_PhotovoltaicDelivery = stsv.get_input_value(self.General_PhotovoltaicDeliveryInput)
             CHP_ElectricityDelivery = stsv.get_input_value(self.CHP_ElectricityDeliveryInput)
             CHP_ElectricityStandbyEnergy = stsv.get_input_value(self.FuelCellElectricityInputStandbyInput)
+        
 
 
             
@@ -567,7 +638,11 @@ class SimpleController(Component):
             
                     self.state.electricity_from_Battery_to_house = 0 # Batterie beliefert ausschließlich Elektrolyseur auf einer direkt Leitung (nicht über allgemeine Netz)
                     self.state.electricity_from_CHP_to_house     = 0 #Da CHP/Fuel Cell nicht läuft, kann kein Strom von CHP zu den Wohnungen geliefert werden! 
-                    
+                    #[ ] gehört noch angepasst CHP to battery; CHP to grid
+                    self.state.electricity_from_CHP_to_battery = 0 #Da CHP/Fuel Cell nicht läuft, kann kein Strom von CHP geliefert werden! 
+                    self.state.electricity_from_CHP_to_grid = 0 #Da CHP/Fuel Cell nicht läuft, kann kein Strom von CHP geliefert werden! 
+
+
                     Estatus_house = General_PhotovoltaicDelivery - General_ElectricityConsumptiom ##Decke zuerst mit der PV den Strombedarf des Hauses
                     electricity_electH2stor_consumption_system = Electrolyzer_ElectricityConsumption + H2Storage_ElectricityConsumption ##Rechne den Gesamtstrombedarf des Elektrolyseur + Wasserstoffspeichers zusammen
             
@@ -648,7 +723,7 @@ class SimpleController(Component):
                     
 
 
-                    self.state.electricity_from_CHP_to_house,self.state.electricity_from_Battery_to_house,self.state.electricity_from_Battery_to_CHP_inStandby= electricity_from_CHP_Battery_to_houseFct(CHP_ElectricityDelivery, BatteryAcBatteryPower,self.state.electricity_to_or_from_grid, H2Storage_ElectricityConsumption,CHP_ElectricityStandbyEnergy,Estatus_CHP_ElectricityStandbyEnergy,timestep)
+                    self.state.electricity_from_CHP_to_house,self.state.electricity_from_Battery_to_house,self.state.electricity_from_Battery_to_CHP_inStandby, self.state.electricity_from_CHP_to_battery, self.state.electricity_from_CHP_to_grid = electricity_from_CHP_Battery_to_houseFct(CHP_ElectricityDelivery, BatteryAcBatteryPower,self.state.electricity_to_or_from_grid, H2Storage_ElectricityConsumption,CHP_ElectricityStandbyEnergy,Estatus_CHP_ElectricityStandbyEnergy,timestep)
 
                 self.processed_state = self.state.clone()
         
@@ -665,6 +740,9 @@ class SimpleController(Component):
         stsv.set_output_value(self.electricity_from_Battery_to_houseOutput, self.state.electricity_from_Battery_to_house)
         stsv.set_output_value(self.electricity_from_PV_to_gridOutput, self.state.part_pv_to_grid)
         stsv.set_output_value(self.electricity_frombattery_to_CHP_inStandby,self.state.electricity_from_Battery_to_CHP_inStandby)
+        
+        stsv.set_output_value(self.electricity_from_electricity_from_CHP_to_batteryOutput,   self.state.electricity_from_CHP_to_battery)
+        stsv.set_output_value(self.electricity_from_electricity_from_CHP_to_gridOutput,   self.state.electricity_from_CHP_to_grid)
 
     
     

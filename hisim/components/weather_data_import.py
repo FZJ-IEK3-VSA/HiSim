@@ -22,7 +22,6 @@ __status__ = ""
 
 
 class WeatherDataImport:
-
     """Import class for weather data from dwd and era5."""
 
     def __init__(

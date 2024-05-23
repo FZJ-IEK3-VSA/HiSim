@@ -1,13 +1,16 @@
 """Windturbine."""
 
+import hashlib
+
 # clean
 
 from dataclasses import dataclass
-from typing import List, Tuple, Optional
+from typing import Any, List, Tuple, Optional, Dict
 
 
 import numpy as np
 import pandas as pd
+from dataclass_wizard import JSONWizard
 from dataclasses_json import dataclass_json
 from windpowerlib import ModelChain, WindTurbine
 
@@ -39,7 +42,6 @@ Use of windpowerlib for calculation of electrical output power
 @dataclass_json
 @dataclass
 class WindturbineConfig(ConfigBase):
-
     """Windturbine Configclass."""
 
     @classmethod
@@ -123,7 +125,6 @@ class WindturbineConfig(ConfigBase):
 
 
 class Windturbine(cp.Component):
-
     """windturbine calculates electrical output power based on windturbine type and weather data."""
 
     # Inputs
@@ -150,6 +151,9 @@ class Windturbine(cp.Component):
             my_config=config,
             my_display_config=my_display_config,
         )
+
+        # caching for windpowerlib simulation
+        self.calculation_cache: Dict = {}
 
         self.turbine_type = self.windturbineconfig.turbine_type
         self.hub_height = self.windturbineconfig.hub_height
@@ -302,10 +306,8 @@ class Windturbine(cp.Component):
             ),
         ]
 
-        weather_df = pd.DataFrame(data, columns=columns)  # dataframe, due to package windpowerlib only work with it
-
         # calculation of windturbine power
-        windturbine_power = self.calculation_setup.run_model(weather_df)
+        windturbine_power = self.get_cached_results_or_run_windpowerlib_simulation(data=data, columns=columns)
 
         # write power output time series to WindTurbine object
         windturbine_power.power_output = windturbine_power.power_output
@@ -336,3 +338,59 @@ class Windturbine(cp.Component):
             consumption=0,
         )
         return opex_cost_data_class
+
+    def get_cached_results_or_run_windpowerlib_simulation(
+        self,
+        data: list,
+        columns: list,
+    ) -> Any:
+        """Use caching of results of windpowerlib simulation."""
+
+        # rounding of variable values
+        wind_speed_10m_in_m_per_sec = round(data[0][0], 2)
+        temperature_2m_in_kelvin = round(data[0][1], 2)
+        pressure_standorthoehe_in_pascal = round(data[0][2], 2)
+        roughness_length_in_m = round(data[0][3], 2)
+
+        my_data_class = CalculationRequest(
+            wind_speed_10m_in_m_per_sec=wind_speed_10m_in_m_per_sec,
+            temperature_2m_in_kelvin=temperature_2m_in_kelvin,
+            pressure_standorthoehe_in_pascal=pressure_standorthoehe_in_pascal,
+            roughness_length_in_m=roughness_length_in_m,
+        )
+        my_json_key = my_data_class.get_key()
+        my_hash_key = hashlib.sha256(my_json_key.encode("utf-8")).hexdigest()
+
+        if my_hash_key in self.calculation_cache:
+            windturbine_power = self.calculation_cache[my_hash_key]
+
+        else:
+            weather_df = pd.DataFrame(data, columns=columns)  # dataframe, due to package windpowerlib only work with it
+            windturbine_power = self.calculation_setup.run_model(weather_df)
+
+            self.calculation_cache[my_hash_key] = windturbine_power
+
+        return windturbine_power
+
+
+@dataclass
+class CalculationRequest(JSONWizard):
+    """Class for caching windtubine parameters so that simulation does not need to run so often."""
+
+    wind_speed_10m_in_m_per_sec: float
+    temperature_2m_in_kelvin: float
+    pressure_standorthoehe_in_pascal: float
+    roughness_length_in_m: float
+
+    def get_key(self):
+        """Get key of class with important parameters."""
+
+        return (
+            str(self.wind_speed_10m_in_m_per_sec)
+            + " "
+            + str(self.temperature_2m_in_kelvin)
+            + " "
+            + str(self.pressure_standorthoehe_in_pascal)
+            + " "
+            + str(self.roughness_length_in_m)
+        )

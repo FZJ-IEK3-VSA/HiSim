@@ -62,7 +62,7 @@ class Carpet(Chart, ChartFontsAndSize):  # noqa: too-few-public-methods
 
         axis = fig.add_subplot(111)
         mycolors = "viridis"
-        color_map = plt.cm.get_cmap(mycolors)
+        color_map = mpl.colormaps.get_cmap(mycolors)
 
         plot = axis.pcolormesh(plot_data, cmap=color_map)
         plt.colorbar(plot).set_label(self.units, fontsize=self.fontsize_label)

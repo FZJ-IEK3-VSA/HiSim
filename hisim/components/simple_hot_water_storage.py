@@ -84,7 +84,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
             position_of_storage_in_system=PositionWaterStorageInSystemEnum.PARALLEL_TO_HEAT_PUMP,
             co2_footprint=100,  # Todo: check value
             cost=volume_heating_water_storage_in_liter * 14.51,  # value from emission_factros_and_costs_devices.csv
-            lifetime=100,  # value from emission_factros_and_costs_devices.csv
+            lifetime=25,  # value from emission_factors_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.0,  # Todo: set correct value
         )
         return config

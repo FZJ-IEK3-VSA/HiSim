@@ -189,7 +189,8 @@ disable=raw-checker-failed,
         broad-exception-raised,
         cyclic-import,
         consider-using-generator,
-        broad-except
+        broad-except,
+        possibly-used-before-assignment
 
 
 

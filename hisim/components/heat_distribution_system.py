@@ -44,7 +44,7 @@ class PositionHotWaterStorageInSystemSetup(IntEnum):
     Heatpump massflow is calculated in hp model, hds massflow is calculated in hds model.
 
     SERIE:
-    Hot Water Storage in series to hp/hds, massflow if hp is massflow of hds, hot water storage is between output of hds and input of hp
+    Hot Water Storage in series to hp/hds, massflow of hds is an input and connected to hp, hot water storage is between output of hds and input of hp
 
     NO_STORAGE:
     No Hot Water Storage in system setup for space heating

@@ -1076,12 +1076,14 @@ class HeatPumpHplibWithTwoOutputs(Component):
             else:
                 m_dot_dhw = self.m_dot_ref
 
-                results = self.heatpump.simulate(
+                results = self.get_cached_results_or_run_hplib_simulation(
+                    force_convergence=force_convergence,
                     t_in_primary=t_in_primary,
                     t_in_secondary=t_in_secondary_dhw,
                     t_amb=t_amb,
                     mode=1,
                 )
+
                 cop = results["COP"]
                 eer = results["EER"]
 
@@ -2024,8 +2026,7 @@ class HeatPumpHplibControllerDHW(Component):
         """
 
         self.state_dhw = 0
-        self.water_temperature_input_from_dhw_storage_in_celsius = 50.0
-        self.water_temperature_input_from_dhw_storage_in_celsius_previous = 50.0
+        self.water_temperature_input_from_dhw_storage_in_celsius = 40.0
         self.thermalpower_dhw_is_constant = self.config.thermalpower_dhw_is_constant
         self.p_th_max_dhw = self.config.p_th_max_dhw_in_watt
 
@@ -2068,10 +2069,11 @@ class HeatPumpHplibControllerDHW(Component):
             # self.state_dhw = self.previous_state_dhw
             pass
         else:
-            water_temperature_input_from_dhw_storage_in_celsius = stsv.get_input_value(
+            self.water_temperature_input_from_dhw_storage_in_celsius = stsv.get_input_value(
                 self.water_temperature_input_channel
             )
             if self.water_temperature_input_from_dhw_storage_in_celsius == 0:
+                # for avoiding errors: sometimes timestep output of dhw storage sends zero as input, so hp will switch to dhw, even this is not necessary
                 self.water_temperature_input_from_dhw_storage_in_celsius = (
                     self.water_temperature_input_from_dhw_storage_in_celsius_previous
                 )
@@ -2081,18 +2083,18 @@ class HeatPumpHplibControllerDHW(Component):
             t_min_dhw_storage_in_celsius = self.config.t_min_dhw_storage_in_celsius
             t_max_dhw_storage_in_celsius = self.config.t_max_dhw_storage_in_celsius
 
-            if water_temperature_input_from_dhw_storage_in_celsius < t_min_dhw_storage_in_celsius:  # on
+            if self.water_temperature_input_from_dhw_storage_in_celsius < t_min_dhw_storage_in_celsius:  # on
                 self.state_dhw = 2
 
             if (
-                water_temperature_input_from_dhw_storage_in_celsius
+                self.water_temperature_input_from_dhw_storage_in_celsius
                 > t_max_dhw_storage_in_celsius + temperature_modifier
             ):  # off
                 self.state_dhw = 0
 
             if (
                 temperature_modifier > 0
-                and water_temperature_input_from_dhw_storage_in_celsius < t_max_dhw_storage_in_celsius
+                and self.water_temperature_input_from_dhw_storage_in_celsius < t_max_dhw_storage_in_celsius
             ):  # aktiviren wenn strom überschuss
                 self.state_dhw = 2
 

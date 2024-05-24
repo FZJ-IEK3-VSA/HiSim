@@ -1109,6 +1109,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
                 t_out_sh = t_in_secondary_sh
                 p_th_sh = 0.0
                 p_el_sh = 0.0
+                p_el_cooling = 0.0
                 m_dot_sh = 0.0
                 time_on_heating = time_on_heating + self.my_simulation_parameters.seconds_per_timestep
                 time_on_cooling = 0

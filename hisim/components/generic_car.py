@@ -208,6 +208,8 @@ class Car(cp.Component):
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of energy and maintenance costs."""
+        opex_cost_per_simulated_period_in_euro = None
+        co2_per_simulated_period_in_kg = None
         for index, output in enumerate(all_outputs):
             if output.component_name == self.config.name + "_w" + str(self.config.source_weight):
                 if output.unit == lt.Units.LITER:
@@ -233,6 +235,9 @@ class Car(cp.Component):
                     # No electricity costs for components except for Electricity Meter, because part of electricity consumption is feed by PV
                     opex_cost_per_simulated_period_in_euro = self.calc_maintenance_cost()
                     co2_per_simulated_period_in_kg = 0.0
+
+        if opex_cost_per_simulated_period_in_euro is None or co2_per_simulated_period_in_kg is None:
+            raise ValueError("Could not calculate OPEX for Car component.")
 
         opex_cost_data_class = OpexCostDataClass(
             opex_cost=opex_cost_per_simulated_period_in_euro,

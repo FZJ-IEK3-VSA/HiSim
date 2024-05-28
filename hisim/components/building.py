@@ -409,6 +409,7 @@ class Building(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for {self.HeatLossFromTransmission} will follow.",
+            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL]
         )
         self.heat_loss_from_ventilation_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -416,6 +417,7 @@ class Building(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for {self.HeatLossFromVentilation} will follow.",
+            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL]
         )
 
         self.heat_demand_according_to_tabula_channel: cp.ComponentOutput = self.add_output(

@@ -6,8 +6,12 @@ from typing import Optional, Any, Union, List
 import re
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from dataclasses_json import dataclass_json
-from utspclient.helpers.lpgdata import Households
+from utspclient.helpers.lpgdata import (
+    ChargingStationSets,
+    Households,
+)
 from utspclient.helpers.lpgpythonbindings import JsonReference
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
@@ -24,14 +28,19 @@ from hisim.components import (
     generic_hot_water_storage_modular,
     controller_l1_heatpump,
     electricity_meter,
+    advanced_ev_battery_bslib,
+    controller_l1_generic_ev_charge,
+    generic_car,
 )
 from hisim.component import ConfigBase
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
+from hisim import utils
 from hisim import log
 from hisim.units import Quantity, Celsius, Watt
+from system_setups.modular_example import cleanup_old_lpg_requests
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -101,6 +110,7 @@ def setup_function(
         - Energy Management System
         - Domestic water heat pump
         - Electricity Meter
+        - Electric Vehicles (including car batteries and car battery controllers)
     """
 
     # =================================================================================================================================
@@ -123,10 +133,12 @@ def setup_function(
 
     # Set Simulation Parameters
     year = 2021
-    seconds_per_timestep = 60
+    seconds_per_timestep = 60 * 15
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters = SimulationParameters.full_year_all_options(
+            year=year, seconds_per_timestep=seconds_per_timestep
+        )
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
         )
@@ -134,14 +146,15 @@ def setup_function(
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_CAPEX)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     # =================================================================================================================================
     # Set System Parameters
+
     # Set Weather
     weather_location = my_config.weather_location
 
@@ -152,7 +165,7 @@ def setup_function(
         pv_power_in_watt = my_config.pv_rooftop_capacity_in_kilowatt * 1000
     else:
         pv_power_in_watt = None
-    share_of_maximum_pv_potential = 0  # my_config.share_of_maximum_pv_potential
+    share_of_maximum_pv_potential = 1  # my_config.share_of_maximum_pv_potential
 
     # Set Building (scale building according to total base area and not absolute floor area)
     building_code = my_config.building_code
@@ -190,8 +203,12 @@ def setup_function(
         raise TypeError(f"Type {type(my_config.lpg_households)} is incompatible. Should be List[str].")
 
     # Set Heat Pump Controller
-    hp_controller_mode = 1  # mode 1 for heating/off and mode 2 for heating/cooling/off
+    hp_controller_mode = 2  # mode 1 for heating/off and mode 2 for heating/cooling/off
     heating_reference_temperature_in_celsius = -7.0
+
+    # Set Electric Vehicle
+    charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
+    charging_power = float((charging_station_set.Name or "").split("with ")[1].split(" kW")[0])
 
     # =================================================================================================================================
     # Build Basic Components
@@ -225,7 +242,6 @@ def setup_function(
 
     # Build Weather
     my_weather_config = weather.WeatherConfig.get_default(location_entry=weather_location)
-
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     # Add to simulator
     my_sim.add_component(my_weather)
@@ -248,8 +264,7 @@ def setup_function(
     my_photovoltaic_system_config.tilt = tilt
 
     my_photovoltaic_system = generic_pv_system.PVSystem(
-        config=my_photovoltaic_system_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_photovoltaic_system_config, my_simulation_parameters=my_simulation_parameters,
     )
     # Add to simulator
     my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
@@ -261,11 +276,10 @@ def setup_function(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
-    my_heat_distribution_controller_config.heating_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
+    # my_heat_distribution_controller_config.heating_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_heat_distribution_controller_config,
+        my_simulation_parameters=my_simulation_parameters, config=my_heat_distribution_controller_config,
     )
     my_hds_controller_information = heat_distribution_system.HeatDistributionControllerInformation(
         config=my_heat_distribution_controller_config
@@ -274,16 +288,13 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
     # Build Heat Pump Controller
-    my_heat_pump_controller_config = (
-        advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(
-            heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
-        )
+    my_heat_pump_controller_config = advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(
+        heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
     )
     my_heat_pump_controller_config.mode = hp_controller_mode
 
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
-        config=my_heat_pump_controller_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_pump_controller_config, my_simulation_parameters=my_simulation_parameters,
     )
     # Add to simulator
     my_sim.add_component(my_heat_pump_controller, connect_automatically=True)
@@ -295,8 +306,7 @@ def setup_function(
     )
 
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
-        config=my_heat_pump_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_pump_config, my_simulation_parameters=my_simulation_parameters,
     )
     # Add to simulator
     my_sim.add_component(my_heat_pump, connect_automatically=True)
@@ -307,8 +317,7 @@ def setup_function(
         water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
-        config=my_heat_distribution_system_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_distribution_system_config, my_simulation_parameters=my_simulation_parameters,
     )
     # Add to simulator
     my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
@@ -321,44 +330,31 @@ def setup_function(
         water_mass_flow_rate_from_hds_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
     )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
-        config=my_simple_heat_water_storage_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_simple_heat_water_storage_config, my_simulation_parameters=my_simulation_parameters,
     )
     # Add to simulator
     my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)
 
     # Build DHW (this is taken from household_3_advanced_hp_diesel-car_pv_battery.py)
     my_dhw_heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
-        number_of_apartments=my_building_information.number_of_apartments,
-        default_power_in_watt=6000,
+        number_of_apartments=my_building_information.number_of_apartments, default_power_in_watt=6000,
     )
-
-    my_dhw_heatpump_controller_config = (
-        controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-            name="DHWHeatpumpController"
-        )
+    my_dhw_heatpump_controller_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
+        name="DHWHeatpumpController"
     )
-
-    my_dhw_storage_config = (
-        generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
-            number_of_apartments=my_building_information.number_of_apartments,
-            default_volume_in_liter=450,
-        )
+    my_dhw_storage_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
+        number_of_apartments=my_building_information.number_of_apartments, default_volume_in_liter=450,
     )
     my_dhw_storage_config.compute_default_cycle(
         temperature_difference_in_kelvin=my_dhw_heatpump_controller_config.t_max_heating_in_celsius
         - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
     )
-
     my_domnestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
-
     my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_dhw_heatpump_controller_config,
+        my_simulation_parameters=my_simulation_parameters, config=my_dhw_heatpump_controller_config,
     )
-
     my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
         config=my_dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
     )
@@ -373,14 +369,76 @@ def setup_function(
         config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
     )
 
+    # Build Electric Vehicle Configs and Car Battery Configs
+    my_car_config = generic_car.CarConfig.get_default_ev_config()
+    my_car_battery_config = advanced_ev_battery_bslib.CarBatteryConfig.get_default_config()
+    my_car_battery_controller_config = controller_l1_generic_ev_charge.ChargingStationConfig.get_default_config(
+        charging_station_set=charging_station_set
+    )
+    # set car config name
+    my_car_config.name = "ElectricCar"
+    # set charging power from battery and controller to same value, to reduce error in simulation of battery
+    my_car_battery_config.p_inv_custom = charging_power * 1e3
+    # lower threshold for soc of car battery in clever case. This enables more surplus charging. Surplus control of car
+    my_car_battery_controller_config.battery_set = 0.4
+    # cleanup old lpg requests, mandatory to change number of cars
+    # Todo: change cleanup-function if result_path from occupancy is not utils.HISIMPATH["results"]
+    if Path(utils.HISIMPATH["utsp_results"]).exists():
+        cleanup_old_lpg_requests()
+    else:
+        Path(utils.HISIMPATH["utsp_results"]).mkdir(parents=False, exist_ok=False)
+    # Build Electric Vehicles
+    # get names of all available cars
+    filepaths = os.listdir(utils.HISIMPATH["utsp_results"])
+    filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
+    car_names = [elem.partition(",")[0].partition(".")[2] for elem in filepaths_location]
+    my_cars: List[generic_car.Car] = []
+    for car in car_names:
+        # Todo: check car name in case of 1 vehicle
+        my_car_config.name = car
+        my_cars.append(
+            generic_car.Car(
+                my_simulation_parameters=my_simulation_parameters,
+                config=my_car_config,
+                occupancy_config=my_occupancy_config,
+            )
+        )
+    # Build Electric Vehicle Batteries
+    my_car_batteries: List[advanced_ev_battery_bslib.CarBattery] = []
+    my_car_battery_controllers: List[controller_l1_generic_ev_charge.L1Controller] = []
+    car_number = 1
+    for car in my_cars:
+        my_car_battery_config = my_config.car_battery_config
+        my_car_battery_config.source_weight = car.config.source_weight
+        my_car_battery_config.name = f"CarBattery_{car_number}"
+        my_car_battery = advanced_ev_battery_bslib.CarBattery(
+            my_simulation_parameters=my_simulation_parameters, config=my_car_battery_config,
+        )
+        my_car_batteries.append(my_car_battery)
+
+        my_car_battery_controller_config = my_config.car_battery_controller_config
+        my_car_battery_controller_config.source_weight = car.config.source_weight
+        my_car_battery_controller_config.name = f"L1EVChargeControl_{car_number}"
+
+        my_car_battery_controller = controller_l1_generic_ev_charge.L1Controller(
+            my_simulation_parameters=my_simulation_parameters, config=my_car_battery_controller_config,
+        )
+        my_car_battery_controllers.append(my_car_battery_controller)
+        car_number += 1
+    # Connect Electric Vehicles and Car Batteries
+    zip_car_battery_controller_lists = zip(my_cars, my_car_batteries, my_car_battery_controllers)
+    for car, car_battery, car_battery_controller in zip_car_battery_controller_lists:
+        car_battery_controller.connect_only_predefined_connections(car)
+        car_battery_controller.connect_only_predefined_connections(car_battery)
+        car_battery.connect_only_predefined_connections(car_battery_controller)
+
     # use ems and battery only when PV is used
     if share_of_maximum_pv_potential != 0:
         # Build EMS
         my_electricity_controller_config = controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
 
         my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_electricity_controller_config,
+            my_simulation_parameters=my_simulation_parameters, config=my_electricity_controller_config,
         )
 
         # Build Battery
@@ -388,8 +446,7 @@ def setup_function(
             total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt
         )
         my_advanced_battery = advanced_battery_bslib.Battery(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_advanced_battery_config,
+            my_simulation_parameters=my_simulation_parameters, config=my_advanced_battery_config,
         )
 
         # -----------------------------------------------------------------------------------------------------------------
@@ -421,6 +478,33 @@ def setup_function(
             source_weight=999,
         )
 
+        # -----------------------------------------------------------------------------------------------------------------
+        # Connect Electric Vehicle and Car Battery with EMS for surplus control
+        for car, car_battery, car_battery_controller in zip_car_battery_controller_lists:
+
+            my_electricity_controller.add_component_input_and_connect(
+                source_object_name=car_battery_controller.component_name,
+                source_component_output=car_battery_controller.BatteryChargingPowerToEMS,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[lt.ComponentType.CAR_BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
+                source_weight=5,
+            )
+
+            electricity_target = my_electricity_controller.add_component_output(
+                source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+                source_tags=[lt.ComponentType.CAR_BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
+                source_weight=5,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                output_description="Target Electricity for EV Battery Controller. ",
+            )
+
+            car_battery_controller.connect_dynamic_input(
+                input_fieldname=controller_l1_generic_ev_charge.L1Controller.ElectricityTarget,
+                src_object=electricity_target,
+            )
+
         # =================================================================================================================================
         # Add Remaining Components to Simulation Parameters
 
@@ -431,6 +515,14 @@ def setup_function(
     # when no PV is used, connect electricty meter automatically
     else:
         my_sim.add_component(my_electricity_meter, connect_automatically=True)
+
+    # Connect Electric Vehicles and Car Batteries
+    for car in my_cars:
+        my_sim.add_component(car)
+    for car_battery in my_car_batteries:
+        my_sim.add_component(car_battery)
+    for car_battery_controller in my_car_battery_controllers:
+        my_sim.add_component(car_battery_controller)
 
     # Set Results Path
     # if config_filename is given, get hash number and sampling mode for result path
@@ -452,12 +544,11 @@ def setup_function(
         further_result_folder_description = "default_config"
 
     SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
-        entry=f"{scenario_hash_string}",
+        key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME, entry=f"{scenario_hash_string}",
     )
 
     ResultPathProviderSingleton().set_important_result_path_information(
-        module_directory="/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/hisim_results",  # my_sim.module_directory,
+        module_directory=my_sim.module_directory,  # "/storage_cluster/projects/2024_waage/01_hisim_results",
         model_name=my_sim.module_filename,
         further_result_folder_description=os.path.join(
             *[

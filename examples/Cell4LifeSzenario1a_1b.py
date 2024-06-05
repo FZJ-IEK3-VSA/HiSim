@@ -21,6 +21,7 @@ from openpyxl.styles import NamedStyle
 import pandas as pd
 import sys
 import math
+import time
 #sys.path.append("C://Users//Standard//4ward Energy Dropbox//Christof Bernsteiner//PC//Desktop//hisim//HiSim//hisim//")
 #os.chdir('C:\\Users\\Standard\\Desktop\\hisim\\HiSim\\hisim\\')
 from hisim import log
@@ -445,17 +446,26 @@ def InputParameter():
     # -energy for charging, discharging and for operation of the tank is considered; 
     # -the operation energy demand is always considererd and added to charging/discharging energy demand if there is fuel stored; 
     
-    #charging: in % in relation to the energy content of the fuel which is stored in the time step; e.g. xx % of energy of energy contend of the fuel stored in the time step
-    h2storage_energy_for_charge_based_on_massflow_h_fuel = 12  #Energieaufwand nach [19] Wikipedia: 12 % des Energieinhalts des Wasserstoffs gehen für Komprimierung auf 700 bar auf
-    h2storage_energy_for_charge_based_on_massflow_h_fuelUnit = "%" #of given h_fuel heat value
-    #discharging: in % in relation to the energy content of the fuel which is withdrawn in the time step 
-    h2storage_energy_for_discharge_based_on_massflow_h_fuel = 0
-    h2storage_energy_for_discharge_based_on_massflow_h_fuelUnit = "%" #of given h_fuel heat value
-    #operation
-    h2storage_energy_for_operation = 0 #in Watt, energy demand just for operation, if there isb fuel stored in the tank; this energy amount is always added to charging & discharging energy; if no fuel is in the tank, this energy is not considered! (h2 storage does not need energy)
-    h2storage_energy_for_operationUnit = "W" 
+    h2storage_storage_pressure = 700 #Storage Pressure
+    h2storage_storage_pressureUnit = "bar"
 
-    
+    if h2storage_storage_pressure == 700:
+
+        #charging: in % in relation to the energy content of the fuel which is stored in the time step; e.g. xx % of energy of energy contend of the fuel stored in the time step
+        h2storage_energy_for_charge_based_on_massflow_h_fuel = 12  #Energieaufwand nach [19] Wikipedia: 12 % des Energieinhalts des Wasserstoffs gehen für Komprimierung auf 700 bar auf
+        h2storage_energy_for_charge_based_on_massflow_h_fuelUnit = "%" #of given h_fuel heat value
+        #discharging: in % in relation to the energy content of the fuel which is withdrawn in the time step 
+        h2storage_energy_for_discharge_based_on_massflow_h_fuel = 0
+        h2storage_energy_for_discharge_based_on_massflow_h_fuelUnit = "%" #of given h_fuel heat value
+        #operation
+        h2storage_energy_for_operation = 0 #in Watt, energy demand just for operation, if there isb fuel stored in the tank; this energy amount is always added to charging & discharging energy; if no fuel is in the tank, this energy is not considered! (h2 storage does not need energy)
+        h2storage_energy_for_operationUnit = "W" 
+    else:
+        print("##########################################################################")
+        print ("FOR THAT STORAGE PRESSURE, NO ENERGY CONSUMPTION FOR COMPRESSION IS GIVEN")
+        time. sleep(345600)
+
+
     input_variablen = {
         "PreResultNumber": {
             "value": PreResultNumber,
@@ -588,6 +598,10 @@ def InputParameter():
         "prediction_horizon": {
             "value": prediction_horizon,
             "unit": prediction_horizonUnit,
+        },
+        "h2storage_storage_pressure": {
+            "value": h2storage_storage_pressure,
+            "unit": h2storage_storage_pressureUnit,
         },
         
     }

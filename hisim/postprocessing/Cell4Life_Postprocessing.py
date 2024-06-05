@@ -178,7 +178,7 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
     workbook = openpyxl.load_workbook(excelfilepathresults)
     
     #----------------------------------------------   
-    #Add "Anlagendaten" to excek
+    #Add "Anlagendaten" to excel
     worksheet = workbook['Anlagendaten']  # 'Anlagendaten' durch den tatsächlichen Namen ersetzen
     
     # delete all data in sheet

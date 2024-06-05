@@ -1,7 +1,7 @@
 import pandas as pd
 import os
 import sys
-import graphviz
+#import graphviz
 os.chdir('C://Users//Standard//Desktop//hisim//HiSim//')
 sys.path.append("C://Users//Standard//Desktop//hisim//HiSim//examples")
 sys.path.append("C://Users//Standard//Desktop//hisim//HiSim//")
@@ -139,14 +139,14 @@ import math
 #                 exec(f.read())
             
 
-#             #Do a copy of the economic assessment excel file        
-            
-#             if PreResultNumber == 0:
-#                 pathbase = 'C://Users//Standard//Desktop//hisim//C4LResults//results//'
-#                 name1 = '20231107_AllSimulationResults_Assessment_v5'
-#                 filepath1 = pathbase + 'OriginalExcelFile//' + name1 + '.xlsx'
-#                 copytopath1= pathbase
-#                 excelfilepathallresults1, excel_filename1 = Cell4Life_Postprocessing.makeacopyofevaluationfile(copytopath1, filepath1, name1)
+#             ##Do a copy of the economic assessment excel file        
+#             ##All Economic Data Assessment Excel File
+#             # if PreResultNumber == 0:
+#             #     pathbase = 'C://Users//Standard//Desktop//hisim//C4LResults//results//'
+#             #     name1 = '20231107_AllSimulationResults_Assessment_v5'
+#             #     filepath1 = pathbase + 'OriginalExcelFile//' + name1 + '.xlsx'
+#             #     copytopath1= pathbase
+#             #     excelfilepathallresults1, excel_filename1 = Cell4Life_Postprocessing.makeacopyofevaluationfile(copytopath1, filepath1, name1)
 
 #             #For economic assessment, create a copy of original excel file
 #             copyfrompath = 'C://Users//Standard//Desktop//hisim//C4LResults//results//'
@@ -196,7 +196,9 @@ szenario = "2a"
 szenarioUnit = "-"
 
 
-FuelCellPowerW_list = [50000]  #Electricity Power of Fuel Cell Power in Watt
+#FuelCellPowerW_list = [50000]  #Electricity Power of Fuel Cell Power in Watt
+FuelCellPowerW_list = [48000]  #Electricity Power of Fuel Cell Power in Watt
+
 BatteryCapkWh_list = [25]     #Total Capacity of Battery in kWh
 Inverter_Ratio_list = [1,0.5]
 BatterieFaktorList = [1,2]
@@ -270,16 +272,16 @@ for BatterieFaktor in BatterieFaktorList:
 
             #Do a copy of the economic assessment excel file        
             
-            if PreResultNumber == 0:
-                pathbase = 'C://Users//Standard//Desktop//hisim//C4LResults//results//'
-                name1 = '20231107_AllSimulationResults_Assessment_v5'
-                filepath1 = pathbase + 'OriginalExcelFile//' + name1 + '.xlsx'
-                copytopath1= pathbase
-                excelfilepathallresults1, excel_filename1 = Cell4Life_Postprocessing.makeacopyofevaluationfile(copytopath1, filepath1, name1)
+#             if PreResultNumber == 0:
+#                 pathbase = 'C://Users//Standard//Desktop//hisim//C4LResults//results//'
+#                 name1 = '20231107_AllSimulationResults_Assessment_v5'
+#                 filepath1 = pathbase + 'OriginalExcelFile//' + name1 + '.xlsx'
+#                 copytopath1= pathbase
+#                 excelfilepathallresults1, excel_filename1 = Cell4Life_Postprocessing.makeacopyofevaluationfile(copytopath1, filepath1, name1)
 
             #For economic assessment, create a copy of original excel file
             copyfrompath = 'C://Users//Standard//Desktop//hisim//C4LResults//results//'
-            name2 = 'Sim_Oek_Assessment_v10'
+            name2 = 'Sim_Oek_Assessment_v11'
             filepath2 = copyfrompath + 'OriginalExcelFile//' + name2 + '.xlsx'
             copytopath2 = ResultPathProviderSingleton().get_result_directory_name()
             copytopath2 = copytopath2 + '//'

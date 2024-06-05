@@ -533,8 +533,7 @@ class SimpleController(Component):
                 
                 Estatus_total = Estatus_house - H2Storage_ElectricityConsumption + CHP_ElectricityDelivery - BatteryAcBatteryPower
                 
-                if timestep == 5943:
-                    print('stop')
+
                 electricity_from_CHP_to_battery = 0
                 electricity_to_or_from_grid = Estatus_total + part_pv_to_grid
                 electricity_from_CHP_to_house,electricity_from_Battery_to_house,electricity_from_CHP_to_battery, electricity_from_CHP_to_grid= electricity_from_CHP_Battery_to_houseFct(CHP_ElectricityDelivery, BatteryAcBatteryPower, electricity_to_or_from_grid, H2Storage_ElectricityConsumption,timestep)

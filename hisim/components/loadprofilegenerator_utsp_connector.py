@@ -472,7 +472,6 @@ class UtspLpgConnector(cp.Component):
                 if cache_complete:
                     log.information("LPG data taken from cache. ")
                     for cache_key in cache_content.keys():
-                        print("key", cache_key)
                         # get dataframe from cache content
                         cached_data = io.StringIO(cache_content[cache_key])
                         dataframe = pd.read_csv(cached_data, sep=",", decimal=".", encoding="cp1252", index_col=0)

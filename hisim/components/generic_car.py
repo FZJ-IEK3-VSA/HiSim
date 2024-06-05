@@ -16,7 +16,7 @@ from dataclasses_json import dataclass_json
 
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim import utils
+from hisim import utils, log
 from hisim.component import OpexCostDataClass
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
@@ -360,7 +360,7 @@ class Car(cp.Component):
         )
         if file_exists:
             # load from cache
-            print("Car results are taken from cache.")
+            log.information("Car results are taken from cache.")
             dataframe = pd.read_csv(cache_filepath, sep=",", decimal=".", encoding="cp1252")
             self.car_location = dataframe["car_location"].tolist()
             self.meters_driven = dataframe["meters_driven"].tolist()

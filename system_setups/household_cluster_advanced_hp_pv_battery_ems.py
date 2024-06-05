@@ -5,8 +5,8 @@
 from typing import Optional, Any, Union, List
 import re
 import os
-from dataclasses import dataclass
 from pathlib import Path
+from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,
@@ -83,7 +83,7 @@ class BuildingPVWeatherConfig(ConfigBase):
             conditioned_floor_area_in_m2=121.2,
             number_of_dwellings_per_building=1,
             norm_heating_load_in_kilowatt=None,
-            lpg_households=["CHR01_Couple_both_at_Work"],
+            lpg_households=["CHR01_Couple_both_at_Work", "CHR05_Family_3_children_both_with_work"],
             weather_location="AACHEN",
         )
 
@@ -136,7 +136,7 @@ def setup_function(
     seconds_per_timestep = 60 * 15
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(
+        my_simulation_parameters = SimulationParameters.one_day_only_with_only_plots(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         my_simulation_parameters.post_processing_options.append(
@@ -188,6 +188,7 @@ def setup_function(
 
     # get household attribute jsonreferences from list of strings
     lpg_households: Union[JsonReference, List[JsonReference]]
+    print(my_config.lpg_households)
     if isinstance(my_config.lpg_households, List):
         if len(my_config.lpg_households) == 1:
             lpg_households = getattr(Households, my_config.lpg_households[0])
@@ -197,6 +198,7 @@ def setup_function(
                 if hasattr(Households, household_string):
                     lpg_household = getattr(Households, household_string)
                     lpg_households.append(lpg_household)
+                    print(lpg_household)
         else:
             raise ValueError("Config list with lpg household is empty.")
     else:
@@ -212,6 +214,12 @@ def setup_function(
 
     # =================================================================================================================================
     # Build Basic Components
+    # cleanup old lpg requests, mandatory to change number of cars
+    # Todo: change cleanup-function if result_path from occupancy is not utils.HISIMPATH["results"]
+    if Path(utils.HISIMPATH["utsp_results"]).exists():
+        cleanup_old_lpg_requests()
+    else:
+        Path(utils.HISIMPATH["utsp_results"]).mkdir(parents=False, exist_ok=False)
 
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home(
@@ -232,6 +240,7 @@ def setup_function(
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
     my_occupancy_config.data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP
     my_occupancy_config.household = lpg_households
+    print("lpg households", lpg_households)
     my_occupancy_config.cache_dir_path = cache_dir_path
 
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
@@ -381,17 +390,18 @@ def setup_function(
     my_car_battery_config.p_inv_custom = charging_power * 1e3
     # lower threshold for soc of car battery in clever case. This enables more surplus charging. Surplus control of car
     my_car_battery_controller_config.battery_set = 0.4
-    # cleanup old lpg requests, mandatory to change number of cars
-    # Todo: change cleanup-function if result_path from occupancy is not utils.HISIMPATH["results"]
-    if Path(utils.HISIMPATH["utsp_results"]).exists():
-        cleanup_old_lpg_requests()
-    else:
-        Path(utils.HISIMPATH["utsp_results"]).mkdir(parents=False, exist_ok=False)
+
     # Build Electric Vehicles
     # get names of all available cars
-    filepaths = os.listdir(utils.HISIMPATH["utsp_results"])
-    filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
-    car_names = [elem.partition(",")[0].partition(".")[2] for elem in filepaths_location]
+    car_and_flex_files = my_occupancy.car_and_flexibility_dict
+    car_location_list = car_and_flex_files["car_locations"]
+    car_names = []
+    for index, car_location in enumerate(car_location_list):
+        car_name = car_location["LoadTypeName"].split(" - ")[1].replace(" ", "_")
+        car_name = car_name + f"_{index}"
+        car_names.append(car_name)
+
+    print("car names", car_names)
     my_cars: List[generic_car.Car] = []
     for car in car_names:
         # Todo: check car name in case of 1 vehicle
@@ -517,6 +527,7 @@ def setup_function(
         my_sim.add_component(my_electricity_meter, connect_automatically=True)
 
     # Connect Electric Vehicles and Car Batteries
+    print("my cars", my_cars)
     for car in my_cars:
         my_sim.add_component(car)
     for car_battery in my_car_batteries:

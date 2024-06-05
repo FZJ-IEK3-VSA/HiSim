@@ -392,43 +392,30 @@ def setup_function(
     my_car_battery_controller_config.battery_set = 0.4
 
     # Build Electric Vehicles
-    # get names of all available cars
-    # car_and_flex_files = my_occupancy.car_and_flexibility_dict
-    # car_location_list = car_and_flex_files["car_locations"]
-    # car_names = []
-    # for index, car_location in enumerate(car_location_list):
-    #     car_name = car_location["LoadTypeName"].split(" - ")[1].replace(" ", "_")
-    #     car_name = car_name + f"_{index}"
-    #     car_names.append(car_name)
-
-    # print("car names", car_names)
     my_car_information = generic_car.GenericCarInformation(my_occupancy_instance=my_occupancy)
     my_cars: List[generic_car.Car] = []
-    for car_information_dict in my_car_information.data_dict_for_car_component.values():
-        # Todo: check car name in case of 1 vehicle
-        my_car_config.name = car_information_dict["car_name"]
-        my_cars.append(
-            generic_car.Car(
-                my_simulation_parameters=my_simulation_parameters,
-                config=my_car_config,
-                data_dict_with_car_information=car_information_dict
-            )
-        )
-    # Build Electric Vehicle Batteries
     my_car_batteries: List[advanced_ev_battery_bslib.CarBattery] = []
     my_car_battery_controllers: List[controller_l1_generic_ev_charge.L1Controller] = []
+    # iterate over all cars
     car_number = 1
-    for car in my_cars:
-        my_car_battery_config = my_config.car_battery_config
-        my_car_battery_config.source_weight = car.config.source_weight
+    for car_information_dict in my_car_information.data_dict_for_car_component.values():
+        # Build Electric Vehicles
+        my_car_config.name = car_information_dict["car_name"] + f"_{car_number}"
+        my_car = generic_car.Car(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_car_config,
+            data_dict_with_car_information=car_information_dict
+        )
+        my_cars.append(my_car)
+        # Build Electric Vehicle Batteries
+        my_car_battery_config.source_weight = my_car.config.source_weight
         my_car_battery_config.name = f"CarBattery_{car_number}"
         my_car_battery = advanced_ev_battery_bslib.CarBattery(
             my_simulation_parameters=my_simulation_parameters, config=my_car_battery_config,
         )
         my_car_batteries.append(my_car_battery)
-
-        my_car_battery_controller_config = my_config.car_battery_controller_config
-        my_car_battery_controller_config.source_weight = car.config.source_weight
+        # Build Electric Vehicle Battery Controller
+        my_car_battery_controller_config.source_weight = my_car.config.source_weight
         my_car_battery_controller_config.name = f"L1EVChargeControl_{car_number}"
 
         my_car_battery_controller = controller_l1_generic_ev_charge.L1Controller(
@@ -436,6 +423,7 @@ def setup_function(
         )
         my_car_battery_controllers.append(my_car_battery_controller)
         car_number += 1
+
     # Connect Electric Vehicles and Car Batteries
     zip_car_battery_controller_lists = zip(my_cars, my_car_batteries, my_car_battery_controllers)
     for car, car_battery, car_battery_controller in zip_car_battery_controller_lists:

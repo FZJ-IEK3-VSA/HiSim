@@ -1291,6 +1291,8 @@ class UtspLpgConnector(cp.Component):
         with open(cache_filepath, "w", encoding="utf-8") as file:
             json.dump(cache_content, file)
         del loadprofile_dataframe
+        del car_dataframe
+        del flexibility_dataframe
 
         log.information(f"Caching of lpg utsp results finished. Cache filepath is {cache_filepath}.")
 

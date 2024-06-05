@@ -393,24 +393,25 @@ def setup_function(
 
     # Build Electric Vehicles
     # get names of all available cars
-    car_and_flex_files = my_occupancy.car_and_flexibility_dict
-    car_location_list = car_and_flex_files["car_locations"]
-    car_names = []
-    for index, car_location in enumerate(car_location_list):
-        car_name = car_location["LoadTypeName"].split(" - ")[1].replace(" ", "_")
-        car_name = car_name + f"_{index}"
-        car_names.append(car_name)
+    # car_and_flex_files = my_occupancy.car_and_flexibility_dict
+    # car_location_list = car_and_flex_files["car_locations"]
+    # car_names = []
+    # for index, car_location in enumerate(car_location_list):
+    #     car_name = car_location["LoadTypeName"].split(" - ")[1].replace(" ", "_")
+    #     car_name = car_name + f"_{index}"
+    #     car_names.append(car_name)
 
-    print("car names", car_names)
+    # print("car names", car_names)
+    my_car_information = generic_car.GenericCarInformation(my_occupancy_instance=my_occupancy)
     my_cars: List[generic_car.Car] = []
-    for car in car_names:
+    for car_information_dict in my_car_information.data_dict_for_car_component.values():
         # Todo: check car name in case of 1 vehicle
-        my_car_config.name = car
+        my_car_config.name = car_information_dict["car_name"]
         my_cars.append(
             generic_car.Car(
                 my_simulation_parameters=my_simulation_parameters,
                 config=my_car_config,
-                occupancy_config=my_occupancy_config,
+                data_dict_with_car_information=car_information_dict
             )
         )
     # Build Electric Vehicle Batteries

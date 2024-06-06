@@ -10,7 +10,6 @@ from dataclasses import dataclass
 
 # -*- coding: utf-8 -*-
 from typing import List, Any, Tuple, Dict
-from ast import literal_eval
 import pandas as pd
 from dataclasses_json import dataclass_json
 
@@ -54,7 +53,7 @@ class GenericCarInformation:
     def build(self, my_occupancy_instance: UtspLpgConnector) -> None:
         """Get important values from occupancy instance."""
         # get names of all available cars
-        car_and_flexibility_data_dict = my_occupancy_instance.car_and_flexibility_dict
+        car_data_dict = my_occupancy_instance.car_data_dict
 
         # get car names and household names
         (
@@ -62,10 +61,10 @@ class GenericCarInformation:
             self.household_names,
             self.time_resolutions,
             self.car_location_value_list,
-        ) = self.get_important_parameters_from_occupancy_car_data(car_data_dict=car_and_flexibility_data_dict)
+        ) = self.get_important_parameters_from_occupancy_car_data(car_data_dict=car_data_dict)
 
         # get driven meters
-        self.driven_meters = self.get_meters_driven_from_occupancy_car_data(car_data_dict=car_and_flexibility_data_dict)
+        self.driven_meters = self.get_meters_driven_from_occupancy_car_data(car_data_dict=car_data_dict)
 
     def get_important_parameters_from_occupancy_car_data(self, car_data_dict: Dict) -> Tuple[List, List, List, List]:
         """Get car names and household names from occupancy car data."""
@@ -83,15 +82,20 @@ class GenericCarInformation:
                 .translate(str.maketrans({" ": "_", ",": "", "/": "", ".": ""}))
             )
             car_names.append(car_name)
+
             # get household names
-            print(literal_eval(car_location["HouseKey"])["HouseholdName"].translate(str.maketrans({" ": "_", ",": "", "/": "", ".": ""})))
-            household_name = literal_eval(car_location["HouseKey"])["HouseholdName"].translate(str.maketrans({" ": "_", ",": "", "/": "", ".": ""}))
+            household_key_dict = car_location["HouseKey"]
+            household_name = household_key_dict["HouseholdName"].translate(
+                str.maketrans({" ": "_", ",": "", "/": "", ".": ""})
+            )
             household_names.append(household_name)
+
             # get time resolutions
             time_resolution = car_location["TimeResolution"]
             time_resolutions.append(time_resolution)
+
             # get car location values
-            car_location_values = literal_eval(car_location["Values"])
+            car_location_values = car_location["Values"]
             car_location_value_list.append(car_location_values)
 
         return car_names, household_names, time_resolutions, car_location_value_list
@@ -101,7 +105,7 @@ class GenericCarInformation:
         driven_distances_list = car_data_dict["driving_distances"]
         driven_meter_list = []
         for driven_distance_data in driven_distances_list:
-            driven_meter_values = literal_eval(driven_distance_data["Values"])
+            driven_meter_values = driven_distance_data["Values"]
             driven_meter_list.append(driven_meter_values)
 
         return driven_meter_list
@@ -215,7 +219,7 @@ class Car(cp.Component):
         config: CarConfig,
         data_dict_with_car_information: Dict,
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(display_in_webtool=True),
-        ) -> None:
+    ) -> None:
         """Initializes Car."""
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
@@ -291,7 +295,11 @@ class Car(cp.Component):
             )  # conversion meter to kilometer
             stsv.set_output_value(self.fuel_consumption, liters_used)
 
-    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of energy and maintenance costs."""
         opex_cost_per_simulated_period_in_euro = None
         co2_per_simulated_period_in_kg = None
@@ -336,7 +344,6 @@ class Car(cp.Component):
     def get_cost_capex(config: CarConfig) -> Tuple[float, float, float]:
         """Returns investment cost, CO2 emissions and lifetime."""
         return config.cost, config.co2_footprint, config.lifetime
-
 
     def build(self, config: CarConfig, car_information_dict: Dict) -> None:
         """Loads necesary data and saves config to class."""
@@ -425,7 +432,12 @@ class Car(cp.Component):
                 self.car_location = self.car_location
 
             # save data in cache
-            database = pd.DataFrame({"car_location": self.car_location, "meters_driven": self.meters_driven,})
+            database = pd.DataFrame(
+                {
+                    "car_location": self.car_location,
+                    "meters_driven": self.meters_driven,
+                }
+            )
 
             database.to_csv(cache_filepath)
             del database

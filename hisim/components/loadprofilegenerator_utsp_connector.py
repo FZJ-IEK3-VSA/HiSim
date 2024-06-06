@@ -7,6 +7,7 @@ import errno
 import io
 import json
 import os
+from ast import literal_eval
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union
 import copy
@@ -452,12 +453,12 @@ class UtspLpgConnector(cp.Component):
             "heating_by_residents": [],
             "number_of_residents": [],
         }
-        self.car_and_flexibility_dict: Dict = {
-            "flexibility": [],
+        self.car_data_dict: Dict = {
             "car_states": [],
             "car_locations": [],
             "driving_distances": [],
         }
+        self.flexibility_data_dict: Dict = {"flexibility": []}
         # iterate over all unique utsp configs and either take cache results or calculate for each household and sum up later
         for list_index, list_item in enumerate(self.list_of_file_exists_and_cache_files):
             file_exists = list_item[0]
@@ -470,54 +471,64 @@ class UtspLpgConnector(cp.Component):
                     cache_content: Dict = json.load(file)
                     cache_complete = True
 
-                if cache_complete:
-                    log.information("LPG data taken from cache. ")
-                    for cache_key in cache_content.keys():
-                        print("lpg cache key", cache_key)
-                        # get dataframe from cache content
-                        cached_data = io.StringIO(cache_content[cache_key])
-                        dataframe = pd.read_csv(cached_data, sep=",", decimal=".", encoding="cp1252", index_col=0)
+                # check if cache content has correct format, otherwise delete cache (because it is from older version) and run new request
+                if not all(isinstance(values, str) for values in cache_content.values()) and "saved_files" in cache_content.keys():
+                    log.information("An older LPG cache version was found but it's not usuable anymore. Therefore it will be deleted.")
+                    os.remove(cache_filepath)
+                    cache_complete = False
 
-                        if cache_key == "data":
+            if cache_complete:
+                log.information("LPG data taken from cache. ")
+                for cache_key in cache_content.keys():
+                    # get dataframe from cache content
+                    cached_data = io.StringIO(cache_content[cache_key])
+                    dataframe = pd.read_csv(cached_data, sep=",", decimal=".", encoding="cp1252", index_col=0)
 
-                            number_of_residents = dataframe["number_of_residents"].tolist()
-                            heating_by_residents = dataframe["heating_by_residents"].tolist()
-                            electricity_consumption = dataframe["electricity_consumption"].tolist()
-                            water_consumption = dataframe["water_consumption"].tolist()
-                            heating_by_devices = dataframe["heating_by_devices"].to_list()
+                    if cache_key == "data":
 
-                            number_of_residents = dataframe["number_of_residents"].tolist()
+                        number_of_residents = dataframe["number_of_residents"].tolist()
+                        heating_by_residents = dataframe["heating_by_residents"].tolist()
+                        electricity_consumption = dataframe["electricity_consumption"].tolist()
+                        water_consumption = dataframe["water_consumption"].tolist()
+                        heating_by_devices = dataframe["heating_by_devices"].to_list()
 
-                            # write lists to dict
-                            value_dict["electricity_consumption"].append(electricity_consumption)
-                            value_dict["heating_by_devices"].append(heating_by_devices)
-                            value_dict["heating_by_residents"].append(heating_by_residents)
-                            value_dict["water_consumption"].append(water_consumption)
-                            value_dict["number_of_residents"].append(number_of_residents)
+                        number_of_residents = dataframe["number_of_residents"].tolist()
 
-                            # sum over all household profiles
-                            (
-                                self.electricity_consumption,
-                                self.heating_by_residents,
-                                self.water_consumption,
-                                self.heating_by_devices,
-                                self.number_of_residents,
-                            ) = self.get_result_lists_by_summing_over_value_dict(value_dict=value_dict)
+                        # write lists to dict
+                        value_dict["electricity_consumption"].append(electricity_consumption)
+                        value_dict["heating_by_devices"].append(heating_by_devices)
+                        value_dict["heating_by_residents"].append(heating_by_residents)
+                        value_dict["water_consumption"].append(water_consumption)
+                        value_dict["number_of_residents"].append(number_of_residents)
 
-                            self.max_hot_water_demand = max(self.water_consumption)
+                        # sum over all household profiles
+                        (
+                            self.electricity_consumption,
+                            self.heating_by_residents,
+                            self.water_consumption,
+                            self.heating_by_devices,
+                            self.number_of_residents,
+                        ) = self.get_result_lists_by_summing_over_value_dict(value_dict=value_dict)
 
-                        elif cache_key == "car_data":
-                            self.car_and_flexibility_dict["car_states"].append(dataframe["car_states"].to_dict())
-                            self.car_and_flexibility_dict["car_locations"].append(dataframe["car_locations"].to_dict())
-                            self.car_and_flexibility_dict["driving_distances"].append(
-                                dataframe["driving_distances"].to_dict()
-                            )
+                        self.max_hot_water_demand = max(self.water_consumption)
 
-                        elif cache_key == "flexibility_data":
-                            self.car_and_flexibility_dict["flexibility"].append(dataframe["flexibility"].to_dict())
+                    elif cache_key == "car_data":
+                        # process car data from cache
+                        for key, dict_values in self.car_data_dict.items():
+                            # transform dataframe column to dict, then get original types of dict values and lastly append to
+                            # car_data_dict
+                            transformed_data_dict = self.transform_dict_values(dataframe[key].to_dict())
+                            dict_values.append(transformed_data_dict)
 
-                        else:
-                            raise KeyError(f"The cache content key {cache_key} could not be recognized.")
+                    elif cache_key == "flexibility_data":
+                        # process flexibility data from cache
+                        # transform dataframe column to dict, then get original types of dict values and lastly append to
+                        # car_and_flexibility_dict
+                        transformed_data_dict = self.transform_dict_values(dataframe["flexibility"].to_dict())
+                        self.flexibility_data_dict["flexibility"].append(transformed_data_dict)
+
+                    else:
+                        raise KeyError(f"The cache content key {cache_key} could not be recognized.")
 
             if not cache_complete or file_exists is False:
                 log.information(
@@ -594,10 +605,10 @@ class UtspLpgConnector(cp.Component):
                         value_dict["heating_by_residents"].append(heating_by_residents)
                         value_dict["water_consumption"].append(water_consumption)
                         value_dict["number_of_residents"].append(number_of_residents)
-                        self.car_and_flexibility_dict["flexibility"].append(list_of_flexibility_and_car_data[0])
-                        self.car_and_flexibility_dict["car_states"].append(list_of_flexibility_and_car_data[1])
-                        self.car_and_flexibility_dict["car_locations"].append(list_of_flexibility_and_car_data[2])
-                        self.car_and_flexibility_dict["driving_distances"].append(list_of_flexibility_and_car_data[3])
+                        self.flexibility_data_dict["flexibility"].append(list_of_flexibility_and_car_data[0])
+                        self.car_data_dict["car_states"].append(list_of_flexibility_and_car_data[1])
+                        self.car_data_dict["car_locations"].append(list_of_flexibility_and_car_data[2])
+                        self.car_data_dict["driving_distances"].append(list_of_flexibility_and_car_data[3])
 
                         # cache results for each household individually
                         self.cache_results(
@@ -651,10 +662,10 @@ class UtspLpgConnector(cp.Component):
                             value_dict["heating_by_residents"].append(heating_by_residents)
                             value_dict["water_consumption"].append(water_consumption)
                             value_dict["number_of_residents"].append(number_of_residents)
-                            self.car_and_flexibility_dict["flexibility"].append(list_of_flexibility_and_car_data[0])
-                            self.car_and_flexibility_dict["car_states"].append(list_of_flexibility_and_car_data[1])
-                            self.car_and_flexibility_dict["car_locations"].append(list_of_flexibility_and_car_data[2])
-                            self.car_and_flexibility_dict["driving_distances"].append(
+                            self.flexibility_data_dict["flexibility"].append(list_of_flexibility_and_car_data[0])
+                            self.car_data_dict["car_states"].append(list_of_flexibility_and_car_data[1])
+                            self.car_data_dict["car_locations"].append(list_of_flexibility_and_car_data[2])
+                            self.car_data_dict["driving_distances"].append(
                                 list_of_flexibility_and_car_data[3]
                             )
 
@@ -1305,3 +1316,16 @@ class UtspLpgConnector(cp.Component):
             data = json.loads(json_acceptable_string)
             list_of_data.append(data)
         return list_of_data
+
+    def transform_dict_values(self, dict_to_check: Dict) -> Dict:
+        """Function to convert string representations of data in a dictionary back to their original types."""
+        transformed_data = {}
+        for key, value in dict_to_check.items():
+            try:
+                # Attempt to evaluate the string value to a Python data type
+                transformed_value = literal_eval(value)
+            except (ValueError, SyntaxError):
+                # If evaluation fails, keep the original string value
+                transformed_value = value
+            transformed_data[key] = transformed_value
+        return transformed_data

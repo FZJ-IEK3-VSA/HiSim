@@ -462,6 +462,7 @@ class UtspLpgConnector(cp.Component):
         for list_index, list_item in enumerate(self.list_of_file_exists_and_cache_files):
             file_exists = list_item[0]
             cache_filepath = list_item[1]
+            print("lpg cache file", cache_filepath)
 
             # a cache file exists
             if file_exists:
@@ -472,6 +473,7 @@ class UtspLpgConnector(cp.Component):
                 if cache_complete:
                     log.information("LPG data taken from cache. ")
                     for cache_key in cache_content.keys():
+                        print("lpg cache key", cache_key)
                         # get dataframe from cache content
                         cached_data = io.StringIO(cache_content[cache_key])
                         dataframe = pd.read_csv(cached_data, sep=",", decimal=".", encoding="cp1252", index_col=0)

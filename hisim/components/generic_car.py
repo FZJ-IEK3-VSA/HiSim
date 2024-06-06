@@ -84,7 +84,8 @@ class GenericCarInformation:
             )
             car_names.append(car_name)
             # get household names
-            household_name = literal_eval(car_location["HouseKey"])["HouseholdName"].replace(" ", "_")
+            print(literal_eval(car_location["HouseKey"])["HouseholdName"].translate(str.maketrans({" ": "_", ",": "", "/": "", ".": ""})))
+            household_name = literal_eval(car_location["HouseKey"])["HouseholdName"].translate(str.maketrans({" ": "_", ",": "", "/": "", ".": ""}))
             household_names.append(household_name)
             # get time resolutions
             time_resolution = car_location["TimeResolution"]
@@ -208,18 +209,13 @@ class Car(cp.Component):
     ElectricityOutput = "ElectricityOutput"
     CarLocation = "CarLocation"
 
-    @staticmethod
-    def get_cost_capex(config: CarConfig) -> Tuple[float, float, float]:
-        """Returns investment cost, CO2 emissions and lifetime."""
-        return config.cost, config.co2_footprint, config.lifetime
-
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
         config: CarConfig,
         data_dict_with_car_information: Dict,
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(display_in_webtool=True),
-    ) -> None:
+        ) -> None:
         """Initializes Car."""
         super().__init__(
             name=config.name + "_w" + str(config.source_weight),
@@ -335,6 +331,12 @@ class Car(cp.Component):
         )
 
         return opex_cost_data_class
+
+    @staticmethod
+    def get_cost_capex(config: CarConfig) -> Tuple[float, float, float]:
+        """Returns investment cost, CO2 emissions and lifetime."""
+        return config.cost, config.co2_footprint, config.lifetime
+
 
     def build(self, config: CarConfig, car_information_dict: Dict) -> None:
         """Loads necesary data and saves config to class."""

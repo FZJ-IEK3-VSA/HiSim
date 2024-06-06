@@ -136,7 +136,7 @@ def setup_function(
     seconds_per_timestep = 60 * 15
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only_with_only_plots(
+        my_simulation_parameters = SimulationParameters.full_year_all_options(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         my_simulation_parameters.post_processing_options.append(
@@ -240,7 +240,6 @@ def setup_function(
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
     my_occupancy_config.data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP
     my_occupancy_config.household = lpg_households
-    print("lpg households", lpg_households)
     my_occupancy_config.cache_dir_path = cache_dir_path
 
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(

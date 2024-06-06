@@ -38,10 +38,10 @@ class GenericHydrogenStorageConfig(cp.ConfigBase):
     #: maximal discharge rate of the hydrgoen storage in kg/s
     max_discharging_rate: float
     #: energy demand for the charging process in Wh/kg
-    
+
     #: permanent hydrogen loss in % per day
     loss_factor_per_day: float
-    
+
     #Wirklich notwendig???-->
     #: energy demand for the charging process in Wh/kg
     energy_for_charge: float
@@ -51,12 +51,12 @@ class GenericHydrogenStorageConfig(cp.ConfigBase):
 
     #Add Christof 8.11.2023
     #: energy demand for the charging, discharging process and stand by (no charging & discharging)
-    #in % based on the stored energy quantity of the stored fuel 
+    #in % based on the stored energy quantity of the stored fuel
     energy_for_charge_based_on_massflow_h_fuel: float
-    #in % based on the stored energy quantity of the stored fuel 
+    #in % based on the stored energy quantity of the stored fuel
     energy_for_discharge_based_on_massflow_h_fuel:float
     #standby in Watt
-    energy_for_operation:float 
+    energy_for_operation:float
     h_fuel: float
 
 
@@ -75,12 +75,12 @@ class GenericHydrogenStorageConfig(cp.ConfigBase):
             energy_for_charge=0,
             energy_for_discharge=0,
             loss_factor_per_day=0,
-            
+
             #added by Christof for energy demand calculation: charging & discharging;
             energy_for_charge_based_on_massflow_h_fuel = 0,     #in % based on the energy quantity of the stored fuel
             energy_for_discharge_based_on_massflow_h_fuel = 0,   #in % based on the  energy quantity of the withdrawn fuel
             energy_for_operation = 0,                             #in Watt, if no charging, discharging is done
-            h_fuel = 0, 
+            h_fuel = 0,
         )
         return config
 
@@ -122,6 +122,7 @@ class GenericHydrogenStorage(cp.Component):
             name=config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
+            my_display_config=cp.DisplayConfig()
         )
         self.config = config
         self.loss_factor = (
@@ -155,7 +156,7 @@ class GenericHydrogenStorage(cp.Component):
             postprocessing_flag=[lt.InandOutputType.STORAGE_CONTENT],
             output_description="Hydrogen SOC",
         )
-        
+
         #Neu hinzugefügt
         self.output_electricity_power_demand: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -170,13 +171,13 @@ class GenericHydrogenStorage(cp.Component):
             self.get_default_connections_from_generic_electrolyzer()
         )
 
-        self.add_default_connections(self.get_default_connections_from_generic_CHP())
+        self.add_default_connections(self.get_default_connections_from_generic_chp())
 
     def i_prepare_simulation(self) -> None:
         """Prepares the simulation."""
         pass
 
-    def get_default_connections_from_generic_CHP(self) -> List[cp.ComponentConnection]:
+    def get_default_connections_from_generic_chp(self) -> List[cp.ComponentConnection]:
         log.information("setting fuel cell default connections in generic H2 storage")
         connections: List[cp.ComponentConnection] = []
         chp_classname = generic_chp.SimpleCHP.get_classname()
@@ -248,15 +249,15 @@ class GenericHydrogenStorage(cp.Component):
                 amount_stored / self.my_simulation_parameters.seconds_per_timestep
             )
 
-        
+
         #Calculation of power demand:
         #h_fuel: heat value of fuel in kWh/kg
-        # charging_rate in kg/s * 3600 -> kg/h; 
+        # charging_rate in kg/s * 3600 -> kg/h;
         # energy_for_charge_based_on_massflow_h_fuel: in % of h_fuel: Energy for charging is calculated based on the "stored" fuel per hour
         # electricity power_demand in Watt;
-        # conversion of kg/s * kWh/kg * % --> in Watt: kWh * 3600 s/h: 3600 kWs * 1000 = 3.6e6 Ws ---> Ws * kg/s = Watt 
+        # conversion of kg/s * kWh/kg * % --> in Watt: kWh * 3600 s/h: 3600 kWs * 1000 = 3.6e6 Ws ---> Ws * kg/s = Watt
         power_demand = charging_rate * self.config.h_fuel * 3.6e3 * 1000 * self.config.energy_for_charge_based_on_massflow_h_fuel/100
-        
+
         return charging_rate, power_demand, delta_not_stored
 
     def withdraw(self, discharging_rate: float) -> Tuple[float, float, float]:
@@ -297,7 +298,7 @@ class GenericHydrogenStorage(cp.Component):
                 amount_released / self.my_simulation_parameters.seconds_per_timestep
             )
 
-        
+
         power_demand = discharging_rate * self.config.h_fuel * 3.6e3 * 1000 * self.config.energy_for_discharge_based_on_massflow_h_fuel/100
         return discharging_rate, power_demand, delta_not_released
 
@@ -319,11 +320,11 @@ class GenericHydrogenStorage(cp.Component):
         charging_rate = stsv.get_input_value(self.hydrogen_input_channel)
         discharging_rate = stsv.get_input_value(self.hydrogen_output_channel)
 
-        if charging_rate < 0:
+        if charging_rate < 0.0:
             raise Exception(
                 "trying to charge with negative amount" + str(charging_rate)
             )
-        if discharging_rate < 0:
+        if discharging_rate < 0.0:
             raise Exception(
                 "trying to discharge with negative amount: " + str(discharging_rate)
             )
@@ -339,18 +340,19 @@ class GenericHydrogenStorage(cp.Component):
                 charging_rate = 0
                 discharging_rate = -delta
 
-        power_demand = 0 #Initialisierung        
-        if charging_rate > 0:
+        power_demand = 0.0 #Initialisierung
+        if charging_rate > 0.0:
 
             _, power_demand, _ = self.store(charging_rate)
         #print(power_demand)
-        if discharging_rate > 0:
+        if discharging_rate > 0.0:
 
             _, power_demand, _ = self.withdraw(discharging_rate)
 
         if (100 * self.state.fill / self.config.max_capacity) > 0.01: #If storage tank is not empty, then add operation energy needed....
-            #the energy demand for operation of the tank which is needed, if some fuel is stored, is added to the energy demand for charging/discharging of the tank; empty tank --> no energy demand for operation
-            power_demand += self.config.energy_for_operation 
+            # the energy demand for operation of the tank which is needed, if some fuel is stored,
+            # is added to the energy demand for charging/discharging of the tank; empty tank --> no energy demand for operation
+            power_demand += self.config.energy_for_operation
 
         self.storage_losses()
 

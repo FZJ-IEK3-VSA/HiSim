@@ -319,23 +319,21 @@ def setup_function(
 
     if my_config.car_config:
         # Diesel-Car(s)
-        # get names of all available cars
-        filepaths = listdir(utils.HISIMPATH["utsp_results"])
-        filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
-        names = [elem.partition(",")[0].partition(".")[2] for elem in filepaths_location]
+        # get all available cars from occupancy
+        my_car_information = generic_car.GenericCarInformation(my_occupancy_instance=my_occupancy)
 
         my_car_config = my_config.car_config
         my_car_config.name = "DieselCar"
 
         # create all cars
         my_cars: List[generic_car.Car] = []
-        for idx, car in enumerate(names):
-            my_car_config.name = car
+        for idx, car_information_dict in enumerate(my_car_information.data_dict_for_car_component.values()):
+            my_car_config.name = car_information_dict["car_name"] + f"_{idx}"
             my_cars.append(
                 generic_car.Car(
                     my_simulation_parameters=my_simulation_parameters,
                     config=my_car_config,
-                    occupancy_config=my_occupancy_config,
+                    data_dict_with_car_information=car_information_dict,
                     my_display_config=DisplayConfig.show(f"Diesel-PKW {idx}"),
                 )
             )

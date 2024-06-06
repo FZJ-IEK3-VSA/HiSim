@@ -1,7 +1,6 @@
 """  Household system setup with gas heater. """
 
 from dataclasses import dataclass
-from os import listdir
 import os
 import re
 from typing import List, Optional, Any

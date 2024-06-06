@@ -3,7 +3,6 @@
 # clean
 
 from typing import List, Optional, Any
-from pathlib import Path
 
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
@@ -22,9 +21,7 @@ from hisim.components import advanced_battery_bslib
 from hisim.components import advanced_ev_battery_bslib
 from hisim.components import controller_l1_generic_ev_charge
 from hisim.components import controller_l2_energy_management_system
-from hisim import utils
 from hisim import loadtypes as lt
-from system_setups.modular_example import cleanup_old_lpg_requests
 from system_setups.household_5a_with_car_priority_advanced_hp_ev_pv_battery import (
     HouseholdAdvancedHpEvPvBatteryConfig,
 )
@@ -64,13 +61,6 @@ def setup_function(
         - Battery
         - EMS (necessary for Battery and Electric Vehicle)
     """
-
-    # cleanup old lpg requests, mandatory to change number of cars
-    # Todo: change cleanup-function if result_path from occupancy is not utils.HISIMPATH["results"]
-    if Path(utils.HISIMPATH["utsp_results"]).exists():
-        cleanup_old_lpg_requests()
-    else:
-        Path(utils.HISIMPATH["utsp_results"]).mkdir(parents=False, exist_ok=False)
 
     # my_config = utils.create_configuration(my_sim, HouseholdAdvancedHpEvPvBatteryConfig)
 

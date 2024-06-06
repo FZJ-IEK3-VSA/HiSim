@@ -3,8 +3,6 @@
 # clean
 
 from dataclasses import dataclass
-from os import listdir
-from pathlib import Path
 from typing import Any, List, Optional
 
 from dataclasses_json import dataclass_json
@@ -39,7 +37,6 @@ from hisim.components import (
 from hisim.simulator import SimulationParameters
 from hisim.system_setup_configuration import SystemSetupConfigBase
 from hisim.units import Celsius, Quantity, Seconds, Watt
-from system_setups.modular_example import cleanup_old_lpg_requests
 
 __authors__ = "Markus Blasberg"
 __copyright__ = "Copyright 2023, FZJ-IEK-3"

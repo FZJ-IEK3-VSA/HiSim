@@ -323,6 +323,12 @@ def setup_function(
             )
         )
 
+    # Build Electricity Meter
+    my_electricity_meter = electricity_meter.ElectricityMeter(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.electricity_meter_config,
+    )
+
     # =================================================================================================================================
     # =================================================================================================================================
     # Connect Components

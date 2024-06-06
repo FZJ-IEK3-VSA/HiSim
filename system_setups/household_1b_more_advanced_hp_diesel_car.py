@@ -1,11 +1,8 @@
 """  Household system setup with advanced heat pump and diesel car. """
 
 # clean
-
 from typing import List, Optional, Any
-from pathlib import Path
 from dataclasses import dataclass
-from os import listdir
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,
     Households,
@@ -29,7 +26,6 @@ from hisim import utils
 from hisim.units import Quantity, Watt, Celsius, Seconds
 import hisim.loadtypes as lt
 
-from system_setups.modular_example import cleanup_old_lpg_requests
 
 __authors__ = ["Jonas Hoppe"]
 __copyright__ = ""
@@ -211,14 +207,6 @@ def setup_function(
         - DHW (Heatpump, Heatpumpcontroller, Storage; copied from modular_example)
         - Car (Diesel)
     """
-
-    # cleanup old lpg requests, mandatory to change number of cars
-    # Todo: change cleanup-function if result_path from occupancy is not utils.HISIMPATH["results"]
-    if Path(utils.HISIMPATH["utsp_results"]).exists():
-        cleanup_old_lpg_requests()
-    else:
-        Path(utils.HISIMPATH["utsp_results"]).mkdir(parents=False, exist_ok=False)
-
     if my_sim.my_module_config:
         my_config = HouseholdMoreAdvancedHPDieselCarConfig.load_from_json(my_sim.my_module_config)
     else:
@@ -317,31 +305,23 @@ def setup_function(
     )
 
     # Build Diesel-Car(s)
-    # get names of all available cars
-    filepaths = listdir(utils.HISIMPATH["utsp_results"])
-    filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
-    names = [elem.partition(",")[0].partition(".")[2] for elem in filepaths_location]
+    # get all available cars from occupancy
+    my_car_information = generic_car.GenericCarInformation(my_occupancy_instance=my_occupancy)
 
     my_car_config = my_config.car_config
     my_car_config.name = "DieselCar"
 
     # create all cars
     my_cars: List[generic_car.Car] = []
-    for car in names:
-        my_car_config.name = car
+    for idx, car_information_dict in enumerate(my_car_information.data_dict_for_car_component.values()):
+        my_car_config.name = car_information_dict["car_name"] + f"_{idx}"
         my_cars.append(
             generic_car.Car(
                 my_simulation_parameters=my_simulation_parameters,
                 config=my_car_config,
-                occupancy_config=my_occupancy_config,
+                data_dict_with_car_information=car_information_dict,
             )
         )
-
-    # Build Electricity Meter
-    my_electricity_meter = electricity_meter.ElectricityMeter(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_config.electricity_meter_config,
-    )
 
     # =================================================================================================================================
     # =================================================================================================================================

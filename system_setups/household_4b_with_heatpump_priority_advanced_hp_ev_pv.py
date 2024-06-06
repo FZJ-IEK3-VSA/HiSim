@@ -64,13 +64,6 @@ def setup_function(
         - EMS (necessary for Electric Vehicle)
     """
 
-    # cleanup old lpg requests, mandatory to change number of cars
-    # Todo: change cleanup-function if result_path from occupancy is not utils.HISIMPATH["results"]
-    if Path(utils.HISIMPATH["utsp_results"]).exists():
-        cleanup_old_lpg_requests()
-    else:
-        Path(utils.HISIMPATH["utsp_results"]).mkdir(parents=False, exist_ok=False)
-
     # my_config = utils.create_configuration(my_sim, HouseholdAdvancedHPEvPvConfig)
 
     # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
@@ -204,34 +197,46 @@ def setup_function(
             )
         )
 
-    # Build Electric Vehicle Battery
+    # Build Electric Vehicle Configs and Car Battery Configs
+    my_car_config = my_car_config = my_config.car_config
+    my_car_battery_config = my_config.car_battery_config
+    my_car_battery_controller_config = my_config.car_battery_controller_config
+    # set car config name
+    my_car_config.name = "ElectricCar"
+    # lower threshold for soc of car battery in clever case. This enables more surplus charging. Surplus control of car
+    my_car_battery_controller_config.battery_set = 0.4
+
+    # Build Electric Vehicles
+    my_car_information = generic_car.GenericCarInformation(my_occupancy_instance=my_occupancy)
+    my_cars: List[generic_car.Car] = []
     my_car_batteries: List[advanced_ev_battery_bslib.CarBattery] = []
     my_car_battery_controllers: List[controller_l1_generic_ev_charge.L1Controller] = []
+    # iterate over all cars
     car_number = 1
-    for car in my_cars:
-        my_car_battery_config = my_config.car_battery_config
-        my_car_battery_config.source_weight = car.config.source_weight
+    for car_information_dict in my_car_information.data_dict_for_car_component.values():
+        # Build Electric Vehicles
+        my_car_config.name = car_information_dict["car_name"] + f"_{car_number}"
+        my_car = generic_car.Car(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_car_config,
+            data_dict_with_car_information=car_information_dict
+        )
+        my_cars.append(my_car)
+        # Build Electric Vehicle Batteries
+        my_car_battery_config.source_weight = my_car.config.source_weight
         my_car_battery_config.name = f"CarBattery_{car_number}"
         my_car_battery = advanced_ev_battery_bslib.CarBattery(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_car_battery_config,
+            my_simulation_parameters=my_simulation_parameters, config=my_car_battery_config,
         )
         my_car_batteries.append(my_car_battery)
-
-        my_car_battery_controller_config = my_config.car_battery_controller_config
-        my_car_battery_controller_config.source_weight = car.config.source_weight
+        # Build Electric Vehicle Battery Controller
+        my_car_battery_controller_config.source_weight = my_car.config.source_weight
         my_car_battery_controller_config.name = f"L1EVChargeControl_{car_number}"
-        if my_config.surplus_control_car:
-            # lower threshold for soc of car battery in clever case. This enables more surplus charging
-            # Todo: this is just to avoid errors in case config from json-file is used
-            my_car_battery_controller_config.battery_set = 0.4
 
         my_car_battery_controller = controller_l1_generic_ev_charge.L1Controller(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_car_battery_controller_config,
+            my_simulation_parameters=my_simulation_parameters, config=my_car_battery_controller_config,
         )
         my_car_battery_controllers.append(my_car_battery_controller)
-
         car_number += 1
 
     # Build Electricity Meter

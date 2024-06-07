@@ -369,7 +369,7 @@ class Car(cp.Component):
         )
         if file_exists:
             # load from cache
-            log.information("Car results are taken from cache.")
+            log.information("Generic car data is taken from cache.")
             dataframe = pd.read_csv(cache_filepath, sep=",", decimal=".", encoding="cp1252")
             self.car_location = dataframe["car_location"].tolist()
             self.meters_driven = dataframe["meters_driven"].tolist()

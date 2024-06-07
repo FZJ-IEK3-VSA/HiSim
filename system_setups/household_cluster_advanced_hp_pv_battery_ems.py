@@ -5,7 +5,6 @@
 from typing import Optional, Any, Union, List
 import re
 import os
-from pathlib import Path
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from utspclient.helpers.lpgdata import (
@@ -37,10 +36,8 @@ from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptio
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
-from hisim import utils
 from hisim import log
 from hisim.units import Quantity, Celsius, Watt
-from system_setups.modular_example import cleanup_old_lpg_requests
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -191,7 +188,6 @@ def setup_function(
 
     # get household attribute jsonreferences from list of strings
     lpg_households: Union[JsonReference, List[JsonReference]]
-    print(my_config.lpg_households)
     if isinstance(my_config.lpg_households, List):
         if len(my_config.lpg_households) == 1:
             lpg_households = getattr(Households, my_config.lpg_households[0])
@@ -217,13 +213,6 @@ def setup_function(
 
     # =================================================================================================================================
     # Build Basic Components
-    # cleanup old lpg requests, mandatory to change number of cars
-    # Todo: change cleanup-function if result_path from occupancy is not utils.HISIMPATH["results"]
-    if Path(utils.HISIMPATH["utsp_results"]).exists():
-        cleanup_old_lpg_requests()
-    else:
-        Path(utils.HISIMPATH["utsp_results"]).mkdir(parents=False, exist_ok=False)
-
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home(
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
@@ -403,7 +392,7 @@ def setup_function(
     car_number = 1
     for car_information_dict in my_car_information.data_dict_for_car_component.values():
         # Build Electric Vehicles
-        my_car_config.name = car_information_dict["car_name"] + f"_{car_number}"
+        my_car_config.name = "Car_of_" + car_information_dict["household_name"] + f"_{car_number}"
         my_car = generic_car.Car(
             my_simulation_parameters=my_simulation_parameters,
             config=my_car_config,

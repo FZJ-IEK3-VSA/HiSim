@@ -3,12 +3,12 @@
  
  <a href="https://www.fz-juelich.de/en/iek/iek-3"><img src="https://www.fz-juelich.de/static/media/Logo.2ceb35fc.svg" alt="Forschungszentrum Juelich Logo" width="230px"></a> 
 
-# HiSim - Household Infrastructure and Building Simulator
+# ETHOS.HiSim - Household Infrastructure and Building Simulator
 
-HiSim is a Python package for simulation and analysis of household scenarios and building systems using modern
+ETHOS.HiSim is a Python package for simulation and analysis of household scenarios and building systems using modern
 components as alternative to fossil fuel based ones. This package integrates load profiles generation of electricity
-consumption, heating demand, electricity generation, and strategies of smart strategies of modern components, such as
-heat pump, battery, electric vehicle or thermal energy storage. HiSim is a package under development by
+consumption, heating demand, electricity generation, and smart strategies of modern components, such as
+heat pump, battery, electric vehicle or thermal energy storage. ETHOS.HiSim is a package under development by
 Forschungszentrum Jülich und Hochschule Emden/Leer. For detailed documentation, please
 access [ReadTheDocs](https://household-infrastructure-simulator.readthedocs.io/en/latest/) of this repository.
 
@@ -33,7 +33,7 @@ git clone https://github.com/FZJ-IEK3-VSA/HiSim.git
 
 Virtual Environment
 -----------------------
-Before installing `Hisim`, it is recommended to set up a Python virtual environment. Let `hisimvenv` be the name of
+Before installing `ETHOS.Hisim`, it is recommended to set up a Python virtual environment. Let `hisimvenv` be the name of
 virtual environment to be created. For Windows users, setting the virtual environment in the path `\Hisim` is done with
 the command line:
 
@@ -60,7 +60,7 @@ conda create -n hisimvenv python=3.9
 conda activate hisimvenv
 ```
 
-With the successful activation, `HiSim` is ready to be locally installed.
+With the successful activation, `ETHOS.HiSim` is ready to be locally installed.
 
 Install package
 ------------------------
@@ -70,7 +70,7 @@ After setting up the virtual environment, install the package to your local libr
 pip install -e .
 ```
 
-Optional: Set environment variables
+Optional: Set Environment Variables
 -----------------------
 Certain components might access APIs to retrieve data. In order to use them, you need to set the url and key as environment variables. This can be done with an `.env` file wihtin the HiSim root folder or with system tools. The environment variables are:
 
@@ -97,7 +97,7 @@ and `simple_system_setup_two.py` that are stored in `HiSim/system_setups`.
 The results can be visualized under directory `results` created under the same directory where the script with the setup
 function is located.
 
-Run Basic Household System setup
+Run Basic Household System Setup
 -----------------------
 The directory `HiSim/system_setups` also contains a basic household configuration in the script `basic_household.py`.
 It can be executed with the following command:
@@ -195,7 +195,7 @@ plots the data and
 generates a report.
 
 ## Contributions and Collaborations
-HiSim welcomes any kind of feedback, contributions, and collaborations. 
+ETHOS.HiSim welcomes any kind of feedback, contributions, and collaborations. 
 If you are interested in joining the project, adding new features, or providing valuable insights, feel free to reach out (email to k.rieck@fz-juelich.de) and participate in our HiSim developer meetings held every second Monday. Additionally, we encourage you to utilize our Issue section to share feedback or report any bugs you encounter.
 We look forward to your contributions and to making meaningful improvements. 
 Happy coding!

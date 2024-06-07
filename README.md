@@ -23,7 +23,7 @@ https://www.graphviz.org/download/
 
 (or simply disable the system charts)
 
-Clone repository
+Clone Repository
 -----------------------
 To clone this repository, enter the following command to your terminal:
 
@@ -62,7 +62,7 @@ conda activate hisimvenv
 
 With the successful activation, `ETHOS.HiSim` is ready to be locally installed.
 
-Install package
+Install Package
 ------------------------
 After setting up the virtual environment, install the package to your local libraries:
 
@@ -154,7 +154,7 @@ implemented:
 
 These methods are used by `Simulator` to execute the simulation and generate the results.
 
-List of `Component` children
+List of `Component` Children
 -----------
 Theses classes inherent from `Component` (`component.py`) class and can be used in your setup function to customize
 different configurations. All `Component` class children are stored in `hisim/hisim/components` directory. Some of these

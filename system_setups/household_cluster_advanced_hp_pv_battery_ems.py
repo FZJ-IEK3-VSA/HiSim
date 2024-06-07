@@ -58,6 +58,7 @@ class BuildingPVWeatherConfig(ConfigBase):
     """Configuration for BuildingPv."""
 
     name: str
+    building_id: str
     pv_azimuth: float
     pv_tilt: float
     pv_rooftop_capacity_in_kilowatt: Optional[float]
@@ -75,6 +76,7 @@ class BuildingPVWeatherConfig(ConfigBase):
 
         return BuildingPVWeatherConfig(
             name="BuildingPVConfig",
+            building_id="default_building",
             pv_azimuth=180,
             pv_tilt=30,
             pv_rooftop_capacity_in_kilowatt=None,
@@ -168,6 +170,7 @@ def setup_function(
     share_of_maximum_pv_potential = 1  # my_config.share_of_maximum_pv_potential
 
     # Set Building (scale building according to total base area and not absolute floor area)
+    building_name = my_config.building_id
     building_code = my_config.building_code
     total_base_area_in_m2 = None
     absolute_conditioned_floor_area_in_m2 = my_config.conditioned_floor_area_in_m2
@@ -226,6 +229,7 @@ def setup_function(
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
         max_thermal_building_demand_in_watt=max_thermal_building_demand_in_watt,
     )
+    my_building_config.name = building_name
     my_building_config.building_code = building_code
     my_building_config.total_base_area_in_m2 = total_base_area_in_m2
     my_building_config.absolute_conditioned_floor_area_in_m2 = absolute_conditioned_floor_area_in_m2
@@ -515,7 +519,6 @@ def setup_function(
         my_sim.add_component(my_electricity_meter, connect_automatically=True)
 
     # Connect Electric Vehicles and Car Batteries
-    print("my cars", my_cars)
     for car in my_cars:
         my_sim.add_component(car)
     for car_battery in my_car_batteries:

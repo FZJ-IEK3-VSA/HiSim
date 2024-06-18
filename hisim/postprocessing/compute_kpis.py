@@ -19,7 +19,7 @@ from hisim.components.heat_distribution_system import HeatDistribution
 from hisim.components.building import Building
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 from hisim.components.more_advanced_heat_pump_hplib import HeatPumpHplibWithTwoOutputs
-from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
+# from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
 from hisim.components.electricity_meter import ElectricityMeter
 from hisim.components.generic_heat_pump_modular import ModularHeatPump
 from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
@@ -1288,7 +1288,7 @@ class KpiGenerator(JSONWizard):
             min_temperature_difference_between_flow_and_return_in_celsius,
         ) = self.get_flow_and_return_temperatures(
             results=self.results,
-            output_name_flow_temperature=SimpleHotWaterStorage.WaterTemperatureToHeatDistribution,
+            output_name_flow_temperature=HeatDistribution.WaterTemperatureInlet,
             output_name_return_temperature=HeatDistribution.WaterTemperatureOutput,
         )
 
@@ -1628,7 +1628,7 @@ class KpiGenerator(JSONWizard):
                 ) = self.get_flow_and_return_temperatures(
                     results=self.results,
                     output_name_flow_temperature=HeatPumpHplibWithTwoOutputs.TemperatureOutputSH,
-                    output_name_return_temperature=SimpleHotWaterStorage.WaterTemperatureToHeatGenerator
+                    output_name_return_temperature=HeatPumpHplibWithTwoOutputs.TemperatureInputSH
                 )
 
                 break

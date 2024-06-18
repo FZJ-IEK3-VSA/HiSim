@@ -236,6 +236,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
     COP = "COP"  # -
     EER = "EER"  # -
     HeatPumpOnOffState = "OnOffStateHeatpump"
+    TemperatureInputSH = "TemperatureInputSpaceHeating"  # °C
     TemperatureOutputSH = "TemperatureOutputSpaceHeating"  # °C
     TemperatureOutputDHW = "TemperatureOutputDHW"  # °C
     MassFlowOutputSH = "MassFlowOutputSpaceHeating"  # kg/s
@@ -518,6 +519,14 @@ class HeatPumpHplibWithTwoOutputs(Component):
             load_type=LoadTypes.ANY,
             unit=Units.ANY,
             output_description="OnOffState",
+        )
+
+        self.t_in_sh: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.TemperatureInputSH,
+            load_type=LoadTypes.HEATING,
+            unit=Units.CELSIUS,
+            output_description="Temperature Input SpaceHeating in °C",
         )
 
         self.t_out_sh: ComponentOutput = self.add_output(
@@ -1241,6 +1250,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
         stsv.set_output_value(self.cop, cop)
         stsv.set_output_value(self.eer, eer)
         stsv.set_output_value(self.heatpump_state, on_off)
+        stsv.set_output_value(self.t_in_sh, t_in_secondary_sh)
         stsv.set_output_value(self.t_out_sh, t_out_sh)
         stsv.set_output_value(self.m_dot_sh, m_dot_sh)
         stsv.set_output_value(self.time_on_heating, time_on_heating)

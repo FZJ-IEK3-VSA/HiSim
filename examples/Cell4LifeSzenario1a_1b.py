@@ -78,12 +78,13 @@ def Cell4Life(
     
 
     # Build Results Path
-    name = input_variablen["szenario"]["value"] +  "_S" + str(input_variablen["PreResultNumber"]["value"])+"_BCap._" + str(math.ceil(input_variablen["battery_capacity"]["value"])) + "kWh_Inv_" + str(math.ceil(input_variablen["battery_inverter_power"]["value"]/1000)) + "kW_FCPow_" + str(math.ceil(input_variablen["fuel_cell_power"]["value"]/1000)) +"kW"
-    
+    #name = input_variablen["szenario"]["value"] +  "_S" + str(input_variablen["PreResultNumber"]["value"])+"_BCap._" + str(math.ceil(input_variablen["battery_capacity"]["value"])) + "kWh_Inv_" + str(math.ceil(input_variablen["battery_inverter_power"]["value"]/1000)) + "kW_FCPow_" + str(math.ceil(input_variablen["fuel_cell_power"]["value"]/1000)) +"kW"
+    name = "S" + str(input_variablen["PreResultNumber"]["value"])+"_BCap._" + str(math.ceil(input_variablen["battery_capacity"]["value"])) + "kWh_Inv_" + str(math.ceil(input_variablen["battery_inverter_power"]["value"]/1000)) + "kW_FCPow_" + str(math.ceil(input_variablen["fuel_cell_power"]["value"]/1000)) +"kW"
+
     
 
     ResultPathProviderSingleton().set_important_result_path_information(
-        module_directory = "C://Users//Standard//Desktop//hisim//C4LResults",
+        module_directory = "C://Users//Standard//Desktop//hisim",
         model_name= name,
         #variant_name=my_sim.setup_function,
         variant_name = '',
@@ -91,6 +92,15 @@ def Cell4Life(
         hash_number=None,
     )
     del name
+    print('   ')
+    print('   ')
+    print('Batterie: ',input_variablen["battery_capacity"]["value"],'  ',input_variablen["battery_capacity"]["unit"]  )   
+    
+    print('Inverterleistung:  ', input_variablen["battery_inverter_power"]["value"], '  ',input_variablen["battery_inverter_power"]["unit"])
+    
+    print('Fuel Cell Leistung: ', input_variablen["fuel_cell_power"]["value"],'  ',input_variablen["fuel_cell_power"]["unit"])
+    
+    print('Elektrolyzer Leistung: ',input_variablen["p_el_elektrolyzer"]["value"],'  ',input_variablen["p_el_elektrolyzer"]["unit"] )
 
     # Postprocessing Options****
     
@@ -360,27 +370,25 @@ def InputParameter():
 
     prediction_horizon = param_df["prediction_horizon"][0]
     prediction_horizonUnit = param_df["prediction_horizonUnit"][0]
-    #Variation Parameters:
+
+    inverte_power_demand = param_df["inverte_power_demand"][0]
+    inverte_power_demandUnit = param_df["inverte_power_demandUnit"][0]
+
+
+    # Variation Parameters:
     battery_capacity: Optional[float] = BatteryCapkWh   #Total Capacity of Battery in kWh
     battery_capacityUnit = BatteryCapkWhUnit
     
-
-    #Test Christof:
-
-    fuel_cell_power  = FuelCellPowerW #Electricity Power of Fuel Cell Power in Watt
+    fuel_cell_power: Optional[float] = FuelCellPowerW #Electricity Power of Fuel Cell Power in Watt
     fuel_cell_powerUnit = FuelCellPowerWUnit
     
-    
+    # Following parameter depends on a "variation parameter"
+    battery_inverter_power = inverte_power_demand #in Watt: Batterie Inverter power is assumed to depend on Battery Capacity which is given in kWh!
+    battery_inverter_powerUnit = inverte_power_demandUnit
 
-    
-    del BatteryCapkWh, FuelCellPowerW, BatteryCapkWhUnit, FuelCellPowerWUnit 
-    
-    #Following parameter depends on a "variation parameter"
-    battery_inverter_power = battery_capacity*1000*Inverter_Ratio #in Watt: Batterie Inverter power is assumed to depend on Battery Capacity which is given in kWh!
-    battery_inverter_powerUnit = "W"
+    del BatteryCapkWh, FuelCellPowerW, BatteryCapkWhUnit, FuelCellPowerWUnit, inverte_power_demand, inverte_power_demandUnit 
 
-
-    #Static Parameters:
+    # Static Parameters:
     NGFm2 = 26804.8 #NettoGesamtfläche (total area in squaremeters of building(s))
     NGFm2Unit = "m2"
     
@@ -399,14 +407,13 @@ def InputParameter():
     init_source_weight_chp = 2
     init_source_weight_chpUnit = "W"
     
-    p_el_elektrolyzer = fuel_cell_power*2.1 #Electrical Operating Power in Watt
+    p_el_elektrolyzer = int(math.ceil(fuel_cell_power*2.1)) #Electrical Operating Power in Watt
     p_el_elektrolyzerUnit = "W"
     
     electrolyzer_source_weight = 999
     electrolyzer_source_weightUnit = "-"
     
 
-    
     min_operation_time_in_seconds_chp = 0 #It is not working in Szenario 1: DO NOT DELETE BECAUSE OF EXCEL ECONOMIC ASSESSMENT
     min_operation_time_in_seconds_chpUnit = "s --> is not used in Szenario 1"
     

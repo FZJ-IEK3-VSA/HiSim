@@ -133,8 +133,8 @@ class HouseholdMoreAdvancedHPDieselCarConfig(SystemSetupConfigBase):
             hds_controller_config=hds_controller_config,
             hds_config=(
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-                    temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
                     water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+                    absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2
                 )
             ),
             sh_controller_config=more_advanced_heat_pump_hplib.HeatPumpHplibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
@@ -151,7 +151,6 @@ class HouseholdMoreAdvancedHPDieselCarConfig(SystemSetupConfigBase):
                 max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
                 temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
                 sizing_option=simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
-                water_mass_flow_rate_from_hds_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
             ),
             dhw_heatpump_controller_config=more_advanced_heat_pump_hplib.HeatPumpHplibControllerDHWConfig.get_default_dhw_controller_config(),
             dhw_storage_config=generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
@@ -357,7 +356,7 @@ def setup_function(
 
     #################################
     my_heat_distribution_controller.connect_only_predefined_connections(
-        my_weather, my_building, my_hot_water_storage
+        my_weather, my_building
     )
 
     my_heat_distribution.connect_only_predefined_connections(

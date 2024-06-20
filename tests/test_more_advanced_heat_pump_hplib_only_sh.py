@@ -11,7 +11,7 @@ from hisim.components.more_advanced_heat_pump_hplib import (
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-from hisim.units import KilowattHour, Quantity, Watt, Celsius, Seconds, Kilogram, Euro, Years
+from hisim.units import KilowattHour, Quantity, Watt, Celsius, Seconds, Kilogram, Euro, Years, KilogramPerSecond
 
 
 @pytest.mark.base
@@ -51,8 +51,12 @@ def test_heat_pump_hplib_new():
         minimum_idle_time_in_seconds=Quantity(600, Seconds),
         minimum_running_time_in_seconds=Quantity(600, Seconds),
         temperature_difference_primary_side=2,
-        with_hot_water_storage=True,
+        position_hot_water_storage_in_system=1,
         with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
+        minimum_massflow_secondary_side_in_kg_per_s=None,
+        maximum_massflow_secondary_side_in_kg_per_s=None,
+        massflow_nominal_secondary_side_in_kg_per_s=Quantity(0.333, KilogramPerSecond),
+        minimum_thermal_output_power_in_watt=Quantity(3800, Watt),
         co2_footprint=Quantity(p_th_set.value * 1e-3 * 165.84, Kilogram),
         cost=Quantity(p_th_set.value * 1e-3 * 1513.74, Euro),
         lifetime=Quantity(10, Years),
@@ -74,6 +78,7 @@ def test_heat_pump_hplib_new():
         counter_switch_sh=0,
         counter_switch_dhw=0,
         counter_onoff=0,
+        delta_t=5,
     )
 
     number_of_outputs = fft.get_number_of_outputs(

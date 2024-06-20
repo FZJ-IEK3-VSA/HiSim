@@ -116,7 +116,9 @@ class DynamicComponent(Component):
     ) -> ComponentOutput:
         """Adds an output channel to a component."""
         # Label Output and generate variable
-        label = f"{source_weight}"
+        num_inputs = len(self.outputs)
+        # label = f"{source_weight}"
+        label = f"Output{num_inputs + 1}"
         vars(self)[label] = label
 
         # Define Output as Component Input and add it to inputs
@@ -298,7 +300,7 @@ class DynamicComponent(Component):
                 continue
         return inputs
 
-    def get_dynamic_output(
+    def get_first_dynamic_output(
         self,
         tags: List[Union[lt.ComponentType, lt.InandOutputType]],
         weight_counter: int,
@@ -307,7 +309,7 @@ class DynamicComponent(Component):
 
         # check if component of component type is available
 
-        for _, element in enumerate(self.my_component_outputs):  # loop over all inputs
+        for _, element in enumerate(self.my_component_outputs):  # loop over all outputs
             if search_and_compare(
                 weight_to_search=weight_counter,
                 weight_of_component=element.source_weight,
@@ -315,4 +317,24 @@ class DynamicComponent(Component):
                 tags_of_component=element.source_tags,
             ):
                 return getattr(self, element.source_component_class)
+
         return None
+
+    def get_all_dynamic_outputs(
+        self, tags: List[Union[lt.ComponentType, lt.InandOutputType]], weight_counter: int
+    ) -> Any:
+        """Sets all output values with given component type and weight."""
+        outputs = []
+
+        for _, element in enumerate(self.my_component_outputs):  # loop over all outputs
+            if search_and_compare(
+                weight_to_search=weight_counter,
+                weight_of_component=element.source_weight,
+                tags_to_search=tags,
+                tags_of_component=element.source_tags,
+            ):
+                outputs.append(getattr(self, element.source_component_class))
+            else:
+                continue
+
+        return outputs

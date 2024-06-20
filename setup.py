@@ -34,7 +34,7 @@ setup(
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
     ],
-    description="HiSim is a house infrastructure simulator",
+    description="ETHOS.HiSim is a house infrastructure simulator",
     entry_points={
         "console_scripts": [
             "hisim=hisim.cli:main",

@@ -1,9 +1,11 @@
 import os
 import pandas as pd
 from openpyxl import load_workbook, Workbook
+import openpyxl
 
 # Pfad zum Hauptordner, in dem sich die Unterordner mit Excel-Files befinden
-main_folder = 'C://Users//Standard//Desktop//hisim//C4LResults//Auswertung//'
+main_folder = 'C://Users//Standard//Desktop//hisim//results//1b20240619//'
+excel_filename = 'C://Users//Standard//Desktop//hisim//results//1b20240619//Gesamtergebnis.xlsx'
 
 # Funktion, um den gewünschten Wert aus dem Excel-File zu extrahieren
 def extract_value_from_excel(file_path):
@@ -18,13 +20,13 @@ def extract_value_from_excel(file_path):
 
     #Wirtschaftliche Betrachtung
     worksheet = workbook['Eingaben']
-    jaehrlichesbetriebsergebnis_inEuro = worksheet['B126'].value
-    Vjaehrlichesbetriebsergebnis_inEuro = worksheet['C126'].value
+    jaehrlichesbetriebsergebnis_inEuro = worksheet['C126'].value
+    Vjaehrlichesbetriebsergebnis_inEuro = worksheet['D126'].value
 
 
     worksheet = workbook['Jahresreihe+Vergleichsjahresr']
-    kapitalwertdifferenz_nach20jahren_inEuro = worksheet['L33'].value
-    kapitalwert_nach20jahren_inEuro = worksheet['I33'].value
+    kapitalwertdifferenz_nach20jahren_inEuro_SOFC_Versus_NURPV = worksheet['L23'].value
+    kapitalwert_nach20jahren_inEuro = worksheet['I23'].value
 
     #Autarkiequote Strom
     worksheet = workbook['Ergebnisse-Energie']
@@ -79,7 +81,7 @@ def extract_value_from_excel(file_path):
     h2storage_kubikmeter = worksheet['C45'].value
     h2storage_pressure = worksheet['B45'].value
 
-    return kapitalwert_nach20jahren_inEuro, kapitalwertdifferenz_nach20jahren_inEuro, jaehrlichesbetriebsergebnis_inEuro,  gesamtstrombedarf_elektr_MWh, eigenerzeugungsanteil_elektr_MWh, netzbezugsanteil_elektr_MWh, netzbezugsanteil_elektr_Prozent, eigenerzeugungsanteil_elektr_Prozent, gesamterzeugungPV_MWh, eigenverbrauchsquote_elektr_MWh, netzeinspeisungsquote_elektr_MWh, netzeinspeisungsquote_elektr_Prozent, eigenverbrauchsquote_elektr_Prozent, gesamtwaermebedarf_MWh, eigenerzeugungsanteil_MWh, waermebedarfsanteil_MWh, eigenerzeugungsanteil_Prozent, waermebedarfsanteil_Prozent,\
+    return kapitalwert_nach20jahren_inEuro, kapitalwertdifferenz_nach20jahren_inEuro_SOFC_Versus_NURPV, jaehrlichesbetriebsergebnis_inEuro,  gesamtstrombedarf_elektr_MWh, eigenerzeugungsanteil_elektr_MWh, netzbezugsanteil_elektr_MWh, netzbezugsanteil_elektr_Prozent, eigenerzeugungsanteil_elektr_Prozent, gesamterzeugungPV_MWh, eigenverbrauchsquote_elektr_MWh, netzeinspeisungsquote_elektr_MWh, netzeinspeisungsquote_elektr_Prozent, eigenverbrauchsquote_elektr_Prozent, gesamtwaermebedarf_MWh, eigenerzeugungsanteil_MWh, waermebedarfsanteil_MWh, eigenerzeugungsanteil_Prozent, waermebedarfsanteil_Prozent,\
         Vjaehrlichesbetriebsergebnis_inEuro,  Vgesamtstrombedarf_elektr_MWh, Veigenerzeugungsanteil_elektr_MWh, Vnetzbezugsanteil_elektr_MWh, Vnetzbezugsanteil_elektr_Prozent, Veigenerzeugungsanteil_elektr_Prozent, VgesamterzeugungPV_MWh, Veigenverbrauchsquote_elektr_MWh, Vnetzeinspeisungsquote_elektr_MWh, Vnetzeinspeisungsquote_elektr_Prozent, Veigenverbrauchsquote_elektr_Prozent, Vgesamtwaermebedarf_MWh, Veigenerzeugungsanteil_MWh, Vwaermebedarfsanteil_MWh, Veigenerzeugungsanteil_Prozent, Vwaermebedarfsanteil_Prozent, \
         batterycapacity_kWh, batterinverwertepower_kW, fuelcellpower_kW, electrolyzer_kW, h2storage_capacity_kg, h2storage_kubikmeter, h2storage_pressure 
 
@@ -102,7 +104,7 @@ for foldername in os.listdir(main_folder):
             if excel_file[2:18] == '_Oek_Assessment_' or excel_file[3:19] == '_Oek_Assessment_' or excel_file[4:20] == '_Oek_Assessment_':
                 print(foldername)
                 # Extrahiere den Wert aus dem Excel-File
-                kapitalwert_nach20jahren_inEuro, kapitalwertdifferenz_nach20jahren_inEuro, jaehrlichesbetriebsergebnis_inEuro,  gesamtstrombedarf_elektr_MWh, eigenerzeugungsanteil_elektr_MWh, netzbezugsanteil_elektr_MWh, netzbezugsanteil_elektr_Prozent, eigenerzeugungsanteil_elektr_Prozent, gesamterzeugungPV_MWh, eigenverbrauchsquote_elektr_MWh, netzeinspeisungsquote_elektr_MWh, netzeinspeisungsquote_elektr_Prozent, eigenverbrauchsquote_elektr_Prozent, gesamtwaermebedarf_MWh, eigenerzeugungsanteil_MWh, waermebedarfsanteil_MWh, eigenerzeugungsanteil_Prozent, waermebedarfsanteil_Prozent,\
+                kapitalwert_nach20jahren_inEuro, kapitalwertdifferenz_nach20jahren_inEuro_SOFC_Versus_NURPV, jaehrlichesbetriebsergebnis_inEuro,  gesamtstrombedarf_elektr_MWh, eigenerzeugungsanteil_elektr_MWh, netzbezugsanteil_elektr_MWh, netzbezugsanteil_elektr_Prozent, eigenerzeugungsanteil_elektr_Prozent, gesamterzeugungPV_MWh, eigenverbrauchsquote_elektr_MWh, netzeinspeisungsquote_elektr_MWh, netzeinspeisungsquote_elektr_Prozent, eigenverbrauchsquote_elektr_Prozent, gesamtwaermebedarf_MWh, eigenerzeugungsanteil_MWh, waermebedarfsanteil_MWh, eigenerzeugungsanteil_Prozent, waermebedarfsanteil_Prozent,\
                     Vjaehrlichesbetriebsergebnis_inEuro,  Vgesamtstrombedarf_elektr_MWh, Veigenerzeugungsanteil_elektr_MWh, Vnetzbezugsanteil_elektr_MWh, Vnetzbezugsanteil_elektr_Prozent, Veigenerzeugungsanteil_elektr_Prozent, VgesamterzeugungPV_MWh, Veigenverbrauchsquote_elektr_MWh, Vnetzeinspeisungsquote_elektr_MWh, Vnetzeinspeisungsquote_elektr_Prozent, Veigenverbrauchsquote_elektr_Prozent, Vgesamtwaermebedarf_MWh, Veigenerzeugungsanteil_MWh, Vwaermebedarfsanteil_MWh, Veigenerzeugungsanteil_Prozent, Vwaermebedarfsanteil_Prozent, \
                     batterycapacity_kWh, batterinverwertepower_kW, fuelcellpower_kW, electrolyzer_kW, h2storage_capacity_kg,  h2storage_kubikmeter, h2storage_pressure, \
                         = extract_value_from_excel(file_path)
@@ -111,12 +113,12 @@ for foldername in os.listdir(main_folder):
 
                 # Füge den Wert und den Dateipfad zur Liste hinzu
 
-                values_and_paths.append((kapitalwert_nach20jahren_inEuro, kapitalwertdifferenz_nach20jahren_inEuro, jaehrlichesbetriebsergebnis_inEuro,  gesamtstrombedarf_elektr_MWh, eigenerzeugungsanteil_elektr_MWh, netzbezugsanteil_elektr_MWh, netzbezugsanteil_elektr_Prozent, eigenerzeugungsanteil_elektr_Prozent, gesamterzeugungPV_MWh, eigenverbrauchsquote_elektr_MWh, netzeinspeisungsquote_elektr_MWh, netzeinspeisungsquote_elektr_Prozent, eigenverbrauchsquote_elektr_Prozent, gesamtwaermebedarf_MWh, eigenerzeugungsanteil_MWh, waermebedarfsanteil_MWh, eigenerzeugungsanteil_Prozent, waermebedarfsanteil_Prozent,\
+                values_and_paths.append((kapitalwert_nach20jahren_inEuro, kapitalwertdifferenz_nach20jahren_inEuro_SOFC_Versus_NURPV, jaehrlichesbetriebsergebnis_inEuro,  gesamtstrombedarf_elektr_MWh, eigenerzeugungsanteil_elektr_MWh, netzbezugsanteil_elektr_MWh, netzbezugsanteil_elektr_Prozent, eigenerzeugungsanteil_elektr_Prozent, gesamterzeugungPV_MWh, eigenverbrauchsquote_elektr_MWh, netzeinspeisungsquote_elektr_MWh, netzeinspeisungsquote_elektr_Prozent, eigenverbrauchsquote_elektr_Prozent, gesamtwaermebedarf_MWh, eigenerzeugungsanteil_MWh, waermebedarfsanteil_MWh, eigenerzeugungsanteil_Prozent, waermebedarfsanteil_Prozent,\
                                          file_path, foldername, \
                                              Vjaehrlichesbetriebsergebnis_inEuro,  Vgesamtstrombedarf_elektr_MWh, Veigenerzeugungsanteil_elektr_MWh, Vnetzbezugsanteil_elektr_MWh, Vnetzbezugsanteil_elektr_Prozent, Veigenerzeugungsanteil_elektr_Prozent, VgesamterzeugungPV_MWh, Veigenverbrauchsquote_elektr_MWh, Vnetzeinspeisungsquote_elektr_MWh, Vnetzeinspeisungsquote_elektr_Prozent, Veigenverbrauchsquote_elektr_Prozent, Vgesamtwaermebedarf_MWh, Veigenerzeugungsanteil_MWh, Vwaermebedarfsanteil_MWh, Veigenerzeugungsanteil_Prozent, Vwaermebedarfsanteil_Prozent, \
                                                 batterycapacity_kWh, batterinverwertepower_kW, fuelcellpower_kW, electrolyzer_kW, h2storage_capacity_kg, h2storage_kubikmeter, h2storage_pressure ))
                 
-                headers = ['kapitalwert_nach20jahren_inEuro','kapitalwertdifferenz_nach20jahren_inEuro', 'jaehrlichesbetriebsergebnis_inEuro',  'gesamtstrombedarf_elektr_MWh', 'eigenerzeugungsanteil_elektr_MWh', 'netzbezugsanteil_elektr_MWh', 'netzbezugsanteil_elektr_Prozent', 'eigenerzeugungsanteil_elektr_Prozent', 'gesamterzeugungPV_MWh', 'eigenverbrauchsquote_elektr_MWh', 'netzeinspeisungsquote_elektr_MWh', 'netzeinspeisungsquote_elektr_Prozent', 'eigenverbrauchsquote_elektr_Prozent', 'gesamtwaermebedarf_MWh', 'eigenerzeugungsanteil_MWh', 'waermebedarfsanteil_MWh', 'eigenerzeugungsanteil_Prozent', 'waermebedarfsanteil_Prozent',\
+                headers = ['kapitalwert_nach20jahren_inEuro','kapitalwertdifferenz_nach20jahren_inEuro_SOFC_Versus_NURPV', 'jaehrlichesbetriebsergebnis_inEuro',  'gesamtstrombedarf_elektr_MWh', 'eigenerzeugungsanteil_elektr_MWh', 'netzbezugsanteil_elektr_MWh', 'netzbezugsanteil_elektr_Prozent', 'eigenerzeugungsanteil_elektr_Prozent', 'gesamterzeugungPV_MWh', 'eigenverbrauchsquote_elektr_MWh', 'netzeinspeisungsquote_elektr_MWh', 'netzeinspeisungsquote_elektr_Prozent', 'eigenverbrauchsquote_elektr_Prozent', 'gesamtwaermebedarf_MWh', 'eigenerzeugungsanteil_MWh', 'waermebedarfsanteil_MWh', 'eigenerzeugungsanteil_Prozent', 'waermebedarfsanteil_Prozent',\
                            'file_path', 'foldername', \
                            'Vjaehrlichesbetriebsergebnis_inEuro',  'Vgesamtstrombedarf_elektr_MWh', 'Veigenerzeugungsanteil_elektr_MWh', 'Vnetzbezugsanteil_elektr_MWh', 'Vnetzbezugsanteil_elektr_Prozent', 'Veigenerzeugungsanteil_elektr_Prozent', 'VgesamterzeugungPV_MWh', 'Veigenverbrauchsquote_elektr_MWh', 'Vnetzeinspeisungsquote_elektr_MWh', 'Vnetzeinspeisungsquote_elektr_Prozent', 'Veigenverbrauchsquote_elektr_Prozent', 'Vgesamtwaermebedarf_MWh', 'Veigenerzeugungsanteil_MWh', 'Vwaermebedarfsanteil_MWh', 'Veigenerzeugungsanteil_Prozent', 'Vwaermebedarfsanteil_Prozent',\
                             'batterycapacity_kWh', 'batterinverwertepower_kW', 'fuelcellpower_kW', 'electrolyzer_kW', 'h2storage_capacity_kg', 'h2storage_Kubikmeter', 'h2storage_Pressure_bar']
@@ -126,11 +128,19 @@ sorted_values_and_paths = sorted(values_and_paths, key=lambda x: x[0], reverse=T
 
 
 # Erstelle eine neue Excel-Arbeitsmappe
-workbook = Workbook()
-
+#workbook = Workbook()
 # Erstes Tabellenblatt für unsortierte Daten
-sheet_unsorted = workbook.active
-sheet_unsorted.title = "Unsortierte Daten"
+#sheet_unsorted = workbook.active
+# 
+ 
+workbook = openpyxl.load_workbook(excel_filename)
+sheet_unsorted = workbook['Unsortierte Daten']
+
+#sheet_unsorted.title = "Unsortierte Daten"
+for row in sheet_unsorted.iter_rows():
+    for cell in row:
+        cell.value = None
+
 
 # Füge Überschriften in das erste Tabellenblatt ein
 for col_index, header in enumerate(headers, start=1):
@@ -143,7 +153,16 @@ for row_index, row_data in enumerate(values_and_paths, start=2):
 
 
 # Zweites Tabellenblatt für sortierte Daten
-sheet_sorted = workbook.create_sheet(title="Sortierte Daten")
+#sheet_sorted = workbook.create_sheet(title="Sortierte Daten")
+
+
+sheet_sorted  = workbook['Sortierte Daten']
+
+#sheet_unsorted.title = "Unsortierte Daten"
+for row in sheet_sorted .iter_rows():
+    for cell in row:
+        cell.value = None
+
 
 # Füge Überschriften in das zweite Tabellenblatt ein
 for col_index, header in enumerate(headers, start=1):
@@ -155,9 +174,33 @@ for row_index, row_data in enumerate(sorted_values_and_paths, start=2):
         sheet_sorted.cell(row=row_index, column=col_index, value=cell_value)
 
 
+sorted_values_and_paths_two = sorted(values_and_paths, key=lambda x: x[5], reverse=False)
+
+sheet_sorted_netzbezug  = workbook['SortiertNetzbezug']
+
+#sheet_unsorted.title = "Unsortierte Daten"
+for row in sheet_sorted_netzbezug .iter_rows():
+    for cell in row:
+        cell.value = None
+
+
+# Füge Überschriften in das zweite Tabellenblatt ein
+for col_index, header in enumerate(headers, start=1):
+    sheet_sorted_netzbezug.cell(row=1, column=col_index, value=header)
+
+# Füge die sortierten Daten in das zweite Tabellenblatt ein
+for row_index, row_data in enumerate(sorted_values_and_paths_two, start=2):
+    for col_index, cell_value in enumerate(row_data, start=1):
+        sheet_sorted_netzbezug.cell(row=row_index, column=col_index, value=cell_value)
+
+
+
+
+
+
 
 # Speichere die Excel-Datei
-excel_filename = 'C://Users//Standard//Desktop//hisim//C4LResults//Auswertung//Gesamtergebnis.xlsx'
+
 workbook.save(excel_filename)
 
 print("Daten wurden in '{}' gespeichert.".format(excel_filename))

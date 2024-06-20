@@ -67,13 +67,16 @@ PV_Peak_in_kW = 781  # in kW
 PV_Peak_in_W = PV_Peak_in_kW * 1000 # Umrechnung in Watt
 
 
-FuelCellPowerW_list = [PV_Peak_in_W/(2.1),PV_Peak_in_W/(2*2.1), PV_Peak_in_W/(4*2.1), PV_Peak_in_W/(8*2.1) ]  #Electricity Power of Fuel Cell Power in Watt, depending on PV - Peak power
+#FuelCellPowerW_list = [PV_Peak_in_W/(2.1),PV_Peak_in_W/(2*2.1), PV_Peak_in_W/(4*2.1), PV_Peak_in_W/(6*2.1), PV_Peak_in_W/(8*2.1), PV_Peak_in_W/(10*2.1) ]  #Electricity Power of Fuel Cell Power in Watt, depending on PV - Peak power
+
+FuelCellPowerW_list = [PV_Peak_in_W/(8*2.1), PV_Peak_in_W/(10*2.1) , PV_Peak_in_W/(12*2.1)]  #Electricity Power of Fuel Cell Power in Watt, depending on PV - Peak power
 
 
-Inverter_Ratio_list = [3,2.5, 2, 1.5, 1] #Means: Inverter_power_demand  = (electrolyzer_energy + h2 storage)*Inverter_Ratio_lis --> inverter is always able to deliver at least power demand of electrolyzer and h2 storage!
+Inverter_Ratio_list = [3, 2.5, 2, 1.5, 1] #Means: Inverter_power_demand  = (electrolyzer_energy + h2 storage)*Inverter_Ratio_lis --> inverter is always able to deliver at least power demand of electrolyzer and h2 storage!
 
-BatterieFaktorList = [10, 8, 6, 4, 2,1] # Battery Capacity =Inverter Power * Batteriefaktorlist --> Batteriekapazität = Faktor * Inverterleistung
+#BatterieFaktorList = [12,10, 8, 6, 4, 2, 1] # Battery Capacity =Inverter Power * Batteriefaktorlist --> Batteriekapazität = Faktor * Inverterleistung
 
+BatterieFaktorList = [16, 14]
 
 
 FuelCellPowerWUnit = "W"
@@ -91,7 +94,7 @@ if prediction_horizon != 0:
 # PreResultNumber = 0
 # PreResultNumberUnit = "-"
 
-PreResultNumber = 0
+PreResultNumber = 240
 PreResultNumberUnit = "-"
 
 for BatterieFaktor in BatterieFaktorList:
@@ -206,23 +209,25 @@ print(finishtext)
 
 # ##Szenario 2a
 
-# szenario = "2a" 
-# szenarioUnit = "-"
+PV_Peak_in_kW = 781  # in kW
+PV_Peak_in_W = PV_Peak_in_kW * 1000 # Umrechnung in Watt
 
 
-# #FuelCellPowerW_list = [50000]  #Electricity Power of Fuel Cell Power in Watt
-# FuelCellPowerW_list = [48000]  #Electricity Power of Fuel Cell Power in Watt
+#FuelCellPowerW_list = [PV_Peak_in_W/(2.1),PV_Peak_in_W/(2*2.1), PV_Peak_in_W/(4*2.1), PV_Peak_in_W/(6*2.1), PV_Peak_in_W/(8*2.1), PV_Peak_in_W/(10*2.1) ]  #Electricity Power of Fuel Cell Power in Watt, depending on PV - Peak power
 
-# BatteryCapkWh_list = [25]     #Total Capacity of Battery in kWh
-# Inverter_Ratio_list = [1,0.5]
-# BatterieFaktorList = [1,2]
+FuelCellPowerW_list = [PV_Peak_in_W/(8*2.1), PV_Peak_in_W/(10*2.1) , PV_Peak_in_W/(12*2.1)]  #Electricity Power of Fuel Cell Power in Watt, depending on PV - Peak power
 
-# #FuelCellPowerW_list = [200000, 100000, 50000, 25000, 12500]  #Electricity Power of Fuel Cell Power in Watt
-# #Inverter_Ratio_list = [0.5, 0.333, 0.25, 0.2,0.1666] #Means: Inverter_power_demand  = Battery capacity multiplied with a factor of the list; Battery Capacity = BatterieFaktor * (electrolyzer_energy + h2 storage)
 
-# FuelCellPowerWUnit = "W"
-# BatteryCapkWhUnit = "kWh"
-# Inverter_RatioUnit = "-"
+Inverter_Ratio_list = [3, 2.5, 2, 1.5, 1] #Means: Inverter_power_demand  = (electrolyzer_energy + h2 storage)*Inverter_Ratio_lis --> inverter is always able to deliver at least power demand of electrolyzer and h2 storage!
+
+#BatterieFaktorList = [12,10, 8, 6, 4, 2, 1] # Battery Capacity =Inverter Power * Batteriefaktorlist --> Batteriekapazität = Faktor * Inverterleistung
+
+BatterieFaktorList = [16, 14]
+
+
+FuelCellPowerWUnit = "W"
+BatteryCapkWhUnit = "kWh"
+Inverter_RatioUnit = "-"
 
 # prediction_horizon = 3600*2
 # prediction_horizonUnit = "seconds"

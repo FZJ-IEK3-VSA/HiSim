@@ -209,6 +209,7 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
     with open(csv_datei1, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
         izaehler = 0
+        iii = 1
         for row in csvreader:
             if izaehler == 0:
                 monat = 'Monat'
@@ -217,38 +218,69 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
                 datum_obj = datetime.strptime(datum, '%Y-%m-%d %H:%M:%S')
                 monat = datum_obj.month
             
-            model_energy_input_data.append([row[0], monat, row[1]])
-            izaehler += 1 
+            if iii > 1:
+                    row[1] = row[1].replace(',', '.')
+                    row[1] = float(row[1]) 
+            
 
+            model_energy_input_data.append([row[0], monat, row[1]])
+            izaehler += 1
+            iii += 1 
+    del iii
 
     # Load data from "CSV_PVComponent" (column 2) and add the collected data to list
     csv_datei2 = os.path.join(path, 'CSV_PVComponent.csv')
     with open(csv_datei2, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        iii = 1 
         for row in csvreader:
+            if iii > 1:
+                row[1] = row[1].replace(',', '.')
+                row[1] = float(row[1]) 
             EnergyInputData2.append(row[1])
+            iii += 1
+    del iii
 
     # Load data from "CSV_HeatingSystemComponent" (column 2) and add the collected data to list
     csv_datei3 = os.path.join(path, 'CSV_HeatingSystemComponent.csv')
     with open(csv_datei3, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+
+        iii = 1 
         for row in csvreader:
+            if iii > 1:
+                row[1] = row[1].replace(',', '.')
+                row[1] = float(row[1])
             EnergyInputData3.append(row[1])
+            iii += 1
+    
+    del iii
 
     # Load data from "CSV_WarmWaterComponent" (column 2) and add the collected data to list
     csv_datei4 = os.path.join(path, 'CSV_WarmWaterComponent.csv')
     with open(csv_datei4, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        iii = 1 
         for row in csvreader:
+            if iii > 1:
+                row[1] = row[1].replace(',', '.')
+                row[1] = float(row[1]) 
             EnergyInputData4.append(row[1])
+            iii += 1
+    del iii
 
     # Load data from "CSV_Sum_of_heat_energy_demand" (column 2) and add the collected data to list
     csv_datei5 = os.path.join(path, 'Sum_Sum_of_heat_energy_demand.csv')
     with open(csv_datei5, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        iii = 1 
         for row in csvreader:
+            if iii > 1:
+                row[1] = row[1].replace(',', '.')
+                row[1] = float(row[1]) 
             EnergyInputData5.append(row[1])
-
+            iii += 1
+    del iii
 
 
 
@@ -316,6 +348,7 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
         #     zusammengefuegte_daten.append([row[0], row[1]])
 
         izaehler = 0
+        iii = 1 
         for row in csvreader:
             if izaehler == 0:
                 monat = 'Monat'
@@ -323,45 +356,84 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
                 datum = row[0]
                 datum_obj = datetime.strptime(datum, '%Y-%m-%d %H:%M:%S')
                 monat = datum_obj.month
-            
+            if iii > 1:
+                row[1] = row[1].replace(',', '.')
+                row[1] = float(row[1]) 
+
             zusammengefuegte_daten.append([row[0], monat, row[1]])
             izaehler += 1 
+            iii +=1
+    del iii
 
     # Lade Daten aus dem zweiten CSV-Datei "Thermal Output CHP in Watt" (ausschließlich Spalte 2) und füge sie zur Liste hinzu (in die dritte Spalte)
     csv_datei2 = os.path.join(path, 'ThermalPowerOutput_CHP_w2.csv')
     with open(csv_datei2, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        iii = 1
         for row in csvreader:
+            if iii > 1:
+                row[1] = row[1].replace(',', '.')
+                row[1] = float(row[1]) 
+
             Data2.append(row[1])
+            iii += 1
+    del iii
 
     # Load 3. CSV-Datei "AcBatteryPower_Battery_w1" (only second column) und add it to the list
     csv_datei3 = os.path.join(path, 'AcBatteryPower_Battery_w1.csv')
     with open(csv_datei3, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        iii = 1
         for row in csvreader:
+            if iii > 1:
+                row[1] = row[1].replace(',', '.')
+                row[1] = float(row[1]) 
+
             Data3.append(row[1])
+            iii +=1
+    del iii
             
     # Load 4. CSV-Datei "DcBatteryPower_Battery_w1" (only second column) und add it to the list
     csv_datei4 = os.path.join(path, 'DcBatteryPower_Battery_w1.csv')
     with open(csv_datei4, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        iii = 1
         for row in csvreader:
+            if iii > 1:
+                row[1] = row[1].replace(',', '.')
+                row[1] = float(row[1]) 
+
             Data4.append(row[1])
+            iii +=1
+    del iii
 
     # Load 5. CSV-Datei "StateOfCharge_Battery_w1" (only second column) und add it to the list
     csv_datei5 = os.path.join(path, 'StateOfCharge_Battery_w1.csv')
     with open(csv_datei5, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        iii = 1
         for row in csvreader:
+            if iii > 1:
+                row[1] = row[1].replace(',', '.')
+                row[1] = float(row[1]) 
+
             Data5.append(row[1])
+            iii +=1
+    del iii
 
     # Load 6. CSV-Datei "HydrogenSOC_HydrogenStorage_w999" (only second column) und add it to the list
     csv_datei6 = os.path.join(path, 'HydrogenSOC_HydrogenStorage_w999.csv')
     with open(csv_datei6, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        iii = 1
         for row in csvreader:
-            Data6.append(row[1])
+            if iii > 1:
+                row[1] = row[1].replace(',', '.')
+                row[1] = float(row[1]) 
 
+            Data6.append(row[1])
+            iii +=1
+    del iii
 
 #Neu:Electricity Consumption of different parts:
     # Load 7. data from "ElectricityConsumptionElectrolyzer" (column 2) and add the collected data to list
@@ -369,15 +441,29 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
     csv_datei7 = os.path.join(path, 'ElectricityConsumptionElectrolyzer_C4LElectrolyzer.csv')
     with open(csv_datei7, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        iii = 1
         for row in csvreader:
+            if iii > 1:
+                row[1] = row[1].replace(',', '.')
+                row[1] = float(row[1]) 
+
             Data7.append(row[1])
+            iii +=1
+    del iii
 
     # Load data from "StorageElectricityConsumption_HydrogenStorage_w999" (column 2) and add the collected data to list
     csv_datei8 = os.path.join(path, 'StorageElectricityConsumption_HydrogenStorage_w999.csv')
     with open(csv_datei8, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        iii = 1
         for row in csvreader:
+            if iii > 1:
+                row[1] = row[1].replace(',', '.')
+                row[1] = float(row[1]) 
+
             Data8.append(row[1])
+            iii+=1
+    del iii
 
     # Load 9. CSV-Datei "TotalElectricityConsumption_L2EMSElectricityController.csv" (only second column) und add it to the list --> IS NOT THE TOTAL CONSUMPTION (based on a comparison and validation done by 4ward)
     csv_datei9 = os.path.join(path, 'TotalElectricityConsumption_Elect_Controller..csv')
@@ -387,59 +473,114 @@ def save_data_in_excel_for_economic_assessment(input_variablen,excelfilepathresu
 
     with open(csv_datei9, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        iii = 1
         for row in csvreader:
+            if iii > 1:
+                row[1] = row[1].replace(',', '.')
+                row[1] = float(row[1]) 
+
             Data9.append(row[1])
+            iii +=1
+    del iii
 
     # Load data from "from CHP to house" (column 2) and add the collected data to list
     csv_datei10 = os.path.join(path, 'QuantitiyShare_electricity_from_CHP_to_house_Elect_Controller.csv')
     with open(csv_datei10, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        iii = 1
         for row in csvreader:
+            if iii > 1:
+                row[1] = row[1].replace(',', '.')
+                row[1] = float(row[1]) 
+
             Data10.append(row[1])
+            iii+=1
+    del iii
 
     # Load data from "from Battery to house" (column 2) and add the collected data to list
     csv_datei11 = os.path.join(path, 'QuantitiyShare_electricity_from_Battery_to_house_Elect_Controller.csv')
     with open(csv_datei11, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        iii = 1
         for row in csvreader:
+            if iii > 1:
+                row[1] = row[1].replace(',', '.')
+                row[1] = float(row[1]) 
+
             Data11.append(row[1])
+            iii +=1
+    del iii
 
     # Load data from "Fuel Cell Standby" (column 2) and add the collected data to list
     csv_datei12 = os.path.join(path, 'FuelCellElectricityInputStandby_CHP_w2.csv')
     with open(csv_datei12, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        iii = 1
         for row in csvreader:
+            if iii > 1:
+                row[1] = row[1].replace(',', '.')
+                row[1] = float(row[1]) 
+
             Data12.append(row[1])
+            iii+=1
+    del iii
 
     # Load data from "Quantity share pv to grid" (column 2) and add the collected data to list
     csv_datei13 = os.path.join(path, 'QuantitiyShare_PV_to_grid_Elect_Controller.csv')
     with open(csv_datei13, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        iii = 1
         for row in csvreader:
+            if iii > 1:
+                row[1] = row[1].replace(',', '.')
+                row[1] = float(row[1]) 
+
             Data13.append(row[1])
+            iii +=1
+    del iii
 
     # Load data from "Electricity Production Fuel Cell" (column 2) and add the collected data to list
     csv_datei14 = os.path.join(path, 'ElectricityOutput_CHP_w2.csv')
     with open(csv_datei14, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        iii = 1
         for row in csvreader:
+            if iii > 1:
+                row[1] = row[1].replace(',', '.')
+                row[1] = float(row[1]) 
+
             Data14.append(row[1])
+            iii +=1
+    del iii
 
 
     # Load data from "Quantity share chp to battery" (column 2) and add the collected data to list
     csv_datei15 = os.path.join(path, 'QuantitiyShare_CHP_to_battery_Elect_Controller.csv')
     with open(csv_datei15, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        iii = 1
         for row in csvreader:
-            Data15.append(row[1])
+            if iii > 1:
+                row[1] = row[1].replace(',', '.')
+                row[1] = float(row[1]) 
 
+            Data15.append(row[1])
+            iii+=1
+    del iii
 
 # Load data from "Quantity share pv to grid" (column 2) and add the collected data to list
     csv_datei16 = os.path.join(path, 'QuantitiyShare_CHP_to_grid_Elect_Controller.csv')
     with open(csv_datei16, 'r') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=';')  # Verwende Semikolon als Trennzeichen
+        iii = 1
         for row in csvreader:
+            if iii > 1:
+                row[1] = row[1].replace(',', '.')
+                row[1] = float(row[1]) 
+
             Data16.append(row[1])
+            iii +=1
+    del iii
 
     #Zusammenfuehren der Daten
     zusammengefuegte_daten = [(x[0], x[1], x[2], Data2[i], Data3[i], Data4[i], Data5[i], Data6[i], Data7[i], Data8[i], Data9[i], Data10[i], Data11[i], Data12[i], Data13[i], Data14[i], Data15[i], Data16[i]) for i, x in enumerate(zusammengefuegte_daten)]

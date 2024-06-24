@@ -94,7 +94,7 @@ if prediction_horizon != 0:
 # PreResultNumber = 0
 # PreResultNumberUnit = "-"
 
-PreResultNumber = 240
+PreResultNumber = 11111
 PreResultNumberUnit = "-"
 
 for BatterieFaktor in BatterieFaktorList:

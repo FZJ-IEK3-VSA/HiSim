@@ -48,7 +48,7 @@ def simulate_simple_water_storage(
         volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
         heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,
         heat_exchanger_is_present=False,
-        position_of_storage_in_system=simple_hot_water_storage.PositionWaterStorageInSystemEnum.PARALLEL_TO_HEAT_PUMP,
+        position_hot_water_storage_in_system=simple_hot_water_storage.PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP,
         co2_footprint=100,
         cost=volume_heating_water_storage_in_liter * 14.51,
         lifetime=100,

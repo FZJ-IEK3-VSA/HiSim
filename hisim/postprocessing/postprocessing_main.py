@@ -714,8 +714,6 @@ class PostProcessor:
             dataframe=dataframe_hourly_data,
             folder=self.result_data_folder_for_scenario_evaluation,
             simulation_duration=ppdt.simulation_parameters.duration.days,
-            simulation_year=ppdt.simulation_parameters.year,
-            region=self.region,
             time_resolution_of_data="hourly",
         )
         # for daily data
@@ -726,8 +724,6 @@ class PostProcessor:
             dataframe=dataframe_daily_data,
             folder=self.result_data_folder_for_scenario_evaluation,
             simulation_duration=ppdt.simulation_parameters.duration.days,
-            simulation_year=ppdt.simulation_parameters.year,
-            region=self.region,
             time_resolution_of_data="daily",
         )
         # for monthly data
@@ -738,8 +734,6 @@ class PostProcessor:
             dataframe=dataframe_monthly_data,
             folder=self.result_data_folder_for_scenario_evaluation,
             simulation_duration=ppdt.simulation_parameters.duration.days,
-            simulation_year=ppdt.simulation_parameters.year,
-            region=self.region,
             time_resolution_of_data="monthly",
         )
 
@@ -764,8 +758,6 @@ class PostProcessor:
             folder=self.result_data_folder_for_scenario_evaluation,
             time_resolution_of_data="yearly",
             simulation_duration=ppdt.simulation_parameters.duration.days,
-            simulation_year=ppdt.simulation_parameters.year,
-            region=self.region,
         )
 
         # --------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -872,14 +864,12 @@ class PostProcessor:
         folder: str,
         time_resolution_of_data: str,
         simulation_duration: int,
-        simulation_year: int,
-        region: str,
     ) -> None:
         """Write file to csv."""
 
         filename = os.path.join(
             folder,
-            f"{time_resolution_of_data}_results_for_{simulation_duration}_days_in_year_{simulation_year}_in_{region}.csv",
+            f"{time_resolution_of_data}_{simulation_duration}_days.csv",
         )
 
         dataframe.to_csv(path_or_buf=filename, index=None)  # type: ignore

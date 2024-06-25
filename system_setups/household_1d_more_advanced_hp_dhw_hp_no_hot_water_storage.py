@@ -5,7 +5,6 @@
 from typing import List, Optional, Any
 from pathlib import Path
 from dataclasses import dataclass
-from os import listdir
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,
     Households,
@@ -30,9 +29,6 @@ from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.system_setup_configuration import SystemSetupConfigBase
 from hisim import utils
 from hisim.units import Quantity, Watt, Celsius, Seconds, KilogramPerSecond
-
-from system_setups.modular_example import cleanup_old_lpg_requests
-
 
 __authors__ = ["Jonas Hoppe"]
 __copyright__ = ""
@@ -220,13 +216,6 @@ def setup_function(
         - DHW (Heatpump, Heatpumpcontroller, Storage; copied from modular_example)
         - Car (Diesel)
     """
-
-    # cleanup old lpg requests, mandatory to change number of cars
-    # Todo: change cleanup-function if result_path from occupancy is not utils.HISIMPATH["results"]
-    if Path(utils.HISIMPATH["utsp_results"]).exists():
-        cleanup_old_lpg_requests()
-    else:
-        Path(utils.HISIMPATH["utsp_results"]).mkdir(parents=False, exist_ok=False)
 
     if my_sim.my_module_config:
         my_config = HouseholdMoreAdvancedHPDHWHPNoStorageConfig.load_from_json(my_sim.my_module_config)

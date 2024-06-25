@@ -53,17 +53,16 @@ def main():
     # -------------------------------------------------------------------------------------------------------------------------------------
     time_resolution_of_data_set = result_data_collection.ResultDataTypeEnum.YEARLY
     cluster_storage_path = (
-        "/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/hisim_results/"  # "/fast/home/k-rieck/"
+        "C:/Users/k.rieck/HiSim/system_setups/"
     )
-    module_results_directory = "results/household_cluster_advanced_hp_pv_battery_ems/"
-    result_folder_description_one = "monte_carlo_20240306_1451/PV-0-hds-2-hpc-mode-2"
-    result_folder_description_two = "bui-0-dhw-0-sh-0"
+    module_results_directory = "results/household_cluster_advanced_hp_pv_battery_ems/-/"
+    result_folder_description_one = "PV-1-hds-2-hpc-mode-2/"
+    result_folder_description_two = "weather-location-BAD_MARIENBURG"
     folder_from_which_data_will_be_collected = os.path.join(
         *[cluster_storage_path, module_results_directory, result_folder_description_one, result_folder_description_two]
     )
 
-    path_to_default_config = "/fast/home/k-rieck/jobs_hisim/cluster-hisim-paper/job_array_for_hisim_mass_simus/default_building_pv_config.json"
-    simulation_duration_to_check = str(365)
+    path_to_default_config = "C:/Users/k.rieck/Desktop/HiSim_cluster/default_config_for_builda_data.json"
 
     data_processing_mode = result_data_collection.ResultDataProcessingModeEnum.PROCESS_ALL_DATA
     filterclass = result_data_processing.FilterClass()
@@ -92,7 +91,7 @@ def main():
         folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
         time_resolution_of_data_set=time_resolution_of_data_set,
         path_to_default_config=path_to_default_config,
-        simulation_duration_to_check=simulation_duration_to_check,
+        simulation_duration_to_check=str(365),
         data_processing_mode=data_processing_mode,
         variables_to_check=list_with_variables_to_check,
         dict_with_scenarios_to_check=dict_with_scenarios_to_check,

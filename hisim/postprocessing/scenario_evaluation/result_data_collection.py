@@ -32,8 +32,16 @@ class ResultDataCollection:
         """Initialize the class."""
         result_folder = folder_from_which_data_will_be_collected
         self.result_data_folder = os.path.join(
-            os.getcwd(), os.pardir, os.pardir, os.pardir, "system_setups", "results_for_scenario_comparison", "data",
+            os.getcwd(),
+            os.pardir,
+            os.pardir,
+            os.pardir,
+            "system_setups",
+            "scenario_comparison",
+            "data",
         )
+        if not os.path.exists(self.result_data_folder):
+            os.makedirs(self.result_data_folder)
 
         # in each system_setups/results folder should be one system setup that was executed with the default config
         self.path_of_scenario_data_executed_with_default_config: str = ""
@@ -95,11 +103,13 @@ class ResultDataCollection:
             raise ValueError("list_with_csv_files is empty")
 
         all_csv_files = self.import_data_from_file(
-            paths_to_check=list_with_csv_files, analyze_yearly_or_hourly_data=time_resolution_of_data_set,
+            paths_to_check=list_with_csv_files,
+            analyze_yearly_or_hourly_data=time_resolution_of_data_set,
         )
 
         dict_of_csv_data = self.make_dictionaries_with_simulation_duration_keys(
-            simulation_duration_to_check=simulation_duration_to_check, all_csv_files=all_csv_files,
+            simulation_duration_to_check=simulation_duration_to_check,
+            all_csv_files=all_csv_files,
         )
 
         self.read_csv_and_generate_pandas_dataframe(
@@ -120,33 +130,50 @@ class ResultDataCollection:
         self.clean_result_directory_from_unfinished_results(result_path=result_path)
 
         # get result folders with result data folder
-        list_with_all_paths_to_check = self.get_list_of_all_relevant_folders_or_files(result_path=result_path, folder_or_filename="result_data_for_scenario_evaluation")
+        list_with_all_paths_to_check = self.get_list_of_all_relevant_folders_or_files(
+            result_path=result_path, folder_or_filename="result_data_for_scenario_evaluation"
+        )
         print(
-            "len of list with all paths to containing result data ", len(list_with_all_paths_to_check),
+            "len of list with all paths to containing result data ",
+            len(list_with_all_paths_to_check),
         )
         # filter out results that had buildings that were too hot or too cold
-        list_with_all_paths_to_check_after_filtering = self.filter_results_that_failed_to_heat_or_cool_building_sufficiently(
-            list_of_result_path_that_contain_scenario_data=list_with_all_paths_to_check
+        list_with_all_paths_to_check_after_filtering = (
+            self.filter_results_that_failed_to_heat_or_cool_building_sufficiently(
+                list_of_result_path_that_contain_scenario_data=list_with_all_paths_to_check
+            )
         )
         print(
-            "len of list with all paths after filtering ", len(list_with_all_paths_to_check),
+            "len of list with all paths after filtering ",
+            len(list_with_all_paths_to_check),
         )
         # check if duplicates are existing and ask for deletion
-        list_with_result_data_folders = self.go_through_all_scenario_data_folders_and_check_if_module_configs_are_double_somewhere(
-            list_of_result_folder_paths_to_check=list_with_all_paths_to_check_after_filtering
+        list_with_result_data_folders = (
+            self.go_through_all_scenario_data_folders_and_check_if_module_configs_are_double_somewhere(
+                list_of_result_folder_paths_to_check=list_with_all_paths_to_check_after_filtering
+            )
         )
         print(
-            "len of list with all paths after double checking for duplicates ", len(list_with_result_data_folders),
+            "len of list with all paths after double checking for duplicates ",
+            len(list_with_result_data_folders),
         )
         return list_with_result_data_folders
 
     def clean_result_directory_from_unfinished_results(self, result_path: str) -> None:
         """When a result folder does not contain the finished_flag, it will be removed from the system_setups/result folder."""
         list_of_unfinished_folders = []
-        with open(os.path.join(self.result_data_folder, "failed_simualtions.txt"), "a", encoding="utf-8",) as file:
+        file_name = os.path.join(self.result_data_folder, "failed_simualtions.txt")
+        mode = "a" if os.path.exists(file_name) else "w"
+        with open(
+            file_name,
+            mode,
+            encoding="utf-8",
+        ) as file:
             file.write(str(datetime.datetime.now()) + "\n")
             file.write("Failed simulations found in the following folders: \n")
-            list_with_all_potential_finsihed_flag_files = self.get_list_of_all_relevant_folders_or_files(result_path=result_path, folder_or_filename="finished.flag")
+            list_with_all_potential_finsihed_flag_files = self.get_list_of_all_relevant_folders_or_files(
+                result_path=result_path, folder_or_filename="finished.flag"
+            )
             for filename in list_with_all_potential_finsihed_flag_files:
                 if not os.path.exists(filename):
                     file.write(os.path.join(filename) + "\n")
@@ -181,7 +208,8 @@ class ResultDataCollection:
         list_of_unsuccessful_folders = []
         with open(
             os.path.join(
-                self.result_data_folder, "succeeded_simulations_that_showed_too_high_or_too_low_building_temps.txt",
+                self.result_data_folder,
+                "succeeded_simulations_that_showed_too_high_or_too_low_building_temps.txt",
             ),
             "a",
             encoding="utf-8",
@@ -353,7 +381,9 @@ class ResultDataCollection:
         return all_csv_files
 
     def make_dictionaries_with_simulation_duration_keys(
-        self, simulation_duration_to_check: str, all_csv_files: List[str],
+        self,
+        simulation_duration_to_check: str,
+        all_csv_files: List[str],
     ) -> Dict:
         """Make dictionaries containing csv files of hourly or yearly data and according to the simulation duration of the data."""
 
@@ -386,7 +416,11 @@ class ResultDataCollection:
         return dict_of_csv_data
 
     def rename_scenario_name_of_dataframe_with_parameter_key_and_value(
-        self, dataframe: pd.DataFrame, parameter_key: str, list_with_parameter_values: List[Any], index: int,
+        self,
+        dataframe: pd.DataFrame,
+        parameter_key: str,
+        list_with_parameter_values: List[Any],
+        index: int,
     ) -> Any:
         """Rename the scenario of the given dataframe adding parameter key and value."""
         value = list_with_parameter_values[index]
@@ -476,7 +510,101 @@ class ResultDataCollection:
             # write all values that were in module config dict in the dataframe, so that you can use these values later for sorting and searching
             if list_with_module_config_dicts is not None:
                 module_config_dict = list_with_module_config_dicts[index]
-                for (module_config_key, module_config_value,) in module_config_dict.items():
+                for (
+                    module_config_key,
+                    module_config_value,
+                ) in module_config_dict.items():
+                    dataframe[module_config_key] = [module_config_value] * len(dataframe["scenario"])
+
+            if rename_scenario is True:
+                if (
+                    parameter_key is not None
+                    and list_with_parameter_key_values is not None
+                    and list_with_parameter_key_values != []
+                ):
+                    # rename scenario adding paramter key, value pair
+                    dataframe["scenario"] = self.rename_scenario_name_of_dataframe_with_parameter_key_and_value(
+                        dataframe=dataframe,
+                        parameter_key=parameter_key,
+                        list_with_parameter_values=list_with_parameter_key_values,
+                        index=index,
+                    )
+
+                else:
+                    # rename scenario adding an index
+                    dataframe["scenario"] = self.rename_scenario_name_of_dataframe_with_index(
+                        dataframe=dataframe, index=index
+                    )
+
+            appended_dataframe = pd.concat([appended_dataframe, dataframe])
+
+            index = index + 1
+
+        # sort dataframe
+        if appended_dataframe.empty:
+            raise ValueError("The appended dataframe is empty")
+        appended_dataframe = self.sort_dataframe_according_to_scenario_values(dataframe=appended_dataframe)
+
+        filename = self.store_scenario_data_with_the_right_name_and_in_the_right_path(
+            result_data_folder=self.result_data_folder,
+            simulation_duration_key=simulation_duration_key,
+            time_resolution_of_data_set=time_resolution_of_data_set,
+            parameter_key=parameter_key,
+        )
+        appended_dataframe.to_csv(filename)
+
+    def alternative_read_csv_and_generate_pandas_dataframe(
+        self,
+        dict_of_csv_to_read: Dict[str, list[str]],
+        time_resolution_of_data_set: Any,
+        rename_scenario: bool = False,
+        parameter_key: Optional[str] = None,
+        list_with_parameter_key_values: Optional[List[Any]] = None,
+        list_with_module_config_dicts: Optional[List[Any]] = None,
+    ) -> None:
+        """Read the csv files and generate the result dataframe."""
+        log.information(f"Read csv files and generate result dataframes for {time_resolution_of_data_set}.")
+
+        appended_dataframe = pd.DataFrame()
+        index = 0
+        simulation_duration_key = list(dict_of_csv_to_read.keys())[0]
+        csv_data_list = dict_of_csv_to_read[simulation_duration_key]
+
+        if csv_data_list == []:
+            raise ValueError("csv_data_list is empty.")
+
+        for csv_file in csv_data_list:
+            # first get input data
+
+            dataframe = pd.read_csv(csv_file)
+            # convert scenario column to str-type just in case it has no string values
+            dataframe["scenario"] = dataframe["scenario"].astype(str)
+            scenario_name_of_current_dataframe = dataframe["scenario"][0]
+            # check if scenario column is empty or not
+            if scenario_name_of_current_dataframe == "" or not isinstance(scenario_name_of_current_dataframe, str):
+                raise ValueError(
+                    f"The scenario variable of the current dataframe is {scenario_name_of_current_dataframe} but it should be a non-empty string value. "
+                    "Please set a scenario name for your simulations."
+                )
+
+            # try to find hash number in scenario name
+            try:
+                hash_number = re.findall(r"\-?\d+", scenario_name_of_current_dataframe)[-1]
+
+            # this is when no hash number could be determined in the scenario name
+            except Exception:
+                hash_number = 1
+                rename_scenario = False
+            # add hash colum to dataframe so hash does not get lost when scenario is renamed
+            dataframe["hash"] = [hash_number] * len(dataframe["scenario"])
+
+            # write all values that were in module config dict in the dataframe, so that you can use these values later for sorting and searching
+            if list_with_module_config_dicts is not None:
+                module_config_dict = list_with_module_config_dicts[index]
+                for (
+                    module_config_key,
+                    module_config_value,
+                ) in module_config_dict.items():
                     dataframe[module_config_key] = [module_config_value] * len(dataframe["scenario"])
 
             if rename_scenario is True:
@@ -538,18 +666,23 @@ class ResultDataCollection:
 
         if parameter_key is not None:
             path_for_file = os.path.join(
-                result_data_folder, f"data_with_different_{parameter_key}s", f"{simulation_duration_key}_days",
+                result_data_folder,
+                f"data_different_{parameter_key}s",
+                f"{simulation_duration_key}_days",
             )
         else:
             path_for_file = os.path.join(
-                result_data_folder, "data_with_all_parameters", f"{simulation_duration_key}_days",
+                result_data_folder,
+                "data_all_parameters",
+                f"{simulation_duration_key}_days",
             )
         if os.path.exists(path_for_file) is False:
             os.makedirs(path_for_file)
         log.information(f"Saving result dataframe in {path_for_file} folder")
 
         filename = os.path.join(
-            path_for_file, f"result_dataframe_for_{simulation_duration_key}_days_{kind_of_data_set}_data.csv",
+            path_for_file,
+            f"result_df_{kind_of_data_set}.csv",
         )
 
         return filename

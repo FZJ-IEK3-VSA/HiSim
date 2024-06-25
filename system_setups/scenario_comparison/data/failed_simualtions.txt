@@ -1,0 +1,28 @@
+2024-06-25 13:50:20.215934
+Failed simulations found in the following folders: 
+Total number of failed simulations in path C:/Users/k.rieck/HiSim/system_setups/results/household_cluster_advanced_hp_pv_battery_ems/-/PV-1-hds-2-hpc-mode-2/weather-location-BAD_MARIENBURG: 0
+
+2024-06-25 13:51:30.917520
+Failed simulations found in the following folders: 
+Total number of failed simulations in path C:/Users/k.rieck/HiSim/system_setups/results/household_cluster_advanced_hp_pv_battery_ems/-/PV-1-hds-2-hpc-mode-2/weather-location-BAD_MARIENBURG: 0
+
+2024-06-25 13:53:06.872369
+Failed simulations found in the following folders: 
+Total number of failed simulations in path C:/Users/k.rieck/HiSim/system_setups/results/household_cluster_advanced_hp_pv_battery_ems/-/PV-1-hds-2-hpc-mode-2/weather-location-BAD_MARIENBURG: 0
+
+2024-06-25 13:53:32.828033
+Failed simulations found in the following folders: 
+Total number of failed simulations in path C:/Users/k.rieck/HiSim/system_setups/results/household_cluster_advanced_hp_pv_battery_ems/-/PV-1-hds-2-hpc-mode-2/weather-location-BAD_MARIENBURG: 0
+
+2024-06-25 13:55:17.023632
+Failed simulations found in the following folders: 
+Total number of failed simulations in path C:/Users/k.rieck/HiSim/system_setups/results/household_cluster_advanced_hp_pv_battery_ems/-/PV-1-hds-2-hpc-mode-2/weather-location-BAD_MARIENBURG: 0
+
+2024-06-25 13:57:09.867134
+Failed simulations found in the following folders: 
+Total number of failed simulations in path C:/Users/k.rieck/HiSim/system_setups/results/household_cluster_advanced_hp_pv_battery_ems/-/PV-1-hds-2-hpc-mode-2/weather-location-BAD_MARIENBURG: 0
+
+2024-06-25 13:57:32.527934
+Failed simulations found in the following folders: 
+Total number of failed simulations in path C:/Users/k.rieck/HiSim/system_setups/results/household_cluster_advanced_hp_pv_battery_ems/-/PV-1-hds-2-hpc-mode-2/weather-location-BAD_MARIENBURG: 0
+

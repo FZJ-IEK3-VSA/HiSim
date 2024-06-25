@@ -4,14 +4,10 @@
 import datetime
 import os
 from typing import Dict, Any, Tuple, Optional, List
-import string
 import warnings
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-
-# import plotly
-# from html2image import Html2Image
 from ordered_set import OrderedSet
 import seaborn as sns
 
@@ -47,32 +43,32 @@ class ScenarioChartGeneration:
         self.data_processing_mode = data_processing_mode
 
         if self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA:
-            data_path_strip = "data_with_all_parameters"
-            result_path_strip = "results_for_all_parameters"
+            data_path_strip = "data_all_parameters"
+            result_path_strip = "results_all_parameters"
             self.show_plot_legend = False
 
         elif self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES:
-            data_path_strip = "data_with_different_building_codes"
+            data_path_strip = "data_different_building_codes"
             result_path_strip = "results_different_building_codes"
 
         elif self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_SIZES:
-            data_path_strip = "data_with_different_conditioned_floor_area_in_m2s"
+            data_path_strip = "data_different_conditioned_floor_area_in_m2s"
             result_path_strip = "results_different_conditioned_floor_area_in_m2s"
 
         elif self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_AZIMUTH_ANGLES:
-            data_path_strip = "data_with_different_pv_azimuths"
+            data_path_strip = "data_different_pv_azimuths"
             result_path_strip = "results_different_pv_azimuths"
 
         elif self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES:
-            data_path_strip = "data_with_different_pv_tilts"
+            data_path_strip = "data_different_pv_tilts"
             result_path_strip = "results_different_pv_tilts"
 
         elif self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_SHARE_OF_MAXIMUM_PV:
-            data_path_strip = "data_with_different_share_of_maximum_pv_powers"
+            data_path_strip = "data_different_share_of_maximum_pv_powers"
             result_path_strip = "results_different_share_of_maximum_pv_powers"
 
         elif self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_NUMBER_OF_DWELLINGS:
-            data_path_strip = "data_with_different_number_of_dwellings_per_buildings"
+            data_path_strip = "data_different_number_of_dwellings_per_buildings"
             result_path_strip = "results_different_number_of_dwellings_per_buildings"
 
         else:
@@ -84,7 +80,7 @@ class ScenarioChartGeneration:
             os.pardir,
             os.pardir,
             "system_setups",
-            "results_for_scenario_comparison",
+            "scenario_comparison",
             "data",
             data_path_strip,
             f"{simulation_duration_to_check}_days",
@@ -96,11 +92,13 @@ class ScenarioChartGeneration:
             os.pardir,
             os.pardir,
             "system_setups",
-            "results_for_scenario_comparison",
+            "scenario_comparison",
             "results",
             result_path_strip,
             f"{simulation_duration_to_check}_days",
         )
+        if not os.path.exists(self.result_folder):
+            os.makedirs(self.result_folder)
 
         self.hisim_chartbase = ChartFontsAndSize()
         self.hisim_chartbase.figsize = (10, 6)
@@ -161,9 +159,8 @@ class ScenarioChartGeneration:
             log.information("Check variable " + str(variable_to_check))
 
             # prepare path for plots
-            self.path_addition = "".join(
-                [x for x in variable_to_check if x in string.ascii_letters or x.isspace() or x == "2"]
-            )
+
+            self.path_addition = variable_to_check.replace(" ", "_")
 
             self.plot_path_complete = os.path.join(self.path_for_plots, self.path_addition)
             if os.path.exists(self.plot_path_complete) is False:
@@ -311,7 +308,7 @@ class ScenarioChartGeneration:
         self.set_ticks_labels_legend_and_save_fig(
             fig=fig,
             a_x=a_x,
-            y_axis_unit=filtered_data.unit.values[0],
+            y_axis_unit=str(filtered_data.unit.values[0]),
             show_legend=self.show_plot_legend,
             plot_type_name="line_plot",
             rotate_x_ticks=True,
@@ -370,14 +367,13 @@ class ScenarioChartGeneration:
         fig, a_x = plt.subplots(figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi)
         if scenario_set is None:
             scenario_set = list(OrderedSet(filtered_data.scenario))
-
         sns.boxplot(data=filtered_data, x="scenario", y="value", palette="Spectral")
 
         self.set_ticks_labels_legend_and_save_fig(
             fig=fig,
             a_x=a_x,
             x_axis_label="",
-            y_axis_unit=filtered_data.unit.values[0],
+            y_axis_unit=str(filtered_data.unit.values[0]),
             show_legend=False,
             legend_labels=scenario_set,
             plot_type_name="box_plot",
@@ -644,7 +640,7 @@ class ScenarioChartGeneration:
             show_legend=True,
             plot_type_name="stacked_bar_plot",
             y_axis_unit=y1_data_unit,
-            x_axis_label=full_pandas_dataframe.year.values[0],
+            x_axis_label=str(full_pandas_dataframe.year.values[0]),
             show_x_ticks=False,
             legend_labels=[y1_data_variable, y2_data_variable],
         )

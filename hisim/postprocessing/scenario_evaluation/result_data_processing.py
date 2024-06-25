@@ -89,7 +89,7 @@ class ScenarioDataProcessing:
 
         # create a excel writer object
         with pd.ExcelWriter(  # pylint: disable=abstract-class-instantiated
-            path=os.path.join(path_to_save, f"{kind_of_data_set}_statistics.xlsx"), mode="w",
+            path=os.path.join(path_to_save, f"{kind_of_data_set}_stats.xlsx"), mode="w",
         ) as writer:
             filtered_data.to_excel(excel_writer=writer, sheet_name="filtered data")
             statistical_data = filtered_data.describe()

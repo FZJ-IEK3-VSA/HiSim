@@ -159,8 +159,10 @@ class ScenarioChartGeneration:
             log.information("Check variable " + str(variable_to_check))
 
             # prepare path for plots
-
-            self.path_addition = variable_to_check.replace(" ", "_")
+            if "|" in variable_to_check:
+                self.path_addition = variable_to_check.split("|")[0] + "_" + variable_to_check.split("|")[-1]
+            else:
+                self.path_addition = variable_to_check.replace(" ", "_")
 
             self.plot_path_complete = os.path.join(self.path_for_plots, self.path_addition)
             if os.path.exists(self.plot_path_complete) is False:

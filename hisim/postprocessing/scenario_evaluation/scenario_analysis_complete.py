@@ -67,7 +67,7 @@ def main():
     data_processing_mode = result_data_collection.ResultDataProcessingModeEnum.PROCESS_ALL_DATA
     filterclass = result_data_processing.FilterClass()
 
-    list_with_variables_to_check = filterclass.kpi_data
+    list_with_variables_to_check = filterclass.electricity_data
 
     # dict_with_scenarios_to_check = {"building_code": filterclass.building_type}
 

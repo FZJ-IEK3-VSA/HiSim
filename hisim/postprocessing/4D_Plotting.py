@@ -7,7 +7,7 @@ import numpy as np
 
 
 # Lese die Excel-Datei und das Tabellenblatt "Bezug" ein
-df = pd.read_excel('C://Users//Standard//Desktop//hisim//results//1b20240619//Gesamtergebnis.xlsx', sheet_name='Netzbezug')
+df = pd.read_excel('C://Users//Standard//Desktop//hisim//results//2a20240624//Gesamtergebnis.xlsx', sheet_name='Netzbezug')
 print(df.head())
 # Extrahiere die relevanten Spalten
 brennstoffzellenleistung = df['FuelCellPowerkWh']  # Spalte B
@@ -38,7 +38,7 @@ cbar = plt.colorbar(sc)
 cbar.set_label('Netzbezugsmenge Strom in MWh/a')
 
 # Beschrifte die Achsen
-ax.set_xlabel('Brennstoffzellenleistung in kW')
+ax.set_xlabel('rSOC-Leistung in kW')
 ax.set_ylabel('Batteriekapazität in kWh')
 ax.set_zlabel('Inverterleistung in kW')
 
@@ -56,7 +56,7 @@ ax.set_zlim(0, inverterleistung_max_)
 
 # Zeige den Plot an
 #plt.show()
-plt.savefig('C://Users//Standard//Desktop//hisim//results//1b20240619//Netzbezug_scatter.png', dpi=300)  # Speichert als PNG mit 300 DPI Auflösung
+plt.savefig('C://Users//Standard//Desktop//hisim//results//2a20240624//Netzbezug_scatter.png', dpi=300)  # Speichert als PNG mit 300 DPI Auflösung
 
 
 ############################################################################# 2
@@ -83,7 +83,7 @@ cbar.ax.set_yticklabels(['niedrig', '', '', 'hoch'])
 cbar.set_label('Kapitalwert nach 20 Jahren (negativ)')
 
 # Beschrifte die Achsen
-ax.set_xlabel('Brennstoffzellenleistung in kW')
+ax.set_xlabel('rSOC-Leistung in kW')
 ax.set_ylabel('Batteriekapazität in kWh')
 ax.set_zlabel('Inverterleistung in kW')
 
@@ -95,7 +95,7 @@ ax.set_zlim(0, inverterleistung_max_)
 
 # Zeige den Plot an
 #plt.show()
-plt.savefig('C://Users//Standard//Desktop//hisim//results//1b20240619//Kapitalwert_scatter.png', dpi=300)  # Speichert als PNG mit 300 DPI Auflösung
+plt.savefig('C://Users//Standard//Desktop//hisim//results//2a20240624//Kapitalwert_scatter.png', dpi=300)  # Speichert als PNG mit 300 DPI Auflösung
 
 
 ############################################################################# 3
@@ -130,7 +130,7 @@ cbar = plt.colorbar(sc)
 cbar.set_label('Netzbezugsmenge Strom in MWh/a')
 
 # Beschrifte die Achsen
-ax.set_xlabel('Brennstoffzellenleistung in kW')
+ax.set_xlabel('rSOC-Leistung in kW')
 ax.set_ylabel('Batteriekapazität in kWh')
 ax.set_zlabel('Inverterleistung in kW')
 
@@ -145,7 +145,7 @@ ax.set_xlim(20, brennstoffzellenleistung_max__small)
 ax.set_ylim(1500, batteriekapazität_max__small)
 ax.set_zlim(50, inverterleistung_max__small)
 #plt.show()
-plt.savefig('C://Users//Standard//Desktop//hisim//results//1b20240619//Netzbezug_20kleisnten_scatter.png', dpi=300)  # Speichert als PNG mit 300 DPI Auflösung
+plt.savefig('C://Users//Standard//Desktop//hisim//results//2a20240624//Netzbezug_20kleisnten_scatter.png', dpi=300)  # Speichert als PNG mit 300 DPI Auflösung
 
 
 
@@ -169,7 +169,7 @@ cbar.ax.set_yticklabels(['niedrig', '', '', 'hoch'])
 cbar.set_label('Kapitalwert nach 20 Jahren (negativ)')
 
 # Beschrifte die Achsen
-ax.set_xlabel('Brennstoffzellenleistung in kW')
+ax.set_xlabel('rSOC-Leistung in kW')
 ax.set_ylabel('Batteriekapazität in kWh')
 ax.set_zlabel('Inverterleistung in kW')
 
@@ -187,4 +187,4 @@ ax.set_zlim(50, inverterleistung_max__small)
 
 # Zeige den Plot an
 #plt.show()
-plt.savefig('C://Users//Standard//Desktop//hisim//results//1b20240619//Kapitalwerte_zu_Netzbezug_20kleisnten_scatter.png', dpi=300)  # Speichert als PNG mit 300 DPI Auflösung
+plt.savefig('C://Users//Standard//Desktop//hisim//results//2a20240624//Kapitalwerte_zu_Netzbezug_20kleisnten_scatter.png', dpi=300)  # Speichert als PNG mit 300 DPI Auflösung

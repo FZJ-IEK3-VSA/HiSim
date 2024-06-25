@@ -2,10 +2,31 @@ import os
 import pandas as pd
 from openpyxl import load_workbook, Workbook
 import openpyxl
+import win32com.client
+
 
 # Pfad zum Hauptordner, in dem sich die Unterordner mit Excel-Files befinden
-main_folder = 'C://Users//Standard//Desktop//hisim//results//1b20240619//'
-excel_filename = 'C://Users//Standard//Desktop//hisim//results//1b20240619//Gesamtergebnis.xlsx'
+main_folder = 'C://Users//Standard//Desktop//hisim//results//2a20240624//'
+excel_filename = 'C://Users//Standard//Desktop//hisim//results//2a20240624//Gesamtergebnis.xlsx'
+
+def startexcelsavefile(excel_file_path):
+
+    excel = win32com.client.Dispatch("Excel.Application")
+    
+    # Arbeitsmappe öffnen
+    excel_file_path = excel_file_path.replace('//', '\\')
+    wb = excel.Workbooks.Open(excel_file_path)
+
+    # Hier könnten zusätzliche Aktionen in Excel ausgeführt werden
+
+    # Arbeitsmappe speichern
+    wb.Save()
+
+    # Arbeitsmappe schließen
+    wb.Close()
+
+    # Excel-Anwendung beenden
+    excel.Quit()
 
 # Funktion, um den gewünschten Wert aus dem Excel-File zu extrahieren
 def extract_value_from_excel(file_path):
@@ -96,13 +117,14 @@ for foldername in os.listdir(main_folder):
     if os.path.isdir(folder_path):
         # Liste für die Excel-Files im aktuellen Unterordner
         excel_files = [f for f in os.listdir(folder_path) if f.endswith('.xlsx') or f.endswith('.xls')]
-        print(foldername)
         # Durchlaufe die Excel-Files im aktuellen Unterordner
         for excel_file in excel_files:
+            
             file_path = os.path.join(folder_path, excel_file)
             # Hier prüfen wir, ob die ersten 10 Buchstaben des Dateinamens übereinstimmen
             if excel_file[2:18] == '_Oek_Assessment_' or excel_file[3:19] == '_Oek_Assessment_' or excel_file[4:20] == '_Oek_Assessment_':
                 print(foldername)
+                startexcelsavefile(file_path)
                 # Extrahiere den Wert aus dem Excel-File
                 kapitalwert_nach20jahren_inEuro, kapitalwertdifferenz_nach20jahren_inEuro_SOFC_Versus_NURPV, jaehrlichesbetriebsergebnis_inEuro,  gesamtstrombedarf_elektr_MWh, eigenerzeugungsanteil_elektr_MWh, netzbezugsanteil_elektr_MWh, netzbezugsanteil_elektr_Prozent, eigenerzeugungsanteil_elektr_Prozent, gesamterzeugungPV_MWh, eigenverbrauchsquote_elektr_MWh, netzeinspeisungsquote_elektr_MWh, netzeinspeisungsquote_elektr_Prozent, eigenverbrauchsquote_elektr_Prozent, gesamtwaermebedarf_MWh, eigenerzeugungsanteil_MWh, waermebedarfsanteil_MWh, eigenerzeugungsanteil_Prozent, waermebedarfsanteil_Prozent,\
                     Vjaehrlichesbetriebsergebnis_inEuro,  Vgesamtstrombedarf_elektr_MWh, Veigenerzeugungsanteil_elektr_MWh, Vnetzbezugsanteil_elektr_MWh, Vnetzbezugsanteil_elektr_Prozent, Veigenerzeugungsanteil_elektr_Prozent, VgesamterzeugungPV_MWh, Veigenverbrauchsquote_elektr_MWh, Vnetzeinspeisungsquote_elektr_MWh, Vnetzeinspeisungsquote_elektr_Prozent, Veigenverbrauchsquote_elektr_Prozent, Vgesamtwaermebedarf_MWh, Veigenerzeugungsanteil_MWh, Vwaermebedarfsanteil_MWh, Veigenerzeugungsanteil_Prozent, Vwaermebedarfsanteil_Prozent, \
@@ -132,7 +154,7 @@ sorted_values_and_paths = sorted(values_and_paths, key=lambda x: x[0], reverse=T
 # Erstes Tabellenblatt für unsortierte Daten
 #sheet_unsorted = workbook.active
 # 
- 
+
 workbook = openpyxl.load_workbook(excel_filename)
 sheet_unsorted = workbook['Unsortierte Daten']
 

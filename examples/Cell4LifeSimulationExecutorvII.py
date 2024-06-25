@@ -67,16 +67,16 @@ PV_Peak_in_kW = 781  # in kW
 PV_Peak_in_W = PV_Peak_in_kW * 1000 # Umrechnung in Watt
 
 
-#FuelCellPowerW_list = [PV_Peak_in_W/(2.1),PV_Peak_in_W/(2*2.1), PV_Peak_in_W/(4*2.1), PV_Peak_in_W/(6*2.1), PV_Peak_in_W/(8*2.1), PV_Peak_in_W/(10*2.1) ]  #Electricity Power of Fuel Cell Power in Watt, depending on PV - Peak power
+FuelCellPowerW_list = [PV_Peak_in_W/(2.1),PV_Peak_in_W/(2*2.1), PV_Peak_in_W/(4*2.1), PV_Peak_in_W/(6*2.1), PV_Peak_in_W/(8*2.1), PV_Peak_in_W/(10*2.1),PV_Peak_in_W/(12*2.1),PV_Peak_in_W/(14*2.1) ]  #Electricity Power of Fuel Cell Power in Watt, depending on PV - Peak power
 
-FuelCellPowerW_list = [PV_Peak_in_W/(8*2.1), PV_Peak_in_W/(10*2.1) , PV_Peak_in_W/(12*2.1)]  #Electricity Power of Fuel Cell Power in Watt, depending on PV - Peak power
+# FuelCellPowerW_list = [PV_Peak_in_W/(8*2.1), PV_Peak_in_W/(10*2.1) , PV_Peak_in_W/(12*2.1)]  #Electricity Power of Fuel Cell Power in Watt, depending on PV - Peak power
 
 
 Inverter_Ratio_list = [3, 2.5, 2, 1.5, 1] #Means: Inverter_power_demand  = (electrolyzer_energy + h2 storage)*Inverter_Ratio_lis --> inverter is always able to deliver at least power demand of electrolyzer and h2 storage!
 
-#BatterieFaktorList = [12,10, 8, 6, 4, 2, 1] # Battery Capacity =Inverter Power * Batteriefaktorlist --> Batteriekapazität = Faktor * Inverterleistung
+BatterieFaktorList = [20, 18, 16,14, 12,10, 8, 6, 4, 2, 1] # Battery Capacity =Inverter Power * Batteriefaktorlist --> Batteriekapazität = Faktor * Inverterleistung
 
-BatterieFaktorList = [16, 14]
+#BatterieFaktorList = [16, 14]
 
 
 FuelCellPowerWUnit = "W"
@@ -94,7 +94,7 @@ if prediction_horizon != 0:
 # PreResultNumber = 0
 # PreResultNumberUnit = "-"
 
-PreResultNumber = 11111
+PreResultNumber = 0
 PreResultNumberUnit = "-"
 
 for BatterieFaktor in BatterieFaktorList:
@@ -205,47 +205,48 @@ for BatterieFaktor in BatterieFaktorList:
 print(finishtext)
 
 
-# # # # #*************************************************
+# # # # # #*************************************************
+# # ##Szenario 2a
 
-# ##Szenario 2a
+# szenario = "2a" 
+# szenarioUnit = "-"
+# print("Szenario ", szenario)
 
-PV_Peak_in_kW = 781  # in kW
-PV_Peak_in_W = PV_Peak_in_kW * 1000 # Umrechnung in Watt
+# PV_Peak_in_kW = 781  # in kW
+# PV_Peak_in_W = PV_Peak_in_kW * 1000 # Umrechnung in Watt
+
+# #PV_Peak_in_W/(2.1)
+# #FuelCellPowerW_list = [PV_Peak_in_W/(2.1),PV_Peak_in_W/(2*2.1), PV_Peak_in_W/(4*2.1), PV_Peak_in_W/(6*2.1), PV_Peak_in_W/(8*2.1), PV_Peak_in_W/(10*2.1), PV_Peak_in_W/(12*2.1) ]  #Electricity Power of Fuel Cell Power in Watt, depending on PV - Peak power
+
+# FuelCellPowerW_list = [PV_Peak_in_W/(14*2.1)]  #Electricity Power of Fuel Cell Power in Watt, depending on PV - Peak power
+
+# Inverter_Ratio_list = [3, 2.5, 2, 1.5, 1] #Means: Inverter_power_demand  = (electrolyzer_energy + h2 storage)*Inverter_Ratio_lis --> inverter is always able to deliver at least power demand of electrolyzer and h2 storage!
+
+# BatterieFaktorList = [20, 18, 16,14, 12,10, 8, 6, 4, 2, 1] # Battery Capacity =Inverter Power * Batteriefaktorlist --> Batteriekapazität = Faktor * Inverterleistung
+
+# #BatterieFaktorList = [16, 14]
 
 
-#FuelCellPowerW_list = [PV_Peak_in_W/(2.1),PV_Peak_in_W/(2*2.1), PV_Peak_in_W/(4*2.1), PV_Peak_in_W/(6*2.1), PV_Peak_in_W/(8*2.1), PV_Peak_in_W/(10*2.1) ]  #Electricity Power of Fuel Cell Power in Watt, depending on PV - Peak power
+# FuelCellPowerWUnit = "W"
+# BatteryCapkWhUnit = "kWh"
+# Inverter_RatioUnit = "-"
 
-FuelCellPowerW_list = [PV_Peak_in_W/(8*2.1), PV_Peak_in_W/(10*2.1) , PV_Peak_in_W/(12*2.1)]  #Electricity Power of Fuel Cell Power in Watt, depending on PV - Peak power
-
-
-Inverter_Ratio_list = [3, 2.5, 2, 1.5, 1] #Means: Inverter_power_demand  = (electrolyzer_energy + h2 storage)*Inverter_Ratio_lis --> inverter is always able to deliver at least power demand of electrolyzer and h2 storage!
-
-#BatterieFaktorList = [12,10, 8, 6, 4, 2, 1] # Battery Capacity =Inverter Power * Batteriefaktorlist --> Batteriekapazität = Faktor * Inverterleistung
-
-BatterieFaktorList = [16, 14]
-
-
-FuelCellPowerWUnit = "W"
-BatteryCapkWhUnit = "kWh"
-Inverter_RatioUnit = "-"
-
-# prediction_horizon = 3600*2
+# prediction_horizon = 3600*3  # Based on "Kurzfristprognosen" laut zamg Seite: https://data.hub.geosphere.at/group/wettervorhersagen --> Kurzfristprognosen gibt es für die nächsten 3 Stunden jeweils
 # prediction_horizonUnit = "seconds"
 
 
-# # PreResultNumber = 0
-# # PreResultNumberUnit = "-"
+# PreResultNumber = 385
+# PreResultNumberUnit = "-"
 
 # #BatterieFaktorList = [4,5,6,7,8]
 # #BatterieFaktorList = [6,7,8,]
 
 # for BatterieFaktor in BatterieFaktorList:
 
-#     PreResultNumber = 0
-#     PreResultNumberUnit = "-"
+
 
 #     for FuelCellPowerW in FuelCellPowerW_list:
-#     #    for BatteryCapkWh in BatteryCapkWh_list:
+#         FuelCellPowerW = int(math.ceil(FuelCellPowerW))
 #         for Inverter_Ratio in Inverter_Ratio_list:
             
 
@@ -269,18 +270,36 @@ Inverter_RatioUnit = "-"
                     
 #             input_variablen = Cell4LifeSzenario2a.InputParameter()
 
+#             '''
+#                 ### aus 1b kopiert
+#                     charging_rate = input_variablen["p_el_elektrolyzer"]["value"] / (3600*40000) #umrechnung von Watt [=Joule/Sekunde, Leistung) p_el in  kg/s H2
+#                     power_demand_charging_h2storage = charging_rate * input_variablen["h_fuel"]["value"] * 3.6e3 * 1000 * input_variablen["h2storage_energy_for_charge_based_on_massflow_h_fuel"]["value"]/100 # electricity power_demand of hydrogen storage for compression of H2 in Watt;
+                    
+
+#                     inverte_power_demand = int(math.ceil((power_demand_charging_h2storage  + input_variablen["p_el_elektrolyzer"]["value"])*Inverter_Ratio)) # Inverterleistung hängt von
+#                     inverte_power_demandUnit = 'W'
+
+#                     BatteryCapkWh = int(math.ceil((inverte_power_demand/1000)*BatterieFaktor)) #Befehl Ceil Rundet auf; BatteryCKapazität in kWh...Batterie-Kapazität hängt von Elektrolyzer + H2 Storage Verbrauch ab!
+
+
+#                 ###
+#             '''
 
 #             charging_rate = input_variablen["p_el_elektrolyzer"]["value"] / (3600*40000) #umrechnung von Watt [=Joule/Sekunde, Leistung) p_el in  kg/s H2
 #             power_demand_charging_h2storage = charging_rate * input_variablen["h_fuel"]["value"] * 3.6e3 * 1000 * input_variablen["h2storage_energy_for_charge_based_on_massflow_h_fuel"]["value"]/100 # electricity power_demand of hydrogen storage for compression of H2 in Watt;
-#             inverte_power_demand_min = power_demand_charging_h2storage  + input_variablen["p_el_elektrolyzer"]["value"]
+#             inverte_power_demand = int(math.ceil((power_demand_charging_h2storage  + input_variablen["p_el_elektrolyzer"]["value"])*Inverter_Ratio))
+#             inverte_power_demandUnit = 'W'
 
-#             BatteryCapkWh = math.ceil(inverte_power_demand_min / 1000 * BatterieFaktor) #Befehl Ceil Rundet auf; BatteryCKapazität in kWh..INverterleistung in Watt gerechnet; Minimum Inverterleistung = 0,25 der Batteriekapazität --> folglich ist die Batteriekapazität immer 4* der Inverterleistung
+#             BatteryCapkWh = int(math.ceil(inverte_power_demand / 1000 * BatterieFaktor)) #Befehl Ceil Rundet auf; BatteryCKapazität in kWh..INverterleistung in Watt gerechnet; Minimum Inverterleistung = 0,25 der Batteriekapazität --> folglich ist die Batteriekapazität immer 4* der Inverterleistung
 
             
 #             param_df["BatteryCapkWh"][0] = BatteryCapkWh
 #             param_df["BatteryCapkWhUnit"][0] = BatteryCapkWhUnit
 #             param_df["Inverter_Ratio"][0] = Inverter_Ratio
 #             param_df["Inverter_RatioUnit"][0] = Inverter_RatioUnit
+#             param_df["inverte_power_demand"][0] = inverte_power_demand
+#             param_df["inverte_power_demandUnit"][0] = inverte_power_demandUnit
+
 
 #             param_df.to_csv("examples/params_to_loop.csv", sep=",", index= False)
 #             #del param_df
@@ -292,14 +311,14 @@ Inverter_RatioUnit = "-"
 #             #Do a copy of the economic assessment excel file        
             
 # #             if PreResultNumber == 0:
-# #                 pathbase = 'C://Users//Standard//Desktop//hisim//C4LResults//results//'
+# #                 pathbase = 'C://Users//Standard//Desktop//hisim//results//'
 # #                 name1 = '20231107_AllSimulationResults_Assessment_v5'
 # #                 filepath1 = pathbase + 'OriginalExcelFile//' + name1 + '.xlsx'
 # #                 copytopath1= pathbase
 # #                 excelfilepathallresults1, excel_filename1 = Cell4Life_Postprocessing.makeacopyofevaluationfile(copytopath1, filepath1, name1)
 
 #             #For economic assessment, create a copy of original excel file
-#             copyfrompath = 'C://Users//Standard//Desktop//hisim//C4LResults//results//'
+#             copyfrompath = 'C://Users//Standard//Desktop//hisim//results//'
 #             name2 = 'Sim_Oek_Assessment_v12'
 #             filepath2 = copyfrompath + 'OriginalExcelFile//' + name2 + '.xlsx'
 #             copytopath2 = ResultPathProviderSingleton().get_result_directory_name()
@@ -310,7 +329,7 @@ Inverter_RatioUnit = "-"
 #             del copytopath2, filepath2, name2
 
 #             #For Excel Controll File, create a copy of original excel file
-#             copyfrompath = 'C://Users//Standard//Desktop//hisim//C4LResults//results//'
+#             copyfrompath = 'C://Users//Standard//Desktop//hisim//results//'
 #             name3 = 'ControllFileData-plotting'
 #             filepath3 = copyfrompath + 'OriginalExcelFile//' + name3 + '.xlsx'
 #             copytopath3 = ResultPathProviderSingleton().get_result_directory_name()
@@ -333,6 +352,10 @@ Inverter_RatioUnit = "-"
 #             finishtext = "---Parametervariation  --vII: " + input_variablen["szenario"]["value"] + "--  abgeschlossen---"
 
 #             del input_variablen
+
+#             print('Stop')
+#             print('Stop')
+
 #             PreResultNumber += 1
 
 

@@ -78,10 +78,10 @@ def Cell4Life(
     
 
     # Build Results Path
-    name = input_variablen["szenario"]["value"] +  "_S" + str(input_variablen["PreResultNumber"]["value"])+"_BCap._" + str(math.ceil(input_variablen["battery_capacity"]["value"])) + "kWh_Inv_" + str(math.ceil(input_variablen["battery_inverter_power"]["value"]/1000)) + "kW_FCPow_" + str(math.ceil(input_variablen["fuel_cell_power"]["value"]/1000)) +"kW"
+    name = "S" + str(input_variablen["PreResultNumber"]["value"])+"_BCap._" + str(math.ceil(input_variablen["battery_capacity"]["value"])) + "kWh_Inv_" + str(math.ceil(input_variablen["battery_inverter_power"]["value"]/1000)) + "kW_FCPow_" + str(math.ceil(input_variablen["fuel_cell_power"]["value"]/1000)) +"kW"
     
     ResultPathProviderSingleton().set_important_result_path_information(
-        module_directory = "C://Users//Standard//Desktop//hisim//C4LResults",
+        module_directory = "C://Users//Standard//Desktop//hisim//",
         model_name= name,
         #variant_name=my_sim.setup_function,
         variant_name = '',
@@ -400,6 +400,12 @@ def InputParameter():
 
     prediction_horizon = param_df["prediction_horizon"][0]
     prediction_horizonUnit = param_df["prediction_horizonUnit"][0]
+    
+    inverte_power_demand = param_df["inverte_power_demand"][0]
+    inverte_power_demandUnit = param_df["inverte_power_demandUnit"][0]   
+    
+    
+    
     #Variation Parameters:
     battery_capacity: Optional[float] = BatteryCapkWh   #Total Capacity of Battery in kWh
     battery_capacityUnit = BatteryCapkWhUnit
@@ -414,11 +420,12 @@ def InputParameter():
     p_el_percentage_standby_fuelcell = 10 #If fuel cell is running in standby, it needs so much electricity power in % of its electricitiy production power if it is running
     p_el_percentage_standby_fuelcellUnit = "%" #10 % assumption is based on [42] "Dynamics and control of a thermally self-sustaining energy storage system using integrated solid oxide cells for an islanded building" from Pegah Mottaghizadeh, Mahshid Fardadi, Faryar Jabbari, Jack Brouwer
 
-    del BatteryCapkWh, FuelCellPowerW, BatteryCapkWhUnit, FuelCellPowerWUnit 
     
     #Following parameter depends on a "variation parameter"
-    battery_inverter_power = battery_capacity*1000*Inverter_Ratio #in Watt: Batterie Inverter power is assumed to depend on Battery Capacity which is given in kWh!
-    battery_inverter_powerUnit = "W"
+    battery_inverter_power = inverte_power_demand #in Watt: Batterie Inverter power is assumed to depend on Battery Capacity which is given in kWh!
+    battery_inverter_powerUnit = inverte_power_demandUnit
+    
+    del BatteryCapkWh, FuelCellPowerW, BatteryCapkWhUnit, FuelCellPowerWUnit, inverte_power_demand, inverte_power_demandUnit 
 
 
     #Static Parameters:
@@ -431,7 +438,7 @@ def InputParameter():
     init_source_weight_battery = 1
     init_source_weight_batteryUnit = "-"
     
-    electricity_threshold = 0 #Minium required power to activate fuel cell
+    electricity_threshold = '-' #Minium required power to activate fuel cell
     electricity_thresholdUnit = "W"
     
     init_source_weight_hydrogenstorage = 999 #init_source_weight_electrolyzer
@@ -449,16 +456,16 @@ def InputParameter():
     electrolyzer_source_weight = 999
     electrolyzer_source_weightUnit = "-"
 
-    min_operation_time_in_seconds_chp = 0.00000001 #
+    min_operation_time_in_seconds_chp = prediction_horizon #
     min_operation_time_in_seconds_chpUnit = "s"
     
-    minstandbytime_fuelcell = 0.00000001 # 
+    minstandbytime_fuelcell = prediction_horizon # 
     minstandbytime_fuelcellUnit = "s"
     
-    min_operation_time_in_seconds_electrolyzer = 0.00000001 #
+    min_operation_time_in_seconds_electrolyzer = prediction_horizon #
     min_operation_time_in_seconds_electrolyzerUnit = "s"
     
-    minstandbytime_electrolyzer  = 0.00000001 #
+    minstandbytime_electrolyzer  = prediction_horizon #
     minstandbytime_electrolyzerUnit = "s"
 
     h2_soc_lower_threshold_chp = 0.1 # Minimum state of charge to start operating the fuel cell in %
@@ -517,16 +524,16 @@ def InputParameter():
     Electrical_power_demand_related_to_fuelcell_percentage = 100
     Electrical_power_demand_related_to_fuelcell_percentageUnit = "%" #Faktor in % which represents the ratio  between [HouseConsumption-PV]/FuelCell (each in Watt)...--> 100 % means, that the  energy demand (houseconsumption-PV) is equivalent to fuel cell output; at this ratio, the fuel cell could be turned on if the next decisions in the decision tree are answered positively, or the Fuel Cell stays turned on if it is already running
 
-    minbatterystateofcharge_electrolyzer_turnon = 80 #minimal battery state of charge, which is necessary, to turn on electrolyzer... in % 
+    minbatterystateofcharge_electrolyzer_turnon = 50 #minimal battery state of charge, which is necessary, to turn on electrolyzer... in % 
     minbatterystateofcharge_electrolyzer_turnonUnit = "%" 
 
     minbatterystateofcharge_let_electrolyzer_staysturnedon = 0.1 #Minimal battery state of charge, which is necessary, that electrolyzer stays turned on, in %
     minbatterystateofcharge_let_electrolyzer_staysturnedonUnit = "%"
 
-    maxbatterystateofcharge_fuelcell_turnon = 80 #maximum battery state of charge; if the actual battery state of charge is above this level, then the fuel cell will not be turned on
+    maxbatterystateofcharge_fuelcell_turnon = 50 #maximum battery state of charge; if the actual battery state of charge is above this level, then the fuel cell will not be turned on
     maxbatterystateofcharge_fuelcell_turnonUnit = "%"
 
-    maxbatterystateofcharge_let_fuelcell_staysturnedon = 95 #Maximum battery state of charge; if that threshold is exceeded, then the fuel cell will be turned off
+    maxbatterystateofcharge_let_fuelcell_staysturnedon = 90 #Maximum battery state of charge; if that threshold is exceeded, then the fuel cell will be turned off
     maxbatterystateofcharge_let_fuelcell_staysturnedonUnit = "%"
     #FOLLOWING FACTORS Electrolyzer:
     #****
@@ -591,6 +598,7 @@ def InputParameter():
             "value": electricity_threshold,
             "unit": electricity_thresholdUnit,
         },
+
         "init_source_weight_hydrogenstorage": {
             "value": init_source_weight_hydrogenstorage,
             "unit":init_source_weight_hydrogenstorageUnit,

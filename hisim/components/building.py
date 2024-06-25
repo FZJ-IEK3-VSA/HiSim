@@ -88,6 +88,7 @@ class BuildingConfig(cp.ConfigBase):
     absolute_conditioned_floor_area_in_m2: Optional[float]
     total_base_area_in_m2: Optional[float]
     number_of_apartments: Optional[float]
+    max_thermal_building_demand_in_watt: Optional[float]
     predictive: bool
     set_heating_temperature_in_celsius: float
     set_cooling_temperature_in_celsius: float
@@ -99,6 +100,7 @@ class BuildingConfig(cp.ConfigBase):
         set_heating_temperature_in_celsius: float = 20.0,
         set_cooling_temperature_in_celsius: float = 25.0,
         heating_reference_temperature_in_celsius: float = -7.0,
+        max_thermal_building_demand_in_watt: Optional[float] = None,
     ) -> Any:
         """Get a default Building."""
         config = BuildingConfig(
@@ -108,6 +110,7 @@ class BuildingConfig(cp.ConfigBase):
             initial_internal_temperature_in_celsius=22.0,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
             absolute_conditioned_floor_area_in_m2=121.2,
+            max_thermal_building_demand_in_watt=max_thermal_building_demand_in_watt,
             total_base_area_in_m2=None,
             number_of_apartments=None,
             predictive=False,
@@ -2108,13 +2111,16 @@ class BuildingInformation:
         )
 
         # Get heating load of building
-        self.max_thermal_building_demand_in_watt = self.calc_max_thermal_building_demand(
-            heating_reference_temperature_in_celsius=self.buildingconfig.heating_reference_temperature_in_celsius,
-            initial_temperature_in_celsius=self.buildingconfig.initial_internal_temperature_in_celsius,
-            scaled_conditioned_floor_area_in_m2=self.scaled_conditioned_floor_area_in_m2,
-            heat_transfer_coeff_by_transmission_in_watt_per_m2_per_kelvin=self.heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin,
-            heat_transfer_coeff_by_ventilation_in_watt_per_m2_per_kelvin=self.heat_transfer_coeff_by_ventilation_ref_in_watt_per_m2_per_kelvin,
-        )
+        if self.buildingconfig.max_thermal_building_demand_in_watt is None:
+            self.max_thermal_building_demand_in_watt = self.calc_max_thermal_building_demand(
+                heating_reference_temperature_in_celsius=self.buildingconfig.heating_reference_temperature_in_celsius,
+                initial_temperature_in_celsius=self.buildingconfig.initial_internal_temperature_in_celsius,
+                scaled_conditioned_floor_area_in_m2=self.scaled_conditioned_floor_area_in_m2,
+                heat_transfer_coeff_by_transmission_in_watt_per_m2_per_kelvin=self.heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin,
+                heat_transfer_coeff_by_ventilation_in_watt_per_m2_per_kelvin=self.heat_transfer_coeff_by_ventilation_ref_in_watt_per_m2_per_kelvin,
+            )
+        else:
+            self.max_thermal_building_demand_in_watt = self.buildingconfig.max_thermal_building_demand_in_watt
 
     def get_physical_param(self, buildingdata: Any) -> Tuple[float, List, List, float, List, float, float, float, Any]:
         """Get the physical parameters from the building data."""

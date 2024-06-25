@@ -6,7 +6,7 @@ The functions are all called in modular_household.
 """
 
 import json
-from os import listdir, path
+from os import path
 from typing import Any, List, Optional, Tuple
 
 import pandas as pd
@@ -164,7 +164,7 @@ def configure_cars(
     my_simulation_parameters: SimulationParameters,
     count: int,
     ev_included: bool,
-    occupancy_config: Any,
+    my_occupancy_instance: loadprofilegenerator_utsp_connector.UtspLpgConnector,
 ) -> Tuple[List[generic_car.Car], int]:
     """Sets smart devices without controllers.
 
@@ -178,19 +178,16 @@ def configure_cars(
         Integer tracking component hierachy for EMS.
     ev_included: bool
         True if Car is electric, False if it is diesel.
-    occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnector,
-        Unique description of load profile generator call (mobility is related!)
-
+    my_occupancy_instance: loadprofilegenerator_utsp_connector.UtspLpgConnector,
+        Instance of load profile generator giving the necessary mobility data (mobility is related!)
 
     """
-    # get names of all available cars
-    filepaths = listdir(utils.HISIMPATH["utsp_results"])
-    filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
-    names = [elem.partition(",")[0].partition(".")[2] for elem in filepaths_location]
+    # get data of all available cars
+    my_car_information = generic_car.GenericCarInformation(my_occupancy_instance=my_occupancy_instance)
 
     # create all cars
     my_cars: List[generic_car.Car] = []
-    for _ in names:
+    for car_information_dict in my_car_information.data_dict_for_car_component.values():
         # decide if they are diesel driven or electricity driven and initialize config
         if ev_included:
             my_car_config = generic_car.CarConfig.get_default_ev_config()
@@ -202,7 +199,7 @@ def configure_cars(
             generic_car.Car(
                 my_simulation_parameters=my_simulation_parameters,
                 config=my_car_config,
-                occupancy_config=occupancy_config,
+                data_dict_with_car_information=car_information_dict,
             )
         )
         my_sim.add_component(my_cars[-1])

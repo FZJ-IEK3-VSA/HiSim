@@ -6,7 +6,6 @@ from typing import Optional, Any, Union, List
 import re
 import os
 from dataclasses import dataclass
-from pathlib import Path
 from dataclasses_json import dataclass_json
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,
@@ -37,10 +36,8 @@ from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptio
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
-from hisim import utils
 from hisim import log
 from hisim.units import Quantity, Celsius, Watt
-from system_setups.modular_example import cleanup_old_lpg_requests
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -58,6 +55,7 @@ class BuildingPVWeatherConfig(ConfigBase):
     """Configuration for BuildingPv."""
 
     name: str
+    building_id: str
     pv_azimuth: float
     pv_tilt: float
     pv_rooftop_capacity_in_kilowatt: Optional[float]
@@ -75,6 +73,7 @@ class BuildingPVWeatherConfig(ConfigBase):
 
         return BuildingPVWeatherConfig(
             name="BuildingPVConfig",
+            building_id="default_building",
             pv_azimuth=180,
             pv_tilt=30,
             pv_rooftop_capacity_in_kilowatt=None,
@@ -136,7 +135,7 @@ def setup_function(
     seconds_per_timestep = 60 * 15
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(
+        my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         my_simulation_parameters.post_processing_options.append(
@@ -197,6 +196,7 @@ def setup_function(
                 if hasattr(Households, household_string):
                     lpg_household = getattr(Households, household_string)
                     lpg_households.append(lpg_household)
+                    print(lpg_household)
         else:
             raise ValueError("Config list with lpg household is empty.")
     else:
@@ -212,7 +212,6 @@ def setup_function(
 
     # =================================================================================================================================
     # Build Basic Components
-
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home(
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
@@ -380,43 +379,32 @@ def setup_function(
     my_car_battery_config.p_inv_custom = charging_power * 1e3
     # lower threshold for soc of car battery in clever case. This enables more surplus charging. Surplus control of car
     my_car_battery_controller_config.battery_set = 0.4
-    # cleanup old lpg requests, mandatory to change number of cars
-    # Todo: change cleanup-function if result_path from occupancy is not utils.HISIMPATH["results"]
-    if Path(utils.HISIMPATH["utsp_results"]).exists():
-        cleanup_old_lpg_requests()
-    else:
-        Path(utils.HISIMPATH["utsp_results"]).mkdir(parents=False, exist_ok=False)
+
     # Build Electric Vehicles
-    # get names of all available cars
-    filepaths = os.listdir(utils.HISIMPATH["utsp_results"])
-    filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
-    car_names = [elem.partition(",")[0].partition(".")[2] for elem in filepaths_location]
+    my_car_information = generic_car.GenericCarInformation(my_occupancy_instance=my_occupancy)
     my_cars: List[generic_car.Car] = []
-    for car in car_names:
-        # Todo: check car name in case of 1 vehicle
-        my_car_config.name = car
-        my_cars.append(
-            generic_car.Car(
-                my_simulation_parameters=my_simulation_parameters,
-                config=my_car_config,
-                occupancy_config=my_occupancy_config,
-            )
-        )
-    # Build Electric Vehicle Batteries
     my_car_batteries: List[advanced_ev_battery_bslib.CarBattery] = []
     my_car_battery_controllers: List[controller_l1_generic_ev_charge.L1Controller] = []
+    # iterate over all cars
     car_number = 1
-    for car in my_cars:
-        my_car_battery_config = my_config.car_battery_config
-        my_car_battery_config.source_weight = car.config.source_weight
+    for car_information_dict in my_car_information.data_dict_for_car_component.values():
+        # Build Electric Vehicles
+        my_car_config.name = f"ElectricCar_{car_number}"
+        my_car = generic_car.Car(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_car_config,
+            data_dict_with_car_information=car_information_dict
+        )
+        my_cars.append(my_car)
+        # Build Electric Vehicle Batteries
+        my_car_battery_config.source_weight = my_car.config.source_weight
         my_car_battery_config.name = f"CarBattery_{car_number}"
         my_car_battery = advanced_ev_battery_bslib.CarBattery(
             my_simulation_parameters=my_simulation_parameters, config=my_car_battery_config,
         )
         my_car_batteries.append(my_car_battery)
-
-        my_car_battery_controller_config = my_config.car_battery_controller_config
-        my_car_battery_controller_config.source_weight = car.config.source_weight
+        # Build Electric Vehicle Battery Controller
+        my_car_battery_controller_config.source_weight = my_car.config.source_weight
         my_car_battery_controller_config.name = f"L1EVChargeControl_{car_number}"
 
         my_car_battery_controller = controller_l1_generic_ev_charge.L1Controller(
@@ -424,6 +412,7 @@ def setup_function(
         )
         my_car_battery_controllers.append(my_car_battery_controller)
         car_number += 1
+
     # Connect Electric Vehicles and Car Batteries
     zip_car_battery_controller_lists = zip(my_cars, my_car_batteries, my_car_battery_controllers)
     for car, car_battery, car_battery_controller in zip_car_battery_controller_lists:
@@ -547,7 +536,7 @@ def setup_function(
     )
 
     ResultPathProviderSingleton().set_important_result_path_information(
-        module_directory=my_sim.module_directory,  # "/storage_cluster/projects/2024_waage/01_hisim_results",
+        module_directory="/storage_cluster/projects/2024_waage/01_hisim_results",  # my_sim.module_directory,  #
         model_name=my_sim.module_filename,
         further_result_folder_description=os.path.join(
             *[

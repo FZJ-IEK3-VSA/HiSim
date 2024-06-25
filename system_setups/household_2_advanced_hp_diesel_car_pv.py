@@ -3,8 +3,6 @@
 # clean
 
 from dataclasses import dataclass
-from os import listdir
-from pathlib import Path
 from typing import Any, List, Optional
 
 from dataclasses_json import dataclass_json
@@ -36,7 +34,6 @@ from hisim.components import (
 from hisim.simulator import SimulationParameters
 from hisim.system_setup_configuration import SystemSetupConfigBase
 from hisim.units import Celsius, Quantity, Seconds, Watt
-from system_setups.modular_example import cleanup_old_lpg_requests
 
 __authors__ = "Markus Blasberg"
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
@@ -222,13 +219,6 @@ def setup_function(
         - EMS (for surplus control for HP and DHW
     """
 
-    # cleanup old lpg requests, mandatory to change number of cars
-    # Todo: change cleanup-function if result_path from occupancy is not utils.HISIMPATH["results"]
-    if Path(utils.HISIMPATH["utsp_results"]).exists():
-        cleanup_old_lpg_requests()
-    else:
-        Path(utils.HISIMPATH["utsp_results"]).mkdir(parents=False, exist_ok=False)
-
     # my_config = utils.create_configuration(my_sim, HouseholdAdvancedHPDieselCarPVConfig)
 
     # Todo: save file leads to use of file in next run. File was just produced to check how it looks like
@@ -339,23 +329,21 @@ def setup_function(
     )
 
     # Build Diesel-Car(s)
-    # get names of all available cars
-    filepaths = listdir(utils.HISIMPATH["utsp_results"])
-    filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
-    names = [elem.partition(",")[0].partition(".")[2] for elem in filepaths_location]
+    # get all available cars from occupancy
+    my_car_information = generic_car.GenericCarInformation(my_occupancy_instance=my_occupancy)
 
     my_car_config = my_config.car_config
     my_car_config.name = "DieselCar"
 
     # create all cars
     my_cars: List[generic_car.Car] = []
-    for car in names:
-        my_car_config.name = car
+    for idx, car_information_dict in enumerate(my_car_information.data_dict_for_car_component.values()):
+        my_car_config.name = car_information_dict["car_name"] + f"_{idx}"
         my_cars.append(
             generic_car.Car(
                 my_simulation_parameters=my_simulation_parameters,
                 config=my_car_config,
-                occupancy_config=my_occupancy_config,
+                data_dict_with_car_information=car_information_dict,
             )
         )
 

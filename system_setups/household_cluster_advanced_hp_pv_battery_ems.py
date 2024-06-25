@@ -82,7 +82,7 @@ class BuildingPVWeatherConfig(ConfigBase):
             conditioned_floor_area_in_m2=121.2,
             number_of_dwellings_per_building=1,
             norm_heating_load_in_kilowatt=None,
-            lpg_households=["CHR01_Couple_both_at_Work", "CHR05_Family_3_children_both_with_work"],
+            lpg_households=["CHR01_Couple_both_at_Work"],
             weather_location="AACHEN",
         )
 
@@ -135,7 +135,7 @@ def setup_function(
     seconds_per_timestep = 60 * 15
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_all_options(
+        my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         my_simulation_parameters.post_processing_options.append(
@@ -167,7 +167,6 @@ def setup_function(
     share_of_maximum_pv_potential = 1  # my_config.share_of_maximum_pv_potential
 
     # Set Building (scale building according to total base area and not absolute floor area)
-    building_name = my_config.building_id
     building_code = my_config.building_code
     total_base_area_in_m2 = None
     absolute_conditioned_floor_area_in_m2 = my_config.conditioned_floor_area_in_m2
@@ -218,7 +217,6 @@ def setup_function(
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
         max_thermal_building_demand_in_watt=max_thermal_building_demand_in_watt,
     )
-    my_building_config.name = building_name
     my_building_config.building_code = building_code
     my_building_config.total_base_area_in_m2 = total_base_area_in_m2
     my_building_config.absolute_conditioned_floor_area_in_m2 = absolute_conditioned_floor_area_in_m2
@@ -392,7 +390,7 @@ def setup_function(
     car_number = 1
     for car_information_dict in my_car_information.data_dict_for_car_component.values():
         # Build Electric Vehicles
-        my_car_config.name = "Car_of_" + car_information_dict["household_name"] + f"_{car_number}"
+        my_car_config.name = f"ElectricCar_{car_number}"
         my_car = generic_car.Car(
             my_simulation_parameters=my_simulation_parameters,
             config=my_car_config,
@@ -539,7 +537,7 @@ def setup_function(
     )
 
     ResultPathProviderSingleton().set_important_result_path_information(
-        module_directory=my_sim.module_directory,  # "/storage_cluster/projects/2024_waage/01_hisim_results",
+        module_directory="/storage_cluster/projects/2024_waage/01_hisim_results",  # my_sim.module_directory,  #
         model_name=my_sim.module_filename,
         further_result_folder_description=os.path.join(
             *[

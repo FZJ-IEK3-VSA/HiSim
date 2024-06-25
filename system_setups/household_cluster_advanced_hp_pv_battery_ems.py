@@ -518,9 +518,11 @@ def setup_function(
         config_filename_splitted = config_filename.split("/")
         try:
             scenario_hash_string = re.findall(r"\-?\d+", config_filename_splitted[-1])[0]
-            further_result_folder_description = config_filename_splitted[-2]
         except Exception:
             scenario_hash_string = "-"
+        try:
+            further_result_folder_description = config_filename_splitted[-2]
+        except Exception:
             further_result_folder_description = "-"
 
         sorting_option = SortingOptionEnum.MASS_SIMULATION_WITH_HASH_ENUMERATION
@@ -536,7 +538,7 @@ def setup_function(
     )
 
     ResultPathProviderSingleton().set_important_result_path_information(
-        module_directory="/storage_cluster/projects/2024_waage/01_hisim_results",  # my_sim.module_directory,  #
+        module_directory=my_sim.module_directory,  # "/storage_cluster/projects/2024_waage/01_hisim_results"
         model_name=my_sim.module_filename,
         further_result_folder_description=os.path.join(
             *[

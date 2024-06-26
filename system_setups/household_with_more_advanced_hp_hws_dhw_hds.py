@@ -116,7 +116,7 @@ def setup_function(
     )
 
     # Build Heat Pump Controller for hot water (heating building)
-    my_heatpump_controller_sh_config = more_advanced_heat_pump_hplib.HeatPumpHplibControllerSpaceHeatingConfig(
+    my_heatpump_controller_sh_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(
         name="HeatPumpControllerSH",
         mode=hp_controller_mode,
         set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_pump_in_celsius,
@@ -126,21 +126,21 @@ def setup_function(
         heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
     )
 
-    my_heatpump_controller_hotwater = more_advanced_heat_pump_hplib.HeatPumpHplibControllerSpaceHeating(
+    my_heatpump_controller_hotwater = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
         config=my_heatpump_controller_sh_config, my_simulation_parameters=my_simulation_parameters
     )
 
     my_heatpump_controller_dhw_config = (
-        more_advanced_heat_pump_hplib.HeatPumpHplibControllerDHWConfig.get_default_dhw_controller_config()
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.get_default_dhw_controller_config()
     )
 
     # Build Heat Pump Controller for dhw
-    my_heatpump_controller_dhw = more_advanced_heat_pump_hplib.HeatPumpHplibControllerDHW(
+    my_heatpump_controller_dhw = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW(
         config=my_heatpump_controller_dhw_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # Build Heat Pump
-    my_heatpump_config = more_advanced_heat_pump_hplib.HeatPumpHplibWithTwoOutputsConfig.get_scaled_advanced_hp_lib(
+    my_heatpump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
         heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
         heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
     )
@@ -148,15 +148,15 @@ def setup_function(
     my_heatpump_config.flow_temperature_in_celsius = Quantity(float(flow_temperature_in_celsius), Celsius)
     my_heatpump_config.with_domestic_hot_water_preparation = with_domestic_hot_water_preparation
 
-    my_heatpump = more_advanced_heat_pump_hplib.HeatPumpHplibWithTwoOutputs(
+    my_heatpump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
         config=my_heatpump_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Distribution System
     my_heat_distribution_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-        temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
         water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+        absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2
     )
 
     my_heat_distribution = heat_distribution_system.HeatDistribution(
@@ -169,7 +169,6 @@ def setup_function(
         max_thermal_power_in_watt_of_heating_system=my_heatpump_config.set_thermal_output_power_in_watt.value,
         sizing_option=simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
-        water_mass_flow_rate_from_hds_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
     )
 
     my_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(

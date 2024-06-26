@@ -136,11 +136,11 @@ def test_house(
 
     # Build Heat Pump Controller
     my_heat_pump_controller_config = (
-        more_advanced_heat_pump_hplib.HeatPumpHplibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
             heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
         )
     )
-    my_heat_pump_controller = more_advanced_heat_pump_hplib.HeatPumpHplibControllerSpaceHeating(
+    my_heat_pump_controller = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
         config=my_heat_pump_controller_config,
         my_simulation_parameters=my_simulation_parameters,
     )
@@ -148,12 +148,12 @@ def test_house(
     my_sim.add_component(my_heat_pump_controller, connect_automatically=True)
 
     # Build Heat Pump
-    my_heat_pump_config = more_advanced_heat_pump_hplib.HeatPumpHplibWithTwoOutputsConfig.get_scaled_advanced_hp_lib(
+    my_heat_pump_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
         heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
         heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
     )
 
-    my_heat_pump = more_advanced_heat_pump_hplib.HeatPumpHplibWithTwoOutputs(
+    my_heat_pump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
         config=my_heat_pump_config,
         my_simulation_parameters=my_simulation_parameters,
     )
@@ -162,8 +162,8 @@ def test_house(
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-        temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
         water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+        absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config,
@@ -177,7 +177,6 @@ def test_house(
         max_thermal_power_in_watt_of_heating_system=my_heat_pump_config.set_thermal_output_power_in_watt.value,
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
         sizing_option=simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
-        water_mass_flow_rate_from_hds_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
     )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
@@ -311,19 +310,77 @@ def test_house(
     )
 
     my_electricity_controller.add_component_output(
-        source_output_name=f"ElectricityToOrFromGridOfSH{my_heat_pump.component_name}_",
+        source_output_name=f"ElectricityToOrFromGridOfSH{my_heat_pump.get_classname()}_",
         source_tags=[lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.ELECTRICITY_TARGET],
         source_weight=2,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        output_description="Target electricity for Gebäude von Quartier EMS. ",
+        output_description="Target electricity for Heating Heat Pump. ",
     )
+
+    my_electricity_controller.add_component_input_and_connect(
+        source_object_name=my_domnestic_hot_water_heatpump.component_name,
+        source_component_output=my_domnestic_hot_water_heatpump.ElectricityOutput,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[
+            lt.ComponentType.HEAT_PUMP_DHW,
+            lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
+        ],
+        source_weight=3,
+    )
+
+    my_electricity_controller.add_component_output(
+        source_output_name=f"ElectricityToOrFromGridOf{my_domnestic_hot_water_heatpump.get_classname()}_",
+        source_tags=[
+            lt.ComponentType.HEAT_PUMP_DHW,
+            lt.InandOutputType.ELECTRICITY_TARGET,
+        ],
+        source_weight=3,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        output_description="Target electricity for dhw heat pump. ",
+    )
+
+    my_electricity_controller.add_component_input_and_connect(
+        source_object_name=my_occupancy.component_name,
+        source_component_output=my_occupancy.ElectricityOutput,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[lt.ComponentType.RESIDENTS, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
+        source_weight=1
+    )
+
+    my_electricity_controller.add_component_output(
+        source_output_name=f"ElectricityToOrFromGridOf{my_occupancy.get_classname()}_",
+        source_tags=[
+            lt.ComponentType.RESIDENTS,
+            lt.InandOutputType.ELECTRICITY_TARGET,
+        ],
+        source_weight=1,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        output_description="Target electricity for Occupancy. ",
+    )
+
+    my_electricity_controller.add_component_input_and_connect(
+        source_object_name=my_photovoltaic_system.component_name,
+        source_component_output=my_photovoltaic_system.ElectricityOutput,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[
+            lt.ComponentType.PV,
+            lt.InandOutputType.ELECTRICITY_PRODUCTION,
+        ],
+        source_weight=999,
+    )
+
     # =================================================================================================================================
     # Add Remaining Components to Simulation Parameters
 
     my_sim.add_component(my_electricity_meter)
     my_sim.add_component(my_advanced_battery)
-    my_sim.add_component(my_electricity_controller, connect_automatically=True)
+    my_sim.add_component(my_electricity_controller, connect_automatically=False)
 
     my_sim.run_all_timesteps()
 

@@ -18,8 +18,8 @@ from hisim.component import ComponentOutput
 from hisim.components.heat_distribution_system import HeatDistribution
 from hisim.components.building import Building
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
-from hisim.components.more_advanced_heat_pump_hplib import HeatPumpHplibWithTwoOutputs
-from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
+from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLib
+# from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
 from hisim.components.electricity_meter import ElectricityMeter
 from hisim.components.generic_heat_pump_modular import ModularHeatPump
 from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
@@ -1288,7 +1288,7 @@ class KpiGenerator(JSONWizard):
             min_temperature_difference_between_flow_and_return_in_celsius,
         ) = self.get_flow_and_return_temperatures(
             results=self.results,
-            output_name_flow_temperature=SimpleHotWaterStorage.WaterTemperatureToHeatDistribution,
+            output_name_flow_temperature=HeatDistribution.WaterTemperatureInlet,
             output_name_return_temperature=HeatDistribution.WaterTemperatureOutput,
         )
 
@@ -1398,7 +1398,7 @@ class KpiGenerator(JSONWizard):
         number_of_cycles = 0
         for column in results.columns:
 
-            if all(x in column.split(sep=" ") for x in [HeatPumpHplibWithTwoOutputs.TimeOff, component_name]):
+            if all(x in column.split(sep=" ") for x in [MoreAdvancedHeatPumpHPLib.TimeOff, component_name]):
                 for index, off_time in enumerate(results[column].values):
                     try:
                         if off_time != 0 and results[column].values[index + 1] == 0:
@@ -1473,7 +1473,7 @@ class KpiGenerator(JSONWizard):
         electrical_energy_for_cooling_in_kilowatt_hour = 1.0
 
         for column in results.columns:
-            if all(x in column.split(sep=" ") for x in [HeatPumpHplibWithTwoOutputs.ThermalOutputPowerSH, component_name]):
+            if all(x in column.split(sep=" ") for x in [MoreAdvancedHeatPumpHPLib.ThermalOutputPowerSH, component_name]):
                 # take only output values for heating
                 heating_output_power_values_in_watt = results[column].loc[results[column] > 0.0]
                 # take only output values for cooling
@@ -1489,12 +1489,12 @@ class KpiGenerator(JSONWizard):
                         timeresolution=seconds_per_timestep,
                     )
                 )
-            if all(x in column.split(sep=" ") for x in [HeatPumpHplibWithTwoOutputs.ElectricalInputPowerSH, component_name]):
+            if all(x in column.split(sep=" ") for x in [MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH, component_name]):
                 # get electrical energie values for heating
                 electrical_energy_for_heating_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
                     power_timeseries_in_watt=results[column], timeresolution=seconds_per_timestep
                 )
-            if all(x in column.split(sep=" ") for x in [HeatPumpHplibWithTwoOutputs.ElectricalInputPowerForCooling, component_name]):
+            if all(x in column.split(sep=" ") for x in [MoreAdvancedHeatPumpHPLib.ElectricalInputPowerForCooling, component_name]):
                 # get electrical energie values for cooling
                 electrical_energy_for_cooling_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
                     power_timeseries_in_watt=results[column], timeresolution=seconds_per_timestep
@@ -1540,10 +1540,10 @@ class KpiGenerator(JSONWizard):
         cooling_time_in_hours = 0.0
 
         for column in results.columns:
-            if all(x in column.split(sep=" ") for x in [HeatPumpHplibWithTwoOutputs.TimeOnHeating, component_name]):
+            if all(x in column.split(sep=" ") for x in [MoreAdvancedHeatPumpHPLib.TimeOnHeating, component_name]):
                 heating_time_in_seconds = sum(results[column])
                 heating_time_in_hours = heating_time_in_seconds / 3600
-            if all(x in column.split(sep=" ") for x in [HeatPumpHplibWithTwoOutputs.TimeOnCooling, component_name]):
+            if all(x in column.split(sep=" ") for x in [MoreAdvancedHeatPumpHPLib.TimeOnCooling, component_name]):
                 cooling_time_in_seconds = sum(results[column])
                 cooling_time_in_hours = cooling_time_in_seconds / 3600
 
@@ -1585,7 +1585,7 @@ class KpiGenerator(JSONWizard):
         # check if Heat Pump was used in components
         for wrapped_component in self.wrapped_components:
 
-            if isinstance(wrapped_component.my_component, HeatPumpHplibWithTwoOutputs):
+            if isinstance(wrapped_component.my_component, MoreAdvancedHeatPumpHPLib):
 
                 # get number of heat pump cycles over simulated period
                 number_of_heat_pump_cycles = self.get_heatpump_cycles(
@@ -1627,8 +1627,8 @@ class KpiGenerator(JSONWizard):
                     min_temperature_difference_between_flow_and_return_in_celsius,
                 ) = self.get_flow_and_return_temperatures(
                     results=self.results,
-                    output_name_flow_temperature=HeatPumpHplibWithTwoOutputs.TemperatureOutputSH,
-                    output_name_return_temperature=SimpleHotWaterStorage.WaterTemperatureToHeatGenerator
+                    output_name_flow_temperature=MoreAdvancedHeatPumpHPLib.TemperatureOutputSH,
+                    output_name_return_temperature=MoreAdvancedHeatPumpHPLib.TemperatureInputSH
                 )
 
                 break
@@ -1885,7 +1885,7 @@ class KpiGenerator(JSONWizard):
         share_of_dhw_advanced_heat_pump_on_total_consumption_from_grid_in_percent: Optional[float] = None
 
         for wrapped_component in self.wrapped_components:
-            if isinstance(wrapped_component.my_component, HeatPumpHplibWithTwoOutputs):
+            if isinstance(wrapped_component.my_component, MoreAdvancedHeatPumpHPLib):
                 wrapped_dhw_advanced_heat_pump_component = wrapped_component
                 if "DHWHeatPump" not in wrapped_dhw_advanced_heat_pump_component.my_component.component_name:
                     log.information(
@@ -1905,7 +1905,7 @@ class KpiGenerator(JSONWizard):
                 x in column.split(sep=" ")
                 for x in [
                     wrapped_dhw_advanced_heat_pump_component.my_component.component_name,
-                    HeatPumpHplibWithTwoOutputs.ElectricalInputPowerDHW,
+                    MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW,
                 ]
             ):
 
@@ -1920,7 +1920,7 @@ class KpiGenerator(JSONWizard):
                 x in column.split(sep=" ")
                 for x in [
                     wrapped_dhw_advanced_heat_pump_component.my_component.component_name,
-                    HeatPumpHplibWithTwoOutputs.ThermalOutputPowerDHW,
+                    MoreAdvancedHeatPumpHPLib.ThermalOutputPowerDHW,
                 ]
             ):
 

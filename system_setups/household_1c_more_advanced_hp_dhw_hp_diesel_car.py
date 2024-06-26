@@ -30,6 +30,7 @@ from hisim import utils
 from hisim.units import Quantity, Watt, Celsius, Seconds
 
 
+
 __authors__ = ["Markus Blasberg", "Kevin Knosala"]
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
 __credits__ = ["Noah Pflugradt"]
@@ -58,8 +59,8 @@ class HouseholdMoreAdvancedHPDHWHPDieselCarConfig(SystemSetupConfigBase):
     building_config: building.BuildingConfig
     hds_controller_config: heat_distribution_system.HeatDistributionControllerConfig
     hds_config: heat_distribution_system.HeatDistributionConfig
-    hp_controller_config: more_advanced_heat_pump_hplib.HeatPumpHplibControllerSpaceHeatingConfig
-    hp_config: more_advanced_heat_pump_hplib.HeatPumpHplibWithTwoOutputsConfig
+    hp_controller_config: more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig
+    hp_config: more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig
     simple_hot_water_storage_config: simple_hot_water_storage.SimpleHotWaterStorageConfig
     dhw_heatpump_config: generic_heat_pump_modular.HeatPumpConfig
     dhw_heatpump_controller_config: controller_l1_heatpump.L1HeatPumpConfig
@@ -135,14 +136,14 @@ class HouseholdMoreAdvancedHPDHWHPDieselCarConfig(SystemSetupConfigBase):
             hds_controller_config=hds_controller_config,
             hds_config=(
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-                    temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
                     water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+                    absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2
                 )
             ),
-            hp_controller_config=more_advanced_heat_pump_hplib.HeatPumpHplibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
+            hp_controller_config=more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
                 heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
             ),
-            hp_config=more_advanced_heat_pump_hplib.HeatPumpHplibWithTwoOutputsConfig.get_scaled_advanced_hp_lib(
+            hp_config=more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
                 heating_load_of_building_in_watt=Quantity(
                     my_building_information.max_thermal_building_demand_in_watt, Watt
                 ),
@@ -154,7 +155,6 @@ class HouseholdMoreAdvancedHPDHWHPDieselCarConfig(SystemSetupConfigBase):
                 max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
                 temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
                 sizing_option=simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
-                water_mass_flow_rate_from_hds_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
             ),
             dhw_heatpump_config=generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
                 number_of_apartments=int(my_building_information.number_of_apartments)
@@ -278,7 +278,7 @@ def setup_function(
     my_heat_pump_controller_config = my_config.hp_controller_config
     my_heat_pump_controller_config.name = "HeatPumpHplibController"
 
-    my_heat_pump_controller = more_advanced_heat_pump_hplib.HeatPumpHplibControllerSpaceHeating(
+    my_heat_pump_controller = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
         config=my_heat_pump_controller_config,
         my_simulation_parameters=my_simulation_parameters,
     )
@@ -287,7 +287,7 @@ def setup_function(
     my_heat_pump_config = my_config.hp_config
     my_heat_pump_config.name = "HeatPumpHPLib"
 
-    my_heat_pump = more_advanced_heat_pump_hplib.HeatPumpHplibWithTwoOutputs(
+    my_heat_pump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
         config=my_heat_pump_config,
         my_simulation_parameters=my_simulation_parameters,
     )

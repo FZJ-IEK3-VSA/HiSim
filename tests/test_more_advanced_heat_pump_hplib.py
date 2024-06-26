@@ -4,14 +4,14 @@ import pytest
 from tests import functions_for_testing as fft
 from hisim import component as cp
 from hisim.components.more_advanced_heat_pump_hplib import (
-    HeatPumpHplibWithTwoOutputs,
-    HeatPumpHplibWithTwoOutputsConfig,
-    HeatPumpWithTwoOutputsState,
+    MoreAdvancedHeatPumpHPLib,
+    MoreAdvancedHeatPumpHPLibConfig,
+    MoreAdvancedHeatPumpHPLibState,
 )
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-from hisim.units import KilowattHour, Quantity, Watt, Celsius, Seconds, Kilogram, Euro, Years
+from hisim.units import KilowattHour, Quantity, Watt, Celsius, Seconds, Kilogram, Euro, Years, KilogramPerSecond
 
 
 @pytest.mark.base
@@ -46,7 +46,7 @@ def test_heat_pump_hplib_new():
     t_amb = cp.ComponentOutput("Fake_t_amb", "Fake_t_amb", lt.LoadTypes.ANY, lt.Units.ANY)
 
     # Initialize component
-    heatpump_config = HeatPumpHplibWithTwoOutputsConfig(
+    heatpump_config = MoreAdvancedHeatPumpHPLibConfig(
         name="Heat Pump",
         model=model,
         heat_source="air",
@@ -58,16 +58,20 @@ def test_heat_pump_hplib_new():
         minimum_idle_time_in_seconds=Quantity(600, Seconds),
         minimum_running_time_in_seconds=Quantity(600, Seconds),
         temperature_difference_primary_side=2,
-        with_hot_water_storage=True,
+        position_hot_water_storage_in_system=1,
         with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
+        minimum_massflow_secondary_side_in_kg_per_s=None,
+        maximum_massflow_secondary_side_in_kg_per_s=None,
+        massflow_nominal_secondary_side_in_kg_per_s=Quantity(0.333, KilogramPerSecond),
+        minimum_thermal_output_power_in_watt=Quantity(3800, Watt),
         co2_footprint=Quantity(p_th_set.value * 1e-3 * 165.84, Kilogram),
         cost=Quantity(p_th_set.value * 1e-3 * 1513.74, Euro),
         lifetime=Quantity(10, Years),
         maintenance_cost_as_percentage_of_investment=0.025,
         consumption=Quantity(0, KilowattHour),
     )
-    heatpump = HeatPumpHplibWithTwoOutputs(config=heatpump_config, my_simulation_parameters=simpars)
-    heatpump.state = HeatPumpWithTwoOutputsState(
+    heatpump = MoreAdvancedHeatPumpHPLib(config=heatpump_config, my_simulation_parameters=simpars)
+    heatpump.state = MoreAdvancedHeatPumpHPLibState(
         time_on_heating=0,
         time_off=0,
         time_on_cooling=0,
@@ -81,6 +85,7 @@ def test_heat_pump_hplib_new():
         counter_switch_sh=0,
         counter_switch_dhw=0,
         counter_onoff=0,
+        delta_t=5,
     )
 
     number_of_outputs = fft.get_number_of_outputs(

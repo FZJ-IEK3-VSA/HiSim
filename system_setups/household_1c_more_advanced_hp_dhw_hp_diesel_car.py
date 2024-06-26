@@ -30,7 +30,6 @@ from hisim import utils
 from hisim.units import Quantity, Watt, Celsius, Seconds
 
 
-
 __authors__ = ["Markus Blasberg", "Kevin Knosala"]
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
 __credits__ = ["Noah Pflugradt"]

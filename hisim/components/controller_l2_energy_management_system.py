@@ -10,6 +10,7 @@ The component with the lowest source weight is activated first.
 from dataclasses import dataclass
 
 from typing import Any, List, Tuple
+
 from dataclasses_json import dataclass_json
 
 from hisim import component as cp
@@ -126,6 +127,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
     # Inputs
     ElectricityToElectrolyzerUnused = "ElectricityToElectrolyzerUnused"
+    ElectricityToBuildingFromDistrict = "ElectricityToBuildingFromDistrict"
 
     # Outputs
     ElectricityToElectrolyzerTarget = "ElectricityToElectrolyzerTarget"
@@ -139,6 +141,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     SpaceHeatingWaterStorageTemperatureModifier = (
         "SpaceHeatingWaterStorageTemperatureModifier"  # used for HeatPumpHplibController
     )
+    ElectricityToBuildingFromDistrictEMSOutput = "ElectricityToBuildingFromDistrictEMSOutput"
 
     CheckPeakShaving = "CheckPeakShaving"
 
@@ -187,6 +190,14 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.electricity_to_electrolyzer_unused: cp.ComponentInput = self.add_input(
             object_name=self.component_name,
             field_name=self.ElectricityToElectrolyzerUnused,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            mandatory=False,
+        )
+
+        self.electricity_to_building_from_district: cp.ComponentInput = self.add_input(
+            object_name=self.component_name,
+            field_name=self.ElectricityToBuildingFromDistrict,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
             mandatory=False,
@@ -247,11 +258,20 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             output_description=f"here a description for {self.CheckPeakShaving} will follow.",
         )
 
-        self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())
-        self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
-        self.add_dynamic_default_connections(self.get_default_connections_from_dhw_heat_pump())
-        self.add_dynamic_default_connections(self.get_default_connections_from_advanced_heat_pump())
-        self.add_dynamic_default_connections(self.get_default_connections_from_advanced_battery())
+        self.electricity_to_building_from_district_output: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricityToBuildingFromDistrictEMSOutput,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.ElectricityToBuildingFromDistrictEMSOutput} will follow.",
+        )
+
+        # self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())
+        # self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
+        # self.add_dynamic_default_connections(self.get_default_connections_from_dhw_heat_pump())
+        # self.add_dynamic_default_connections(self.get_default_connections_from_advanced_heat_pump())
+        # self.add_dynamic_default_connections(self.get_default_connections_from_advanced_battery())
 
     def get_default_connections_from_pv_system(
         self,
@@ -432,7 +452,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         outputs_sorted = []
 
         for ind, source_weight in enumerate(source_weights):
-            output = self.get_dynamic_output(
+            outputs = self.get_all_dynamic_outputs(
                 tags=[
                     component_types_sorted[ind],
                     lt.InandOutputType.ELECTRICITY_TARGET,
@@ -440,11 +460,11 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 weight_counter=source_weight,
             )
 
-            if output is not None:
-                outputs_sorted.append(output)
-            else:
-                raise Exception(f"Dynamic input with source weight {source_weight} is not connected to dynamic output")
-
+            for output in outputs:
+                if output is not None:
+                    outputs_sorted.append(output)
+                else:
+                    raise Exception("Dynamic input is not conncted to dynamic output")
         production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
         consumption_uncontrolled_inputs = self.get_dynamic_inputs(
             tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
@@ -541,6 +561,17 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             )
             stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
 
+        elif current_component_type == lt.ComponentType.SURPLUS_CONTROLLER_DISTRICT:
+            if available_surplus_electricity_in_watt > 0:
+                available_surplus_electricity_in_watt = (
+                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
+                )
+                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
+            else:
+                stsv.set_output_value(
+                    output=current_output, value=-electricity_demand_from_current_input_component_in_watt
+                )
+
         return available_surplus_electricity_in_watt
 
     def modify_set_temperatures_for_components_in_case_of_surplus_electricity(
@@ -622,9 +653,14 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 self.consumption_ems_controlled_inputs,
             ) = self.sort_source_weights_and_components()
 
+        district_electricity_unused = stsv.get_input_value(component_input=self.electricity_to_building_from_district)
+
+        stsv.set_output_value(self.electricity_to_building_from_district_output, district_electricity_unused)
+
         # get total production and consumptions
-        self.state.production_in_watt = sum(
-            [stsv.get_input_value(component_input=elem) for elem in self.production_inputs]
+        self.state.production_in_watt = (
+            sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])
+            + district_electricity_unused
         )
         self.state.consumption_uncontrolled_in_watt = sum(
             [stsv.get_input_value(component_input=elem) for elem in self.consumption_uncontrolled_inputs]

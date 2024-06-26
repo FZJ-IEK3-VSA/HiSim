@@ -1,4 +1,5 @@
 """Heat Distribution Module."""
+
 # clean
 import importlib
 from enum import IntEnum
@@ -7,10 +8,10 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
 import pandas as pd
+import numpy as np
 
 import hisim.component as cp
 from hisim.components.building import Building
-from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
 from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import PhysicsConfig
@@ -29,17 +30,34 @@ __status__ = ""
 
 
 class HeatDistributionSystemType(IntEnum):
-
     """Set Heating System Types."""
 
     RADIATOR = 1
     FLOORHEATING = 2
 
 
+class PositionHotWaterStorageInSystemSetup(IntEnum):
+    """Set Postion of Hot Water Storage in system setup.
+
+    PARALLEL:
+    Hot Water Storage is parallel to heatpump and hds, massflow of heatpump and heat distribution system are independent of each other.
+    Heatpump massflow is calculated in hp model, hds massflow is calculated in hds model.
+
+    SERIE:
+    Hot Water Storage in series to hp/hds, massflow of hds is an input and connected to hp, hot water storage is between output of hds and input of hp
+
+    NO_STORAGE:
+    No Hot Water Storage in system setup for space heating
+    """
+
+    PARALLEL = 1
+    SERIE = 2
+    NO_STORAGE = 3
+
+
 @dataclass_json
 @dataclass
 class HeatDistributionConfig(cp.ConfigBase):
-
     """Configuration of the HeatingWaterStorage class."""
 
     @classmethod
@@ -48,8 +66,9 @@ class HeatDistributionConfig(cp.ConfigBase):
         return HeatDistribution.get_full_classname()
 
     name: str
-    temperature_difference_between_flow_and_return_in_celsius: float
     water_mass_flow_rate_in_kg_per_second: float
+    absolute_conditioned_floor_area_in_m2: float
+    position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int]
     #: CO2 footprint of investment in kg
     co2_footprint: float
     #: cost for investment in Euro
@@ -62,14 +81,16 @@ class HeatDistributionConfig(cp.ConfigBase):
     @classmethod
     def get_default_heatdistributionsystem_config(
         cls,
-        temperature_difference_between_flow_and_return_in_celsius: float,
         water_mass_flow_rate_in_kg_per_second: float,
+        absolute_conditioned_floor_area_in_m2: float,
+        position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int] = PositionHotWaterStorageInSystemSetup.PARALLEL,
     ) -> Any:
         """Get a default heat distribution system config."""
         config = HeatDistributionConfig(
             name="HeatDistributionSystem",
-            temperature_difference_between_flow_and_return_in_celsius=temperature_difference_between_flow_and_return_in_celsius,
             water_mass_flow_rate_in_kg_per_second=water_mass_flow_rate_in_kg_per_second,
+            absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
+            position_hot_water_storage_in_system=position_hot_water_storage_in_system,
             co2_footprint=0,  # Todo: check value
             cost=8000,  # SOURCE: https://www.hausjournal.net/heizungsrohre-verlegen-kosten  # Todo: use price per m2 in system_setups instead
             lifetime=50,  # SOURCE: VDI2067-1
@@ -78,65 +99,24 @@ class HeatDistributionConfig(cp.ConfigBase):
         return config
 
 
-@dataclass_json
-@dataclass
-class HeatDistributionControllerConfig(cp.ConfigBase):
-
-    """HeatDistribution Controller Config Class."""
-
-    @classmethod
-    def get_main_classname(cls):
-        """Returns the full class name of the base class."""
-        return HeatDistributionController.get_full_classname()
-
-    name: str
-    heating_system: Union[HeatDistributionSystemType, int]
-    set_heating_threshold_outside_temperature_in_celsius: Optional[float]
-    heating_reference_temperature_in_celsius: float
-    set_heating_temperature_for_building_in_celsius: float
-    set_cooling_temperature_for_building_in_celsius: float
-    heating_load_of_building_in_watt: float
-
-    @classmethod
-    def get_default_heat_distribution_controller_config(
-        cls,
-        heating_load_of_building_in_watt: float,
-        set_heating_temperature_for_building_in_celsius: float,
-        set_cooling_temperature_for_building_in_celsius: float,
-        heating_reference_temperature_in_celsius: float = -7.0,
-        heating_system: Union[HeatDistributionSystemType, int] = HeatDistributionSystemType.FLOORHEATING,
-    ) -> "HeatDistributionControllerConfig":
-        """Gets a default HeatDistribution Controller."""
-
-        return HeatDistributionControllerConfig(
-            name="HeatDistributionController",
-            heating_system=heating_system,
-            set_heating_threshold_outside_temperature_in_celsius=16.0,
-            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-            set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
-            set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
-            heating_load_of_building_in_watt=heating_load_of_building_in_watt,
-        )
-
-
 @dataclass
 class HeatDistributionSystemState:
-
     """HeatDistributionSystemState class."""
 
-    water_output_temperature_in_celsius: float = 25
-    thermal_power_delivered_in_watt: float = 0
+    water_output_temperature_in_celsius: float = 25.0
+    water_input_temperature_in_celsius: float = 25.0
+    thermal_power_delivered_in_watt: float = 0.0
 
     def self_copy(self):
         """Copy the Heat Distribution State."""
         return HeatDistributionSystemState(
             self.water_output_temperature_in_celsius,
+            self.water_input_temperature_in_celsius,
             self.thermal_power_delivered_in_watt,
         )
 
 
 class HeatDistribution(cp.Component):
-
     """Heat Distribution System.
 
     It simulates the heat exchange between heat generator and building.
@@ -148,10 +128,14 @@ class HeatDistribution(cp.Component):
     WaterTemperatureInput = "WaterTemperatureInput"
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
     ResidenceTemperatureIndoorAir = "ResidenceTemperatureIndoorAir"
+    WaterMassFlow = "WaterMassFlow"
 
     # Outputs
+    WaterTemperatureInlet = "WaterTemperatureInlet"
     WaterTemperatureOutput = "WaterTemperatureOutput"
+    WaterTemperatureDifference = "WaterTemperatureDifference"
     ThermalPowerDelivered = "ThermalPowerDelivered"
+    WaterMassFlowHDS = "WaterMassFlowHDS"
 
     # Similar components to connect to:
     # 1. Building
@@ -173,18 +157,26 @@ class HeatDistribution(cp.Component):
 
         self.thermal_power_delivered_in_watt: float = 0.0
         self.water_temperature_output_in_celsius: float = 21
-        self.temperature_difference_between_flow_and_return_in_celsius = (
-            self.heat_distribution_system_config.temperature_difference_between_flow_and_return_in_celsius
-        )
+        self.water_input_temperature_in_celsius: float = 21
 
         self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second = (
             self.heat_distribution_system_config.water_mass_flow_rate_in_kg_per_second
         )
 
+        self.absolute_conditioned_floor_area_in_m2 = (
+            self.heat_distribution_system_config.absolute_conditioned_floor_area_in_m2
+        )
+
+        self.position_hot_water_storage_in_system = (
+            self.heat_distribution_system_config.position_hot_water_storage_in_system
+        )
+
         self.build()
 
         self.state: HeatDistributionSystemState = HeatDistributionSystemState(
-            water_output_temperature_in_celsius=21, thermal_power_delivered_in_watt=0
+            water_output_temperature_in_celsius=21.0,
+            water_input_temperature_in_celsius=21.0,
+            thermal_power_delivered_in_watt=0,
         )
         self.previous_state = self.state.self_copy()
 
@@ -192,6 +184,7 @@ class HeatDistribution(cp.Component):
         self.state_channel: cp.ComponentInput = self.add_input(
             self.component_name, self.State, lt.LoadTypes.ANY, lt.Units.ANY, True
         )
+
         self.theoretical_thermal_building_demand_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.TheoreticalThermalBuildingDemand,
@@ -216,13 +209,40 @@ class HeatDistribution(cp.Component):
             True,
         )
 
+        if self.position_hot_water_storage_in_system in [
+            PositionHotWaterStorageInSystemSetup.SERIE,
+            PositionHotWaterStorageInSystemSetup.NO_STORAGE,
+        ]:
+            # just important for heating system without parallel bufferstorage
+            self.water_mass_flow_rate_hp_in_kg_per_second_channel: cp.ComponentInput = self.add_input(
+                self.component_name,
+                self.WaterMassFlow,
+                lt.LoadTypes.WATER,
+                lt.Units.KG_PER_SEC,
+                True,
+            )
+
         # Outputs
-        self.water_temperature_output_channel: cp.ComponentOutput = self.add_output(
+        self.water_temperature_inlet_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.WaterTemperatureInlet,
+            lt.LoadTypes.WATER,
+            lt.Units.CELSIUS,
+            output_description=f"here a description for {self.WaterTemperatureInlet} will follow.",
+        )
+        self.water_temperature_outlet_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.WaterTemperatureOutput,
             lt.LoadTypes.WATER,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.WaterTemperatureOutput} will follow.",
+        )
+        self.water_temperature_difference_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.WaterTemperatureDifference,
+            lt.LoadTypes.WATER,
+            lt.Units.KELVIN,
+            output_description=f"here a description for {self.WaterTemperatureDifference} will follow.",
         )
         self.thermal_power_delivered_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -231,10 +251,18 @@ class HeatDistribution(cp.Component):
             lt.Units.WATT,
             output_description=f"here a description for {self.ThermalPowerDelivered} will follow.",
         )
+        self.water_mass_flow_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.WaterMassFlowHDS,
+            lt.LoadTypes.VOLUME,
+            lt.Units.KG_PER_SEC,
+            output_description=f"here a description for {self.WaterMassFlowHDS} will follow.",
+        )
 
         self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
         self.add_default_connections(self.get_default_connections_from_building())
-        self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
+        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
+            self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
 
     def get_default_connections_from_heat_distribution_controller(
         self,
@@ -305,6 +333,7 @@ class HeatDistribution(cp.Component):
         self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = (
             PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
         )
+        self.density_of_water = PhysicsConfig.water_density
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -336,46 +365,131 @@ class HeatDistribution(cp.Component):
         theoretical_thermal_building_demand_in_watt = stsv.get_input_value(
             self.theoretical_thermal_building_demand_channel
         )
-
-        water_temperature_input_in_celsius = stsv.get_input_value(self.water_temperature_input_channel)
-
         residence_temperature_input_in_celsius = stsv.get_input_value(self.residence_temperature_input_channel)
 
-        # if state_controller == 1:
-        if state_controller in (1, -1):
-            (
-                self.water_temperature_output_in_celsius,
-                self.thermal_power_delivered_in_watt,
-            ) = self.determine_water_temperature_output_after_heat_exchange_with_building_and_effective_thermal_power(
-                water_temperature_input_in_celsius=water_temperature_input_in_celsius,
-                water_mass_flow_in_kg_per_second=self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second,
-                theoretical_thermal_buiding_demand_in_watt=theoretical_thermal_building_demand_in_watt,
-                residence_temperature_in_celsius=residence_temperature_input_in_celsius,
+        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
+            water_mass_flow_rate_in_kg_per_second = (
+                self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second
+            )
+        else:
+            # important for heating system without buffer storage
+            water_mass_flow_rate_in_kg_per_second = stsv.get_input_value(
+                self.water_mass_flow_rate_hp_in_kg_per_second_channel
             )
 
-        elif state_controller == 0:
-            self.thermal_power_delivered_in_watt = 0.0
-
-            self.water_temperature_output_in_celsius = water_temperature_input_in_celsius
-
+        if water_mass_flow_rate_in_kg_per_second == 0:
+            # important for heating system without buffer storage
+            (
+                water_temperature_input_in_celsius,
+                water_temperature_output_in_celsius,
+                thermal_power_delivered_in_watt,
+            ) = self.determine_water_temperature_input_output_effective_thermal_power_without_massflow(
+                residence_temperature_in_celsius=residence_temperature_input_in_celsius,
+            )
         else:
-            raise ValueError("unknown hds controller mode")
+            water_temperature_input_in_celsius = stsv.get_input_value(self.water_temperature_input_channel)
+            # if state_controller == 1:
+            if state_controller in (1, -1):
+                (
+                    water_temperature_output_in_celsius,
+                    thermal_power_delivered_in_watt,
+                ) = self.determine_water_temperature_output_after_heat_exchange_with_building_and_effective_thermal_power(
+                    water_temperature_input_in_celsius=water_temperature_input_in_celsius,
+                    water_mass_flow_in_kg_per_second=water_mass_flow_rate_in_kg_per_second,
+                    theoretical_thermal_buiding_demand_in_watt=theoretical_thermal_building_demand_in_watt,
+                    residence_temperature_in_celsius=residence_temperature_input_in_celsius,
+                )
+
+            elif state_controller == 0:
+                thermal_power_delivered_in_watt = 0.0
+                water_temperature_output_in_celsius = water_temperature_input_in_celsius
+
+            else:
+                raise ValueError("unknown hds controller mode")
 
         # Set outputs -----------------------------------------------------------------------------------------------------------
-
         stsv.set_output_value(
-            self.water_temperature_output_channel,
-            self.state.water_output_temperature_in_celsius
-            # self.water_temperature_output_in_celsius,
+            self.water_temperature_inlet_channel,
+            self.state.water_input_temperature_in_celsius,
+            # water_temperature_input_in_celsius
+        )
+        stsv.set_output_value(
+            self.water_temperature_outlet_channel,
+            self.state.water_output_temperature_in_celsius,
+            #  water_temperature_output_in_celsius,
+        )
+        stsv.set_output_value(
+            self.water_temperature_difference_channel,
+            #    water_temperature_input_in_celsius-water_temperature_output_in_celsius
+            self.state.water_input_temperature_in_celsius - self.state.water_output_temperature_in_celsius,
         )
         stsv.set_output_value(
             self.thermal_power_delivered_channel,
-            self.state.thermal_power_delivered_in_watt
-            # self.thermal_power_delivered_in_watt,
+            self.state.thermal_power_delivered_in_watt,
+            #  thermal_power_delivered_in_watt,
+        )
+        stsv.set_output_value(
+            self.water_mass_flow_channel,
+            water_mass_flow_rate_in_kg_per_second,
         )
 
-        self.state.water_output_temperature_in_celsius = self.water_temperature_output_in_celsius
-        self.state.thermal_power_delivered_in_watt = self.thermal_power_delivered_in_watt
+        # write values to state
+        self.state.water_output_temperature_in_celsius = water_temperature_output_in_celsius
+        self.state.water_input_temperature_in_celsius = water_temperature_input_in_celsius
+        self.state.thermal_power_delivered_in_watt = thermal_power_delivered_in_watt
+
+    def determine_water_temperature_input_output_effective_thermal_power_without_massflow(
+        self,
+        residence_temperature_in_celsius: float,
+    ) -> Any:
+        """Calculate cooled or heated water temperature due to free convection after heat exchange between heat distribution system and building without massflow."""
+
+        # source1: https://www.mdpi.com/1996-1073/16/15/5850
+        # source2: https://www.researchgate.net/publication/305659004_Modelling_and_Simulation_of_Underfloor_Heating_System_Supplied_from_Heat_Pump
+        # source3: https://www.sciencedirect.com/science/article/pii/S0378778816312749?via%3Dihub
+        # assumption1: https://www.heizsparer.de/heizung/heizkorper/fussbodenheizung/fussbodenheizung-planen-heizkreise-berechnen
+        # assumption2: heat transfer direction just to the room --> other direction is adiabatic
+        # assumption3: still air and no floor covering considered
+
+        height_of_screed = 40 / 1000  # in m
+        thermal_conductivity_screed = 1.4  # in W/(m^2K)
+        heat_transfer_coefficient_screed_to_air = 5.8  # assumption3
+        inner_pipe_diameter = 16 / 1000  # in m  # Task 44 IEA Annex 38
+        outer_pipe_diameter = (16 + 2) / 1000  # in m  # Task 44 IEA Annex 38
+
+        heat_resistance_coefficient_hds_pipe_to_air = (
+            height_of_screed / thermal_conductivity_screed + 1 / heat_transfer_coefficient_screed_to_air
+        )
+
+        length_of_hds_pipe = 8.8 * self.absolute_conditioned_floor_area_in_m2  # in m -> assumption1
+        inner_volume_of_hds = (np.pi / 4) * ((inner_pipe_diameter) ** 2) * length_of_hds_pipe  # in m^3
+
+        outer_surface_of_hds_pipe = np.pi * outer_pipe_diameter * length_of_hds_pipe  # in m^2
+
+        mass_of_water_in_hds = inner_volume_of_hds * self.density_of_water
+
+        time_constant_hds = (
+            mass_of_water_in_hds * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
+        ) * (heat_resistance_coefficient_hds_pipe_to_air / outer_surface_of_hds_pipe)
+
+        water_temperature_input_in_celsius = residence_temperature_in_celsius + (
+            (self.state.water_input_temperature_in_celsius - residence_temperature_in_celsius)
+            * np.exp(-(self.my_simulation_parameters.seconds_per_timestep) / time_constant_hds)
+        )
+        water_temperature_output_in_celsius = residence_temperature_in_celsius + (
+            (self.state.water_output_temperature_in_celsius - residence_temperature_in_celsius)
+            * np.exp(-(self.my_simulation_parameters.seconds_per_timestep) / time_constant_hds)
+        )
+
+        thermal_power_delivered_effective_in_watt = self.state.thermal_power_delivered_in_watt * np.exp(
+            -(self.my_simulation_parameters.seconds_per_timestep) / time_constant_hds
+        )
+
+        return (
+            water_temperature_input_in_celsius,
+            water_temperature_output_in_celsius,
+            thermal_power_delivered_effective_in_watt,
+        )
 
     def determine_water_temperature_output_after_heat_exchange_with_building_and_effective_thermal_power(
         self,
@@ -466,8 +580,47 @@ class HeatDistribution(cp.Component):
         return opex_cost_data_class
 
 
-class HeatDistributionController(cp.Component):
+@dataclass_json
+@dataclass
+class HeatDistributionControllerConfig(cp.ConfigBase):
+    """HeatDistribution Controller Config Class."""
 
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return HeatDistributionController.get_full_classname()
+
+    name: str
+    heating_system: Union[HeatDistributionSystemType, int]
+    set_heating_threshold_outside_temperature_in_celsius: Optional[float]
+    heating_reference_temperature_in_celsius: float
+    set_heating_temperature_for_building_in_celsius: float
+    set_cooling_temperature_for_building_in_celsius: float
+    heating_load_of_building_in_watt: float
+
+    @classmethod
+    def get_default_heat_distribution_controller_config(
+        cls,
+        heating_load_of_building_in_watt: float,
+        set_heating_temperature_for_building_in_celsius: float,
+        set_cooling_temperature_for_building_in_celsius: float,
+        heating_reference_temperature_in_celsius: float = -7.0,
+        heating_system: Union[HeatDistributionSystemType, int] = HeatDistributionSystemType.FLOORHEATING,
+    ) -> "HeatDistributionControllerConfig":
+        """Gets a default HeatDistribution Controller."""
+
+        return HeatDistributionControllerConfig(
+            name="HeatDistributionController",
+            heating_system=heating_system,
+            set_heating_threshold_outside_temperature_in_celsius=16.0,
+            heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
+            set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
+            set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
+            heating_load_of_building_in_watt=heating_load_of_building_in_watt,
+        )
+
+
+class HeatDistributionController(cp.Component):
     """Heat Distribution Controller.
 
     It takes data from the building, weather and water storage and sends signal to the heat distribution for
@@ -478,13 +631,14 @@ class HeatDistributionController(cp.Component):
     # Inputs
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
     DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
-    WaterTemperatureInputFromHeatWaterStorage = "WaterTemperatureInputFromHeatWaterStorage"
     # Inputs -> energy management system
     BuildingTemperatureModifier = "BuildingTemperatureModifier"
 
     # Outputs
     State = "State"
     HeatingFlowTemperature = "HeatingFlowTemperature"
+    HeatingReturnTemperature = "HeatingReturnTemperature"
+    HeatingTemperatureDifference = "HeatingTemperatureDifference"
 
     # Similar components to connect to:
     # 1. Building
@@ -537,13 +691,6 @@ class HeatDistributionController(cp.Component):
             lt.Units.CELSIUS,
             True,
         )
-        self.water_temperature_input_from_heat_water_storage_channel: cp.ComponentInput = self.add_input(
-            self.component_name,
-            self.WaterTemperatureInputFromHeatWaterStorage,
-            lt.LoadTypes.TEMPERATURE,
-            lt.Units.CELSIUS,
-            True,
-        )
         self.building_temperature_modifier_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.BuildingTemperatureModifier,
@@ -566,12 +713,26 @@ class HeatDistributionController(cp.Component):
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.HeatingFlowTemperature} will follow.",
         )
+        self.heating_return_temperature_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatingReturnTemperature,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            output_description=f"here a description for {self.HeatingReturnTemperature} will follow.",
+        )
+        self.heating_temperature_difference_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.HeatingTemperatureDifference,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            output_description=f"here a description for {self.HeatingTemperatureDifference} will follow.",
+        )
+
         self.controller_heat_distribution_mode: str = "off"
         self.previous_controller_heat_distribution_mode: str = "off"
 
         self.add_default_connections(self.get_default_connections_from_building())
         self.add_default_connections(self.get_default_connections_from_weather())
-        self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
         self.add_default_connections(self.get_default_connections_from_energy_management_system())
 
     def get_default_connections_from_weather(
@@ -602,22 +763,6 @@ class HeatDistributionController(cp.Component):
                 HeatDistributionController.TheoreticalThermalBuildingDemand,
                 building_classname,
                 Building.TheoreticalThermalBuildingDemand,
-            )
-        )
-        return connections
-
-    def get_default_connections_from_simple_hot_water_storage(
-        self,
-    ):
-        """Get simple_hot_water_storage default connections."""
-
-        connections = []
-        hws_classname = SimpleHotWaterStorage.get_classname()
-        connections.append(
-            cp.ComponentConnection(
-                HeatDistributionController.WaterTemperatureInputFromHeatWaterStorage,
-                hws_classname,
-                SimpleHotWaterStorage.WaterTemperatureToHeatDistribution,
             )
         )
         return connections
@@ -748,6 +893,16 @@ class HeatDistributionController(cp.Component):
                 self.heating_flow_temperature_channel,
                 list_of_heating_distribution_system_flow_and_return_temperatures[0],
             )
+            stsv.set_output_value(
+                self.heating_return_temperature_channel,
+                list_of_heating_distribution_system_flow_and_return_temperatures[1],
+            )
+
+            stsv.set_output_value(
+                self.heating_temperature_difference_channel,
+                list_of_heating_distribution_system_flow_and_return_temperatures[0]
+                - list_of_heating_distribution_system_flow_and_return_temperatures[1],
+            )
 
     def conditions_for_opening_or_shutting_heat_distribution(
         self,
@@ -875,7 +1030,6 @@ class HeatDistributionController(cp.Component):
 @dataclass_json
 @dataclass
 class HeatDistributionControllerInformation:
-
     """Class for collecting important heat distribution parameters to pass to other components."""
 
     def __init__(self, config: HeatDistributionControllerConfig):

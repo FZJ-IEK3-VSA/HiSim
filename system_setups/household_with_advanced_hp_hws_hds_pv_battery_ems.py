@@ -145,8 +145,8 @@ def setup_function(
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-        temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
         water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+        absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config,
@@ -158,7 +158,6 @@ def setup_function(
         max_thermal_power_in_watt_of_heating_system=my_heat_pump_config.set_thermal_output_power_in_watt.value,
         sizing_option=simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
-        water_mass_flow_rate_from_hds_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
     )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
@@ -199,6 +198,62 @@ def setup_function(
         src_object=loading_power_input_for_battery_in_watt,
     )
 
+    # -----------------------------------------------------------------------------------------------------------------
+    # Add inputs and outputs to EMS
+    my_electricity_controller.add_component_input_and_connect(
+        source_object_name=my_heat_pump.component_name,
+        source_component_output=my_heat_pump.ElectricalInputPower,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[
+            lt.ComponentType.HEAT_PUMP_BUILDING,
+            lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
+        ],
+        source_weight=2,
+    )
+
+    my_electricity_controller.add_component_output(
+        source_output_name=f"ElectricityToOrFromGridOfSH{my_heat_pump.get_classname()}_",
+        source_tags=[lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.ELECTRICITY_TARGET],
+        source_weight=2,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        output_description="Target electricity for Heating Heat Pump. ",
+    )
+
+    my_electricity_controller.add_component_input_and_connect(
+        source_object_name=my_occupancy.component_name,
+        source_component_output=my_occupancy.ElectricityOutput,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[lt.ComponentType.RESIDENTS, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
+        source_weight=1
+    )
+
+    my_electricity_controller.add_component_output(
+        source_output_name=f"ElectricityToOrFromGridOf{my_occupancy.get_classname()}_",
+        source_tags=[
+            lt.ComponentType.RESIDENTS,
+            lt.InandOutputType.ELECTRICITY_TARGET,
+        ],
+        source_weight=1,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        output_description="Target electricity for Occupancy. ",
+    )
+
+    my_electricity_controller.add_component_input_and_connect(
+        source_object_name=my_photovoltaic_system.component_name,
+        source_component_output=my_photovoltaic_system.ElectricityOutput,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        source_tags=[
+            lt.ComponentType.PV,
+            lt.InandOutputType.ELECTRICITY_PRODUCTION,
+        ],
+        source_weight=999,
+    )
+
     # =================================================================================================================================
     # Add Components to Simulation Parameters
 
@@ -212,4 +267,4 @@ def setup_function(
     my_sim.add_component(my_heat_pump_controller, connect_automatically=True)
     my_sim.add_component(my_heat_pump, connect_automatically=True)
     my_sim.add_component(my_advanced_battery)
-    my_sim.add_component(my_electricity_controller, connect_automatically=True)
+    my_sim.add_component(my_electricity_controller, connect_automatically=False)

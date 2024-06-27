@@ -3,7 +3,6 @@
 # clean
 
 from typing import List, Optional, Any
-from pathlib import Path
 from dataclasses import dataclass
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,

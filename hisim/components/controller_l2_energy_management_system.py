@@ -267,11 +267,11 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             output_description=f"here a description for {self.ElectricityToBuildingFromDistrictEMSOutput} will follow.",
         )
 
-        # self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())
-        # self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
-        # self.add_dynamic_default_connections(self.get_default_connections_from_dhw_heat_pump())
-        # self.add_dynamic_default_connections(self.get_default_connections_from_advanced_heat_pump())
-        # self.add_dynamic_default_connections(self.get_default_connections_from_advanced_battery())
+        self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())
+        self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
+        self.add_dynamic_default_connections(self.get_default_connections_from_dhw_heat_pump())
+        self.add_dynamic_default_connections(self.get_default_connections_from_advanced_heat_pump())
+        self.add_dynamic_default_connections(self.get_default_connections_from_advanced_battery())
 
     def get_default_connections_from_pv_system(
         self,

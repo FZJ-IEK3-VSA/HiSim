@@ -225,6 +225,7 @@ def air_conditioned_house(
         number_of_apartments=number_of_apartments,
         predictive=predictive,
         enable_opening_windows=enable_opening_windows,
+        max_thermal_building_demand_in_watt=None,
     )
     my_building = building.Building(
         config=my_building_config,
@@ -275,6 +276,7 @@ def air_conditioned_house(
         predictive=predictive,
         prediction_horizon=prediction_horizon,
         predictive_control=predictive_control,
+        share_of_maximum_pv_potential=1.0
     )
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,

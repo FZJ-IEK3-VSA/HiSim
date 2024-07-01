@@ -3,9 +3,6 @@
 # clean
 
 from typing import List, Optional, Any
-from os import listdir
-from pathlib import Path
-
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
@@ -22,9 +19,7 @@ from hisim.components import generic_pv_system
 from hisim.components import advanced_ev_battery_bslib
 from hisim.components import controller_l1_generic_ev_charge
 from hisim.components import controller_l2_energy_management_system
-from hisim import utils
 from hisim import loadtypes as lt
-from system_setups.modular_example import cleanup_old_lpg_requests
 from system_setups.household_4a_with_car_priority_advanced_hp_ev_pv import (
     HouseholdAdvancedHPEvPvConfig,
 )
@@ -63,13 +58,6 @@ def setup_function(
         - Car (Electric Vehicle, Electric Vehicle Battery, Electric Vehicle Battery Controller)
         - EMS (necessary for Electric Vehicle)
     """
-
-    # cleanup old lpg requests, mandatory to change number of cars
-    # Todo: change cleanup-function if result_path from occupancy is not utils.HISIMPATH["results"]
-    if Path(utils.HISIMPATH["utsp_results"]).exists():
-        cleanup_old_lpg_requests()
-    else:
-        Path(utils.HISIMPATH["utsp_results"]).mkdir(parents=False, exist_ok=False)
 
     # my_config = utils.create_configuration(my_sim, HouseholdAdvancedHPEvPvConfig)
 
@@ -183,24 +171,21 @@ def setup_function(
     )
 
     # Build Electric Vehicle(s)
-    # get names of all available cars
-    filepaths = listdir(utils.HISIMPATH["utsp_results"])
-    filepaths_location = [elem for elem in filepaths if "CarLocation." in elem]
-    names = [elem.partition(",")[0].partition(".")[2] for elem in filepaths_location]
+    # get all available cars from occupancy
+    my_car_information = generic_car.GenericCarInformation(my_occupancy_instance=my_occupancy)
 
-    my_car_config = my_config.car_config  # Todo: check source weight in case of 2 vehicles
+    my_car_config = my_config.car_config
     my_car_config.name = "ElectricCar"
 
     # create all cars
     my_cars: List[generic_car.Car] = []
-    for car in names:
-        # Todo: check car name in case of 1 vehicle
-        my_car_config.name = car
+    for idx, car_information_dict in enumerate(my_car_information.data_dict_for_car_component.values()):
+        my_car_config.name = car_information_dict["car_name"] + f"_{idx}"
         my_cars.append(
             generic_car.Car(
                 my_simulation_parameters=my_simulation_parameters,
                 config=my_car_config,
-                occupancy_config=my_occupancy_config,
+                data_dict_with_car_information=car_information_dict,
             )
         )
 

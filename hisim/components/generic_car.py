@@ -6,21 +6,20 @@ Evaluates diesel or electricity consumption based on driven kilometers and proce
 # clean
 
 import datetime as dt
-import json
 from dataclasses import dataclass
-from os import listdir, path
-# -*- coding: utf-8 -*-
-from typing import List, Any, Tuple
 
+# -*- coding: utf-8 -*-
+from typing import List, Any, Tuple, Dict
 import pandas as pd
 from dataclasses_json import dataclass_json
 
 from hisim import component as cp
 from hisim import loadtypes as lt
-from hisim import utils
+from hisim import utils, log
 from hisim.component import OpexCostDataClass
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
+from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -30,6 +29,105 @@ __version__ = ""
 __maintainer__ = "Johanna Ganglbauer"
 __email__ = "johanna.ganglbauer@4wardenergy.at"
 __status__ = "development"
+
+
+@dataclass_json
+@dataclass
+class GenericCarInformation:
+
+    """Class for collecting important generic car parameters from occupancy."""
+
+    def __init__(self, my_occupancy_instance: UtspLpgConnector):
+        """Initialize the class."""
+
+        self.my_occupancy_instance = my_occupancy_instance
+        self.build(my_occupancy_instance=my_occupancy_instance)
+        self.data_dict_for_car_component = self.prepare_data_dict_for_car_component(
+            car_names=self.car_names,
+            household_names=self.household_names,
+            time_resolutions=self.time_resolutions,
+            car_locations=self.car_location_value_list,
+            driven_meters=self.driven_meters,
+        )
+
+    def build(self, my_occupancy_instance: UtspLpgConnector) -> None:
+        """Get important values from occupancy instance."""
+        # get names of all available cars
+        car_data_dict = my_occupancy_instance.car_data_dict
+
+        # get car names and household names
+        (
+            self.car_names,
+            self.household_names,
+            self.time_resolutions,
+            self.car_location_value_list,
+        ) = self.get_important_parameters_from_occupancy_car_data(car_data_dict=car_data_dict)
+
+        # get driven meters
+        self.driven_meters = self.get_meters_driven_from_occupancy_car_data(car_data_dict=car_data_dict)
+
+    def get_important_parameters_from_occupancy_car_data(self, car_data_dict: Dict) -> Tuple[List, List, List, List]:
+        """Get car names and household names from occupancy car data."""
+        car_location_list = car_data_dict["car_locations"]
+
+        car_names = []
+        household_names = []
+        time_resolutions = []
+        car_location_value_list = []
+        for car_location in car_location_list:
+            # get car names
+            car_name = (
+                car_location["LoadTypeName"]
+                .split(" - ")[1]
+                .translate(str.maketrans({" ": "_", ",": "", "/": "", ".": ""}))
+            )
+            car_names.append(car_name)
+
+            # get household names
+            household_key_dict = car_location["HouseKey"]
+            household_name = household_key_dict["HouseholdName"].translate(
+                str.maketrans({" ": "_", ",": "", "/": "", ".": ""})
+            )
+            household_names.append(household_name)
+
+            # get time resolutions
+            time_resolution = car_location["TimeResolution"]
+            time_resolutions.append(time_resolution)
+
+            # get car location values
+            car_location_values = car_location["Values"]
+            car_location_value_list.append(car_location_values)
+
+        return car_names, household_names, time_resolutions, car_location_value_list
+
+    def get_meters_driven_from_occupancy_car_data(self, car_data_dict: Dict) -> List:
+        """Get meters driven from occupancy car data."""
+        driven_distances_list = car_data_dict["driving_distances"]
+        driven_meter_list = []
+        for driven_distance_data in driven_distances_list:
+            driven_meter_values = driven_distance_data["Values"]
+            driven_meter_list.append(driven_meter_values)
+
+        return driven_meter_list
+
+    def prepare_data_dict_for_car_component(
+        self, car_names: List, household_names: List, time_resolutions: List, car_locations: List, driven_meters: List
+    ) -> Dict:
+        """Prepare data for car component."""
+        data_dict_for_car_component: Dict = {}
+        for index, household_name in enumerate(household_names):
+            data_dict_for_car_component.update(
+                {
+                    household_name: {
+                        "car_name": car_names[index],
+                        "household_name": household_name,
+                        "time_resolution": time_resolutions[index],
+                        "car_location": car_locations[index],
+                        "driven_meters": driven_meters[index],
+                    }
+                }
+            )
+        return data_dict_for_car_component
 
 
 @dataclass_json
@@ -115,16 +213,11 @@ class Car(cp.Component):
     ElectricityOutput = "ElectricityOutput"
     CarLocation = "CarLocation"
 
-    @staticmethod
-    def get_cost_capex(config: CarConfig) -> Tuple[float, float, float]:
-        """Returns investment cost, CO2 emissions and lifetime."""
-        return config.cost, config.co2_footprint, config.lifetime
-
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
         config: CarConfig,
-        occupancy_config: Any,
+        data_dict_with_car_information: Dict,
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(display_in_webtool=True),
     ) -> None:
         """Initializes Car."""
@@ -134,7 +227,7 @@ class Car(cp.Component):
             my_config=config,
             my_display_config=my_display_config,
         )
-        self.build(config=config, occupancy_config=occupancy_config)
+        self.build(config=config, car_information_dict=data_dict_with_car_information)
 
         if self.config.fuel == lt.LoadTypes.ELECTRICITY:
             self.electricity_output: cp.ComponentOutput = self.add_output(
@@ -247,11 +340,17 @@ class Car(cp.Component):
 
         return opex_cost_data_class
 
-    def build(self, config: CarConfig, occupancy_config: Any) -> None:
+    @staticmethod
+    def get_cost_capex(config: CarConfig) -> Tuple[float, float, float]:
+        """Returns investment cost, CO2 emissions and lifetime."""
+        return config.cost, config.co2_footprint, config.lifetime
+
+    def build(self, config: CarConfig, car_information_dict: Dict) -> None:
         """Loads necesary data and saves config to class."""
-        self.config = config
-        self.car_location = []
-        self.meters_driven = []
+        self.car_information_dict = car_information_dict
+        self.car_location = car_information_dict["car_location"]
+        self.meters_driven = car_information_dict["driven_meters"]
+        self.time_resolution = car_information_dict["time_resolution"]
 
         location_translator = {
             "School": 0,
@@ -265,32 +364,20 @@ class Car(cp.Component):
         # check if caching is possible
         file_exists, cache_filepath = utils.get_cache_file(
             component_key=self.component_name,
-            parameter_class=occupancy_config,
+            parameter_class=config,
             my_simulation_parameters=self.my_simulation_parameters,
         )
         if file_exists:
             # load from cache
+            log.information("Generic car data is taken from cache.")
             dataframe = pd.read_csv(cache_filepath, sep=",", decimal=".", encoding="cp1252")
             self.car_location = dataframe["car_location"].tolist()
             self.meters_driven = dataframe["meters_driven"].tolist()
+
         else:
-            # load car data from LPG output
-            filepaths = listdir(utils.HISIMPATH["utsp_results"])
-            filepath_location = [elem for elem in filepaths if "CarLocation." + self.config.name in elem][0]
-            filepath_meters_driven = [elem for elem in filepaths if "DrivingDistance." + self.config.name in elem][0]
-            with open(
-                path.join(utils.HISIMPATH["utsp_results"], filepath_location),
-                encoding="utf-8",
-            ) as json_file:
-                car_location = json.load(json_file)
-            with open(
-                path.join(utils.HISIMPATH["utsp_results"], filepath_meters_driven),
-                encoding="utf-8",
-            ) as json_file:
-                meters_driven = json.load(json_file)
 
             # compare time resolution of LPG to time resolution of hisim
-            time_resolution_original = dt.datetime.strptime(car_location["TimeResolution"], "%H:%M:%S")
+            time_resolution_original = dt.datetime.strptime(self.time_resolution, "%H:%M:%S")
             seconds_per_timestep_original = (
                 time_resolution_original.hour * 3600
                 + time_resolution_original.minute * 60
@@ -319,30 +406,30 @@ class Car(cp.Component):
                         - dt.timedelta(seconds=60),
                         freq="T",
                     ),
-                    "meters_driven": meters_driven["Values"][:steps_desired_in_minutes],
-                    "car_location": [location_translator[elem] for elem in car_location["Values"]][
+                    "meters_driven": self.meters_driven[:steps_desired_in_minutes],
+                    "car_location": [location_translator[elem] for elem in self.car_location][
                         :steps_desired_in_minutes
                     ],
                 }
             )
             initial_data = utils.convert_lpg_data_to_utc(data=initial_data, year=self.my_simulation_parameters.year)
-            meters_driven = pd.to_numeric(initial_data["meters_driven"]).tolist()
-            car_location = pd.to_numeric(initial_data["car_location"]).tolist()
+            self.meters_driven = pd.to_numeric(initial_data["meters_driven"]).tolist()
+            self.car_location = pd.to_numeric(initial_data["car_location"]).tolist()
 
             # sum / extract most common value from data to match hisim time resolution
             if minutes_per_timestep > 1:
                 for i in range(steps_desired):
                     self.meters_driven.append(
-                        sum(meters_driven[i * minutes_per_timestep : (i + 1) * minutes_per_timestep])
+                        sum(self.meters_driven[i * minutes_per_timestep : (i + 1) * minutes_per_timestep])
                     )  # sum
-                    location_list = car_location[
+                    location_list = self.car_location[
                         i * minutes_per_timestep : (i + 1) * minutes_per_timestep
                     ]  # extract list
                     occurence_count = most_frequent(input_list=location_list)  # extract most common
                     self.car_location.append(occurence_count)
             else:
-                self.meters_driven = meters_driven
-                self.car_location = car_location
+                self.meters_driven = self.meters_driven
+                self.car_location = self.car_location
 
             # save data in cache
             database = pd.DataFrame(
@@ -351,6 +438,7 @@ class Car(cp.Component):
                     "meters_driven": self.meters_driven,
                 }
             )
+
             database.to_csv(cache_filepath)
             del database
 

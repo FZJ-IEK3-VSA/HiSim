@@ -86,7 +86,7 @@ def test_house(
     )
     # Build PV
     my_photovoltaic_system_config = (
-        generic_pv_system.PVSystemConfig.get_scaled_pv_system(share_of_maximum_pv_power=1, rooftop_area_in_m2=120)
+        generic_pv_system.PVSystemConfig.get_scaled_pv_system(share_of_maximum_pv_potential=1, rooftop_area_in_m2=120)
     )
 
     my_photovoltaic_system = generic_pv_system.PVSystem(

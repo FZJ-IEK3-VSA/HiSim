@@ -82,6 +82,8 @@ class PVSystemConfig(ConfigBase):
     power_in_watt: float
     azimuth: float
     tilt: float
+    # [0..1], how much pv potential is used
+    share_of_maximum_pv_potential: float
     load_module_data: bool
     source_weight: int
     #: CO2 footprint of investment in kg
@@ -97,9 +99,9 @@ class PVSystemConfig(ConfigBase):
     prediction_horizon: Optional[int]
 
     @classmethod
-    def get_default_pv_system(cls) -> "PVSystemConfig":
+    def get_default_pv_system(cls, power_in_watt: float = 10e3, share_of_maximum_pv_potential: float = 1.0, location: str = "Aachen") -> "PVSystemConfig":
         """Gets a default PV system."""
-        power_in_watt = 10e3  # W
+        power_in_watt = power_in_watt * share_of_maximum_pv_potential
         return PVSystemConfig(
             time=2019,
             power_in_watt=power_in_watt,
@@ -112,8 +114,9 @@ class PVSystemConfig(ConfigBase):
             name="PVSystem",
             azimuth=180,
             tilt=30,
+            share_of_maximum_pv_potential=share_of_maximum_pv_potential,
             source_weight=0,
-            location="Aachen",
+            location=location,
             co2_footprint=power_in_watt * 1e-3 * 330.51,  # value from emission_factros_and_costs_devices.csv
             cost=power_in_watt * 1e-3 * 794.41,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
@@ -127,7 +130,7 @@ class PVSystemConfig(ConfigBase):
     def get_scaled_pv_system(
         cls,
         rooftop_area_in_m2: float,
-        share_of_maximum_pv_power: float = 1.0,
+        share_of_maximum_pv_potential: float = 1.0,
         module_name: str = "Hanwha HSL60P6-PA-4-250T [2013]",
         module_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
         location: str = "Aachen",
@@ -136,7 +139,7 @@ class PVSystemConfig(ConfigBase):
         """Gets a default PV system with scaling according to rooftop area."""
         total_pv_power_in_watt = cls.size_pv_system(
             rooftop_area_in_m2=rooftop_area_in_m2,
-            share_of_maximum_pv_power=share_of_maximum_pv_power,
+            share_of_maximum_pv_potential=share_of_maximum_pv_potential,
             module_name=module_name,
             module_database=module_database,
         )
@@ -152,6 +155,7 @@ class PVSystemConfig(ConfigBase):
             name="PVSystem",
             azimuth=180,
             tilt=30,
+            share_of_maximum_pv_potential=share_of_maximum_pv_potential,
             source_weight=0,
             location=location,
             co2_footprint=total_pv_power_in_watt * 1e-3 * 330.51,  # value from emission_factros_and_costs_devices.csv
@@ -167,7 +171,7 @@ class PVSystemConfig(ConfigBase):
     def size_pv_system(
         cls,
         rooftop_area_in_m2: float,
-        share_of_maximum_pv_power: float,
+        share_of_maximum_pv_potential: float,
         module_name: str,
         module_database: PVLibModuleAndInverterEnum,
     ) -> float:
@@ -204,7 +208,7 @@ class PVSystemConfig(ConfigBase):
 
         total_pv_power_in_watt = (
             effective_rooftop_area_in_m2 / module_area_in_m2 * module_power_in_watt
-        ) * share_of_maximum_pv_power
+        ) * share_of_maximum_pv_potential
 
         return total_pv_power_in_watt
 
@@ -371,7 +375,7 @@ class PVSystem(cp.Component):
         self.add_default_connections(self.get_default_connections_from_weather())
 
     @staticmethod
-    def get_default_config(power_in_watt: float = 10e3, source_weight: int = 1) -> Any:
+    def get_default_config(power_in_watt: float = 10e3, source_weight: int = 1, share_of_maximum_pv_potential: float = 1.0) -> Any:
         """Get default config."""
         config = PVSystemConfig(
             name="PVSystem",
@@ -385,6 +389,7 @@ class PVSystem(cp.Component):
             power_in_watt=power_in_watt,
             azimuth=180,
             tilt=30,
+            share_of_maximum_pv_potential=share_of_maximum_pv_potential,
             load_module_data=False,
             source_weight=source_weight,
             co2_footprint=power_in_watt * 1e-3 * 130.7,  # value from emission_factros_and_costs_devices.csv

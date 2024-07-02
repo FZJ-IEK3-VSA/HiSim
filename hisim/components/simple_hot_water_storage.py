@@ -4,8 +4,8 @@
 # Owned
 import importlib
 from dataclasses import dataclass
-from typing import List, Any, Tuple
-from enum import Enum
+from typing import List, Any, Tuple, Union
+from enum import IntEnum
 import numpy as np
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -28,7 +28,7 @@ __email__ = "k.rieck@fz-juelich.de"
 __status__ = "dev"
 
 
-class HotWaterStorageSizingEnum(Enum):
+class HotWaterStorageSizingEnum(IntEnum):
 
     """Set Simple Hot Water Storage sizing options."""
 
@@ -36,7 +36,7 @@ class HotWaterStorageSizingEnum(Enum):
     SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM = 2
 
 
-class PositionWaterStorageInSystemEnum(Enum):
+class PositionHotWaterStorageInSystemSetup(IntEnum):
 
     """Set Simple Hot Water Storage Position options."""
 
@@ -58,7 +58,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
     volume_heating_water_storage_in_liter: float
     heat_transfer_coefficient_in_watt_per_m2_per_kelvin: float
     heat_exchanger_is_present: bool
-    position_of_storage_in_system: PositionWaterStorageInSystemEnum
+    position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int]
     # it should be checked how much energy the storage lost during the simulated period (see guidelines below, p.2, accepted loss in kWh/days)
     # https://www.bdh-industrie.de/fileadmin/user_upload/ISH2019/Infoblaetter/Infoblatt_Nr_74_Energetische_Bewertung_Warmwasserspeicher.pdf
     #: CO2 footprint of investment in kg
@@ -76,12 +76,13 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
     ) -> "SimpleHotWaterStorageConfig":
         """Get a default simplehotwaterstorage config."""
         volume_heating_water_storage_in_liter: float = 500
+        position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int] = PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP
         config = SimpleHotWaterStorageConfig(
             name="SimpleHotWaterStorage",
             volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,
             heat_exchanger_is_present=True,  # until now stratified mode is causing problems, so heat exchanger mode is recommended
-            position_of_storage_in_system=PositionWaterStorageInSystemEnum.PARALLEL_TO_HEAT_PUMP,
+            position_hot_water_storage_in_system=position_hot_water_storage_in_system,
             co2_footprint=100,  # Todo: check value
             cost=volume_heating_water_storage_in_liter * 14.51,  # value from emission_factros_and_costs_devices.csv
             lifetime=25,  # value from emission_factors_and_costs_devices.csv
@@ -131,12 +132,14 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         else:
             raise ValueError(f"Sizing option for Simple Hot Water Storage {sizing_option} is unvalid.")
 
+        position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int] = PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP
+
         config = SimpleHotWaterStorageConfig(
             name="SimpleHotWaterStorage",
             volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,
             heat_exchanger_is_present=True,  # until now stratified mode is causing problems, so heat exchanger mode is recommended
-            position_of_storage_in_system=PositionWaterStorageInSystemEnum.PARALLEL_TO_HEAT_PUMP,
+            position_hot_water_storage_in_system=position_hot_water_storage_in_system,
             co2_footprint=100,  # Todo: check value
             cost=volume_heating_water_storage_in_liter * 14.51,  # value from emission_factros_and_costs_devices.csv
             lifetime=100,  # value from emission_factros_and_costs_devices.csv
@@ -168,7 +171,7 @@ class SimpleHotWaterStorage(cp.Component):
     # Input
     # A hot water storage can be used also with more than one heat generator. In this case you need to add a new input and output.
     WaterTemperatureFromHeatDistribution = "WaterTemperatureFromHeatDistribution"
-    WaterTemperatureFromHeatGenerator = "WaterTemperaturefromHeatGenerator"
+    WaterTemperatureFromHeatGenerator = "WaterTemperatureFromHeatGenerator"
     WaterMassFlowRateFromHeatGenerator = "WaterMassFlowRateFromHeatGenerator"
     WaterMassFlowRateFromHeatDistributionSystem = "WaterMassFlowRateFromHeatDistributionSystem"
     State = "State"
@@ -217,7 +220,7 @@ class SimpleHotWaterStorage(cp.Component):
         else:
             self.water_mass_flow_rate_from_heat_generator_in_kg_per_second_from_singleton_sim_repo = None
 
-        self.position_of_storage_in_system = self.waterstorageconfig.position_of_storage_in_system
+        self.position_hot_water_storage_in_system = self.waterstorageconfig.position_hot_water_storage_in_system
         self.build(heat_exchanger_is_present=self.waterstorageconfig.heat_exchanger_is_present)
 
         self.state: SimpleHotWaterStorageState = SimpleHotWaterStorageState(
@@ -244,7 +247,7 @@ class SimpleHotWaterStorage(cp.Component):
             False,
         )
 
-        if self.position_of_storage_in_system == PositionWaterStorageInSystemEnum.PARALLEL_TO_HEAT_PUMP:
+        if self.position_hot_water_storage_in_system in [PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP]:
             self.water_temperature_heat_generator_input_channel: ComponentInput = self.add_input(
                 self.component_name,
                 self.WaterTemperatureFromHeatGenerator,
@@ -448,7 +451,7 @@ class SimpleHotWaterStorage(cp.Component):
             self.water_mass_flow_rate_heat_distribution_system_input_channel
         )
 
-        if self.position_of_storage_in_system == PositionWaterStorageInSystemEnum.PARALLEL_TO_HEAT_PUMP:
+        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP:
             water_temperature_from_heat_generator_in_celsius = stsv.get_input_value(
                 self.water_temperature_heat_generator_input_channel
             )
@@ -568,7 +571,7 @@ class SimpleHotWaterStorage(cp.Component):
                 raise ValueError("unknown storage controller state.")
 
         # Set outputs -------------------------------------------------------------------------------------------------------
-        if self.position_of_storage_in_system == PositionWaterStorageInSystemEnum.PARALLEL_TO_HEAT_PUMP:
+        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP:
             stsv.set_output_value(
                 self.water_temperature_heat_distribution_system_output_channel,
                 water_temperature_to_heat_distribution_system_in_celsius,

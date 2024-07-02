@@ -1,6 +1,6 @@
 """More advanced heat pump module.
 
-See library on https://github.com/FZJ-IEK3-VSA/hplib/tree/main/hplib
+See library on https://github.com/FZJ-IEK3-VSA/HPLib/tree/main/HPLib
 
 two controller: one dhw controller and one building heating controller
 
@@ -83,13 +83,13 @@ class PositionHotWaterStorageInSystemSetup(IntEnum):
 
 @dataclass_json
 @dataclass
-class HeatPumpHplibWithTwoOutputsConfig(ConfigBase):
-    """HeatPumpHplibWithTwoOutputsConfig."""
+class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
+    """MoreAdvancedHeatPumpHPLibConfig."""
 
     @classmethod
     def get_main_classname(cls):
         """Returns the full class name of the base class."""
-        return HeatPumpHplibWithTwoOutputs.get_full_classname()
+        return MoreAdvancedHeatPumpHPLib.get_full_classname()
 
     name: str
     model: str
@@ -128,13 +128,13 @@ class HeatPumpHplibWithTwoOutputsConfig(ConfigBase):
             0.333, KilogramPerSecond
         ),
         minimum_thermal_output_power_in_watt: Quantity[float, Watt] = Quantity(3800, Watt),
-    ) -> "HeatPumpHplibWithTwoOutputsConfig":
+    ) -> "MoreAdvancedHeatPumpHPLibConfig":
         """Gets a default HPLib Heat Pump.
 
         see default values for air/water hp on:
-        https://github.com/FZJ-IEK3-VSA/hplib/blob/main/hplib/hplib.py l.135 "fit_p_th_ref.
+        https://github.com/FZJ-IEK3-VSA/HPLib/blob/main/HPLib/HPLib.py l.135 "fit_p_th_ref.
         """
-        return HeatPumpHplibWithTwoOutputsConfig(
+        return MoreAdvancedHeatPumpHPLibConfig(
             name="MoreAdvancedHeatPumpHPLib",
             model="Generic",
             heat_source="air",
@@ -146,7 +146,7 @@ class HeatPumpHplibWithTwoOutputsConfig(ConfigBase):
             minimum_running_time_in_seconds=Quantity(3600, Seconds),
             minimum_idle_time_in_seconds=Quantity(3600, Seconds),
             temperature_difference_primary_side=2,
-            position_hot_water_storage_in_system=1,
+            position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.PARALLEL,
             with_domestic_hot_water_preparation=False,
             minimum_massflow_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
             maximum_massflow_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
@@ -170,12 +170,12 @@ class HeatPumpHplibWithTwoOutputsConfig(ConfigBase):
             0.333, KilogramPerSecond
         ),
         minimum_thermal_output_power_in_watt: Quantity[float, Watt] = Quantity(3800, Watt),
-    ) -> "HeatPumpHplibWithTwoOutputsConfig":
+    ) -> "MoreAdvancedHeatPumpHPLibConfig":
         """Gets a default heat pump with scaling according to heating load of the building."""
 
         set_thermal_output_power_in_watt: Quantity[float, Watt] = heating_load_of_building_in_watt
 
-        return HeatPumpHplibWithTwoOutputsConfig(
+        return MoreAdvancedHeatPumpHPLibConfig(
             name="MoreAdvancedHeatPumpHPLib",
             model="Generic",
             heat_source="air",
@@ -187,7 +187,7 @@ class HeatPumpHplibWithTwoOutputsConfig(ConfigBase):
             minimum_running_time_in_seconds=Quantity(3600, Seconds),
             minimum_idle_time_in_seconds=Quantity(3600, Seconds),
             temperature_difference_primary_side=2,
-            position_hot_water_storage_in_system=1,
+            position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.PARALLEL,
             with_domestic_hot_water_preparation=False,
             minimum_massflow_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
             maximum_massflow_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
@@ -204,7 +204,7 @@ class HeatPumpHplibWithTwoOutputsConfig(ConfigBase):
         )
 
 
-class HeatPumpHplibWithTwoOutputs(Component):
+class MoreAdvancedHeatPumpHPLib(Component):
     """Simulate the heat pump.
 
     Outputs are heat pump efficiency (cop) as well as electrical (p_el) and
@@ -268,7 +268,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: HeatPumpHplibWithTwoOutputsConfig,
+        config: MoreAdvancedHeatPumpHPLibConfig,
         my_display_config: DisplayConfig = DisplayConfig(display_in_webtool=True),
     ):
         """Loads the parameters of the specified heat pump."""
@@ -279,7 +279,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
             my_config=config,
             my_display_config=my_display_config,
         )
-        # caching for hplib simulation
+        # caching for HPLib simulation
         self.calculation_cache: Dict = {}
 
         self.model = config.model
@@ -352,7 +352,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
         ]
 
         # Component has states
-        self.state = HeatPumpWithTwoOutputsState(
+        self.state = MoreAdvancedHeatPumpHPLibState(
             time_on_heating=0,
             time_off=0,
             time_on_cooling=0,
@@ -795,12 +795,12 @@ class HeatPumpHplibWithTwoOutputs(Component):
     ):
         """Get default connections."""
         connections = []
-        hpc_classname = HeatPumpHplibControllerSpaceHeating.get_classname()
+        hpc_classname = MoreAdvancedHeatPumpHPLibControllerSpaceHeating.get_classname()
         connections.append(
             ComponentConnection(
-                HeatPumpHplibWithTwoOutputs.OnOffSwitchSH,
+                MoreAdvancedHeatPumpHPLib.OnOffSwitchSH,
                 hpc_classname,
-                HeatPumpHplibControllerSpaceHeating.State_SH,
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.State_SH,
             )
         )
         return connections
@@ -810,26 +810,26 @@ class HeatPumpHplibWithTwoOutputs(Component):
     ):
         """Get default connections."""
         connections = []
-        hpc_dhw_classname = HeatPumpHplibControllerDHW.get_classname()
+        hpc_dhw_classname = MoreAdvancedHeatPumpHPLibControllerDHW.get_classname()
         connections.append(
             ComponentConnection(
-                HeatPumpHplibWithTwoOutputs.OnOffSwitchDHW,
+                MoreAdvancedHeatPumpHPLib.OnOffSwitchDHW,
                 hpc_dhw_classname,
-                HeatPumpHplibControllerDHW.State_dhw,
+                MoreAdvancedHeatPumpHPLibControllerDHW.State_dhw,
             )
         )
         connections.append(
             ComponentConnection(
-                HeatPumpHplibWithTwoOutputs.ThermalPowerIsConstantForDHW,
+                MoreAdvancedHeatPumpHPLib.ThermalPowerIsConstantForDHW,
                 hpc_dhw_classname,
-                HeatPumpHplibControllerDHW.ThermalPower_dhw_is_constant,
+                MoreAdvancedHeatPumpHPLibControllerDHW.ThermalPower_dhw_is_constant,
             )
         )
         connections.append(
             ComponentConnection(
-                HeatPumpHplibWithTwoOutputs.MaxThermalPowerValueForDHW,
+                MoreAdvancedHeatPumpHPLib.MaxThermalPowerValueForDHW,
                 hpc_dhw_classname,
-                HeatPumpHplibControllerDHW.Value_thermalpower_dhw_is_constant,
+                MoreAdvancedHeatPumpHPLibControllerDHW.Value_thermalpower_dhw_is_constant,
             )
         )
         return connections
@@ -842,7 +842,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
         weather_classname = weather.Weather.get_classname()
         connections.append(
             ComponentConnection(
-                HeatPumpHplibWithTwoOutputs.TemperatureAmbient,
+                MoreAdvancedHeatPumpHPLib.TemperatureAmbient,
                 weather_classname,
                 weather.Weather.DailyAverageOutsideTemperatures,
             )
@@ -861,7 +861,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
         hws_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
-                HeatPumpHplibWithTwoOutputs.TemperatureInputSecondary_SH,
+                MoreAdvancedHeatPumpHPLib.TemperatureInputSecondary_SH,
                 hws_classname,
                 simple_hot_water_storage.SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
             )
@@ -880,7 +880,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
         dhw_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
-                HeatPumpHplibWithTwoOutputs.TemperatureInputSecondary_DHW,
+                MoreAdvancedHeatPumpHPLib.TemperatureInputSecondary_DHW,
                 dhw_classname,
                 component_class.TemperatureMean,
             )
@@ -971,7 +971,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
         elif self.cycling_mode is False:
             pass
         else:
-            raise ValueError("Cycling mode of the advanced hplib unknown.")
+            raise ValueError("Cycling mode of the advanced HPLib unknown.")
 
         if on_off == 1:  # Calculation for building heating
             if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
@@ -1309,7 +1309,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
         self.state.delta_t = self.heatpump.delta_t
 
     @staticmethod
-    def get_cost_capex(config: HeatPumpHplibWithTwoOutputsConfig) -> Tuple[float, float, float]:
+    def get_cost_capex(config: MoreAdvancedHeatPumpHPLibConfig) -> Tuple[float, float, float]:
         """Returns investment cost, CO2 emissions and lifetime."""
         return config.cost.value, config.co2_footprint.value, config.lifetime.value
 
@@ -1325,7 +1325,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
         """
         for index, output in enumerate(all_outputs):
             if (
-                output.component_name == "HeatPumpHplibWithTwoOutputs" and output.load_type == LoadTypes.ELECTRICITY
+                output.component_name == "MoreAdvancedHeatPumpHPLib" and output.load_type == LoadTypes.ELECTRICITY
             ):  # Todo: check component name from system_setups: find another way of using only heatpump-outputs
                 self.config.consumption = round(
                     sum(postprocessing_results.iloc[:, index])
@@ -1349,7 +1349,7 @@ class HeatPumpHplibWithTwoOutputs(Component):
         t_amb: float,
         mode: int,
     ) -> Any:
-        """Use caching of results of hplib simulation."""
+        """Use caching of results of HPLib simulation."""
 
         # rounding of variable values
         if not force_convergence:
@@ -1377,8 +1377,8 @@ class HeatPumpHplibWithTwoOutputs(Component):
 
 
 @dataclass
-class HeatPumpWithTwoOutputsState:
-    """HeatPumpWithTwoOutputsState class."""
+class MoreAdvancedHeatPumpHPLibState:
+    """MoreAdvancedHeatPumpHPLibState class."""
 
     time_on_heating: int
     time_off: int
@@ -1399,7 +1399,7 @@ class HeatPumpWithTwoOutputsState:
         self,
     ):
         """Copy the Heat Pump State."""
-        return HeatPumpWithTwoOutputsState(
+        return MoreAdvancedHeatPumpHPLibState(
             self.time_on_heating,
             self.time_off,
             self.time_on_cooling,
@@ -1419,7 +1419,7 @@ class HeatPumpWithTwoOutputsState:
 
 @dataclass
 class CalculationRequest(JSONWizard):
-    """Class for caching hplib parameters so that hplib.simulate does not need to run so often."""
+    """Class for caching HPLib parameters so that HPLib.simulate does not need to run so often."""
 
     t_in_primary: float
     t_in_secondary: float
@@ -1434,13 +1434,13 @@ class CalculationRequest(JSONWizard):
 
 @dataclass_json
 @dataclass
-class HeatPumpHplibControllerSpaceHeatingConfig(ConfigBase):
+class MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(ConfigBase):
     """HeatPump Controller Config Class for building heating."""
 
     @classmethod
     def get_main_classname(cls):
         """Returns the full class name of the base class."""
-        return HeatPumpHplibControllerSpaceHeating.get_full_classname()
+        return MoreAdvancedHeatPumpHPLibControllerSpaceHeating.get_full_classname()
 
     name: str
     mode: int
@@ -1456,10 +1456,10 @@ class HeatPumpHplibControllerSpaceHeatingConfig(ConfigBase):
         heat_distribution_system_type: Any,
         upper_temperature_offset_for_state_conditions_in_celsius: float = 5.0,
         lower_temperature_offset_for_state_conditions_in_celsius: float = 5.0,
-    ) -> "HeatPumpHplibControllerSpaceHeatingConfig":
+    ) -> "MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig":
         """Gets a default Generic Heat Pump Controller."""
-        return HeatPumpHplibControllerSpaceHeatingConfig(
-            name="HeatPumpHplibControllerSpaceHeating",
+        return MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(
+            name="MoreAdvancedHeatPumpHPLibControllerSpaceHeating",
             mode=1,
             set_heating_threshold_outside_temperature_in_celsius=16.0,
             set_cooling_threshold_outside_temperature_in_celsius=20.0,
@@ -1469,7 +1469,7 @@ class HeatPumpHplibControllerSpaceHeatingConfig(ConfigBase):
         )
 
 
-class HeatPumpHplibControllerSpaceHeating(Component):
+class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
     """Heat Pump Controller for Space Heating.
 
     It takes data from other
@@ -1505,7 +1505,7 @@ class HeatPumpHplibControllerSpaceHeating(Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: HeatPumpHplibControllerSpaceHeatingConfig,
+        config: MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig,
         my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Construct all the neccessary attributes."""
@@ -1578,7 +1578,7 @@ class HeatPumpHplibControllerSpaceHeating(Component):
         hdsc_classname = heat_distribution_system.HeatDistributionController.get_classname()
         connections.append(
             ComponentConnection(
-                HeatPumpHplibControllerSpaceHeating.HeatingFlowTemperatureFromHeatDistributionSystem,
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.HeatingFlowTemperatureFromHeatDistributionSystem,
                 hdsc_classname,
                 heat_distribution_system.HeatDistributionController.HeatingFlowTemperature,
             )
@@ -1593,7 +1593,7 @@ class HeatPumpHplibControllerSpaceHeating(Component):
         weather_classname = weather.Weather.get_classname()
         connections.append(
             ComponentConnection(
-                HeatPumpHplibControllerSpaceHeating.DailyAverageOutsideTemperature,
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.DailyAverageOutsideTemperature,
                 weather_classname,
                 weather.Weather.DailyAverageOutsideTemperatures,
             )
@@ -1608,7 +1608,7 @@ class HeatPumpHplibControllerSpaceHeating(Component):
         hws_classname = simple_hot_water_storage.SimpleHotWaterStorage.get_classname()
         connections.append(
             ComponentConnection(
-                HeatPumpHplibControllerSpaceHeating.WaterTemperatureInput,
+                MoreAdvancedHeatPumpHPLibControllerSpaceHeating.WaterTemperatureInput,
                 hws_classname,
                 simple_hot_water_storage.SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
             )
@@ -1891,16 +1891,16 @@ class HeatPumpHplibControllerSpaceHeating(Component):
         return cooling_mode
 
 
-# implement a hplib controller l1 for dhw storage (tww)
+# implement a HPLib controller l1 for dhw storage (tww)
 @dataclass_json
 @dataclass
-class HeatPumpHplibControllerDHWConfig(ConfigBase):
+class MoreAdvancedHeatPumpHPLibControllerDHWConfig(ConfigBase):
     """HeatPump Controller Config Class."""
 
     @classmethod
     def get_main_classname(cls):
         """Returns the full class name of the base class."""
-        return HeatPumpHplibControllerDHW.get_full_classname()
+        return MoreAdvancedHeatPumpHPLibControllerDHW.get_full_classname()
 
     name: str
     #: lower set temperature of DHW Storage, given in °C
@@ -1915,7 +1915,7 @@ class HeatPumpHplibControllerDHWConfig(ConfigBase):
     @classmethod
     def get_default_dhw_controller_config(cls):
         """Gets a default Generic Heat Pump Controller."""
-        return HeatPumpHplibControllerDHWConfig(
+        return MoreAdvancedHeatPumpHPLibControllerDHWConfig(
             name="HeatPumpControllerDHW",
             t_min_dhw_storage_in_celsius=40.0,
             t_max_dhw_storage_in_celsius=60.0,
@@ -1924,7 +1924,7 @@ class HeatPumpHplibControllerDHWConfig(ConfigBase):
         )
 
 
-class HeatPumpHplibControllerDHW(Component):
+class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
     """Heat Pump Controller for DHW.
 
     It takes data from DHW Storage --> generic hot water storage modular
@@ -1944,7 +1944,7 @@ class HeatPumpHplibControllerDHW(Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: HeatPumpHplibControllerDHWConfig,
+        config: MoreAdvancedHeatPumpHPLibControllerDHWConfig,
         my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Construct all the neccessary attributes."""
@@ -1955,7 +1955,7 @@ class HeatPumpHplibControllerDHW(Component):
             my_config=config,
             my_display_config=my_display_config,
         )
-        self.config: HeatPumpHplibControllerDHWConfig = config
+        self.config: MoreAdvancedHeatPumpHPLibControllerDHWConfig = config
 
         self.state_dhw: int
         self.previous_state_dhw: int
@@ -2020,7 +2020,7 @@ class HeatPumpHplibControllerDHW(Component):
         dhw_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
-                HeatPumpHplibControllerDHW.WaterTemperatureInputFromDHWStorage,
+                MoreAdvancedHeatPumpHPLibControllerDHW.WaterTemperatureInputFromDHWStorage,
                 dhw_classname,
                 component_class.TemperatureMean,
             )

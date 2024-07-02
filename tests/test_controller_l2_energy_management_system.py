@@ -21,7 +21,7 @@ from hisim.components import (
     generic_pv_system,
     heat_distribution_system,
     advanced_battery_bslib,
-    more_advanced_heat_pump_hplib,
+    advanced_heat_pump_hplib,
     controller_l2_energy_management_system,
     generic_heat_pump_modular,
     controller_l1_heatpump,
@@ -136,11 +136,11 @@ def test_house(
 
     # Build Heat Pump Controller
     my_heat_pump_controller_config = (
-        more_advanced_heat_pump_hplib.HeatPumpHplibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
+        advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(
             heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
         )
     )
-    my_heat_pump_controller = more_advanced_heat_pump_hplib.HeatPumpHplibControllerSpaceHeating(
+    my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
         config=my_heat_pump_controller_config,
         my_simulation_parameters=my_simulation_parameters,
     )
@@ -148,12 +148,12 @@ def test_house(
     my_sim.add_component(my_heat_pump_controller, connect_automatically=True)
 
     # Build Heat Pump
-    my_heat_pump_config = more_advanced_heat_pump_hplib.HeatPumpHplibWithTwoOutputsConfig.get_scaled_advanced_hp_lib(
+    my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
         heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
         heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
     )
 
-    my_heat_pump = more_advanced_heat_pump_hplib.HeatPumpHplibWithTwoOutputs(
+    my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
         config=my_heat_pump_config,
         my_simulation_parameters=my_simulation_parameters,
     )
@@ -277,46 +277,6 @@ def test_house(
         source_weight=999,
     )
 
-    # -----------------------------------------------------------------------------------------------------------------
-    # Connect Heat Pump
-    my_heat_pump.connect_input(
-        my_heat_pump.TemperatureInputPrimary,
-        my_weather.component_name,
-        my_weather.DailyAverageOutsideTemperatures,
-    )
-
-    my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterTemperatureFromHeatGenerator,
-        my_heat_pump.component_name,
-        my_heat_pump.TemperatureOutputSH,
-    )
-
-    my_simple_hot_water_storage.connect_input(
-        my_simple_hot_water_storage.WaterMassFlowRateFromHeatGenerator,
-        my_heat_pump.component_name,
-        my_heat_pump.MassFlowOutputSH,
-    )
-
-    my_electricity_controller.add_component_input_and_connect(
-        source_object_name=my_heat_pump.component_name,
-        source_component_output=my_heat_pump.ElectricalInputPowerSH,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        source_tags=[
-            lt.ComponentType.HEAT_PUMP_BUILDING,
-            lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
-        ],
-        source_weight=2,
-    )
-
-    my_electricity_controller.add_component_output(
-        source_output_name=f"ElectricityToOrFromGridOfSH{my_heat_pump.component_name}_",
-        source_tags=[lt.ComponentType.HEAT_PUMP_BUILDING, lt.InandOutputType.ELECTRICITY_TARGET],
-        source_weight=2,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        output_description="Target electricity for Gebäude von Quartier EMS. ",
-    )
     # =================================================================================================================================
     # Add Remaining Components to Simulation Parameters
 
@@ -358,7 +318,7 @@ def test_house(
         "Total electrical input energy of SH heat pump"
     ].get("value")
     domestic_hot_water_heatpump_total_consumption_kpi_in_kilowatt_hour = jsondata["Heat Pump For Domestic Hot Water"][
-        "DHW modular heat pump total electricity consumption"
+        "DHW heat pump total electricity consumption"
     ].get("value")
 
     sum_component_total_consumptions_in_kilowatt_hour = (
@@ -380,7 +340,7 @@ def test_house(
         "Space heating heat pump electricity from grid"
     ].get("value")
     domestic_hot_water_heatpump_grid_consumption_kpi_in_kilowatt_hour = jsondata["Heat Pump For Domestic Hot Water"][
-        "Domestic hot water modular heat pump electricity from grid"
+        "Domestic hot water heat pump electricity from grid"
     ].get("value")
     sum_component_grid_consumptions_in_kilowatt_hour = (
         residents_grid_consumption_kpi_in_kilowatt_hour
@@ -398,6 +358,7 @@ def test_house(
     simulation_results_ems_total_consumption_in_watt = my_sim.results_data_frame[
         "L2EMSElectricityController - TotalElectricityConsumption [Electricity - W]"
     ]
+
     ems_total_consumption_in_kilowatt_hour = (
         sum(simulation_results_ems_total_consumption_in_watt) * seconds_per_timestep / 3.6e6
     )

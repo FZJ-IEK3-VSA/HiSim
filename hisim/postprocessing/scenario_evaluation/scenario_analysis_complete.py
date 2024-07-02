@@ -51,7 +51,7 @@ def main():
 
     # Inputs for scenario analysis
     # -------------------------------------------------------------------------------------------------------------------------------------
-    time_resolution_of_data_set = result_data_collection.ResultDataTypeEnum.YEARLY
+    time_resolution_of_data_set = result_data_collection.ResultDataTypeEnum.MONTHLY
     cluster_storage_path = (
         "C:/Users/k.rieck/HiSim/system_setups/"
     )

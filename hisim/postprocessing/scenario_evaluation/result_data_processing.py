@@ -21,6 +21,7 @@ class ScenarioDataProcessing:
         time_resolution_of_data_set: Any,
         dict_of_scenarios_to_check: Optional[Dict[str, List[str]]],
         variables_to_check: List[str],
+        xlsx_or_csv: str = "csv"
     ) -> Tuple[pd.DataFrame, str, str, List[str]]:
         """Get csv data and create dataframes with the filtered and procesed scenario data."""
 
@@ -34,22 +35,25 @@ class ScenarioDataProcessing:
             kind_of_data_set = "monthly"
         else:
             raise ValueError("This kind of data was not found in the datacollectorenum class.")
-        log.information(f"Read csv files and create one big dataframe for {kind_of_data_set} data.")
+        log.information(f"Read csv or excel files and create one big dataframe for {kind_of_data_set} data.")
 
-        csv_data_file_path = os.path.join(data_folder_path, f"*{kind_of_data_set}*.csv")
-        list_of_possible_data_csv_files = glob.glob(csv_data_file_path)
+        data_file_path = os.path.join(data_folder_path, f"*{kind_of_data_set}*.{xlsx_or_csv}")
+        list_of_possible_data_files = glob.glob(data_file_path)
         file: str = ""
-        if not list_of_possible_data_csv_files:
-            raise FileExistsError(f"No csv file could be found in this path {csv_data_file_path}.")
-        if len(list_of_possible_data_csv_files) > 1:
-            raise ValueError(f"The csv file path {csv_data_file_path} should not contain more than one csv file.")
+        if not list_of_possible_data_files:
+            raise FileExistsError(f"No file could be found in this path {data_file_path}.")
+        if len(list_of_possible_data_files) > 1:
+            raise ValueError(f"The file path {data_file_path} should not contain more than one file.")
 
-        file = list_of_possible_data_csv_files[0]
-
-        file_df = pd.read_csv(filepath_or_buffer=file)
+        file = list_of_possible_data_files[0]
+        if xlsx_or_csv == "csv":
+            file_df = pd.read_csv(filepath_or_buffer=file)
+        else:
+            file_df = pd.read_excel(file, header=[0,1], index_col=0)
+        print("file_df", file_df)
 
         # if scenario values are no strings, transform them
-        file_df["scenario"] = file_df["scenario"].transform(str)
+        # file_df["scenario"] = file_df["scenario"].transform(str)
         key_for_scenario_one = ""
         key_for_current_scenario = ""
 
@@ -72,7 +76,8 @@ class ScenarioDataProcessing:
     @staticmethod
     def filter_pandas_dataframe(dataframe: pd.DataFrame, variable_to_check: str) -> pd.DataFrame:
         """Filter pandas dataframe according to variable."""
-        filtered_dataframe = dataframe.loc[dataframe["variable"] == variable_to_check]
+        print(dataframe.columns)
+        filtered_dataframe = dataframe.loc[dataframe[('Output','variable')] == variable_to_check]
         if filtered_dataframe.empty:
             print(f"The dataframe contains the following variables: {set(list(dataframe.variable))}")
             # raise ValueError(

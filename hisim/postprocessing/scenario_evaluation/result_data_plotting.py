@@ -116,6 +116,7 @@ class ScenarioChartGeneration:
                 time_resolution_of_data_set=time_resolution_of_data_set,
                 dict_of_scenarios_to_check=dict_of_scenarios_to_check,
                 variables_to_check=variables_to_check,
+                xlsx_or_csv="xlsx"
             )
 
             log.information("key for scenario one " + key_for_scenario_one)
@@ -172,115 +173,117 @@ class ScenarioChartGeneration:
             filtered_data = ScenarioDataProcessing.filter_pandas_dataframe(
                 dataframe=pandas_dataframe, variable_to_check=variable_to_check
             )
-            # get unit of variable
-            try:
-                unit = str(filtered_data.unit.values[0])
-                unit = str(filtered_data.unit.values[0])
-            except Exception:
-                if "Temperature deviation" in variable_to_check:
-                    unit = "°C*h"
-                else:
-                    unit = "-"
 
-            if time_resolution_of_data_set == ResultDataTypeEnum.YEARLY:
-                kind_of_data_set = "yearly"
+            filtered_data.to_excel(os.path.join(self.path_for_plots, self.path_addition, "results.xlsx"))
+            # # get unit of variable
+            # try:
+            #     unit = str(filtered_data.unit.values[0])
+            #     unit = str(filtered_data.unit.values[0])
+            # except Exception:
+            #     if "Temperature deviation" in variable_to_check:
+            #         unit = "°C*h"
+            #     else:
+            #         unit = "-"
 
-                # get statistical data
-                x_and_y_plot_data = ScenarioDataProcessing.take_mean_values_of_scenarios(filtered_data=filtered_data)
-                ScenarioDataProcessing.get_statistics_of_data_and_write_to_excel(
-                    filtered_data=filtered_data,
-                    path_to_save=self.plot_path_complete,
-                    kind_of_data_set=kind_of_data_set,
-                    x_and_y_plot_data=x_and_y_plot_data,
-                )
+            # if time_resolution_of_data_set == ResultDataTypeEnum.YEARLY:
+            #     kind_of_data_set = "yearly"
 
-                self.make_box_plot_for_pandas_dataframe(filtered_data=filtered_data)
+            #     # get statistical data
+            #     x_and_y_plot_data = ScenarioDataProcessing.take_mean_values_of_scenarios(filtered_data=filtered_data)
+            #     ScenarioDataProcessing.get_statistics_of_data_and_write_to_excel(
+            #         filtered_data=filtered_data,
+            #         path_to_save=self.plot_path_complete,
+            #         kind_of_data_set=kind_of_data_set,
+            #         x_and_y_plot_data=x_and_y_plot_data,
+            #     )
 
-                self.make_bar_plot_for_pandas_dataframe(unit=unit, x_and_y_plot_data=x_and_y_plot_data)
+            #     self.make_box_plot_for_pandas_dataframe(filtered_data=filtered_data)
 
-                try:
-                    x_data_variable = dict_with_extra_information_for_specific_plot["scatter"]["x_data_variable"]
-                    self.make_scatter_plot_for_pandas_dataframe_for_yearly_data(
-                        full_pandas_dataframe=pandas_dataframe,
-                        filtered_data=filtered_data,
-                        y_data_variable=self.path_addition,
-                        x_data_variable=x_data_variable,
-                    )
-                except Exception:
-                    log.information(f"{variable_to_check} could not be plotted as scatter plot.")
-                try:
-                    self.make_histogram_plot_for_pandas_dataframe(
-                        filtered_data=filtered_data, unit=unit, x_axis_label=self.path_addition
-                    )
-                except Exception:
-                    log.information(f"{variable_to_check} could not be plotted as histogram plot.")
+            #     self.make_bar_plot_for_pandas_dataframe(unit=unit, x_and_y_plot_data=x_and_y_plot_data)
 
-                if variable_to_check in [
-                    dict_with_extra_information_for_specific_plot["stacked_bar"]["y1_data_variable"],
-                    dict_with_extra_information_for_specific_plot["stacked_bar"]["y2_data_variable"],
-                ]:
-                    y1_data_variable = dict_with_extra_information_for_specific_plot["stacked_bar"]["y1_data_variable"]
-                    y2_data_variable = dict_with_extra_information_for_specific_plot["stacked_bar"]["y2_data_variable"]
-                    use_y1_as_bottom_for_y2 = dict_with_extra_information_for_specific_plot["stacked_bar"][
-                        "use_y1_as_bottom_for_y2"
-                    ]
-                    sort_according_to_y1_or_y2_data = dict_with_extra_information_for_specific_plot["stacked_bar"][
-                        "sort_according_to_y1_or_y2_data"
-                    ]
-                    self.make_stacked_bar_plot_for_pandas_dataframe(
-                        full_pandas_dataframe=pandas_dataframe,
-                        y1_data_variable=y1_data_variable,
-                        y2_data_variable=y2_data_variable,
-                        use_y1_as_bottom_for_y2=use_y1_as_bottom_for_y2,
-                        sort_according_to_y1_or_y2_data=sort_according_to_y1_or_y2_data,
-                    )
+            #     try:
+            #         x_data_variable = dict_with_extra_information_for_specific_plot["scatter"]["x_data_variable"]
+            #         self.make_scatter_plot_for_pandas_dataframe_for_yearly_data(
+            #             full_pandas_dataframe=pandas_dataframe,
+            #             filtered_data=filtered_data,
+            #             y_data_variable=self.path_addition,
+            #             x_data_variable=x_data_variable,
+            #         )
+            #     except Exception:
+            #         log.information(f"{variable_to_check} could not be plotted as scatter plot.")
+            #     try:
+            #         self.make_histogram_plot_for_pandas_dataframe(
+            #             filtered_data=filtered_data, unit=unit, x_axis_label=self.path_addition
+            #         )
+            #     except Exception:
+            #         log.information(f"{variable_to_check} could not be plotted as histogram plot.")
 
-            elif time_resolution_of_data_set in (
-                ResultDataTypeEnum.HOURLY,
-                ResultDataTypeEnum.DAILY,
-                ResultDataTypeEnum.MONTHLY,
-            ):
-                if time_resolution_of_data_set == ResultDataTypeEnum.HOURLY:
-                    kind_of_data_set = "hourly"
-                    line_plot_marker_size = 2
-                elif time_resolution_of_data_set == ResultDataTypeEnum.DAILY:
-                    kind_of_data_set = "daily"
-                    line_plot_marker_size = 3
-                elif time_resolution_of_data_set == ResultDataTypeEnum.MONTHLY:
-                    kind_of_data_set = "monthly"
-                    line_plot_marker_size = 5
+            #     if variable_to_check in [
+            #         dict_with_extra_information_for_specific_plot["stacked_bar"]["y1_data_variable"],
+            #         dict_with_extra_information_for_specific_plot["stacked_bar"]["y2_data_variable"],
+            #     ]:
+            #         y1_data_variable = dict_with_extra_information_for_specific_plot["stacked_bar"]["y1_data_variable"]
+            #         y2_data_variable = dict_with_extra_information_for_specific_plot["stacked_bar"]["y2_data_variable"]
+            #         use_y1_as_bottom_for_y2 = dict_with_extra_information_for_specific_plot["stacked_bar"][
+            #             "use_y1_as_bottom_for_y2"
+            #         ]
+            #         sort_according_to_y1_or_y2_data = dict_with_extra_information_for_specific_plot["stacked_bar"][
+            #             "sort_according_to_y1_or_y2_data"
+            #         ]
+            #         self.make_stacked_bar_plot_for_pandas_dataframe(
+            #             full_pandas_dataframe=pandas_dataframe,
+            #             y1_data_variable=y1_data_variable,
+            #             y2_data_variable=y2_data_variable,
+            #             use_y1_as_bottom_for_y2=use_y1_as_bottom_for_y2,
+            #             sort_according_to_y1_or_y2_data=sort_according_to_y1_or_y2_data,
+            #         )
 
-                # get statistical data
-                x_and_y_plot_data = ScenarioDataProcessing.take_mean_values_of_scenarios(filtered_data=filtered_data)
-                ScenarioDataProcessing.get_statistics_of_data_and_write_to_excel(
-                    filtered_data=filtered_data,
-                    path_to_save=self.plot_path_complete,
-                    kind_of_data_set=kind_of_data_set,
-                    x_and_y_plot_data=x_and_y_plot_data,
-                )
+            # elif time_resolution_of_data_set in (
+            #     ResultDataTypeEnum.HOURLY,
+            #     ResultDataTypeEnum.DAILY,
+            #     ResultDataTypeEnum.MONTHLY,
+            # ):
+            #     if time_resolution_of_data_set == ResultDataTypeEnum.HOURLY:
+            #         kind_of_data_set = "hourly"
+            #         line_plot_marker_size = 2
+            #     elif time_resolution_of_data_set == ResultDataTypeEnum.DAILY:
+            #         kind_of_data_set = "daily"
+            #         line_plot_marker_size = 3
+            #     elif time_resolution_of_data_set == ResultDataTypeEnum.MONTHLY:
+            #         kind_of_data_set = "monthly"
+            #         line_plot_marker_size = 5
 
-                self.make_line_plot_for_pandas_dataframe(
-                    filtered_data=filtered_data,
-                    x_and_y_plot_data=x_and_y_plot_data,
-                    line_plot_marker_size=line_plot_marker_size,
-                )
+            #     # get statistical data
+            #     x_and_y_plot_data = ScenarioDataProcessing.take_mean_values_of_scenarios(filtered_data=filtered_data)
+            #     ScenarioDataProcessing.get_statistics_of_data_and_write_to_excel(
+            #         filtered_data=filtered_data,
+            #         path_to_save=self.plot_path_complete,
+            #         kind_of_data_set=kind_of_data_set,
+            #         x_and_y_plot_data=x_and_y_plot_data,
+            #     )
 
-                self.make_box_plot_for_pandas_dataframe(filtered_data=filtered_data)
+            #     self.make_line_plot_for_pandas_dataframe(
+            #         filtered_data=filtered_data,
+            #         x_and_y_plot_data=x_and_y_plot_data,
+            #         line_plot_marker_size=line_plot_marker_size,
+            #     )
 
-                try:
-                    x_data_variable = dict_with_extra_information_for_specific_plot["scatter"]["x_data_variable"]
-                    self.make_line_scatter_plot_for_pandas_dataframe(
-                        full_pandas_dataframe=pandas_dataframe,
-                        filtered_data=filtered_data,
-                        y_data_variable=self.path_addition,
-                        x_data_variable=x_data_variable,
-                        line_plot_marker_size=line_plot_marker_size,
-                    )
-                except Exception:
-                    log.information(f"{variable_to_check} could not be plotted as line scatter plot.")
+            #     self.make_box_plot_for_pandas_dataframe(filtered_data=filtered_data)
 
-            else:
-                raise ValueError("This kind of data was not found in the datacollectorenum class.")
+            #     try:
+            #         x_data_variable = dict_with_extra_information_for_specific_plot["scatter"]["x_data_variable"]
+            #         self.make_line_scatter_plot_for_pandas_dataframe(
+            #             full_pandas_dataframe=pandas_dataframe,
+            #             filtered_data=filtered_data,
+            #             y_data_variable=self.path_addition,
+            #             x_data_variable=x_data_variable,
+            #             line_plot_marker_size=line_plot_marker_size,
+            #         )
+            #     except Exception:
+            #         log.information(f"{variable_to_check} could not be plotted as line scatter plot.")
+
+            # else:
+            #     raise ValueError("This kind of data was not found in the datacollectorenum class.")
 
     def make_line_plot_for_pandas_dataframe(
         self, filtered_data: pd.DataFrame, x_and_y_plot_data: pd.DataFrame, line_plot_marker_size: int

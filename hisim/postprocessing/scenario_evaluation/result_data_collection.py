@@ -112,7 +112,7 @@ class ResultDataCollection:
             all_csv_files=all_csv_files,
         )
 
-        self.read_csv_and_generate_pandas_dataframe(
+        self.alternative_read_csv_and_generate_pandas_dataframe(
             dict_of_csv_to_read=dict_of_csv_data,
             time_resolution_of_data_set=time_resolution_of_data_set,
             rename_scenario=True,
@@ -566,46 +566,79 @@ class ResultDataCollection:
         log.information(f"Read csv files and generate result dataframes for {time_resolution_of_data_set}.")
 
         appended_dataframe = pd.DataFrame()
-        index = 0
         simulation_duration_key = list(dict_of_csv_to_read.keys())[0]
         csv_data_list = dict_of_csv_to_read[simulation_duration_key]
+        from collections import defaultdict
+        dict_with_all_data: Dict = {"Index": defaultdict(list), "Input": defaultdict(list), "Output": defaultdict(list)}
 
         if csv_data_list == []:
             raise ValueError("csv_data_list is empty.")
 
-        for csv_file in csv_data_list:
+        for index, csv_file in enumerate(csv_data_list):
             # first get input data
-
+            # get dataframe by reading csv file
             dataframe = pd.read_csv(csv_file)
-            # convert scenario column to str-type just in case it has no string values
-            dataframe["scenario"] = dataframe["scenario"].astype(str)
-            scenario_name_of_current_dataframe = dataframe["scenario"][0]
-            # check if scenario column is empty or not
-            if scenario_name_of_current_dataframe == "" or not isinstance(scenario_name_of_current_dataframe, str):
-                raise ValueError(
-                    f"The scenario variable of the current dataframe is {scenario_name_of_current_dataframe} but it should be a non-empty string value. "
-                    "Please set a scenario name for your simulations."
-                )
+            print(dataframe.columns)
+            # number of variables
+            set_of_variables = list(ordered_set.OrderedSet(dataframe["variable"]))
+            for variable in set_of_variables:
+                filtered_df = dataframe[dataframe["variable"]==variable]
+                length_df = len(filtered_df)
+                # if length of df is >1, its timeseries data
+                if length_df > 1:
+                    # if time resolution is 1 year add one column, otherwise add column for each time point
+                    # more timepoints exist
+                    if "time" in dataframe.columns:
+                        for time_index, time_value in enumerate(filtered_df["time"].tolist()):
+                            values_for_one_timestep = filtered_df[filtered_df["time"]==time_value]
 
-            # try to find hash number in scenario name
-            try:
-                hash_number = re.findall(r"\-?\d+", scenario_name_of_current_dataframe)[-1]
+                            dict_with_all_data["Output"][f"{time_value}"].append(values_for_one_timestep["value"].to_list())
 
-            # this is when no hash number could be determined in the scenario name
-            except Exception:
-                hash_number = 1
-                rename_scenario = False
-            # add hash colum to dataframe so hash does not get lost when scenario is renamed
-            dataframe["hash"] = [hash_number] * len(dataframe["scenario"])
+                    # # if length of df is 1, its yearly data
+                    # elif length_df == 1:
+                    #     if "year" in dataframe.columns:
+                    #         dict_with_all_data["Output"][str(dataframe["year"][0])].append(filtered_df["value"].tolist()[0])
+                    # else:
+                    #     raise ValueError(f"Length of df is {length_df}")
 
-            # write all values that were in module config dict in the dataframe, so that you can use these values later for sorting and searching
-            if list_with_module_config_dicts is not None:
-                module_config_dict = list_with_module_config_dicts[index]
-                for (
-                    module_config_key,
-                    module_config_value,
-                ) in module_config_dict.items():
-                    dataframe[module_config_key] = [module_config_value] * len(dataframe["scenario"])
+                    # convert scenario column to str-type just in case it has no string values
+                    scenario_name_of_current_dataframe = str(filtered_df["scenario"].to_list()[0])
+                    # check if scenario column is empty or not
+                    if scenario_name_of_current_dataframe == "" or not isinstance(scenario_name_of_current_dataframe, str):
+                        raise ValueError(
+                            f"The scenario variable of the current dataframe is {scenario_name_of_current_dataframe} but it should be a non-empty string value. "
+                            "Please set a scenario name for your simulations."
+                        )
+                    # try to find hash number in scenario name
+                    try:
+                        hash_number = re.findall(r"\-?\d+", scenario_name_of_current_dataframe)[-1]
+                    # this is when no hash number could be determined in the scenario name
+                    except Exception:
+                        hash_number = 1
+                        rename_scenario = False
+                    # add hash colum to dataframe so hash does not get lost when scenario is renamed
+                    dict_with_all_data["Input"]["model"].append(filtered_df["model"].tolist()[0])
+                    dict_with_all_data["Input"]["scenario"].append(scenario_name_of_current_dataframe)
+                    dict_with_all_data["Input"]["region"].append(filtered_df["region"].tolist()[0])
+                    dict_with_all_data["Input"]["hash"].append(hash_number)
+
+                    # write all values that were in module config dict in the dataframe, so that you can use these values later for sorting and searching
+                    if list_with_module_config_dicts is not None:
+                        module_config_dict = list_with_module_config_dicts[index]
+                        for key, value in module_config_dict.items():
+                            dict_with_all_data["Input"][key].append(value)
+                    # add outputs to dict
+                    dict_with_all_data["Output"]["variable"].append(variable)
+                    dict_with_all_data["Output"]["unit"].append(filtered_df["unit"].tolist()[0])
+
+                    # get index
+                    dict_with_all_data["Index"]["Index"].append(index)
+                    for key, value_dict in dict_with_all_data.items():
+                        print(key)
+                        for key_key, value_value_list in value_dict.items():
+                            print(key_key, len(value_value_list))
+                        print("\n")
+
 
             if rename_scenario is True:
                 if (
@@ -614,35 +647,56 @@ class ResultDataCollection:
                     and list_with_parameter_key_values != []
                 ):
                     # rename scenario adding paramter key, value pair
-                    dataframe["scenario"] = self.rename_scenario_name_of_dataframe_with_parameter_key_and_value(
-                        dataframe=dataframe,
-                        parameter_key=parameter_key,
-                        list_with_parameter_values=list_with_parameter_key_values,
-                        index=index,
-                    )
+                    value = list_with_parameter_key_values[index]
+                    if not isinstance(value, str):
+                        value = round(value, 1)
+                    dict_with_all_data["Input"]["scenario"][index] = [f"{parameter_key}_{value}"] * len(dict_with_all_data["Input"]["scenario"][index])
 
-                else:
-                    # rename scenario adding an index
-                    dataframe["scenario"] = self.rename_scenario_name_of_dataframe_with_index(
-                        dataframe=dataframe, index=index
-                    )
 
-            appended_dataframe = pd.concat([appended_dataframe, dataframe])
-
-            index = index + 1
-
-        # sort dataframe
-        if appended_dataframe.empty:
-            raise ValueError("The appended dataframe is empty")
-        appended_dataframe = self.sort_dataframe_according_to_scenario_values(dataframe=appended_dataframe)
+        # sort dict
+        if not bool(dict_with_all_data):
+            raise ValueError("The dict_with_all_data is empty")
+        # appended_dataframe = self.sort_dataframe_according_to_scenario_values(dataframe=appended_dataframe)
 
         filename = self.store_scenario_data_with_the_right_name_and_in_the_right_path(
             result_data_folder=self.result_data_folder,
             simulation_duration_key=simulation_duration_key,
             time_resolution_of_data_set=time_resolution_of_data_set,
             parameter_key=parameter_key,
+            xlsx_or_csv="xlsx"
         )
-        appended_dataframe.to_csv(filename)
+        print(filename)
+        list_of_key_keys = []
+        list_of_value_lists = []
+        list_of_column_names = []
+        for key, value_dict in dict_with_all_data.items():
+            import itertools
+            number_of_key_keys = 0
+            print(key)
+            for key_key, value_value_list in value_dict.items():
+                print(key_key, type(value_value_list))
+                try:
+                    print(len(value_value_list))
+                    value_value_list = list(itertools.chain.from_iterable(value_value_list))
+                    print(len(value_value_list))  
+                except:
+                    print(len(value_value_list))
+                list_of_key_keys.append(key_key)
+                number_of_key_keys = number_of_key_keys + 1
+                list_of_value_lists.append(value_value_list)
+            list_of_column_names.append([key]*number_of_key_keys)
+        list_of_column_names = list(itertools.chain.from_iterable(list_of_column_names))
+
+        merged_list = [(list_of_column_names[index], list_of_key_keys[index]) for index in range(0, len(list_of_column_names))]
+        index = pd.MultiIndex.from_tuples(merged_list, names=["first", "second"])
+        print(index)
+        appended_dataframe = pd.DataFrame(columns=index)
+        for index, column in enumerate(merged_list):
+            appended_dataframe[column] = list_of_value_lists[index]
+
+        print(appended_dataframe)
+        appended_dataframe.to_excel(filename)
+        # now make xlsx files according to variables
 
     def store_scenario_data_with_the_right_name_and_in_the_right_path(
         self,
@@ -650,6 +704,7 @@ class ResultDataCollection:
         simulation_duration_key: str,
         time_resolution_of_data_set: Any,
         parameter_key: Optional[str] = None,
+        xlsx_or_csv: str = "csv"
     ) -> str:
         """Store csv files in the result data folder with the right filename and path."""
 
@@ -682,7 +737,7 @@ class ResultDataCollection:
 
         filename = os.path.join(
             path_for_file,
-            f"result_df_{kind_of_data_set}.csv",
+            f"result_df_{kind_of_data_set}.{xlsx_or_csv}",
         )
 
         return filename

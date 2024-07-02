@@ -21,7 +21,7 @@ class ScenarioDataProcessing:
         time_resolution_of_data_set: Any,
         dict_of_scenarios_to_check: Optional[Dict[str, List[str]]],
         variables_to_check: List[str],
-        xlsx_or_csv: str = "csv"
+        xlsx_or_csv: str = "csv",
     ) -> Tuple[pd.DataFrame, str, str, List[str]]:
         """Get csv data and create dataframes with the filtered and procesed scenario data."""
 
@@ -49,8 +49,7 @@ class ScenarioDataProcessing:
         if xlsx_or_csv == "csv":
             file_df = pd.read_csv(filepath_or_buffer=file)
         else:
-            file_df = pd.read_excel(file, header=[0,1], index_col=0)
-        print("file_df", file_df)
+            file_df = pd.read_excel(file, header=[0, 1], index_col=0)
 
         # if scenario values are no strings, transform them
         # file_df["scenario"] = file_df["scenario"].transform(str)
@@ -76,8 +75,8 @@ class ScenarioDataProcessing:
     @staticmethod
     def filter_pandas_dataframe(dataframe: pd.DataFrame, variable_to_check: str) -> pd.DataFrame:
         """Filter pandas dataframe according to variable."""
-        print(dataframe.columns)
-        filtered_dataframe = dataframe.loc[dataframe[('Output','variable')] == variable_to_check]
+
+        filtered_dataframe = dataframe.loc[dataframe[("Output", "variable")] == variable_to_check]
         if filtered_dataframe.empty:
             print(f"The dataframe contains the following variables: {set(list(dataframe.variable))}")
             # raise ValueError(

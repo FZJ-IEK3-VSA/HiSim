@@ -700,9 +700,9 @@ class PostProcessor:
         timeseries_monthly = ppdt.results_monthly.index
 
         if PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT in ppdt.post_processing_options:
-            self.write_kpis_in_dict(ppdt=ppdt, simple_dict_cumulative_data=simple_dict_hourly_data)
-            self.write_kpis_in_dict(ppdt=ppdt, simple_dict_cumulative_data=simple_dict_daily_data)
-            self.write_kpis_in_dict(ppdt=ppdt, simple_dict_cumulative_data=simple_dict_monthly_data)
+            # self.write_kpis_in_dict(ppdt=ppdt, simple_dict_cumulative_data=simple_dict_hourly_data)
+            # self.write_kpis_in_dict(ppdt=ppdt, simple_dict_cumulative_data=simple_dict_daily_data)
+            # self.write_kpis_in_dict(ppdt=ppdt, simple_dict_cumulative_data=simple_dict_monthly_data)
             self.write_kpis_in_dict(ppdt=ppdt, simple_dict_cumulative_data=simple_dict_cumulative_data)
 
         # got through all components and read output values, variables and units
@@ -818,7 +818,8 @@ class PostProcessor:
                 try:
                     simple_dict_cumulative_data["year"].append(self.year)
                 except Exception:
-                    simple_dict_cumulative_data["time"].append(self.year)
+                    # simple_dict_cumulative_data["time"].append(self.year)
+                    raise KeyError("KPI values should be written only to yearly or cumulative data, not to timeseries data.")
                 simple_dict_cumulative_data["value"].append(variable_value)
 
     def get_variable_name_and_unit_from_ppdt_results_column(self, column: str) -> Tuple[str, str]:

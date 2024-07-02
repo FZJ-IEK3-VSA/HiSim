@@ -116,7 +116,7 @@ class ScenarioChartGeneration:
                 time_resolution_of_data_set=time_resolution_of_data_set,
                 dict_of_scenarios_to_check=dict_of_scenarios_to_check,
                 variables_to_check=variables_to_check,
-                xlsx_or_csv="xlsx"
+                xlsx_or_csv="xlsx",
             )
 
             log.information("key for scenario one " + key_for_scenario_one)

@@ -52,17 +52,15 @@ def main():
     # Inputs for scenario analysis
     # -------------------------------------------------------------------------------------------------------------------------------------
     time_resolution_of_data_set = result_data_collection.ResultDataTypeEnum.MONTHLY
-    cluster_storage_path = (
-        "C:/Users/k.rieck/HiSim/system_setups/"
-    )
-    module_results_directory = "results/household_cluster_advanced_hp_pv_battery_ems/-/"
+    cluster_storage_path = "/fast/home/k-rieck/repositories/HiSim/system_setups/"
+    module_results_directory = "results/household_cluster_advanced_hp_pv_battery_ems/builda_samples_20240607_1004/"
     result_folder_description_one = "PV-1-hds-2-hpc-mode-2/"
     result_folder_description_two = "weather-location-BAD_MARIENBURG"
     folder_from_which_data_will_be_collected = os.path.join(
         *[cluster_storage_path, module_results_directory, result_folder_description_one, result_folder_description_two]
     )
 
-    path_to_default_config = "C:/Users/k.rieck/Desktop/HiSim_cluster/default_config_for_builda_data.json"
+    path_to_default_config = "/fast/home/k-rieck/jobs_hisim/cluster-hisim-paper/job_array_for_hisim_mass_simus/default_config_for_builda_data.json"
 
     data_processing_mode = result_data_collection.ResultDataProcessingModeEnum.PROCESS_ALL_DATA
     filterclass = result_data_processing.FilterClass()

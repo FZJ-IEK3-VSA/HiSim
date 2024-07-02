@@ -393,9 +393,12 @@ class WeatherConfig(ConfigBase):
             if location_entry in LocationEnum._member_names_:  # pylint: disable=W0212
                 location_entry = getattr(LocationEnum, location_entry)
             else:
-                raise ValueError(
-                    f"The location_entry {location_entry} could not be found in the Weather Location Enum class."
-                )
+                try:
+                    location_entry = getattr(LocationEnum, location_entry.strip())
+                except Exception as exc:
+                    raise ValueError(
+                        f"The location_entry {location_entry} could not be found in the Weather Location Enum class."
+                    ) from exc
 
         path = os.path.join(
             utils.get_input_directory(),

@@ -78,7 +78,7 @@ class ScenarioDataProcessing:
 
         filtered_dataframe = dataframe.loc[dataframe[("Output", "variable")] == variable_to_check]
         if filtered_dataframe.empty:
-            print(f"The dataframe contains the following variables: {set(list(dataframe.variable))}")
+            print("The dataframe contains the following variables: ", set(list(dataframe[("Output", "variable")])))
             # raise ValueError(
             print(
                 f"The filtered dataframe is empty. The dataframe did not contain the variable {variable_to_check}. Check the list above."
@@ -349,8 +349,18 @@ class FilterClass:
             "PVSystem_w0|Electricity|ElectricityOutput",
             "AdvancedHeatPumpHPLib|Electricity|ElectricalInputPower",
             "DHWHeatPump_w1|Electricity|ElectricityOutput",
-            "Weather|Temperature|DailyAverageOutsideTemperatures",
-            "HeatDistributionController|Temperature|HeatingFlowTemperature",
+            "ElectricCar_1_w1|Electricity|ElectricityOutput",
+            "ElectricCar_2_w1|Electricity|ElectricityOutput",
+            "ElectricCar_3_w1|Electricity|ElectricityOutput",
+            "ElectricCar_4_w1|Electricity|ElectricityOutput",
+            "ElectricCar_5_w1|Electricity|ElectricityOutput",
+            "ElectricCar_6_w1|Electricity|ElectricityOutput",
+            "ElectricCar_7_w1|Electricity|ElectricityOutput",
+            "ElectricCar_8_w1|Electricity|ElectricityOutput",
+            "ElectricCar_9_w1|Electricity|ElectricityOutput",
+            "ElectricCar_10_w1|Electricity|ElectricityOutput",
+            "ElectricCar_11_w1|Electricity|ElectricityOutput",
+            "ElectricCar_12_w1|Electricity|ElectricityOutput",
         ]
 
         flow_and_return_temperatures = [

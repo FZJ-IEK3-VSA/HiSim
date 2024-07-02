@@ -52,7 +52,7 @@ def main():
     # Inputs for scenario analysis
     # -------------------------------------------------------------------------------------------------------------------------------------
     time_resolution_of_data_set = result_data_collection.ResultDataTypeEnum.MONTHLY
-    cluster_storage_path = "/fast/home/k-rieck/repositories/HiSim/system_setups/"
+    cluster_storage_path = "/storage_cluster/projects/2024_waage/01_hisim_results/"  # "/fast/home/k-rieck/repositories/HiSim/system_setups/"
     module_results_directory = "results/household_cluster_advanced_hp_pv_battery_ems/builda_samples_20240607_1004/"
     result_folder_description_one = "PV-1-hds-2-hpc-mode-2/"
     result_folder_description_two = "weather-location-BAD_MARIENBURG"

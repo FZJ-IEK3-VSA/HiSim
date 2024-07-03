@@ -547,8 +547,8 @@ class ResultDataCollection:
         if csv_data_list == []:
             raise ValueError("csv_data_list is empty.")
 
-        for multi_index_columns, csv_file in enumerate(csv_data_list):
-            print("house number ", multi_index_columns)
+        for house_index, csv_file in enumerate(csv_data_list):
+            log.information("Reading data from house number " + str(house_index))
             # first get input data
             # get dataframe by reading csv file
             dataframe = pd.read_csv(csv_file)
@@ -605,7 +605,7 @@ class ResultDataCollection:
 
                 # write all values that were in module config dict in the dict["Inputs"]
                 if list_with_module_config_dicts is not None:
-                    module_config_dict = list_with_module_config_dicts[multi_index_columns]
+                    module_config_dict = list_with_module_config_dicts[house_index]
                     for key_0, value in module_config_dict.items():
                         dict_with_all_data["Input"][key_0].append(value)
 
@@ -614,7 +614,7 @@ class ResultDataCollection:
                 dict_with_all_data["Output"]["unit"].append(filtered_df["unit"].tolist()[0])
 
                 # get index
-                dict_with_all_data["Index"]["Index"].append(multi_index_columns)
+                dict_with_all_data["Index"]["Index"].append(house_index)
 
             if rename_scenario is True:
                 if (
@@ -623,11 +623,11 @@ class ResultDataCollection:
                     and list_with_parameter_key_values != []
                 ):
                     # rename scenario adding paramter key, value pair
-                    value = list_with_parameter_key_values[multi_index_columns]
+                    value = list_with_parameter_key_values[house_index]
                     if not isinstance(value, str):
                         value = round(value, 1)
-                    dict_with_all_data["Input"]["scenario"][multi_index_columns] = [f"{parameter_key}_{value}"] * len(
-                        dict_with_all_data["Input"]["scenario"][multi_index_columns]
+                    dict_with_all_data["Input"]["scenario"][house_index] = [f"{parameter_key}_{value}"] * len(
+                        dict_with_all_data["Input"]["scenario"][house_index]
                     )
 
         # check if dict is empty
@@ -669,8 +669,20 @@ class ResultDataCollection:
         for index, column in enumerate(multi_index_column_list):
             appended_dataframe[column] = list_of_value_1_lists[index]
 
-        # save dataframe
-        appended_dataframe.to_excel(filename)
+        # # save dataframe
+        # appended_dataframe.to_excel(filename)
+
+        # Create an Excel writer object using XlsxWriter as the engine
+        with pd.ExcelWriter(filename, engine="xlsxwriter") as writer:
+            # Get the xlsxwriter workbook object
+            workbook = writer.book
+
+            # Enable ZIP64 extensions
+            workbook.use_zip64()
+
+            # Write the DataFrame to the Excel file
+            appended_dataframe.to_excel(writer, sheet_name="Sheet1")
+
         log.information(f"Saving result dataframe here: {filename}")
 
         del appended_dataframe

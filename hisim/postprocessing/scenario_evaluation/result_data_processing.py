@@ -47,9 +47,9 @@ class ScenarioDataProcessing:
 
         file = list_of_possible_data_files[0]
         if xlsx_or_csv == "csv":
-            file_df = pd.read_csv(filepath_or_buffer=file)
+            file_df = pd.read_csv(filepath_or_buffer=file, sep=",")
         else:
-            file_df = pd.read_excel(file, header=[0, 1], index_col=0)
+            file_df = pd.read_excel(file, header=[0, 1], index_col=0, sheet_name="Sheet1")
 
         # if scenario values are no strings, transform them
         # file_df["scenario"] = file_df["scenario"].transform(str)

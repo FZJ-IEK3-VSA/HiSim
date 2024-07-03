@@ -476,7 +476,7 @@ class KpiGenerator(JSONWizard):
 
         if not wrapped_electricty_meter_component:
             log.information("Could not find the Electricity Meter component.")
-            return None
+            return None, None
 
         for column in self.results.columns:
 
@@ -484,10 +484,10 @@ class KpiGenerator(JSONWizard):
                 for string in column.split(sep=" "):
 
                     if "ElectricityToGrid" in string.split(sep="_") :
-                        total_energy_to_grid_in_kwh = (self.results[column].loc[self.results[column] > 0.0]).sum()/1000
+                        total_energy_to_grid_in_kwh = (self.results[column].loc[self.results[column] > 0.0]).sum() / 1000
 
-                    if "ElectricitFromGrid" in string.split(sep="_") :
-                        total_energy_from_grid_in_kwh = (self.results[column].loc[self.results[column] > 0.0]).sum()/1000
+                    if "ElectricityFromGrid" in string.split(sep="_") :
+                        total_energy_from_grid_in_kwh = (self.results[column].loc[self.results[column] > 0.0]).sum() / 1000
 
         if total_energy_from_grid_in_kwh is None and total_energy_to_grid_in_kwh is None:
             log.warning(

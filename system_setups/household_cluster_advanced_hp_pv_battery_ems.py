@@ -36,6 +36,7 @@ from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptio
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
+from hisim import utils
 from hisim import log
 from hisim.units import Quantity, Celsius, Watt
 

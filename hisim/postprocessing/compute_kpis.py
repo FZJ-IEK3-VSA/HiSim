@@ -493,8 +493,6 @@ class KpiGenerator(JSONWizard):
             log.warning(
                 "KPI values for total energy to and from grid are None. "
                 "Please check if you have correctly initialized and connected the electricity meter in your system setup. "
-                f"Also check if you chose no. {str(PostProcessingOptions.COMPUTE_OPEX)} in your postprocessing options because this "
-                "option is responsible for writing the energy to/from grid values into the electricity meter config."
             )
         # make kpi entry
         total_energy_from_grid_in_kwh_entry = KpiEntry(

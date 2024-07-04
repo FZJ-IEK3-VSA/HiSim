@@ -29,7 +29,6 @@ from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes
 from hisim.utils import HISIMPATH
 from hisim import log
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
-from hisim.postprocessingoptions import PostProcessingOptions
 
 
 class KpiTagEnumClass(Enum):

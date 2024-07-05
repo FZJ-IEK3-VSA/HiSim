@@ -7,7 +7,7 @@ import numpy as np
 
 
 # Lese die Excel-Datei und das Tabellenblatt "Bezug" ein
-df = pd.read_excel('C://Users//Standard//Desktop//hisim//results//2a20240624//Gesamtergebnis.xlsx', sheet_name='Netzbezug')
+df = pd.read_excel('C://Users//Standard//Desktop//hisim//results//2a20240624//Gesamtergebnis.xlsx', sheet_name='Netzbezug', nrows=441)
 print(df.head())
 # Extrahiere die relevanten Spalten
 brennstoffzellenleistung = df['FuelCellPowerkWh']  # Spalte B

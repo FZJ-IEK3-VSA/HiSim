@@ -40,7 +40,6 @@ class EMSControlStrategy(IntEnum):
 @dataclass_json
 @dataclass
 class EMSConfig(cp.ConfigBase):
-
     """L1 Controller Config."""
 
     @classmethod
@@ -63,10 +62,9 @@ class EMSConfig(cp.ConfigBase):
     space_heating_water_storage_temperature_offset_value: float
 
     @classmethod
-    def get_default_config_ems(cls,
-        strategy: Union[EMSControlStrategy, int] = EMSControlStrategy.OPTIMIZEOWNCONSUMPTION_ITERATIV
-
-                               ) -> "EMSConfig":
+    def get_default_config_ems(
+        cls, strategy: Union[EMSControlStrategy, int] = EMSControlStrategy.OPTIMIZEOWNCONSUMPTION_ITERATIV
+    ) -> "EMSConfig":
         """Default Config for Energy Management System."""
         config = EMSConfig(
             name="L2EMSElectricityController",
@@ -80,7 +78,6 @@ class EMSConfig(cp.ConfigBase):
 
 
 class EMSState:
-
     """Saves the state of the Energy Management System."""
 
     def __init__(
@@ -104,7 +101,6 @@ class EMSState:
 
 
 class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
-
     """Surplus electricity controller - time step based.
 
     Iteratively goes through connected inputs by hierachy of
@@ -442,6 +438,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     def sort_source_weights_and_components(
         self,
     ) -> Tuple[
+        List[int],
         List[ComponentInput],
         List[lt.ComponentType],
         List[ComponentOutput],
@@ -483,6 +480,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED]
         )
         return (
+            source_weights,
             inputs_sorted,
             component_types_sorted,
             outputs_sorted,
@@ -627,78 +625,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
         return available_surplus_electricity_in_watt
 
-    def control_electricity_component_parallel(
-            self,
-            available_surplus_electricity_in_watt: float,
-            stsv: cp.SingleTimeStepValues,
-            current_component_type: lt.ComponentType,
-            current_input: cp.ComponentInput,
-            current_output: cp.ComponentOutput,
-    ) -> float:
-        """Calculates available surplus electricity.
-
-        Subtracts the electricity consumption signal of the component from the previous iteration,
-        and sends updated signal back.
-        This function controls how surplus electricity is distributed and how much of each components'
-        electricity need is covered onsite or from grid.
-        """
-        # get electricity demand from input component and substract from (or add to) available surplus electricity
-        electricity_demand_from_current_input_component_in_watt = stsv.get_input_value(component_input=current_input)
-
-        # if available_surplus_electricity > 0: electricity is fed into battery
-        # if available_surplus_electricity < 0: electricity is taken from battery
-        if current_component_type == lt.ComponentType.BATTERY:
-            stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
-            # difference between what is fed into battery and what battery really used
-            available_surplus_electricity_in_watt = (
-                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
-            )
-
-        # these are electricity CONSUMERS
-        elif current_component_type in [
-            lt.ComponentType.RESIDENTS,
-            lt.ComponentType.ELECTROLYZER,
-            lt.ComponentType.SMART_DEVICE,
-            lt.ComponentType.CAR_BATTERY,
-            lt.ComponentType.HEAT_PUMP_DHW,
-            lt.ComponentType.HEAT_PUMP,
-            lt.ComponentType.HEAT_PUMP_BUILDING,
-        ]:
-            # if surplus electricity is available, a part of the component's consumption can be covered onsite
-            if available_surplus_electricity_in_watt > 0:
-                available_surplus_electricity_in_watt = (
-                        available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
-                )
-                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
-            # otherwise all of the component's consumption is taken from grid
-            else:
-                stsv.set_output_value(
-                    output=current_output, value=-electricity_demand_from_current_input_component_in_watt
-                )
-                available_surplus_electricity_in_watt = (
-                        available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
-                )
-
-        # these are electricity PRODUCERS
-        elif current_component_type == lt.ComponentType.CHP:
-            available_surplus_electricity_in_watt = (
-                    available_surplus_electricity_in_watt + electricity_demand_from_current_input_component_in_watt
-            )
-            stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
-
-        elif current_component_type == lt.ComponentType.SURPLUS_CONTROLLER_DISTRICT:
-            if available_surplus_electricity_in_watt > 0:
-                available_surplus_electricity_in_watt = (
-                        available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
-                )
-                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
-            else:
-                stsv.set_output_value(
-                    output=current_output, value=-electricity_demand_from_current_input_component_in_watt
-                )
-
-        return available_surplus_electricity_in_watt
-
     def distribute_available_surplus_electricity_iterative(
         self,
         available_surplus_electricity_in_watt: float,
@@ -723,34 +649,144 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
         return available_surplus_electricity_in_watt
 
+    def control_electricity_component_parallel(
+        self,
+        available_surplus_electricity_in_watt: float,
+        stsv: cp.SingleTimeStepValues,
+        current_component_type: lt.ComponentType,
+        current_input: cp.ComponentInput,
+        current_output: cp.ComponentOutput,
+    ) -> float:
+        """Calculates available surplus electricity.
+
+        Subtracts the electricity consumption signal of the component from the previous iteration,
+        and sends updated signal back.
+        This function controls how surplus electricity is distributed and how much of each components'
+        electricity need is covered onsite or from grid.
+        """
+        # get electricity demand from input component and substract from (or add to) available surplus electricity
+        electricity_demand_from_current_input_component_in_watt = stsv.get_input_value(component_input=current_input)
+
+        # if available_surplus_electricity > 0: electricity is fed into battery
+        # if available_surplus_electricity < 0: electricity is taken from battery
+        if current_component_type == lt.ComponentType.BATTERY:
+            stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
+            # difference between what is fed into battery and what battery really used
+            available_surplus_electricity_in_watt = (
+                available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
+            )
+
+        # these are electricity CONSUMERS
+        elif current_component_type in [
+            lt.ComponentType.RESIDENTS,
+            lt.ComponentType.ELECTROLYZER,
+            lt.ComponentType.SMART_DEVICE,
+            lt.ComponentType.CAR_BATTERY,
+            lt.ComponentType.HEAT_PUMP_DHW,
+            lt.ComponentType.HEAT_PUMP,
+            lt.ComponentType.HEAT_PUMP_BUILDING,
+        ]:
+            # if surplus electricity is available, a part of the component's consumption can be covered onsite
+            if available_surplus_electricity_in_watt > 0:
+                available_surplus_electricity_in_watt = (
+                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
+                )
+                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
+            # otherwise all of the component's consumption is taken from grid
+            else:
+                stsv.set_output_value(
+                    output=current_output, value=-electricity_demand_from_current_input_component_in_watt
+                )
+                available_surplus_electricity_in_watt = (
+                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
+                )
+
+        # these are electricity PRODUCERS
+        elif current_component_type == lt.ComponentType.CHP:
+            available_surplus_electricity_in_watt = (
+                available_surplus_electricity_in_watt + electricity_demand_from_current_input_component_in_watt
+            )
+            stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
+
+        elif current_component_type == lt.ComponentType.SURPLUS_CONTROLLER_DISTRICT:
+            if available_surplus_electricity_in_watt > 0:
+                available_surplus_electricity_in_watt = (
+                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
+                )
+                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
+            else:
+                stsv.set_output_value(
+                    output=current_output, value=-electricity_demand_from_current_input_component_in_watt
+                )
+
+        return available_surplus_electricity_in_watt
+
     def distribute_available_surplus_electricity_parallel(
-            self,
-            available_surplus_electricity_in_watt: float,
-            stsv: cp.SingleTimeStepValues,
-            inputs_sorted: List[ComponentInput],
-            component_types_sorted: List[lt.ComponentType],
-            outputs_sorted: List[ComponentOutput],
+        self,
+        source_weights_sorted: List[int],
+        available_surplus_electricity_in_watt: float,
+        stsv: cp.SingleTimeStepValues,
+        inputs_sorted: List[ComponentInput],
+        component_types_sorted: List[lt.ComponentType],
+        outputs_sorted: List[ComponentOutput],
     ) -> float:
         """Evaluates available surplus electricity component by component, iteratively, and sends updated signals back."""
+
+        number_of_same_source_weights = {}
+
+        for number in source_weights_sorted:
+            if number in number_of_same_source_weights:
+                number_of_same_source_weights[number] += 1
+            else:
+                number_of_same_source_weights[number] = 1
 
         for index, single_input_sorted in enumerate(inputs_sorted):
             single_component_type_sorted = component_types_sorted[index]
             single_output_sorted = outputs_sorted[index]
+            single_source_weight_sorted = source_weights_sorted[index]
+            single_number_of_same_source_weights = number_of_same_source_weights[single_source_weight_sorted]
 
-            available_surplus_electricity_in_watt = self.control_electricity_component_parallel(
-                available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
-                stsv=stsv,
-                current_component_type=single_component_type_sorted,
-                current_input=single_input_sorted,
-                current_output=single_output_sorted,
-            )
+            if single_number_of_same_source_weights > 1:
+                available_surplus_electricity_in_watt_split = (
+                    available_surplus_electricity_in_watt / single_number_of_same_source_weights
+                )
+
+                available_surplus_electricity_in_watt_split_rest = self.control_electricity_component_parallel(
+                    available_surplus_electricity_in_watt=available_surplus_electricity_in_watt_split,
+                    stsv=stsv,
+                    current_component_type=single_component_type_sorted,
+                    current_input=single_input_sorted,
+                    current_output=single_output_sorted,
+                )
+
+                single_number_of_same_source_weights -= 1
+                number_of_same_source_weights[single_source_weight_sorted] -= 1
+                available_surplus_electricity_in_watt = (
+                    available_surplus_electricity_in_watt_split * single_number_of_same_source_weights
+                )
+
+                if available_surplus_electricity_in_watt_split_rest > 0:
+                    available_surplus_electricity_in_watt = (
+                        available_surplus_electricity_in_watt + available_surplus_electricity_in_watt_split_rest
+                    )
+
+            else:
+                available_surplus_electricity_in_watt = self.control_electricity_component_parallel(
+                    available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
+                    stsv=stsv,
+                    current_component_type=single_component_type_sorted,
+                    current_input=single_input_sorted,
+                    current_output=single_output_sorted,
+                )
 
         return available_surplus_electricity_in_watt
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates iteration of surplus controller."""
+
         if timestep == 0:
             (
+                self.source_weights_sorted,
                 self.inputs_sorted,
                 self.component_types_sorted,
                 self.outputs_sorted,
@@ -777,7 +813,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
         # Production of Electricity positve sign
         # Consumption of Electricity negative sign
-        available_surplus_electricity_in_watt = self.state.production_in_watt - self.state.consumption_uncontrolled_in_watt
+        available_surplus_electricity_in_watt = (
+            self.state.production_in_watt - self.state.consumption_uncontrolled_in_watt
+        )
 
         if self.strategy == EMSControlStrategy.OPTIMIZEOWNCONSUMPTION_ITERATIV:
             available_surplus_electricity_in_watt = self.distribute_available_surplus_electricity_iterative(
@@ -794,9 +832,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 component_types_sorted=self.component_types_sorted,
             )
 
-
         if self.strategy == EMSControlStrategy.OPTIMIZEOWNCONSUMPTION_PARALLEL:
             available_surplus_electricity_in_watt = self.distribute_available_surplus_electricity_parallel(
+                source_weights_sorted=self.source_weights_sorted,
                 available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
                 stsv=stsv,
                 inputs_sorted=self.inputs_sorted,
@@ -810,7 +848,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 inputs_sorted=self.inputs_sorted,
                 component_types_sorted=self.component_types_sorted,
             )
-
 
         stsv.set_output_value(self.total_electricity_to_or_from_grid, available_surplus_electricity_in_watt)
         stsv.set_output_value(

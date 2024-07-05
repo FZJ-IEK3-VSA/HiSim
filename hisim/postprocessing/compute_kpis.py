@@ -21,7 +21,7 @@ from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnecto
 from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLib
 from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib
 
-# from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
+from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
 from hisim.components.electricity_meter import ElectricityMeter
 from hisim.components.generic_heat_pump_modular import ModularHeatPump
 from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
@@ -1517,11 +1517,6 @@ class KpiGenerator(JSONWizard):
         total_electrical_energy_input_in_kilowatt_hour = (
             electrical_energy_for_cooling_in_kilowatt_hour + electrical_energy_for_heating_in_kilowatt_hour
         )
-        print(
-            "advacned kpi sh hp",
-            electrical_energy_for_cooling_in_kilowatt_hour,
-            electrical_energy_for_heating_in_kilowatt_hour,
-        )
 
         return (
             spf,
@@ -1624,7 +1619,7 @@ class KpiGenerator(JSONWizard):
                     output_name_return_temperature = MoreAdvancedHeatPumpHPLib.TemperatureInputSH
                 elif isinstance(wrapped_component.my_component, HeatPumpHplib):
                     output_name_flow_temperature = HeatPumpHplib.TemperatureOutput
-                    output_name_return_temperature = HeatPumpHplib.TemperatureInputSecondary
+                    output_name_return_temperature = SimpleHotWaterStorage.WaterTemperatureToHeatGenerator
 
                 (
                     mean_flow_temperature_in_celsius,
@@ -1915,8 +1910,6 @@ class KpiGenerator(JSONWizard):
             dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour = None
             return
 
-        print("dhw compoennt is", wrapped_dhw_heat_pump_component.my_component.component_name)
-
         for column in self.results.columns:
             if all(
                 x in column.split(sep=" ")
@@ -2181,7 +2174,6 @@ class KpiGenerator(JSONWizard):
                             )
                         )
                     if "ElectricityToOrFromGridOfUtspLpgConnector" in string.split(sep="_"):
-                        print(self.results[column])
                         occupancy_electricity_from_grid_in_watt_series = self.results[column].loc[
                             self.results[column] < 0.0
                         ]
@@ -2200,12 +2192,6 @@ class KpiGenerator(JSONWizard):
             log.warning(
                 "Some KPI values for the energy management system are None. "
                 "Please check if you have correctly initialized and connected the EMS in your system setup or ignore this message."
-            )
-            print(
-                "ems from grid",
-                sh_heatpump_electricity_from_grid_in_kilowatt_hour,
-                dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
-                occupancy_electricity_from_grid_in_kilowatt_hour,
             )
 
         # make kpi entry

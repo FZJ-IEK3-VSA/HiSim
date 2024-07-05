@@ -73,7 +73,7 @@ def main():
 
     dict_with_extra_information_for_specific_plot: Dict[str, Dict] = {
         "scatter": {
-            "x_data_variable": "HeatDistributionController|Temperature|HeatingFlowTemperature"
+            "x_data_variable": "PVSystem_w0|Electricity|ElectricityOutput"
         },  # "Building|Temperature|TemperatureIndoorAir"     "Specific heating demand according to TABULA" "Weather|Temperature|DailyAverageOutsideTemperatures"
         "stacked_bar": {
             "y1_data_variable": "Mean flow temperature of heat pump",

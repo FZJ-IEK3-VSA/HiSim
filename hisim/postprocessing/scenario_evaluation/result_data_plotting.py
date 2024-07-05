@@ -173,10 +173,15 @@ class ScenarioChartGeneration:
             filtered_data = ScenarioDataProcessing.filter_pandas_dataframe(
                 dataframe=pandas_dataframe, variable_to_check=variable_to_check
             )
-            x_and_y_plot_data, output_values_key = ScenarioDataProcessing.take_mean_values_of_scenarios(
-                filtered_data=filtered_data
+            x_and_y_plot_data, output_value_keys = ScenarioDataProcessing.take_mean_values_of_scenarios(
+                filtered_data=filtered_data, time_resolution_of_data_set=time_resolution_of_data_set
             )
-            if filtered_data[("Output", output_values_key)].isnull().all():
+            # if any output column has no values, skip this variable
+            skip_this_variable: bool = False
+            for output_value_key in output_value_keys:
+                if filtered_data[("Output", output_value_key)].isnull().all():
+                    skip_this_variable = True
+            if skip_this_variable:
                 print(f"No values for {variable_to_check} found.")
                 continue
 
@@ -203,12 +208,12 @@ class ScenarioChartGeneration:
 
                 self.make_box_plot_for_pandas_dataframe(
                     filtered_data=filtered_data,
-                    key_for_output_values=output_values_key,
-                    y_axis_label=self.path_addition,
+                    key_for_output_values=output_value_keys[0],
+                    y_axis_label=self.path_addition.replace("_", " "),
                 )
 
                 self.make_bar_plot_for_pandas_dataframe(
-                    unit=unit, x_and_y_plot_data=x_and_y_plot_data, y_axis_label=self.path_addition
+                    unit=unit, x_and_y_plot_data=x_and_y_plot_data, y_axis_label=self.path_addition.replace("_", " ")
                 )
 
                 try:
@@ -221,15 +226,15 @@ class ScenarioChartGeneration:
                     )
                 except Exception:
                     log.information(f"{variable_to_check} could not be plotted as scatter plot.")
-                # try:
-                self.make_histogram_plot_for_pandas_dataframe(
-                    filtered_data=filtered_data,
-                    key_for_output_values=output_values_key,
-                    unit=unit,
-                    x_axis_label=self.path_addition,
-                )
-                # except Exception:
-                #     log.information(f"{variable_to_check} could not be plotted as histogram plot.")
+                try:
+                    self.make_histogram_plot_for_pandas_dataframe(
+                        filtered_data=filtered_data,
+                        key_for_output_values=output_value_keys[0],
+                        unit=unit,
+                        x_axis_label=self.path_addition.replace("_", " "),
+                    )
+                except Exception:
+                    log.information(f"{variable_to_check} could not be plotted as histogram plot.")
 
                 if variable_to_check in [
                     dict_with_extra_information_for_specific_plot["stacked_bar"]["y1_data_variable"],
@@ -251,55 +256,54 @@ class ScenarioChartGeneration:
                         sort_according_to_y1_or_y2_data=sort_according_to_y1_or_y2_data,
                     )
 
-            # elif time_resolution_of_data_set in (
-            #     ResultDataTypeEnum.HOURLY,
-            #     ResultDataTypeEnum.DAILY,
-            #     ResultDataTypeEnum.MONTHLY,
-            # ):
-            #     if time_resolution_of_data_set == ResultDataTypeEnum.HOURLY:
-            #         kind_of_data_set = "hourly"
-            #         line_plot_marker_size = 2
-            #     elif time_resolution_of_data_set == ResultDataTypeEnum.DAILY:
-            #         kind_of_data_set = "daily"
-            #         line_plot_marker_size = 3
-            #     elif time_resolution_of_data_set == ResultDataTypeEnum.MONTHLY:
-            #         kind_of_data_set = "monthly"
-            #         line_plot_marker_size = 5
+            elif time_resolution_of_data_set in (
+                ResultDataTypeEnum.HOURLY,
+                ResultDataTypeEnum.DAILY,
+                ResultDataTypeEnum.MONTHLY,
+            ):
+                if time_resolution_of_data_set == ResultDataTypeEnum.HOURLY:
+                    kind_of_data_set = "hourly"
+                    line_plot_marker_size = 2
+                elif time_resolution_of_data_set == ResultDataTypeEnum.DAILY:
+                    kind_of_data_set = "daily"
+                    line_plot_marker_size = 3
+                elif time_resolution_of_data_set == ResultDataTypeEnum.MONTHLY:
+                    kind_of_data_set = "monthly"
+                    line_plot_marker_size = 5
 
-            #     # get statistical data
-            #     x_and_y_plot_data = ScenarioDataProcessing.take_mean_values_of_scenarios(filtered_data=filtered_data)
-            #     ScenarioDataProcessing.get_statistics_of_data_and_write_to_excel(
-            #         filtered_data=filtered_data,
-            #         path_to_save=self.plot_path_complete,
-            #         kind_of_data_set=kind_of_data_set,
-            #         x_and_y_plot_data=x_and_y_plot_data,
-            #     )
+                # get statistical data
+                ScenarioDataProcessing.get_statistics_of_data_and_write_to_excel(
+                    filtered_data=filtered_data,
+                    path_to_save=self.plot_path_complete,
+                    kind_of_data_set=kind_of_data_set,
+                    x_and_y_plot_data=x_and_y_plot_data,
+                )
 
-            #     self.make_line_plot_for_pandas_dataframe(
-            #         filtered_data=filtered_data,
-            #         x_and_y_plot_data=x_and_y_plot_data,
-            #         line_plot_marker_size=line_plot_marker_size,
-            #     )
+                self.make_line_plot_for_pandas_dataframe(
+                    filtered_data=filtered_data,
+                    x_and_y_plot_data=x_and_y_plot_data,
+                    line_plot_marker_size=line_plot_marker_size,
+                    y_axis_label=self.path_addition.replace("_", " "),
+                )
 
-            #     self.make_box_plot_for_pandas_dataframe(filtered_data=filtered_data)
+                try:
+                    x_data_variable = dict_with_extra_information_for_specific_plot["scatter"]["x_data_variable"]
+                    self.make_line_scatter_plot_for_pandas_dataframe(
+                        full_pandas_dataframe=pandas_dataframe,
+                        filtered_data=filtered_data,
+                        keys_for_output_values=output_value_keys,
+                        y_data_variable=self.path_addition,
+                        x_data_variable=x_data_variable,
+                        line_plot_marker_size=line_plot_marker_size,
+                    )
+                except Exception:
+                    log.information(f"{variable_to_check} could not be plotted as line scatter plot.")
 
-            #     try:
-            #         x_data_variable = dict_with_extra_information_for_specific_plot["scatter"]["x_data_variable"]
-            #         self.make_line_scatter_plot_for_pandas_dataframe(
-            #             full_pandas_dataframe=pandas_dataframe,
-            #             filtered_data=filtered_data,
-            #             y_data_variable=self.path_addition,
-            #             x_data_variable=x_data_variable,
-            #             line_plot_marker_size=line_plot_marker_size,
-            #         )
-            #     except Exception:
-            #         log.information(f"{variable_to_check} could not be plotted as line scatter plot.")
-
-            # else:
-            #     raise ValueError("This kind of data was not found in the datacollectorenum class.")
+            else:
+                raise ValueError("This kind of data was not found in the datacollectorenum class.")
 
     def make_line_plot_for_pandas_dataframe(
-        self, filtered_data: pd.DataFrame, x_and_y_plot_data: pd.DataFrame, line_plot_marker_size: int
+        self, filtered_data: pd.DataFrame, x_and_y_plot_data: pd.DataFrame, line_plot_marker_size: int, y_axis_label: str
     ) -> None:
         """Make line plot."""
         log.information("Make line plot with data.")
@@ -326,10 +330,11 @@ class ScenarioChartGeneration:
         self.set_ticks_labels_legend_and_save_fig(
             fig=fig,
             a_x=a_x,
-            y_axis_unit=str(filtered_data.unit.values[0]),
+            y_axis_unit=str(filtered_data[("Output", "unit")].values[0]),
             show_legend=self.show_plot_legend,
             plot_type_name="line_plot",
             rotate_x_ticks=True,
+            y_axis_label=y_axis_label
         )
 
     def make_bar_plot_for_pandas_dataframe(self, x_and_y_plot_data: pd.DataFrame, unit: str, y_axis_label: str) -> None:
@@ -390,6 +395,7 @@ class ScenarioChartGeneration:
         fig, a_x = plt.subplots(figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi)
         if scenario_set is None:
             scenario_set = list(OrderedSet(filtered_data[("Input", "scenario")]))
+
         sns.boxplot(
             data=filtered_data, x=("Input", "scenario"), y=("Output", key_for_output_values), palette="Spectral"
         )
@@ -527,6 +533,7 @@ class ScenarioChartGeneration:
         filtered_data: pd.DataFrame,
         line_plot_marker_size: int,
         y_data_variable: str,
+        keys_for_output_values: List[str],
         x_data_variable: str = "Specific heating demand according to TABULA",
     ) -> None:
         """Make line scatter plot."""
@@ -535,21 +542,26 @@ class ScenarioChartGeneration:
         fig, a_x = plt.subplots(figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi)
 
         # iterate over all scenarios
-        for scenario in list(OrderedSet(list(full_pandas_dataframe.scenario))):
-            full_data_per_scenario = full_pandas_dataframe.loc[full_pandas_dataframe["scenario"] == scenario]
-            filtered_data_per_scenario = filtered_data.loc[filtered_data["scenario"] == scenario]
+        for scenario in list(OrderedSet(list(full_pandas_dataframe[("Input", "scenario")]))):
+            full_data_per_scenario = full_pandas_dataframe.loc[full_pandas_dataframe[("Input", "scenario")] == scenario]
+            filtered_data_per_scenario = filtered_data.loc[filtered_data[("Input", "scenario")] == scenario]
 
             # get x_data_list by filtering the df according to x_data_variable and then by taking values from "value" column
-            x_data_list = list(
-                full_data_per_scenario.loc[full_data_per_scenario["variable"] == x_data_variable]["value"].values
-            )
-            x_data_unit = full_data_per_scenario.loc[full_data_per_scenario["variable"] == x_data_variable][
-                "unit"
-            ].values[0]
-
-            # get y values from filtered data per scenario (already filtered according to variable to check and scenario)
-            y_data_list = list(filtered_data_per_scenario["value"].values)
-            y_data_unit = filtered_data_per_scenario["unit"].values[0]
+            x_data_list = []
+            y_data_list = []
+            for output_value_key in keys_for_output_values:
+                x_values = list(
+                full_data_per_scenario.loc[full_data_per_scenario[("Output", "variable")] == x_data_variable][("Output", output_value_key)].values
+                )
+                x_data_list.append(x_values)
+                # get y values from filtered data per scenario (already filtered according to variable to check and scenario)
+                y_values = list(
+                filtered_data_per_scenario[("Output", output_value_key)].values
+                )
+                y_data_list.append(y_values)
+            # get units
+            x_data_unit = full_data_per_scenario.loc[full_data_per_scenario[("Output", "variable")] == x_data_variable][("Output", "unit")].values[0]
+            y_data_unit = filtered_data_per_scenario[("Output", "unit")].values[0]
 
             # make scatter plot
             plt.plot(x_data_list, y_data_list, "-o", markersize=line_plot_marker_size)

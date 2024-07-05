@@ -1517,6 +1517,11 @@ class KpiGenerator(JSONWizard):
         total_electrical_energy_input_in_kilowatt_hour = (
             electrical_energy_for_cooling_in_kilowatt_hour + electrical_energy_for_heating_in_kilowatt_hour
         )
+        print(
+            "advacned kpi sh hp",
+            electrical_energy_for_cooling_in_kilowatt_hour,
+            electrical_energy_for_heating_in_kilowatt_hour,
+        )
 
         return (
             spf,
@@ -1910,6 +1915,8 @@ class KpiGenerator(JSONWizard):
             dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour = None
             return
 
+        print("dhw compoennt is", wrapped_dhw_heat_pump_component.my_component.component_name)
+
         for column in self.results.columns:
             if all(
                 x in column.split(sep=" ")
@@ -2174,7 +2181,7 @@ class KpiGenerator(JSONWizard):
                             )
                         )
                     if "ElectricityToOrFromGridOfUtspLpgConnector" in string.split(sep="_"):
-
+                        print(self.results[column])
                         occupancy_electricity_from_grid_in_watt_series = self.results[column].loc[
                             self.results[column] < 0.0
                         ]
@@ -2193,6 +2200,12 @@ class KpiGenerator(JSONWizard):
             log.warning(
                 "Some KPI values for the energy management system are None. "
                 "Please check if you have correctly initialized and connected the EMS in your system setup or ignore this message."
+            )
+            print(
+                "ems from grid",
+                sh_heatpump_electricity_from_grid_in_kilowatt_hour,
+                dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
+                occupancy_electricity_from_grid_in_kilowatt_hour,
             )
 
         # make kpi entry

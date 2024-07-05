@@ -173,70 +173,83 @@ class ScenarioChartGeneration:
             filtered_data = ScenarioDataProcessing.filter_pandas_dataframe(
                 dataframe=pandas_dataframe, variable_to_check=variable_to_check
             )
+            x_and_y_plot_data, output_values_key = ScenarioDataProcessing.take_mean_values_of_scenarios(
+                filtered_data=filtered_data
+            )
+            if filtered_data[("Output", output_values_key)].isnull().all():
+                print(f"No values for {variable_to_check} found.")
+                continue
 
             filtered_data.to_excel(os.path.join(self.path_for_plots, self.path_addition, "results.xlsx"))
-            # # get unit of variable
-            # try:
-            #     unit = str(filtered_data.unit.values[0])
-            #     unit = str(filtered_data.unit.values[0])
-            # except Exception:
-            #     if "Temperature deviation" in variable_to_check:
-            #         unit = "°C*h"
-            #     else:
-            #         unit = "-"
+            # get unit of variable
+            try:
+                unit = str(filtered_data[("Output", "unit")].values[0])
+            except Exception:
+                if "Temperature deviation" in variable_to_check:
+                    unit = "°C*h"
+                else:
+                    unit = "-"
 
-            # if time_resolution_of_data_set == ResultDataTypeEnum.YEARLY:
-            #     kind_of_data_set = "yearly"
+            if time_resolution_of_data_set == ResultDataTypeEnum.YEARLY:
+                kind_of_data_set = "yearly"
 
-            #     # get statistical data
-            #     x_and_y_plot_data = ScenarioDataProcessing.take_mean_values_of_scenarios(filtered_data=filtered_data)
-            #     ScenarioDataProcessing.get_statistics_of_data_and_write_to_excel(
-            #         filtered_data=filtered_data,
-            #         path_to_save=self.plot_path_complete,
-            #         kind_of_data_set=kind_of_data_set,
-            #         x_and_y_plot_data=x_and_y_plot_data,
-            #     )
+                # get statistical data
+                ScenarioDataProcessing.get_statistics_of_data_and_write_to_excel(
+                    filtered_data=filtered_data,
+                    path_to_save=self.plot_path_complete,
+                    kind_of_data_set=kind_of_data_set,
+                    x_and_y_plot_data=x_and_y_plot_data,
+                )
 
-            #     self.make_box_plot_for_pandas_dataframe(filtered_data=filtered_data)
+                self.make_box_plot_for_pandas_dataframe(
+                    filtered_data=filtered_data,
+                    key_for_output_values=output_values_key,
+                    y_axis_label=self.path_addition,
+                )
 
-            #     self.make_bar_plot_for_pandas_dataframe(unit=unit, x_and_y_plot_data=x_and_y_plot_data)
+                self.make_bar_plot_for_pandas_dataframe(
+                    unit=unit, x_and_y_plot_data=x_and_y_plot_data, y_axis_label=self.path_addition
+                )
 
-            #     try:
-            #         x_data_variable = dict_with_extra_information_for_specific_plot["scatter"]["x_data_variable"]
-            #         self.make_scatter_plot_for_pandas_dataframe_for_yearly_data(
-            #             full_pandas_dataframe=pandas_dataframe,
-            #             filtered_data=filtered_data,
-            #             y_data_variable=self.path_addition,
-            #             x_data_variable=x_data_variable,
-            #         )
-            #     except Exception:
-            #         log.information(f"{variable_to_check} could not be plotted as scatter plot.")
-            #     try:
-            #         self.make_histogram_plot_for_pandas_dataframe(
-            #             filtered_data=filtered_data, unit=unit, x_axis_label=self.path_addition
-            #         )
-            #     except Exception:
-            #         log.information(f"{variable_to_check} could not be plotted as histogram plot.")
+                try:
+                    x_data_variable = dict_with_extra_information_for_specific_plot["scatter"]["x_data_variable"]
+                    self.make_scatter_plot_for_pandas_dataframe_for_yearly_data(
+                        full_pandas_dataframe=pandas_dataframe,
+                        filtered_data=filtered_data,
+                        y_data_variable=self.path_addition,
+                        x_data_variable=x_data_variable,
+                    )
+                except Exception:
+                    log.information(f"{variable_to_check} could not be plotted as scatter plot.")
+                # try:
+                self.make_histogram_plot_for_pandas_dataframe(
+                    filtered_data=filtered_data,
+                    key_for_output_values=output_values_key,
+                    unit=unit,
+                    x_axis_label=self.path_addition,
+                )
+                # except Exception:
+                #     log.information(f"{variable_to_check} could not be plotted as histogram plot.")
 
-            #     if variable_to_check in [
-            #         dict_with_extra_information_for_specific_plot["stacked_bar"]["y1_data_variable"],
-            #         dict_with_extra_information_for_specific_plot["stacked_bar"]["y2_data_variable"],
-            #     ]:
-            #         y1_data_variable = dict_with_extra_information_for_specific_plot["stacked_bar"]["y1_data_variable"]
-            #         y2_data_variable = dict_with_extra_information_for_specific_plot["stacked_bar"]["y2_data_variable"]
-            #         use_y1_as_bottom_for_y2 = dict_with_extra_information_for_specific_plot["stacked_bar"][
-            #             "use_y1_as_bottom_for_y2"
-            #         ]
-            #         sort_according_to_y1_or_y2_data = dict_with_extra_information_for_specific_plot["stacked_bar"][
-            #             "sort_according_to_y1_or_y2_data"
-            #         ]
-            #         self.make_stacked_bar_plot_for_pandas_dataframe(
-            #             full_pandas_dataframe=pandas_dataframe,
-            #             y1_data_variable=y1_data_variable,
-            #             y2_data_variable=y2_data_variable,
-            #             use_y1_as_bottom_for_y2=use_y1_as_bottom_for_y2,
-            #             sort_according_to_y1_or_y2_data=sort_according_to_y1_or_y2_data,
-            #         )
+                if variable_to_check in [
+                    dict_with_extra_information_for_specific_plot["stacked_bar"]["y1_data_variable"],
+                    dict_with_extra_information_for_specific_plot["stacked_bar"]["y2_data_variable"],
+                ]:
+                    y1_data_variable = dict_with_extra_information_for_specific_plot["stacked_bar"]["y1_data_variable"]
+                    y2_data_variable = dict_with_extra_information_for_specific_plot["stacked_bar"]["y2_data_variable"]
+                    use_y1_as_bottom_for_y2 = dict_with_extra_information_for_specific_plot["stacked_bar"][
+                        "use_y1_as_bottom_for_y2"
+                    ]
+                    sort_according_to_y1_or_y2_data = dict_with_extra_information_for_specific_plot["stacked_bar"][
+                        "sort_according_to_y1_or_y2_data"
+                    ]
+                    self.make_stacked_bar_plot_for_pandas_dataframe(
+                        full_pandas_dataframe=pandas_dataframe,
+                        y1_data_variable=y1_data_variable,
+                        y2_data_variable=y2_data_variable,
+                        use_y1_as_bottom_for_y2=use_y1_as_bottom_for_y2,
+                        sort_according_to_y1_or_y2_data=sort_according_to_y1_or_y2_data,
+                    )
 
             # elif time_resolution_of_data_set in (
             #     ResultDataTypeEnum.HOURLY,
@@ -319,7 +332,7 @@ class ScenarioChartGeneration:
             rotate_x_ticks=True,
         )
 
-    def make_bar_plot_for_pandas_dataframe(self, x_and_y_plot_data: pd.DataFrame, unit: str) -> None:
+    def make_bar_plot_for_pandas_dataframe(self, x_and_y_plot_data: pd.DataFrame, unit: str, y_axis_label: str) -> None:
         """Make bar plot."""
         log.information("Make bar plot.")
 
@@ -361,24 +374,33 @@ class ScenarioChartGeneration:
             rotate_x_ticks=rotate_x_ticks,
             x_ticks=np.arange(len(bar_labels)),
             x_tick_labels=bar_labels_sorted,
+            y_axis_label=y_axis_label,
         )
 
     def make_box_plot_for_pandas_dataframe(
-        self, filtered_data: pd.DataFrame, scenario_set: Optional[List[str]] = None,
+        self,
+        filtered_data: pd.DataFrame,
+        key_for_output_values: str,
+        y_axis_label: str,
+        scenario_set: Optional[List[str]] = None,
     ) -> None:
         """Make box plot."""
         log.information("Make box plot.")
 
         fig, a_x = plt.subplots(figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi)
         if scenario_set is None:
-            scenario_set = list(OrderedSet(filtered_data.scenario))
-        sns.boxplot(data=filtered_data, x="scenario", y="value", palette="Spectral")
+            scenario_set = list(OrderedSet(filtered_data[("Input", "scenario")]))
+        sns.boxplot(
+            data=filtered_data, x=("Input", "scenario"), y=("Output", key_for_output_values), palette="Spectral"
+        )
+        a_x.set(xlabel=None)
+        data_unit = filtered_data[("Output", "unit")].values[0]
 
         self.set_ticks_labels_legend_and_save_fig(
             fig=fig,
             a_x=a_x,
             x_axis_label="",
-            y_axis_unit=str(filtered_data.unit.values[0]),
+            y_axis_unit=str(data_unit),
             show_legend=False,
             legend_labels=scenario_set,
             plot_type_name="box_plot",
@@ -386,10 +408,16 @@ class ScenarioChartGeneration:
             x_ticks=np.arange(len(scenario_set)),
             x_tick_labels=scenario_set,
             rotate_x_ticks=True,
+            y_axis_label=y_axis_label,
         )
 
     def make_histogram_plot_for_pandas_dataframe(
-        self, filtered_data: pd.DataFrame, unit: str, x_axis_label: str, scenario_set: Optional[List[str]] = None,
+        self,
+        filtered_data: pd.DataFrame,
+        key_for_output_values: str,
+        unit: str,
+        x_axis_label: str,
+        scenario_set: Optional[List[str]] = None,
     ) -> None:
         """Make histogram plot."""
         log.information("Make histogram plot.")
@@ -398,9 +426,9 @@ class ScenarioChartGeneration:
             figsize=self.hisim_chartbase.figsize, dpi=self.hisim_chartbase.dpi
         )
         if scenario_set is None:
-            scenario_set = list(OrderedSet(filtered_data.scenario))
+            scenario_set = list(OrderedSet(filtered_data[("Input", "scenario")]))
 
-        plt.hist(x=np.array(filtered_data.value.values), bins="auto")
+        plt.hist(x=np.array(filtered_data[("Output", key_for_output_values)].values), bins="auto")
 
         self.set_ticks_labels_legend_and_save_fig(
             fig=fig,

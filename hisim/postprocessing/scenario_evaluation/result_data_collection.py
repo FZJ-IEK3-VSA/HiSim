@@ -583,23 +583,25 @@ class ResultDataCollection:
                 if use_this_variable is False:
                     continue
                 # convert scenario column to str-type just in case it has no string values
-                scenario_name_of_current_dataframe = str(filtered_df["scenario"].to_list()[0])
+                original_scenario_name_of_current_dataframe = str(filtered_df["scenario"].to_list()[0])
                 # check if scenario column is empty or not
-                if scenario_name_of_current_dataframe == "" or not isinstance(scenario_name_of_current_dataframe, str):
+                if original_scenario_name_of_current_dataframe == "" or not isinstance(
+                    original_scenario_name_of_current_dataframe, str
+                ):
                     raise ValueError(
-                        f"The scenario variable of the current dataframe is {scenario_name_of_current_dataframe} but it should be a non-empty string value. "
+                        f"The scenario variable of the current dataframe is {original_scenario_name_of_current_dataframe} but it should be a non-empty string value. "
                         "Please set a scenario name for your simulations."
                     )
                 # try to find hash number in scenario name
                 try:
-                    hash_number = re.findall(r"\-?\d+", scenario_name_of_current_dataframe)[-1]
+                    hash_number = re.findall(r"\-?\d+", original_scenario_name_of_current_dataframe)[-1]
                 # this is when no hash number could be determined in the scenario name
                 except Exception:
                     hash_number = 1
                     rename_scenario = False
                 # add hash colum to dataframe so hash does not get lost when scenario is renamed
                 dict_with_all_data["Input"]["model"].append(filtered_df["model"].tolist()[0])
-                dict_with_all_data["Input"]["scenario"].append(scenario_name_of_current_dataframe)
+                # dict_with_all_data["Input"]["scenario"].append(scenario_name_of_current_dataframe)
                 dict_with_all_data["Input"]["region"].append(filtered_df["region"].tolist()[0])
                 dict_with_all_data["Input"]["hash"].append(hash_number)
 
@@ -616,19 +618,25 @@ class ResultDataCollection:
                 # get index
                 dict_with_all_data["Index"]["Index"].append(house_index)
 
-            if rename_scenario is True:
+                # change scenario name is needed
                 if (
-                    parameter_key is not None
+                    rename_scenario is True
+                    and parameter_key is not None
                     and list_with_parameter_key_values is not None
                     and list_with_parameter_key_values != []
                 ):
+
                     # rename scenario adding paramter key, value pair
                     value = list_with_parameter_key_values[house_index]
                     if not isinstance(value, str):
                         value = round(value, 1)
-                    dict_with_all_data["Input"]["scenario"][house_index] = [f"{parameter_key}_{value}"] * len(
-                        dict_with_all_data["Input"]["scenario"][house_index]
-                    )
+                    final_scenario_name_to_use: str = f"{parameter_key}_{value}"
+
+                else:
+                    # append original scenario name and do no renaming
+                    final_scenario_name_to_use = original_scenario_name_of_current_dataframe
+                # append final scenario name to dict
+                dict_with_all_data["Input"]["scenario"].append(final_scenario_name_to_use)
 
         # check if dict is empty
         if not bool(dict_with_all_data):
@@ -669,18 +677,16 @@ class ResultDataCollection:
         for index, column in enumerate(multi_index_column_list):
             appended_dataframe[column] = list_of_value_1_lists[index]
 
-        # # save dataframe
-        # appended_dataframe.to_excel(filename)
-
-        # Create an Excel writer object using XlsxWriter as the engine
-        with pd.ExcelWriter(filename, engine="xlsxwriter") as writer:
-            # Get the xlsxwriter workbook object
+        # save dataframe
+        # create an excel writer object using xlsxWriter as the engine
+        with pd.ExcelWriter(filename, engine="xlsxwriter") as writer:  # pylint: disable=abstract-class-instantiated
+            # get the xlsxwriter workbook object
             workbook = writer.book
 
-            # Enable ZIP64 extensions
+            # enable ZIP64 extensions in order to handle large dataframes
             workbook.use_zip64()
 
-            # Write the DataFrame to the Excel file
+            # write the dataframe to the excel file
             appended_dataframe.to_excel(writer, sheet_name="Sheet1")
 
         log.information(f"Saving result dataframe here: {filename}")

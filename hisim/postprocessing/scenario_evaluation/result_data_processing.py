@@ -143,10 +143,10 @@ class ScenarioDataProcessing:
         """Check for one scenario."""
 
         aggregated_scenario_dict: Dict = {key: [] for key in list_of_scenarios_to_check}
-
         for scenario_to_check in list_of_scenarios_to_check:
             print("scenario to check", scenario_to_check)
-            for value in dataframe[column_name_to_check].values:
+
+            for value in dataframe[("Input", column_name_to_check)].values:
                 if (
                     isinstance(scenario_to_check, str)
                     and scenario_to_check in value
@@ -160,20 +160,26 @@ class ScenarioDataProcessing:
                 ):
                     aggregated_scenario_dict[scenario_to_check].append(value)
 
-        concat_df = pd.DataFrame()
-        # only take rows from dataframe which are in selected scenarios
-        for (key_scenario_to_check, given_list_of_values,) in aggregated_scenario_dict.items():
+            filtered_dfs = []
+
+        for key_scenario_to_check, given_list_of_values in aggregated_scenario_dict.items():
+
+            # Filter the DataFrame for the specific scenarios
             df_filtered_for_specific_scenarios = dataframe.loc[
-                dataframe[column_name_to_check].isin(given_list_of_values)
-            ]
+                dataframe[("Input", column_name_to_check)].isin(given_list_of_values)
+            ].copy()  # Use copy to avoid SettingWithCopyWarning
 
-            df_filtered_for_specific_scenarios.loc[:, "scenario"] = key_scenario_to_check
+            # Assign the scenario key to a new column
+            df_filtered_for_specific_scenarios[("Input", "scenario")] = key_scenario_to_check
 
-            concat_df = pd.concat([concat_df, df_filtered_for_specific_scenarios], ignore_index=True)
+            # Append the filtered DataFrame to the list
+            filtered_dfs.append(df_filtered_for_specific_scenarios)
 
-            concat_df[f"scenario_{filter_level_index}"] = dataframe.loc[:, "scenario"]
+        # Concatenate all filtered DataFrames
+        concat_df = pd.concat(filtered_dfs, ignore_index=True)
 
-            del df_filtered_for_specific_scenarios
+        # # Add scenario column
+        # concat_df[f"scenario_{filter_level_index}"] = dataframe[("Input", "scenario")]
 
         return concat_df
 
@@ -186,6 +192,7 @@ class ScenarioDataProcessing:
         concat_df = data_frame
         filter_level_index = 0
         for (scenario_to_check_key, list_of_scenarios_to_check,) in dict_of_scenarios_to_check.items():
+            print("scenario to check key", scenario_to_check_key)
             concat_df = ScenarioDataProcessing.aggregate_all_values_for_one_scenario(
                 dataframe=concat_df,
                 list_of_scenarios_to_check=list_of_scenarios_to_check,
@@ -213,24 +220,32 @@ class ScenarioDataProcessing:
         return concat_df, key_for_scenario_one, key_for_current_scenario
 
     @staticmethod
-    def take_mean_values_of_scenarios(filtered_data: pd.DataFrame) -> pd.DataFrame:
+    def take_mean_values_of_scenarios(filtered_data: pd.DataFrame) -> Tuple[pd.DataFrame, str]:
         """Get mean values of scenarios."""
 
         dict_with_x_and_y_data: Dict = {}
         # this is for timeseries data like hourly daily monthly
+
         try:
             x_data = list(OrderedSet(list(filtered_data.time)))
             take_mean_time_values_bool: bool = True
         # this is for yearly data
         except Exception:
-            x_data = [filtered_data.year.values[0]]
+            # x_data = [filtered_data.year.values[0]]
+            output_keys = filtered_data["Output"].keys()
+            output_values_key: str = ""
+            for key in output_keys:
+                if key not in ("variable", "unit"):
+                    output_values_key = key
+
+            x_data = [output_values_key]
             take_mean_time_values_bool = False
 
         # add x_data as column
         dict_with_x_and_y_data.update({"time": x_data})
 
-        for scenario in list(OrderedSet(list(filtered_data.scenario))):
-            filtered_data_per_scenario = filtered_data.loc[filtered_data["scenario"] == scenario]
+        for scenario in list(OrderedSet(list(filtered_data[("Input", "scenario")]))):
+            filtered_data_per_scenario = filtered_data.loc[filtered_data[("Input", "scenario")] == scenario]
 
             # if time column exists in dataframe, meaning if hourly, daily or monthly data, take mean values of time also
             if take_mean_time_values_bool:
@@ -245,12 +260,12 @@ class ScenarioDataProcessing:
 
             # take mean value directly for yearly data
             else:
-                mean_value_per_scenario = np.mean(filtered_data_per_scenario.value.values)
+                mean_value_per_scenario = np.mean(filtered_data_per_scenario[("Output", output_values_key)].values)
                 dict_with_x_and_y_data.update({f"{scenario}": [mean_value_per_scenario]})
 
         x_and_y_plot_data: pd.DataFrame = pd.DataFrame(dict_with_x_and_y_data)
 
-        return x_and_y_plot_data
+        return x_and_y_plot_data, output_values_key
 
 
 class FilterClass:
@@ -282,58 +297,60 @@ class FilterClass:
         # system_setups for variables to check (check names of your variables before your evaluation, if they are correct)
         # kpi data has no time series, so only choose when you analyze yearly data
         kpi_data = [
-            # "Total electricity consumption",
-            # "PV production",
+            "Total electricity consumption",
+            "PV production",
             # "Ratio between PV production and total consumption",
             # "Self-consumption",
             # "Self-consumption rate",
             # "Autarky rate",
             "Total energy from grid",
-            # "Total energy to grid",
+            "Total energy to grid",
             # "Relative electricity demand from grid",
             # "Self-consumption rate according to solar htw berlin",
-            # "Autarky rate according to solar htw berlin",
-            # "Investment costs for equipment per simulated period",
-            # "CO2 footprint for equipment per simulated period",
-            # "System operational costs for simulated period",
-            # "System operational emissions for simulated period",
-            # "Total costs for simulated period",
-            # "Total CO2 emissions for simulated period",
+            "Autarky rate according to solar htw berlin",
+            "Investment costs for equipment per simulated period",
+            "CO2 footprint for equipment per simulated period",
+            "System operational costs for simulated period",
+            "System operational emissions for simulated period",
+            "Total costs for simulated period",
+            "Total CO2 emissions for simulated period",
             # "Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius",
             # "Minimum building indoor air temperature reached",
             # "Temperature deviation of building indoor air temperature being above set temperature 25.0 Celsius",
             # "Maximum building indoor air temperature reached",
             # "Building heating load",
-            # "Conditioned floor area",
+            "Conditioned floor area",
             # "Rooftop area",
             # "Specific heating load",
-            # "Specific heating demand according to TABULA",
+            "Specific heating demand according to TABULA",
             # "Thermal output energy of heat distribution system",
             # "Number of SH heat pump cycles",
-            "Seasonal performance factor of SH heat pump",
-            "Seasonal energy efficiency ratio of SH heat pump",
-            "Heating hours of SH heat pump",
-            "Cooling hours of SH heat pump",
-            "Max flow temperature of SH heat pump",
-            "Max return temperature of SH heat pump",
-            "Max temperature difference of SH heat pump",
-            "Min flow temperature of SH heat pump",
-            "Min return temperature of SH heat pump",
-            "Min temperature difference of SH heat pump",
+            # "Seasonal performance factor of SH heat pump",
+            # "Seasonal energy efficiency ratio of SH heat pump",
+            # "Heating hours of SH heat pump",
+            # "Cooling hours of SH heat pump",
+            # "Max flow temperature of SH heat pump",
+            # "Max return temperature of SH heat pump",
+            # "Max temperature difference of SH heat pump",
+            # "Min flow temperature of SH heat pump",
+            # "Min return temperature of SH heat pump",
+            # "Min temperature difference of SH heat pump",
+            "Mean flow temperature of SH heat pump",
+            "Mean return temperature of SH heat pump",
             # "Heating output energy of SH heat pump",
             # "Cooling output energy of SH heat pump",
             # "Specific heating energy of SH heat pump",
-            "Electrical input energy for heating of SH heat pump",
-            "Electrical input energy for cooling of SH heat pump",
+            # "Electrical input energy for heating of SH heat pump",
+            # "Electrical input energy for cooling of SH heat pump",
             "Total electrical input energy of SH heat pump",
-            # "Space heating heat pump electricity from grid",
+            "Space heating heat pump electricity from grid",
             # "Relative electricity demand of SH heat pump",
-            # "DHW heat pump total electricity consumption",
-            # "Domestic hot water heat pump electricity from grid",
+            "DHW heat pump total electricity consumption",
+            "Domestic hot water heat pump electricity from grid",
             # "Heating output energy of DHW heat pump",
             # "Relative electricity demand of DHW heat pump",
-            # "Residents' total electricity consumption",
-            # "Residents' electricity consumption from grid",
+            "Residents' total electricity consumption",
+            "Residents' electricity consumption from grid",
             # "Relative electricity demand of residents",
             # "Battery charging energy",
             # "Battery discharging energy",

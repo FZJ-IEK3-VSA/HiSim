@@ -51,7 +51,7 @@ def main():
 
     # Inputs for scenario analysis
     # -------------------------------------------------------------------------------------------------------------------------------------
-    time_resolution_of_data_set = result_data_collection.ResultDataTypeEnum.DAILY
+    time_resolution_of_data_set = result_data_collection.ResultDataTypeEnum.YEARLY
     cluster_storage_path = "/storage_cluster/projects/2024_waage/01_hisim_results/"  # "/fast/home/k-rieck/repositories/HiSim/system_setups/"
     module_results_directory = "results/household_cluster_advanced_hp_pv_battery_ems/builda_samples_20240607_1004/"
     result_folder_description_one = "PV-1-hds-2-hpc-mode-2/"
@@ -65,7 +65,7 @@ def main():
     data_processing_mode = result_data_collection.ResultDataProcessingModeEnum.PROCESS_ALL_DATA
     filterclass = result_data_processing.FilterClass()
 
-    list_with_variables_to_check = filterclass.electricity_data
+    list_with_variables_to_check = filterclass.kpi_data
 
     # dict_with_scenarios_to_check = {"building_code": filterclass.building_type}
 

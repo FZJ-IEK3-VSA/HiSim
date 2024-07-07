@@ -537,162 +537,6 @@ class ResultDataCollection:
         """Read the csv files and generate the result dataframe."""
         log.information(f"Read csv files and generate result dataframes for {time_resolution_of_data_set}.")
 
-        # appended_dataframe = pd.DataFrame()
-        # simulation_duration_key = list(dict_of_csv_to_read.keys())[0]
-        # csv_data_list = dict_of_csv_to_read[simulation_duration_key]
-
-        # dict_with_all_data: Dict = {"Index": defaultdict(list), "Input": defaultdict(list), "Output": defaultdict(list)}
-        # log.information(f"Time resolution is {time_resolution_of_data_set}.")
-        # if csv_data_list == []:
-        #     raise ValueError("csv_data_list is empty.")
-
-        # for house_index, csv_file in enumerate(csv_data_list):
-        #     log.information("Reading data from house number " + str(house_index))
-        #     # first get input data
-        #     # get dataframe by reading csv file
-        #     dataframe = pd.read_csv(csv_file)
-
-        #     # number of variables
-        #     set_of_variables = list(ordered_set.OrderedSet(dataframe["variable"]))
-
-        #     for variable in set_of_variables:
-        #         use_this_variable: bool = True
-        #         filtered_df = dataframe[dataframe["variable"] == variable]
-
-        #         # if timeseries data (MONTHLY, DAILY, HOURLY)
-        #         if time_resolution_of_data_set != ResultDataTypeEnum.YEARLY:
-        #             # add column for each time point
-        #             if "time" in dataframe.columns:
-        #                 for time_value in filtered_df["time"].tolist():
-        #                     # only take datetime index format, no yearly kpi data (because this messes up with the format)
-        #                     if not time_value.isalnum():
-        #                         values_for_one_timestep = filtered_df[filtered_df["time"] == time_value]
-        #                         dict_with_all_data["Output"][f"{time_value}"].append(
-        #                             values_for_one_timestep["value"].to_list()[0]
-        #                         )
-        #                     else:
-        #                         # skip cumulative or yearly data (mostly KPI data)
-        #                         use_this_variable = False
-
-        #         # add only one column as only one value for each variable exists (no timeseries)
-        #         elif time_resolution_of_data_set == ResultDataTypeEnum.YEARLY:
-        #             dict_with_all_data["Output"][str(dataframe["year"][0])].append(filtered_df["value"].tolist()[0])
-
-        #         # skip his variable if needed
-        #         if use_this_variable is False:
-        #             continue
-        #         # convert scenario column to str-type just in case it has no string values
-        #         original_scenario_name_of_current_dataframe = str(filtered_df["scenario"].to_list()[0])
-        #         # check if scenario column is empty or not
-        #         if original_scenario_name_of_current_dataframe == "" or not isinstance(
-        #             original_scenario_name_of_current_dataframe, str
-        #         ):
-        #             raise ValueError(
-        #                 f"The scenario variable of the current dataframe is {original_scenario_name_of_current_dataframe} but it should be a non-empty string value. "
-        #                 "Please set a scenario name for your simulations."
-        #             )
-        #         # try to find hash number in scenario name
-        #         try:
-        #             hash_number = re.findall(r"\-?\d+", original_scenario_name_of_current_dataframe)[-1]
-        #         # this is when no hash number could be determined in the scenario name
-        #         except Exception:
-        #             hash_number = 1
-        #             rename_scenario = False
-        #         # add hash colum to dataframe so hash does not get lost when scenario is renamed
-        #         dict_with_all_data["Input"]["model"].append(filtered_df["model"].tolist()[0])
-        #         # dict_with_all_data["Input"]["scenario"].append(scenario_name_of_current_dataframe)
-        #         dict_with_all_data["Input"]["region"].append(filtered_df["region"].tolist()[0])
-        #         dict_with_all_data["Input"]["hash"].append(hash_number)
-
-        #         # write all values that were in module config dict in the dict["Inputs"]
-        #         if list_with_module_config_dicts is not None:
-        #             module_config_dict = list_with_module_config_dicts[house_index]
-        #             for key_0, value in module_config_dict.items():
-        #                 dict_with_all_data["Input"][key_0].append(value)
-
-        #         # add outputs to dict
-        #         dict_with_all_data["Output"]["variable"].append(variable)
-        #         dict_with_all_data["Output"]["unit"].append(filtered_df["unit"].tolist()[0])
-
-        #         # get index
-        #         dict_with_all_data["Index"]["Index"].append(house_index)
-
-        #         # change scenario name is needed
-        #         if (
-        #             rename_scenario is True
-        #             and parameter_key is not None
-        #             and list_with_parameter_key_values is not None
-        #             and list_with_parameter_key_values != []
-        #         ):
-
-        #             # rename scenario adding paramter key, value pair
-        #             value = list_with_parameter_key_values[house_index]
-        #             if not isinstance(value, str):
-        #                 value = round(value, 1)
-        #             final_scenario_name_to_use: str = f"{parameter_key}_{value}"
-
-        #         else:
-        #             # append original scenario name and do no renaming
-        #             final_scenario_name_to_use = original_scenario_name_of_current_dataframe
-        #         # append final scenario name to dict
-        #         dict_with_all_data["Input"]["scenario"].append(final_scenario_name_to_use)
-
-        # # check if dict is empty
-        # if not bool(dict_with_all_data):
-        #     raise ValueError("The dict_with_all_data is empty")
-
-        # # create filename
-        # filename = self.store_scenario_data_with_the_right_name_and_in_the_right_path(
-        #     result_data_folder=self.result_data_folder,
-        #     simulation_duration_key=simulation_duration_key,
-        #     time_resolution_of_data_set=time_resolution_of_data_set,
-        #     parameter_key=parameter_key,
-        #     xlsx_or_csv="xlsx",
-        # )
-
-        # # create dataframe with multiindex columns (columns over two rows) from dict
-        # list_of_key_1 = []
-        # list_of_value_1_lists = []
-        # list_of_column_names = []
-        # # iterate over whole dataframe and create lists
-        # for key_0, value_0_dict in dict_with_all_data.items():
-
-        #     number_of_key_1_for_each_key_0 = 0
-        #     for key_1, value_1_list in value_0_dict.items():
-
-        #         list_of_key_1.append(key_1)
-        #         number_of_key_1_for_each_key_0 = number_of_key_1_for_each_key_0 + 1
-        #         list_of_value_1_lists.append(value_1_list)
-        #     list_of_column_names.append([key_0] * number_of_key_1_for_each_key_0)
-
-        # # create multiindex column names to build dataframe
-        # list_of_column_names = list(itertools.chain.from_iterable(list_of_column_names))
-        # multi_index_column_list = [
-        #     (list_of_column_names[index], list_of_key_1[index]) for index in range(0, len(list_of_column_names))
-        # ]
-        # multi_index_columns = pd.MultiIndex.from_tuples(multi_index_column_list, names=["first", "second"])  # type: ignore
-        # appended_dataframe = pd.DataFrame(columns=multi_index_columns)  # type: ignore
-        # # now fill dataframe with values
-        # for index, column in enumerate(multi_index_column_list):
-        #     appended_dataframe[column] = list_of_value_1_lists[index]
-
-        # # save dataframe
-        # # create an excel writer object using xlsxWriter as the engine
-        # with pd.ExcelWriter(filename, engine="xlsxwriter") as writer:  # pylint: disable=abstract-class-instantiated
-        #     # get the xlsxwriter workbook object
-        #     workbook = writer.book
-
-        #     # enable ZIP64 extensions in order to handle large dataframes
-        #     workbook.use_zip64()
-
-        #     # write the dataframe to the excel file
-        #     appended_dataframe.to_excel(writer, sheet_name="Sheet1")
-
-        # log.information(f"Saving result dataframe here: {filename}")
-
-        # del appended_dataframe
-        # del dict_with_all_data
-
         if not dict_of_csv_to_read:
             raise ValueError("The input dictionary dict_of_csv_to_read is empty.")
 
@@ -742,6 +586,10 @@ class ResultDataCollection:
                 dict_with_all_data["Input"]["region"].append(filtered_df["region"].iloc[0])
                 dict_with_all_data["Input"]["hash"].append(hash_number)
 
+                # Add outputs to dict
+                dict_with_all_data["Output"]["variable"].append(variable)
+                dict_with_all_data["Output"]["unit"].append(filtered_df["unit"].tolist()[0])
+
                 if list_with_module_config_dicts is not None:
                     module_config_dict = list_with_module_config_dicts[house_index]
                     for key, value in module_config_dict.items():
@@ -779,7 +627,7 @@ class ResultDataCollection:
         }, columns=multi_index_columns)
 
         # save file (use zip64 for handling large excel files)
-        with pd.ExcelWriter(filename, engine="xlsxwriter") as writer:
+        with pd.ExcelWriter(filename, engine="xlsxwriter") as writer:  # pylint: disable=abstract-class-instantiated
             workbook = writer.book
             workbook.use_zip64()
             appended_dataframe.to_excel(writer, sheet_name="Sheet1")

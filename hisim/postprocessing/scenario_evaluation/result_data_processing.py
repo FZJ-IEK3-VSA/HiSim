@@ -139,7 +139,6 @@ class ScenarioDataProcessing:
         # Assuming ScenarioDataProcessing.aggregate_all_values_for_one_scenario is optimized
         concat_df = data_frame
         filter_level_index = 0
-        print(dict_of_scenarios_to_check)
         # Iterate over the dictionary of scenarios
         for scenario_to_check_key, list_of_scenarios_to_check in dict_of_scenarios_to_check.items():
             print("scenario to check key", scenario_to_check_key)

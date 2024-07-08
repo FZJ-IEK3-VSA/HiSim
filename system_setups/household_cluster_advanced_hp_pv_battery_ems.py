@@ -6,7 +6,6 @@ from typing import Optional, Any, Union, List
 import re
 import os
 from dataclasses import dataclass
-from pathlib import Path
 from dataclasses_json import dataclass_json
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,
@@ -37,7 +36,6 @@ from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptio
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
-from hisim import utils
 from hisim import log
 from hisim.units import Quantity, Celsius, Watt
 
@@ -541,7 +539,7 @@ def setup_function(
     )
 
     ResultPathProviderSingleton().set_important_result_path_information(
-        module_directory="/storage_cluster/projects/2024_waage/01_hisim_results",  # my_sim.module_directory,  # 
+        module_directory=my_sim.module_directory,  # "/storage_cluster/projects/2024_waage/01_hisim_results",
         model_name=my_sim.module_filename,
         further_result_folder_description=os.path.join(
             *[

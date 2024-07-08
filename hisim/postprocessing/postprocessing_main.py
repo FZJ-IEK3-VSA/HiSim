@@ -817,9 +817,9 @@ class PostProcessor:
                 simple_dict_cumulative_data["unit"].append(variable_unit)
                 try:
                     simple_dict_cumulative_data["year"].append(self.year)
-                except Exception:
+                except Exception as exc:
                     # simple_dict_cumulative_data["time"].append(self.year)
-                    raise KeyError("KPI values should be written only to yearly or cumulative data, not to timeseries data.")
+                    raise KeyError("KPI values should be written only to yearly or cumulative data, not to timeseries data.") from exc
                 simple_dict_cumulative_data["value"].append(variable_value)
 
     def get_variable_name_and_unit_from_ppdt_results_column(self, column: str) -> Tuple[str, str]:

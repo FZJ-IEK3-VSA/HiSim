@@ -21,7 +21,7 @@ from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnecto
 from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLib
 from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib
 
-# from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
+from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
 from hisim.components.electricity_meter import ElectricityMeter
 from hisim.components.generic_heat_pump_modular import ModularHeatPump
 from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
@@ -1619,7 +1619,7 @@ class KpiGenerator(JSONWizard):
                     output_name_return_temperature = MoreAdvancedHeatPumpHPLib.TemperatureInputSH
                 elif isinstance(wrapped_component.my_component, HeatPumpHplib):
                     output_name_flow_temperature = HeatPumpHplib.TemperatureOutput
-                    output_name_return_temperature = HeatPumpHplib.TemperatureInputSecondary
+                    output_name_return_temperature = SimpleHotWaterStorage.WaterTemperatureToHeatGenerator
 
                 (
                     mean_flow_temperature_in_celsius,
@@ -2174,7 +2174,6 @@ class KpiGenerator(JSONWizard):
                             )
                         )
                     if "ElectricityToOrFromGridOfUtspLpgConnector" in string.split(sep="_"):
-
                         occupancy_electricity_from_grid_in_watt_series = self.results[column].loc[
                             self.results[column] < 0.0
                         ]

@@ -541,11 +541,11 @@ def setup_function(
     )
 
     ResultPathProviderSingleton().set_important_result_path_information(
-        module_directory=my_sim.module_directory,  # "/storage_cluster/projects/2024_waage/01_hisim_results"
+        module_directory="/storage_cluster/projects/2024_waage/01_hisim_results",  # my_sim.module_directory,  # 
         model_name=my_sim.module_filename,
         further_result_folder_description=os.path.join(
             *[
-                further_result_folder_description,
+                f"{further_result_folder_description}_new_try",
                 f"PV-{share_of_maximum_pv_potential}-hds-{my_hds_controller_information.heat_distribution_system_type}-hpc-mode-{hp_controller_mode}",
                 f"weather-location-{weather_location}",
             ]

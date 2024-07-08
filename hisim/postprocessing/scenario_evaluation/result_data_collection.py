@@ -8,6 +8,7 @@ import json
 import enum
 import shutil
 import re
+from collections import defaultdict
 import pandas as pd
 import ordered_set
 
@@ -32,13 +33,7 @@ class ResultDataCollection:
         """Initialize the class."""
         result_folder = folder_from_which_data_will_be_collected
         self.result_data_folder = os.path.join(
-            os.getcwd(),
-            os.pardir,
-            os.pardir,
-            os.pardir,
-            "system_setups",
-            "scenario_comparison",
-            "data",
+            os.getcwd(), os.pardir, os.pardir, os.pardir, "system_setups", "scenario_comparison", "data",
         )
         if not os.path.exists(self.result_data_folder):
             os.makedirs(self.result_data_folder)
@@ -103,13 +98,11 @@ class ResultDataCollection:
             raise ValueError("list_with_csv_files is empty")
 
         all_csv_files = self.import_data_from_file(
-            paths_to_check=list_with_csv_files,
-            analyze_yearly_or_hourly_data=time_resolution_of_data_set,
+            paths_to_check=list_with_csv_files, analyze_yearly_or_hourly_data=time_resolution_of_data_set,
         )
 
         dict_of_csv_data = self.make_dictionaries_with_simulation_duration_keys(
-            simulation_duration_to_check=simulation_duration_to_check,
-            all_csv_files=all_csv_files,
+            simulation_duration_to_check=simulation_duration_to_check, all_csv_files=all_csv_files,
         )
 
         self.alternative_read_csv_and_generate_pandas_dataframe(
@@ -134,28 +127,21 @@ class ResultDataCollection:
             result_path=result_path, folder_or_filename="result_data_for_scenario_evaluation"
         )
         print(
-            "len of list with all paths to containing result data ",
-            len(list_with_all_paths_to_check),
+            "len of list with all paths to containing result data ", len(list_with_all_paths_to_check),
         )
         # filter out results that had buildings that were too hot or too cold
-        list_with_all_paths_to_check_after_filtering = (
-            self.filter_results_that_failed_to_heat_or_cool_building_sufficiently(
-                list_of_result_path_that_contain_scenario_data=list_with_all_paths_to_check
-            )
+        list_with_all_paths_to_check_after_filtering = self.filter_results_that_failed_to_heat_or_cool_building_sufficiently(
+            list_of_result_path_that_contain_scenario_data=list_with_all_paths_to_check
         )
         print(
-            "len of list with all paths after filtering ",
-            len(list_with_all_paths_to_check),
+            "len of list with all paths after filtering ", len(list_with_all_paths_to_check),
         )
         # check if duplicates are existing and ask for deletion
-        list_with_result_data_folders = (
-            self.go_through_all_scenario_data_folders_and_check_if_module_configs_are_double_somewhere(
-                list_of_result_folder_paths_to_check=list_with_all_paths_to_check_after_filtering
-            )
+        list_with_result_data_folders = self.go_through_all_scenario_data_folders_and_check_if_module_configs_are_double_somewhere(
+            list_of_result_folder_paths_to_check=list_with_all_paths_to_check_after_filtering
         )
         print(
-            "len of list with all paths after double checking for duplicates ",
-            len(list_with_result_data_folders),
+            "len of list with all paths after double checking for duplicates ", len(list_with_result_data_folders),
         )
         return list_with_result_data_folders
 
@@ -164,11 +150,7 @@ class ResultDataCollection:
         list_of_unfinished_folders = []
         file_name = os.path.join(self.result_data_folder, "failed_simualtions.txt")
         mode = "a" if os.path.exists(file_name) else "w"
-        with open(
-            file_name,
-            mode,
-            encoding="utf-8",
-        ) as file:
+        with open(file_name, mode, encoding="utf-8",) as file:
             file.write(str(datetime.datetime.now()) + "\n")
             file.write("Failed simulations found in the following folders: \n")
             list_with_all_potential_finsihed_flag_files = self.get_list_of_all_relevant_folders_or_files(
@@ -208,8 +190,7 @@ class ResultDataCollection:
         list_of_unsuccessful_folders = []
         with open(
             os.path.join(
-                self.result_data_folder,
-                "succeeded_simulations_that_showed_too_high_or_too_low_building_temps.txt",
+                self.result_data_folder, "succeeded_simulations_that_showed_too_high_or_too_low_building_temps.txt",
             ),
             "a",
             encoding="utf-8",
@@ -381,9 +362,7 @@ class ResultDataCollection:
         return all_csv_files
 
     def make_dictionaries_with_simulation_duration_keys(
-        self,
-        simulation_duration_to_check: str,
-        all_csv_files: List[str],
+        self, simulation_duration_to_check: str, all_csv_files: List[str],
     ) -> Dict:
         """Make dictionaries containing csv files of hourly or yearly data and according to the simulation duration of the data."""
 
@@ -416,11 +395,7 @@ class ResultDataCollection:
         return dict_of_csv_data
 
     def rename_scenario_name_of_dataframe_with_parameter_key_and_value(
-        self,
-        dataframe: pd.DataFrame,
-        parameter_key: str,
-        list_with_parameter_values: List[Any],
-        index: int,
+        self, dataframe: pd.DataFrame, parameter_key: str, list_with_parameter_values: List[Any], index: int,
     ) -> Any:
         """Rename the scenario of the given dataframe adding parameter key and value."""
         value = list_with_parameter_values[index]
@@ -510,10 +485,7 @@ class ResultDataCollection:
             # write all values that were in module config dict in the dataframe, so that you can use these values later for sorting and searching
             if list_with_module_config_dicts is not None:
                 module_config_dict = list_with_module_config_dicts[index]
-                for (
-                    module_config_key,
-                    module_config_value,
-                ) in module_config_dict.items():
+                for (module_config_key, module_config_value,) in module_config_dict.items():
                     dataframe[module_config_key] = [module_config_value] * len(dataframe["scenario"])
 
             if rename_scenario is True:
@@ -565,138 +537,105 @@ class ResultDataCollection:
         """Read the csv files and generate the result dataframe."""
         log.information(f"Read csv files and generate result dataframes for {time_resolution_of_data_set}.")
 
-        appended_dataframe = pd.DataFrame()
+        if not dict_of_csv_to_read:
+            raise ValueError("The input dictionary dict_of_csv_to_read is empty.")
+
         simulation_duration_key = list(dict_of_csv_to_read.keys())[0]
         csv_data_list = dict_of_csv_to_read[simulation_duration_key]
-        from collections import defaultdict
-        dict_with_all_data: Dict = {"Index": defaultdict(list), "Input": defaultdict(list), "Output": defaultdict(list)}
 
-        if csv_data_list == []:
+        if not csv_data_list:
             raise ValueError("csv_data_list is empty.")
 
-        for index, csv_file in enumerate(csv_data_list):
-            # first get input data
-            # get dataframe by reading csv file
+        # Initialize dictionaries to hold data
+        dict_with_all_data: Dict[str, defaultdict] = {
+            "Index": defaultdict(list),
+            "Input": defaultdict(list),
+            "Output": defaultdict(list),
+        }
+
+        for house_index, csv_file in enumerate(csv_data_list):
+            log.information(f"Reading data from house number {house_index}")
             dataframe = pd.read_csv(csv_file)
-            print(dataframe.columns)
-            # number of variables
-            set_of_variables = list(ordered_set.OrderedSet(dataframe["variable"]))
+            set_of_variables = dataframe["variable"].unique()
+
             for variable in set_of_variables:
-                filtered_df = dataframe[dataframe["variable"]==variable]
-                length_df = len(filtered_df)
-                # if length of df is >1, its timeseries data
-                if length_df > 1:
-                    # if time resolution is 1 year add one column, otherwise add column for each time point
-                    # more timepoints exist
-                    if "time" in dataframe.columns:
-                        for time_index, time_value in enumerate(filtered_df["time"].tolist()):
-                            values_for_one_timestep = filtered_df[filtered_df["time"]==time_value]
+                filtered_df = dataframe[dataframe["variable"] == variable]
 
-                            dict_with_all_data["Output"][f"{time_value}"].append(values_for_one_timestep["value"].to_list())
+                if time_resolution_of_data_set != ResultDataTypeEnum.YEARLY and "time" in dataframe.columns:
+                    # Process time series data
+                    time_values = filtered_df["time"]
+                    filtered_df = filtered_df[~time_values.str.isalnum()]
+                    for time_value, value in zip(filtered_df["time"], filtered_df["value"]):
+                        dict_with_all_data["Output"][time_value].append(value)
+                elif time_resolution_of_data_set == ResultDataTypeEnum.YEARLY:
+                    # Process yearly data
+                    dict_with_all_data["Output"][str(dataframe["year"].iloc[0])].append(filtered_df["value"].iloc[0])
 
-                    # # if length of df is 1, its yearly data
-                    # elif length_df == 1:
-                    #     if "year" in dataframe.columns:
-                    #         dict_with_all_data["Output"][str(dataframe["year"][0])].append(filtered_df["value"].tolist()[0])
-                    # else:
-                    #     raise ValueError(f"Length of df is {length_df}")
+                original_scenario_name = str(filtered_df["scenario"].iloc[0])
+                if not original_scenario_name:
+                    raise ValueError("The scenario variable of the current dataframe is empty. Please set a scenario name for your simulations.")
 
-                    # convert scenario column to str-type just in case it has no string values
-                    scenario_name_of_current_dataframe = str(filtered_df["scenario"].to_list()[0])
-                    # check if scenario column is empty or not
-                    if scenario_name_of_current_dataframe == "" or not isinstance(scenario_name_of_current_dataframe, str):
-                        raise ValueError(
-                            f"The scenario variable of the current dataframe is {scenario_name_of_current_dataframe} but it should be a non-empty string value. "
-                            "Please set a scenario name for your simulations."
-                        )
-                    # try to find hash number in scenario name
-                    try:
-                        hash_number = re.findall(r"\-?\d+", scenario_name_of_current_dataframe)[-1]
-                    # this is when no hash number could be determined in the scenario name
-                    except Exception:
-                        hash_number = 1
-                        rename_scenario = False
-                    # add hash colum to dataframe so hash does not get lost when scenario is renamed
-                    dict_with_all_data["Input"]["model"].append(filtered_df["model"].tolist()[0])
-                    dict_with_all_data["Input"]["scenario"].append(scenario_name_of_current_dataframe)
-                    dict_with_all_data["Input"]["region"].append(filtered_df["region"].tolist()[0])
-                    dict_with_all_data["Input"]["hash"].append(hash_number)
+                try:
+                    hash_number = re.findall(r"-?\d+", original_scenario_name)[-1]
+                except IndexError:
+                    hash_number = 1
+                    rename_scenario = False
 
-                    # write all values that were in module config dict in the dataframe, so that you can use these values later for sorting and searching
-                    if list_with_module_config_dicts is not None:
-                        module_config_dict = list_with_module_config_dicts[index]
-                        for key, value in module_config_dict.items():
-                            dict_with_all_data["Input"][key].append(value)
-                    # add outputs to dict
-                    dict_with_all_data["Output"]["variable"].append(variable)
-                    dict_with_all_data["Output"]["unit"].append(filtered_df["unit"].tolist()[0])
+                # Add input and metadata values to the dictionary
+                dict_with_all_data["Input"]["model"].append(filtered_df["model"].iloc[0])
+                dict_with_all_data["Input"]["region"].append(filtered_df["region"].iloc[0])
+                dict_with_all_data["Input"]["hash"].append(hash_number)
 
-                    # get index
-                    dict_with_all_data["Index"]["Index"].append(index)
-                    for key, value_dict in dict_with_all_data.items():
-                        print(key)
-                        for key_key, value_value_list in value_dict.items():
-                            print(key_key, len(value_value_list))
-                        print("\n")
+                # Add outputs to dict
+                dict_with_all_data["Output"]["variable"].append(variable)
+                dict_with_all_data["Output"]["unit"].append(filtered_df["unit"].tolist()[0])
 
+                if list_with_module_config_dicts is not None:
+                    module_config_dict = list_with_module_config_dicts[house_index]
+                    for key, value in module_config_dict.items():
+                        dict_with_all_data["Input"][key].append(value)
 
-            if rename_scenario is True:
-                if (
-                    parameter_key is not None
-                    and list_with_parameter_key_values is not None
-                    and list_with_parameter_key_values != []
-                ):
-                    # rename scenario adding paramter key, value pair
-                    value = list_with_parameter_key_values[index]
-                    if not isinstance(value, str):
-                        value = round(value, 1)
-                    dict_with_all_data["Input"]["scenario"][index] = [f"{parameter_key}_{value}"] * len(dict_with_all_data["Input"]["scenario"][index])
+                dict_with_all_data["Index"]["Index"].append(house_index)
 
+                if rename_scenario and parameter_key and list_with_parameter_key_values:
+                    value = list_with_parameter_key_values[house_index]
+                    final_scenario_name = f"{parameter_key}_{value if isinstance(value, str) else round(value, 1)}"
+                else:
+                    final_scenario_name = original_scenario_name
 
-        # sort dict
-        if not bool(dict_with_all_data):
+                dict_with_all_data["Input"]["scenario"].append(final_scenario_name)
+
+        if not dict_with_all_data:
             raise ValueError("The dict_with_all_data is empty")
-        # appended_dataframe = self.sort_dataframe_according_to_scenario_values(dataframe=appended_dataframe)
 
+        # create filename
         filename = self.store_scenario_data_with_the_right_name_and_in_the_right_path(
             result_data_folder=self.result_data_folder,
             simulation_duration_key=simulation_duration_key,
             time_resolution_of_data_set=time_resolution_of_data_set,
             parameter_key=parameter_key,
-            xlsx_or_csv="xlsx"
+            xlsx_or_csv="xlsx",
         )
-        print(filename)
-        list_of_key_keys = []
-        list_of_value_lists = []
-        list_of_column_names = []
-        for key, value_dict in dict_with_all_data.items():
-            import itertools
-            number_of_key_keys = 0
-            print(key)
-            for key_key, value_value_list in value_dict.items():
-                print(key_key, type(value_value_list))
-                try:
-                    print(len(value_value_list))
-                    value_value_list = list(itertools.chain.from_iterable(value_value_list))
-                    print(len(value_value_list))  
-                except:
-                    print(len(value_value_list))
-                list_of_key_keys.append(key_key)
-                number_of_key_keys = number_of_key_keys + 1
-                list_of_value_lists.append(value_value_list)
-            list_of_column_names.append([key]*number_of_key_keys)
-        list_of_column_names = list(itertools.chain.from_iterable(list_of_column_names))
+        # create multiindex columns
+        multi_index_columns = pd.MultiIndex.from_tuples(
+            [(key1, key2) for key1, v1_dict in dict_with_all_data.items() for key2 in v1_dict.keys()],
+            names=["first", "second"]
+        )
+        # add everything to the dataframe
+        appended_dataframe = pd.DataFrame({
+            (key1, key2): value_list2 for key1, v1_dict in dict_with_all_data.items() for key2, value_list2 in v1_dict.items()
+        }, columns=multi_index_columns)
 
-        merged_list = [(list_of_column_names[index], list_of_key_keys[index]) for index in range(0, len(list_of_column_names))]
-        index = pd.MultiIndex.from_tuples(merged_list, names=["first", "second"])
-        print(index)
-        appended_dataframe = pd.DataFrame(columns=index)
-        for index, column in enumerate(merged_list):
-            appended_dataframe[column] = list_of_value_lists[index]
+        # save file (use zip64 for handling large excel files)
+        with pd.ExcelWriter(filename, engine="xlsxwriter") as writer:  # pylint: disable=abstract-class-instantiated
+            workbook = writer.book
+            workbook.use_zip64()
+            appended_dataframe.to_excel(writer, sheet_name="Sheet1")
 
-        print(appended_dataframe)
-        appended_dataframe.to_excel(filename)
-        # now make xlsx files according to variables
+        log.information(f"Saving result dataframe here: {filename}")
+
+        del appended_dataframe
+        del dict_with_all_data
 
     def store_scenario_data_with_the_right_name_and_in_the_right_path(
         self,
@@ -704,7 +643,7 @@ class ResultDataCollection:
         simulation_duration_key: str,
         time_resolution_of_data_set: Any,
         parameter_key: Optional[str] = None,
-        xlsx_or_csv: str = "csv"
+        xlsx_or_csv: str = "csv",
     ) -> str:
         """Store csv files in the result data folder with the right filename and path."""
 
@@ -721,25 +660,14 @@ class ResultDataCollection:
 
         if parameter_key is not None:
             path_for_file = os.path.join(
-                result_data_folder,
-                f"data_different_{parameter_key}s",
-                f"{simulation_duration_key}_days",
+                result_data_folder, f"data_different_{parameter_key}s", f"{simulation_duration_key}_days",
             )
         else:
-            path_for_file = os.path.join(
-                result_data_folder,
-                "data_all_parameters",
-                f"{simulation_duration_key}_days",
-            )
+            path_for_file = os.path.join(result_data_folder, "data_all_parameters", f"{simulation_duration_key}_days",)
         if os.path.exists(path_for_file) is False:
             os.makedirs(path_for_file)
-        log.information(f"Saving result dataframe in {path_for_file} folder")
 
-        filename = os.path.join(
-            path_for_file,
-            f"result_df_{kind_of_data_set}.{xlsx_or_csv}",
-        )
-
+        filename = os.path.join(path_for_file, f"result_df_{kind_of_data_set}.{xlsx_or_csv}",)
         return filename
 
     def get_default_config(self, path_to_default_config: Optional[str]) -> Any:

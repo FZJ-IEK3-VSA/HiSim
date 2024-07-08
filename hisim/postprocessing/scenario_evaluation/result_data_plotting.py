@@ -53,26 +53,6 @@ class ScenarioChartGeneration:
             data_path_strip = "data_different_building_codes"
             result_path_strip = "results_different_building_codes"
 
-        elif self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_SIZES:
-            data_path_strip = "data_different_conditioned_floor_area_in_m2s"
-            result_path_strip = "results_different_conditioned_floor_area_in_m2s"
-
-        elif self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_AZIMUTH_ANGLES:
-            data_path_strip = "data_different_pv_azimuths"
-            result_path_strip = "results_different_pv_azimuths"
-
-        elif self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES:
-            data_path_strip = "data_different_pv_tilts"
-            result_path_strip = "results_different_pv_tilts"
-
-        elif self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_SHARE_OF_MAXIMUM_PV:
-            data_path_strip = "data_different_share_of_maximum_pv_powers"
-            result_path_strip = "results_different_share_of_maximum_pv_powers"
-
-        elif self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_NUMBER_OF_DWELLINGS:
-            data_path_strip = "data_different_number_of_dwellings_per_buildings"
-            result_path_strip = "results_different_number_of_dwellings_per_buildings"
-
         else:
             raise ValueError("DataProcessingMode not known.")
 
@@ -273,8 +253,9 @@ class ScenarioChartGeneration:
             self.make_scatter_plot_for_yearly_data(
                 full_pandas_dataframe=full_dataframe,
                 filtered_data=filtered_data,
-                y_data_variable=self.path_addition,
+                y_data_variable=self.path_addition.replace("_", " "),
                 x_data_variable=x_data_variable,
+                key_for_output_values=output_value_keys[0]
             )
         except Exception:
             log.information(f"{variable_to_check} could not be plotted as scatter plot.")
@@ -516,6 +497,7 @@ class ScenarioChartGeneration:
         self,
         full_pandas_dataframe: pd.DataFrame,
         filtered_data: pd.DataFrame,
+        key_for_output_values: str,
         y_data_variable: str,
         x_data_variable: str = "Specific heating demand according to TABULA",
     ) -> None:
@@ -527,16 +509,16 @@ class ScenarioChartGeneration:
         # iterate over all scenarios
         x_data_mean_value_list_for_all_scenarios = []
         y_data_mean_value_list_for_all_scenarios = []
-        for scenario in list(OrderedSet(list(full_pandas_dataframe.scenario))):
-            full_data_per_scenario = full_pandas_dataframe.loc[full_pandas_dataframe["scenario"] == scenario]
-            filtered_data_per_scenario = filtered_data.loc[filtered_data["scenario"] == scenario]
+        for scenario in list(OrderedSet(list(full_pandas_dataframe[("Input", "scenario")]))):
+            full_data_per_scenario = full_pandas_dataframe.loc[full_pandas_dataframe[("Input", "scenario")] == scenario]
+            filtered_data_per_scenario = filtered_data.loc[filtered_data[("Input", "scenario")] == scenario]
 
             # get x_data_list by filtering the df according to x_data_variable and then by taking values from "value" column
             x_data_list = list(
-                full_data_per_scenario.loc[full_data_per_scenario["variable"] == x_data_variable]["value"].values
+                full_data_per_scenario.loc[full_data_per_scenario[("Output", "variable")] == x_data_variable][("Output", key_for_output_values)].values
             )
-            x_data_unit = full_data_per_scenario.loc[full_data_per_scenario["variable"] == x_data_variable][
-                "unit"
+            x_data_unit = full_data_per_scenario.loc[full_data_per_scenario[("Output", "variable")] == x_data_variable][
+                ("Output", "unit")
             ].values[0]
 
             # if x_data_list has more than 1 value (because more values for this scenario exist), then take mean value
@@ -554,8 +536,8 @@ class ScenarioChartGeneration:
             x_data_mean_value_list_for_all_scenarios.append(x_data_mean_value_per_scenario)
 
             # get y values from filtered data per scenario (already filtered according to variable to check and scenario)
-            y_data_list = list(filtered_data_per_scenario["value"].values)
-            y_data_unit = filtered_data_per_scenario["unit"].values[0]
+            y_data_list = list(filtered_data_per_scenario[("Output", key_for_output_values)].values)
+            y_data_unit = filtered_data_per_scenario[("Output", "unit")].values[0]
             # if y_data_list has more than 1 value (because more values for this scenario exist), then take mean value
             if len(y_data_list) > 1:
                 # for each scenario take the mean value

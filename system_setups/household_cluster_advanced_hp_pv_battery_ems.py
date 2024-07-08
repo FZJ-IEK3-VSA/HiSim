@@ -6,6 +6,7 @@ from typing import Optional, Any, Union, List
 import re
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from dataclasses_json import dataclass_json
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,
@@ -36,6 +37,7 @@ from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptio
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
+from hisim import utils
 from hisim import log
 from hisim.units import Quantity, Celsius, Watt
 
@@ -132,6 +134,7 @@ def setup_function(
 
     # Set Simulation Parameters
     year = 2021
+    seconds_per_timestep = 60 * 15
     seconds_per_timestep = 60 * 15
 
     if my_simulation_parameters is None:

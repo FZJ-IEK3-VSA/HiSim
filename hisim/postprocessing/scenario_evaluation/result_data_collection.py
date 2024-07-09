@@ -416,6 +416,9 @@ class ResultDataCollection:
                     # Process time series data
                     time_values = filtered_df["time"]
                     filtered_df = filtered_df[~time_values.str.isalnum()]
+                    # if in timeseries data there are also yearly data contained (like KPIs) which cause an empty filtered_df, the variable should be skipped
+                    if filtered_df.empty:
+                        continue
                     for time_value, value in zip(filtered_df["time"], filtered_df["value"]):
                         dict_with_all_data["Output"][time_value].append(value)
                 elif time_resolution_of_data_set == ResultDataTypeEnum.YEARLY.name:

@@ -140,6 +140,7 @@ system_setups/mypath
 system_setups/results
 system_setups/scenario_comparison/
 system_setups/results_for_scenario_comparison/
+hisim/postprocessing/scenario_evaluation/*.json
 
 system_setups/component_connections.json
 results/Results

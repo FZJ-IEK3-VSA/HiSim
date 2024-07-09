@@ -27,8 +27,8 @@ class ScenarioChartGeneration:
     def __init__(
         self,
         simulation_duration_to_check: str,
-        data_processing_mode: Any,
-        time_resolution_of_data_set: Any,
+        data_processing_mode: str,
+        time_resolution_of_data_set: str,
         dict_with_extra_information_for_specific_plot: Dict[str, Dict],
         variables_to_check: Optional[List[str]] = None,
         dict_of_scenarios_to_check: Optional[Dict[str, List[str]]] = None,
@@ -44,12 +44,12 @@ class ScenarioChartGeneration:
         self.path_addition: str = ""
         self.plot_path_complete: str = ""
 
-        if self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA:
+        if self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA.name:
             data_path_strip = "data_all_parameters"
             result_path_strip = "results_all_parameters"
             self.show_plot_legend = False
 
-        elif self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES:
+        elif self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES.name:
             data_path_strip = "data_different_building_codes"
             result_path_strip = "results_different_building_codes"
 
@@ -88,10 +88,9 @@ class ScenarioChartGeneration:
 
         if variables_to_check != [] and variables_to_check is not None:
             # read data, sort data according to scenarios if wanted, and create pandas dataframe
+
             (
                 full_dataframe,
-                key_for_scenario_one,
-                key_for_current_scenario,
                 variables_to_check,
             ) = ScenarioDataProcessing.get_dataframe_and_create_pandas_dataframe_for_all_data(
                 data_folder_path=self.data_folder_path,
@@ -100,9 +99,6 @@ class ScenarioChartGeneration:
                 variables_to_check=variables_to_check,
                 xlsx_or_csv="xlsx",
             )
-
-            log.information("key for scenario one " + key_for_scenario_one)
-            log.information("key for current scenario " + key_for_current_scenario)
 
             self.make_plots_with_specific_kind_of_data(
                 time_resolution_of_data_set=time_resolution_of_data_set,
@@ -118,7 +114,7 @@ class ScenarioChartGeneration:
 
     def make_plots_with_specific_kind_of_data(
         self,
-        time_resolution_of_data_set: Any,
+        time_resolution_of_data_set: str,
         full_dataframe: pd.DataFrame,
         simulation_duration_key: str,
         variables_to_check: List[str],
@@ -132,7 +128,7 @@ class ScenarioChartGeneration:
         if full_dataframe.empty:
             raise ValueError("Dataframe is empty.")
 
-        sub_results_folder = f"{time_resolution_of_data_set.value}_{self.datetime_string}"
+        sub_results_folder = f"{time_resolution_of_data_set}_{self.datetime_string}"
         if result_folder_description:
             sub_results_folder += f"_{result_folder_description}"
 
@@ -143,8 +139,8 @@ class ScenarioChartGeneration:
 
             self.prepare_plot_path(variable_to_check)
 
-            filtered_data = self.filter_dataframe(full_dataframe, variable_to_check)
-            x_and_y_plot_data, output_value_keys = self.get_mean_values(filtered_data, time_resolution_of_data_set)
+            filtered_data = self.filter_dataframe_according_to_output_variable(full_dataframe, variable_to_check)
+            x_and_y_plot_data, output_value_keys = self.get_mean_values(filtered_data=filtered_data, time_resolution_of_data_set=time_resolution_of_data_set)
 
             if self.check_empty_output_values(filtered_data, output_value_keys):
                 continue
@@ -153,7 +149,7 @@ class ScenarioChartGeneration:
 
             unit = self.get_unit(filtered_data=filtered_data, variable_to_check=variable_to_check)
 
-            if time_resolution_of_data_set == ResultDataTypeEnum.YEARLY:
+            if time_resolution_of_data_set == ResultDataTypeEnum.YEARLY.name:
                 self.process_yearly_data(
                     filtered_data=filtered_data,
                     full_dataframe=full_dataframe,
@@ -164,9 +160,9 @@ class ScenarioChartGeneration:
                     dict_with_extra_information_for_specific_plot=dict_with_extra_information_for_specific_plot,
                 )
             elif time_resolution_of_data_set in (
-                ResultDataTypeEnum.HOURLY,
-                ResultDataTypeEnum.DAILY,
-                ResultDataTypeEnum.MONTHLY,
+                ResultDataTypeEnum.HOURLY.name,
+                ResultDataTypeEnum.DAILY.name,
+                ResultDataTypeEnum.MONTHLY.name,
             ):
                 self.process_time_series_data(
                     filtered_data=filtered_data,
@@ -191,12 +187,12 @@ class ScenarioChartGeneration:
         self.plot_path_complete = os.path.join(self.path_for_plots, self.path_addition)
         os.makedirs(self.plot_path_complete, exist_ok=True)
 
-    def filter_dataframe(self, dataframe: pd.DataFrame, variable_to_check: str) -> pd.DataFrame:
+    def filter_dataframe_according_to_output_variable(self, dataframe: pd.DataFrame, variable_to_check: str) -> pd.DataFrame:
         """Filter dataframe by variable."""
-        filtered_dataframe = ScenarioDataProcessing.filter_pandas_dataframe(dataframe=dataframe, variable_to_check=variable_to_check)
+        filtered_dataframe = ScenarioDataProcessing.filter_pandas_dataframe_according_to_output_variable(dataframe=dataframe, variable_to_check=variable_to_check)
         return filtered_dataframe
 
-    def get_mean_values(self, filtered_data: pd.DataFrame, time_resolution_of_data_set: Any) -> Tuple[pd.DataFrame, List[str]]:
+    def get_mean_values(self, filtered_data: pd.DataFrame, time_resolution_of_data_set: str) -> Tuple[pd.DataFrame, List[str]]:
         """Calculate mean values of scenarios."""
         x_and_y_plot_data, keys_for_output_values = ScenarioDataProcessing.take_mean_values_of_scenarios(
             filtered_data=filtered_data, time_resolution_of_data_set=time_resolution_of_data_set
@@ -299,16 +295,16 @@ class ScenarioChartGeneration:
         unit: str,
         variable_to_check: str,
         dict_with_extra_information_for_specific_plot: Dict[str, Dict],
-        time_resolution_of_data_set: Any,
+        time_resolution_of_data_set: str,
     ) -> None:
         """Process time series data."""
-        if time_resolution_of_data_set == ResultDataTypeEnum.HOURLY:
+        if time_resolution_of_data_set == ResultDataTypeEnum.HOURLY.name:
             kind_of_data_set = "hourly"
             line_plot_marker_size = 2
-        elif time_resolution_of_data_set == ResultDataTypeEnum.DAILY:
+        elif time_resolution_of_data_set == ResultDataTypeEnum.DAILY.name:
             kind_of_data_set = "daily"
             line_plot_marker_size = 3
-        elif time_resolution_of_data_set == ResultDataTypeEnum.MONTHLY:
+        elif time_resolution_of_data_set == ResultDataTypeEnum.MONTHLY.name:
             kind_of_data_set = "monthly"
             line_plot_marker_size = 5
 
@@ -398,7 +394,7 @@ class ScenarioChartGeneration:
             data_processing_mode=self.data_processing_mode, zip_list_one=list(y_data), zip_list_two=list(bar_labels)
         )
         # if no scenarios chosen, make artificial x ticks
-        if self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA:
+        if self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA.name:
             x_data = np.arange(0, len(y_data) * 2, step=2)
             rotate_x_ticks = False
             x_axis_label = ""
@@ -888,7 +884,7 @@ class ScenarioChartGeneration:
         plt.close()
 
     def set_plot_colors_according_to_data_processing_mode(
-        self, data_processing_mode: ResultDataProcessingModeEnum, number_of_scenarios: int
+        self, data_processing_mode: str, number_of_scenarios: int
     ) -> Tuple[List[str], Optional[str]]:
         """Set plot colors according to data processing mode."""
         # color_palette = list(mcolors.TABLEAU_COLORS.values())
@@ -896,7 +892,7 @@ class ScenarioChartGeneration:
 
         color: List[str] = []
         edgecolor: Optional[str] = None
-        if data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA:
+        if data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA.name:
             for i in range(0, number_of_scenarios):
                 color.append("blue")
         else:
@@ -906,11 +902,11 @@ class ScenarioChartGeneration:
         return color, edgecolor
 
     def sort_y_values_according_to_data_processing_mode(
-        self, data_processing_mode: ResultDataProcessingModeEnum, zip_list_one: List, zip_list_two: List
+        self, data_processing_mode: str, zip_list_one: List, zip_list_two: List
     ) -> Tuple[List, List]:
         """Decide whether to sort y values or not."""
         # if all data is processed and no scenario is chosen, the y values for plots should be sorted
-        if data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA:
+        if data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA.name:
             sorted_zip_lists = sorted(zip(zip_list_one, zip_list_two), reverse=True)
             list_one_sorted = [y1 for y1, y2 in sorted_zip_lists]
             list_two_sorted = [y2 for y1, y2 in sorted_zip_lists]

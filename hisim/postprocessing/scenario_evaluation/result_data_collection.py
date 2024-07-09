@@ -10,9 +10,6 @@ import shutil
 import re
 from collections import defaultdict
 import pandas as pd
-import ordered_set
-
-
 from hisim import log
 
 
@@ -45,26 +42,11 @@ class ResultDataCollection:
 
         list_with_result_data_folders = self.get_only_useful_data(result_path=result_folder)
 
-        if data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA:
+        if data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA.name:
             parameter_key = None
 
-        elif data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_SIZES:
-            parameter_key = "conditioned_floor_area_in_m2"
-
-        elif data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES:
+        elif data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES.name:
             parameter_key = "building_code"
-
-        elif data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_AZIMUTH_ANGLES:
-            parameter_key = "pv_azimuth"
-
-        elif data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES:
-            parameter_key = "pv_tilt"
-
-        elif data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_SHARE_OF_MAXIMUM_PV:
-            parameter_key = "share_of_maximum_pv_power"
-
-        elif data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_NUMBER_OF_DWELLINGS:
-            parameter_key = "number_of_dwellings_per_building"
 
         else:
             raise ValueError("Analysis mode is not part of the ResultDataProcessingModeEnum class.")
@@ -336,19 +318,19 @@ class ResultDataCollection:
 
         return list_with_all_paths_to_check
 
-    def import_data_from_file(self, paths_to_check: List[str], analyze_yearly_or_hourly_data: Any) -> List:
+    def import_data_from_file(self, paths_to_check: List[str], analyze_yearly_or_hourly_data: str) -> List:
         """Import data from result files."""
         log.information("Importing result_data_for_scenario_evaluation from csv files.")
 
         all_csv_files = []
 
-        if analyze_yearly_or_hourly_data == ResultDataTypeEnum.HOURLY:
+        if analyze_yearly_or_hourly_data == ResultDataTypeEnum.HOURLY.name:
             kind_of_data_set = "hourly"
-        elif analyze_yearly_or_hourly_data == ResultDataTypeEnum.YEARLY:
+        elif analyze_yearly_or_hourly_data == ResultDataTypeEnum.YEARLY.name:
             kind_of_data_set = "yearly"
-        elif analyze_yearly_or_hourly_data == ResultDataTypeEnum.DAILY:
+        elif analyze_yearly_or_hourly_data == ResultDataTypeEnum.DAILY.name:
             kind_of_data_set = "daily"
-        elif analyze_yearly_or_hourly_data == ResultDataTypeEnum.MONTHLY:
+        elif analyze_yearly_or_hourly_data == ResultDataTypeEnum.MONTHLY.name:
             kind_of_data_set = "monthly"
         else:
             raise ValueError("analyze_yearly_or_hourly_data was not found in the datacollectorenum class.")
@@ -394,137 +376,6 @@ class ResultDataCollection:
 
         return dict_of_csv_data
 
-    def rename_scenario_name_of_dataframe_with_parameter_key_and_value(
-        self, dataframe: pd.DataFrame, parameter_key: str, list_with_parameter_values: List[Any], index: int,
-    ) -> Any:
-        """Rename the scenario of the given dataframe adding parameter key and value."""
-        value = list_with_parameter_values[index]
-        if not isinstance(value, str):
-            value = round(value, 1)
-        dataframe["scenario"] = f"{parameter_key}_{value}"
-        return dataframe["scenario"]
-
-    def rename_scenario_name_of_dataframe_with_index(self, dataframe: pd.DataFrame, index: int) -> Any:
-        """Rename the scenario of the given dataframe adding an index."""
-        dataframe["scenario"] = dataframe["scenario"] + f"_{index}"
-        return dataframe["scenario"]
-
-    def sort_dataframe_according_to_scenario_values(self, dataframe: pd.DataFrame) -> pd.DataFrame:
-        """Sort dataframe according to scenario values."""
-
-        # get parameter key values from scenario name
-        values = []
-
-        for scenario in dataframe["scenario"]:
-            scenario_name_splitted = scenario.split("_")
-            try:
-                number = float(scenario_name_splitted[-1])
-                values.append(number)
-            except Exception:
-                return dataframe
-
-        # order the values
-        ordered_values = list(ordered_set.OrderedSet(sorted(values)))
-
-        # sort the order of the dataframe according to order of parameter key values
-        new_df = pd.DataFrame()
-        for sorted_value in ordered_values:
-            for scenario in list(set(dataframe["scenario"])):
-                scenario_name_splitted = scenario.split("_")
-                number = float(scenario_name_splitted[-1])
-
-                if sorted_value == number:
-                    df_1 = dataframe.loc[dataframe["scenario"] == scenario]
-                    new_df = pd.concat([new_df, df_1])
-
-        return new_df
-
-    def read_csv_and_generate_pandas_dataframe(
-        self,
-        dict_of_csv_to_read: Dict[str, list[str]],
-        time_resolution_of_data_set: Any,
-        rename_scenario: bool = False,
-        parameter_key: Optional[str] = None,
-        list_with_parameter_key_values: Optional[List[Any]] = None,
-        list_with_module_config_dicts: Optional[List[Any]] = None,
-    ) -> None:
-        """Read the csv files and generate the result dataframe."""
-        log.information(f"Read csv files and generate result dataframes for {time_resolution_of_data_set}.")
-
-        appended_dataframe = pd.DataFrame()
-        index = 0
-        simulation_duration_key = list(dict_of_csv_to_read.keys())[0]
-        csv_data_list = dict_of_csv_to_read[simulation_duration_key]
-
-        if csv_data_list == []:
-            raise ValueError("csv_data_list is empty.")
-
-        for csv_file in csv_data_list:
-            dataframe = pd.read_csv(csv_file)
-            # convert scenario column to str-type just in case it has no string values
-            dataframe["scenario"] = dataframe["scenario"].astype(str)
-            scenario_name_of_current_dataframe = dataframe["scenario"][0]
-            # check if scenario column is empty or not
-            if scenario_name_of_current_dataframe == "" or not isinstance(scenario_name_of_current_dataframe, str):
-                raise ValueError(
-                    f"The scenario variable of the current dataframe is {scenario_name_of_current_dataframe} but it should be a non-empty string value. "
-                    "Please set a scenario name for your simulations."
-                )
-
-            # try to find hash number in scenario name
-            try:
-                hash_number = re.findall(r"\-?\d+", scenario_name_of_current_dataframe)[-1]
-
-            # this is when no hash number could be determined in the scenario name
-            except Exception:
-                hash_number = 1
-                rename_scenario = False
-            # add hash colum to dataframe so hash does not get lost when scenario is renamed
-            dataframe["hash"] = [hash_number] * len(dataframe["scenario"])
-
-            # write all values that were in module config dict in the dataframe, so that you can use these values later for sorting and searching
-            if list_with_module_config_dicts is not None:
-                module_config_dict = list_with_module_config_dicts[index]
-                for (module_config_key, module_config_value,) in module_config_dict.items():
-                    dataframe[module_config_key] = [module_config_value] * len(dataframe["scenario"])
-
-            if rename_scenario is True:
-                if (
-                    parameter_key is not None
-                    and list_with_parameter_key_values is not None
-                    and list_with_parameter_key_values != []
-                ):
-                    # rename scenario adding paramter key, value pair
-                    dataframe["scenario"] = self.rename_scenario_name_of_dataframe_with_parameter_key_and_value(
-                        dataframe=dataframe,
-                        parameter_key=parameter_key,
-                        list_with_parameter_values=list_with_parameter_key_values,
-                        index=index,
-                    )
-
-                else:
-                    # rename scenario adding an index
-                    dataframe["scenario"] = self.rename_scenario_name_of_dataframe_with_index(
-                        dataframe=dataframe, index=index
-                    )
-
-            appended_dataframe = pd.concat([appended_dataframe, dataframe])
-
-            index = index + 1
-
-        # sort dataframe
-        if appended_dataframe.empty:
-            raise ValueError("The appended dataframe is empty")
-        appended_dataframe = self.sort_dataframe_according_to_scenario_values(dataframe=appended_dataframe)
-
-        filename = self.store_scenario_data_with_the_right_name_and_in_the_right_path(
-            result_data_folder=self.result_data_folder,
-            simulation_duration_key=simulation_duration_key,
-            time_resolution_of_data_set=time_resolution_of_data_set,
-            parameter_key=parameter_key,
-        )
-        appended_dataframe.to_csv(filename)
-
     def alternative_read_csv_and_generate_pandas_dataframe(
         self,
         dict_of_csv_to_read: Dict[str, list[str]],
@@ -561,13 +412,13 @@ class ResultDataCollection:
             for variable in set_of_variables:
                 filtered_df = dataframe[dataframe["variable"] == variable]
 
-                if time_resolution_of_data_set != ResultDataTypeEnum.YEARLY and "time" in dataframe.columns:
+                if time_resolution_of_data_set != ResultDataTypeEnum.YEARLY.name and "time" in dataframe.columns:
                     # Process time series data
                     time_values = filtered_df["time"]
                     filtered_df = filtered_df[~time_values.str.isalnum()]
                     for time_value, value in zip(filtered_df["time"], filtered_df["value"]):
                         dict_with_all_data["Output"][time_value].append(value)
-                elif time_resolution_of_data_set == ResultDataTypeEnum.YEARLY:
+                elif time_resolution_of_data_set == ResultDataTypeEnum.YEARLY.name:
                     # Process yearly data
                     dict_with_all_data["Output"][str(dataframe["year"].iloc[0])].append(filtered_df["value"].iloc[0])
 
@@ -599,7 +450,7 @@ class ResultDataCollection:
 
                 if rename_scenario and parameter_key and list_with_parameter_key_values:
                     value = list_with_parameter_key_values[house_index]
-                    final_scenario_name = f"{parameter_key}_{value if isinstance(value, str) else round(value, 1)}"
+                    final_scenario_name = f"{value if isinstance(value, str) else round(value, 1)}"
                 else:
                     final_scenario_name = original_scenario_name
 
@@ -641,19 +492,19 @@ class ResultDataCollection:
         self,
         result_data_folder: str,
         simulation_duration_key: str,
-        time_resolution_of_data_set: Any,
+        time_resolution_of_data_set: str,
         parameter_key: Optional[str] = None,
         xlsx_or_csv: str = "csv",
     ) -> str:
         """Store csv files in the result data folder with the right filename and path."""
 
-        if time_resolution_of_data_set == ResultDataTypeEnum.HOURLY:
+        if time_resolution_of_data_set == ResultDataTypeEnum.HOURLY.name:
             kind_of_data_set = "hourly"
-        elif time_resolution_of_data_set == ResultDataTypeEnum.YEARLY:
+        elif time_resolution_of_data_set == ResultDataTypeEnum.YEARLY.name:
             kind_of_data_set = "yearly"
-        elif time_resolution_of_data_set == ResultDataTypeEnum.DAILY:
+        elif time_resolution_of_data_set == ResultDataTypeEnum.DAILY.name:
             kind_of_data_set = "daily"
-        elif time_resolution_of_data_set == ResultDataTypeEnum.MONTHLY:
+        elif time_resolution_of_data_set == ResultDataTypeEnum.MONTHLY.name:
             kind_of_data_set = "monthly"
         else:
             raise ValueError("This kind of data was not found in the datacollectorenum class.")
@@ -832,6 +683,8 @@ class ResultDataCollection:
         self, list_of_result_folder_paths_to_check: List[str]
     ) -> List[Any]:
         """Go through all result folders and remove the system_setups that are duplicated."""
+        if list_of_result_folder_paths_to_check == []:
+            raise ValueError("No HiSim results could be found in the results folder. Please check if you are collecting results from the correct folder.")
 
         list_of_all_module_configs = []
         list_of_result_folders_which_have_only_unique_configs = []
@@ -905,9 +758,3 @@ class ResultDataProcessingModeEnum(enum.Enum):
 
     PROCESS_ALL_DATA = 1
     PROCESS_FOR_DIFFERENT_BUILDING_CODES = 2
-    PROCESS_FOR_DIFFERENT_BUILDING_SIZES = 3
-    PROCESS_FOR_DIFFERENT_PV_SIZES = 4
-    PROCESS_FOR_DIFFERENT_PV_AZIMUTH_ANGLES = 5
-    PROCESS_FOR_DIFFERENT_PV_TILT_ANGLES = 6
-    PROCESS_FOR_DIFFERENT_SHARE_OF_MAXIMUM_PV = 7
-    PROCESS_FOR_DIFFERENT_NUMBER_OF_DWELLINGS = 8

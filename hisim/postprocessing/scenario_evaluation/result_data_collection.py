@@ -574,8 +574,6 @@ class ResultDataCollection:
         # for each parameter different than the default config parameter, get the respective path to the folder
         # and also create a dict with the parameter, value pairs
 
-        # if my_module_config_dict[parameter_key] != default_config_dict[parameter_key]:
-
         list_with_csv_files.append(path_to_scenario_data_folder)
         list_with_parameter_key_values.append(my_module_config_dict[parameter_key])
 

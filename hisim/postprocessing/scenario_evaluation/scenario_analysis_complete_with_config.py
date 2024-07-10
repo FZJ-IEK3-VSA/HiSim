@@ -22,6 +22,7 @@ class ScenarioAnalysisConfig(ConfigBase):
     """Configuration for running a scenario analysis."""
 
     name: str
+    data_format_type: str
     time_resolution_of_data_set: str
     cluster_storage_path: str
     module_results_directory: str
@@ -39,8 +40,9 @@ class ScenarioAnalysisConfig(ConfigBase):
         """Get default ScenarioAnalysisConfig."""
 
         return ScenarioAnalysisConfig(
-            name="ScenarioAnalysisConfig",
-            time_resolution_of_data_set=result_data_collection.ResultDataTypeEnum.YEARLY.name,
+            name="ScenarioAnalysisConfig_0",
+            data_format_type=result_data_processing.DataFormatEnum.CSV.name,
+            time_resolution_of_data_set=result_data_processing.ResultDataTypeEnum.YEARLY.name,
             cluster_storage_path="system_setups/",
             module_results_directory="results/household_cluster_advanced_hp_pv_battery_ems/",
             result_folder_description_one="PV-1-hds-2-hpc-mode-2/",
@@ -71,7 +73,13 @@ class ScenarioAnalysisNew:
     def __init__(self, scenario_analysis_config: ScenarioAnalysisConfig) -> None:
         """Initialize the class."""
         # Get input parameters from config
+        try:
+            config_name = scenario_analysis_config.name.split("_")[1]
+        except Exception:
+            config_name = ""
+
         data_processing_mode = scenario_analysis_config.data_processing_mode
+        data_format_type = scenario_analysis_config.data_format_type
         folder_from_which_data_will_be_collected = os.path.join(
             *[
                 scenario_analysis_config.cluster_storage_path,
@@ -88,10 +96,11 @@ class ScenarioAnalysisNew:
         dict_with_extra_information_for_specific_plot = (
             scenario_analysis_config.dict_with_extra_information_for_specific_plot
         )
-        result_folder_description = scenario_analysis_config.result_folder_description_one
 
-        result_data_collection.ResultDataCollection(
+        result_data_collection_instance = result_data_collection.ResultDataCollection(
             data_processing_mode=data_processing_mode,
+            scenario_analysis_config_name=config_name,
+            data_format_type=data_format_type,
             folder_from_which_data_will_be_collected=folder_from_which_data_will_be_collected,
             path_to_default_config=path_to_default_config,
             time_resolution_of_data_set=time_resolution_of_data_set,
@@ -99,12 +108,14 @@ class ScenarioAnalysisNew:
         )
         result_data_plotting.ScenarioChartGeneration(
             simulation_duration_to_check=simulation_duration_to_check,
+            filepath_of_aggregated_dataframe=result_data_collection_instance.filepath_of_aggregated_dataframe,
+            scenario_config_name=config_name,
+            data_format_type=data_format_type,
             time_resolution_of_data_set=time_resolution_of_data_set,
             data_processing_mode=data_processing_mode,
             variables_to_check=variables_to_check,
             dict_of_scenarios_to_check=dict_with_scenarios_to_check,
             dict_with_extra_information_for_specific_plot=dict_with_extra_information_for_specific_plot,
-            result_folder_description=result_folder_description,
         )
 
 

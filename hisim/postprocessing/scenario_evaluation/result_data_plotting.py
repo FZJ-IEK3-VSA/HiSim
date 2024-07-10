@@ -1,7 +1,5 @@
 """Data Processing and Plotting for Scenario Comparison."""
 
-
-import datetime
 import os
 from typing import Dict, Any, Tuple, Optional, List
 import warnings
@@ -11,11 +9,12 @@ import matplotlib.pyplot as plt
 from ordered_set import OrderedSet
 import seaborn as sns
 
-from hisim.postprocessing.scenario_evaluation.result_data_collection import (
+from hisim.postprocessing.scenario_evaluation.result_data_processing import (
     ResultDataTypeEnum,
     ResultDataProcessingModeEnum,
+    ScenarioDataProcessing,
+    DataFormatEnum,
 )
-from hisim.postprocessing.scenario_evaluation.result_data_processing import ScenarioDataProcessing
 from hisim.postprocessing.chartbase import ChartFontsAndSize
 from hisim import log
 
@@ -27,46 +26,35 @@ class ScenarioChartGeneration:
     def __init__(
         self,
         simulation_duration_to_check: str,
+        filepath_of_aggregated_dataframe: str,
         data_processing_mode: str,
+        data_format_type: str,
+        scenario_config_name: str,
         time_resolution_of_data_set: str,
         dict_with_extra_information_for_specific_plot: Dict[str, Dict],
         variables_to_check: Optional[List[str]] = None,
         dict_of_scenarios_to_check: Optional[Dict[str, List[str]]] = None,
-        result_folder_description: Optional[str] = None,
     ) -> None:
         """Initialize the class."""
 
         warnings.filterwarnings("ignore")
 
-        self.datetime_string = datetime.datetime.now().strftime("%Y%m%d_%H%M")
         self.show_plot_legend: bool = True
         self.data_processing_mode = data_processing_mode
         self.path_addition: str = ""
         self.plot_path_complete: str = ""
+        self.data_format_type: str = data_format_type
+        self.scenario_config_name: str = scenario_config_name
 
         if self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA.name:
-            data_path_strip = "data_all_parameters"
             result_path_strip = "results_all_parameters"
             self.show_plot_legend = False
 
         elif self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_FOR_DIFFERENT_BUILDING_CODES.name:
-            data_path_strip = "data_different_building_codes"
             result_path_strip = "results_different_building_codes"
 
         else:
             raise ValueError("DataProcessingMode not known.")
-
-        self.data_folder_path = os.path.join(
-            os.getcwd(),
-            os.pardir,
-            os.pardir,
-            os.pardir,
-            "system_setups",
-            "scenario_comparison",
-            "data",
-            data_path_strip,
-            f"{simulation_duration_to_check}_days",
-        )
 
         self.result_folder = os.path.join(
             os.getcwd(),
@@ -93,11 +81,10 @@ class ScenarioChartGeneration:
                 full_dataframe,
                 variables_to_check,
             ) = ScenarioDataProcessing.get_dataframe_and_create_pandas_dataframe_for_all_data(
-                data_folder_path=self.data_folder_path,
-                time_resolution_of_data_set=time_resolution_of_data_set,
+                filepath_of_aggregated_dataframe=filepath_of_aggregated_dataframe,
                 dict_of_scenarios_to_check=dict_of_scenarios_to_check,
                 variables_to_check=variables_to_check,
-                xlsx_or_csv="xlsx",
+                data_format_type=self.data_format_type,
             )
 
             self.make_plots_with_specific_kind_of_data(
@@ -106,7 +93,6 @@ class ScenarioChartGeneration:
                 simulation_duration_key=simulation_duration_to_check,
                 variables_to_check=variables_to_check,
                 dict_with_extra_information_for_specific_plot=dict_with_extra_information_for_specific_plot,
-                result_folder_description=result_folder_description,
             )
 
         else:
@@ -119,7 +105,6 @@ class ScenarioChartGeneration:
         simulation_duration_key: str,
         variables_to_check: List[str],
         dict_with_extra_information_for_specific_plot: Dict[str, Dict],
-        result_folder_description: Optional[str],
     ) -> None:
         """Make plots for different kind of data."""
 
@@ -128,9 +113,7 @@ class ScenarioChartGeneration:
         if full_dataframe.empty:
             raise ValueError("Dataframe is empty.")
 
-        sub_results_folder = f"{time_resolution_of_data_set}_{self.datetime_string}"
-        if result_folder_description:
-            sub_results_folder += f"_{result_folder_description}"
+        sub_results_folder = f"{time_resolution_of_data_set}_{self.scenario_config_name}"
 
         self.path_for_plots = os.path.join(self.result_folder, sub_results_folder)
 
@@ -140,12 +123,14 @@ class ScenarioChartGeneration:
             self.prepare_plot_path(variable_to_check)
 
             filtered_data = self.filter_dataframe_according_to_output_variable(full_dataframe, variable_to_check)
-            x_and_y_plot_data, output_value_keys = self.get_mean_values(filtered_data=filtered_data, time_resolution_of_data_set=time_resolution_of_data_set)
+            x_and_y_plot_data, output_value_keys = self.get_mean_values(
+                filtered_data=filtered_data, time_resolution_of_data_set=time_resolution_of_data_set
+            )
 
             if self.check_empty_output_values(filtered_data, output_value_keys):
                 continue
 
-            self.save_filtered_data_to_excel(filtered_data)
+            self.save_filtered_data_to_excel_or_csv(filtered_data, data_format_type=self.data_format_type)
 
             unit = self.get_unit(filtered_data=filtered_data, variable_to_check=variable_to_check)
 
@@ -187,12 +172,18 @@ class ScenarioChartGeneration:
         self.plot_path_complete = os.path.join(self.path_for_plots, self.path_addition)
         os.makedirs(self.plot_path_complete, exist_ok=True)
 
-    def filter_dataframe_according_to_output_variable(self, dataframe: pd.DataFrame, variable_to_check: str) -> pd.DataFrame:
+    def filter_dataframe_according_to_output_variable(
+        self, dataframe: pd.DataFrame, variable_to_check: str
+    ) -> pd.DataFrame:
         """Filter dataframe by variable."""
-        filtered_dataframe = ScenarioDataProcessing.filter_pandas_dataframe_according_to_output_variable(dataframe=dataframe, variable_to_check=variable_to_check)
+        filtered_dataframe = ScenarioDataProcessing.filter_pandas_dataframe_according_to_output_variable(
+            dataframe=dataframe, variable_to_check=variable_to_check
+        )
         return filtered_dataframe
 
-    def get_mean_values(self, filtered_data: pd.DataFrame, time_resolution_of_data_set: str) -> Tuple[pd.DataFrame, List[str]]:
+    def get_mean_values(
+        self, filtered_data: pd.DataFrame, time_resolution_of_data_set: str
+    ) -> Tuple[pd.DataFrame, List[str]]:
         """Calculate mean values of scenarios."""
         x_and_y_plot_data, keys_for_output_values = ScenarioDataProcessing.take_mean_values_of_scenarios(
             filtered_data=filtered_data, time_resolution_of_data_set=time_resolution_of_data_set
@@ -207,9 +198,14 @@ class ScenarioChartGeneration:
                 return True
         return False
 
-    def save_filtered_data_to_excel(self, filtered_data: pd.DataFrame) -> None:
-        """Save filtered data to Excel."""
-        filtered_data.to_excel(os.path.join(self.plot_path_complete, "results.xlsx"))
+    def save_filtered_data_to_excel_or_csv(self, filtered_data: pd.DataFrame, data_format_type: str) -> None:
+        """Save filtered data to Excel or CSV."""
+        if data_format_type == DataFormatEnum.XLSX.name:
+            filtered_data.to_excel(os.path.join(self.plot_path_complete, "results.xlsx"))
+        elif data_format_type == DataFormatEnum.CSV.name:
+            filtered_data.to_csv(os.path.join(self.plot_path_complete, "results.csv"))
+        else:
+            raise ValueError(f"Only data format types xlsx or csv are implemented. Here it is {self.data_format_type}.")
 
     def get_unit(self, filtered_data: pd.DataFrame, variable_to_check: str) -> str:
         """Get unit of variable."""
@@ -251,7 +247,7 @@ class ScenarioChartGeneration:
                 filtered_data=filtered_data,
                 y_data_variable=self.path_addition.replace("_", " "),
                 x_data_variable=x_data_variable,
-                key_for_output_values=output_value_keys[0]
+                key_for_output_values=output_value_keys[0],
             )
         except Exception:
             log.information(f"{variable_to_check} could not be plotted as scatter plot.")
@@ -342,11 +338,7 @@ class ScenarioChartGeneration:
         )
 
     def make_line_plot(
-        self,
-        x_and_y_plot_data: pd.DataFrame,
-        line_plot_marker_size: int,
-        y_axis_label: str,
-        unit: str
+        self, x_and_y_plot_data: pd.DataFrame, line_plot_marker_size: int, y_axis_label: str, unit: str
     ) -> None:
         """Make line plot."""
         log.information("Make line plot with data.")
@@ -511,7 +503,9 @@ class ScenarioChartGeneration:
 
             # get x_data_list by filtering the df according to x_data_variable and then by taking values from "value" column
             x_data_list = list(
-                full_data_per_scenario.loc[full_data_per_scenario[("Output", "variable")] == x_data_variable][("Output", key_for_output_values)].values
+                full_data_per_scenario.loc[full_data_per_scenario[("Output", "variable")] == x_data_variable][
+                    ("Output", key_for_output_values)
+                ].values
             )
             x_data_unit = full_data_per_scenario.loc[full_data_per_scenario[("Output", "variable")] == x_data_variable][
                 ("Output", "unit")

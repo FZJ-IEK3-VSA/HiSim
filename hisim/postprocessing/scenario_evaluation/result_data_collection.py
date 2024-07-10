@@ -5,12 +5,16 @@ import datetime
 import os
 from typing import Dict, Any, Optional, List, Tuple
 import json
-import enum
 import shutil
 import re
 from collections import defaultdict
 import pandas as pd
 from hisim import log
+from hisim.postprocessing.scenario_evaluation.result_data_processing import (
+    ResultDataProcessingModeEnum,
+    ResultDataTypeEnum,
+    DataFormatEnum,
+)
 
 
 class ResultDataCollection:
@@ -19,6 +23,8 @@ class ResultDataCollection:
 
     def __init__(
         self,
+        scenario_analysis_config_name: str,
+        data_format_type: str,
         data_processing_mode: Any,
         simulation_duration_to_check: str,
         time_resolution_of_data_set: Any,
@@ -37,6 +43,8 @@ class ResultDataCollection:
 
         # in each system_setups/results folder should be one system setup that was executed with the default config
         self.path_of_scenario_data_executed_with_default_config: str = ""
+        self.data_format_type: str = data_format_type
+        self.scenario_analysis_config_name: str = scenario_analysis_config_name
 
         log.information(f"Checking results from folder: {result_folder}")
 
@@ -87,7 +95,7 @@ class ResultDataCollection:
             simulation_duration_to_check=simulation_duration_to_check, all_csv_files=all_csv_files,
         )
 
-        self.alternative_read_csv_and_generate_pandas_dataframe(
+        self.filepath_of_aggregated_dataframe = self.alternative_read_csv_and_generate_pandas_dataframe(
             dict_of_csv_to_read=dict_of_csv_data,
             time_resolution_of_data_set=time_resolution_of_data_set,
             rename_scenario=True,
@@ -384,7 +392,7 @@ class ResultDataCollection:
         parameter_key: Optional[str] = None,
         list_with_parameter_key_values: Optional[List[Any]] = None,
         list_with_module_config_dicts: Optional[List[Any]] = None,
-    ) -> None:
+    ) -> str:
         """Read the csv files and generate the result dataframe."""
         log.information(f"Read csv files and generate result dataframes for {time_resolution_of_data_set}.")
 
@@ -427,7 +435,9 @@ class ResultDataCollection:
 
                 original_scenario_name = str(filtered_df["scenario"].iloc[0])
                 if not original_scenario_name:
-                    raise ValueError("The scenario variable of the current dataframe is empty. Please set a scenario name for your simulations.")
+                    raise ValueError(
+                        "The scenario variable of the current dataframe is empty. Please set a scenario name for your simulations."
+                    )
 
                 try:
                     hash_number = re.findall(r"-?\d+", original_scenario_name)[-1]
@@ -462,42 +472,68 @@ class ResultDataCollection:
         if not dict_with_all_data:
             raise ValueError("The dict_with_all_data is empty")
 
-        # create filename
-        filename = self.store_scenario_data_with_the_right_name_and_in_the_right_path(
-            result_data_folder=self.result_data_folder,
-            simulation_duration_key=simulation_duration_key,
-            time_resolution_of_data_set=time_resolution_of_data_set,
-            parameter_key=parameter_key,
-            xlsx_or_csv="xlsx",
-        )
         # create multiindex columns
         multi_index_columns = pd.MultiIndex.from_tuples(
             [(key1, key2) for key1, v1_dict in dict_with_all_data.items() for key2 in v1_dict.keys()],
-            names=["first", "second"]
+            names=["first", "second"],
         )
         # add everything to the dataframe
-        appended_dataframe = pd.DataFrame({
-            (key1, key2): value_list2 for key1, v1_dict in dict_with_all_data.items() for key2, value_list2 in v1_dict.items()
-        }, columns=multi_index_columns)
+        appended_dataframe = pd.DataFrame(
+            {
+                (key1, key2): value_list2
+                for key1, v1_dict in dict_with_all_data.items()
+                for key2, value_list2 in v1_dict.items()
+            },
+            columns=multi_index_columns,
+        )
 
-        # save file (use zip64 for handling large excel files)
-        with pd.ExcelWriter(filename, engine="xlsxwriter") as writer:  # pylint: disable=abstract-class-instantiated
-            workbook = writer.book
-            workbook.use_zip64()
-            appended_dataframe.to_excel(writer, sheet_name="Sheet1")
+        if self.data_format_type == DataFormatEnum.CSV.name:
+            # create filename
+            filename = self.store_scenario_data_with_the_right_name_and_in_the_right_path(
+                result_data_folder=self.result_data_folder,
+                simulation_duration_key=simulation_duration_key,
+                time_resolution_of_data_set=time_resolution_of_data_set,
+                parameter_key=parameter_key,
+                data_format_type="csv",
+                scenario_analysis_config_name=self.scenario_analysis_config_name,
+            )
+            # save file compressed
+            # appended_dataframe.to_csv(f"{filename}.gz", compression="gzip")
+            appended_dataframe.to_csv(filename)
+
+        elif self.data_format_type == DataFormatEnum.XLSX.name:
+            # create filename
+            filename = self.store_scenario_data_with_the_right_name_and_in_the_right_path(
+                result_data_folder=self.result_data_folder,
+                simulation_duration_key=simulation_duration_key,
+                time_resolution_of_data_set=time_resolution_of_data_set,
+                parameter_key=parameter_key,
+                data_format_type="xlsx",
+                scenario_analysis_config_name=self.scenario_analysis_config_name,
+            )
+            # save file (use zip64 for handling large excel files)
+            with pd.ExcelWriter(filename, engine="xlsxwriter") as writer:  # pylint: disable=abstract-class-instantiated
+                workbook = writer.book
+                workbook.use_zip64()
+                appended_dataframe.to_excel(writer, sheet_name="Sheet1")
+
+        else:
+            raise ValueError(f"Only data format types xlsx or csv are implemented. Here it is {self.data_format_type}.")
 
         log.information(f"Saving result dataframe here: {filename}")
 
         del appended_dataframe
         del dict_with_all_data
+        return filename
 
     def store_scenario_data_with_the_right_name_and_in_the_right_path(
         self,
         result_data_folder: str,
         simulation_duration_key: str,
         time_resolution_of_data_set: str,
+        data_format_type: str,
+        scenario_analysis_config_name: str,
         parameter_key: Optional[str] = None,
-        xlsx_or_csv: str = "csv",
     ) -> str:
         """Store csv files in the result data folder with the right filename and path."""
 
@@ -521,7 +557,7 @@ class ResultDataCollection:
         if os.path.exists(path_for_file) is False:
             os.makedirs(path_for_file)
 
-        filename = os.path.join(path_for_file, f"result_df_{kind_of_data_set}.{xlsx_or_csv}",)
+        filename = os.path.join(path_for_file, f"result_df_{kind_of_data_set}_{scenario_analysis_config_name}.{data_format_type}",)
         return filename
 
     def get_default_config(self, path_to_default_config: Optional[str]) -> Any:
@@ -685,7 +721,9 @@ class ResultDataCollection:
     ) -> List[Any]:
         """Go through all result folders and remove the system_setups that are duplicated."""
         if list_of_result_folder_paths_to_check == []:
-            raise ValueError("No HiSim results could be found in the results folder. Please check if you are collecting results from the correct folder.")
+            raise ValueError(
+                "No HiSim results could be found in the results folder. Please check if you are collecting results from the correct folder."
+            )
 
         list_of_all_module_configs = []
         list_of_result_folders_which_have_only_unique_configs = []
@@ -735,27 +773,3 @@ class ResultDataCollection:
                 print("The answer must be yes or no.")
 
         return list_of_result_folders_which_have_only_unique_configs
-
-
-class ResultDataTypeEnum(enum.Enum):
-
-    """ResultDataTypeEnum class.
-
-    Here it is defined what kind of data you want to collect.
-    """
-
-    HOURLY = "hourly"  # hourly not working yet
-    DAILY = "daily"
-    MONTHLY = "monthly"
-    YEARLY = "yearly"
-
-
-class ResultDataProcessingModeEnum(enum.Enum):
-
-    """ResultDataProcessingModeEnum class.
-
-    Here it is defined what kind of data processing you want to make.
-    """
-
-    PROCESS_ALL_DATA = 1
-    PROCESS_FOR_DIFFERENT_BUILDING_CODES = 2

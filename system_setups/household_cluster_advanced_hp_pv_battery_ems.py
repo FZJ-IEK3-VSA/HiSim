@@ -5,7 +5,6 @@
 from typing import Optional, Any, Union, List
 import re
 import os
-from enum import Enum
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from utspclient.helpers.lpgdata import (
@@ -31,10 +30,7 @@ from hisim.components import (
     advanced_ev_battery_bslib,
     controller_l1_generic_ev_charge,
     generic_car,
-    generic_gas_heater,
-    controller_l1_generic_gas_heater 
 )
-
 from hisim.component import ConfigBase
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
@@ -50,12 +46,6 @@ __license__ = "MIT"
 __version__ = "1.0"
 __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
-
-
-class SpaceHeatingSystemEnum(Enum):
-    """Class to determine system for space heating."""
-    HEAT_PUMP = 1
-    GAS_HEATER = 2
 
 
 @dataclass_json
@@ -145,7 +135,7 @@ def setup_function(
     seconds_per_timestep = 60 * 15
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
+        my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         my_simulation_parameters.post_processing_options.append(
@@ -163,10 +153,6 @@ def setup_function(
 
     # =================================================================================================================================
     # Set System Parameters
-    space_heating_system_type = SpaceHeatingSystemEnum.GAS_HEATER
-    # Set Heat Pump Controller
-    hp_controller_mode = 1  # mode 1 for heating/off and mode 2 for heating/cooling/off
-    heating_reference_temperature_in_celsius = -7.0
 
     # Set Weather
     weather_location = my_config.weather_location
@@ -210,12 +196,15 @@ def setup_function(
                 if hasattr(Households, household_string):
                     lpg_household = getattr(Households, household_string)
                     lpg_households.append(lpg_household)
-            print("len lpg households", len(lpg_households))
+                    print(lpg_household)
         else:
             raise ValueError("Config list with lpg household is empty.")
     else:
         raise TypeError(f"Type {type(my_config.lpg_households)} is incompatible. Should be List[str].")
 
+    # Set Heat Pump Controller
+    hp_controller_mode = 2  # mode 1 for heating/off and mode 2 for heating/cooling/off
+    heating_reference_temperature_in_celsius = -7.0
 
     # Set Electric Vehicle
     charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
@@ -297,62 +286,29 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
-    if space_heating_system_type == SpaceHeatingSystemEnum.HEAT_PUMP:
-        # Set other parameters
-        hws_sizing_option = simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
-        # Build Heat Pump Controller
-        my_heat_pump_controller_config = advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(
-            heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
-        )
-        my_heat_pump_controller_config.mode = hp_controller_mode
+    # Build Heat Pump Controller
+    my_heat_pump_controller_config = advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(
+        heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
+    )
+    my_heat_pump_controller_config.mode = hp_controller_mode
 
-        my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
-            config=my_heat_pump_controller_config, my_simulation_parameters=my_simulation_parameters,
-        )
-        # Add to simulator
-        my_sim.add_component(my_heat_pump_controller, connect_automatically=True)
+    my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
+        config=my_heat_pump_controller_config, my_simulation_parameters=my_simulation_parameters,
+    )
+    # Add to simulator
+    my_sim.add_component(my_heat_pump_controller, connect_automatically=True)
 
-        # Build Heat Pump
-        my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-            heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
-            heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
-        )
+    # Build Heat Pump
+    my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
+        heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
+        heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
+    )
 
-        my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
-            config=my_heat_pump_config, my_simulation_parameters=my_simulation_parameters,
-        )
-        # Add to simulator
-        my_sim.add_component(my_heat_pump, connect_automatically=True)
-
-    elif space_heating_system_type == SpaceHeatingSystemEnum.GAS_HEATER:
-        # Set other parameters
-        # hws_sizing_option = simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM
-        hws_sizing_option = simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
-        # Build Gas Heater Controller
-        my_gas_heater_controller_config=(
-                controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config.get_scaled_generic_gas_heater_controller_config(
-                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
-                )
-            )
-        my_gas_heater_controller_config.set_heating_threshold_outside_temperature_in_celsius = my_heat_distribution_controller_config.set_heating_threshold_outside_temperature_in_celsius
-        my_gas_heater_controller = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1(
-            my_simulation_parameters=my_simulation_parameters, config=my_gas_heater_controller_config,
-        )
-        my_sim.add_component(my_gas_heater_controller, connect_automatically=True)
-
-        # Build Gas Heater
-        my_gas_heater_config=generic_gas_heater.GenericGasHeaterConfig.get_scaled_gasheater_config(
-                heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
-            )
-
-        my_gas_heater = generic_gas_heater.GasHeater(
-            config=my_gas_heater_config,
-            my_simulation_parameters=my_simulation_parameters,
-        )
-        my_sim.add_component(my_gas_heater, connect_automatically=True)
-
-    else:
-        raise ValueError(f"Space heating system was chosen {space_heating_system_type}. So far the cluster system setup only operates with HEAT_PUMP or GAS_HEATER for space heating.")
+    my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
+        config=my_heat_pump_config, my_simulation_parameters=my_simulation_parameters,
+    )
+    # Add to simulator
+    my_sim.add_component(my_heat_pump, connect_automatically=True)
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
@@ -367,9 +323,9 @@ def setup_function(
 
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-        max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt, # my_heat_pump_config.set_thermal_output_power_in_watt.value,
+        max_thermal_power_in_watt_of_heating_system=my_heat_pump_config.set_thermal_output_power_in_watt.value,
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
-        sizing_option=hws_sizing_option,
+        sizing_option=simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
     )
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config, my_simulation_parameters=my_simulation_parameters,
@@ -582,11 +538,11 @@ def setup_function(
     )
 
     ResultPathProviderSingleton().set_important_result_path_information(
-        module_directory="/storage_cluster/projects/2024_waage/01_hisim_results",  # my_sim.module_directory,  # 
+        module_directory=my_sim.module_directory,  # "/storage_cluster/projects/2024_waage/01_hisim_results"
         model_name=my_sim.module_filename,
         further_result_folder_description=os.path.join(
             *[
-                f"{further_result_folder_description}_{space_heating_system_type.name}_for_space_heating",
+                further_result_folder_description,
                 f"PV-{share_of_maximum_pv_potential}-hds-{my_hds_controller_information.heat_distribution_system_type}-hpc-mode-{hp_controller_mode}",
                 f"weather-location-{weather_location}",
             ]

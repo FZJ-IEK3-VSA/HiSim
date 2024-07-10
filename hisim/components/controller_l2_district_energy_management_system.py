@@ -895,8 +895,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 inputs_sorted=self.inputs_sorted,
                 component_types_sorted=self.component_types_sorted,
             )
-        if timestep > 1063:
-            print("...")
+
         if self.strategy == EMSControlStrategy.OPTIMIZEOWNCONSUMPTION_PARALLEL:
             #           print("...")
             available_surplus_electricity_in_watt = self.distribute_available_surplus_electricity_parallel(

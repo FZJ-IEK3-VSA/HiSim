@@ -182,6 +182,7 @@ class HeatPumpHplib(Component):
     COP = "COP"  # -
     EER = "EER"  # -
     TemperatureOutput = "TemperatureOutput"  # °C
+    TemperatureInputWarmWater = "TemperatureInputWarmWater"  # °C
     MassFlowOutput = "MassFlowOutput"  # kg/s
     TimeOnHeating = "TimeOnHeating"  # s
     TimeOnCooling = "TimeOnCooling"  # s
@@ -373,6 +374,16 @@ class HeatPumpHplib(Component):
             load_type=LoadTypes.HEATING,
             unit=Units.CELSIUS,
             output_description="Temperature Output in °C",
+            postprocessing_flag=[
+                OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+            ],
+        )
+        self.t_in_warm_water: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.TemperatureInputWarmWater,
+            load_type=LoadTypes.HEATING,
+            unit=Units.CELSIUS,
+            output_description="Temperature Input in °C",
             postprocessing_flag=[
                 OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
             ],
@@ -629,6 +640,7 @@ class HeatPumpHplib(Component):
         stsv.set_output_value(self.cop, cop)
         stsv.set_output_value(self.eer, eer)
         stsv.set_output_value(self.t_out, t_out)
+        stsv.set_output_value(self.t_in_warm_water, t_in_secondary)
         stsv.set_output_value(self.m_dot, m_dot)
         stsv.set_output_value(self.time_on_heating, time_on_heating)
         stsv.set_output_value(self.time_on_cooling, time_on_cooling)

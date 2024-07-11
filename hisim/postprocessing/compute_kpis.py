@@ -1631,7 +1631,7 @@ class KpiGenerator(JSONWizard):
                     output_name_return_temperature = MoreAdvancedHeatPumpHPLib.TemperatureInputSH
                 elif isinstance(wrapped_component.my_component, HeatPumpHplib):
                     output_name_flow_temperature = HeatPumpHplib.TemperatureOutput
-                    output_name_return_temperature = HeatPumpHplib.TemperatureInputSecondary
+                    output_name_return_temperature = HeatPumpHplib.TemperatureInputWarmWater
 
                 (
                     mean_flow_temperature_in_celsius,

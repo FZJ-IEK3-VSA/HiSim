@@ -63,7 +63,7 @@ class GenericGasHeaterConfig(ConfigBase):
     # maintenance cost as share of investment [0..1]
     maintenance_cost_as_percentage_of_investment: float
     #: consumption of the car in kWh or l
-    consumption: float
+    consumption_in_kilowatt_hour: float
 
     @classmethod
     def get_default_gasheater_config(
@@ -88,7 +88,7 @@ class GenericGasHeaterConfig(ConfigBase):
             cost=7416,  # value from emission_factros_and_costs_devices.csv
             lifetime=20,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
-            consumption=0,
+            consumption_in_kilowatt_hour=0,
         )
         return config
 
@@ -113,7 +113,7 @@ class GenericGasHeaterConfig(ConfigBase):
             cost=7416,  # value from emission_factros_and_costs_devices.csv
             lifetime=20,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
-            consumption=0,
+            consumption_in_kilowatt_hour=0,
         )
         return config
 
@@ -182,7 +182,7 @@ class GasHeater(Component):
             self.component_name,
             GasHeater.GasDemand,
             lt.LoadTypes.GAS,
-            lt.Units.KWH,
+            lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.GasDemand} will follow.",
             postprocessing_flag=[
                 lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
@@ -294,7 +294,7 @@ class GasHeater(Component):
         # p_th = (
         #     c_w * mass_flow_out_in_kg_per_s * (mass_flow_out_temperature_in_celsius - stsv.get_input_value(self.mass_flow_input_tempertaure_channel))
         # )
-        gas_demand_in_kwh = gas_power_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3.6e6
+        gas_demand_in_watt_hour = gas_power_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
 
         stsv.set_output_value(self.thermal_output_power_channel, gas_power_in_watt)  # efficiency
         stsv.set_output_value(
@@ -302,7 +302,7 @@ class GasHeater(Component):
             mass_flow_out_temperature_in_celsius,
         )  # efficiency
         stsv.set_output_value(self.mass_flow_output_channel, mass_flow_out_in_kg_per_s)  # efficiency
-        stsv.set_output_value(self.gas_demand_channel, gas_demand_in_kwh)  # gas consumption
+        stsv.set_output_value(self.gas_demand_channel, gas_demand_in_watt_hour)  # gas consumption
 
     @staticmethod
     def get_cost_capex(config: GenericGasHeaterConfig) -> Tuple[float, float, float]:
@@ -317,21 +317,21 @@ class GasHeater(Component):
         """Calculate OPEX costs, consisting of energy and maintenance costs."""
         for index, output in enumerate(all_outputs):
             if output.component_name == self.config.name and output.load_type == lt.LoadTypes.GAS:
-                self.config.consumption = round(sum(postprocessing_results.iloc[:, index]), 1)
+                self.config.consumption_in_kilowatt_hour = round(sum(postprocessing_results.iloc[:, index]), 1) * 1e-3
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year
         )
         co2_per_unit = emissions_and_cost_factors.gas_footprint_in_kg_per_kwh
         euro_per_unit = emissions_and_cost_factors.gas_costs_in_euro_per_kwh
 
-        opex_cost_per_simulated_period_in_euro = self.config.consumption * euro_per_unit
-        co2_per_simulated_period_in_kg = self.config.consumption * co2_per_unit
+        opex_cost_per_simulated_period_in_euro = self.config.consumption_in_kilowatt_hour * euro_per_unit
+        co2_per_simulated_period_in_kg = self.config.consumption_in_kilowatt_hour * co2_per_unit
 
         opex_cost_per_simulated_period_in_euro += self.calc_maintenance_cost()
         opex_cost_data_class = OpexCostDataClass(
             opex_cost=opex_cost_per_simulated_period_in_euro,
             co2_footprint=co2_per_simulated_period_in_kg,
-            consumption=self.config.consumption,
+            consumption=self.config.consumption_in_kilowatt_hour,
         )
 
         return opex_cost_data_class

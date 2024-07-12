@@ -687,8 +687,10 @@ class KpiGenerator(JSONWizard):
         """Compute energy prices and co2 emissions."""
 
         # initialize prices
-        costs_for_energy_use_in_euro = 0.0
-        co2_emitted_due_to_energy_use_in_kilogram = 0.0
+        total_costs_for_energy_use_in_euro: float = 0.0
+        total_co2_emitted_due_to_energy_use_in_kilogram: float = 0.0
+        total_costs_for_electricity_use_in_euro: float = 0.0
+        total_co2_emitted_due_to_electricity_use_in_kilogram: float = 0.0
 
         price_frame = self.read_in_fuel_costs()
 
@@ -704,23 +706,23 @@ class KpiGenerator(JSONWizard):
         if electricity_production_in_kilowatt_hour > 0:
             # evaluate electricity price
             if not electricity_price_injection.empty:
-                costs_for_energy_use_in_euro = (
-                    costs_for_energy_use_in_euro
+                total_costs_for_electricity_use_in_euro = (
+                    total_costs_for_electricity_use_in_euro
                     - self.compute_total_energy_from_power_timeseries(
                         power_timeseries_in_watt=injection[injection > 0] * electricity_price_injection[injection > 0],
                         timeresolution=self.simulation_parameters.seconds_per_timestep,
                     )
                 )
-                costs_for_energy_use_in_euro = (
-                    costs_for_energy_use_in_euro
+                total_costs_for_electricity_use_in_euro = (
+                    total_costs_for_electricity_use_in_euro
                     + self.compute_total_energy_from_power_timeseries(
                         power_timeseries_in_watt=result_dataframe["total_consumption"] - self_consumption,
                         timeresolution=self.simulation_parameters.seconds_per_timestep,
                     )
                 )  # Todo: is this correct? (maybe not so important, only used if generic_price_signal is used
             else:
-                costs_for_energy_use_in_euro = (
-                    costs_for_energy_use_in_euro
+                total_costs_for_electricity_use_in_euro = (
+                    total_costs_for_electricity_use_in_euro
                     - grid_injection_in_kilowatt_hour * electricity_inj_price_constant
                     + (electricity_consumption_in_kilowatt_hour - self_consumption_in_kilowatt_hour)
                     * electricity_price_constant
@@ -729,21 +731,42 @@ class KpiGenerator(JSONWizard):
         else:
             if not electricity_price_consumption.empty:
                 # substract self consumption from consumption for bill calculation
-                costs_for_energy_use_in_euro = (
-                    costs_for_energy_use_in_euro
+                total_costs_for_electricity_use_in_euro = (
+                    total_costs_for_electricity_use_in_euro
                     + self.compute_total_energy_from_power_timeseries(
                         power_timeseries_in_watt=result_dataframe["total_consumption"] * electricity_price_consumption,
                         timeresolution=self.simulation_parameters.seconds_per_timestep,
                     )
                 )
             else:
-                costs_for_energy_use_in_euro = (
-                    costs_for_energy_use_in_euro + electricity_consumption_in_kilowatt_hour * electricity_price_constant
+                total_costs_for_electricity_use_in_euro = (
+                    total_costs_for_electricity_use_in_euro + electricity_consumption_in_kilowatt_hour * electricity_price_constant
                 )
 
-        co2_emitted_due_to_energy_use_in_kilogram = (
-            co2_emitted_due_to_energy_use_in_kilogram
+        total_co2_emitted_due_to_electricity_use_in_kilogram = (
+            total_co2_emitted_due_to_electricity_use_in_kilogram
             + (electricity_consumption_in_kilowatt_hour - self_consumption_in_kilowatt_hour) * co2_price_constant
+        )
+        # make kpi entry
+        costs_for_electricity_use_entry = KpiEntry(
+            name="Cost for use of electricity",
+            unit="EUR",
+            value=total_costs_for_electricity_use_in_euro,
+            tag=KpiTagEnumClass.COSTS_AND_EMISSIONS,
+        )
+        co2_emission_for_electricity_use_entry = KpiEntry(
+            name="CO2 emission due to use of electricity",
+            unit="kg",
+            value=total_co2_emitted_due_to_electricity_use_in_kilogram,
+            tag=KpiTagEnumClass.COSTS_AND_EMISSIONS,
+        )
+
+        # update kpi collection dict
+        self.kpi_collection_dict_unsorted.update(
+            {
+                costs_for_electricity_use_entry.name: costs_for_electricity_use_entry.to_dict(),
+                co2_emission_for_electricity_use_entry.name: co2_emission_for_electricity_use_entry.to_dict(),
+            }
         )
 
         # compute cost and co2 for LoadTypes other than electricity
@@ -753,27 +776,27 @@ class KpiGenerator(JSONWizard):
             LoadTypes.DISTRICTHEATING,
             LoadTypes.DIESEL,
         ]:
-            fuel_price, fuel_co2 = self.compute_cost_of_fuel_type(
+            fuel_price_in_euro, fuel_co2_emission_in_kg = self.compute_cost_of_fuel_type(
                 results=self.results,
                 all_outputs=self.all_outputs,
                 timeresolution=self.simulation_parameters.seconds_per_timestep,
                 price_frame=price_frame,
                 fuel=fuel,
             )
-            co2_emitted_due_to_energy_use_in_kilogram = co2_emitted_due_to_energy_use_in_kilogram + fuel_co2
-            costs_for_energy_use_in_euro = costs_for_energy_use_in_euro + fuel_price
+            total_co2_emitted_due_to_energy_use_in_kilogram = total_co2_emitted_due_to_electricity_use_in_kilogram + fuel_co2_emission_in_kg
+            total_costs_for_energy_use_in_euro = total_costs_for_electricity_use_in_euro + fuel_price_in_euro
 
         # make kpi entry
         costs_for_energy_use_entry = KpiEntry(
-            name="Cost for energy use",
+            name="Total cost for energy use",
             unit="EUR",
-            value=costs_for_energy_use_in_euro,
+            value=total_costs_for_energy_use_in_euro,
             tag=KpiTagEnumClass.COSTS_AND_EMISSIONS,
         )
         co2_emission_entry = KpiEntry(
-            name="CO2 emission due to energy use",
+            name="Total CO2 emission due to energy use",
             unit="kg",
-            value=co2_emitted_due_to_energy_use_in_kilogram,
+            value=total_co2_emitted_due_to_energy_use_in_kilogram,
             tag=KpiTagEnumClass.COSTS_AND_EMISSIONS,
         )
 

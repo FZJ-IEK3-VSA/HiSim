@@ -35,7 +35,7 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
 
 
-class KpiGeneratorForComponents:
+class KpiPreparation:
 
     """Class for generating and calculating key performance indicators."""
 

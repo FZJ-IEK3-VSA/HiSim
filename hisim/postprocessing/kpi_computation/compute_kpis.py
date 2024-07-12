@@ -11,11 +11,11 @@ from typing import List, Dict
 from dataclasses import dataclass
 from dataclass_wizard import JSONWizard
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
-from hisim.postprocessing.kpi_computation.compute_kpis_of_components import KpiGeneratorForComponents
+from hisim.postprocessing.kpi_computation.kpi_preparation import KpiPreparation
 
 
 @dataclass
-class KpiGenerator(JSONWizard, KpiGeneratorForComponents):
+class KpiGenerator(JSONWizard, KpiPreparation):
 
     """Class for generating and calculating key performance indicators."""
 

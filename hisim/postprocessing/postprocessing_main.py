@@ -21,7 +21,7 @@ from hisim.modular_household.interface_configs.kpi_config import KPIConfig
 from hisim.postprocessing import charts
 from hisim.postprocessing import reportgenerator
 from hisim.postprocessing.chart_singleday import ChartSingleDay
-from hisim.postprocessing.compute_kpis import KpiGenerator
+from hisim.postprocessing.kpi_computation.compute_kpis import KpiGenerator
 from hisim.postprocessing.generate_csv_for_housing_database import generate_csv_for_database
 from hisim.postprocessing.opex_and_capex_cost_calculation import (
     opex_calculation,
@@ -552,7 +552,7 @@ class PostProcessor:
     ) -> PostProcessingDataTransfer:
         """Computes KPI's and writes them to report and to ppdt kpi collection."""
         # initialize kpi data class and compute all kpi values
-        kpi_data_class = KpiGenerator(ppdt)
+        kpi_data_class = KpiGenerator(post_processing_data_transfer=ppdt)
         # write kpi table to report
         kpi_table = kpi_data_class.return_table_for_report()
         self.write_new_chapter_with_table_to_report(

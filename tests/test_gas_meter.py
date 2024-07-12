@@ -29,7 +29,7 @@ from hisim import log
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
-PATH = "../system_setups/household_for_test_electricity_meter.py"
+PATH = "../system_setups/household_for_test_gas_meter.py"
 
 
 @utils.measure_execution_time
@@ -55,6 +55,7 @@ def test_house(
 
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_CAPEX)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON)
         my_simulation_parameters.logging_level = 4
@@ -69,7 +70,7 @@ def test_house(
     my_sim: sim.Simulator = sim.Simulator(
         module_directory=path_to_be_added,
         my_simulation_parameters=my_simulation_parameters,
-        module_filename="household_for_test_electricity_meter",
+        module_filename="household_for_test_gas_meter",
     )
     my_sim.set_simulation_parameters(my_simulation_parameters)
     # Set some parameters

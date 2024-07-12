@@ -24,14 +24,13 @@ class KpiGenerator(JSONWizard, KpiPreparation):
     def __post_init__(self):
         """Build the dataclass from input data."""
         super().__init__(post_processing_data_transfer=self.post_processing_data_transfer)
-        # self.kpi_collection_dict_unsorted: Dict = {}
         self.create_kpi_collection()
         self.kpi_collection_dict_sorted = self.sort_kpi_collection_according_to_kpi_tags(
             kpi_collection_dict_unsorted=self.kpi_collection_dict_unsorted
         )
         self.return_table_for_report()
 
-    def create_kpi_collection(self):  # , post_processing_data_transfer):
+    def create_kpi_collection(self):
         """Create kpi collection and write back into post processing data transfer."""
         # get filtered result dataframe
         self.filtered_result_dataframe = self.filter_results_according_to_postprocessing_flags(

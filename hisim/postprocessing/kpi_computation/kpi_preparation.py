@@ -17,6 +17,7 @@ import pandas as pd
 
 # from dataclass_wizard import JSONWizard
 from hisim.component import ComponentOutput, Component
+from hisim.component_wrapper import ComponentWrapper
 from hisim.components.heat_distribution_system import HeatDistribution
 from hisim.components.building import Building
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
@@ -48,6 +49,7 @@ class KpiPreparation:
         self.results = self.post_processing_data_transfer.results
         self.all_outputs = self.post_processing_data_transfer.all_outputs
         self.simulation_parameters = self.post_processing_data_transfer.simulation_parameters
+        self.get_all_component_kpis(wrapped_components=self.wrapped_components)
 
     def filter_results_according_to_postprocessing_flags(
         self, all_outputs: List, results: pd.DataFrame
@@ -1201,67 +1203,67 @@ class KpiPreparation:
             name="Thermal output energy of heat distribution system",
             unit="kWh",
             value=thermal_output_energy_in_kilowatt_hour,
-            tag=KpiTagEnumClass.HEATDISTRIBUTIONSYSTEM,
+            tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
         )
         specific_thermal_output_energy_hds_entry = KpiEntry(
             name="Specific thermal output energy of heat distribution system",
             unit="kWh/m2",
             value=specific_thermal_output_energy_in_kilowatt_hour,
-            tag=KpiTagEnumClass.HEATDISTRIBUTIONSYSTEM,
+            tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
         )
         mean_flow_temperature_hds_entry = KpiEntry(
             name="Mean flow temperature of heat distribution system",
             unit="°C",
             value=mean_flow_temperature_in_celsius,
-            tag=KpiTagEnumClass.HEATDISTRIBUTIONSYSTEM,
+            tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
         )
         mean_return_temperature_hds_entry = KpiEntry(
             name="Mean return temperature of heat distribution system",
             unit="°C",
             value=mean_return_temperature_in_celsius,
-            tag=KpiTagEnumClass.HEATDISTRIBUTIONSYSTEM,
+            tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
         )
         mean_temperature_difference_hds_entry = KpiEntry(
             name="Mean temperature difference of heat distribution system",
             unit="°C",
             value=mean_temperature_difference_between_flow_and_return_in_celsius,
-            tag=KpiTagEnumClass.HEATDISTRIBUTIONSYSTEM,
+            tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
         )
         max_flow_temperature_hds_entry = KpiEntry(
             name="Max flow temperature of heat distribution system",
             unit="°C",
             value=max_flow_temperature_in_celsius,
-            tag=KpiTagEnumClass.HEATDISTRIBUTIONSYSTEM,
+            tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
         )
         max_return_temperature_hds_entry = KpiEntry(
             name="Max return temperature of heat distribution system",
             unit="°C",
             value=max_return_temperature_in_celsius,
-            tag=KpiTagEnumClass.HEATDISTRIBUTIONSYSTEM,
+            tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
         )
         max_temperature_difference_hds_entry = KpiEntry(
             name="Max temperature difference of heat distribution system",
             unit="°C",
             value=max_temperature_difference_between_flow_and_return_in_celsius,
-            tag=KpiTagEnumClass.HEATDISTRIBUTIONSYSTEM,
+            tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
         )
         min_flow_temperature_hds_entry = KpiEntry(
             name="Min flow temperature of heat distribution system",
             unit="°C",
             value=min_flow_temperature_in_celsius,
-            tag=KpiTagEnumClass.HEATDISTRIBUTIONSYSTEM,
+            tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
         )
         min_return_temperature_hds_entry = KpiEntry(
             name="Min return temperature of heat distribution system",
             unit="°C",
             value=min_return_temperature_in_celsius,
-            tag=KpiTagEnumClass.HEATDISTRIBUTIONSYSTEM,
+            tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
         )
         min_temperature_difference_hds_entry = KpiEntry(
             name="Min temperature difference of heat distribution system",
             unit="°C",
             value=min_temperature_difference_between_flow_and_return_in_celsius,
-            tag=KpiTagEnumClass.HEATDISTRIBUTIONSYSTEM,
+            tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
         )
         # update kpi collection dict
         self.kpi_collection_dict_unsorted.update(
@@ -2144,3 +2146,18 @@ class KpiPreparation:
         min_value = float(np.min(list_or_pandas_series))
 
         return mean_value, max_value, min_value
+
+    def get_all_component_kpis(self, wrapped_components: List[ComponentWrapper]) -> None:
+        """Go through all components and get their KPIs if implemented."""
+        my_component_kpi_entry_list: List[KpiEntry]
+        for wrapped_component in wrapped_components:
+            my_component = wrapped_component.my_component
+            # get KPIs of respective component
+            try:
+                my_component_kpi_entry_list = my_component.get_component_kpi_entries(all_outputs=self.all_outputs, postprocessing_results=self.results)
+                # add all KPI entries to kpi dict
+                for kpi_entry in my_component_kpi_entry_list:
+                    print(kpi_entry.name, kpi_entry.value)
+                    self.kpi_collection_dict_unsorted[kpi_entry.name] = kpi_entry.to_dict()
+            except Exception:
+                print("---", my_component.component_name, " does not have this method yet")

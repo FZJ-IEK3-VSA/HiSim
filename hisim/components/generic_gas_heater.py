@@ -4,7 +4,7 @@
 # Owned
 import importlib
 from dataclasses import dataclass
-from typing import List, Any, Tuple
+from typing import List, Any, Tuple, Optional
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -22,6 +22,7 @@ from hisim.component import (
 )
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 
 __authors__ = "Frank Burkrad, Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -317,7 +318,7 @@ class GasHeater(Component):
         """Calculate OPEX costs, consisting of energy and maintenance costs."""
         for index, output in enumerate(all_outputs):
             if output.component_name == self.config.name and output.load_type == lt.LoadTypes.GAS:
-                self.config.consumption_in_kilowatt_hour = round(sum(postprocessing_results.iloc[:, index]), 1) * 1e-3
+                self.config.consumption_in_kilowatt_hour = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year
         )
@@ -335,3 +336,21 @@ class GasHeater(Component):
         )
 
         return opex_cost_data_class
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        total_gas_consumption_in_kilowatt_hour: Optional[float] = None
+        list_of_kpi_entries: List[KpiEntry] = []
+        for index, output in enumerate(all_outputs):
+            if output.component_name == self.config.name and output.field_name == self.GasDemand and output.load_type == lt.LoadTypes.GAS:
+                    total_gas_consumption_in_kilowatt_hour = round(postprocessing_results.iloc[:, index].sum() * 1e-3,1)
+                    break
+        my_kpi_entry = KpiEntry(name="Gas consumption for space heating", unit="kWh", value=total_gas_consumption_in_kilowatt_hour, tag=KpiTagEnumClass.GAS_HEATER_SPACE_HEATING)
+        list_of_kpi_entries.append(my_kpi_entry)
+        return list_of_kpi_entries
+
+

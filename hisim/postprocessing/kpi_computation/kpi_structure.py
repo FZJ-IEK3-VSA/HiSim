@@ -15,10 +15,12 @@ class KpiTagEnumClass(Enum):
     COSTS_AND_EMISSIONS = "Costs and Emissions"
     BUILDING = "Building"
     BATTERY = "Battery"
-    HEATDISTRIBUTIONSYSTEM = "Heat Distribution System"
+    HEAT_DISTRIBUTION_SYSTEM = "Heat Distribution System"
     HEATPUMP_SPACE_HEATING = "Heat Pump For Space Heating"
     HEATPUMP_DOMESTIC_HOT_WATER = "Heat Pump For Domestic Hot Water"
     RESIDENTS = "Residents"
+    GAS_HEATER_SPACE_HEATING = "Gas Heater For Space Heating"
+    GAS_HEATER_DOMESTIC_HOT_WATER = "Gas Heater For Domestic Hot Water"
 
 
 @dataclass

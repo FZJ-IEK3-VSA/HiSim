@@ -2,7 +2,7 @@
 
 # clean
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -19,7 +19,7 @@ from hisim.dynamic_component import (
     DynamicComponentConnection,
 )
 from hisim.simulationparameters import SimulationParameters
-
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 
 @dataclass_json
 @dataclass
@@ -399,6 +399,31 @@ class ElectricityMeter(DynamicComponent):
         )
 
         return opex_cost_data_class
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        total_energy_from_grid_in_kwh: Optional[float] = None
+        total_energy_to_grid_in_kwh: Optional[float] = None
+        list_of_kpi_entries: List[KpiEntry] = []
+        for index, output in enumerate(all_outputs):
+            if output.component_name == self.config.name and output.load_type == lt.LoadTypes.ELECTRICITY:
+                if output.field_name == self.ElectricityFromGrid:
+                    total_energy_from_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 1)
+                elif output.field_name == self.ElectricityToGrid:
+                    total_energy_to_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 1)
+        
+        total_energy_from_grid_in_kwh_entry = KpiEntry(
+            name="Total energy from grid", unit="kWh", value=total_energy_from_grid_in_kwh, tag=KpiTagEnumClass.GENERAL
+        )
+        total_energy_to_grid_in_kwh_entry = KpiEntry(
+            name="Total energy to grid", unit="kWh", value=total_energy_to_grid_in_kwh, tag=KpiTagEnumClass.GENERAL
+        )
+        list_of_kpi_entries = [total_energy_from_grid_in_kwh_entry, total_energy_to_grid_in_kwh_entry]
+        return list_of_kpi_entries
 
 
 @dataclass

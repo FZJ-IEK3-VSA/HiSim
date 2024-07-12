@@ -25,7 +25,7 @@ from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib
 from hisim.components.electricity_meter import ElectricityMeter
 from hisim.components.generic_heat_pump_modular import ModularHeatPump
 from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
-#from hisim.components.controller_l2_district_energy_management_system import L2GenericEnergyManagementSystem
+from hisim.components.controller_l2_district_energy_management_system import L2GenericEnergyManagementSystem
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes
 from hisim.utils import HISIMPATH
 from hisim import log
@@ -471,16 +471,16 @@ class KpiGenerator(JSONWizard):
         # go through all wrapped components and try to find electricity meter
         for wrapped_component in self.wrapped_components:
             if isinstance(wrapped_component.my_component, ElectricityMeter):
-                wrapped_electricty_meter_component = wrapped_component
+                wrapped_electricity_meter_component = wrapped_component
                 break
 
-        if not wrapped_electricty_meter_component:
+        if not wrapped_electricity_meter_component:
             log.information("Could not find the Electricity Meter component.")
             return None, None
 
         for column in self.results.columns:
 
-            if all(x in column.split(sep=" ") for x in [wrapped_electricty_meter_component.my_component.component_name]):
+            if all(x in column.split(sep=" ") for x in [wrapped_electricity_meter_component.my_component.component_name]):
                 for string in column.split(sep=" "):
 
                     if "ElectricityToGrid" in string.split(sep="_") :

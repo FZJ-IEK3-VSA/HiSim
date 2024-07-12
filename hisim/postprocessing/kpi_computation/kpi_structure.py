@@ -3,6 +3,7 @@
 """Classes to provide the structure for the KPi generation."""
 from typing import Optional
 from enum import Enum
+import pandas as pd
 from dataclasses import dataclass
 from dataclass_wizard import JSONWizard
 
@@ -33,3 +34,18 @@ class KpiEntry(JSONWizard):
     value: Optional[float]
     description: Optional[str] = None
     tag: Optional[KpiTagEnumClass] = None
+
+
+class KpiHelperClass:
+
+    """Class for providing some helper fucntions for calculating KPIs."""
+    @staticmethod
+    def compute_total_energy_from_power_timeseries(
+            power_timeseries_in_watt: pd.Series, timeresolution: int
+        ) -> float:
+            """Computes the energy in kWh from a power timeseries in W."""
+            if power_timeseries_in_watt.empty:
+                return 0.0
+
+            energy_in_kilowatt_hour = float(power_timeseries_in_watt.sum() * timeresolution / 3.6e6)
+            return energy_in_kilowatt_hour

@@ -2155,9 +2155,10 @@ class KpiPreparation:
             # get KPIs of respective component
             try:
                 my_component_kpi_entry_list = my_component.get_component_kpi_entries(all_outputs=self.all_outputs, postprocessing_results=self.results)
+                if len(my_component_kpi_entry_list) != []:
+                    print("kpi generation for ", my_component.component_name, " successful.")
                 # add all KPI entries to kpi dict
                 for kpi_entry in my_component_kpi_entry_list:
-                    print(kpi_entry.name, kpi_entry.value)
                     self.kpi_collection_dict_unsorted[kpi_entry.name] = kpi_entry.to_dict()
             except Exception:
                 print("---", my_component.component_name, " does not have this method yet")

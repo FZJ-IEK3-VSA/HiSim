@@ -30,6 +30,7 @@ from utspclient.helpers.lpgdata import (
     EnergyIntensityType,
 )
 from utspclient.helpers.lpgpythonbindings import CalcOption, JsonReference
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 
 # Owned
 from hisim import component as cp
@@ -1393,3 +1394,33 @@ class UtspLpgConnector(cp.Component):
                 transformed_value = value
             transformed_data[key] = transformed_value
         return transformed_data
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        occupancy_total_electricity_consumption_in_kilowatt_hour: Optional[float] = None
+        list_of_kpi_entries: List[KpiEntry] = []
+        for index, output in enumerate(all_outputs):
+            if output.component_name == self.config.name:
+                if output.field_name == self.ElectricityOutput:
+                    occupancy_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]
+                    occupancy_total_electricity_consumption_in_kilowatt_hour = (
+                    KpiHelperClass.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
+                        timeresolution=self.my_simulation_parameters.seconds_per_timestep)
+                    )
+                    break
+
+        # make kpi entry
+        occupancy_total_electricity_consumption_entry = KpiEntry(
+            name="Residents' total electricity consumption",
+            unit="kWh",
+            value=occupancy_total_electricity_consumption_in_kilowatt_hour,
+            tag=KpiTagEnumClass.RESIDENTS,
+        )
+
+        list_of_kpi_entries = [occupancy_total_electricity_consumption_entry]
+        return list_of_kpi_entries

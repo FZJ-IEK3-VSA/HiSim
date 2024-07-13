@@ -4,7 +4,7 @@
 
 # Generic/Built-in
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 import pandas as pd
 import numpy as np
@@ -20,6 +20,7 @@ from hisim.components import controller_l1_heatpump
 
 from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 
 __authors__ = "edited Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -424,3 +425,49 @@ class ModularHeatPump(cp.Component):
         )
 
         return opex_cost_data_class
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour: Optional[float] = None
+        dhw_heat_pump_heating_energy_output_in_kilowatt_hour: Optional[float] = None
+        list_of_kpi_entries: List[KpiEntry] = []
+        for index, output in enumerate(all_outputs):
+            if output.component_name == self.component_name:
+                if output.field_name == self.ElectricityOutput:
+                    dhw_heat_pump_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]
+                    dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour = (
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=dhw_heat_pump_total_electricity_consumption_in_watt_series,
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
+                    )
+                elif output.field_name == self.ThermalPowerDelivered:
+                    dhw_heat_pump_heating_power_output_in_watt_series = postprocessing_results.iloc[:, index]
+                    dhw_heat_pump_heating_energy_output_in_kilowatt_hour = (
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=dhw_heat_pump_heating_power_output_in_watt_series,
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
+                    )
+
+        dhw_heatpump_total_electricity_consumption_entry = KpiEntry(
+            name="DHW heat pump total electricity consumption",
+            unit="kWh",
+            value=dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
+        )
+        list_of_kpi_entries.append(dhw_heatpump_total_electricity_consumption_entry)
+
+        dhw_heatpump_heating_energy_output_entry = KpiEntry(
+            name="Heating output energy of DHW heat pump",
+            unit="kWh",
+            value=dhw_heat_pump_heating_energy_output_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
+        )
+        list_of_kpi_entries.append(dhw_heatpump_heating_energy_output_entry)
+
+        return list_of_kpi_entries

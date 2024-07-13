@@ -1,11 +1,12 @@
 # clean
 
 """Classes to provide the structure for the KPi generation."""
-from typing import Optional
+from typing import Optional, Union, List, Tuple
 from enum import Enum
-import pandas as pd
 from dataclasses import dataclass
 from dataclass_wizard import JSONWizard
+import pandas as pd
+import numpy as np
 
 
 class KpiTagEnumClass(Enum):
@@ -39,13 +40,22 @@ class KpiEntry(JSONWizard):
 class KpiHelperClass:
 
     """Class for providing some helper fucntions for calculating KPIs."""
-    @staticmethod
-    def compute_total_energy_from_power_timeseries(
-            power_timeseries_in_watt: pd.Series, timeresolution: int
-        ) -> float:
-            """Computes the energy in kWh from a power timeseries in W."""
-            if power_timeseries_in_watt.empty:
-                return 0.0
 
-            energy_in_kilowatt_hour = float(power_timeseries_in_watt.sum() * timeresolution / 3.6e6)
-            return energy_in_kilowatt_hour
+    @staticmethod
+    def compute_total_energy_from_power_timeseries(power_timeseries_in_watt: pd.Series, timeresolution: int) -> float:
+        """Computes the energy in kWh from a power timeseries in W."""
+        if power_timeseries_in_watt.empty:
+            return 0.0
+
+        energy_in_kilowatt_hour = float(power_timeseries_in_watt.sum() * timeresolution / 3.6e6)
+        return energy_in_kilowatt_hour
+
+    @staticmethod
+    def calc_mean_max_min_value(list_or_pandas_series: Union[List, pd.Series]) -> Tuple[float, float, float]:
+        """Calc mean, max and min values from List or pd.Series with numpy."""
+
+        mean_value = float(np.mean(list_or_pandas_series))
+        max_value = float(np.max(list_or_pandas_series))
+        min_value = float(np.min(list_or_pandas_series))
+
+        return mean_value, max_value, min_value

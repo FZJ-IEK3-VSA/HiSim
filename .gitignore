@@ -139,6 +139,7 @@ hisim/inputs/cache
 system_setups/mypath
 system_setups/results
 system_setups/results_for_scenario_comparison
+system_setups/scenario_comparison
 system_setups/component_connections.json
 results/Results
 hisim/results

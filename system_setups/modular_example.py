@@ -282,7 +282,7 @@ def setup_function(
             my_simulation_parameters=my_simulation_parameters,
             count=count,
             ev_included=ev_included,
-            occupancy_config=my_occupancy_config,
+            my_occupancy_instance=my_occupancy,
         )
         if controllable is False:
             for car in my_cars:

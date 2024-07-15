@@ -599,6 +599,8 @@ class HeatDistribution(cp.Component):
         max_flow_temperature_in_celsius: Optional[float] = None
         max_return_temperature_in_celsius: Optional[float] = None
         max_temperature_difference_between_flow_and_return_in_celsius: Optional[float] = None
+        flow_temperature_list_in_celsius: pd.Series = pd.Series([])
+        return_temperature_list_in_celsius: pd.Series = pd.Series([])
 
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):

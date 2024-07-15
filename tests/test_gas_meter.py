@@ -3,10 +3,10 @@
 # clean
 
 import os
-import json
+# import json
 from typing import Optional
 import pytest
-import numpy as np
+# import numpy as np
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
@@ -17,15 +17,15 @@ from hisim.components import (
     gas_meter,
     generic_gas_heater,
     controller_l1_generic_gas_heater,
-    generic_heat_source,
+    # generic_heat_source,
     simple_hot_water_storage,
     heat_distribution_system,
     generic_pv_system,
 )
-from hisim import utils, loadtypes
+from hisim import utils  # , loadtypes
 
 from hisim.postprocessingoptions import PostProcessingOptions
-from hisim import log
+# from hisim import log
 
 
 # PATH and FUNC needed to build simulator, PATH is fake

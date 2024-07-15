@@ -346,11 +346,19 @@ class GasHeater(Component):
         total_gas_consumption_in_kilowatt_hour: Optional[float] = None
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.config.name and output.field_name == self.GasDemand and output.load_type == lt.LoadTypes.GAS:
-                    total_gas_consumption_in_kilowatt_hour = round(postprocessing_results.iloc[:, index].sum() * 1e-3,1)
-                    break
-        my_kpi_entry = KpiEntry(name="Gas consumption for space heating", unit="kWh", value=total_gas_consumption_in_kilowatt_hour, tag=KpiTagEnumClass.GAS_HEATER_SPACE_HEATING, description=self.component_name)
+            if (
+                output.component_name == self.config.name
+                and output.field_name == self.GasDemand
+                and output.load_type == lt.LoadTypes.GAS
+            ):
+                total_gas_consumption_in_kilowatt_hour = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 1)
+                break
+        my_kpi_entry = KpiEntry(
+            name="Gas consumption for space heating",
+            unit="kWh",
+            value=total_gas_consumption_in_kilowatt_hour,
+            tag=KpiTagEnumClass.GAS_HEATER_SPACE_HEATING,
+            description=self.component_name,
+        )
         list_of_kpi_entries.append(my_kpi_entry)
         return list_of_kpi_entries
-
-

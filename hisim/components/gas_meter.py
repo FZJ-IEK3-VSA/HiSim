@@ -21,6 +21,7 @@ from hisim.dynamic_component import (
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 
+
 @dataclass_json
 @dataclass
 class GasMeterConfig(cp.ConfigBase):
@@ -330,7 +331,11 @@ class GasMeter(DynamicComponent):
                     break
 
         total_energy_from_grid_in_kwh_entry = KpiEntry(
-            name="Total gas demand from grid", unit="kWh", value=total_energy_from_grid_in_kwh, tag=KpiTagEnumClass.GENERAL, description=self.component_name
+            name="Total gas demand from grid",
+            unit="kWh",
+            value=total_energy_from_grid_in_kwh,
+            tag=KpiTagEnumClass.GENERAL,
+            description=self.component_name,
         )
 
         list_of_kpi_entries = [total_energy_from_grid_in_kwh_entry]

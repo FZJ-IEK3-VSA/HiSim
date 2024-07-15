@@ -311,7 +311,7 @@ class GasMeter(DynamicComponent):
         opex_cost_data_class = OpexCostDataClass(
             opex_cost=opex_cost_per_simulated_period_in_euro,
             co2_footprint=co2_per_simulated_period_in_kg,
-            consumption=0,
+            consumption=self.config.total_energy_from_grid_in_kwh,
         )
 
         return opex_cost_data_class
@@ -334,11 +334,29 @@ class GasMeter(DynamicComponent):
             name="Total gas demand from grid",
             unit="kWh",
             value=total_energy_from_grid_in_kwh,
-            tag=KpiTagEnumClass.GENERAL,
+            tag=KpiTagEnumClass.GAS_METER,
             description=self.component_name,
         )
+        list_of_kpi_entries.append(total_energy_from_grid_in_kwh_entry)
+        # try to get opex costs
+        opex_costs = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)
+        opex_costs_in_euro_entry = KpiEntry(
+            name="Opex costs for gas",
+            unit="Euro",
+            value=opex_costs.opex_cost,
+            tag=KpiTagEnumClass.GAS_METER,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(opex_costs_in_euro_entry)
+        co2_footprint_in_kg_entry = KpiEntry(
+            name="CO2 footprint for gas",
+            unit="kg",
+            value=opex_costs.co2_footprint,
+            tag=KpiTagEnumClass.GAS_METER,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(co2_footprint_in_kg_entry)
 
-        list_of_kpi_entries = [total_energy_from_grid_in_kwh_entry]
         return list_of_kpi_entries
 
 

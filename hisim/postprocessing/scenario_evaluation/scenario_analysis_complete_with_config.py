@@ -66,7 +66,7 @@ class ScenarioAnalysisConfig(ConfigBase):
         )
 
 
-class ScenarioAnalysisNew:
+class ScenarioAnalysisWithConfig:
 
     """ScenarioAnalysis class which executes result data collection, processing and plotting."""
 
@@ -160,7 +160,7 @@ def main():
 
     # -------------------------------------------------------------------------------------------------------------------------------------
 
-    ScenarioAnalysisNew(scenario_analysis_config=my_config)
+    ScenarioAnalysisWithConfig(scenario_analysis_config=my_config)
 
 
 if __name__ == "__main__":

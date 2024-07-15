@@ -29,7 +29,6 @@ from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes
 from hisim.utils import HISIMPATH
 from hisim import log
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
-from hisim.postprocessingoptions import PostProcessingOptions
 
 
 class KpiTagEnumClass(Enum):
@@ -471,16 +470,28 @@ class KpiGenerator(JSONWizard):
         # go through all wrapped components and try to find electricity meter
         for wrapped_component in self.wrapped_components:
             if isinstance(wrapped_component.my_component, ElectricityMeter):
-                total_energy_from_grid_in_kwh = wrapped_component.my_component.config.total_energy_from_grid_in_kwh
-                total_energy_to_grid_in_kwh = wrapped_component.my_component.config.total_energy_to_grid_in_kwh
-
+                wrapped_electricty_meter_component = wrapped_component
                 break
+
+        if not wrapped_electricty_meter_component:
+            log.information("Could not find the Electricity Meter component.")
+            return None, None
+
+        for column in self.results.columns:
+
+            if all(x in column.split(sep=" ") for x in [wrapped_electricty_meter_component.my_component.component_name]):
+                for string in column.split(sep=" "):
+
+                    if "ElectricityToGrid" in string.split(sep="_") :
+                        total_energy_to_grid_in_kwh = (self.results[column].loc[self.results[column] > 0.0]).sum() / 1000
+
+                    if "ElectricityFromGrid" in string.split(sep="_") :
+                        total_energy_from_grid_in_kwh = (self.results[column].loc[self.results[column] > 0.0]).sum() / 1000
+
         if total_energy_from_grid_in_kwh is None and total_energy_to_grid_in_kwh is None:
             log.warning(
                 "KPI values for total energy to and from grid are None. "
                 "Please check if you have correctly initialized and connected the electricity meter in your system setup. "
-                f"Also check if you chose no. {str(PostProcessingOptions.COMPUTE_OPEX)} in your postprocessing options because this "
-                "option is responsible for writing the energy to/from grid values into the electricity meter config."
             )
         # make kpi entry
         total_energy_from_grid_in_kwh_entry = KpiEntry(
@@ -1902,7 +1913,7 @@ class KpiGenerator(JSONWizard):
                     wrapped_dhw_heat_pump_component = wrapped_component
 
             if isinstance(wrapped_component.my_component, MoreAdvancedHeatPumpHPLib):
-                if "DHWHeatPump" in wrapped_component.my_component.component_name:
+                if wrapped_component.my_component.with_domestic_hot_water_preparation:
                     wrapped_dhw_heat_pump_component = wrapped_component
 
         if wrapped_dhw_heat_pump_component is None:

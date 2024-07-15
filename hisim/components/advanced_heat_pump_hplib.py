@@ -775,6 +775,7 @@ class HeatPumpHplib(Component):
             unit="-",
             value=number_of_heat_pump_cycles,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+            description=self.component_name
         )
         list_of_kpi_entries.append(number_of_heat_pump_cycles_entry)
 
@@ -783,6 +784,7 @@ class HeatPumpHplib(Component):
             unit="-",
             value=seasonal_performance_factor,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+            description=self.component_name
         )
         list_of_kpi_entries.append(seasonal_performance_factor_entry)
 
@@ -791,6 +793,7 @@ class HeatPumpHplib(Component):
             unit="-",
             value=seasonal_energy_efficiency_ratio,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+            description=self.component_name
         )
         list_of_kpi_entries.append(seasonal_energy_efficiency_entry)
 
@@ -799,6 +802,7 @@ class HeatPumpHplib(Component):
             unit="kWh",
             value=output_heating_energy_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+            description=self.component_name
         )
         list_of_kpi_entries.append(heating_output_energy_heatpump_entry)
 
@@ -807,6 +811,7 @@ class HeatPumpHplib(Component):
             unit="kWh",
             value=output_cooling_energy_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+            description=self.component_name
         )
         list_of_kpi_entries.append(cooling_output_energy_heatpump_entry)
 
@@ -815,6 +820,7 @@ class HeatPumpHplib(Component):
             unit="kWh",
             value=electrical_energy_for_heating_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+            description=self.component_name
         )
         list_of_kpi_entries.append(electrical_input_energy_for_heating_entry)
 
@@ -823,6 +829,7 @@ class HeatPumpHplib(Component):
             unit="kWh",
             value=electrical_energy_for_cooling_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+            description=self.component_name
         )
         list_of_kpi_entries.append(electrical_input_energy_for_cooling_entry)
 
@@ -831,6 +838,7 @@ class HeatPumpHplib(Component):
             unit="kWh",
             value=total_electrical_energy_input_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+            description=self.component_name
         )
         list_of_kpi_entries.append(electrical_input_energy_total_entry)
 
@@ -839,6 +847,7 @@ class HeatPumpHplib(Component):
             unit="h",
             value=heating_time_in_hours,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+            description=self.component_name
         )
         list_of_kpi_entries.append(heating_hours_entry)
 
@@ -847,6 +856,7 @@ class HeatPumpHplib(Component):
             unit="h",
             value=cooling_time_in_hours,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+            description=self.component_name
         )
         list_of_kpi_entries.append(cooling_hours_entry)
 

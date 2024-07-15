@@ -770,6 +770,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             unit="kWh",
             value=sh_heatpump_electricity_from_grid_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+            description=self.component_name
         )
         list_of_kpi_entries.append(sh_heatpump_electricity_from_grid_entry)
         dhw_heatpump_electricity_from_grid_entry = KpiEntry(
@@ -777,6 +778,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             unit="kWh",
             value=dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
+            description=self.component_name
         )
         list_of_kpi_entries.append(dhw_heatpump_electricity_from_grid_entry)
         occupancy_electricity_from_grid_entry = KpiEntry(
@@ -784,90 +786,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             unit="kWh",
             value=occupancy_electricity_from_grid_in_kilowatt_hour,
             tag=KpiTagEnumClass.RESIDENTS,
+            description=self.component_name
         )
         list_of_kpi_entries.append(occupancy_electricity_from_grid_entry)
 
         return list_of_kpi_entries
-
-        # for column in self.results.columns:
-
-        #     if all(x in column.split(sep=" ") for x in [wrapped_ems_component.my_component.component_name]):
-        #         for string in column.split(sep=" "):
-
-        #             if "ElectricityToOrFromGridOfModularHeatPump" in string.split(
-        #                 sep="_"
-        #             ) or "ElectricityToOrFromGridOfDHWMoreAdvancedHeatPumpHPLib" in string.split(sep="_"):
-        #                 dhw_hp_electricity_from_grid_in_watt_series = self.results[column].loc[
-        #                     self.results[column] < 0.0
-        #                 ]
-        #                 dhw_heatpump_electricity_from_grid_in_kilowatt_hour = abs(
-        #                     self.compute_total_energy_from_power_timeseries(
-        #                         power_timeseries_in_watt=dhw_hp_electricity_from_grid_in_watt_series,
-        #                         timeresolution=self.simulation_parameters.seconds_per_timestep,
-        #                     )
-        #                 )
-
-        #             if "ElectricityToOrFromGridOfSHMoreAdvancedHeatPumpHPLib" in string.split(
-        #                 sep="_"
-        #             ) or "ElectricityToOrFromGridOfHeatPumpHplib" in string.split(sep="_"):
-        #                 sh_electricity_from_grid_in_watt_series = self.results[column].loc[self.results[column] < 0.0]
-        #                 sh_heatpump_electricity_from_grid_in_kilowatt_hour = abs(
-        #                     self.compute_total_energy_from_power_timeseries(
-        #                         power_timeseries_in_watt=sh_electricity_from_grid_in_watt_series,
-        #                         timeresolution=self.simulation_parameters.seconds_per_timestep,
-        #                     )
-        #                 )
-        #             if "ElectricityToOrFromGridOfUtspLpgConnector" in string.split(sep="_"):
-        #                 occupancy_electricity_from_grid_in_watt_series = self.results[column].loc[
-        #                     self.results[column] < 0.0
-        #                 ]
-
-        #                 occupancy_electricity_from_grid_in_kilowatt_hour = abs(
-        #                     self.compute_total_energy_from_power_timeseries(
-        #                         power_timeseries_in_watt=occupancy_electricity_from_grid_in_watt_series,
-        #                         timeresolution=self.simulation_parameters.seconds_per_timestep,
-        #                     )
-        #                 )
-        # if None in (
-        #     sh_heatpump_electricity_from_grid_in_kilowatt_hour,
-        #     dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
-        #     occupancy_electricity_from_grid_in_kilowatt_hour,
-        # ):
-        #     log.warning(
-        #         "Some KPI values for the energy management system are None. "
-        #         "Please check if you have correctly initialized and connected the EMS in your system setup or ignore this message."
-        #     )
-
-        # # make kpi entry
-        # sh_heatpump_electricity_from_grid_entry = KpiEntry(
-        #     name="Space heating heat pump electricity from grid",
-        #     unit="kWh",
-        #     value=sh_heatpump_electricity_from_grid_in_kilowatt_hour,
-        #     tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
-        # )
-        # dhw_heatpump_electricity_from_grid_entry = KpiEntry(
-        #     name="Domestic hot water heat pump electricity from grid",
-        #     unit="kWh",
-        #     value=dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
-        #     tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
-        # )
-        # occupancy_electricity_from_grid_entry = KpiEntry(
-        #     name="Residents' electricity consumption from grid",
-        #     unit="kWh",
-        #     value=occupancy_electricity_from_grid_in_kilowatt_hour,
-        #     tag=KpiTagEnumClass.RESIDENTS,
-        # )
-
-        # # update kpi collection dict
-        # self.kpi_collection_dict_unsorted.update(
-        #     {
-        #         sh_heatpump_electricity_from_grid_entry.name: sh_heatpump_electricity_from_grid_entry.to_dict(),
-        #         dhw_heatpump_electricity_from_grid_entry.name: dhw_heatpump_electricity_from_grid_entry.to_dict(),
-        #         occupancy_electricity_from_grid_entry.name: occupancy_electricity_from_grid_entry.to_dict(),
-        #     }
-        # )
-        # return (
-        #     sh_heatpump_electricity_from_grid_in_kilowatt_hour,
-        #     dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
-        #     occupancy_electricity_from_grid_in_kilowatt_hour,
-        # )

@@ -52,6 +52,7 @@ from hisim.units import (
 from hisim.components.configuration import PhysicsConfig
 
 from hisim.simulationparameters import SimulationParameters
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 
 __authors__ = "Jonas Hoppe"
 __copyright__ = ""
@@ -1374,6 +1375,361 @@ class MoreAdvancedHeatPumpHPLib(Component):
             self.calculation_cache[my_hash_key] = results
 
         return results
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+
+        output_heating_energy_in_kilowatt_hour: float = 0.0
+        output_cooling_energy_in_kilowatt_hour: float = 0.0
+        electrical_energy_for_heating_in_kilowatt_hour: float = 1.0
+        electrical_energy_for_cooling_in_kilowatt_hour: float = 1.0
+        number_of_heat_pump_cycles: Optional[float] = None
+        seasonal_performance_factor: Optional[float] = None
+        seasonal_energy_efficiency_ratio: Optional[float] = None
+        total_electrical_energy_input_in_kilowatt_hour: Optional[float] = None
+        heating_time_in_hours: Optional[float] = None
+        cooling_time_in_hours: Optional[float] = None
+        return_temperature_list_in_celsius: pd.Series = pd.Series([])
+        flow_temperature_list_in_celsius: pd.Series = pd.Series([])
+        dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour: Optional[float] = None
+        dhw_heat_pump_heating_energy_output_in_kilowatt_hour: Optional[float] = None
+
+        list_of_kpi_entries: List[KpiEntry] = []
+        for index, output in enumerate(all_outputs):
+            if output.component_name == self.config.name:
+                number_of_heat_pump_cycles = self.get_heatpump_cycles(
+                    output=output, index=index, postprocessing_results=postprocessing_results
+                )
+                if output.field_name == self.ThermalOutputPowerSH and output.load_type == LoadTypes.HEATING:
+                    # take only output values for heating
+                    heating_output_power_values_in_watt = postprocessing_results.iloc[:, index].loc[
+                        postprocessing_results.iloc[:, index] > 0.0
+                    ]
+                    # get energy from power
+                    output_heating_energy_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=heating_output_power_values_in_watt,
+                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    )
+
+                    # take only output values for cooling
+                    cooling_output_power_values_in_watt = postprocessing_results.iloc[:, index].loc[
+                        postprocessing_results.iloc[:, index] < 0.0
+                    ]
+                    # for cooling enery use absolute value, not negative value
+                    output_cooling_energy_in_kilowatt_hour = abs(
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=cooling_output_power_values_in_watt,
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
+                    )
+                elif output.field_name == self.ThermalOutputPowerDHW:
+                    dhw_heat_pump_heating_power_output_in_watt_series = postprocessing_results.iloc[:, index]
+                    dhw_heat_pump_heating_energy_output_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=dhw_heat_pump_heating_power_output_in_watt_series,
+                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    )
+                    dhw_heatpump_heating_energy_output_entry = KpiEntry(
+                        name="Heating output energy of DHW heat pump",
+                        unit="kWh",
+                        value=dhw_heat_pump_heating_energy_output_in_kilowatt_hour,
+                        tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
+                        description=self.component_name
+                    )
+                    list_of_kpi_entries.append(dhw_heatpump_heating_energy_output_entry)
+
+                elif output.field_name == self.ElectricalInputPowerSH:
+                    # get electrical energie values for heating
+                    electrical_energy_for_heating_in_kilowatt_hour = (
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=postprocessing_results.iloc[:, index],
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
+                    )
+                elif output.field_name == self.ElectricalInputPowerDHW:
+                    dhw_heat_pump_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]
+                    dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=dhw_heat_pump_total_electricity_consumption_in_watt_series,
+                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    )
+                    dhw_heatpump_total_electricity_consumption_entry = KpiEntry(
+                        name="DHW heat pump total electricity consumption",
+                        unit="kWh",
+                        value=dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour,
+                        tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
+                        description=self.component_name
+                    )
+                    list_of_kpi_entries.append(dhw_heatpump_total_electricity_consumption_entry)
+
+                elif output.field_name == self.ElectricalInputPowerForCooling:
+                    # get electrical energie values for cooling
+                    electrical_energy_for_cooling_in_kilowatt_hour = (
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=postprocessing_results.iloc[:, index],
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
+                    )
+
+                elif output.field_name == self.TimeOnHeating:
+                    heating_time_in_seconds = sum(postprocessing_results.iloc[:, index])
+                    heating_time_in_hours = heating_time_in_seconds / 3600
+
+                elif output.field_name == self.TimeOnCooling:
+                    cooling_time_in_seconds = sum(postprocessing_results.iloc[:, index])
+                    cooling_time_in_hours = cooling_time_in_seconds / 3600
+
+                elif output.field_name == self.TemperatureOutputSH:
+                    flow_temperature_list_in_celsius = postprocessing_results.iloc[:, index]
+
+                elif output.field_name == self.TemperatureInputSH:
+                    return_temperature_list_in_celsius = postprocessing_results.iloc[:, index]
+
+        # get flow and return temperatures
+        if not flow_temperature_list_in_celsius.empty and not return_temperature_list_in_celsius.empty:
+            list_of_kpi_entries = self.get_flow_and_return_temperatures(
+                flow_temperature_list_in_celsius=flow_temperature_list_in_celsius,
+                return_temperature_list_in_celsius=return_temperature_list_in_celsius,
+                list_of_kpi_entries=list_of_kpi_entries,
+            )
+        # calculate SPF
+        if electrical_energy_for_heating_in_kilowatt_hour != 0.0:
+            seasonal_performance_factor = (
+                output_heating_energy_in_kilowatt_hour / electrical_energy_for_heating_in_kilowatt_hour
+            )
+
+        # calculate SEER
+        if electrical_energy_for_cooling_in_kilowatt_hour != 0.0:
+            seasonal_energy_efficiency_ratio = (
+                output_cooling_energy_in_kilowatt_hour / electrical_energy_for_cooling_in_kilowatt_hour
+            )
+
+        # calculate total electricty input energy
+        total_electrical_energy_input_in_kilowatt_hour = (
+            electrical_energy_for_cooling_in_kilowatt_hour + electrical_energy_for_heating_in_kilowatt_hour
+        )
+        # make kpi entry
+        number_of_heat_pump_cycles_entry = KpiEntry(
+            name="Number of SH heat pump cycles",
+            unit="-",
+            value=number_of_heat_pump_cycles,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(number_of_heat_pump_cycles_entry)
+
+        seasonal_performance_factor_entry = KpiEntry(
+            name="Seasonal performance factor of SH heat pump",
+            unit="-",
+            value=seasonal_performance_factor,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(seasonal_performance_factor_entry)
+
+        seasonal_energy_efficiency_entry = KpiEntry(
+            name="Seasonal energy efficiency ratio of SH heat pump",
+            unit="-",
+            value=seasonal_energy_efficiency_ratio,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(seasonal_energy_efficiency_entry)
+
+        heating_output_energy_heatpump_entry = KpiEntry(
+            name="Heating output energy of SH heat pump",
+            unit="kWh",
+            value=output_heating_energy_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(heating_output_energy_heatpump_entry)
+
+        cooling_output_energy_heatpump_entry = KpiEntry(
+            name="Cooling output energy of SH heat pump",
+            unit="kWh",
+            value=output_cooling_energy_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(cooling_output_energy_heatpump_entry)
+
+        electrical_input_energy_for_heating_entry = KpiEntry(
+            name="Electrical input energy for heating of SH heat pump",
+            unit="kWh",
+            value=electrical_energy_for_heating_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(electrical_input_energy_for_heating_entry)
+
+        electrical_input_energy_for_cooling_entry = KpiEntry(
+            name="Electrical input energy for cooling of SH heat pump",
+            unit="kWh",
+            value=electrical_energy_for_cooling_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(electrical_input_energy_for_cooling_entry)
+
+        electrical_input_energy_total_entry = KpiEntry(
+            name="Total electrical input energy of SH heat pump",
+            unit="kWh",
+            value=total_electrical_energy_input_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(electrical_input_energy_total_entry)
+
+        heating_hours_entry = KpiEntry(
+            name="Heating hours of SH heat pump",
+            unit="h",
+            value=heating_time_in_hours,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(heating_hours_entry)
+
+        cooling_hours_entry = KpiEntry(
+            name="Cooling hours of SH heat pump",
+            unit="h",
+            value=cooling_time_in_hours,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(cooling_hours_entry)
+
+        return list_of_kpi_entries
+
+    # make kpi entries and append to list
+    def get_heatpump_cycles(self, output: Any, index: int, postprocessing_results: pd.DataFrame) -> float:
+        """Get the number of cycles of the heat pump for the simulated period."""
+        number_of_cycles = 0
+        if output.field_name == self.TimeOff:
+            for time_index, off_time in enumerate(postprocessing_results.iloc[:, index].values):
+                try:
+                    if off_time != 0 and postprocessing_results.iloc[:, index].values[time_index + 1] == 0:
+                        number_of_cycles = number_of_cycles + 1
+
+                except Exception:
+                    pass
+
+        return number_of_cycles
+
+    def get_flow_and_return_temperatures(
+        self,
+        flow_temperature_list_in_celsius: pd.Series,
+        return_temperature_list_in_celsius: pd.Series,
+        list_of_kpi_entries: List[KpiEntry],
+    ) -> List[KpiEntry]:
+        """Get flow and return temperatures of heat pump."""
+        # get mean, max and min values of flow and return temperatures
+        mean_flow_temperature_in_celsius: Optional[float] = None
+        mean_return_temperature_in_celsius: Optional[float] = None
+        mean_temperature_difference_between_flow_and_return_in_celsius: Optional[float] = None
+        min_flow_temperature_in_celsius: Optional[float] = None
+        min_return_temperature_in_celsius: Optional[float] = None
+        min_temperature_difference_between_flow_and_return_in_celsius: Optional[float] = None
+        max_flow_temperature_in_celsius: Optional[float] = None
+        max_return_temperature_in_celsius: Optional[float] = None
+        max_temperature_difference_between_flow_and_return_in_celsius: Optional[float] = None
+
+        temperature_diff_flow_and_return_in_celsius = (
+            flow_temperature_list_in_celsius - return_temperature_list_in_celsius
+        )
+        (
+            mean_temperature_difference_between_flow_and_return_in_celsius,
+            max_temperature_difference_between_flow_and_return_in_celsius,
+            min_temperature_difference_between_flow_and_return_in_celsius,
+        ) = KpiHelperClass.calc_mean_max_min_value(list_or_pandas_series=temperature_diff_flow_and_return_in_celsius)
+
+        (
+            mean_flow_temperature_in_celsius,
+            max_flow_temperature_in_celsius,
+            min_flow_temperature_in_celsius,
+        ) = KpiHelperClass.calc_mean_max_min_value(list_or_pandas_series=flow_temperature_list_in_celsius)
+
+        (
+            mean_return_temperature_in_celsius,
+            max_return_temperature_in_celsius,
+            min_return_temperature_in_celsius,
+        ) = KpiHelperClass.calc_mean_max_min_value(list_or_pandas_series=return_temperature_list_in_celsius)
+
+        # make kpi entries and append to list
+        mean_flow_temperature_sh_entry = KpiEntry(
+            name="Mean flow temperature of SH heat pump",
+            unit="°C",
+            value=mean_flow_temperature_in_celsius,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
+        list_of_kpi_entries.append(mean_flow_temperature_sh_entry)
+
+        mean_return_temperature_sh_entry = KpiEntry(
+            name="Mean return temperature of SH heat pump",
+            unit="°C",
+            value=mean_return_temperature_in_celsius,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
+        list_of_kpi_entries.append(mean_return_temperature_sh_entry)
+
+        mean_temperature_difference_sh_entry = KpiEntry(
+            name="Mean temperature difference of SH heat pump",
+            unit="°C",
+            value=mean_temperature_difference_between_flow_and_return_in_celsius,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
+        list_of_kpi_entries.append(mean_temperature_difference_sh_entry)
+
+        max_flow_temperature_sh_entry = KpiEntry(
+            name="Max flow temperature of SH heat pump",
+            unit="°C",
+            value=max_flow_temperature_in_celsius,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
+        list_of_kpi_entries.append(max_flow_temperature_sh_entry)
+
+        max_return_temperature_sh_entry = KpiEntry(
+            name="Max return temperature of SH heat pump",
+            unit="°C",
+            value=max_return_temperature_in_celsius,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
+        list_of_kpi_entries.append(max_return_temperature_sh_entry)
+
+        max_temperature_difference_sh_entry = KpiEntry(
+            name="Max temperature difference of SH heat pump",
+            unit="°C",
+            value=max_temperature_difference_between_flow_and_return_in_celsius,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
+        list_of_kpi_entries.append(max_temperature_difference_sh_entry)
+
+        min_flow_temperature_sh_entry = KpiEntry(
+            name="Min flow temperature of SH heat pump",
+            unit="°C",
+            value=min_flow_temperature_in_celsius,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
+        list_of_kpi_entries.append(min_flow_temperature_sh_entry)
+
+        min_return_temperature_sh_entry = KpiEntry(
+            name="Min return temperature of SH heat pump",
+            unit="°C",
+            value=min_return_temperature_in_celsius,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
+        list_of_kpi_entries.append(min_return_temperature_sh_entry)
+
+        min_temperature_difference_sh_entry = KpiEntry(
+            name="Min temperature difference of SH heat pump",
+            unit="°C",
+            value=min_temperature_difference_between_flow_and_return_in_celsius,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+        )
+        list_of_kpi_entries.append(min_temperature_difference_sh_entry)
+        return list_of_kpi_entries
 
 
 @dataclass

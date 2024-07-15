@@ -1420,6 +1420,7 @@ class UtspLpgConnector(cp.Component):
             unit="kWh",
             value=occupancy_total_electricity_consumption_in_kilowatt_hour,
             tag=KpiTagEnumClass.RESIDENTS,
+            description=self.component_name
         )
 
         list_of_kpi_entries = [occupancy_total_electricity_consumption_entry]

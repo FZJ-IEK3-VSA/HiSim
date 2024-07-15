@@ -459,6 +459,7 @@ class ModularHeatPump(cp.Component):
             unit="kWh",
             value=dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
+            description=self.component_name
         )
         list_of_kpi_entries.append(dhw_heatpump_total_electricity_consumption_entry)
 
@@ -467,6 +468,7 @@ class ModularHeatPump(cp.Component):
             unit="kWh",
             value=dhw_heat_pump_heating_energy_output_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
+            description=self.component_name
         )
         list_of_kpi_entries.append(dhw_heatpump_heating_energy_output_entry)
 

@@ -417,10 +417,10 @@ class ElectricityMeter(DynamicComponent):
                     total_energy_to_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 1)
         
         total_energy_from_grid_in_kwh_entry = KpiEntry(
-            name="Total energy from grid", unit="kWh", value=total_energy_from_grid_in_kwh, tag=KpiTagEnumClass.GENERAL
+            name="Total energy from grid", unit="kWh", value=total_energy_from_grid_in_kwh, tag=KpiTagEnumClass.GENERAL, description=self.component_name
         )
         total_energy_to_grid_in_kwh_entry = KpiEntry(
-            name="Total energy to grid", unit="kWh", value=total_energy_to_grid_in_kwh, tag=KpiTagEnumClass.GENERAL
+            name="Total energy to grid", unit="kWh", value=total_energy_to_grid_in_kwh, tag=KpiTagEnumClass.GENERAL, description=self.component_name
         )
         list_of_kpi_entries = [total_energy_from_grid_in_kwh_entry, total_energy_to_grid_in_kwh_entry]
         return list_of_kpi_entries

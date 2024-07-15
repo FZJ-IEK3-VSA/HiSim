@@ -618,6 +618,7 @@ class HeatDistribution(cp.Component):
                         unit="kWh",
                         value=thermal_output_energy_in_kilowatt_hour,
                         tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
+                        description=self.component_name
                     )
                     list_of_kpi_entries.append(thermal_output_energy_hds_entry)
 
@@ -654,6 +655,7 @@ class HeatDistribution(cp.Component):
             unit="°C",
             value=mean_flow_temperature_in_celsius,
             tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
+            description=self.component_name
         )
         list_of_kpi_entries.append(mean_flow_temperature_hds_entry)
 
@@ -662,6 +664,7 @@ class HeatDistribution(cp.Component):
             unit="°C",
             value=mean_return_temperature_in_celsius,
             tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
+            description=self.component_name
         )
         list_of_kpi_entries.append(mean_return_temperature_hds_entry)
 
@@ -670,6 +673,7 @@ class HeatDistribution(cp.Component):
             unit="°C",
             value=mean_temperature_difference_between_flow_and_return_in_celsius,
             tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
+            description=self.component_name
         )
         list_of_kpi_entries.append(mean_temperature_difference_hds_entry)
 
@@ -678,6 +682,7 @@ class HeatDistribution(cp.Component):
             unit="°C",
             value=max_flow_temperature_in_celsius,
             tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
+            description=self.component_name
         )
         list_of_kpi_entries.append(max_flow_temperature_hds_entry)
 
@@ -686,6 +691,7 @@ class HeatDistribution(cp.Component):
             unit="°C",
             value=max_return_temperature_in_celsius,
             tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
+            description=self.component_name
         )
         list_of_kpi_entries.append(max_return_temperature_hds_entry)
 
@@ -694,6 +700,7 @@ class HeatDistribution(cp.Component):
             unit="°C",
             value=max_temperature_difference_between_flow_and_return_in_celsius,
             tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
+            description=self.component_name
         )
         list_of_kpi_entries.append(max_temperature_difference_hds_entry)
 
@@ -702,6 +709,7 @@ class HeatDistribution(cp.Component):
             unit="°C",
             value=min_flow_temperature_in_celsius,
             tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
+            description=self.component_name
         )
         list_of_kpi_entries.append(min_flow_temperature_hds_entry)
 
@@ -710,6 +718,7 @@ class HeatDistribution(cp.Component):
             unit="°C",
             value=min_return_temperature_in_celsius,
             tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
+            description=self.component_name
         )
         list_of_kpi_entries.append(min_return_temperature_hds_entry)
 
@@ -718,6 +727,7 @@ class HeatDistribution(cp.Component):
             unit="°C",
             value=min_temperature_difference_between_flow_and_return_in_celsius,
             tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
+            description=self.component_name
         )
         list_of_kpi_entries.append(min_temperature_difference_hds_entry)
 

@@ -1191,7 +1191,7 @@ class Building(cp.Component):
 
         # make kpi entries and append to list
         heating_load_in_watt_entry = KpiEntry(
-            name="Building heating load", unit="W", value=heating_load_in_watt, tag=KpiTagEnumClass.BUILDING
+            name="Building heating load", unit="W", value=heating_load_in_watt, tag=KpiTagEnumClass.BUILDING, description=self.component_name
         )
         list_of_kpi_entries.append(heating_load_in_watt_entry)
 
@@ -1200,6 +1200,7 @@ class Building(cp.Component):
             unit="m2",
             value=scaled_conditioned_floor_area_in_m2,
             tag=KpiTagEnumClass.BUILDING,
+            description=self.component_name
         )
         list_of_kpi_entries.append(scaled_conditioned_floor_area_in_m2_entry)
 
@@ -1208,6 +1209,7 @@ class Building(cp.Component):
             unit="m2",
             value=scaled_rooftop_area_in_m2,
             tag=KpiTagEnumClass.BUILDING,
+            description=self.component_name
         )
         list_of_kpi_entries.append(scaled_rooftop_area_in_m2_entry)
 
@@ -1216,6 +1218,7 @@ class Building(cp.Component):
             unit="W/m2",
             value=specific_heating_load_in_watt_per_m2,
             tag=KpiTagEnumClass.BUILDING,
+            description=self.component_name
         )
         list_of_kpi_entries.append(specific_heating_load_in_watt_per_m2_entry)
 
@@ -1224,6 +1227,7 @@ class Building(cp.Component):
             unit="kWh/m2a",
             value=energy_need_for_heating_in_kilowatthour_per_m2_per_year_tabula_ref,
             tag=KpiTagEnumClass.BUILDING,
+            description=self.component_name
         )
         list_of_kpi_entries.append(specific_heat_demand_from_tabula_in_kwh_per_m2a_entry)
 
@@ -1284,6 +1288,7 @@ class Building(cp.Component):
                 unit="°C*h",
                 value=temperature_hours_of_building_being_below_heating_set_temperature,
                 tag=KpiTagEnumClass.BUILDING,
+                description=self.component_name
             )
             list_of_kpi_entries.append(temperature_hours_of_building_below_heating_set_temperature_entry)
             temperature_hours_of_building_above_cooling_set_temperature_entry = KpiEntry(
@@ -1291,6 +1296,7 @@ class Building(cp.Component):
                 unit="°C*h",
                 value=temperature_hours_of_building_being_above_cooling_set_temperature,
                 tag=KpiTagEnumClass.BUILDING,
+                description=self.component_name
             )
             list_of_kpi_entries.append(temperature_hours_of_building_above_cooling_set_temperature_entry)
             min_temperature_reached_in_celsius_entry = KpiEntry(
@@ -1298,6 +1304,7 @@ class Building(cp.Component):
                 unit="°C",
                 value=min_temperature_reached_in_celsius,
                 tag=KpiTagEnumClass.BUILDING,
+                description=self.component_name
             )
             list_of_kpi_entries.append(min_temperature_reached_in_celsius_entry)
             max_temperature_reached_in_celsius_entry = KpiEntry(
@@ -1305,6 +1312,7 @@ class Building(cp.Component):
                 unit="°C",
                 value=max_temperature_reached_in_celsius,
                 tag=KpiTagEnumClass.BUILDING,
+                description=self.component_name
             )
             list_of_kpi_entries.append(max_temperature_reached_in_celsius_entry)
         return list_of_kpi_entries
@@ -1331,6 +1339,7 @@ class Building(cp.Component):
                 unit="kWh",
                 value=energy_loss_from_transmission_in_kilowatt_hour,
                 tag=KpiTagEnumClass.BUILDING,
+                description=self.component_name
             )
             list_of_kpi_entries.append(energy_loss_from_transmission_entry)
 
@@ -1346,6 +1355,7 @@ class Building(cp.Component):
                 unit="kWh",
                 value=energy_loss_from_ventilation_in_kilowatt_hour,
                 tag=KpiTagEnumClass.BUILDING,
+                description=self.component_name
             )
             list_of_kpi_entries.append(energy_loss_from_ventilation_entry)
 
@@ -1360,6 +1370,7 @@ class Building(cp.Component):
                 unit="kWh",
                 value=energy_gains_from_solar_in_kilowatt_hour,
                 tag=KpiTagEnumClass.BUILDING,
+                description=self.component_name
             )
             list_of_kpi_entries.append(energy_gains_from_solar_entry)
 
@@ -1374,6 +1385,7 @@ class Building(cp.Component):
                 unit="kWh",
                 value=energy_gains_from_internal_in_kilowatt_hour,
                 tag=KpiTagEnumClass.BUILDING,
+                description=self.component_name
             )
             list_of_kpi_entries.append(energy_gains_from_internal_entry)
 
@@ -1390,6 +1402,7 @@ class Building(cp.Component):
                 unit="kWh",
                 value=energy_demand_calculated_based_on_tabula_in_kilowatt_hour,
                 tag=KpiTagEnumClass.BUILDING,
+                description=self.component_name
             )
             list_of_kpi_entries.append(heat_demand_calculated_entry)
 

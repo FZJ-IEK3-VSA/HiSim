@@ -310,35 +310,6 @@ class KpiPreparation:
             battery_losses_in_kilowatt_hour,
         )
 
-    def compute_autarky_according_to_solar_htw_berlin(
-        self,
-        relative_electricty_demand_in_percent: Optional[float],
-    ) -> None:
-        """Return the autarky rate according to solar htw berlin.
-
-        https://solar.htw-berlin.de/wp-content/uploads/WENIGER-2017-Vergleich-verschiedener-Kennzahlen-zur-Bewertung-von-PV-Batteriesystemen.pdf.
-        """
-        if relative_electricty_demand_in_percent is None:
-            autraky_rate_in_percent = None
-        else:
-            autraky_rate_in_percent = 100 - relative_electricty_demand_in_percent
-            if autraky_rate_in_percent > 100:
-                raise ValueError(
-                    "The autarky rate should not be over 100 %. Something is wrong here. Please check your code. "
-                    f"The realtive electricity demand is {relative_electricty_demand_in_percent} %. "
-                )
-
-        # make kpi entry
-        autarky_rate_entry = KpiEntry(
-            name="Autarky rate according to solar htw berlin",
-            unit="%",
-            value=autraky_rate_in_percent,
-            tag=KpiTagEnumClass.GENERAL,
-        )
-
-        # update kpi collection dict
-        self.kpi_collection_dict_unsorted.update({autarky_rate_entry.name: autarky_rate_entry.to_dict()})
-
     def get_electricity_to_and_from_grid_from_electricty_meter(self) -> Tuple[Optional[float], Optional[float]]:
         """Get electricity to and from grid from electricity meter."""
         from hisim.components.electricity_meter import ElectricityMeter
@@ -432,44 +403,6 @@ class KpiPreparation:
 
         # update kpi collection dict
         self.kpi_collection_dict_unsorted.update({ratio_in_percent_entry.name: ratio_in_percent_entry.to_dict()})
-
-    def compute_self_consumption_rate_according_to_solar_htw_berlin(
-        self,
-        total_electricity_production_in_kilowatt_hour: float,
-        electricity_to_grid_in_kilowatt_hour: Optional[float],
-    ) -> None:
-        """Return self-consumption according to solar htw berlin.
-
-        https://solar.htw-berlin.de/wp-content/uploads/WENIGER-2017-Vergleich-verschiedener-Kennzahlen-zur-Bewertung-von-PV-Batteriesystemen.pdf.
-        https://academy.dualsun.com/hc/en-us/articles/360018456939-How-is-the-self-consumption-rate-calculated-on-MyDualSun.
-        """
-        if electricity_to_grid_in_kilowatt_hour is None or total_electricity_production_in_kilowatt_hour == 0:
-            self_consumption_rate_in_percent = None
-        else:
-            self_consumption_rate_in_percent = (
-                (total_electricity_production_in_kilowatt_hour - electricity_to_grid_in_kilowatt_hour)
-                / total_electricity_production_in_kilowatt_hour
-                * 100
-            )
-            if self_consumption_rate_in_percent > 100:
-                raise ValueError(
-                    "The self-consumption rate should not be over 100 %. Something is wrong here. Please check your code."
-                    f"Electricity to grid {electricity_to_grid_in_kilowatt_hour} kWh, "
-                    f"total electricity production {total_electricity_production_in_kilowatt_hour} kWh."
-                )
-
-        # make kpi entry
-        self_consumption_rate_entry = KpiEntry(
-            name="Self-consumption rate according to solar htw berlin",
-            unit="%",
-            value=self_consumption_rate_in_percent,
-            tag=KpiTagEnumClass.GENERAL,
-        )
-
-        # update kpi collection dict
-        self.kpi_collection_dict_unsorted.update(
-            {self_consumption_rate_entry.name: self_consumption_rate_entry.to_dict()}
-        )
 
     def read_in_fuel_costs(self) -> pd.DataFrame:
         """Reads data for costs and co2 emissions of fuels from csv."""

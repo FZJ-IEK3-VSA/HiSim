@@ -1152,15 +1152,19 @@ class Building(cp.Component):
         for index, output in enumerate(all_outputs):
             if output.component_name == self.config.name:
                 list_of_kpi_entries = self.get_building_kpis_from_outputs(
-                    output=output, index=index, postprocessing_results=postprocessing_results,
-                    list_of_kpi_entries=list_of_kpi_entries
+                    output=output,
+                    index=index,
+                    postprocessing_results=postprocessing_results,
+                    list_of_kpi_entries=list_of_kpi_entries,
                 )
                 list_of_kpi_entries = self.get_building_kpis_from_building_information(
                     list_of_kpi_entries=list_of_kpi_entries
                 )
                 list_of_kpi_entries = self.get_building_temperature_deviation_from_set_temperatures(
-                    output=output, index=index, postprocessing_results=postprocessing_results,
-                    list_of_kpi_entries=list_of_kpi_entries
+                    output=output,
+                    index=index,
+                    postprocessing_results=postprocessing_results,
+                    list_of_kpi_entries=list_of_kpi_entries,
                 )
 
         return list_of_kpi_entries
@@ -1241,7 +1245,6 @@ class Building(cp.Component):
         temperature_hours_of_building_being_above_cooling_set_temperature = None
         min_temperature_reached_in_celsius = None
         max_temperature_reached_in_celsius = None
-
         if output.field_name == self.TemperatureIndoorAir:
             indoor_temperatures_in_celsius = postprocessing_results.iloc[:, index]
             for temperature in indoor_temperatures_in_celsius:
@@ -1275,35 +1278,35 @@ class Building(cp.Component):
             min_temperature_reached_in_celsius = float(min(indoor_temperatures_in_celsius.values))
             max_temperature_reached_in_celsius = float(max(indoor_temperatures_in_celsius.values))
 
-        # make kpi entries and append to list
-        temperature_hours_of_building_below_heating_set_temperature_entry = KpiEntry(
-            name=f"Temperature deviation of building indoor air temperature being below set temperature {self.set_heating_temperature_in_celsius} Celsius",
-            unit="°C*h",
-            value=temperature_hours_of_building_being_below_heating_set_temperature,
-            tag=KpiTagEnumClass.BUILDING,
-        )
-        list_of_kpi_entries.append(temperature_hours_of_building_below_heating_set_temperature_entry)
-        temperature_hours_of_building_above_cooling_set_temperature_entry = KpiEntry(
-            name=f"Temperature deviation of building indoor air temperature being above set temperature {self.set_cooling_temperature_in_celsius} Celsius",
-            unit="°C*h",
-            value=temperature_hours_of_building_being_above_cooling_set_temperature,
-            tag=KpiTagEnumClass.BUILDING,
-        )
-        list_of_kpi_entries.append(temperature_hours_of_building_above_cooling_set_temperature_entry)
-        min_temperature_reached_in_celsius_entry = KpiEntry(
-            name="Minimum building indoor air temperature reached",
-            unit="°C",
-            value=min_temperature_reached_in_celsius,
-            tag=KpiTagEnumClass.BUILDING,
-        )
-        list_of_kpi_entries.append(min_temperature_reached_in_celsius_entry)
-        max_temperature_reached_in_celsius_entry = KpiEntry(
-            name="Maximum building indoor air temperature reached",
-            unit="°C",
-            value=max_temperature_reached_in_celsius,
-            tag=KpiTagEnumClass.BUILDING,
-        )
-        list_of_kpi_entries.append(max_temperature_reached_in_celsius_entry)
+            # make kpi entries and append to list
+            temperature_hours_of_building_below_heating_set_temperature_entry = KpiEntry(
+                name=f"Temperature deviation of building indoor air temperature being below set temperature {self.set_heating_temperature_in_celsius} Celsius",
+                unit="°C*h",
+                value=temperature_hours_of_building_being_below_heating_set_temperature,
+                tag=KpiTagEnumClass.BUILDING,
+            )
+            list_of_kpi_entries.append(temperature_hours_of_building_below_heating_set_temperature_entry)
+            temperature_hours_of_building_above_cooling_set_temperature_entry = KpiEntry(
+                name=f"Temperature deviation of building indoor air temperature being above set temperature {self.set_cooling_temperature_in_celsius} Celsius",
+                unit="°C*h",
+                value=temperature_hours_of_building_being_above_cooling_set_temperature,
+                tag=KpiTagEnumClass.BUILDING,
+            )
+            list_of_kpi_entries.append(temperature_hours_of_building_above_cooling_set_temperature_entry)
+            min_temperature_reached_in_celsius_entry = KpiEntry(
+                name="Minimum building indoor air temperature reached",
+                unit="°C",
+                value=min_temperature_reached_in_celsius,
+                tag=KpiTagEnumClass.BUILDING,
+            )
+            list_of_kpi_entries.append(min_temperature_reached_in_celsius_entry)
+            max_temperature_reached_in_celsius_entry = KpiEntry(
+                name="Maximum building indoor air temperature reached",
+                unit="°C",
+                value=max_temperature_reached_in_celsius,
+                tag=KpiTagEnumClass.BUILDING,
+            )
+            list_of_kpi_entries.append(max_temperature_reached_in_celsius_entry)
         return list_of_kpi_entries
 
     def get_building_kpis_from_outputs(

@@ -117,18 +117,27 @@ class KpiPreparation:
         """Compute electricity consumption and production and battery kpis."""
 
         # sum consumption and production over time
-        total_electricity_consumption_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
-            power_timeseries_in_watt=result_dataframe["total_consumption"],
-            timeresolution=self.simulation_parameters.seconds_per_timestep,
+        total_electricity_consumption_in_kilowatt_hour = round(
+            self.compute_total_energy_from_power_timeseries(
+                power_timeseries_in_watt=result_dataframe["total_consumption"],
+                timeresolution=self.simulation_parameters.seconds_per_timestep,
+            ),
+            1,
         )
 
-        total_electricity_production_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
-            power_timeseries_in_watt=result_dataframe["total_production"],
-            timeresolution=self.simulation_parameters.seconds_per_timestep,
+        total_electricity_production_in_kilowatt_hour = round(
+            self.compute_total_energy_from_power_timeseries(
+                power_timeseries_in_watt=result_dataframe["total_production"],
+                timeresolution=self.simulation_parameters.seconds_per_timestep,
+            ),
+            1,
         )
-        pv_production_in_kilowatt_hour = self.compute_total_energy_from_power_timeseries(
-            power_timeseries_in_watt=result_dataframe["pv_production"],
-            timeresolution=self.simulation_parameters.seconds_per_timestep,
+        pv_production_in_kilowatt_hour = round(
+            self.compute_total_energy_from_power_timeseries(
+                power_timeseries_in_watt=result_dataframe["pv_production"],
+                timeresolution=self.simulation_parameters.seconds_per_timestep,
+            ),
+            1,
         )
 
         # compute battery kpis
@@ -317,7 +326,10 @@ class KpiPreparation:
         total_energy_from_grid_in_kwh: Optional[float] = None
         total_energy_to_grid_in_kwh: Optional[float] = None
         for kpi_entry in self.kpi_collection_dict_unsorted.values():
-            if isinstance(kpi_entry["description"], str) and ElectricityMeter.get_classname() in kpi_entry["description"]:
+            if (
+                isinstance(kpi_entry["description"], str)
+                and ElectricityMeter.get_classname() in kpi_entry["description"]
+            ):
 
                 if kpi_entry["name"] == "Total energy from grid" and kpi_entry["unit"] == "kWh":
                     total_energy_from_grid_in_kwh = kpi_entry["value"]
@@ -338,8 +350,8 @@ class KpiPreparation:
             relative_electricity_demand_from_grid_in_percent = None
         else:
             relative_electricity_demand_from_grid_in_percent = (
-                round(electricity_from_grid_in_kilowatt_hour, 2)
-                / round(total_electricity_consumption_in_kilowatt_hour, 2)
+                round(electricity_from_grid_in_kilowatt_hour, 1)
+                / round(total_electricity_consumption_in_kilowatt_hour, 1)
                 * 100
             )
             if relative_electricity_demand_from_grid_in_percent > 100:
@@ -364,7 +376,8 @@ class KpiPreparation:
         return relative_electricity_demand_from_grid_in_percent
 
     def compute_autarky_according_to_solar_htw_berlin(
-        self, relative_electricty_demand_in_percent: Optional[float],
+        self,
+        relative_electricty_demand_in_percent: Optional[float],
     ) -> None:
         """Return the autarky rate according to solar htw berlin.
 

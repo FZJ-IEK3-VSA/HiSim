@@ -410,12 +410,12 @@ class Component:
 
     def get_component_kpi_entries(
         self,
-        all_outputs: List,
-        postprocessing_results: pd.DataFrame,
+        all_outputs: List,  # pylint: disable=unused-argument
+        postprocessing_results: pd.DataFrame,  # pylint: disable=unused-argument
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
-        # raise NotImplementedError("Subclasses must implement this method")
-        pass
+        # if the method is not implemented in the component return an empty list
+        return []
 
     def calc_maintenance_cost(self) -> float:
         """Calc maintenance_cost per simulated period as share of capex of component."""

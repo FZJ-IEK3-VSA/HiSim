@@ -69,25 +69,25 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             electricity_consumption_in_kilowatt_hour=total_electricity_consumption_in_kilowatt_hour,
             electricity_production_in_kilowatt_hour=total_electricity_production_in_kilowatt_hour,
         )
-        # # get electricity to and from grid
-        # (
-        #     total_electricity_from_grid_in_kwh,
-        #     total_electricity_to_grid_in_kwh,
-        # ) = self.get_electricity_to_and_from_grid_from_electricty_meter()
-        # # get relative electricity demand
-        # relative_electricity_demand_from_grid_in_percent = self.compute_relative_electricity_demand(
-        #     total_electricity_consumption_in_kilowatt_hour=total_electricity_consumption_in_kilowatt_hour,
-        #     electricity_from_grid_in_kilowatt_hour=total_electricity_from_grid_in_kwh,
-        # )
-        # # get self-consumption rate according to solar htw berlin
-        # self.compute_self_consumption_rate_according_to_solar_htw_berlin(
-        #     total_electricity_production_in_kilowatt_hour=total_electricity_production_in_kilowatt_hour,
-        #     electricity_to_grid_in_kilowatt_hour=total_electricity_to_grid_in_kwh,
-        # )
-        # # get autarky rate according to solar htw berlin
-        # self.compute_autarky_according_to_solar_htw_berlin(
-        #     relative_electricty_demand_in_percent=relative_electricity_demand_from_grid_in_percent
-        # )
+        # get electricity to and from grid
+        (
+            total_electricity_from_grid_in_kwh,
+            total_electricity_to_grid_in_kwh,
+        ) = self.get_electricity_to_and_from_grid_from_electricty_meter()
+        # get relative electricity demand
+        relative_electricity_demand_from_grid_in_percent = self.compute_relative_electricity_demand(
+            total_electricity_consumption_in_kilowatt_hour=total_electricity_consumption_in_kilowatt_hour,
+            electricity_from_grid_in_kilowatt_hour=total_electricity_from_grid_in_kwh,
+        )
+        # get self-consumption rate according to solar htw berlin
+        self.compute_self_consumption_rate_according_to_solar_htw_berlin(
+            total_electricity_production_in_kilowatt_hour=total_electricity_production_in_kilowatt_hour,
+            electricity_to_grid_in_kilowatt_hour=total_electricity_to_grid_in_kwh,
+        )
+        # get autarky rate according to solar htw berlin
+        self.compute_autarky_according_to_solar_htw_berlin(
+            relative_electricty_demand_in_percent=relative_electricity_demand_from_grid_in_percent
+        )
 
         # get energy prices and co2 emissions
         self.compute_energy_prices_and_co2_emission(
@@ -101,37 +101,6 @@ class KpiGenerator(JSONWizard, KpiPreparation):
         )
         # get capex and opex costs
         self.read_opex_and_capex_costs_from_results()
-
-        # # get building performance indicators
-        # building_conditioned_floor_area_in_m2 = self.get_building_kpis()
-
-        # get heat pump grid consumption from energy management system kpis
-        # (
-        #     sh_heatpump_electricity_from_grid_in_kilowatt_hour,
-        #     dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
-        #     occupancy_electricity_from_grid_in_kilowatt_hour,
-        # ) = self.get_grid_consumptions_of_heat_pumps_via_energy_management_kpis()
-
-        # # get space heating heat pump performance indicators
-        # self.get_space_heating_heat_pump_kpis(
-        #     building_conditioned_floor_area_in_m2=building_conditioned_floor_area_in_m2,
-        #     sh_heat_pump_electricity_consumption_from_grid_in_kilowatt_hour=sh_heatpump_electricity_from_grid_in_kilowatt_hour,
-        #     total_electricity_consumption_in_kilowatt_hour=total_electricity_consumption_in_kilowatt_hour,
-        #     total_electricity_consumption_from_grid_in_kilowatt_hour=total_electricity_from_grid_in_kwh,
-        # )
-        # # get domestic hot water heat pump kpis from modular or more advanced heat pump
-        # self.get_dhw_heat_pump_kpis(
-        #     dhw_heat_pump_electricity_consumption_from_grid_in_kilowatt_hour=dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
-        #     total_electricity_consumption_in_kilowatt_hour=total_electricity_consumption_in_kilowatt_hour,
-        #     total_electricity_consumption_from_grid_in_kilowatt_hour=total_electricity_from_grid_in_kwh,
-        # )
-
-        # # get occupancy electrictiy kpis
-        # self.get_occupancy_electricity_kpis(
-        #     total_electricity_consumption_from_grid_in_kilowatt_hour=total_electricity_from_grid_in_kwh,
-        #     total_electricity_consumption_in_kilowatt_hour=total_electricity_consumption_in_kilowatt_hour,
-        #     occupancy_electricity_from_grid_in_kilowatt_hour=occupancy_electricity_from_grid_in_kilowatt_hour,
-        # )
 
     def return_table_for_report(self):
         """Return a table with all kpis for the report."""

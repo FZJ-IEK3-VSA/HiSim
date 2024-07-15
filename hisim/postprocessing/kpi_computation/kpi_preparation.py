@@ -339,6 +339,86 @@ class KpiPreparation:
         # update kpi collection dict
         self.kpi_collection_dict_unsorted.update({autarky_rate_entry.name: autarky_rate_entry.to_dict()})
 
+    def get_electricity_to_and_from_grid_from_electricty_meter(self) -> Tuple[Optional[float], Optional[float]]:
+        """Get electricity to and from grid from electricity meter."""
+        from hisim.components.electricity_meter import ElectricityMeter
+        total_energy_from_grid_in_kwh: Optional[float] = None
+        total_energy_to_grid_in_kwh: Optional[float] = None
+        for kpi_entry in self.kpi_collection_dict_unsorted.values():
+            if isinstance(kpi_entry["description"], str) and ElectricityMeter.get_classname() in kpi_entry["description"]:
+
+                if kpi_entry["name"] == "Total energy from grid" and kpi_entry["unit"] == "kWh":
+                    total_energy_from_grid_in_kwh = kpi_entry["value"]
+                elif kpi_entry["name"] == "Total energy to grid" and kpi_entry["unit"] == "kWh":
+                    total_energy_to_grid_in_kwh = kpi_entry["value"]
+            else:
+                continue
+
+        return total_energy_from_grid_in_kwh, total_energy_to_grid_in_kwh
+
+    def compute_relative_electricity_demand(
+        self,
+        total_electricity_consumption_in_kilowatt_hour: float,
+        electricity_from_grid_in_kilowatt_hour: Optional[float],
+    ) -> Optional[float]:
+        """Return the relative electricity demand."""
+        if electricity_from_grid_in_kilowatt_hour is None:
+            relative_electricity_demand_from_grid_in_percent = None
+        else:
+            relative_electricity_demand_from_grid_in_percent = (
+                round(electricity_from_grid_in_kilowatt_hour, 2)
+                / round(total_electricity_consumption_in_kilowatt_hour, 2)
+                * 100
+            )
+            if relative_electricity_demand_from_grid_in_percent > 100:
+                raise ValueError(
+                    "The relative elecricity demand should not be over 100 %. Something is wrong here. Please check your code."
+                    f"Electricity from grid {electricity_from_grid_in_kilowatt_hour} kWh, "
+                    f"total electricity consumption {total_electricity_consumption_in_kilowatt_hour} kWh."
+                )
+
+        # make kpi entry
+        relative_electricity_demand_entry = KpiEntry(
+            name="Relative electricity demand from grid",
+            unit="%",
+            value=relative_electricity_demand_from_grid_in_percent,
+            tag=KpiTagEnumClass.GENERAL,
+        )
+
+        # update kpi collection dict
+        self.kpi_collection_dict_unsorted.update(
+            {relative_electricity_demand_entry.name: relative_electricity_demand_entry.to_dict()}
+        )
+        return relative_electricity_demand_from_grid_in_percent
+
+    def compute_autarky_according_to_solar_htw_berlin(
+        self, relative_electricty_demand_in_percent: Optional[float],
+    ) -> None:
+        """Return the autarky rate according to solar htw berlin.
+
+        https://solar.htw-berlin.de/wp-content/uploads/WENIGER-2017-Vergleich-verschiedener-Kennzahlen-zur-Bewertung-von-PV-Batteriesystemen.pdf.
+        """
+        if relative_electricty_demand_in_percent is None:
+            autraky_rate_in_percent = None
+        else:
+            autraky_rate_in_percent = 100 - relative_electricty_demand_in_percent
+            if autraky_rate_in_percent > 100:
+                raise ValueError(
+                    "The autarky rate should not be over 100 %. Something is wrong here. Please check your code. "
+                    f"The realtive electricity demand is {relative_electricty_demand_in_percent} %. "
+                )
+
+        # make kpi entry
+        autarky_rate_entry = KpiEntry(
+            name="Autarky rate according to solar htw berlin",
+            unit="%",
+            value=autraky_rate_in_percent,
+            tag=KpiTagEnumClass.GENERAL,
+        )
+
+        # update kpi collection dict
+        self.kpi_collection_dict_unsorted.update({autarky_rate_entry.name: autarky_rate_entry.to_dict()})
+
     def compute_ratio_between_two_values_and_set_as_kpi(
         self, denominator_value: float, numerator_value: float, kpi_name: str
     ) -> None:

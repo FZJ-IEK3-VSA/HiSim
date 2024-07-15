@@ -341,7 +341,7 @@ class GasMeter(DynamicComponent):
         # try to get opex costs
         opex_costs = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)
         opex_costs_in_euro_entry = KpiEntry(
-            name="Opex costs for gas",
+            name="Opex costs of gas consumption",
             unit="Euro",
             value=opex_costs.opex_cost,
             tag=KpiTagEnumClass.GAS_METER,
@@ -349,7 +349,7 @@ class GasMeter(DynamicComponent):
         )
         list_of_kpi_entries.append(opex_costs_in_euro_entry)
         co2_footprint_in_kg_entry = KpiEntry(
-            name="CO2 footprint for gas",
+            name="CO2 footprint of gas consumption",
             unit="kg",
             value=opex_costs.co2_footprint,
             tag=KpiTagEnumClass.GAS_METER,

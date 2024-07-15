@@ -24,6 +24,7 @@ class KpiTagEnumClass(Enum):
     GAS_HEATER_SPACE_HEATING = "Gas Heater For Space Heating"
     GAS_HEATER_DOMESTIC_HOT_WATER = "Gas Heater For Domestic Hot Water"
     GAS_METER = "Gas Meter"
+    ELECTRICITY_METER = "Electricity Meter"
 
 
 @dataclass

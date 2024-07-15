@@ -15,6 +15,7 @@ from hisim.component_wrapper import ComponentWrapper
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes
 from hisim.utils import HISIMPATH
 from hisim import log
+        from hisim.components.electricity_meter import ElectricityMeter
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
 
@@ -312,7 +313,7 @@ class KpiPreparation:
 
     def get_electricity_to_and_from_grid_from_electricty_meter(self) -> Tuple[Optional[float], Optional[float]]:
         """Get electricity to and from grid from electricity meter."""
-        from hisim.components.electricity_meter import ElectricityMeter
+
         total_energy_from_grid_in_kwh: Optional[float] = None
         total_energy_to_grid_in_kwh: Optional[float] = None
         for kpi_entry in self.kpi_collection_dict_unsorted.values():

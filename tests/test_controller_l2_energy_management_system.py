@@ -297,8 +297,8 @@ def test_house(
 
     # Get general KPI values
     total_consumption_kpi_in_kilowatt_hour = jsondata["General"]["Total electricity consumption"].get("value")
-    electricity_from_grid_kpi_in_kilowatt_hour = jsondata["General"]["Total energy from grid"].get("value")
-    electricity_to_grid_kpi_in_kilowatt_hour = jsondata["General"]["Total energy to grid"].get("value")
+    electricity_from_grid_kpi_in_kilowatt_hour = jsondata["Electricity Meter"]["Total energy from grid"].get("value")
+    electricity_to_grid_kpi_in_kilowatt_hour = jsondata["Electricity Meter"]["Total energy to grid"].get("value")
     other_kpi_grid_injection_in_kilowatt_hour = jsondata["General"]["Grid injection"].get("value")
 
     # Get battery KPI values

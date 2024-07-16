@@ -18,7 +18,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
-
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
 # Package
 
 
@@ -407,6 +407,15 @@ class Component:
         :rtype: Tuple[float,float, float]
         """
         return 0, 0, 1
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,  # pylint: disable=unused-argument
+        postprocessing_results: pd.DataFrame,  # pylint: disable=unused-argument
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        # if the method is not implemented in the component return an empty list
+        return []
 
     def calc_maintenance_cost(self) -> float:
         """Calc maintenance_cost per simulated period as share of capex of component."""

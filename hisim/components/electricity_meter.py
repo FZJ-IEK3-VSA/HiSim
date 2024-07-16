@@ -2,7 +2,7 @@
 
 # clean
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -19,6 +19,7 @@ from hisim.dynamic_component import (
     DynamicComponentConnection,
 )
 from hisim.simulationparameters import SimulationParameters
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 
 
 @dataclass_json
@@ -395,10 +396,65 @@ class ElectricityMeter(DynamicComponent):
         opex_cost_data_class = OpexCostDataClass(
             opex_cost=opex_cost_per_simulated_period_in_euro,
             co2_footprint=co2_per_simulated_period_in_kg,
-            consumption=0,
+            consumption=self.config.total_energy_from_grid_in_kwh,
         )
 
         return opex_cost_data_class
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        total_energy_from_grid_in_kwh: Optional[float] = None
+        total_energy_to_grid_in_kwh: Optional[float] = None
+        list_of_kpi_entries: List[KpiEntry] = []
+        for index, output in enumerate(all_outputs):
+            if output.component_name == self.config.name and output.load_type == lt.LoadTypes.ELECTRICITY:
+                if output.field_name == self.ElectricityFromGrid:
+                    total_energy_from_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 1)
+                elif output.field_name == self.ElectricityToGrid:
+                    total_energy_to_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 1)
+
+        total_energy_from_grid_in_kwh_entry = KpiEntry(
+            name="Total energy from grid",
+            unit="kWh",
+            value=total_energy_from_grid_in_kwh,
+            tag=KpiTagEnumClass.ELECTRICITY_METER,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(total_energy_from_grid_in_kwh_entry)
+
+        total_energy_to_grid_in_kwh_entry = KpiEntry(
+            name="Total energy to grid",
+            unit="kWh",
+            value=total_energy_to_grid_in_kwh,
+            tag=KpiTagEnumClass.ELECTRICITY_METER,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(total_energy_to_grid_in_kwh_entry)
+
+        # get opex costs
+        opex_costs = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)
+        opex_costs_in_euro_entry = KpiEntry(
+            name="Opex costs of electricity consumption",
+            unit="Euro",
+            value=opex_costs.opex_cost,
+            tag=KpiTagEnumClass.ELECTRICITY_METER,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(opex_costs_in_euro_entry)
+        co2_footprint_in_kg_entry = KpiEntry(
+            name="CO2 footprint of electricity consumption",
+            unit="kg",
+            value=opex_costs.co2_footprint,
+            tag=KpiTagEnumClass.ELECTRICITY_METER,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(co2_footprint_in_kg_entry)
+
+        return list_of_kpi_entries
 
 
 @dataclass

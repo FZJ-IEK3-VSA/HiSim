@@ -29,7 +29,7 @@ def test_simple_bucket_boiler_state():
     )
     boiler_config.volume = 200
     heater_config = (
-        generic_heat_source.HeatSourceConfig.get_default_config_waterheating()
+        generic_heat_source.HeatSourceConfig.get_default_config_waterheating_with_district_heating()
     )
 
     # definition of outputs

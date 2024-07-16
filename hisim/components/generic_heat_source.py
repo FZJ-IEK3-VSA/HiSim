@@ -3,10 +3,12 @@
 # clean
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
+import importlib
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 from dataclasses_json import dataclass_json
+import pandas as pd
 
 # Import modules from HiSim
 from hisim import component as cp
@@ -14,6 +16,8 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.components import controller_l1_heatpump
 from hisim.simulationparameters import SimulationParameters
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
+from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -63,7 +67,7 @@ class HeatSourceConfig(cp.ConfigBase):
         return config
 
     @classmethod
-    def get_default_config_waterheating(cls) -> "HeatSourceConfig":
+    def get_default_config_waterheating_with_district_heating(cls) -> "HeatSourceConfig":
         """Returns default configuration of a Heat Source used for water heating (DHW)."""
         config = HeatSourceConfig(
             name="DHWHeatSource",
@@ -72,6 +76,45 @@ class HeatSourceConfig(cp.ConfigBase):
             power_th=3000.0,
             water_vs_heating=lt.InandOutputType.WATER_HEATING,
             efficiency=1.0,
+        )
+        return config
+
+    @classmethod
+    def get_default_config_waterheating_with_gas(
+        cls,
+        max_warm_water_demand_in_liter: float,
+        scaling_factor_according_to_number_of_apartments: float,
+        seconds_per_timestep: int,
+    ) -> "HeatSourceConfig":
+        """Returns default configuration of a Heat Source used for water heating (DHW)."""
+        # use importlib for importing the other component in order to avoid circular-import errors
+
+        component_module_name = "hisim.modular_household.component_connections"
+        component_module = importlib.import_module(name=component_module_name)
+        get_heating_system_efficiency = getattr(component_module, "get_heating_system_efficiency")
+        thermal_power_in_watt = (
+            max_warm_water_demand_in_liter
+            * (4180 / 3600)
+            * 0.5
+            * (3600 / seconds_per_timestep)
+            * (
+                HouseholdWarmWaterDemandConfig.ww_temperature_demand
+                - HouseholdWarmWaterDemandConfig.temperature_difference_hot
+                - HouseholdWarmWaterDemandConfig.freshwater_temperature
+            )
+            * scaling_factor_according_to_number_of_apartments
+        )
+        efficiency = get_heating_system_efficiency(
+            heating_system_installed=lt.HeatingSystems.GAS_HEATING,
+            water_vs_heating=lt.InandOutputType.HEATING,
+        )
+        config = HeatSourceConfig(
+            name="DHWHeatSource",
+            source_weight=1,
+            fuel=lt.LoadTypes.GAS,
+            power_th=thermal_power_in_watt,
+            water_vs_heating=lt.InandOutputType.WATER_HEATING,
+            efficiency=efficiency,
         )
         return config
 
@@ -242,3 +285,27 @@ class HeatSource(cp.Component):
                 self.fuel_delivered_channel,
                 power_modifier * self.config.power_th * self.my_simulation_parameters.seconds_per_timestep / 3.6e3,
             )
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        gas_consumption_in_kilowatt_hour: Optional[float] = None
+        list_of_kpi_entries: List[KpiEntry] = []
+        for index, output in enumerate(all_outputs):
+            if output.component_name == self.component_name:
+                if output.field_name == self.FuelDelivered and output.load_type == lt.LoadTypes.GAS:
+                    gas_consumption_in_kilowatt_hour = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 1)
+                    break
+        my_kpi_entry = KpiEntry(
+            name="Gas consumption for domestic hot water",
+            unit="kWh",
+            value=gas_consumption_in_kilowatt_hour,
+            tag=KpiTagEnumClass.GAS_HEATER_DOMESTIC_HOT_WATER,
+            description=self.component_name,
+        )
+
+        list_of_kpi_entries.append(my_kpi_entry)
+        return list_of_kpi_entries

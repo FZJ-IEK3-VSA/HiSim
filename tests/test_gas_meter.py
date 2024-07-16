@@ -3,10 +3,10 @@
 # clean
 
 import os
-# import json
+import json
 from typing import Optional
 import pytest
-# import numpy as np
+import numpy as np
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
@@ -17,15 +17,17 @@ from hisim.components import (
     gas_meter,
     generic_gas_heater,
     controller_l1_generic_gas_heater,
-    # generic_heat_source,
+    generic_heat_source,
+    controller_l1_heatpump,
+    generic_hot_water_storage_modular,
     simple_hot_water_storage,
     heat_distribution_system,
     generic_pv_system,
 )
-from hisim import utils  # , loadtypes
+from hisim import utils, loadtypes
 
 from hisim.postprocessingoptions import PostProcessingOptions
-# from hisim import log
+from hisim import log
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
@@ -149,13 +151,47 @@ def test_house(
         config=my_gas_heater_controller_config,
     )
 
-    # Build Gas heater
+    # Build Gas heater For Space Heating
     my_gas_heater_config = generic_gas_heater.GenericGasHeaterConfig.get_scaled_gasheater_config(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
     )
     my_gas_heater = generic_gas_heater.GasHeater(
         config=my_gas_heater_config,
         my_simulation_parameters=my_simulation_parameters,
+    )
+    # Build Gas Heater for DHW
+    my_gas_heater_for_dhw_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating_with_gas(
+        max_warm_water_demand_in_liter=my_occupancy.max_hot_water_demand,
+        scaling_factor_according_to_number_of_apartments=my_occupancy.scaling_factor_according_to_number_of_apartments,
+        seconds_per_timestep=seconds_per_timestep,
+    )
+
+    my_gas_heater_controller_l1_config = (
+        controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
+            "DHW" + loadtypes.HeatingSystems.GAS_HEATING.value
+        )
+    )
+
+    my_boiler_config = (
+        generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
+            number_of_apartments=my_building_information.number_of_apartments
+        )
+    )
+    my_boiler_config.compute_default_cycle(
+        temperature_difference_in_kelvin=my_gas_heater_controller_l1_config.t_max_heating_in_celsius
+        - my_gas_heater_controller_l1_config.t_min_heating_in_celsius
+    )
+
+    my_boiler_for_dhw = generic_hot_water_storage_modular.HotWaterStorage(
+        my_simulation_parameters=my_simulation_parameters, config=my_boiler_config
+    )
+
+    my_heater_controller_l1_for_dhw = controller_l1_heatpump.L1HeatPumpController(
+        my_simulation_parameters=my_simulation_parameters, config=my_gas_heater_controller_l1_config
+    )
+
+    my_gas_heater_for_dhw = generic_heat_source.HeatSource(
+        config=my_gas_heater_for_dhw_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # Build Electricity Meter
@@ -185,100 +221,48 @@ def test_house(
 
     my_sim.add_component(my_electricity_meter, connect_automatically=True)
     my_sim.add_component(my_gas_meter, connect_automatically=True)
+    my_sim.add_component(my_gas_heater_for_dhw, connect_automatically=True)
+    my_sim.add_component(my_boiler_for_dhw, connect_automatically=True)
+    my_sim.add_component(my_heater_controller_l1_for_dhw, connect_automatically=True)
 
     my_sim.run_all_timesteps()
 
     # =========================================================================================================================================================
     # Compare with kpi computation results
 
-    # # read kpi data
-    # with open(os.path.join(my_sim._simulation_parameters.result_directory, "all_kpis.json"), "r", encoding="utf-8") as file:  # pylint: disable=W0212
-    #     jsondata = json.load(file)
+    # read kpi data
+    with open(
+        os.path.join(my_sim._simulation_parameters.result_directory, "all_kpis.json"),  # pylint: disable=W0212
+        "r",
+        encoding="utf-8",
+    ) as file:
+        jsondata = json.load(file)
 
-    # cumulative_consumption_kpi_in_kilowatt_hour = jsondata["General"]["Total electricity consumption"].get("value")
+    gas_consumption_in_kilowatt_hour = jsondata["Gas Meter"]["Total gas demand from grid"].get("value")
+    gas_consumption_for_space_heating_in_kilowatt_hour = jsondata["Gas Heater For Space Heating"][
+        "Gas consumption for space heating"
+    ].get("value")
+    gas_consumption_for_domestic_hot_water_in_kilowatt_hour = jsondata["Gas Heater For Domestic Hot Water"][
+        "Gas consumption for domestic hot water"
+    ].get("value")
 
-    # cumulative_production_kpi_in_kilowatt_hour = jsondata["General"]["Total electricity production"].get("value")
+    opex_costs_for_gas_in_euro = jsondata["Gas Meter"]["Opex costs of gas consumption"].get("value")
 
-    # electricity_from_grid_kpi_in_kilowatt_hour = jsondata["General"]["Total energy from grid"].get("value")
+    co2_footprint_due_to_gas_use_in_kg = jsondata["Gas Meter"]["CO2 footprint of gas consumption"].get("value")
 
-    # # simualtion results from grid energy balancer (last entry)
-    # simulation_results_electricity_meter_cumulative_production_in_watt_hour = (
-    #     my_sim.results_data_frame[
-    #         "ElectricityMeter - CumulativeProduction [Electricity - Wh]"
-    #     ][-1]
-    # )
-    # simulation_results_electricity_meter_cumulative_consumption_in_watt_hour = (
-    #     my_sim.results_data_frame[
-    #         "ElectricityMeter - CumulativeConsumption [Electricity - Wh]"
-    #     ][-1]
-    # )
-    # simulation_results_electricity_from_grid_in_watt_hour = (
-    #     my_sim.results_data_frame[
-    #         "ElectricityMeter - ElectricityFromGrid [Electricity - Wh]"
-    #     ]
-    # )
-    # simulation_results_electricity_consumption_in_watt_hour = (
-    #     my_sim.results_data_frame[
-    #         "ElectricityMeter - ElectricityConsumption [Electricity - Wh]"
-    #     ]
-    # )
-    # sum_electricity_from_grid_in_kilowatt_hour = sum(simulation_results_electricity_from_grid_in_watt_hour) / 1000
-    # sum_electricity_consumption_in_kilowatt_hour = sum(simulation_results_electricity_consumption_in_watt_hour) / 1000
+    log.information(
+        "Gas consumption for space heating [kWh] " + str(gas_consumption_for_space_heating_in_kilowatt_hour)
+    )
+    log.information(
+        "Gas consumption for domestic hot water [kWh] " + str(gas_consumption_for_domestic_hot_water_in_kilowatt_hour)
+    )
+    log.information("Total gas consumption measured by gas meter [kWh] " + str(gas_consumption_in_kilowatt_hour))
+    log.information("Opex costs for total gas consumption [€] " + str(opex_costs_for_gas_in_euro))
+    log.information("CO2 footprint for total gas consumption [kg] " + str(co2_footprint_due_to_gas_use_in_kg))
 
-    # log.information(
-    #     "kpi cumulative production [kWh] "
-    #     + str(cumulative_production_kpi_in_kilowatt_hour)
-    # )
-    # log.information(
-    #     "kpi cumulative consumption [kWh] "
-    #     + str(cumulative_consumption_kpi_in_kilowatt_hour)
-    # )
-    # log.information(
-    #     "kpi energy from grid [kWh] "
-    #     + str(electricity_from_grid_kpi_in_kilowatt_hour)
-    # )
-    # log.information(
-    #     "ElectricityMeter cumulative production [kWh] "
-    #     + str(
-    #         simulation_results_electricity_meter_cumulative_production_in_watt_hour
-    #         * 1e-3
-    #     )
-    # )
-    # log.information(
-    #     "ElectricityMeter cumulative consumption [kWh] "
-    #     + str(
-    #         simulation_results_electricity_meter_cumulative_consumption_in_watt_hour
-    #         * 1e-3
-    #     )
-    # )
-    # log.information(
-    #     "ElectricityMeter energy from grid [kWh] "
-    #     + str(
-    #         sum_electricity_from_grid_in_kilowatt_hour
-    #     )
-    # )
-    # log.information(
-    #     "ElectricityMeter consumption [kWh] "
-    #     + str(
-    #         sum_electricity_consumption_in_kilowatt_hour
-    #     )
-    # )
-
-    # # test and compare with relative error of 10%
-    # np.testing.assert_allclose(
-    #     cumulative_production_kpi_in_kilowatt_hour,
-    #     simulation_results_electricity_meter_cumulative_production_in_watt_hour * 1e-3,
-    #     rtol=0.1,
-    # )
-
-    # np.testing.assert_allclose(
-    #     cumulative_consumption_kpi_in_kilowatt_hour,
-    #     simulation_results_electricity_meter_cumulative_consumption_in_watt_hour * 1e-3,
-    #     rtol=0.1,
-    # )
-
-    # np.testing.assert_allclose(
-    #     electricity_from_grid_kpi_in_kilowatt_hour,
-    #     sum_electricity_from_grid_in_kilowatt_hour,
-    #     rtol=0.1,
-    # )
+    # test and compare with relative error of 5%
+    np.testing.assert_allclose(
+        gas_consumption_in_kilowatt_hour,
+        gas_consumption_for_domestic_hot_water_in_kilowatt_hour + gas_consumption_for_space_heating_in_kilowatt_hour,
+        rtol=0.05,
+    )

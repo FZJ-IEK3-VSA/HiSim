@@ -686,12 +686,20 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             value = stsv.get_input_value(component_input=inputs_sorted[index])
             component_electricity_demand[item] = -value
 
-        max_repeats = 10
         repeat_count = 0
 
         available_surplus_electricity_in_watt_next_component = available_surplus_electricity_in_watt
 
-        while repeat_count < max_repeats:
+        for single_source_weight_sorted in source_weights_sorted:
+            number_of_components_with_electricity_demand_and_same_source_weight = sum(
+                1
+                for key, wert in component_electricity_demand.items()
+                if wert < 0
+                and key
+                in component_types_and_number_of_same_source_weights[single_source_weight_sorted]["components"]
+            )
+
+        while repeat_count < number_of_components_with_electricity_demand_and_same_source_weight + 1:
             repeat_loop = False
             index = 0
             component_types_and_number_of_same_source_weights_copy = (

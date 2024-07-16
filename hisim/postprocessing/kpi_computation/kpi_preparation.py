@@ -596,27 +596,6 @@ class KpiPreparation:
             total_co2_emitted_due_to_electricity_use_in_kilogram
             + (electricity_consumption_in_kilowatt_hour - self_consumption_in_kilowatt_hour) * co2_price_constant
         )
-        # make kpi entry
-        costs_for_electricity_use_entry = KpiEntry(
-            name="Cost for use of electricity",
-            unit="EUR",
-            value=total_costs_for_electricity_use_in_euro,
-            tag=KpiTagEnumClass.COSTS_AND_EMISSIONS,
-        )
-        co2_emission_for_electricity_use_entry = KpiEntry(
-            name="CO2 emission due to use of electricity",
-            unit="kg",
-            value=total_co2_emitted_due_to_electricity_use_in_kilogram,
-            tag=KpiTagEnumClass.COSTS_AND_EMISSIONS,
-        )
-
-        # update kpi collection dict
-        self.kpi_collection_dict_unsorted.update(
-            {
-                costs_for_electricity_use_entry.name: costs_for_electricity_use_entry.to_dict(),
-                co2_emission_for_electricity_use_entry.name: co2_emission_for_electricity_use_entry.to_dict(),
-            }
-        )
 
         # compute cost and co2 for LoadTypes other than electricity
         for fuel in [

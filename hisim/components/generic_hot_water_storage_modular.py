@@ -23,8 +23,6 @@ from hisim.component import OpexCostDataClass
 from hisim.components import (
     controller_l1_building_heating,
     generic_chp,
-    # generic_heat_pump_modular,
-    # generic_heat_source,
     configuration,
 )
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector

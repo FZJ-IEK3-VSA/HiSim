@@ -3,6 +3,7 @@
 # clean
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
+import importlib
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -17,7 +18,7 @@ from hisim.components import controller_l1_heatpump
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
-from hisim.modular_household.component_connections import get_heating_system_efficiency
+# from hisim.modular_household.component_connections import get_heating_system_efficiency
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -87,6 +88,11 @@ class HeatSourceConfig(cp.ConfigBase):
         seconds_per_timestep: int,
     ) -> "HeatSourceConfig":
         """Returns default configuration of a Heat Source used for water heating (DHW)."""
+        # use importlib for importing the other component in order to avoid circular-import errors
+
+        component_module_name = "hisim.modular_household.component_connections"
+        component_module = importlib.import_module(name=component_module_name)
+        get_heating_system_efficiency = getattr(component_module, "get_heating_system_efficiency")
         thermal_power_in_watt = (
             max_warm_water_demand_in_liter
             * (4180 / 3600)

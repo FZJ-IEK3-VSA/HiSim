@@ -18,7 +18,6 @@ from hisim.components import controller_l1_heatpump
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
-# from hisim.modular_household.component_connections import get_heating_system_efficiency
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"

@@ -169,11 +169,13 @@ def setup_function(
     # Set System Parameters
 
     # Set heating systems for space heating and domestic hot water
-    space_heating_system = HeatingSystemType.GAS_HEATER
-    domestic_hot_water_heating_system = HeatingSystemType.GAS_HEATER
+    space_heating_system = HeatingSystemType.HEAT_PUMP
+    domestic_hot_water_heating_system = HeatingSystemType.HEAT_PUMP
     # Set Heat Pump Controller
     hp_controller_mode = 2  # mode 1 for heating/off and mode 2 for heating/cooling/off
     heating_reference_temperature_in_celsius = -7.0
+    # Set gas meter (default is False, is set true when gas heaters are used)
+    use_gas_meter: bool = False
 
     # Set Weather
     weather_location = my_config.weather_location
@@ -336,6 +338,8 @@ def setup_function(
     elif space_heating_system == HeatingSystemType.GAS_HEATER:
         # Set sizing option for Hot water Storage
         sizing_option = simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER
+        # Set gas meter
+        use_gas_meter = True
 
         # Build Gas Heater Controller
         my_gas_heater_controller_config = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config.get_scaled_generic_gas_heater_controller_config(
@@ -388,6 +392,8 @@ def setup_function(
         my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
 
     elif domestic_hot_water_heating_system == HeatingSystemType.GAS_HEATER:
+        # Set gas meter
+        use_gas_meter = True
         # Build Gas Heater for DHW
         my_gas_heater_for_dhw_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating_with_gas(
             max_warm_water_demand_in_liter=my_occupancy.max_hot_water_demand,
@@ -450,13 +456,13 @@ def setup_function(
         my_simulation_parameters=my_simulation_parameters,
         config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
     )
-
-    # Build Gas Meter
-    my_gas_meter = gas_meter.GasMeter(
-        my_simulation_parameters=my_simulation_parameters,
-        config=gas_meter.GasMeterConfig.get_gas_meter_default_config(),
-    )
-    my_sim.add_component(my_gas_meter, connect_automatically=True)
+    if use_gas_meter:
+        # Build Gas Meter
+        my_gas_meter = gas_meter.GasMeter(
+            my_simulation_parameters=my_simulation_parameters,
+            config=gas_meter.GasMeterConfig.get_gas_meter_default_config(),
+        )
+        my_sim.add_component(my_gas_meter, connect_automatically=True)
 
     # Build Electric Vehicle Configs and Car Battery Configs
     my_car_config = generic_car.CarConfig.get_default_ev_config()

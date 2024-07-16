@@ -25,11 +25,11 @@ from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib
 from hisim.components.electricity_meter import ElectricityMeter
 from hisim.components.generic_heat_pump_modular import ModularHeatPump
 from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
+from hisim.components.controller_l2_district_energy_management_system import L2GenericDistrictEnergyManagementSystem
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes
 from hisim.utils import HISIMPATH
 from hisim import log
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
-from hisim.postprocessingoptions import PostProcessingOptions
 
 
 class KpiTagEnumClass(Enum):
@@ -2150,7 +2150,7 @@ class KpiGenerator(JSONWizard):
         occupancy_electricity_from_grid_in_kilowatt_hour = None
 
         for wrapped_component in self.wrapped_components:
-            if isinstance(wrapped_component.my_component, L2GenericEnergyManagementSystem):
+            if isinstance(wrapped_component.my_component, (L2GenericEnergyManagementSystem, L2GenericDistrictEnergyManagementSystem)):
                 wrapped_ems_component = wrapped_component
                 break
         if not wrapped_ems_component:

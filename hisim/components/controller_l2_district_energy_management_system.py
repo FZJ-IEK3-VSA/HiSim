@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from enum import IntEnum
 from typing import Any, List, Tuple, Union
 
-import pandas as pd
 from dataclasses_json import dataclass_json
 
 from hisim import component as cp
@@ -40,13 +39,13 @@ class EMSControlStrategy(IntEnum):
 
 @dataclass_json
 @dataclass
-class EMSConfig(cp.ConfigBase):
+class EMSDistrictConfig(cp.ConfigBase):
     """L1 Controller Config."""
 
     @classmethod
     def get_main_classname(cls):
         """Return the full class name of the base class."""
-        return L2GenericEnergyManagementSystem.get_full_classname()
+        return L2GenericDistrictEnergyManagementSystem.get_full_classname()
 
     #: name of the device
     name: str
@@ -65,9 +64,9 @@ class EMSConfig(cp.ConfigBase):
     @classmethod
     def get_default_config_ems(
         cls, strategy: Union[EMSControlStrategy, int] = EMSControlStrategy.OPTIMIZEOWNCONSUMPTION_ITERATIV
-    ) -> "EMSConfig":
+    ) -> "EMSDistrictConfig":
         """Default Config for Energy Management System."""
-        config = EMSConfig(
+        config = EMSDistrictConfig(
             name="L2EMSElectricityController",
             strategy=strategy,
             limit_to_shave=0,
@@ -78,7 +77,7 @@ class EMSConfig(cp.ConfigBase):
         return config
 
 
-class EMSState:
+class EMSDistrictState:
     """Saves the state of the Energy Management System."""
 
     def __init__(
@@ -92,16 +91,16 @@ class EMSState:
         self.consumption_uncontrolled_in_watt = consumption_uncontrolled
         self.consumption_ems_controlled_in_watt = consumption_ems_controlled
 
-    def clone(self) -> "EMSState":
+    def clone(self) -> "EMSDistrictState":
         """Copy EMSState efficiently."""
-        return EMSState(
+        return EMSDistrictState(
             production=self.production_in_watt,
             consumption_uncontrolled=self.consumption_uncontrolled_in_watt,
             consumption_ems_controlled=self.consumption_ems_controlled_in_watt,
         )
 
 
-class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
+class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent):
     """Surplus electricity controller - time step based.
 
     Iteratively goes through connected inputs by hierachy of
@@ -156,7 +155,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: EMSConfig,
+        config: EMSDistrictConfig,
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ):
         """Initializes."""
@@ -172,7 +171,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             my_display_config=my_display_config,
         )
 
-        self.state = EMSState(production=0, consumption_uncontrolled=0, consumption_ems_controlled=0)
+        self.state = EMSDistrictState(production=0, consumption_uncontrolled=0, consumption_ems_controlled=0)
         self.previous_state = self.state.clone()
 
         self.component_types_sorted: List[lt.ComponentType] = []
@@ -279,11 +278,10 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
         self.add_dynamic_default_connections(self.get_default_connections_from_dhw_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_advanced_heat_pump())
-
-    #    self.add_dynamic_default_connections(self.get_default_connections_from_advanced_battery())
+        self.add_dynamic_default_connections(self.get_default_connections_from_advanced_battery())
 
     def get_default_connections_from_pv_system(
-        self,
+            self,
     ):
         """Get pv system default connections."""
 
@@ -309,7 +307,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         return dynamic_connections
 
     def get_default_connections_from_utsp_occupancy(
-        self,
+            self,
     ):
         """Get utsp occupancy default connections."""
 
@@ -327,7 +325,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.RESIDENTS, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
-                source_weight=5,
+                source_weight=1,
             )
         )
         self.add_component_output(
@@ -336,7 +334,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 lt.ComponentType.RESIDENTS,
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
-            source_weight=5,
+            source_weight=1,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for Occupancy. ",
@@ -344,7 +342,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         return dynamic_connections
 
     def get_default_connections_from_advanced_heat_pump(
-        self,
+            self,
     ):
         """Get advanced heat pump default connections."""
 
@@ -380,7 +378,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         return dynamic_connections
 
     def get_default_connections_from_dhw_heat_pump(
-        self,
+            self,
     ):
         """Get dhw heat pump default connections."""
 
@@ -398,7 +396,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.HEAT_PUMP_DHW, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
-                source_weight=2,
+                source_weight=3,
             )
         )
 
@@ -408,7 +406,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 lt.ComponentType.HEAT_PUMP_DHW,
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
-            source_weight=2,
+            source_weight=3,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for dhw heat pump.",
@@ -416,7 +414,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         return dynamic_connections
 
     def get_default_connections_from_advanced_battery(
-        self,
+            self,
     ):
         """Get advanced battery default connections."""
 
@@ -660,7 +658,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         inputs_sorted: List[ComponentInput],
         component_types_sorted: List[lt.ComponentType],
         outputs_sorted: List[ComponentOutput],
-        timestep: int,
     ) -> float:
         """Evaluates available surplus electricity component by component, parallel, and sends updated signals back.
 
@@ -668,10 +665,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         To do this, the surplus is divided by the number of components with equal source weight so that each component
         has the chance to receive an equal share. If a component requires less, the rest is returned to available surplus.
         """
-        if timestep > 317:
-            print("debug")
-
-        component_types_and_number_of_same_source_weights = {}
+        component_types_and_number_of_same_source_weights: dict = {}
 
         for weight, component in zip(source_weights_sorted, component_types_sorted):
             if weight in component_types_and_number_of_same_source_weights:
@@ -680,7 +674,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             else:
                 component_types_and_number_of_same_source_weights[weight] = {"count": 1, "components": [component]}
 
-        component_electricity_demand = {}
+        component_electricity_demand: dict = {}
 
         for index, item in enumerate(component_types_sorted):
             value = stsv.get_input_value(component_input=inputs_sorted[index])
@@ -694,18 +688,13 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             number_of_components_with_electricity_demand_and_same_source_weight = sum(
                 1
                 for key, wert in component_electricity_demand.items()
-                if wert < 0
-                and key
-                in component_types_and_number_of_same_source_weights[single_source_weight_sorted]["components"]
+                if wert < 0 and key in component_types_and_number_of_same_source_weights[single_source_weight_sorted]["components"]
             )
 
         while repeat_count < number_of_components_with_electricity_demand_and_same_source_weight + 1:
             repeat_loop = False
             index = 0
-            component_types_and_number_of_same_source_weights_copy = (
-                component_types_and_number_of_same_source_weights.copy()
-            )
-            surplus_next_iteration = 0
+            surplus_next_iteration = 0.0
             counter_inner_while = 0
 
             while index < len(inputs_sorted):
@@ -723,22 +712,14 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
                     available_surplus_electricity_in_watt = available_surplus_electricity_in_watt_next_component
 
-                    if component_electricity_demand[single_component_type_sorted] >= 0:
-                        available_surplus_electricity_in_watt_next_component = available_surplus_electricity_in_watt
-                        surplus_next_iteration = surplus_next_iteration
-                        continue
-
                     number_of_components_with_electricity_demand_and_same_source_weight = sum(
                         1
-                        for key, wert in component_electricity_demand.items()
-                        if wert < 0
-                        and key
-                        in component_types_and_number_of_same_source_weights[single_source_weight_sorted]["components"]
+                        for key, wert in component_electricity_demand.items() if wert < 0
+                        and key in component_types_and_number_of_same_source_weights[single_source_weight_sorted]["components"]
                     )
 
-                    if number_of_components_with_electricity_demand_and_same_source_weight == 0:
+                    if component_electricity_demand[single_component_type_sorted] >= 0 or number_of_components_with_electricity_demand_and_same_source_weight == 0:
                         available_surplus_electricity_in_watt_next_component = available_surplus_electricity_in_watt
-                        surplus_next_iteration = surplus_next_iteration
                         continue
 
                     if available_surplus_electricity_in_watt > 0:
@@ -772,10 +753,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                         surplus_next_iteration += available_surplus_electricity_in_watt
                         available_surplus_electricity_in_watt = 0
 
-                    if (
-                        surplus_next_iteration > 0
-                        and number_of_components_with_electricity_demand_and_same_source_weight > 1
-                    ):
+                    if surplus_next_iteration > 0 and number_of_components_with_electricity_demand_and_same_source_weight > 1:
                         repeat_loop = True
 
                 else:
@@ -966,7 +944,6 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 inputs_sorted=self.inputs_sorted,
                 component_types_sorted=self.component_types_sorted,
                 outputs_sorted=self.outputs_sorted,
-                timestep=timestep,
             )
 
             self.modify_set_temperatures_for_components_in_case_of_surplus_electricity(

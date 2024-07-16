@@ -232,10 +232,10 @@ def test_house(
     )
 
     # Build EMS
-    my_electricity_controller_config = controller_l2_district_energy_management_system.EMSConfig.get_default_config_ems(
+    my_electricity_controller_config = controller_l2_district_energy_management_system.EMSDistrictConfig.get_default_config_ems(
         strategy=controller_l2_district_energy_management_system.EMSControlStrategy.OPTIMIZEOWNCONSUMPTION_PARALLEL)
 
-    my_electricity_controller = controller_l2_district_energy_management_system.L2GenericEnergyManagementSystem(
+    my_electricity_controller = controller_l2_district_energy_management_system.L2GenericDistrictEnergyManagementSystem(
         my_simulation_parameters=my_simulation_parameters,
         config=my_electricity_controller_config,
     )

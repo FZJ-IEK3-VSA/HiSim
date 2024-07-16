@@ -271,16 +271,16 @@ class KpiPreparation:
 
         # make kpi entry
         grid_injection_entry = KpiEntry(
-            name="Grid injection", unit="kWh", value=grid_injection_in_kilowatt_hour, tag=KpiTagEnumClass.GENERAL
+            name="Grid injection of electricity", unit="kWh", value=grid_injection_in_kilowatt_hour, tag=KpiTagEnumClass.GENERAL
         )
         self_consumption_entry = KpiEntry(
-            name="Self-consumption", unit="kWh", value=self_consumption_in_kilowatt_hour, tag=KpiTagEnumClass.GENERAL
+            name="Self-consumption of electricity", unit="kWh", value=self_consumption_in_kilowatt_hour, tag=KpiTagEnumClass.GENERAL
         )
         self_consumption_rate_entry = KpiEntry(
-            name="Self-consumption rate", unit="%", value=self_consumption_rate_in_percent, tag=KpiTagEnumClass.GENERAL
+            name="Self-consumption rate of electricity", unit="%", value=self_consumption_rate_in_percent, tag=KpiTagEnumClass.GENERAL
         )
         autarkie_rate_entry = KpiEntry(
-            name="Autarky rate", unit="%", value=autarky_rate_in_percent, tag=KpiTagEnumClass.GENERAL
+            name="Autarky rate of electricity", unit="%", value=autarky_rate_in_percent, tag=KpiTagEnumClass.GENERAL
         )
 
         # update kpi collection dict

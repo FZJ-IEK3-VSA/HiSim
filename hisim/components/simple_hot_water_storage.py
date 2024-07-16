@@ -34,6 +34,7 @@ class HotWaterStorageSizingEnum(IntEnum):
 
     SIZE_ACCORDING_TO_HEAT_PUMP = 1
     SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM = 2
+    SIZE_ACCORDING_TO_GAS_HEATER = 3
 
 
 class PositionHotWaterStorageInSystemSetup(IntEnum):
@@ -128,6 +129,10 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         # otherwise use approximation: 60l per kw thermal power
         elif sizing_option == HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM:
             volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 60
+
+        # or for gas heaters make hws smaller because gas heaters are a bigger inertia than heat pump
+        elif sizing_option == HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER:
+            volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 20
 
         else:
             raise ValueError(f"Sizing option for Simple Hot Water Storage {sizing_option} is unvalid.")

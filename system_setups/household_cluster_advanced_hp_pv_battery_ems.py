@@ -5,6 +5,7 @@
 from typing import Optional, Any, Union, List
 import re
 import os
+from enum import Enum
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from utspclient.helpers.lpgdata import (
@@ -30,6 +31,9 @@ from hisim.components import (
     advanced_ev_battery_bslib,
     controller_l1_generic_ev_charge,
     generic_car,
+    controller_l1_generic_gas_heater,
+    generic_gas_heater,
+    generic_heat_source
 )
 from hisim.component import ConfigBase
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
@@ -46,6 +50,13 @@ __license__ = "MIT"
 __version__ = "1.0"
 __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
+
+
+class HeatingSystemType(Enum):
+
+    """Enum class for heating system types."""
+    HEAT_PUMP = "Heat Pump"
+    GAS_HEATER = "Gas Heater"
 
 
 @dataclass_json
@@ -154,6 +165,17 @@ def setup_function(
     # =================================================================================================================================
     # Set System Parameters
 
+    # Set heating systems for space heating and domestic hot water
+    space_heating_system = HeatingSystemType.HEAT_PUMP
+    domestic_hot_water_heating_system = HeatingSystemType.HEAT_PUMP
+    # Set Heat Pump Controller
+    hp_controller_mode = 2  # mode 1 for heating/off and mode 2 for heating/cooling/off
+    heating_reference_temperature_in_celsius = -7.0
+    # use gas meter
+    use_gas_meter: bool = False
+    if space_heating_system == HeatingSystemType.GAS_HEATER or domestic_hot_water_heating_system == HeatingSystemType.GAS_HEATER:
+        use_gas_meter == True
+
     # Set Weather
     weather_location = my_config.weather_location
 
@@ -202,9 +224,6 @@ def setup_function(
     else:
         raise TypeError(f"Type {type(my_config.lpg_households)} is incompatible. Should be List[str].")
 
-    # Set Heat Pump Controller
-    hp_controller_mode = 2  # mode 1 for heating/off and mode 2 for heating/cooling/off
-    heating_reference_temperature_in_celsius = -7.0
 
     # Set Electric Vehicle
     charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
@@ -286,29 +305,141 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
-    # Build Heat Pump Controller
-    my_heat_pump_controller_config = advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(
-        heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
-    )
-    my_heat_pump_controller_config.mode = hp_controller_mode
+    if space_heating_system == HeatingSystemType.HEAT_PUMP:
+        # Set sizing option for Hot water Storage
+        sizing_option = simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
+        
+        # Build Heat Pump Controller
+        my_heat_pump_controller_config = advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(
+            heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
+        )
+        my_heat_pump_controller_config.mode = hp_controller_mode
 
-    my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
-        config=my_heat_pump_controller_config, my_simulation_parameters=my_simulation_parameters,
+        my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
+            config=my_heat_pump_controller_config, my_simulation_parameters=my_simulation_parameters,
+        )
+        # Add to simulator
+        my_sim.add_component(my_heat_pump_controller, connect_automatically=True)
+
+        # Build Heat Pump
+        my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
+            heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
+            heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
+        )
+
+        my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
+            config=my_heat_pump_config, my_simulation_parameters=my_simulation_parameters,
+        )
+        # Add to simulator
+        my_sim.add_component(my_heat_pump, connect_automatically=True)
+
+    elif space_heating_system == HeatingSystemType.GAS_HEATER:
+        # Set sizing option for Hot water Storage
+        sizing_option = simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER
+
+        # Build Gas Heater Controller
+        my_gas_heater_controller_config = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config.get_scaled_generic_gas_heater_controller_config(
+            heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+        )
+        my_gas_heater_controller = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_gas_heater_controller_config,
+        )
+        my_sim.add_component(my_gas_heater_controller, connect_automatically=True)
+
+        # Build Gas heater For Space Heating
+        my_gas_heater_config = generic_gas_heater.GenericGasHeaterConfig.get_scaled_gasheater_config(
+            heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+        )
+        my_gas_heater = generic_gas_heater.GasHeater(
+            config=my_gas_heater_config,
+            my_simulation_parameters=my_simulation_parameters,
+        )
+        my_sim.add_component(my_gas_heater, connect_automatically=True)
+    else:
+        raise ValueError(f"Space heating system {space_heating_system} not recognized.")
+
+    if domestic_hot_water_heating_system == HeatingSystemType.HEAT_PUMP:
+
+        # Build DHW (this is taken from household_3_advanced_hp_diesel-car_pv_battery.py)
+        my_dhw_heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
+            number_of_apartments=my_building_information.number_of_apartments, default_power_in_watt=6000,
+        )
+        my_dhw_heatpump_controller_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
+            name="DHWHeatpumpController"
+        )
+        my_dhw_storage_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
+            number_of_apartments=my_building_information.number_of_apartments, default_volume_in_liter=450,
+        )
+        my_dhw_storage_config.compute_default_cycle(
+            temperature_difference_in_kelvin=my_dhw_heatpump_controller_config.t_max_heating_in_celsius
+            - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
+        )
+        my_domnestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
+            my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
+        )
+        my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
+            my_simulation_parameters=my_simulation_parameters, config=my_dhw_heatpump_controller_config,
+        )
+        my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
+            config=my_dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
+        )
+        # Add to simulator
+        my_sim.add_component(my_domnestic_hot_water_storage, connect_automatically=True)
+        my_sim.add_component(my_domnestic_hot_water_heatpump_controller, connect_automatically=True)
+        my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
+
+    elif domestic_hot_water_heating_system == HeatingSystemType.GAS_HEATER:
+        # Build Gas Heater for DHW
+        my_gas_heater_for_dhw_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating_with_gas(
+            max_warm_water_demand_in_liter=my_occupancy.max_hot_water_demand,
+            scaling_factor_according_to_number_of_apartments=my_occupancy.scaling_factor_according_to_number_of_apartments,
+            seconds_per_timestep=seconds_per_timestep,
+        )
+        my_gas_heater_controller_l1_config = (
+            controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
+                "DHW" + loadtypes.HeatingSystems.GAS_HEATING.value
+            )
+        )
+        my_boiler_config = (
+            generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
+                number_of_apartments=my_building_information.number_of_apartments
+            )
+        )
+        my_boiler_config.compute_default_cycle(
+            temperature_difference_in_kelvin=my_gas_heater_controller_l1_config.t_max_heating_in_celsius
+            - my_gas_heater_controller_l1_config.t_min_heating_in_celsius
+        )
+
+        my_boiler_for_dhw = generic_hot_water_storage_modular.HotWaterStorage(
+            my_simulation_parameters=my_simulation_parameters, config=my_boiler_config
+        )
+
+        my_heater_controller_l1_for_dhw = controller_l1_heatpump.L1HeatPumpController(
+            my_simulation_parameters=my_simulation_parameters, config=my_gas_heater_controller_l1_config
+        )
+
+        my_gas_heater_for_dhw = generic_heat_source.HeatSource(
+            config=my_gas_heater_for_dhw_config, my_simulation_parameters=my_simulation_parameters
+        )
+        my_sim.add_component(my_gas_heater_for_dhw, connect_automatically=True)
+        my_sim.add_component(my_boiler_for_dhw, connect_automatically=True)
+        my_sim.add_component(my_heater_controller_l1_for_dhw, connect_automatically=True)
+    else:
+        raise ValueError(f"Heating system for domestic hot water {domestic_hot_water_heating_system} not recognized.")
+
+
+    # Build Heat Water Storage
+    my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
+        max_thermal_power_in_watt_of_heating_system=my_heat_pump_config.set_thermal_output_power_in_watt.value,
+        temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
+        sizing_option=sizing_option,
+    )
+    my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
+        config=my_simple_heat_water_storage_config, my_simulation_parameters=my_simulation_parameters,
     )
     # Add to simulator
-    my_sim.add_component(my_heat_pump_controller, connect_automatically=True)
-
-    # Build Heat Pump
-    my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
-        heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
-    )
-
-    my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
-        config=my_heat_pump_config, my_simulation_parameters=my_simulation_parameters,
-    )
-    # Add to simulator
-    my_sim.add_component(my_heat_pump, connect_automatically=True)
+    my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
@@ -321,51 +452,20 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
 
-    # Build Heat Water Storage
-    my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-        max_thermal_power_in_watt_of_heating_system=my_heat_pump_config.set_thermal_output_power_in_watt.value,
-        temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
-        sizing_option=simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
-    )
-    my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
-        config=my_simple_heat_water_storage_config, my_simulation_parameters=my_simulation_parameters,
-    )
-    # Add to simulator
-    my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)
-
-    # Build DHW (this is taken from household_3_advanced_hp_diesel-car_pv_battery.py)
-    my_dhw_heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
-        number_of_apartments=my_building_information.number_of_apartments, default_power_in_watt=6000,
-    )
-    my_dhw_heatpump_controller_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-        name="DHWHeatpumpController"
-    )
-    my_dhw_storage_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
-        number_of_apartments=my_building_information.number_of_apartments, default_volume_in_liter=450,
-    )
-    my_dhw_storage_config.compute_default_cycle(
-        temperature_difference_in_kelvin=my_dhw_heatpump_controller_config.t_max_heating_in_celsius
-        - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
-    )
-    my_domnestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
-        my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
-    )
-    my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
-        my_simulation_parameters=my_simulation_parameters, config=my_dhw_heatpump_controller_config,
-    )
-    my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
-        config=my_dhw_heatpump_config, my_simulation_parameters=my_simulation_parameters
-    )
-    # Add to simulator
-    my_sim.add_component(my_domnestic_hot_water_storage, connect_automatically=True)
-    my_sim.add_component(my_domnestic_hot_water_heatpump_controller, connect_automatically=True)
-    my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
 
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,
         config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
     )
+    # Build Gas Meter if necessary
+    if use_gas_meter is True:
+        # Build Gas Meter
+        my_gas_meter = gas_meter.GasMeter(
+            my_simulation_parameters=my_simulation_parameters,
+            config=gas_meter.GasMeterConfig.get_gas_meter_default_config(),
+        )
+        my_sim.add_component(my_gas_meter, connect_automatically=True)
 
     # Build Electric Vehicle Configs and Car Battery Configs
     my_car_config = generic_car.CarConfig.get_default_ev_config()
@@ -543,7 +643,7 @@ def setup_function(
         further_result_folder_description=os.path.join(
             *[
                 further_result_folder_description,
-                f"PV-{share_of_maximum_pv_potential}-hds-{my_hds_controller_information.heat_distribution_system_type}-hpc-mode-{hp_controller_mode}",
+                f"PV-{share_of_maximum_pv_potential}-hds-{my_hds_controller_information.heat_distribution_system_type}-SH-{space_heating_system.name}-DHW-{domestic_hot_water_heating_system.name}",
                 f"weather-location-{weather_location}",
             ]
         ),

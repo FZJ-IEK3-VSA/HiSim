@@ -387,7 +387,7 @@ class HotWaterStorage(cp.Component):
         component_class = getattr(component_module, "HeatSource")
 
         connections = []
-        heatsource_classname = component_class.HeatSource.get_classname()
+        heatsource_classname = component_class.get_classname()
         connections.append(
             cp.ComponentConnection(
                 HotWaterStorage.ThermalPowerDelivered,

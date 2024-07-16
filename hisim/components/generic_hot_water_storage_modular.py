@@ -4,7 +4,7 @@ Energy bucket model: extracts energy, adds energy and converts back to temperate
 The hot water storage simulates only storage and demand and needs to be connnected to a heat source. It can act as
 DHW hot water storage or as buffer storage.
 """
-
+import importlib
 from dataclasses import dataclass
 
 # clean
@@ -23,8 +23,8 @@ from hisim.component import OpexCostDataClass
 from hisim.components import (
     controller_l1_building_heating,
     generic_chp,
-    generic_heat_pump_modular,
-    generic_heat_source,
+    # generic_heat_pump_modular,
+    # generic_heat_source,
     configuration,
 )
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
@@ -363,28 +363,36 @@ class HotWaterStorage(cp.Component):
 
     def get_default_connections_from_generic_heat_pump_modular(self):
         """Sets heat pump default connections in hot water storage."""
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.generic_heat_pump_modular"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "ModularHeatPump")
 
         connections = []
-        heatpump_classname = generic_heat_pump_modular.ModularHeatPump.get_classname()
+        heatpump_classname = component_class.get_classname()
         connections.append(
             cp.ComponentConnection(
                 HotWaterStorage.ThermalPowerDelivered,
                 heatpump_classname,
-                generic_heat_pump_modular.ModularHeatPump.ThermalPowerDelivered,
+                component_class.ThermalPowerDelivered,
             )
         )
         return connections
 
     def get_heatsource_default_connections(self):
         """Sets heat source default connections in hot water storage."""
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.generic_heat_source"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "HeatSource")
 
         connections = []
-        heatsource_classname = generic_heat_source.HeatSource.get_classname()
+        heatsource_classname = component_class.HeatSource.get_classname()
         connections.append(
             cp.ComponentConnection(
                 HotWaterStorage.ThermalPowerDelivered,
                 heatsource_classname,
-                generic_heat_source.HeatSource.ThermalPowerDelivered,
+                component_class.ThermalPowerDelivered,
             )
         )
         return connections

@@ -226,20 +226,13 @@ class GasMeter(DynamicComponent):
         # GAS #
 
         # get sum of production and consumption for all inputs for each iteration
-        production_in_watt = sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])
-        consumption_uncontrolled_in_watt = sum(
+        production_in_watt_hour = sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])
+        consumption_uncontrolled_in_watt_hour = sum(
             [stsv.get_input_value(component_input=elem) for elem in self.consumption_uncontrolled_inputs]
         )
         # Production of Gas positve sign
         # Consumption of Gas negative sign
-        difference_between_production_and_consumption_in_watt = production_in_watt - consumption_uncontrolled_in_watt
-
-        # transform watt to watthour
-        production_in_watt_hour = production_in_watt * self.seconds_per_timestep / 3600
-        consumption_uncontrolled_in_watt_hour = consumption_uncontrolled_in_watt * self.seconds_per_timestep / 3600
-        difference_between_production_and_consumption_in_watt_hour = (
-            production_in_watt_hour - consumption_uncontrolled_in_watt_hour
-        )
+        difference_between_production_and_consumption_in_watt_hour = production_in_watt_hour - consumption_uncontrolled_in_watt_hour
 
         # calculate cumulative production and consumption
         cumulative_production_in_watt_hour = self.state.cumulative_production_in_watt_hour + production_in_watt_hour
@@ -262,7 +255,7 @@ class GasMeter(DynamicComponent):
         # set outputs
         stsv.set_output_value(
             self.gas_available_channel,
-            difference_between_production_and_consumption_in_watt,
+            difference_between_production_and_consumption_in_watt_hour,
         )
 
         stsv.set_output_value(self.gas_from_grid_channel, gas_from_grid_in_watt_hour)

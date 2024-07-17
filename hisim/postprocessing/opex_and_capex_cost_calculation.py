@@ -12,6 +12,7 @@ from hisim.components.advanced_battery_bslib import Battery
 from hisim.components.electricity_meter import ElectricityMeter
 from hisim.components.gas_meter import GasMeter
 
+
 def opex_calculation(
     components: List[ComponentWrapper],
     all_outputs: List,
@@ -36,7 +37,7 @@ def opex_calculation(
         # cost and co2_footprint are calculated per simulated period
         component_class_name = component_unwrapped.get_classname()
         # get opex data for all components except Electricity and Gas Meter
-        if component_class_name  != ElectricityMeter.get_classname() and component_class_name  != GasMeter.get_classname():
+        if component_class_name != ElectricityMeter.get_classname() and component_class_name != GasMeter.get_classname():
             opex_cost_data_class: OpexCostDataClass = component_unwrapped.get_cost_opex(
                 all_outputs=all_outputs,
                 postprocessing_results=postprocessing_results,

@@ -324,7 +324,7 @@ class GasHeater(Component):
             self.my_simulation_parameters.year
         )
         co2_per_unit = emissions_and_cost_factors.gas_footprint_in_kg_per_kwh
-        co2_per_simulated_period_in_kg = self.config.consumption_in_kilowatt_hour  * co2_per_unit
+        co2_per_simulated_period_in_kg = self.config.consumption_in_kilowatt_hour * co2_per_unit
 
         # energy costs and co2 and everything will be considered in gas meter
         opex_cost_data_class = OpexCostDataClass(

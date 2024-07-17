@@ -492,6 +492,7 @@ class KpiPreparation:
         )
         if Path(opex_results_path).exists():
             opex_df = pd.read_csv(opex_results_path, index_col=0)
+            print("opex df", opex_df)
             total_maintenance_cost_per_simulated_period = opex_df["Maintenance Costs in EUR"].iloc[-1]
 
         else:
@@ -501,6 +502,7 @@ class KpiPreparation:
 
         if Path(capex_results_path).exists():
             capex_df = pd.read_csv(capex_results_path, index_col=0)
+            print("capex df", capex_df)
             total_investment_cost_per_simulated_period = capex_df["Investment in EUR"].iloc[-1]
             total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint in kg"].iloc[-1]
         else:

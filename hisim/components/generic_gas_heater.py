@@ -331,7 +331,7 @@ class GasHeater(Component):
             opex_energy_cost_in_euro=0,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
-            consumption_in_kwh=0,
+            consumption_in_kwh=self.config.consumption_in_kilowatt_hour,
             loadtype=lt.LoadTypes.GAS
         )
 

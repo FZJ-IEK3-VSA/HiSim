@@ -233,31 +233,29 @@ def test_house(
 
     # Build EMS
     my_electricity_controller_config = controller_l2_district_energy_management_system.EMSDistrictConfig.get_default_config_ems(
-        strategy=controller_l2_district_energy_management_system.EMSControlStrategy.OPTIMIZEOWNCONSUMPTION_PARALLEL)
+        strategy=controller_l2_district_energy_management_system.EMSControlStrategy.BUILDING_OPTIMIZEOWNCONSUMPTION_PARALLEL)
 
     my_electricity_controller = controller_l2_district_energy_management_system.L2GenericDistrictEnergyManagementSystem(
         my_simulation_parameters=my_simulation_parameters,
         config=my_electricity_controller_config,
     )
 
-    # Build Battery
-    my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
-        total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt
-    )
-    my_advanced_battery = advanced_battery_bslib.Battery(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_advanced_battery_config,
+    my_building.connect_input(
+        my_building.BuildingTemperatureModifier,
+        my_electricity_controller.component_name,
+        my_electricity_controller.BuildingIndoorTemperatureModifier,
     )
 
-    # -----------------------------------------------------------------------------------------------------------------
-    # Add outputs to EMS
-    loading_power_input_for_battery_in_watt = my_electricity_controller.add_component_output(
-        source_output_name="LoadingPowerInputForBattery_",
-        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-        source_weight=4,
-        source_load_type=lt.LoadTypes.ELECTRICITY,
-        source_unit=lt.Units.WATT,
-        output_description="Target electricity for Battery Control. ",
+    my_domnestic_hot_water_heatpump_controller.connect_input(
+        my_domnestic_hot_water_heatpump_controller.StorageTemperatureModifier,
+        my_electricity_controller.component_name,
+        my_electricity_controller.DomesticHotWaterStorageTemperatureModifier,
+    )
+
+    my_heat_pump_controller.connect_input(
+        my_heat_pump_controller.SimpleHotWaterStorageTemperatureModifier,
+        my_electricity_controller.component_name,
+        my_electricity_controller.SpaceHeatingWaterStorageTemperatureModifier,
     )
 
     # -----------------------------------------------------------------------------------------------------------------
@@ -282,7 +280,7 @@ def test_house(
     # Add Remaining Components to Simulation Parameters
 
     my_sim.add_component(my_electricity_meter)
-    my_sim.add_component(my_advanced_battery)
+   # my_sim.add_component(my_advanced_battery)
     my_sim.add_component(my_electricity_controller, connect_automatically=True)
 
     my_sim.run_all_timesteps()

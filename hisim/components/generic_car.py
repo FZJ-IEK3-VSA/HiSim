@@ -20,6 +20,7 @@ from hisim.component import OpexCostDataClass
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -308,7 +309,7 @@ class Car(cp.Component):
         energy_costs_in_euro = 0
         for index, output in enumerate(all_outputs):
             if output.component_name == self.config.name + "_w" + str(self.config.source_weight):
-                if output.unit == lt.Units.LITER and output.load_type == lt.LoadTypes.DIESEL:
+                if output.field_name == self.FuelConsumption and output.unit == lt.Units.LITER and output.load_type == lt.LoadTypes.DIESEL:
                     self.config.consumption_in_liter = round(sum(postprocessing_results.iloc[:, index]), 1)
                     # heating value: https://nachhaltigmobil.schule/leistung-energie-verbrauch/#:~:text=Benzin%20hat%20einen%20Heizwert%20von,9%2C8%20kWh%20pro%20Liter.
                     heating_value_of_diesel_in_kwh_per_liter = 9.8
@@ -322,13 +323,10 @@ class Car(cp.Component):
                     energy_costs_in_euro = self.config.consumption_in_liter * euro_per_unit
                     co2_per_simulated_period_in_kg = self.config.consumption_in_liter * co2_per_unit
 
-                elif output.unit == lt.Units.WATT and output.load_type == lt.LoadTypes.ELECTRICITY:
-                    self.config.consumption_in_kwh = round(
-                        sum(postprocessing_results.iloc[:, index])
-                        * self.my_simulation_parameters.seconds_per_timestep
-                        / 3.6e6,
-                        1,
-                    )
+                elif output.field_name == self.ElectricityOutput and output.unit == lt.Units.WATT and output.load_type == lt.LoadTypes.ELECTRICITY:
+                    print("car output ", output.full_name)
+                    print("car driven kilometers", sum(self.meters_driven)/ 1000)
+                    self.config.consumption_in_kwh = round(KpiHelperClass.compute_total_energy_from_power_timeseries(power_timeseries_in_watt=postprocessing_results.iloc[:, index], timeresolution=self.my_simulation_parameters.seconds_per_timestep), 1)
                     self.config.consumption_in_liter = 0
                     # No electricity costs for components except for Electricity Meter, because part of electricity consumption is feed by PV
                     energy_costs_in_euro = 0
@@ -346,6 +344,44 @@ class Car(cp.Component):
         )
 
         return opex_cost_data_class
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        total_electricity_demand_in_kilowatt_hour: Optional[float] = None
+        list_of_kpi_entries: List[KpiEntry] = []
+        for index, output in enumerate(all_outputs):
+            if (
+                output.component_name == self.component_name
+                and output.field_name == self.ElectricityOutput
+                and output.load_type == lt.LoadTypes.ELECTRICITY
+            ):
+                total_electricity_demand_in_kilowatt_hour = round(KpiHelperClass.compute_total_energy_from_power_timeseries(power_timeseries_in_watt=postprocessing_results.iloc[:, index], timeresolution=self.my_simulation_parameters.seconds_per_timestep), 1)
+                break
+        
+        my_kpi_entry = KpiEntry(
+            name="Electricity demand for driving",
+            unit="kWh",
+            value=total_electricity_demand_in_kilowatt_hour,
+            tag=KpiTagEnumClass.CAR,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(my_kpi_entry)
+
+        distance_driven_in_km = round(sum(self.meters_driven) / 1000, 1)
+        my_kpi_entry_2 = KpiEntry(
+            name="Distance driven",
+            unit="km",
+            value=distance_driven_in_km,
+            tag=KpiTagEnumClass.CAR,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(my_kpi_entry_2)
+        
+        return list_of_kpi_entries
 
     @staticmethod
     def get_cost_capex(config: CarConfig) -> Tuple[float, float, float]:

@@ -364,6 +364,7 @@ class SmartDevice(cp.Component):
             opex_maintenance_cost_in_euro=0,  # TODO: add maintenance costs
             co2_footprint_in_kg=0,
             consumption_in_kwh=self.consumption,
+            loadtype=lt.LoadTypes.ELECTRICITY
         )
 
         return opex_cost_data_class

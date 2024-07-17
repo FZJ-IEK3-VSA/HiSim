@@ -305,6 +305,7 @@ class Car(cp.Component):
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of energy and maintenance costs."""
         co2_per_simulated_period_in_kg = None
+        energy_costs_in_euro = 0
         for index, output in enumerate(all_outputs):
             if output.component_name == self.config.name + "_w" + str(self.config.source_weight):
                 if output.unit == lt.Units.LITER and output.load_type == lt.LoadTypes.DIESEL:

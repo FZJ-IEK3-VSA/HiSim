@@ -61,8 +61,6 @@ class KpiGenerator(JSONWizard, KpiPreparation):
 
         # get self-consumption, autarkie, injection
         (
-            grid_injection_in_kilowatt_hour,
-            self_consumption_in_kilowatt_hour,
             self.filtered_result_dataframe,
         ) = self.compute_self_consumption_injection_autarky(
             result_dataframe=self.filtered_result_dataframe,

@@ -210,7 +210,7 @@ class KpiPreparation:
         result_dataframe: pd.DataFrame,
         electricity_production_in_kilowatt_hour: float,
         electricity_consumption_in_kilowatt_hour: float,
-    ) -> Tuple[float, float, pd.DataFrame]:
+    ) -> pd.DataFrame:
         """Computes the self consumption, grid injection, autarky and battery losses if electricty production is bigger than zero."""
 
         if electricity_production_in_kilowatt_hour > 0:
@@ -295,7 +295,7 @@ class KpiPreparation:
                 autarkie_rate_entry.name: autarkie_rate_entry.to_dict(),
             }
         )
-        return grid_injection_in_kilowatt_hour, self_consumption_in_kilowatt_hour, result_dataframe
+        return result_dataframe
 
     def compute_battery_kpis(self, result_dataframe: pd.DataFrame) -> Tuple[float, float, float]:
         """Compute battery kpis."""
@@ -573,6 +573,7 @@ class KpiPreparation:
                 total_gas_co2_emissions_entry.name: total_gas_co2_emissions_entry.to_dict(),
                 total_investment_cost_per_simulated_period_entry.name: total_investment_cost_per_simulated_period_entry.to_dict(),
                 total_device_co2_footprint_per_simulated_period_entry.name: total_device_co2_footprint_per_simulated_period_entry.to_dict(),
+                total_maintenance_cost_entry.name: total_maintenance_cost_entry.to_dict(),
                 total_cost_entry.name: total_cost_entry.to_dict(),
                 total_emissions_entry.name: total_emissions_entry.to_dict(),
             }

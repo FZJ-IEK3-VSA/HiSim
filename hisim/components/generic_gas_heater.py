@@ -20,6 +20,7 @@ from hisim.component import (
     OpexCostDataClass,
     DisplayConfig,
 )
+from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 

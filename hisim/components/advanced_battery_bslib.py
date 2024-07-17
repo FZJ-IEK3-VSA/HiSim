@@ -277,7 +277,7 @@ class Battery(Component):
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of maintenance costs."""
-
+        battery_losses_in_kwh: float = 0.0
         for index, output in enumerate(all_outputs):
             if (
                 output.postprocessing_flag is not None

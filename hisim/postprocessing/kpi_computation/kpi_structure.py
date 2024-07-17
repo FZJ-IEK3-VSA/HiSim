@@ -14,7 +14,8 @@ class KpiTagEnumClass(Enum):
     """Determine KPI tags as enums."""
 
     GENERAL = "General"
-    COSTS_AND_EMISSIONS = "Costs and Emissions"
+    COSTS = "Costs"
+    EMISSIONS = "Emissions"
     BUILDING = "Building"
     BATTERY = "Battery"
     HEAT_DISTRIBUTION_SYSTEM = "Heat Distribution System"

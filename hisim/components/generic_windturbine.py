@@ -333,9 +333,10 @@ class Windturbine(cp.Component):
         # pylint: disable=unused-argument
         """Calculate OPEX costs, consisting of maintenance costs for PV."""
         opex_cost_data_class = OpexCostDataClass(
-            opex_cost=self.calc_maintenance_cost(),
-            co2_footprint=0,
-            consumption=0,
+            opex_energy_cost_in_euro=0,
+            opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
+            co2_footprint_in_kg=0,
+            consumption_in_kwh=0,
         )
         return opex_cost_data_class
 

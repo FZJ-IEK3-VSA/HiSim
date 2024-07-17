@@ -295,13 +295,15 @@ class Battery(Component):
                         * self.my_simulation_parameters.seconds_per_timestep
                         / 3.6e6,
                         1,
-                    )
+                    ) * (-1)
+                    battery_losses_in_kwh = self.battery_config.charge_in_kwh - self.battery_config.discharge_in_kwh
 
-        opex_cost_per_simulated_period_in_euro = self.calc_maintenance_cost()
         opex_cost_data_class = OpexCostDataClass(
-            opex_cost=opex_cost_per_simulated_period_in_euro,
-            co2_footprint=0,
-            consumption=0,
+            opex_energy_cost_in_euro=0,
+            opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
+            co2_footprint_in_kg=0,
+            consumption_in_kwh=battery_losses_in_kwh,
+            loadtype=LoadTypes.ELECTRICITY
         )
 
         return opex_cost_data_class

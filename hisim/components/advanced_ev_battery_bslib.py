@@ -276,9 +276,11 @@ class CarBattery(Component):
         # Todo: Battery Aging like in component advanced_battery_bslib? Or is this considered in maintenance cost of car?
 
         opex_cost_data_class = OpexCostDataClass(
-            opex_cost=0,
-            co2_footprint=0,
-            consumption=0,
+            opex_energy_cost_in_euro=0,
+            opex_maintenance_cost_in_euro=0,
+            co2_footprint_in_kg=0,
+            consumption_in_kwh=0,
+            loadtype=LoadTypes.ELECTRICITY
         )
 
         return opex_cost_data_class

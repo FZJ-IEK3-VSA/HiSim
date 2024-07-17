@@ -152,7 +152,8 @@ class CarConfig(cp.ConfigBase):
     # maintenance cost as share of investment [0..1]
     maintenance_cost_as_percentage_of_investment: float
     #: consumption of the car in kWh or l
-    consumption: float
+    consumption_in_kwh: float
+    consumption_in_liter: float
 
     @classmethod
     def get_main_classname(cls):
@@ -171,7 +172,8 @@ class CarConfig(cp.ConfigBase):
             cost=32035.0,
             lifetime=18,
             maintenance_cost_as_percentage_of_investment=0.02,
-            consumption=0,
+            consumption_in_kwh=0,
+            consumption_in_liter=0,
         )
         return config
 
@@ -187,7 +189,8 @@ class CarConfig(cp.ConfigBase):
             cost=44498.0,
             maintenance_cost_as_percentage_of_investment=0.02,
             lifetime=18,
-            consumption=0,
+            consumption_in_kwh=0,
+            consumption_in_liter=0,
         )
         return config
 
@@ -301,41 +304,44 @@ class Car(cp.Component):
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of energy and maintenance costs."""
-        opex_cost_per_simulated_period_in_euro = None
         co2_per_simulated_period_in_kg = None
         for index, output in enumerate(all_outputs):
             if output.component_name == self.config.name + "_w" + str(self.config.source_weight):
-                if output.unit == lt.Units.LITER:
-                    self.config.consumption = round(sum(postprocessing_results.iloc[:, index]), 1)
+                if output.unit == lt.Units.LITER and output.load_type == lt.LoadTypes.DIESEL:
+                    self.config.consumption_in_liter = round(sum(postprocessing_results.iloc[:, index]), 1)
+                    # heating value: https://nachhaltigmobil.schule/leistung-energie-verbrauch/#:~:text=Benzin%20hat%20einen%20Heizwert%20von,9%2C8%20kWh%20pro%20Liter.
+                    heating_value_of_diesel_in_kwh_per_liter = 9.8
+                    self.config.consumption_in_kwh = heating_value_of_diesel_in_kwh_per_liter * self.config.consumption_in_liter
                     emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
                         self.my_simulation_parameters.year
                     )
                     co2_per_unit = emissions_and_cost_factors.diesel_footprint_in_kg_per_l
                     euro_per_unit = emissions_and_cost_factors.diesel_costs_in_euro_per_l
 
-                    opex_cost_per_simulated_period_in_euro = (
-                        self.calc_maintenance_cost() + self.config.consumption * euro_per_unit
-                    )
-                    co2_per_simulated_period_in_kg = self.config.consumption * co2_per_unit
+                    energy_costs_in_euro = self.config.consumption_in_liter * euro_per_unit
+                    co2_per_simulated_period_in_kg = self.config.consumption_in_liter * co2_per_unit
 
-                elif output.unit == lt.Units.WATT:
-                    self.config.consumption = round(
+                elif output.unit == lt.Units.WATT and output.load_type == lt.LoadTypes.ELECTRICITY:
+                    self.config.consumption_in_kwh = round(
                         sum(postprocessing_results.iloc[:, index])
                         * self.my_simulation_parameters.seconds_per_timestep
                         / 3.6e6,
                         1,
                     )
+                    self.config.consumption_in_liter = 0
                     # No electricity costs for components except for Electricity Meter, because part of electricity consumption is feed by PV
-                    opex_cost_per_simulated_period_in_euro = self.calc_maintenance_cost()
+                    energy_costs_in_euro = 0
                     co2_per_simulated_period_in_kg = 0.0
 
-        if opex_cost_per_simulated_period_in_euro is None or co2_per_simulated_period_in_kg is None:
+        if co2_per_simulated_period_in_kg is None:
             raise ValueError("Could not calculate OPEX for Car component.")
 
         opex_cost_data_class = OpexCostDataClass(
-            opex_cost=opex_cost_per_simulated_period_in_euro,
-            co2_footprint=co2_per_simulated_period_in_kg,
-            consumption=self.config.consumption,
+            opex_energy_cost_in_euro=energy_costs_in_euro,
+            opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
+            co2_footprint_in_kg=co2_per_simulated_period_in_kg,
+            consumption_in_kwh=self.config.consumption_in_kwh,
+            loadtype=self.config.fuel
         )
 
         return opex_cost_data_class

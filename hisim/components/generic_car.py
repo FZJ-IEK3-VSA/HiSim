@@ -9,7 +9,7 @@ import datetime as dt
 from dataclasses import dataclass
 
 # -*- coding: utf-8 -*-
-from typing import List, Any, Tuple, Dict
+from typing import List, Any, Tuple, Dict, Optional
 import pandas as pd
 from dataclasses_json import dataclass_json
 
@@ -299,21 +299,23 @@ class Car(cp.Component):
             )  # conversion meter to kilometer
             stsv.set_output_value(self.fuel_consumption, liters_used)
 
-    def get_cost_opex(
-        self,
-        all_outputs: List,
-        postprocessing_results: pd.DataFrame,
-    ) -> OpexCostDataClass:
+    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of energy and maintenance costs."""
         co2_per_simulated_period_in_kg = None
         energy_costs_in_euro = 0
         for index, output in enumerate(all_outputs):
             if output.component_name == self.config.name + "_w" + str(self.config.source_weight):
-                if output.field_name == self.FuelConsumption and output.unit == lt.Units.LITER and output.load_type == lt.LoadTypes.DIESEL:
+                if (
+                    output.field_name == self.FuelConsumption
+                    and output.unit == lt.Units.LITER
+                    and output.load_type == lt.LoadTypes.DIESEL
+                ):
                     self.config.consumption_in_liter = round(sum(postprocessing_results.iloc[:, index]), 1)
                     # heating value: https://nachhaltigmobil.schule/leistung-energie-verbrauch/#:~:text=Benzin%20hat%20einen%20Heizwert%20von,9%2C8%20kWh%20pro%20Liter.
                     heating_value_of_diesel_in_kwh_per_liter = 9.8
-                    self.config.consumption_in_kwh = heating_value_of_diesel_in_kwh_per_liter * self.config.consumption_in_liter
+                    self.config.consumption_in_kwh = (
+                        heating_value_of_diesel_in_kwh_per_liter * self.config.consumption_in_liter
+                    )
                     emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
                         self.my_simulation_parameters.year
                     )
@@ -323,10 +325,20 @@ class Car(cp.Component):
                     energy_costs_in_euro = self.config.consumption_in_liter * euro_per_unit
                     co2_per_simulated_period_in_kg = self.config.consumption_in_liter * co2_per_unit
 
-                elif output.field_name == self.ElectricityOutput and output.unit == lt.Units.WATT and output.load_type == lt.LoadTypes.ELECTRICITY:
+                elif (
+                    output.field_name == self.ElectricityOutput
+                    and output.unit == lt.Units.WATT
+                    and output.load_type == lt.LoadTypes.ELECTRICITY
+                ):
                     print("car output ", output.full_name)
-                    print("car driven kilometers", sum(self.meters_driven)/ 1000)
-                    self.config.consumption_in_kwh = round(KpiHelperClass.compute_total_energy_from_power_timeseries(power_timeseries_in_watt=postprocessing_results.iloc[:, index], timeresolution=self.my_simulation_parameters.seconds_per_timestep), 1)
+                    print("car driven kilometers", sum(self.meters_driven) / 1000)
+                    self.config.consumption_in_kwh = round(
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=postprocessing_results.iloc[:, index],
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        ),
+                        1,
+                    )
                     self.config.consumption_in_liter = 0
                     # No electricity costs for components except for Electricity Meter, because part of electricity consumption is feed by PV
                     energy_costs_in_euro = 0
@@ -340,16 +352,12 @@ class Car(cp.Component):
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
             consumption_in_kwh=self.config.consumption_in_kwh,
-            loadtype=self.config.fuel
+            loadtype=self.config.fuel,
         )
 
         return opex_cost_data_class
 
-    def get_component_kpi_entries(
-        self,
-        all_outputs: List,
-        postprocessing_results: pd.DataFrame,
-    ) -> List[KpiEntry]:
+    def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         total_electricity_demand_in_kilowatt_hour: Optional[float] = None
         list_of_kpi_entries: List[KpiEntry] = []
@@ -359,9 +367,15 @@ class Car(cp.Component):
                 and output.field_name == self.ElectricityOutput
                 and output.load_type == lt.LoadTypes.ELECTRICITY
             ):
-                total_electricity_demand_in_kilowatt_hour = round(KpiHelperClass.compute_total_energy_from_power_timeseries(power_timeseries_in_watt=postprocessing_results.iloc[:, index], timeresolution=self.my_simulation_parameters.seconds_per_timestep), 1)
+                total_electricity_demand_in_kilowatt_hour = round(
+                    KpiHelperClass.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=postprocessing_results.iloc[:, index],
+                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    ),
+                    1,
+                )
                 break
-        
+
         my_kpi_entry = KpiEntry(
             name="Electricity demand for driving",
             unit="kWh",
@@ -380,7 +394,7 @@ class Car(cp.Component):
             description=self.component_name,
         )
         list_of_kpi_entries.append(my_kpi_entry_2)
-        
+
         return list_of_kpi_entries
 
     @staticmethod
@@ -475,12 +489,7 @@ class Car(cp.Component):
                 self.car_location = self.car_location
 
             # save data in cache
-            database = pd.DataFrame(
-                {
-                    "car_location": self.car_location,
-                    "meters_driven": self.meters_driven,
-                }
-            )
+            database = pd.DataFrame({"car_location": self.car_location, "meters_driven": self.meters_driven,})
 
             database.to_csv(cache_filepath)
             del database

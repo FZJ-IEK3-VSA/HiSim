@@ -71,14 +71,14 @@ class KpiPreparation:
                     or InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED in output.postprocessing_flag
                 ):
                     total_consumption_ids.append(index)
-                    print("output for total consumption", output.full_name, output.unit)
+                    log.debug("Output considered in total electricity consumption " + output.full_name + " " + str(output.unit))
 
                 elif InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
                     if ComponentType.BATTERY in output.postprocessing_flag:
                         battery_charge_discharge_ids.append(index)
                     elif ComponentType.CAR_BATTERY in output.postprocessing_flag:
                         total_consumption_ids.append(index)
-                        print("output for total consumption", output.full_name, output.unit)
+                        log.debug("Output considered in total electricity consumption " + output.full_name + " " + str(output.unit))
             else:
                 continue
 
@@ -152,7 +152,8 @@ class KpiPreparation:
         total_electricity_consumption_in_kilowatt_hour = (
             total_electricity_consumption_in_kilowatt_hour + battery_losses_in_kilowatt_hour
         )
-        print("total elec consumtpion", total_electricity_consumption_in_kilowatt_hour)
+        log.debug("Battery losses " + str(battery_losses_in_kilowatt_hour))
+        log.debug("Total electricity consumption (battery losses included) " + str(total_electricity_consumption_in_kilowatt_hour))
 
         # make kpi entry
         total_consumtion_entry = KpiEntry(
@@ -491,7 +492,7 @@ class KpiPreparation:
         )
         if Path(opex_results_path).exists():
             opex_df = pd.read_csv(opex_results_path, index_col=0)
-            print("opex df", opex_df)
+            log.debug("Opex df " + str(opex_df) + "\n")
             total_maintenance_cost_per_simulated_period = opex_df["Maintenance Costs in EUR"].iloc[-1]
 
         else:
@@ -500,7 +501,7 @@ class KpiPreparation:
 
         if Path(capex_results_path).exists():
             capex_df = pd.read_csv(capex_results_path, index_col=0)
-            print("capex df", capex_df)
+            log.debug("Capex df " + str(capex_df) + "\n")
             total_investment_cost_per_simulated_period = capex_df["Investment in EUR"].iloc[-1]
             total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint in kg"].iloc[-1]
         else:

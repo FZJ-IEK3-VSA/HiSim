@@ -9,7 +9,7 @@ import datetime as dt
 from dataclasses import dataclass
 
 # -*- coding: utf-8 -*-
-from typing import List, Any, Tuple, Dict, Optional
+from typing import List, Any, Tuple, Dict
 import pandas as pd
 from dataclasses_json import dataclass_json
 
@@ -330,8 +330,6 @@ class Car(cp.Component):
                     and output.unit == lt.Units.WATT
                     and output.load_type == lt.LoadTypes.ELECTRICITY
                 ):
-                    print("car output ", output.full_name)
-                    print("car driven kilometers", sum(self.meters_driven) / 1000)
                     self.config.consumption_in_kwh = round(
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=postprocessing_results.iloc[:, index],
@@ -359,7 +357,7 @@ class Car(cp.Component):
 
     def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
-        total_electricity_demand_in_kilowatt_hour: Optional[float] = None
+
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
             if (
@@ -374,26 +372,53 @@ class Car(cp.Component):
                     ),
                     1,
                 )
+                my_kpi_entry = KpiEntry(
+                    name="Electricity demand for driving",
+                    unit="kWh",
+                    value=total_electricity_demand_in_kilowatt_hour,
+                    tag=KpiTagEnumClass.CAR,
+                    description=self.component_name,
+                )
+                list_of_kpi_entries.append(my_kpi_entry)
+                break
+            if (
+                output.component_name == self.component_name
+                and output.field_name == self.FuelConsumption
+                and output.load_type == lt.LoadTypes.DIESEL
+                and output.unit == lt.Units.LITER
+            ):
+                consumption_in_liter = round(sum(postprocessing_results.iloc[:, index]), 1)
+                # heating value: https://nachhaltigmobil.schule/leistung-energie-verbrauch/#:~:text=Benzin%20hat%20einen%20Heizwert%20von,9%2C8%20kWh%20pro%20Liter.
+                heating_value_of_diesel_in_kwh_per_liter = 9.8
+                consumption_in_kwh = round((heating_value_of_diesel_in_kwh_per_liter * consumption_in_liter), 1)
+
+                my_kpi_entry = KpiEntry(
+                    name="Diesel demand for driving",
+                    unit="liter",
+                    value=consumption_in_liter,
+                    tag=KpiTagEnumClass.CAR,
+                    description=self.component_name,
+                )
+                list_of_kpi_entries.append(my_kpi_entry)
+                my_kpi_entry_2 = KpiEntry(
+                    name="Diesel demand for driving",
+                    unit="kWh",
+                    value=consumption_in_kwh,
+                    tag=KpiTagEnumClass.CAR,
+                    description=self.component_name,
+                )
+                list_of_kpi_entries.append(my_kpi_entry_2)
                 break
 
-        my_kpi_entry = KpiEntry(
-            name="Electricity demand for driving",
-            unit="kWh",
-            value=total_electricity_demand_in_kilowatt_hour,
-            tag=KpiTagEnumClass.CAR,
-            description=self.component_name,
-        )
-        list_of_kpi_entries.append(my_kpi_entry)
-
         distance_driven_in_km = round(sum(self.meters_driven) / 1000, 1)
-        my_kpi_entry_2 = KpiEntry(
+        my_kpi_entry_3 = KpiEntry(
             name="Distance driven",
             unit="km",
             value=distance_driven_in_km,
             tag=KpiTagEnumClass.CAR,
             description=self.component_name,
         )
-        list_of_kpi_entries.append(my_kpi_entry_2)
+        list_of_kpi_entries.append(my_kpi_entry_3)
 
         return list_of_kpi_entries
 
@@ -489,7 +514,7 @@ class Car(cp.Component):
                 self.car_location = self.car_location
 
             # save data in cache
-            database = pd.DataFrame({"car_location": self.car_location, "meters_driven": self.meters_driven,})
+            database = pd.DataFrame({"car_location": self.car_location, "meters_driven": self.meters_driven})
 
             database.to_csv(cache_filepath)
             del database

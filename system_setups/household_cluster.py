@@ -145,7 +145,7 @@ def setup_function(
 
     # Set Simulation Parameters
     year = 2021
-    seconds_per_timestep = 60 * 60
+    seconds_per_timestep = 60 * 15
 
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year(
@@ -169,8 +169,8 @@ def setup_function(
     # Set System Parameters
 
     # Set heating systems for space heating and domestic hot water
-    space_heating_system = HeatingSystemType.HEAT_PUMP
-    domestic_hot_water_heating_system = HeatingSystemType.HEAT_PUMP
+    space_heating_system = HeatingSystemType.GAS_HEATER
+    domestic_hot_water_heating_system = HeatingSystemType.GAS_HEATER
     # Set Heat Pump Controller
     hp_controller_mode = 2  # mode 1 for heating/off and mode 2 for heating/cooling/off
     heating_reference_temperature_in_celsius = -7.0
@@ -640,7 +640,7 @@ def setup_function(
         further_result_folder_description=os.path.join(
             *[
                 further_result_folder_description,
-                f"PV-{share_of_maximum_pv_potential}-hds-{my_hds_controller_information.heat_distribution_system_type}"
+                f"PV-{share_of_maximum_pv_potential}"
                 f"-SH-{space_heating_system.name}-DHW-{domestic_hot_water_heating_system.name}",
                 f"weather-location-{weather_location}",
             ]

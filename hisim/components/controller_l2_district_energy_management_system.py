@@ -547,9 +547,9 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
         available_surplus_electricity_in_watt = (
             self.state.production_in_watt - self.state.consumption_uncontrolled_in_watt
         )
-
-        if timestep == 2100:
-            print("debug")
+        #
+        # if timestep > 360:
+        #     print("debug")
 
         if self.strategy == EMSControlStrategy.BUILDING_OPTIMIZEOWNCONSUMPTION_ITERATIV:
             available_surplus_electricity_in_watt = (
@@ -579,12 +579,12 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                     outputs_sorted=self.outputs_sorted,
                 )
             )
-            # self.modify_set_temperatures_for_building_components_in_case_of_surplus_electricity_iterativ(
-            #     available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
-            #     stsv=stsv,
-            #     inputs_sorted=self.inputs_sorted,
-            #     component_types_sorted=self.component_types_sorted,
-            # )
+            self.modify_set_temperatures_for_building_components_in_case_of_surplus_electricity_iterativ(
+                available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
+                stsv=stsv,
+                inputs_sorted=self.inputs_sorted,
+                component_types_sorted=self.component_types_sorted,
+            )
 
         if self.strategy == EMSControlStrategy.DISTRICT_OPTIMIZECONSUMPTION_PARALLEL:
             available_surplus_electricity_in_watt = (
@@ -646,7 +646,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
             single_component_type_sorted = component_types_sorted[index]
             single_output_sorted = outputs_sorted[index]
 
-            available_surplus_electricity_in_watt = self.control_electricity_to_building_components_iterative(
+            available_surplus_electricity_in_watt = self.control_electricity_iterative(
                 available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
                 stsv=stsv,
                 current_component_type=single_component_type_sorted,
@@ -656,7 +656,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
 
         return available_surplus_electricity_in_watt
 
-    def control_electricity_to_building_components_iterative(
+    def control_electricity_iterative(
         self,
         available_surplus_electricity_in_watt: float,
         stsv: cp.SingleTimeStepValues,
@@ -804,6 +804,14 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
             value = stsv.get_input_value(component_input=inputs_sorted[index])
             component_electricity_demand[item] = -value
 
+
+
+        if available_surplus_electricity_in_watt>1000 and all(demand < -100 for demand in component_electricity_demand.values()):
+
+            print("debug")
+
+
+
         repeat_count = 0
         previous_single_source_weight_sorted = 0
 
@@ -839,9 +847,9 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                 if single_source_weight_sorted > previous_single_source_weight_sorted:
                     counter_inner_while = 0
 
-                if component_types_and_number_of_same_source_weights[single_source_weight_sorted]["count"] > 1:
+                available_surplus_electricity_in_watt = available_surplus_electricity_in_watt_next_component
 
-                    available_surplus_electricity_in_watt = available_surplus_electricity_in_watt_next_component
+                if component_types_and_number_of_same_source_weights[single_source_weight_sorted]["count"] > 1:
 
                     number_of_components_with_electricity_demand_and_same_source_weight = sum(
                         1
@@ -851,31 +859,35 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                         in component_types_and_number_of_same_source_weights[single_source_weight_sorted]["components"]
                     )
 
-                    if (
-                        component_electricity_demand[single_component_type_sorted] >= 0
-                        or number_of_components_with_electricity_demand_and_same_source_weight == 0
-                    ):
-                        available_surplus_electricity_in_watt_next_component = available_surplus_electricity_in_watt
-                        additional_electricity_demand = additional_electricity_demand
-                        surplus_next_iteration = surplus_next_iteration
-                        continue
+                    # if (
+                    #     component_electricity_demand[single_component_type_sorted] >= 0
+                    #     or number_of_components_with_electricity_demand_and_same_source_weight == 0
+                    # ):
+                    #     available_surplus_electricity_in_watt_next_component = available_surplus_electricity_in_watt
+                    #     additional_electricity_demand = additional_electricity_demand
+                    #     surplus_next_iteration = surplus_next_iteration
+                    #     continue
 
                     if counter_inner_while == 0:
-                        available_surplus_electricity_in_watt_split = (
-                            available_surplus_electricity_in_watt
-                            / number_of_components_with_electricity_demand_and_same_source_weight
-                        )
-                        if number_of_components_with_electricity_demand_and_same_source_weight == 1:
+                        if number_of_components_with_electricity_demand_and_same_source_weight == 0:
+                            available_surplus_electricity_in_watt_split = available_surplus_electricity_in_watt
                             available_surplus_electricity_in_watt_next_component = 0
                         else:
-                            available_surplus_electricity_in_watt_next_component = available_surplus_electricity_in_watt_split
+                            available_surplus_electricity_in_watt_split = (
+                                available_surplus_electricity_in_watt
+                                / number_of_components_with_electricity_demand_and_same_source_weight
+                            )
+                            if number_of_components_with_electricity_demand_and_same_source_weight == 1:
+                                available_surplus_electricity_in_watt_next_component = 0
+                            else:
+                                available_surplus_electricity_in_watt_next_component = available_surplus_electricity_in_watt_split
 
                     else:
                         available_surplus_electricity_in_watt_split = (
                             available_surplus_electricity_in_watt_next_component
                         )
 
-                    available_surplus_electricity_in_watt = self.control_only_electricity_for_building_components_parallel(
+                    available_surplus_electricity_in_watt = self.control_electricity_parallel(
                         available_surplus_electricity_in_watt=available_surplus_electricity_in_watt_split,
                         stsv=stsv,
                         current_component_type=single_component_type_sorted,
@@ -891,10 +903,12 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                         available_surplus_electricity_in_watt = 0
                     else:
                         additional_electricity_demand += available_surplus_electricity_in_watt
+                        available_surplus_electricity_in_watt = 0
 
                     if (
                         surplus_next_iteration > 0
                         and counter_inner_while == number_of_components_with_same_source_weights
+                        and number_of_components_with_electricity_demand_and_same_source_weight > 1
                     ):
                         repeat_loop = True
 
@@ -904,7 +918,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                         available_surplus_electricity_in_watt + surplus_next_iteration + additional_electricity_demand
                     )
 
-                    available_surplus_electricity_in_watt = self.control_only_electricity_for_building_components_parallel(
+                    available_surplus_electricity_in_watt = self.control_electricity_parallel(
                         available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
                         stsv=stsv,
                         current_component_type=single_component_type_sorted,
@@ -923,6 +937,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
             if repeat_loop:
                 repeat_count += 1
                 available_surplus_electricity_in_watt_next_component = surplus_next_iteration
+
             else:
                 break
 
@@ -1100,7 +1115,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
 
         return available_surplus_electricity_in_watt
 
-    def control_only_electricity_for_building_components_parallel(
+    def control_electricity_parallel(
         self,
         available_surplus_electricity_in_watt: float,
         stsv: cp.SingleTimeStepValues,

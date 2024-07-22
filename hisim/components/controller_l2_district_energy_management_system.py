@@ -2,7 +2,7 @@
 
 It received the electricity consumption
 of all components and the PV production. According to the balance it
-sends activation/deactivation siganls to components.
+sends activation/deactivation signals to components.
 The component with the lowest source weight is activated first.
 """
 
@@ -326,7 +326,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.RESIDENTS, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
-                source_weight=2,
+                source_weight=1,
             )
         )
         self.add_component_output(
@@ -335,7 +335,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                 lt.ComponentType.RESIDENTS,
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
-            source_weight=2,
+            source_weight=1,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for Occupancy. ",
@@ -362,7 +362,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                     lt.ComponentType.HEAT_PUMP_BUILDING,
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
                 ],
-                source_weight=1,
+                source_weight=2,
             )
         )
         self.add_component_output(
@@ -371,7 +371,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                 lt.ComponentType.HEAT_PUMP_BUILDING,
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
-            source_weight=1,
+            source_weight=2,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for Heating Heat Pump. ",
@@ -397,7 +397,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.HEAT_PUMP_DHW, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
-                source_weight=1,
+                source_weight=2,
             )
         )
 
@@ -407,7 +407,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                 lt.ComponentType.HEAT_PUMP_DHW,
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
-            source_weight=1,
+            source_weight=2,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for dhw heat pump.",
@@ -547,9 +547,6 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
         available_surplus_electricity_in_watt = (
             self.state.production_in_watt - self.state.consumption_uncontrolled_in_watt
         )
-        #
-        # if timestep > 360:
-        #     print("debug")
 
         if self.strategy == EMSControlStrategy.BUILDING_OPTIMIZEOWNCONSUMPTION_ITERATIV:
             available_surplus_electricity_in_watt = (
@@ -587,22 +584,23 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
             )
 
         if self.strategy == EMSControlStrategy.DISTRICT_OPTIMIZECONSUMPTION_PARALLEL:
-            available_surplus_electricity_in_watt = (
-                self.distribute_available_surplus_from_district_to_building_parallel(
-                    source_weights_sorted=self.source_weights_sorted,
-                    available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
-                    stsv=stsv,
-                    inputs_sorted=self.inputs_sorted,
-                    component_types_sorted=self.component_types_sorted,
-                    outputs_sorted=self.outputs_sorted,
-                )
-            )
+            # available_surplus_electricity_in_watt = (
+            #     self.distribute_available_surplus_from_district_to_building_parallel(
+            #         source_weights_sorted=self.source_weights_sorted,
+            #         available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
+            #         stsv=stsv,
+            #         inputs_sorted=self.inputs_sorted,
+            #         component_types_sorted=self.component_types_sorted,
+            #         outputs_sorted=self.outputs_sorted,
+            #     )
+            # )
             # self.modify_set_temperatures_for_components_in_case_of_surplus_electricity(
             #     available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
             #     stsv=stsv,
             #     inputs_sorted=self.inputs_sorted,
             #     component_types_sorted=self.component_types_sorted,
             # )
+            pass
 
         stsv.set_output_value(self.total_electricity_to_or_from_grid, available_surplus_electricity_in_watt)
         stsv.set_output_value(
@@ -789,6 +787,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
         To do this, the surplus is divided by the number of components with equal source weight so that each component
         has the chance to receive an equal share. If a component requires less, the rest is returned to available surplus.
         """
+
         component_types_and_number_of_same_source_weights: dict = {}
 
         for weight, component in zip(source_weights_sorted, component_types_sorted):
@@ -802,102 +801,128 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
 
         for index, item in enumerate(component_types_sorted):
             value = stsv.get_input_value(component_input=inputs_sorted[index])
-            component_electricity_demand[item] = -value
+            if item == "Battery":
+                component_electricity_demand[item] = float(value)
+            else:
+                component_electricity_demand[item] = -1 * float(abs(value))
 
+        surplus_next_iteration = 0.0
+        additional_electricity_demand = 0.0
 
+        for single_source_weight_sorted in list(component_types_and_number_of_same_source_weights.keys()):
 
-        if available_surplus_electricity_in_watt>1000 and all(demand < -100 for demand in component_electricity_demand.values()):
+            available_surplus_electricity_in_watt_next_component = (
+                available_surplus_electricity_in_watt + additional_electricity_demand + surplus_next_iteration
+            )
 
-            print("debug")
-
-
-
-        repeat_count = 0
-        previous_single_source_weight_sorted = 0
-
-        available_surplus_electricity_in_watt_next_component = available_surplus_electricity_in_watt
-
-        repeat_max = max(
-            component_types_and_number_of_same_source_weights[single_source_weight_sorted]["count"]
-            for single_source_weight_sorted in source_weights_sorted
-        )
-
-        while repeat_count < repeat_max + 5:
-            repeat_loop = False
-            index = 0
-            surplus_next_iteration = 0.0
-            additional_electricity_demand = 0.0
-            counter_inner_while = 0
-
-            while index < len(inputs_sorted):
-                single_component_type_sorted = component_types_sorted[index]
-                single_output_sorted = outputs_sorted[index]
-                single_source_weight_sorted = source_weights_sorted[index]
-
+            if component_types_and_number_of_same_source_weights[single_source_weight_sorted]["count"] > 1:
                 number_of_components_with_same_source_weights = component_types_and_number_of_same_source_weights[
                     single_source_weight_sorted
                 ]["count"]
-
-                electricity_demand_from_current_input_component_in_watt = component_electricity_demand[
-                    single_component_type_sorted
-                ]
-
-                index += 1
-
-                if single_source_weight_sorted > previous_single_source_weight_sorted:
+                repeat_loop = True
+                repeat_count = 0
+                while repeat_loop:
+                    repeat_loop = False
+                    index = 0
+                    surplus_next_iteration = 0.0
+                    additional_electricity_demand = 0.0
                     counter_inner_while = 0
 
-                available_surplus_electricity_in_watt = available_surplus_electricity_in_watt_next_component
+                    while index < len(inputs_sorted):
+                        single_component_type_sorted = component_types_sorted[index]
+                        single_output_sorted = outputs_sorted[index]
+                        current_weight = source_weights_sorted[index]
 
-                if component_types_and_number_of_same_source_weights[single_source_weight_sorted]["count"] > 1:
+                        if current_weight != single_source_weight_sorted:
+                            index += 1
+                            continue
 
-                    number_of_components_with_electricity_demand_and_same_source_weight = sum(
-                        1
-                        for key, wert in component_electricity_demand.items()
-                        if wert < 0
-                        and key
-                        in component_types_and_number_of_same_source_weights[single_source_weight_sorted]["components"]
-                    )
+                        electricity_demand_from_current_input_component_in_watt = component_electricity_demand[
+                            single_component_type_sorted
+                        ]
 
-                    # if (
-                    #     component_electricity_demand[single_component_type_sorted] >= 0
-                    #     or number_of_components_with_electricity_demand_and_same_source_weight == 0
-                    # ):
-                    #     available_surplus_electricity_in_watt_next_component = available_surplus_electricity_in_watt
-                    #     additional_electricity_demand = additional_electricity_demand
-                    #     surplus_next_iteration = surplus_next_iteration
-                    #     continue
+                        if repeat_count > 0 and component_electricity_demand[single_component_type_sorted] >= 0:
+                            index += 1
+                            continue
 
-                    if counter_inner_while == 0:
-                        if number_of_components_with_electricity_demand_and_same_source_weight == 0:
-                            available_surplus_electricity_in_watt_split = available_surplus_electricity_in_watt
-                            available_surplus_electricity_in_watt_next_component = 0
-                        else:
-                            available_surplus_electricity_in_watt_split = (
-                                available_surplus_electricity_in_watt
-                                / number_of_components_with_electricity_demand_and_same_source_weight
-                            )
-                            if number_of_components_with_electricity_demand_and_same_source_weight == 1:
-                                available_surplus_electricity_in_watt_next_component = 0
-                            else:
-                                available_surplus_electricity_in_watt_next_component = available_surplus_electricity_in_watt_split
-
-                    else:
-                        available_surplus_electricity_in_watt_split = (
-                            available_surplus_electricity_in_watt_next_component
+                        number_of_components_with_electricity_demand_and_same_source_weight = sum(
+                            1
+                            for key, wert in component_electricity_demand.items()
+                            if wert < 0
+                            and key in component_types_and_number_of_same_source_weights[current_weight]["components"]
                         )
 
+                        if counter_inner_while == 0:
+                            if number_of_components_with_electricity_demand_and_same_source_weight <= 1:
+                                available_surplus_electricity_in_watt_split = (
+                                    available_surplus_electricity_in_watt_next_component
+                                )
+                                available_surplus_electricity_in_watt_next_component = 0
+                            else:
+                                available_surplus_electricity_in_watt_split = (
+                                    available_surplus_electricity_in_watt_next_component
+                                    / number_of_components_with_electricity_demand_and_same_source_weight
+                                )
+                                available_surplus_electricity_in_watt_next_component = (
+                                    available_surplus_electricity_in_watt_split
+                                )
+                        else:
+                            available_surplus_electricity_in_watt_split = (
+                                available_surplus_electricity_in_watt_next_component
+                            )
+
+                        available_surplus_electricity_in_watt = self.control_electricity_parallel(
+                            available_surplus_electricity_in_watt=available_surplus_electricity_in_watt_split,
+                            stsv=stsv,
+                            current_component_type=single_component_type_sorted,
+                            current_output=single_output_sorted,
+                            component_electricity_demand=component_electricity_demand,
+                            electricity_demand_from_current_input_component_in_watt=electricity_demand_from_current_input_component_in_watt,
+                        )
+
+                        if available_surplus_electricity_in_watt > 0:
+                            surplus_next_iteration += available_surplus_electricity_in_watt
+                            available_surplus_electricity_in_watt = 0
+                        else:
+                            additional_electricity_demand += available_surplus_electricity_in_watt
+                            available_surplus_electricity_in_watt = 0
+
+                        counter_inner_while += 1
+                        index += 1
+
+                    if (
+                        surplus_next_iteration > 0 > additional_electricity_demand
+                        and counter_inner_while >= number_of_components_with_same_source_weights
+                    ):
+                        available_surplus_electricity_in_watt_next_component = surplus_next_iteration
+                        repeat_count += 1
+                        repeat_loop = True
+
+            else:
+                index = 0
+                surplus_next_iteration = 0.0
+                additional_electricity_demand = 0.0
+                while index < len(inputs_sorted):
+                    single_component_type_sorted = component_types_sorted[index]
+                    single_output_sorted = outputs_sorted[index]
+                    current_weight = source_weights_sorted[index]
+
+                    if current_weight != single_source_weight_sorted:
+                        index += 1
+                        continue
+
+                    electricity_demand_from_current_input_component_in_watt = component_electricity_demand[
+                        single_component_type_sorted
+                    ]
+
                     available_surplus_electricity_in_watt = self.control_electricity_parallel(
-                        available_surplus_electricity_in_watt=available_surplus_electricity_in_watt_split,
+                        available_surplus_electricity_in_watt=available_surplus_electricity_in_watt_next_component,
                         stsv=stsv,
                         current_component_type=single_component_type_sorted,
                         current_output=single_output_sorted,
                         component_electricity_demand=component_electricity_demand,
                         electricity_demand_from_current_input_component_in_watt=electricity_demand_from_current_input_component_in_watt,
                     )
-
-                    counter_inner_while += 1
-
                     if available_surplus_electricity_in_watt > 0:
                         surplus_next_iteration += available_surplus_electricity_in_watt
                         available_surplus_electricity_in_watt = 0
@@ -905,213 +930,9 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                         additional_electricity_demand += available_surplus_electricity_in_watt
                         available_surplus_electricity_in_watt = 0
 
-                    if (
-                        surplus_next_iteration > 0
-                        and counter_inner_while == number_of_components_with_same_source_weights
-                        and number_of_components_with_electricity_demand_and_same_source_weight > 1
-                    ):
-                        repeat_loop = True
+                    index += 1
 
-                else:
-
-                    available_surplus_electricity_in_watt = (
-                        available_surplus_electricity_in_watt + surplus_next_iteration + additional_electricity_demand
-                    )
-
-                    available_surplus_electricity_in_watt = self.control_electricity_parallel(
-                        available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
-                        stsv=stsv,
-                        current_component_type=single_component_type_sorted,
-                        current_output=single_output_sorted,
-                        component_electricity_demand=component_electricity_demand,
-                        electricity_demand_from_current_input_component_in_watt=electricity_demand_from_current_input_component_in_watt,
-                    )
-
-                    available_surplus_electricity_in_watt_next_component = available_surplus_electricity_in_watt
-
-                previous_single_source_weight_sorted = single_source_weight_sorted
-
-                if repeat_loop:
-                    break
-
-            if repeat_loop:
-                repeat_count += 1
-                available_surplus_electricity_in_watt_next_component = surplus_next_iteration
-
-            else:
-                break
-
-        # available_surplus_electricity_in_watt = sum(
-        #     values for values in component_electricity_demand.values()
-        # )  # if values < 0)
-
-        max_key = max(component_types_and_number_of_same_source_weights.keys())
-        components_with_max_count = component_types_and_number_of_same_source_weights[max_key]["components"]
-
-        available_surplus_electricity_in_watt = sum(
-            component_electricity_demand[component] for component in components_with_max_count
-        )
-
-        return available_surplus_electricity_in_watt
-
-    def distribute_available_surplus_from_district_to_building_parallel(
-        self,
-        source_weights_sorted: List[int],
-        available_surplus_electricity_in_watt: float,
-        stsv: cp.SingleTimeStepValues,
-        inputs_sorted: List[ComponentInput],
-        component_types_sorted: List[lt.ComponentType],
-        outputs_sorted: List[ComponentOutput],
-    ) -> float:
-        """Evaluates available surplus electricity component by component, parallel, and sends updated signals back.
-
-        Parallel distribution of surplus when components have equal source weight.
-        To do this, the surplus is divided by the number of components with equal source weight so that each component
-        has the chance to receive an equal share. If a component requires less, the rest is returned to available surplus.
-        """
-        component_types_and_number_of_same_source_weights: dict = {}
-
-        for weight, component in zip(source_weights_sorted, component_types_sorted):
-            if weight in component_types_and_number_of_same_source_weights:
-                component_types_and_number_of_same_source_weights[weight]["count"] += 1
-                component_types_and_number_of_same_source_weights[weight]["components"].append(component)
-            else:
-                component_types_and_number_of_same_source_weights[weight] = {"count": 1, "components": [component]}
-
-        component_electricity_demand: dict = {}
-
-        for index, item in enumerate(component_types_sorted):
-            value = stsv.get_input_value(component_input=inputs_sorted[index])
-            component_electricity_demand[item] = -value
-
-        repeat_count = 0
-        previous_single_source_weight_sorted = 0
-
-        available_surplus_electricity_in_watt_next_component = available_surplus_electricity_in_watt
-
-        for single_source_weight_sorted in source_weights_sorted:
-            number_of_components_with_electricity_demand_and_same_source_weight = sum(
-                1
-                for key, wert in component_electricity_demand.items()
-                if wert < 0
-                and key in component_types_and_number_of_same_source_weights[single_source_weight_sorted]["components"]
-            )
-
-        while repeat_count < number_of_components_with_electricity_demand_and_same_source_weight + 1:
-            repeat_loop = False
-            index = 0
-            surplus_next_iteration = 0.0
-            counter_inner_while = 0
-
-            while index < len(inputs_sorted):
-                single_component_type_sorted = component_types_sorted[index]
-                single_output_sorted = outputs_sorted[index]
-                single_source_weight_sorted = source_weights_sorted[index]
-
-                electricity_demand_from_current_input_component_in_watt = component_electricity_demand[
-                    single_component_type_sorted
-                ]
-
-                index += 1
-
-                available_surplus_electricity_in_watt = available_surplus_electricity_in_watt_next_component
-
-                if single_source_weight_sorted > previous_single_source_weight_sorted:
-                    counter_inner_while = 0
-
-                if component_types_and_number_of_same_source_weights[single_source_weight_sorted]["count"] > 1:
-
-                    number_of_components_with_electricity_demand_and_same_source_weight = sum(
-                        1
-                        for key, wert in component_electricity_demand.items()
-                        if wert < 0
-                        and key
-                        in component_types_and_number_of_same_source_weights[single_source_weight_sorted]["components"]
-                    )
-
-                    if (
-                        component_electricity_demand[single_component_type_sorted] >= 0
-                        or number_of_components_with_electricity_demand_and_same_source_weight == 0
-                    ):
-                        available_surplus_electricity_in_watt_next_component = available_surplus_electricity_in_watt
-                        continue
-
-                    #   if available_surplus_electricity_in_watt > 0:
-
-                    if counter_inner_while == 0:
-                        available_surplus_electricity_in_watt_split = (
-                            available_surplus_electricity_in_watt
-                            / number_of_components_with_electricity_demand_and_same_source_weight
-                        )
-                        available_surplus_electricity_in_watt_next_component = (
-                            available_surplus_electricity_in_watt - available_surplus_electricity_in_watt_split
-                        )
-                    else:
-                        available_surplus_electricity_in_watt_split = available_surplus_electricity_in_watt
-
-                    # else:
-                    #     available_surplus_electricity_in_watt_split = available_surplus_electricity_in_watt_speicher
-
-                    available_surplus_electricity_in_watt = self.control_electricity_and_modify_set_temperatures_for_component_parallel(
-                        available_surplus_electricity_in_watt=available_surplus_electricity_in_watt_split,
-                        stsv=stsv,
-                        current_component_type=single_component_type_sorted,
-                        current_output=single_output_sorted,
-                        component_electricity_demand=component_electricity_demand,
-                        electricity_demand_from_current_input_component_in_watt=electricity_demand_from_current_input_component_in_watt,
-                    )
-
-                    if available_surplus_electricity_in_watt > 0:
-                        surplus_next_iteration += available_surplus_electricity_in_watt
-                        available_surplus_electricity_in_watt = 0
-
-                    if (
-                        surplus_next_iteration > 0
-                        and number_of_components_with_electricity_demand_and_same_source_weight > 1
-                    ):
-                        repeat_loop = True
-
-                else:
-
-                    # if available_surplus_electricity_in_watt > 0:
-                    available_surplus_electricity_in_watt = (
-                        available_surplus_electricity_in_watt + surplus_next_iteration
-                    )
-                    # else:
-                    #   available_surplus_electricity_in_watt = available_surplus_electricity_in_watt_speicher + surplus_next_iteration
-
-                    available_surplus_electricity_in_watt = self.control_electricity_and_modify_set_temperatures_for_component_parallel(
-                        available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
-                        stsv=stsv,
-                        current_component_type=single_component_type_sorted,
-                        current_output=single_output_sorted,
-                        component_electricity_demand=component_electricity_demand,
-                        electricity_demand_from_current_input_component_in_watt=electricity_demand_from_current_input_component_in_watt,
-                    )
-
-                    available_surplus_electricity_in_watt_next_component = available_surplus_electricity_in_watt
-
-                previous_single_source_weight_sorted = single_source_weight_sorted
-                counter_inner_while += 1
-
-                if repeat_loop:
-                    break
-
-            if repeat_loop:
-                repeat_count += 1
-                available_surplus_electricity_in_watt_next_component = surplus_next_iteration
-            else:
-                break
-
-        # available_surplus_electricity_in_watt = sum(
-        #     values for values in component_electricity_demand.values())# if values < 0)
-
-        max_key = max(component_types_and_number_of_same_source_weights.keys())
-        components_with_max_count = component_types_and_number_of_same_source_weights[max_key]["components"]
-
-        available_surplus_electricity_in_watt = sum(
-            component_electricity_demand[component] for component in components_with_max_count
-        )
+        available_surplus_electricity_in_watt = additional_electricity_demand + surplus_next_iteration
 
         return available_surplus_electricity_in_watt
 
@@ -1132,10 +953,6 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
         electricity need is covered onsite or from grid.
         Electricity input if each component is saved in dict to make iteration possible when parallel distribution is used.
         """
-
-        electricity_demand_from_current_input_component_in_watt = abs(
-            electricity_demand_from_current_input_component_in_watt
-        )
 
         # if available_surplus_electricity > 0: electricity is fed into battery
         # if available_surplus_electricity < 0: electricity is taken from battery
@@ -1160,16 +977,16 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
             # if surplus electricity is available, a part of the component's consumption can be covered onsite
             if available_surplus_electricity_in_watt > 0:
                 available_surplus_electricity_in_watt = (
-                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
+                    available_surplus_electricity_in_watt + electricity_demand_from_current_input_component_in_watt
                 )
                 stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
             # otherwise all of the component's consumption is taken from grid
             else:
                 stsv.set_output_value(
-                    output=current_output, value=-electricity_demand_from_current_input_component_in_watt
+                    output=current_output, value=electricity_demand_from_current_input_component_in_watt
                 )
                 available_surplus_electricity_in_watt = (
-                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
+                    available_surplus_electricity_in_watt + electricity_demand_from_current_input_component_in_watt
                 )
 
         # these are electricity PRODUCERS
@@ -1298,3 +1115,203 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                 stsv.set_output_value(self.domestic_hot_water_storage_temperature_modifier, 0)
 
         return available_surplus_electricity_in_watt
+
+
+"""
+                ***IN PROGRESS***
+    def distribute_available_surplus_from_district_to_building_parallel(
+        self,
+        source_weights_sorted: List[int],
+        available_surplus_electricity_in_watt: float,
+        stsv: cp.SingleTimeStepValues,
+        inputs_sorted: List[ComponentInput],
+        component_types_sorted: List[lt.ComponentType],
+        outputs_sorted: List[ComponentOutput],
+    ) -> float:
+        """ """Evaluates available surplus electricity component by component.
+
+        - First step: actual electricity demand of each component is subtracted from surplus
+        - second step: available surplus is distributed to components iterative if same source weight
+
+        Parallel distribution of surplus when components have equal source weight.
+        To do this, the surplus is divided by the number of components with equal source weight so that each component
+        has the chance to receive an equal share. If a component requires less, the rest is returned to available surplus.
+        """ """
+        component_types_and_number_of_same_source_weights: dict = {}
+
+        for weight, component in zip(source_weights_sorted, component_types_sorted):
+            if weight in component_types_and_number_of_same_source_weights:
+                component_types_and_number_of_same_source_weights[weight]["count"] += 1
+                component_types_and_number_of_same_source_weights[weight]["components"].append(component)
+            else:
+                component_types_and_number_of_same_source_weights[weight] = {"count": 1, "components": [component]}
+
+        component_electricity_demand: dict = {}
+
+        for index, item in enumerate(component_types_sorted):
+            value = stsv.get_input_value(component_input=inputs_sorted[index])
+            component_electricity_demand[item] = -1 * float(abs(value))
+
+        repeat_count = 0
+        previous_single_source_weight_sorted = 0
+
+        available_surplus_electricity_in_watt_next_component = available_surplus_electricity_in_watt
+
+        # if (available_surplus_electricity_in_watt > 100 and list(component_electricity_demand.values())[
+        #          0] == 0 and list(component_electricity_demand.values())[1] < -100) :
+        #     print("debug")
+
+        repeat_max = max(
+            component_types_and_number_of_same_source_weights[single_source_weight_sorted]["count"]
+            for single_source_weight_sorted in source_weights_sorted
+        )
+
+        while repeat_count < repeat_max + 5:
+            repeat_loop = False
+            index = 0
+            surplus_next_iteration = 0.0
+            additional_electricity_demand = 0.0
+            counter_inner_while = 0
+
+            while index < len(inputs_sorted):
+                single_component_type_sorted = component_types_sorted[index]
+                single_output_sorted = outputs_sorted[index]
+                single_source_weight_sorted = source_weights_sorted[index]
+
+                number_of_components_with_same_source_weights = component_types_and_number_of_same_source_weights[
+                    single_source_weight_sorted
+                ]["count"]
+
+                electricity_demand_from_current_input_component_in_watt = component_electricity_demand[
+                    single_component_type_sorted
+                ]
+
+                index += 1
+
+                if single_source_weight_sorted > previous_single_source_weight_sorted:
+                    counter_inner_while = 0
+
+                available_surplus_electricity_in_watt = available_surplus_electricity_in_watt_next_component
+
+                #
+                #  if repeat_count > 0:
+                #      print("debug")
+
+                # if (
+                #     component_electricity_demand[single_component_type_sorted] >= 0
+                #     or number_of_components_with_electricity_demand_and_same_source_weight == 0
+                # ):
+                #     available_surplus_electricity_in_watt_next_component = available_surplus_electricity_in_watt
+                #     additional_electricity_demand = additional_electricity_demand
+                #     surplus_next_iteration = surplus_next_iteration
+                #     continue
+
+                if repeat_count > 0 and component_electricity_demand[single_component_type_sorted] >= 0:
+                    available_surplus_electricity_in_watt_next_component = available_surplus_electricity_in_watt
+                    additional_electricity_demand = additional_electricity_demand
+                    surplus_next_iteration = surplus_next_iteration
+                    component_electricity_demand[single_component_type_sorted] = 0
+                    continue
+
+                if component_types_and_number_of_same_source_weights[single_source_weight_sorted]["count"] > 1:
+
+                    number_of_components_with_electricity_demand_and_same_source_weight = sum(
+                        1
+                        for key, wert in component_electricity_demand.items()
+                        if wert < 0
+                        and key
+                        in component_types_and_number_of_same_source_weights[single_source_weight_sorted]["components"]
+                    )
+
+                    if counter_inner_while == 0:
+
+                        if number_of_components_with_electricity_demand_and_same_source_weight <= 1:
+                            available_surplus_electricity_in_watt_split = available_surplus_electricity_in_watt
+                            available_surplus_electricity_in_watt_next_component = 0
+                        # if number_of_components_with_electricity_demand_and_same_source_weight <= 1:
+                        #     available_surplus_electricity_in_watt_split = available_surplus_electricity_in_watt
+                        #     available_surplus_electricity_in_watt_next_component = 0
+                        else:
+                            available_surplus_electricity_in_watt_split = (
+                                available_surplus_electricity_in_watt
+                                / number_of_components_with_electricity_demand_and_same_source_weight
+                            )
+                            # if number_of_components_with_electricity_demand_and_same_source_weight == 1:
+                            #     available_surplus_electricity_in_watt_next_component = 0
+                            # else:
+                            available_surplus_electricity_in_watt_next_component = (
+                                available_surplus_electricity_in_watt_split
+                            )
+
+                    else:
+                        available_surplus_electricity_in_watt_split = (
+                            available_surplus_electricity_in_watt_next_component
+                        )
+
+                    available_surplus_electricity_in_watt = self.control_electricity_parallel(
+                        available_surplus_electricity_in_watt=available_surplus_electricity_in_watt_split,
+                        stsv=stsv,
+                        current_component_type=single_component_type_sorted,
+                        current_output=single_output_sorted,
+                        component_electricity_demand=component_electricity_demand,
+                        electricity_demand_from_current_input_component_in_watt=electricity_demand_from_current_input_component_in_watt,
+                    )
+
+                    counter_inner_while += 1
+
+                    if available_surplus_electricity_in_watt > 0:
+                        surplus_next_iteration += available_surplus_electricity_in_watt
+                        available_surplus_electricity_in_watt = 0
+                    else:
+                        additional_electricity_demand += available_surplus_electricity_in_watt
+                        available_surplus_electricity_in_watt = 0
+
+                    if (
+                        surplus_next_iteration > 0
+                        and additional_electricity_demand < 0
+                        and counter_inner_while == number_of_components_with_same_source_weights
+                    ):
+                        repeat_loop = True
+
+                else:
+
+                    available_surplus_electricity_in_watt = (
+                        available_surplus_electricity_in_watt + surplus_next_iteration + additional_electricity_demand
+                    )
+
+                    available_surplus_electricity_in_watt = self.control_electricity_parallel(
+                        available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
+                        stsv=stsv,
+                        current_component_type=single_component_type_sorted,
+                        current_output=single_output_sorted,
+                        component_electricity_demand=component_electricity_demand,
+                        electricity_demand_from_current_input_component_in_watt=electricity_demand_from_current_input_component_in_watt,
+                    )
+
+                    available_surplus_electricity_in_watt_next_component = available_surplus_electricity_in_watt
+
+                previous_single_source_weight_sorted = single_source_weight_sorted
+
+                if repeat_loop:
+                    break
+
+            if repeat_loop:
+                repeat_count += 1
+                available_surplus_electricity_in_watt_next_component = surplus_next_iteration
+
+            else:
+                break
+
+        # available_surplus_electricity_in_watt = sum(
+        #     values for values in component_electricity_demand.values()
+        # )  # if values < 0)
+
+        max_key = max(component_types_and_number_of_same_source_weights.keys())
+        components_with_max_count = component_types_and_number_of_same_source_weights[max_key]["components"]
+
+        available_surplus_electricity_in_watt = sum(
+            component_electricity_demand[component] for component in components_with_max_count
+        )
+
+        return available_surplus_electricity_in_watt
+"""

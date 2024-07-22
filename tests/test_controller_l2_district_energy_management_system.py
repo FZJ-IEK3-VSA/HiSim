@@ -60,9 +60,14 @@ def test_house(
         my_simulation_parameters = SimulationParameters.one_week_only(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_SINGLE_DAYS)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
 
     # this part is copied from hisim_main
     # Build Simulator
@@ -240,6 +245,32 @@ def test_house(
         config=my_electricity_controller_config,
     )
 
+    # Build Battery
+    my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
+        total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt
+    )
+    my_advanced_battery = advanced_battery_bslib.Battery(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_advanced_battery_config,
+    )
+
+    # -----------------------------------------------------------------------------------------------------------------
+    # Add outputs to EMS
+    loading_power_input_for_battery_in_watt = my_electricity_controller.add_component_output(
+        source_output_name="LoadingPowerInputForBattery_",
+        source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
+        source_weight=4,
+        source_load_type=lt.LoadTypes.ELECTRICITY,
+        source_unit=lt.Units.WATT,
+        output_description="Target electricity for Battery Control. ",
+    )
+
+    my_heat_distribution_controller.connect_input(
+        my_heat_distribution_controller.BuildingTemperatureModifier,
+        my_electricity_controller.component_name,
+        my_electricity_controller.BuildingIndoorTemperatureModifier,
+    )
+
     my_building.connect_input(
         my_building.BuildingTemperatureModifier,
         my_electricity_controller.component_name,
@@ -280,7 +311,7 @@ def test_house(
     # Add Remaining Components to Simulation Parameters
 
     my_sim.add_component(my_electricity_meter)
-   # my_sim.add_component(my_advanced_battery)
+    my_sim.add_component(my_advanced_battery)
     my_sim.add_component(my_electricity_controller, connect_automatically=True)
 
     my_sim.run_all_timesteps()
@@ -326,9 +357,9 @@ def test_house(
         + domestic_hot_water_heatpump_total_consumption_kpi_in_kilowatt_hour
         + battery_losses_in_kilowatt_hour
     )
-    print("occupancy total consumption ", residents_total_consumption_kpi_in_kilowatt_hour)
-    print("sh hp total consumption ", space_heating_heatpump_total_consumption_kpi_in_kilowatt_hour)
-    print("dhw hp total consumption ", domestic_hot_water_heatpump_total_consumption_kpi_in_kilowatt_hour)
+    print("occupancy total consumption component output ", residents_total_consumption_kpi_in_kilowatt_hour)
+    print("sh hp total consumption component output ", space_heating_heatpump_total_consumption_kpi_in_kilowatt_hour)
+    print("dhw hp total consumption component output ", domestic_hot_water_heatpump_total_consumption_kpi_in_kilowatt_hour)
     print("\n")
 
     # Get grid consumptions of components
@@ -348,9 +379,9 @@ def test_house(
         - battery_discharging_energy_in_kilowatt_hour
     )
 
-    print("occupancy grid consumption ", residents_grid_consumption_kpi_in_kilowatt_hour)
-    print("sh hp grid consumption ", space_heating_heatpump_grid_consumption_kpi_in_kilowatt_hour)
-    print("dhw hp grid consumption ", domestic_hot_water_heatpump_grid_consumption_kpi_in_kilowatt_hour)
+    print("occupancy grid consumption ems output ", residents_grid_consumption_kpi_in_kilowatt_hour)
+    print("sh hp grid consumption ems output ", space_heating_heatpump_grid_consumption_kpi_in_kilowatt_hour)
+    print("dhw hp grid consumption ems output ", domestic_hot_water_heatpump_grid_consumption_kpi_in_kilowatt_hour)
     print("\n")
 
     # Get EMS output TotalElectricityConsumption
@@ -387,7 +418,7 @@ def test_house(
     # Test total electricity consumption
     print("ems total consumption ", ems_total_consumption_in_kilowatt_hour)
     print("kpi total consumption ", total_consumption_kpi_in_kilowatt_hour)
-    print("sum of components' total consumptions ", sum_component_total_consumptions_in_kilowatt_hour)
+    print("sum of components' total consumptions components outputs ", sum_component_total_consumptions_in_kilowatt_hour)
     print("\n")
     np.testing.assert_allclose(
         ems_total_consumption_in_kilowatt_hour,
@@ -403,7 +434,7 @@ def test_house(
     # Test grid consumption
     print("ems grid consumption ", ems_grid_consumption_in_kilowatt_hour)
     print("kpi grid consumption ", electricity_from_grid_kpi_in_kilowatt_hour)
-    print("sum of components' grid consumptions ", sum_component_grid_consumptions_in_kilowatt_hour)
+    print("sum of components' grid consumptions ems outputs", sum_component_grid_consumptions_in_kilowatt_hour)
     print("\n")
     np.testing.assert_allclose(
         ems_grid_consumption_in_kilowatt_hour,

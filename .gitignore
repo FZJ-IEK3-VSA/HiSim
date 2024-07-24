@@ -138,8 +138,10 @@ inputs/cache
 hisim/inputs/cache
 system_setups/mypath
 system_setups/results
-system_setups/results_for_scenario_comparison
-system_setups/scenario_comparison
+system_setups/scenario_comparison/
+system_setups/results_for_scenario_comparison/
+hisim/postprocessing/scenario_evaluation/*.json
+
 system_setups/component_connections.json
 results/Results
 hisim/results
@@ -154,6 +156,7 @@ tests/results_scaling/
 tests/lpg_utsp_scaling_test/
 tests/component_connections.json
 tests/test_system_setups/results/
+tests/test/
 
 components_information.xlsx
 hisim/components_information.xlsx

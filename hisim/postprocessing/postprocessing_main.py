@@ -700,9 +700,9 @@ class PostProcessor:
         timeseries_monthly = ppdt.results_monthly.index
 
         if PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT in ppdt.post_processing_options:
-            self.write_kpis_in_dict(ppdt=ppdt, simple_dict_cumulative_data=simple_dict_hourly_data)
-            self.write_kpis_in_dict(ppdt=ppdt, simple_dict_cumulative_data=simple_dict_daily_data)
-            self.write_kpis_in_dict(ppdt=ppdt, simple_dict_cumulative_data=simple_dict_monthly_data)
+            # self.write_kpis_in_dict(ppdt=ppdt, simple_dict_cumulative_data=simple_dict_hourly_data)
+            # self.write_kpis_in_dict(ppdt=ppdt, simple_dict_cumulative_data=simple_dict_daily_data)
+            # self.write_kpis_in_dict(ppdt=ppdt, simple_dict_cumulative_data=simple_dict_monthly_data)
             self.write_kpis_in_dict(ppdt=ppdt, simple_dict_cumulative_data=simple_dict_cumulative_data)
 
         # got through all components and read output values, variables and units
@@ -714,8 +714,6 @@ class PostProcessor:
             dataframe=dataframe_hourly_data,
             folder=self.result_data_folder_for_scenario_evaluation,
             simulation_duration=ppdt.simulation_parameters.duration.days,
-            simulation_year=ppdt.simulation_parameters.year,
-            region=self.region,
             time_resolution_of_data="hourly",
         )
         # for daily data
@@ -726,8 +724,6 @@ class PostProcessor:
             dataframe=dataframe_daily_data,
             folder=self.result_data_folder_for_scenario_evaluation,
             simulation_duration=ppdt.simulation_parameters.duration.days,
-            simulation_year=ppdt.simulation_parameters.year,
-            region=self.region,
             time_resolution_of_data="daily",
         )
         # for monthly data
@@ -738,8 +734,6 @@ class PostProcessor:
             dataframe=dataframe_monthly_data,
             folder=self.result_data_folder_for_scenario_evaluation,
             simulation_duration=ppdt.simulation_parameters.duration.days,
-            simulation_year=ppdt.simulation_parameters.year,
-            region=self.region,
             time_resolution_of_data="monthly",
         )
 
@@ -764,8 +758,6 @@ class PostProcessor:
             folder=self.result_data_folder_for_scenario_evaluation,
             time_resolution_of_data="yearly",
             simulation_duration=ppdt.simulation_parameters.duration.days,
-            simulation_year=ppdt.simulation_parameters.year,
-            region=self.region,
         )
 
         # --------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -825,8 +817,9 @@ class PostProcessor:
                 simple_dict_cumulative_data["unit"].append(variable_unit)
                 try:
                     simple_dict_cumulative_data["year"].append(self.year)
-                except Exception:
-                    simple_dict_cumulative_data["time"].append(self.year)
+                except Exception as exc:
+                    # simple_dict_cumulative_data["time"].append(self.year)
+                    raise KeyError("KPI values should be written only to yearly or cumulative data, not to timeseries data.") from exc
                 simple_dict_cumulative_data["value"].append(variable_value)
 
     def get_variable_name_and_unit_from_ppdt_results_column(self, column: str) -> Tuple[str, str]:
@@ -872,14 +865,12 @@ class PostProcessor:
         folder: str,
         time_resolution_of_data: str,
         simulation_duration: int,
-        simulation_year: int,
-        region: str,
     ) -> None:
         """Write file to csv."""
 
         filename = os.path.join(
             folder,
-            f"{time_resolution_of_data}_results_for_{simulation_duration}_days_in_year_{simulation_year}_in_{region}.csv",
+            f"{time_resolution_of_data}_{simulation_duration}_days.csv",
         )
 
         dataframe.to_csv(path_or_buf=filename, index=None)  # type: ignore

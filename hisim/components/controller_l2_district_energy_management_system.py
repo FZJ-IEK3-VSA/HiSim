@@ -514,8 +514,6 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates iteration of surplus controller."""
-        if timestep >= 0:
-            print("debug")
         if timestep == 0:
             (
                 self.source_weights_sorted,
@@ -527,11 +525,14 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                 self.consumption_ems_controlled_inputs,
             ) = self.sort_source_weights_and_components()
 
-      #  district_electricity_surplus_unused = stsv.get_input_value(component_input=self.surplus_electricity_unused_to_building_ems_from_district_ems)
+        district_electricity_surplus_unused = max(
+            0.0, stsv.get_input_value(component_input=self.surplus_electricity_unused_to_building_ems_from_district_ems)
+        )
 
-        district_electricity_surplus_unused = max(0.0, stsv.get_input_value(component_input=self.surplus_electricity_unused_to_building_ems_from_district_ems))
-
-        stsv.set_output_value(self.surplus_electricity_unused_to_building_ems_from_district_ems_output, district_electricity_surplus_unused)
+        stsv.set_output_value(
+            self.surplus_electricity_unused_to_building_ems_from_district_ems_output,
+            district_electricity_surplus_unused,
+        )
 
         # get total production and consumptions
         self.state.production_in_watt = (
@@ -698,7 +699,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                     output=current_output, value=electricity_demand_from_current_input_component_in_watt
                 )
                 available_surplus_electricity_in_watt = (
-                        available_surplus_electricity_in_watt + electricity_demand_from_current_input_component_in_watt
+                    available_surplus_electricity_in_watt + electricity_demand_from_current_input_component_in_watt
                 )
 
         # these are electricity CONSUMERS
@@ -987,7 +988,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                     output=current_output, value=electricity_demand_from_current_input_component_in_watt
                 )
                 available_surplus_electricity_in_watt = (
-                        available_surplus_electricity_in_watt + electricity_demand_from_current_input_component_in_watt
+                    available_surplus_electricity_in_watt + electricity_demand_from_current_input_component_in_watt
                 )
 
         # these are electricity CONSUMERS
@@ -1073,7 +1074,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                     output=current_output, value=electricity_demand_from_current_input_component_in_watt
                 )
                 available_surplus_electricity_in_watt = (
-                        available_surplus_electricity_in_watt + electricity_demand_from_current_input_component_in_watt
+                    available_surplus_electricity_in_watt + electricity_demand_from_current_input_component_in_watt
                 )
 
         # these are electricity CONSUMERS

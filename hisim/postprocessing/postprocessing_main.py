@@ -411,7 +411,7 @@ class PostProcessor:
             ppdt.results[column].to_csv(
                 os.path.join(
                     ppdt.simulation_parameters.result_directory,
-                    f"{column.split(' ', 3)[2]}_{column.split(' ', 3)[0]}.csv",
+                    f"{column.split(' ', 3)[0]}_{column.split(' ', 3)[2]}.csv",
                 ),
                 sep=",",
                 decimal=".",
@@ -419,7 +419,7 @@ class PostProcessor:
         for column in ppdt.results_monthly:
             csvfilename = os.path.join(
                 ppdt.simulation_parameters.result_directory,
-                f"{column.split(' ', 3)[2]}_{column.split(' ', 3)[0]}_monthly.csv",
+                f"{column.split(' ', 3)[0]}_{column.split(' ', 3)[2]}_monthly.csv",
             )
             header = [f"{column.split('[', 1)[0]} - monthly [" f"{column.split('[', 1)[1]}"]
             ppdt.results_monthly[column].to_csv(csvfilename, sep=",", decimal=".", header=header)

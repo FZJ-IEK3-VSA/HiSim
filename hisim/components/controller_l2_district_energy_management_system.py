@@ -115,15 +115,15 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
 
     Recognised non controllable consumption of any component
     when dynamic input is labeld with the flag
-    "CONSUMPTION_UNCONTROLLED" and the related source weight
-    is set to 999.
+    "ELECTRICITY_CONSUMPTION_UNCONTROLLED" and the related
+    source weight is set to 999.
 
     For each component, which should receive signals from the
     EMS, the EMS needs to be connected with one dynamic input
-    with the tag "ELECTRICITY_REAL" and the source weight of
-    the related component. This signal reflects the real
-    consumption/production of the device, which is needed to
-    update the energy balance in the EMS.
+    with the tag "ELECTRICITY_CONSUMPTION_EMS_CONTROLLED" and
+    the source weight of the related component. This signal
+    reflects the real consumption/production of the device,
+    which is needed to update the energy balance in the EMS.
     In addition, the EMS needs to be connected with one dynamic
     output with the tag "ELECTRICITY_TARGET" with the
     source weight of the related component. This signal sends
@@ -134,7 +134,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
 
     # Inputs
     ElectricityToElectrolyzerUnused = "ElectricityToElectrolyzerUnused"
-    ElectricityToBuildingFromDistrict = "ElectricityToBuildingFromDistrict"
+    SurplusUnusedFromDistrictEMS = "SurplusUnusedFromDistrictEMS"
 
     # Outputs
     ElectricityToElectrolyzerTarget = "ElectricityToElectrolyzerTarget"
@@ -148,7 +148,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
     SpaceHeatingWaterStorageTemperatureModifier = (
         "SpaceHeatingWaterStorageTemperatureModifier"  # used for HeatPumpHplibController
     )
-    ElectricityToBuildingFromDistrictEMSOutput = "ElectricityToBuildingFromDistrictEMSOutput"
+    SurplusUnusedFromDistrictEMSOutput = "SurplusUnusedFromDistrictEMSOutput"
 
     CheckPeakShaving = "CheckPeakShaving"
 
@@ -203,9 +203,9 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
             mandatory=False,
         )
 
-        self.electricity_to_building_from_district: cp.ComponentInput = self.add_input(
+        self.surplus_electricity_unused_to_building_ems_from_district_ems: cp.ComponentInput = self.add_input(
             object_name=self.component_name,
-            field_name=self.ElectricityToBuildingFromDistrict,
+            field_name=self.SurplusUnusedFromDistrictEMS,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
             mandatory=False,
@@ -266,13 +266,13 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
             output_description=f"here a description for {self.CheckPeakShaving} will follow.",
         )
 
-        self.electricity_to_building_from_district_output: cp.ComponentOutput = self.add_output(
+        self.surplus_electricity_unused_to_building_ems_from_district_ems_output: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.ElectricityToBuildingFromDistrictEMSOutput,
+            field_name=self.SurplusUnusedFromDistrictEMSOutput,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
             sankey_flow_direction=False,
-            output_description=f"here a description for {self.ElectricityToBuildingFromDistrictEMSOutput} will follow.",
+            output_description=f"here a description for {self.SurplusUnusedFromDistrictEMSOutput} will follow.",
         )
 
         self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())
@@ -514,7 +514,8 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates iteration of surplus controller."""
-
+        if timestep >= 0:
+            print("debug")
         if timestep == 0:
             (
                 self.source_weights_sorted,
@@ -526,14 +527,16 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                 self.consumption_ems_controlled_inputs,
             ) = self.sort_source_weights_and_components()
 
-        district_electricity_unused = stsv.get_input_value(component_input=self.electricity_to_building_from_district)
+      #  district_electricity_surplus_unused = stsv.get_input_value(component_input=self.surplus_electricity_unused_to_building_ems_from_district_ems)
 
-        stsv.set_output_value(self.electricity_to_building_from_district_output, district_electricity_unused)
+        district_electricity_surplus_unused = max(0.0, stsv.get_input_value(component_input=self.surplus_electricity_unused_to_building_ems_from_district_ems))
+
+        stsv.set_output_value(self.surplus_electricity_unused_to_building_ems_from_district_ems_output, district_electricity_surplus_unused)
 
         # get total production and consumptions
         self.state.production_in_watt = (
             sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])
-            + district_electricity_unused
+            + district_electricity_surplus_unused
         )
         self.state.consumption_uncontrolled_in_watt = sum(
             [stsv.get_input_value(component_input=elem) for elem in self.consumption_uncontrolled_inputs]
@@ -681,9 +684,27 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                 available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
             )
 
+        # Building Tag, if district controller manage the hp in building --> contracting
+        # Building has own ems which controll the temperatures of storages
+        # District EMS controll how surplus is devided to buildings(ems)
+        elif current_component_type == lt.ComponentType.SURPLUS_CONTROLLER_DISTRICT:
+            if available_surplus_electricity_in_watt > 0:
+                available_surplus_electricity_in_watt = (
+                    available_surplus_electricity_in_watt + electricity_demand_from_current_input_component_in_watt
+                )
+                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
+            else:
+                stsv.set_output_value(
+                    output=current_output, value=electricity_demand_from_current_input_component_in_watt
+                )
+                available_surplus_electricity_in_watt = (
+                        available_surplus_electricity_in_watt + electricity_demand_from_current_input_component_in_watt
+                )
+
         # these are electricity CONSUMERS
         elif current_component_type in [
             lt.ComponentType.RESIDENTS,
+            lt.ComponentType.BUILDINGS,
             lt.ComponentType.ELECTROLYZER,
             lt.ComponentType.SMART_DEVICE,
             lt.ComponentType.CAR_BATTERY,
@@ -712,17 +733,6 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                 available_surplus_electricity_in_watt + electricity_demand_from_current_input_component_in_watt
             )
             stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
-
-        elif current_component_type == lt.ComponentType.SURPLUS_CONTROLLER_DISTRICT:
-            if available_surplus_electricity_in_watt > 0:
-                available_surplus_electricity_in_watt = (
-                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
-                )
-                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
-            else:
-                stsv.set_output_value(
-                    output=current_output, value=-electricity_demand_from_current_input_component_in_watt
-                )
 
         return available_surplus_electricity_in_watt
 
@@ -963,9 +973,27 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                 available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
             )
 
+        # Building Tag, if district controller manage the hp in building --> contracting
+        # Building has own ems which controll the temperatures of storages
+        # District EMS controll how surplus is devided to buildings(ems)
+        elif current_component_type == lt.ComponentType.SURPLUS_CONTROLLER_DISTRICT:
+            if available_surplus_electricity_in_watt > 0:
+                available_surplus_electricity_in_watt = (
+                    available_surplus_electricity_in_watt + electricity_demand_from_current_input_component_in_watt
+                )
+                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
+            else:
+                stsv.set_output_value(
+                    output=current_output, value=electricity_demand_from_current_input_component_in_watt
+                )
+                available_surplus_electricity_in_watt = (
+                        available_surplus_electricity_in_watt + electricity_demand_from_current_input_component_in_watt
+                )
+
         # these are electricity CONSUMERS
         elif current_component_type in [
             lt.ComponentType.RESIDENTS,
+            lt.ComponentType.BUILDINGS,
             lt.ComponentType.ELECTROLYZER,
             lt.ComponentType.SMART_DEVICE,
             lt.ComponentType.CAR_BATTERY,
@@ -995,17 +1023,6 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                 available_surplus_electricity_in_watt + electricity_demand_from_current_input_component_in_watt
             )
             stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
-
-        elif current_component_type == lt.ComponentType.SURPLUS_CONTROLLER_DISTRICT:
-            if available_surplus_electricity_in_watt > 0:
-                available_surplus_electricity_in_watt = (
-                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
-                )
-                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
-            else:
-                stsv.set_output_value(
-                    output=current_output, value=-electricity_demand_from_current_input_component_in_watt
-                )
 
         component_electricity_demand[current_component_type] = available_surplus_electricity_in_watt
 
@@ -1042,9 +1059,27 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                 available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
             )
 
+        # Building Tag, if district controller manage the hp in building --> contracting
+        # Building has own ems which controll the temperatures of storages
+        # District EMS controll how surplus is devided to buildings(ems)
+        elif current_component_type == lt.ComponentType.SURPLUS_CONTROLLER_DISTRICT:
+            if available_surplus_electricity_in_watt > 0:
+                available_surplus_electricity_in_watt = (
+                    available_surplus_electricity_in_watt + electricity_demand_from_current_input_component_in_watt
+                )
+                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
+            else:
+                stsv.set_output_value(
+                    output=current_output, value=electricity_demand_from_current_input_component_in_watt
+                )
+                available_surplus_electricity_in_watt = (
+                        available_surplus_electricity_in_watt + electricity_demand_from_current_input_component_in_watt
+                )
+
         # these are electricity CONSUMERS
         elif current_component_type in [
             lt.ComponentType.RESIDENTS,
+            lt.ComponentType.BUILDINGS,
             lt.ComponentType.ELECTROLYZER,
             lt.ComponentType.SMART_DEVICE,
             lt.ComponentType.CAR_BATTERY,
@@ -1074,17 +1109,6 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                 available_surplus_electricity_in_watt + electricity_demand_from_current_input_component_in_watt
             )
             stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
-
-        elif current_component_type == lt.ComponentType.SURPLUS_CONTROLLER_DISTRICT:
-            if available_surplus_electricity_in_watt > 0:
-                available_surplus_electricity_in_watt = (
-                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
-                )
-                stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
-            else:
-                stsv.set_output_value(
-                    output=current_output, value=-electricity_demand_from_current_input_component_in_watt
-                )
 
         component_electricity_demand[current_component_type] = available_surplus_electricity_in_watt
 

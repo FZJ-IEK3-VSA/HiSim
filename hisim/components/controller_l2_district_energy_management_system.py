@@ -871,7 +871,15 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                             continue
 
                         if counter_inner_interation == 0:
-                            if number_of_components_with_electricity_demand_and_same_source_weight <= 1:
+                            if number_of_components_with_electricity_demand_and_same_source_weight == 0:
+                                available_surplus_electricity_in_watt_split = (
+                                    available_surplus_electricity_in_watt_next_component
+                                    / number_of_components_with_current_source_weight
+                                )
+                                available_surplus_electricity_in_watt_next_component = (
+                                    available_surplus_electricity_in_watt_split
+                                )
+                            elif number_of_components_with_electricity_demand_and_same_source_weight == 1:
                                 available_surplus_electricity_in_watt_split = (
                                     available_surplus_electricity_in_watt_next_component
                                 )
@@ -910,8 +918,8 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
 
                     if (
                         surplus_next_iteration > 0 > additional_electricity_demand
-                        and counter_inner_interation + 1
-                        >= number_of_components_with_electricity_demand_and_same_source_weight
+                        and counter_inner_interation
+                            >= number_of_components_with_electricity_demand_and_same_source_weight
                     ):
                         available_surplus_electricity_in_watt_next_component = surplus_next_iteration
                         repeat_count += 1

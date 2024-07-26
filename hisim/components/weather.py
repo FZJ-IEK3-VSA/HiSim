@@ -656,6 +656,14 @@ class Weather(Component):
                 weatherconfig=self.weather_config,
                 year=self.my_simulation_parameters.year,
             )
+
+            start_date = self.my_simulation_parameters.start_date,
+            end_date = self.my_simulation_parameters.end_date,
+            print(start_date)
+            print(end_date)
+            print(tmy_data)
+
+
             if self.weather_config.data_source == WeatherDataSourceEnum.NSRDB_15MIN:
                 dni = tmy_data["DNI"].resample("1T").asfreq().interpolate(method="linear")
                 temperature = tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")

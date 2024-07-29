@@ -42,7 +42,6 @@ from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDict
 
 
 class LpgDataAcquisitionMode(enum.Enum):
-
     """Set LPG Data Acquisition Mode."""
 
     USE_PREDEFINED_PROFILE = "use_predefined_profile"
@@ -52,7 +51,6 @@ class LpgDataAcquisitionMode(enum.Enum):
 @dataclass_json
 @dataclass
 class UtspLpgConnectorConfig(cp.ConfigBase):
-
     """Config class for UtspLpgConnector. Contains LPG parameters and UTSP connection parameters."""
 
     name: str
@@ -99,7 +97,6 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
 
 
 class UtspLpgConnector(cp.Component):
-
     """Component that provides data from the LoadProfileGenerator.
 
     This component provides the heating generated, the electricity and water consumed
@@ -301,9 +298,7 @@ class UtspLpgConnector(cp.Component):
         resolution = datetime.timedelta(seconds=seconds)
         return str(resolution)
 
-    def get_profiles_from_utsp(
-        self, lpg_households: Union[JsonReference, List[JsonReference]], guid: str
-    ) -> Tuple[
+    def get_profiles_from_utsp(self, lpg_households: Union[JsonReference, List[JsonReference]], guid: str) -> Tuple[
         Union[str, List],
         Union[str, List],
         Union[str, List],
@@ -322,7 +317,9 @@ class UtspLpgConnector(cp.Component):
         # Create an LPG configuration and set the simulation parameters
         start_date = self.my_simulation_parameters.start_date.strftime("%Y-%m-%d")
         # Unlike HiSim the LPG includes the specified end day in the simulation --> subtract one day
-        last_day = self.my_simulation_parameters.end_date - datetime.timedelta(days=1)
+        last_day = (
+            self.my_simulation_parameters.end_date
+        )  # - datetime.timedelta(days=1) --> new time span definition in "def load_result_files_and_transform_to_lists"
         end_date = last_day.strftime("%Y-%m-%d")
 
         # choose if one lpg request should be made or several in parallel
@@ -1165,24 +1162,83 @@ class UtspLpgConnector(cp.Component):
             occupancy_profile.append(json_filex)
 
         # see how long csv files from LPG are to check if averaging has to be done and calculate desired length
-        simulation_time_span = self.my_simulation_parameters.end_date - self.my_simulation_parameters.start_date
+        start_date = pd.Timestamp(self.my_simulation_parameters.start_date, tz="UTC")
+        end_date = pd.Timestamp(self.my_simulation_parameters.end_date, tz="UTC")
+
+        simulation_time_span = end_date - start_date
         minutes_per_timestep = int(self.my_simulation_parameters.seconds_per_timestep / 60)
         steps_desired = int(
             simulation_time_span.days * 24 * (3600 / self.my_simulation_parameters.seconds_per_timestep)
         )
         steps_desired_in_minutes = steps_desired * minutes_per_timestep
 
-        # initialize number of residence and heating by residents
-        heating_by_residents = [0.0] * steps_desired_in_minutes
-        number_of_residents = [0] * steps_desired_in_minutes
+        start_time_bodily_activity_files = []
+        length_of_value_list_bodily_activity_files = []
+        time_resolution_list_bodily_activity_files = []
 
-        # compute heat gains and number of persons
-        for mode, gain in enumerate(gain_per_person):
-            for timestep in range(steps_desired_in_minutes):
-                number_of_residents[timestep] += occupancy_profile[mode]["Values"][timestep]
-                heating_by_residents[timestep] = (
-                    heating_by_residents[timestep] + gain * occupancy_profile[mode]["Values"][timestep]
+        for profile in occupancy_profile:
+            start_time_bodily_activity_files.append(profile["StartTime"])
+            length_of_value_list_bodily_activity_files.append(len(profile["Values"]))
+            time_resolution_list_bodily_activity_files.append(profile["TimeResolution"])
+
+        if not (
+            all(
+                element == start_time_bodily_activity_files[0]
+                for element in start_time_bodily_activity_files
+            )
+        ):
+            raise KeyError(
+                "StartTime of bodily activity files are not equal! "
+                + str(start_time_bodily_activity_files)
+            )
+        if not (
+            all(
+                element == length_of_value_list_bodily_activity_files[0]
+                for element in length_of_value_list_bodily_activity_files
+            )
+        ):
+            raise KeyError(
+                "Number of values of bodily activity files are not equal!"
+                + str(length_of_value_list_bodily_activity_files)
+            )
+        if not (
+            all(
+                element == time_resolution_list_bodily_activity_files[0]
+                for element in time_resolution_list_bodily_activity_files
+            )
+        ):
+            raise KeyError(
+                "Time resolution of bodily activity files are not equal!"
+                + str(time_resolution_list_bodily_activity_files)
+            )
+
+        bodily_activity_df = pd.DataFrame(
+            {
+                "Time": pd.date_range(
+                    start=pd.Timestamp(start_time_bodily_activity_files[0], tz="UTC"),
+                    end=pd.Timestamp(start_time_bodily_activity_files[0], tz="UTC")
+                    + pd.Timedelta(time_resolution_list_bodily_activity_files[0])
+                    * (length_of_value_list_bodily_activity_files[0] - 1),
+                    freq=pd.Timedelta(time_resolution_list_bodily_activity_files[0]),
                 )
+            }
+        )
+        bodily_activity_df["high_bodily_activity"] = occupancy_profile[0]["Values"]
+        bodily_activity_df["low_bodily_activity"] = occupancy_profile[1]["Values"]
+
+        bodily_activity_df.set_index("Time", inplace=True)
+        bodily_activity_df_in_simulation_period = bodily_activity_df[start_date:end_date]
+
+        number_of_residents = pd.to_numeric(
+            bodily_activity_df_in_simulation_period.loc[:, "high_bodily_activity"]
+            + bodily_activity_df_in_simulation_period.loc[:, "low_bodily_activity"]
+        ).tolist()
+
+        heating_by_residents = pd.to_numeric(
+            bodily_activity_df_in_simulation_period.loc[:, "high_bodily_activity"] * gain_per_person[0]
+            + bodily_activity_df_in_simulation_period.loc[:, "low_bodily_activity"] * gain_per_person[1]
+        ).tolist()
+
         if data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
             # load electricity consumption, water consumption and inner device heat gains
             electricity_data = io.StringIO(electricity)
@@ -1191,7 +1247,7 @@ class UtspLpgConnector(cp.Component):
                 sep=";",
                 decimal=".",
                 encoding="cp1252",
-            ).loc[: (steps_desired_in_minutes - 1)]
+            ).loc[:(steps_desired_in_minutes)]
             electricity_consumption_list = pd.to_numeric(
                 pre_electricity_consumption["Sum [kWh]"] * 1000 * 60
             ).tolist()  # 1 kWh/min == 60W / min
@@ -1202,7 +1258,7 @@ class UtspLpgConnector(cp.Component):
                 sep=";",
                 decimal=".",
                 encoding="cp1252",
-            ).loc[: (steps_desired_in_minutes - 1)]
+            ).loc[:(steps_desired_in_minutes)]
             water_consumption_list = pd.to_numeric(pre_water_consumption["Sum [L]"]).tolist()
 
             inner_device_heat_gain_data = io.StringIO(inner_device_heat_gains)
@@ -1211,22 +1267,29 @@ class UtspLpgConnector(cp.Component):
                 sep=";",
                 decimal=".",
                 encoding="cp1252",
-            ).loc[: (steps_desired_in_minutes - 1)]
+            ).loc[:(steps_desired_in_minutes)]
             inner_device_heat_gains_list = pd.to_numeric(
                 pre_inner_device_heat_gains["Sum [kWh]"] * 1000 * 60
             ).tolist()  # 1 kWh/min == 60W / min
 
         elif data_acquisition_mode == LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE:
+
             # load electricity consumption, water consumption and inner device heat gains
             pre_electricity_consumption = pd.read_csv(
                 electricity,
                 sep=";",
                 decimal=".",
                 encoding="utf-8",
-                usecols=["Sum [kWh]"],
-            ).loc[: (steps_desired_in_minutes - 1)]
+                usecols=["Sum [kWh]", "Time"],
+            )
+            pre_electricity_consumption["Time"] = pd.to_datetime(
+                pre_electricity_consumption["Time"], format="%d.%m.%Y %H:%M", utc=True
+            )
+            pre_electricity_consumption.set_index("Time", inplace=True)
+            pre_electricity_consumption_in_simulation_period = pre_electricity_consumption[start_date:end_date]
+
             electricity_consumption_list = pd.to_numeric(
-                pre_electricity_consumption.loc[:, "Sum [kWh]"] * 1000 * 60
+                pre_electricity_consumption_in_simulation_period.loc[:, "Sum [kWh]"] * 1000 * 60
             ).tolist()  # 1 kWh/min == 60 000 W / min
 
             pre_water_consumption = pd.read_csv(
@@ -1234,29 +1297,41 @@ class UtspLpgConnector(cp.Component):
                 sep=";",
                 decimal=".",
                 encoding="utf-8",
-                usecols=["Sum [L]"],
-            ).loc[: (steps_desired_in_minutes - 1)]
-            water_consumption_list = pd.to_numeric(pre_water_consumption.loc[:, "Sum [L]"]).tolist()
+                usecols=["Sum [L]", "Time"],
+            )
+            pre_water_consumption["Time"] = pd.to_datetime(
+                pre_water_consumption["Time"], format="%d.%m.%Y %H:%M", utc=True
+            )
+            pre_water_consumption.set_index("Time", inplace=True)
+            pre_water_consumption_in_simulation_period = pre_water_consumption[start_date:end_date]
+
+            water_consumption_list = pd.to_numeric(
+                pre_water_consumption_in_simulation_period.loc[:, "Sum [L]"]
+            ).tolist()
 
             pre_inner_device_heat_gains = pd.read_csv(
                 inner_device_heat_gains,
                 sep=";",
                 decimal=".",
                 encoding="utf-8",
-                usecols=["Time", "Sum [kWh]"],
-            ).loc[: (steps_desired_in_minutes - 1)]
+                usecols=["Sum [kWh]", "Time"],
+            )
+            pre_inner_device_heat_gains["Time"] = pd.to_datetime(
+                pre_inner_device_heat_gains["Time"], format="%d.%m.%Y %H:%M", utc=True
+            )
+            pre_inner_device_heat_gains.set_index("Time", inplace=True)
+            pre_inner_device_heat_gains_in_simulation_period = pre_inner_device_heat_gains[start_date:end_date]
+
             inner_device_heat_gains_list = pd.to_numeric(
-                pre_inner_device_heat_gains.loc[:, "Sum [kWh]"] * 1000 * 60
+                pre_inner_device_heat_gains_in_simulation_period.loc[:, "Sum [kWh]"] * 1000 * 60
             ).tolist()  # 1 kWh/min == 60W / min
 
         # put everything in a data frame and convert to utc
         initial_data = pd.DataFrame(
             {
                 "Time": pd.date_range(
-                    start=datetime.datetime(year=self.my_simulation_parameters.year, month=1, day=1),
-                    end=datetime.datetime(year=self.my_simulation_parameters.year, month=1, day=1)
-                    + datetime.timedelta(days=simulation_time_span.days)
-                    - datetime.timedelta(seconds=60),
+                    start=start_date,
+                    end=end_date,
                     freq="min",
                 )
             }
@@ -1267,9 +1342,8 @@ class UtspLpgConnector(cp.Component):
         initial_data["electricity_consumption"] = electricity_consumption_list
         initial_data["water_consumption"] = water_consumption_list
         initial_data["inner_device_heat_gains"] = inner_device_heat_gains_list
-
-        initial_data = utils.convert_lpg_data_to_utc(data=initial_data, year=self.my_simulation_parameters.year)
-
+        if str(initial_data["Time"].dtype.tz) != "UTC":
+            initial_data = utils.convert_lpg_data_to_utc(data=initial_data, year=self.my_simulation_parameters.year)
         # extract everything from data frame
         electricity_consumption = initial_data["electricity_consumption"].tolist()
         heating_by_residents = initial_data["heating_by_residents"].tolist()

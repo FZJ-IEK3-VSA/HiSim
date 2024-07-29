@@ -656,42 +656,17 @@ class Weather(Component):
                 weatherconfig=self.weather_config,
                 year=self.my_simulation_parameters.year,
             )
+            start_date = pd.Timestamp(self.my_simulation_parameters.start_date, tz="UTC")
+            end_date = pd.Timestamp(self.my_simulation_parameters.end_date, tz="UTC")
+            tmy_data_in_simulation_period = tmy_data[start_date:end_date]
 
-            start_date = self.my_simulation_parameters.start_date,
-            end_date = self.my_simulation_parameters.end_date,
-            print(start_date)
-            print(end_date)
-            print(tmy_data)
+            dni = tmy_data_in_simulation_period["DNI"].resample("1T").asfreq().interpolate(method="linear")
+            temperature = tmy_data_in_simulation_period["T"].resample("1T").asfreq().interpolate(method="linear")
+            dhi = tmy_data_in_simulation_period["DHI"].resample("1T").asfreq().interpolate(method="linear")
+            ghi = tmy_data_in_simulation_period["GHI"].resample("1T").asfreq().interpolate(method="linear")
+            wind_speed = tmy_data_in_simulation_period["Wspd"].resample("1T").asfreq().interpolate(method="linear")
+            pressure = tmy_data_in_simulation_period["Pressure"].resample("1T").asfreq().interpolate(method="linear")
 
-
-            if self.weather_config.data_source == WeatherDataSourceEnum.NSRDB_15MIN:
-                dni = tmy_data["DNI"].resample("1T").asfreq().interpolate(method="linear")
-                temperature = tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")
-                dhi = tmy_data["DHI"].resample("1T").asfreq().interpolate(method="linear")
-                ghi = tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")
-                wind_speed = tmy_data["Wspd"].resample("1T").asfreq().interpolate(method="linear")
-                pressure = tmy_data["Pressure"].resample("1T").asfreq().interpolate(method="linear")
-            elif self.weather_config.data_source == WeatherDataSourceEnum.DWD_10MIN:
-                dni = tmy_data["DNI"].resample("1T").asfreq().interpolate(method="linear")
-                temperature = tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")
-                dhi = tmy_data["DHI"].resample("1T").asfreq().interpolate(method="linear")
-                ghi = tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")
-                wind_speed = tmy_data["Wspd"].resample("1T").asfreq().interpolate(method="linear")
-                pressure = tmy_data["Pressure"].resample("1T").asfreq().interpolate(method="linear")
-            elif self.weather_config.data_source == WeatherDataSourceEnum.ERA5:
-                dni = tmy_data["DNI"].resample("1T").asfreq().interpolate(method="linear")
-                temperature = tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")
-                dhi = tmy_data["DHI"].resample("1T").asfreq().interpolate(method="linear")
-                ghi = tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")
-                wind_speed = tmy_data["Wspd"].resample("1T").asfreq().interpolate(method="linear")
-                pressure = tmy_data["Pressure"].resample("1T").asfreq().interpolate(method="linear")
-            else:
-                dni = self.interpolate(tmy_data["DNI"], self.my_simulation_parameters.year)
-                temperature = self.interpolate(tmy_data["T"], self.my_simulation_parameters.year)
-                dhi = self.interpolate(tmy_data["DHI"], self.my_simulation_parameters.year)
-                ghi = self.interpolate(tmy_data["GHI"], self.my_simulation_parameters.year)
-                wind_speed = self.interpolate(tmy_data["Wspd"], self.my_simulation_parameters.year)
-                pressure = self.interpolate(tmy_data["Pressure"], self.my_simulation_parameters.year)
             # calculate extra terrestrial radiation- n eeded for perez array diffuse irradiance models
             dni_extra = pd.Series(pvlib.irradiance.get_extra_radiation(dni.index), index=dni.index)  # type: ignore
 
@@ -811,20 +786,6 @@ class Weather(Component):
                 key=SingletonDictKeyEnum.WEATHERALTITUDEYEARLYFORECAST,
                 entry=self.altitude_list,
             )
-
-    def interpolate(self, pd_database: Any, year: int) -> Any:
-        """Interpolates a time series."""
-        firstday = pd.Series(
-            [0.0],
-            index=[pd.to_datetime(datetime.datetime(year - 1, 12, 31, 23, 0), utc=True).tz_convert(tz="Europe/Berlin")],
-        )
-        lastday = pd.Series(
-            pd_database.iloc[-1],
-            index=[pd.to_datetime(datetime.datetime(year, 12, 31, 22, 59), utc=True).tz_convert(tz="Europe/Berlin")],
-        )
-        pd_database = pd.concat([pd_database, firstday, lastday])
-        pd_database = pd_database.sort_index()
-        return pd_database.resample("1T").asfreq().interpolate(method="linear")
 
     def calc_sun_position(self, latitude_deg, longitude_deg, year, hoy):
         """Calculates the Sun Position for a specific hour and location.
@@ -990,12 +951,13 @@ def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:
     # check if time series data already exists as .csv with DNI
     if os.path.isfile(filepath + ".csv"):
         data = pd.read_csv(filepath + ".csv", index_col=0, parse_dates=True, sep=";", decimal=",")
-        data.index = pd.to_datetime(data.index, utc=True).tz_convert("Europe/Berlin")
+        data.index = pd.to_datetime(data.index, utc=True)
     # else read from .dat and calculate DNI etc.
     else:
         # get data
         data = pd.read_csv(filepath + ".dat", sep=r"\s+", skiprows=list(range(0, 31)))
-        data.index = pd.date_range(f"{year}-01-01 00:30:00", periods=8760, freq="H", tz="Europe/Berlin")
+        data.index = pd.date_range(f"{year}-01-01 01:00:00", periods=8760, freq="H", tz="Europe/Berlin")
+        data.index = pd.to_datetime(data.index, utc=True)
         data["GHI"] = data["D"] + data["B"]
         data = data.rename(
             columns={

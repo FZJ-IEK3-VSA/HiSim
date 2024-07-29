@@ -35,7 +35,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     Here two fuel_cell/chp_systems and two batteries
     are added.
     """
-    year = 2018
+    year = 2021
     seconds_per_timestep = 60 * 15
 
     if my_simulation_parameters is None:

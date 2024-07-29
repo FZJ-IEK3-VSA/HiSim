@@ -40,6 +40,8 @@ class SimulationParameters(JSONWizard):
         """Initializes the class."""
         self.start_date: datetime.datetime = start_date
         self.end_date: datetime.datetime = end_date
+        if self.start_date > self.end_date:
+            raise KeyError("Simulation start date is after end date!")
         self.seconds_per_timestep = seconds_per_timestep
         self.duration = end_date - start_date
         total_seconds = self.duration.total_seconds()

@@ -656,8 +656,31 @@ class Weather(Component):
                 weatherconfig=self.weather_config,
                 year=self.my_simulation_parameters.year,
             )
+
+            tmy_data = tmy_data.reset_index()
+            tmy_data.rename(columns={'index': 'Time'}, inplace=True)
+            tmy_data["Time"] = pd.to_datetime(tmy_data["Time"])
+            tmy_delta_time = tmy_data["Time"][1] - tmy_data["Time"][0]
+
             start_date = pd.Timestamp(self.my_simulation_parameters.start_date, tz="UTC")
             end_date = pd.Timestamp(self.my_simulation_parameters.end_date, tz="UTC")
+
+            # create initial dataframe
+            initial_data = pd.DataFrame(
+                {
+                    "Time": pd.date_range(
+                        start=start_date,
+                        end=end_date,
+                        freq=tmy_delta_time,
+                    )
+                }
+            )
+
+            if len(initial_data["Time"]) != len(tmy_data["Time"]):
+                tmy_data = pd.merge(initial_data, tmy_data, on='Time', how='outer')
+                tmy_data = tmy_data.interpolate()
+
+            tmy_data.set_index("Time", inplace=True)
             tmy_data_in_simulation_period = tmy_data[start_date:end_date]
 
             dni = tmy_data_in_simulation_period["DNI"].resample("1T").asfreq().interpolate(method="linear")

@@ -1147,7 +1147,7 @@ class UtspLpgConnector(cp.Component):
         gain_per_person = [150, 100]
 
         # load occupancy profile
-        occupancy_profile = []
+        bodily_activity_profiles = []
         bodily_activity_files = [high_activity, low_activity]
         for filecontent in bodily_activity_files:
             if data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
@@ -1159,7 +1159,7 @@ class UtspLpgConnector(cp.Component):
             else:
                 raise ValueError("Could not recognize data_acquisition_mode.")
 
-            occupancy_profile.append(json_filex)
+            bodily_activity_profiles.append(json_filex)
 
         start_date = pd.Timestamp(self.my_simulation_parameters.start_date, tz="UTC")
         end_date = pd.Timestamp(self.my_simulation_parameters.end_date, tz="UTC")
@@ -1187,10 +1187,10 @@ class UtspLpgConnector(cp.Component):
         length_of_value_list_bodily_activity_files = []
         time_resolution_list_bodily_activity_files = []
 
-        for profile in occupancy_profile:
-            start_time_bodily_activity_files.append(pd.Timestamp(profile["StartTime"], tz="UTC"))
-            length_of_value_list_bodily_activity_files.append(len(profile["Values"]))
-            time_resolution_list_bodily_activity_files.append(profile["TimeResolution"])
+        for bodily_activity_profile in bodily_activity_profiles:
+            start_time_bodily_activity_files.append(pd.Timestamp(bodily_activity_profile["StartTime"], tz="UTC"))
+            length_of_value_list_bodily_activity_files.append(len(bodily_activity_profile["Values"]))
+            time_resolution_list_bodily_activity_files.append(bodily_activity_profile["TimeResolution"])
 
         if start_date not in start_time_bodily_activity_files:
             raise KeyError(
@@ -1238,13 +1238,17 @@ class UtspLpgConnector(cp.Component):
                 )
             }
         )
-        bodily_activity_df["high_bodily_activity"] = occupancy_profile[0]["Values"]
-        bodily_activity_df["low_bodily_activity"] = occupancy_profile[1]["Values"]
+        bodily_activity_df["high_bodily_activity"] = bodily_activity_profiles[0]["Values"]
+        bodily_activity_df["low_bodily_activity"] = bodily_activity_profiles[1]["Values"]
 
         if len(initial_data["Time"]) != len(bodily_activity_df["Time"]):
-            bodily_activity_df = pd.merge(initial_data, bodily_activity_df, on='Time', how='outer')
-            bodily_activity_df['high_bodily_activity'] = bodily_activity_df['high_bodily_activity'].interpolate().round().astype(int)
-            bodily_activity_df['low_bodily_activity'] = bodily_activity_df['low_bodily_activity'].interpolate().round().astype(int)
+            bodily_activity_df = pd.merge(initial_data, bodily_activity_df, on="Time", how="outer")
+            bodily_activity_df["high_bodily_activity"] = (
+                bodily_activity_df["high_bodily_activity"].interpolate().round().astype(int)
+            )
+            bodily_activity_df["low_bodily_activity"] = (
+                bodily_activity_df["low_bodily_activity"].interpolate().round().astype(int)
+            )
 
         bodily_activity_df.set_index("Time", inplace=True)
         bodily_activity_df_in_simulation_period = bodily_activity_df[start_date:end_date]
@@ -1306,10 +1310,18 @@ class UtspLpgConnector(cp.Component):
                 pre_electricity_consumption["Time"], format="%d.%m.%Y %H:%M", utc=True
             )
 
+            if not pre_electricity_consumption["Time"].isin([start_date]).any():
+                raise KeyError(
+                    f"Simulation start date {start_date} is not in time span of predefined files of electricity "
+                    f"consumption profile "
+                    f"{pre_electricity_consumption['Time'].iloc[0]} - {pre_electricity_consumption['Time'].iloc[-1]}!"
+                )
+
             if len(initial_data["Time"]) != len(pre_electricity_consumption["Time"]):
-                pre_electricity_consumption = pd.merge(initial_data, pre_electricity_consumption, on='Time', how='outer')
-                pre_electricity_consumption['Sum [kWh]'] = pre_electricity_consumption[
-                    'Sum [kWh]'].interpolate()
+                pre_electricity_consumption = pd.merge(
+                    initial_data, pre_electricity_consumption, on="Time", how="outer"
+                )
+                pre_electricity_consumption["Sum [kWh]"] = pre_electricity_consumption["Sum [kWh]"].interpolate()
 
             pre_electricity_consumption.set_index("Time", inplace=True)
             pre_electricity_consumption_in_simulation_period = pre_electricity_consumption[start_date:end_date]
@@ -1329,10 +1341,15 @@ class UtspLpgConnector(cp.Component):
                 pre_water_consumption["Time"], format="%d.%m.%Y %H:%M", utc=True
             )
 
+            if not pre_water_consumption["Time"].isin([start_date]).any():
+                raise KeyError(
+                    f"Simulation start date {start_date} is not in time span of predefined files of water consumption "
+                    f"profile {pre_water_consumption['Time'].iloc[0]} - {pre_water_consumption['Time'].iloc[-1]}!"
+                )
+
             if len(initial_data["Time"]) != len(pre_water_consumption["Time"]):
-                pre_water_consumption = pd.merge(initial_data, pre_water_consumption, on='Time', how='outer')
-                pre_water_consumption['Sum [L]'] = pre_water_consumption[
-                    'Sum [L]'].interpolate()
+                pre_water_consumption = pd.merge(initial_data, pre_water_consumption, on="Time", how="outer")
+                pre_water_consumption["Sum [L]"] = pre_water_consumption["Sum [L]"].interpolate()
 
             pre_water_consumption.set_index("Time", inplace=True)
             pre_water_consumption_in_simulation_period = pre_water_consumption[start_date:end_date]
@@ -1352,10 +1369,18 @@ class UtspLpgConnector(cp.Component):
                 pre_inner_device_heat_gains["Time"], format="%d.%m.%Y %H:%M", utc=True
             )
 
+            if not pre_inner_device_heat_gains["Time"].isin([start_date]).any():
+                raise KeyError(
+                    f"Simulation start date {start_date} is not in time span of predefined files of inner device heat "
+                    f"gains consumption profile "
+                    f"{pre_inner_device_heat_gains['Time'].iloc[0]} - {pre_inner_device_heat_gains['Time'].iloc[-1]}!"
+                )
+
             if len(initial_data["Time"]) != len(pre_inner_device_heat_gains["Time"]):
-                pre_inner_device_heat_gains = pd.merge(initial_data, pre_inner_device_heat_gains, on='Time', how='outer')
-                pre_inner_device_heat_gains['Sum [kWh]'] = pre_inner_device_heat_gains[
-                    'Sum [kWh]'].interpolate()
+                pre_inner_device_heat_gains = pd.merge(
+                    initial_data, pre_inner_device_heat_gains, on="Time", how="outer"
+                )
+                pre_inner_device_heat_gains["Sum [kWh]"] = pre_inner_device_heat_gains["Sum [kWh]"].interpolate()
 
             pre_inner_device_heat_gains.set_index("Time", inplace=True)
             pre_inner_device_heat_gains_in_simulation_period = pre_inner_device_heat_gains[start_date:end_date]

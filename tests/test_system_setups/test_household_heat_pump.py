@@ -58,7 +58,7 @@ def test_household_heat_pump_main():
     """Execute setup with default values with hisim main."""
 
     path = "../system_setups/household_heat_pump.py"
-    my_simpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
+    my_simpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     my_simpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
     hisim_main.main(path, my_simpar)
     log.information(os.getcwd())

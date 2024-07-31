@@ -53,11 +53,11 @@ def test_windturbine():
 
     fft.add_global_index_of_components([my_weather, my_windturbine])
 
-    timestep = 55535
+    timestep = 55505
     my_weather.i_simulate(timestep, stsv, False)
     my_windturbine.i_simulate(timestep, stsv, False)
     log.information("windturbine electricity output [W]: " + str(
         stsv.values[my_windturbine.electricity_output_channel.global_index]))
 
-    # check windturbine electricity output [W] in timestep 55535
+    # check windturbine electricity output [W] in timestep 55505
     assert stsv.values[my_windturbine.electricity_output_channel.global_index] == 18816.25770544808

@@ -3,7 +3,6 @@
 # clean
 
 # Generic/Built-in
-import datetime
 import enum
 import math
 import os
@@ -707,17 +706,6 @@ class PVSystem(cp.Component):
                 for t in range(self.my_simulation_parameters.timesteps)
             ]
             SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.PVFORECASTYEARLY, entry=pv_forecast_yearly)
-
-    def interpolate(self, pd_database: Any, year: Any) -> Any:
-        """Interpolates."""
-        lastday = pd.Series(
-            pd_database[-1],
-            index=[pd.to_datetime(datetime.datetime(year, 12, 31, 22, 59), utc=True).tz_convert("Europe/Berlin")],
-        )
-
-        pd_database = pd_database.append(lastday)
-        pd_database = pd_database.sort_index()
-        return pd_database.resample("1T").asfreq().interpolate(method="linear").tolist()
 
     def get_modules_from_database(self, module_database: Any, load_module_data: bool, module_name: str) -> Any:
         """Get modules from pvlib module database."""

@@ -462,7 +462,7 @@ def configure_water_heating(
         lt.HeatingSystems.OIL_HEATING: lt.LoadTypes.OIL,
         lt.HeatingSystems.DISTRICT_HEATING: lt.LoadTypes.DISTRICTHEATING,
     }
-    heater_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating()
+    heater_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating_with_district_heating()
     heater_config.fuel = fuel_translator[water_heating_system_installed]
     heater_config.efficiency = get_heating_system_efficiency(
         heating_system_installed=water_heating_system_installed, water_vs_heating=lt.InandOutputType.HEATING

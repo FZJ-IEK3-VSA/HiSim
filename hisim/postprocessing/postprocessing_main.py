@@ -21,7 +21,7 @@ from hisim.modular_household.interface_configs.kpi_config import KPIConfig
 from hisim.postprocessing import charts
 from hisim.postprocessing import reportgenerator
 from hisim.postprocessing.chart_singleday import ChartSingleDay
-from hisim.postprocessing.compute_kpis import KpiGenerator
+from hisim.postprocessing.kpi_computation.compute_kpis import KpiGenerator
 from hisim.postprocessing.generate_csv_for_housing_database import generate_csv_for_database
 from hisim.postprocessing.opex_and_capex_cost_calculation import (
     opex_calculation,
@@ -552,7 +552,7 @@ class PostProcessor:
     ) -> PostProcessingDataTransfer:
         """Computes KPI's and writes them to report and to ppdt kpi collection."""
         # initialize kpi data class and compute all kpi values
-        kpi_data_class = KpiGenerator(ppdt)
+        kpi_data_class = KpiGenerator(post_processing_data_transfer=ppdt)
         # write kpi table to report
         kpi_table = kpi_data_class.return_table_for_report()
         self.write_new_chapter_with_table_to_report(
@@ -975,9 +975,9 @@ class PostProcessor:
             kpi_collection_dict_general_values = ppdt.kpi_collection_dict["General"]
             kpi_collection_dict_cost_and_emission_values = ppdt.kpi_collection_dict["Costs and Emissions"]
 
-            self_consumption_rate = kpi_collection_dict_general_values["Self-consumption rate"]["value"]
-            autarky_rate = kpi_collection_dict_general_values["Autarky rate"]["value"]
-            grid_injection_in_kilowatt_hour = kpi_collection_dict_general_values["Grid injection"]["value"]
+            self_consumption_rate = kpi_collection_dict_general_values["Self-consumption rate of electricity"]["value"]
+            autarky_rate = kpi_collection_dict_general_values["Autarky rate of electricity"]["value"]
+            grid_injection_in_kilowatt_hour = kpi_collection_dict_general_values["Grid injection of electricity"]["value"]
             economic_cost = kpi_collection_dict_cost_and_emission_values["Total costs for simulated period"]["value"]
             co2_cost = kpi_collection_dict_cost_and_emission_values["Total CO2 emissions for simulated period"]["value"]
 

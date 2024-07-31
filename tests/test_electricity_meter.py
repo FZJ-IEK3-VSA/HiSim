@@ -184,7 +184,7 @@ def test_house(
 
     cumulative_production_kpi_in_kilowatt_hour = jsondata["General"]["Total electricity production"].get("value")
 
-    electricity_from_grid_kpi_in_kilowatt_hour = jsondata["General"]["Total energy from grid"].get("value")
+    electricity_from_grid_kpi_in_kilowatt_hour = jsondata["Electricity Meter"]["Total energy from grid"].get("value")
 
     # simualtion results from grid energy balancer (last entry)
     simulation_results_electricity_meter_cumulative_production_in_watt_hour = (

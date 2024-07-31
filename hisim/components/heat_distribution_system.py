@@ -18,6 +18,7 @@ from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.component import OpexCostDataClass
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 
 __authors__ = "Katharina Rieck, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -83,7 +84,9 @@ class HeatDistributionConfig(cp.ConfigBase):
         cls,
         water_mass_flow_rate_in_kg_per_second: float,
         absolute_conditioned_floor_area_in_m2: float,
-        position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int] = PositionHotWaterStorageInSystemSetup.PARALLEL,
+        position_hot_water_storage_in_system: Union[
+            PositionHotWaterStorageInSystemSetup, int
+        ] = PositionHotWaterStorageInSystemSetup.PARALLEL,
     ) -> Any:
         """Get a default heat distribution system config."""
         config = HeatDistributionConfig(
@@ -578,6 +581,159 @@ class HeatDistribution(cp.Component):
         )
 
         return opex_cost_data_class
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+
+        thermal_output_energy_in_kilowatt_hour: Optional[float] = None
+        mean_flow_temperature_in_celsius: Optional[float] = None
+        mean_return_temperature_in_celsius: Optional[float] = None
+        mean_temperature_difference_between_flow_and_return_in_celsius: Optional[float] = None
+        min_flow_temperature_in_celsius: Optional[float] = None
+        min_return_temperature_in_celsius: Optional[float] = None
+        min_temperature_difference_between_flow_and_return_in_celsius: Optional[float] = None
+        max_flow_temperature_in_celsius: Optional[float] = None
+        max_return_temperature_in_celsius: Optional[float] = None
+        max_temperature_difference_between_flow_and_return_in_celsius: Optional[float] = None
+        flow_temperature_list_in_celsius: pd.Series = pd.Series([])
+        return_temperature_list_in_celsius: pd.Series = pd.Series([])
+
+        list_of_kpi_entries: List[KpiEntry] = []
+        for index, output in enumerate(all_outputs):
+            if output.component_name == self.config.name:
+                if output.field_name == self.ThermalPowerDelivered and output.load_type == lt.LoadTypes.HEATING:
+                    # take only output values for heating
+                    thermal_output_power_values_in_watt = postprocessing_results.iloc[:, index].loc[
+                        postprocessing_results.iloc[:, index] > 0.0
+                    ]
+                    # get energy from power
+                    thermal_output_energy_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=thermal_output_power_values_in_watt,
+                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    )
+                    thermal_output_energy_hds_entry = KpiEntry(
+                        name="Thermal output energy of heat distribution system",
+                        unit="kWh",
+                        value=thermal_output_energy_in_kilowatt_hour,
+                        tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
+                        description=self.component_name
+                    )
+                    list_of_kpi_entries.append(thermal_output_energy_hds_entry)
+
+                elif output.field_name == self.WaterTemperatureInlet:
+                    flow_temperature_list_in_celsius = postprocessing_results.iloc[:, index]
+                elif output.field_name == self.WaterTemperatureOutput:
+                    return_temperature_list_in_celsius = postprocessing_results.iloc[:, index]
+
+        # get mean, max and min values of flow and return temperatures
+        temperature_diff_flow_and_return_in_celsius = (
+            flow_temperature_list_in_celsius - return_temperature_list_in_celsius
+        )
+        (
+            mean_temperature_difference_between_flow_and_return_in_celsius,
+            max_temperature_difference_between_flow_and_return_in_celsius,
+            min_temperature_difference_between_flow_and_return_in_celsius,
+        ) = KpiHelperClass.calc_mean_max_min_value(list_or_pandas_series=temperature_diff_flow_and_return_in_celsius)
+
+        (
+            mean_flow_temperature_in_celsius,
+            max_flow_temperature_in_celsius,
+            min_flow_temperature_in_celsius,
+        ) = KpiHelperClass.calc_mean_max_min_value(list_or_pandas_series=flow_temperature_list_in_celsius)
+
+        (
+            mean_return_temperature_in_celsius,
+            max_return_temperature_in_celsius,
+            min_return_temperature_in_celsius,
+        ) = KpiHelperClass.calc_mean_max_min_value(list_or_pandas_series=return_temperature_list_in_celsius)
+
+        # make kpi entries and append to list
+        mean_flow_temperature_hds_entry = KpiEntry(
+            name="Mean flow temperature of heat distribution system",
+            unit="°C",
+            value=mean_flow_temperature_in_celsius,
+            tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(mean_flow_temperature_hds_entry)
+
+        mean_return_temperature_hds_entry = KpiEntry(
+            name="Mean return temperature of heat distribution system",
+            unit="°C",
+            value=mean_return_temperature_in_celsius,
+            tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(mean_return_temperature_hds_entry)
+
+        mean_temperature_difference_hds_entry = KpiEntry(
+            name="Mean temperature difference of heat distribution system",
+            unit="°C",
+            value=mean_temperature_difference_between_flow_and_return_in_celsius,
+            tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(mean_temperature_difference_hds_entry)
+
+        max_flow_temperature_hds_entry = KpiEntry(
+            name="Max flow temperature of heat distribution system",
+            unit="°C",
+            value=max_flow_temperature_in_celsius,
+            tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(max_flow_temperature_hds_entry)
+
+        max_return_temperature_hds_entry = KpiEntry(
+            name="Max return temperature of heat distribution system",
+            unit="°C",
+            value=max_return_temperature_in_celsius,
+            tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(max_return_temperature_hds_entry)
+
+        max_temperature_difference_hds_entry = KpiEntry(
+            name="Max temperature difference of heat distribution system",
+            unit="°C",
+            value=max_temperature_difference_between_flow_and_return_in_celsius,
+            tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(max_temperature_difference_hds_entry)
+
+        min_flow_temperature_hds_entry = KpiEntry(
+            name="Min flow temperature of heat distribution system",
+            unit="°C",
+            value=min_flow_temperature_in_celsius,
+            tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(min_flow_temperature_hds_entry)
+
+        min_return_temperature_hds_entry = KpiEntry(
+            name="Min return temperature of heat distribution system",
+            unit="°C",
+            value=min_return_temperature_in_celsius,
+            tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(min_return_temperature_hds_entry)
+
+        min_temperature_difference_hds_entry = KpiEntry(
+            name="Min temperature difference of heat distribution system",
+            unit="°C",
+            value=min_temperature_difference_between_flow_and_return_in_celsius,
+            tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(min_temperature_difference_hds_entry)
+
+        return list_of_kpi_entries
 
 
 @dataclass_json

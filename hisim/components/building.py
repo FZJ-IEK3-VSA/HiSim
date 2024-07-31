@@ -58,6 +58,7 @@ from hisim.components.weather import Weather
 from hisim.loadtypes import OutputPostprocessingRules
 from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
 from hisim.simulationparameters import SimulationParameters
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
 
 __authors__ = "Vitor Hugo Bellotto Zago"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -393,7 +394,7 @@ class Building(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for {self.SolarGainThroughWindows} will follow.",
-            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL]
+            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
         self.internal_heat_gains_from_residents_and_devices_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -401,7 +402,7 @@ class Building(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for {self.InternalHeatGainsFromOccupancy} will follow.",
-            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL]
+            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
         self.heat_loss_from_transmission_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -409,7 +410,7 @@ class Building(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for {self.HeatLossFromTransmission} will follow.",
-            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL]
+            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
         self.heat_loss_from_ventilation_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -417,7 +418,7 @@ class Building(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for {self.HeatLossFromVentilation} will follow.",
-            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL]
+            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
 
         self.heat_demand_according_to_tabula_channel: cp.ComponentOutput = self.add_output(
@@ -454,7 +455,7 @@ class Building(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for {self.TotalThermalMassHeatFlux} will follow.",
-            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL]
+            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
         self.open_window_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -1139,6 +1140,273 @@ class Building(cp.Component):
             f"{self.my_building_information.energy_need_for_heating_reference_in_kilowatthour_per_m2_per_year:.2f}"
         )
         return self.buildingconfig.get_string_dict() + lines
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+
+        list_of_kpi_entries: List[KpiEntry] = []
+        for index, output in enumerate(all_outputs):
+            if output.component_name == self.config.name:
+                list_of_kpi_entries = self.get_building_kpis_from_outputs(
+                    output=output,
+                    index=index,
+                    postprocessing_results=postprocessing_results,
+                    list_of_kpi_entries=list_of_kpi_entries,
+                )
+                list_of_kpi_entries = self.get_building_kpis_from_building_information(
+                    list_of_kpi_entries=list_of_kpi_entries
+                )
+                list_of_kpi_entries = self.get_building_temperature_deviation_from_set_temperatures(
+                    output=output,
+                    index=index,
+                    postprocessing_results=postprocessing_results,
+                    list_of_kpi_entries=list_of_kpi_entries,
+                )
+
+        return list_of_kpi_entries
+
+    def get_building_kpis_from_building_information(self, list_of_kpi_entries: List[KpiEntry]) -> List[KpiEntry]:
+        """Check building kpi values.
+
+        Check for all timesteps and count the
+        time when the temperature is outside of the building set temperatures
+        in order to verify if energy system provides enough heating and cooling.
+        """
+        # get heating load and heating ref temperature
+        heating_load_in_watt = self.my_building_information.max_thermal_building_demand_in_watt
+        # get building area
+        scaled_conditioned_floor_area_in_m2 = self.my_building_information.scaled_conditioned_floor_area_in_m2
+        # get rooftop area
+        scaled_rooftop_area_in_m2 = self.my_building_information.scaled_rooftop_area_in_m2
+        # get specific heating load
+        specific_heating_load_in_watt_per_m2 = heating_load_in_watt / scaled_conditioned_floor_area_in_m2
+        # get tabula reference value for energy need in kWh per m2 / a
+        energy_need_for_heating_in_kilowatthour_per_m2_per_year_tabula_ref = (
+            self.my_building_information.energy_need_for_heating_reference_in_kilowatthour_per_m2_per_year
+        )
+
+        # make kpi entries and append to list
+        heating_load_in_watt_entry = KpiEntry(
+            name="Building heating load", unit="W", value=heating_load_in_watt, tag=KpiTagEnumClass.BUILDING, description=self.component_name
+        )
+        list_of_kpi_entries.append(heating_load_in_watt_entry)
+
+        scaled_conditioned_floor_area_in_m2_entry = KpiEntry(
+            name="Conditioned floor area",
+            unit="m2",
+            value=scaled_conditioned_floor_area_in_m2,
+            tag=KpiTagEnumClass.BUILDING,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(scaled_conditioned_floor_area_in_m2_entry)
+
+        scaled_rooftop_area_in_m2_entry = KpiEntry(
+            name="Rooftop area",
+            unit="m2",
+            value=scaled_rooftop_area_in_m2,
+            tag=KpiTagEnumClass.BUILDING,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(scaled_rooftop_area_in_m2_entry)
+
+        specific_heating_load_in_watt_per_m2_entry = KpiEntry(
+            name="Specific heating load",
+            unit="W/m2",
+            value=specific_heating_load_in_watt_per_m2,
+            tag=KpiTagEnumClass.BUILDING,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(specific_heating_load_in_watt_per_m2_entry)
+
+        specific_heat_demand_from_tabula_in_kwh_per_m2a_entry = KpiEntry(
+            name="Specific heating demand according to TABULA",
+            unit="kWh/m2a",
+            value=energy_need_for_heating_in_kilowatthour_per_m2_per_year_tabula_ref,
+            tag=KpiTagEnumClass.BUILDING,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(specific_heat_demand_from_tabula_in_kwh_per_m2a_entry)
+
+        return list_of_kpi_entries
+
+    def get_building_temperature_deviation_from_set_temperatures(
+        self, output: Any, index: int, postprocessing_results: pd.DataFrame, list_of_kpi_entries: List[KpiEntry]
+    ) -> List[KpiEntry]:
+        """Check building temperatures.
+
+        Check for all timesteps and count the
+        time when the temperature is outside of the building set temperatures
+        in order to verify if energy system provides enough heating and cooling.
+        """
+
+        temperature_difference_of_building_being_below_heating_set_temperature = 0
+        temperature_difference_of_building_being_below_cooling_set_temperature = 0
+        temperature_hours_of_building_being_below_heating_set_temperature = None
+        temperature_hours_of_building_being_above_cooling_set_temperature = None
+        min_temperature_reached_in_celsius = None
+        max_temperature_reached_in_celsius = None
+        if output.field_name == self.TemperatureIndoorAir:
+            indoor_temperatures_in_celsius = postprocessing_results.iloc[:, index]
+            for temperature in indoor_temperatures_in_celsius:
+                if temperature < self.set_heating_temperature_in_celsius:
+                    temperature_difference_heating = self.set_heating_temperature_in_celsius - temperature
+
+                    temperature_difference_of_building_being_below_heating_set_temperature = (
+                        temperature_difference_of_building_being_below_heating_set_temperature
+                        + temperature_difference_heating
+                    )
+                elif temperature > self.set_cooling_temperature_in_celsius:
+                    temperature_difference_cooling = temperature - self.set_cooling_temperature_in_celsius
+                    temperature_difference_of_building_being_below_cooling_set_temperature = (
+                        temperature_difference_of_building_being_below_cooling_set_temperature
+                        + temperature_difference_cooling
+                    )
+
+            temperature_hours_of_building_being_below_heating_set_temperature = (
+                temperature_difference_of_building_being_below_heating_set_temperature
+                * self.seconds_per_timestep
+                / 3600
+            )
+
+            temperature_hours_of_building_being_above_cooling_set_temperature = (
+                temperature_difference_of_building_being_below_cooling_set_temperature
+                * self.seconds_per_timestep
+                / 3600
+            )
+
+            # get also max and min indoor air temperature
+            min_temperature_reached_in_celsius = float(min(indoor_temperatures_in_celsius.values))
+            max_temperature_reached_in_celsius = float(max(indoor_temperatures_in_celsius.values))
+
+            # make kpi entries and append to list
+            temperature_hours_of_building_below_heating_set_temperature_entry = KpiEntry(
+                name=f"Temperature deviation of building indoor air temperature being below set temperature {self.set_heating_temperature_in_celsius} Celsius",
+                unit="°C*h",
+                value=temperature_hours_of_building_being_below_heating_set_temperature,
+                tag=KpiTagEnumClass.BUILDING,
+                description=self.component_name
+            )
+            list_of_kpi_entries.append(temperature_hours_of_building_below_heating_set_temperature_entry)
+            temperature_hours_of_building_above_cooling_set_temperature_entry = KpiEntry(
+                name=f"Temperature deviation of building indoor air temperature being above set temperature {self.set_cooling_temperature_in_celsius} Celsius",
+                unit="°C*h",
+                value=temperature_hours_of_building_being_above_cooling_set_temperature,
+                tag=KpiTagEnumClass.BUILDING,
+                description=self.component_name
+            )
+            list_of_kpi_entries.append(temperature_hours_of_building_above_cooling_set_temperature_entry)
+            min_temperature_reached_in_celsius_entry = KpiEntry(
+                name="Minimum building indoor air temperature reached",
+                unit="°C",
+                value=min_temperature_reached_in_celsius,
+                tag=KpiTagEnumClass.BUILDING,
+                description=self.component_name
+            )
+            list_of_kpi_entries.append(min_temperature_reached_in_celsius_entry)
+            max_temperature_reached_in_celsius_entry = KpiEntry(
+                name="Maximum building indoor air temperature reached",
+                unit="°C",
+                value=max_temperature_reached_in_celsius,
+                tag=KpiTagEnumClass.BUILDING,
+                description=self.component_name
+            )
+            list_of_kpi_entries.append(max_temperature_reached_in_celsius_entry)
+        return list_of_kpi_entries
+
+    def get_building_kpis_from_outputs(
+        self, output: Any, index: int, postprocessing_results: pd.DataFrame, list_of_kpi_entries: List[KpiEntry]
+    ) -> List[KpiEntry]:
+        """Get KPIs for building outputs."""
+        energy_loss_from_transmission_in_kilowatt_hour: Optional[float] = None
+        energy_loss_from_ventilation_in_kilowatt_hour: Optional[float] = None
+        energy_gains_from_solar_in_kilowatt_hour: Optional[float] = None
+        energy_gains_from_internal_in_kilowatt_hour: Optional[float] = None
+        energy_demand_calculated_based_on_tabula_in_kilowatt_hour: Optional[float] = None
+
+        if output.field_name == self.HeatLossFromTransmission:
+            heat_loss_from_transmission_values_in_watt = postprocessing_results.iloc[:, index]
+            # get energy from power
+            energy_loss_from_transmission_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
+                power_timeseries_in_watt=heat_loss_from_transmission_values_in_watt,
+                timeresolution=self.seconds_per_timestep,
+            )
+            energy_loss_from_transmission_entry = KpiEntry(
+                name="Energy transfer from transmission",
+                unit="kWh",
+                value=energy_loss_from_transmission_in_kilowatt_hour,
+                tag=KpiTagEnumClass.BUILDING,
+                description=self.component_name
+            )
+            list_of_kpi_entries.append(energy_loss_from_transmission_entry)
+
+        elif output.field_name == self.HeatLossFromVentilation:
+            heat_loss_from_ventilation_values_in_watt = postprocessing_results.iloc[:, index]
+            # get energy from power
+            energy_loss_from_ventilation_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
+                power_timeseries_in_watt=heat_loss_from_ventilation_values_in_watt,
+                timeresolution=self.seconds_per_timestep,
+            )
+            energy_loss_from_ventilation_entry = KpiEntry(
+                name="Energy transfer from ventilation",
+                unit="kWh",
+                value=energy_loss_from_ventilation_in_kilowatt_hour,
+                tag=KpiTagEnumClass.BUILDING,
+                description=self.component_name
+            )
+            list_of_kpi_entries.append(energy_loss_from_ventilation_entry)
+
+        elif output.field_name == self.SolarGainThroughWindows:
+            solar_gains_values_in_watt = postprocessing_results.iloc[:, index]
+            # get energy from power
+            energy_gains_from_solar_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
+                power_timeseries_in_watt=solar_gains_values_in_watt, timeresolution=self.seconds_per_timestep
+            )
+            energy_gains_from_solar_entry = KpiEntry(
+                name="Solar energy gains",
+                unit="kWh",
+                value=energy_gains_from_solar_in_kilowatt_hour,
+                tag=KpiTagEnumClass.BUILDING,
+                description=self.component_name
+            )
+            list_of_kpi_entries.append(energy_gains_from_solar_entry)
+
+        elif output.field_name == self.InternalHeatGainsFromOccupancy:
+            internal_gains_values_in_watt = postprocessing_results.iloc[:, index]
+            # get energy from power
+            energy_gains_from_internal_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
+                power_timeseries_in_watt=internal_gains_values_in_watt, timeresolution=self.seconds_per_timestep
+            )
+            energy_gains_from_internal_entry = KpiEntry(
+                name="Internal energy gains",
+                unit="kWh",
+                value=energy_gains_from_internal_in_kilowatt_hour,
+                tag=KpiTagEnumClass.BUILDING,
+                description=self.component_name
+            )
+            list_of_kpi_entries.append(energy_gains_from_internal_entry)
+
+        elif output.field_name == self.HeatDemandAccordingToTabula:
+            heat_demand_values_in_watt = postprocessing_results.iloc[:, index]
+            # get energy from power
+            energy_demand_calculated_based_on_tabula_in_kilowatt_hour = (
+                KpiHelperClass.compute_total_energy_from_power_timeseries(
+                    power_timeseries_in_watt=heat_demand_values_in_watt, timeresolution=self.seconds_per_timestep
+                )
+            )
+            heat_demand_calculated_entry = KpiEntry(
+                name="Heat demand calculated based on TABULA",
+                unit="kWh",
+                value=energy_demand_calculated_based_on_tabula_in_kilowatt_hour,
+                tag=KpiTagEnumClass.BUILDING,
+                description=self.component_name
+            )
+            list_of_kpi_entries.append(heat_demand_calculated_entry)
+
+        return list_of_kpi_entries
 
     # =====================================================================================================================================
     # Calculation of the heat transfer coefficients or thermal conductances.

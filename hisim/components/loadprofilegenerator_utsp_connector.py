@@ -802,12 +802,12 @@ class UtspLpgConnector(cp.Component):
         because part of electricity consumption is feed by PV
         """
         for index, output in enumerate(all_outputs):
-            if output.component_name == "UTSPConnector" and output.load_type == lt.LoadTypes.ELECTRICITY:
-                self.utsp_config.consumption_in_kwh = round(
-                    sum(postprocessing_results.iloc[:, index])
-                    * self.my_simulation_parameters.seconds_per_timestep
-                    / 3.6e6,
-                    1,
+            if output.component_name == self.config.name and output.load_type == lt.LoadTypes.ELECTRICITY and output.field_name == self.ElectricityOutput:
+                occupancy_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]
+                self.utsp_config.consumption_in_kwh = (
+                KpiHelperClass.compute_total_energy_from_power_timeseries(
+                    power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
+                    timeresolution=self.my_simulation_parameters.seconds_per_timestep)
                 )
 
         opex_cost_data_class = OpexCostDataClass(
@@ -1409,11 +1409,13 @@ class UtspLpgConnector(cp.Component):
             if output.component_name == self.config.name:
                 if output.field_name == self.ElectricityOutput:
                     occupancy_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]
+                    print("len occupancy watt series", len(occupancy_total_electricity_consumption_in_watt_series))
                     occupancy_total_electricity_consumption_in_kilowatt_hour = (
                     KpiHelperClass.compute_total_energy_from_power_timeseries(
                         power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
                         timeresolution=self.my_simulation_parameters.seconds_per_timestep)
                     )
+                    print("occupancy consumption in kWh", occupancy_total_electricity_consumption_in_kilowatt_hour)
                     break
 
         # make kpi entry

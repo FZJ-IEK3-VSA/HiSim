@@ -1409,13 +1409,11 @@ class UtspLpgConnector(cp.Component):
             if output.component_name == self.config.name:
                 if output.field_name == self.ElectricityOutput:
                     occupancy_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]
-                    print("len occupancy watt series", len(occupancy_total_electricity_consumption_in_watt_series))
                     occupancy_total_electricity_consumption_in_kilowatt_hour = (
                     KpiHelperClass.compute_total_energy_from_power_timeseries(
                         power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
                         timeresolution=self.my_simulation_parameters.seconds_per_timestep)
                     )
-                    print("occupancy consumption in kWh", occupancy_total_electricity_consumption_in_kilowatt_hour)
                     break
 
         # make kpi entry

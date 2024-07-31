@@ -630,7 +630,7 @@ class HeatPumpHplib(Component):
         """
         for index, output in enumerate(all_outputs):
             if (
-                output.component_name == self.component_name and output.load_type == LoadTypes.ELECTRICITY
+                output.component_name == self.component_name and output.load_type == LoadTypes.ELECTRICITY and output.field_name == self.ElectricalInputPower
             ):  # Todo: check component name from system_setups: find another way of using only heatpump-outputs
                 self.config.consumption_in_kwh = round(
                     sum(postprocessing_results.iloc[:, index])

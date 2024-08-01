@@ -92,7 +92,7 @@ def run_cluster_house(
     # Build method
     # setup function needs to be imported inside the function, otherwise error occurs
     from system_setups.household_cluster import setup_function  # pylint: disable=import-outside-toplevel
-
+    # make sure that in cluster house setup function HeatPumps are used as energy system (GasHeaters do currently not work for time resolutions > 60 *15)
     setup_function(my_sim=my_sim, my_simulation_parameters=my_simulation_parameters)
 
     my_sim.run_all_timesteps()

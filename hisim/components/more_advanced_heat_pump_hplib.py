@@ -1326,7 +1326,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         """
         for index, output in enumerate(all_outputs):
             if (
-                output.component_name == "MoreAdvancedHeatPumpHPLib" and output.load_type == LoadTypes.ELECTRICITY
+                output.component_name == "MoreAdvancedHeatPumpHPLib" and output.load_type == LoadTypes.ELECTRICITY and output.field_name == self.ElectricalInputPowerTotal
             ):  # Todo: check component name from system_setups: find another way of using only heatpump-outputs
                 self.config.consumption = round(
                     sum(postprocessing_results.iloc[:, index])

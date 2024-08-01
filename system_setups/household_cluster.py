@@ -144,10 +144,9 @@ def setup_function(
         my_sim.my_module_config = my_config.to_dict()
 
     # Set Simulation Parameters
-    year = 2021
-    seconds_per_timestep = 60 * 15
-
     if my_simulation_parameters is None:
+        year = 2021
+        seconds_per_timestep = 60 * 15
         my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
@@ -169,8 +168,8 @@ def setup_function(
     # Set System Parameters
 
     # Set heating systems for space heating and domestic hot water
-    space_heating_system = HeatingSystemType.GAS_HEATER
-    domestic_hot_water_heating_system = HeatingSystemType.GAS_HEATER
+    space_heating_system = HeatingSystemType.HEAT_PUMP
+    domestic_hot_water_heating_system = HeatingSystemType.HEAT_PUMP
     # Set Heat Pump Controller
     hp_controller_mode = 2  # mode 1 for heating/off and mode 2 for heating/cooling/off
     heating_reference_temperature_in_celsius = -7.0
@@ -398,7 +397,7 @@ def setup_function(
         my_gas_heater_for_dhw_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating_with_gas(
             max_warm_water_demand_in_liter=my_occupancy.max_hot_water_demand,
             scaling_factor_according_to_number_of_apartments=my_occupancy.scaling_factor_according_to_number_of_apartments,
-            seconds_per_timestep=seconds_per_timestep,
+            seconds_per_timestep=my_simulation_parameters.seconds_per_timestep,
         )
         my_gas_heater_controller_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
             "DHW" + lt.HeatingSystems.GAS_HEATING.value

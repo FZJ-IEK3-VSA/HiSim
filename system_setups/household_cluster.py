@@ -146,7 +146,7 @@ def setup_function(
     # Set Simulation Parameters
     if my_simulation_parameters is None:
         year = 2021
-        seconds_per_timestep = 60
+        seconds_per_timestep = 60 * 15
         my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
@@ -157,10 +157,10 @@ def setup_function(
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_CAPEX)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON)
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
-        my_simulation_parameters.logging_level = 4
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
+        # my_simulation_parameters.logging_level = 4
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
@@ -168,8 +168,8 @@ def setup_function(
     # Set System Parameters
 
     # Set heating systems for space heating and domestic hot water
-    space_heating_system = HeatingSystemType.GAS_HEATER
-    domestic_hot_water_heating_system = HeatingSystemType.GAS_HEATER
+    space_heating_system = HeatingSystemType.HEAT_PUMP
+    domestic_hot_water_heating_system = HeatingSystemType.HEAT_PUMP
     # Set Heat Pump Controller
     hp_controller_mode = 2  # mode 1 for heating/off and mode 2 for heating/cooling/off
     heating_reference_temperature_in_celsius = -7.0
@@ -475,7 +475,6 @@ def setup_function(
     my_car_battery_config.p_inv_custom = charging_power * 1e3
     # lower threshold for soc of car battery in clever case. This enables more surplus charging. Surplus control of car
     my_car_battery_controller_config.battery_set = 0.4
-
     # Build Electric Vehicles
     my_car_information = generic_car.GenericCarInformation(my_occupancy_instance=my_occupancy)
     my_cars: List[generic_car.Car] = []
@@ -510,7 +509,7 @@ def setup_function(
         car_number += 1
 
     # Connect Electric Vehicles and Car Batteries
-    zip_car_battery_controller_lists = zip(my_cars, my_car_batteries, my_car_battery_controllers)
+    zip_car_battery_controller_lists = list(zip(my_cars, my_car_batteries, my_car_battery_controllers))
     for car, car_battery, car_battery_controller in zip_car_battery_controller_lists:
         car_battery_controller.connect_only_predefined_connections(car)
         car_battery_controller.connect_only_predefined_connections(car_battery)
@@ -518,6 +517,7 @@ def setup_function(
 
     # use ems and battery only when PV is used
     if share_of_maximum_pv_potential != 0:
+
         # Build EMS
         my_electricity_controller_config = controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
 
@@ -564,7 +564,8 @@ def setup_function(
 
         # -----------------------------------------------------------------------------------------------------------------
         # Connect Electric Vehicle and Car Battery with EMS for surplus control
-        for car, car_battery, car_battery_controller in zip_car_battery_controller_lists:
+
+        for car, car_battery, car_battery_controller in list(zip_car_battery_controller_lists):
 
             my_electricity_controller.add_component_input_and_connect(
                 source_object_name=car_battery_controller.component_name,

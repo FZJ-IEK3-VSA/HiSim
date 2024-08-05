@@ -61,6 +61,8 @@ class ElectricityMeter(DynamicComponent):
     ElectricityProduction = "ElectricityProduction"
     CumulativeConsumption = "CumulativeConsumption"
     CumulativeProduction = "CumulativeProduction"
+    ElectricityToGridInWatt = "ElectricityToGridInWatt"
+    ElectricityFromGridInWatt = "ElectricityFromGridInWatt"
 
     def __init__(
         self,
@@ -91,6 +93,24 @@ class ElectricityMeter(DynamicComponent):
         self.previous_state = self.state.self_copy()
 
         # Outputs
+        self.electricity_to_grid_in_watt_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricityToGridInWatt,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.ElectricityToGridInWatt} will follow.",
+            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
+        )
+        self.electricity_from_grid_in_watt_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricityFromGridInWatt,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.ElectricityFromGridInWatt} will follow.",
+            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
+        )
         self.electricity_available_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ElectricityAvailable,
@@ -333,6 +353,17 @@ class ElectricityMeter(DynamicComponent):
             electricity_from_grid_in_watt_hour = 0.0
 
         # set outputs
+        stsv.set_output_value(
+            self.electricity_to_grid_in_watt_channel,
+            difference_between_production_and_consumption_in_watt
+            if difference_between_production_and_consumption_in_watt > 0 else 0,
+        )
+        stsv.set_output_value(
+            self.electricity_from_grid_in_watt_channel,
+            -difference_between_production_and_consumption_in_watt
+            if difference_between_production_and_consumption_in_watt < 0 else 0,
+        )
+
         stsv.set_output_value(
             self.electricity_available_channel,
             difference_between_production_and_consumption_in_watt,

@@ -184,7 +184,7 @@ class ComponentType(str, enum.Enum):
     WINDTURBINE = "Windturbine"
     SMART_DEVICE = "SmartDevice"
     SURPLUS_CONTROLLER = "SurplusController"
-    SURPLUS_CONTROLLER_DISTRICT = "SurplusControllerOnDistrictLevel"
+    SURPLUS_CONTROLLER_DISTRICT = "SurplusControllerDistrict"
     PREDICTIVE_CONTROLLER = "PredictiveControllerforSmartDevices"
     HEAT_PUMP = "HeatPump"
     GAS_HEATER = "GasHeater"
@@ -201,6 +201,7 @@ class ComponentType(str, enum.Enum):
     BUFFER = "Buffer"
     HEATERS = [HEAT_PUMP, GAS_HEATER]
     RESIDENTS = "Residents"
+    BUILDINGS = "Buildings"
 
     # different heat_pump types
     HEAT_PUMP_BUILDING = "HeatPumpBuilding"  # Heatpump for heating the house

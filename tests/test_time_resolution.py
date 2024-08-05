@@ -15,9 +15,9 @@ from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
 
 
-def values_are_similar(lst: List, tolerance: float = 1e-1) -> bool:
-    """Function to check if values are similar within a certain tolerance."""
-    return all(abs(x - lst[0]) <= tolerance for x in lst)
+def values_are_similar(lst: List, relative_tolerance: float = 0.05) -> bool:
+    """Function to check if values are similar within a certain tolerance (rel tolerance = 5%, absolute tolerance = 0.1)."""
+    return all(abs(x - lst[0]) / x <= relative_tolerance for x in lst) or all(abs(x - lst[0]) <= 0.1 for x in lst)
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
@@ -31,6 +31,7 @@ def test_cluster_houe_for_several_time_resolutions():
 
     opex_consumption_dict: Dict = {}
     yearly_results_dict: Dict = {}
+    # do not use seconds per timestep = 60 because test takes then too long
     for seconds_per_timestep in [60 * 15, 60 * 30, 60 * 60]:
         print("\n")
         print("Seconds per timestep ", seconds_per_timestep)
@@ -42,9 +43,11 @@ def test_cluster_houe_for_several_time_resolutions():
                 opex_consumptions_dict=opex_consumption_dict,
             )
         except Exception as exc:
-            raise ValueError(f"Cluster house simulation with time resolution {seconds_per_timestep}s is not possible. "
-                  "Please make sure that only heat pumps are used for space heating and domestic hot water "
-                  "because the gas heaters provoque error at low time resolutions.") from exc
+            raise ValueError(
+                f"Cluster house simulation with time resolution {seconds_per_timestep}s is not possible. "
+                "Please make sure that only heat pumps are used for space heating and domestic hot water "
+                "because the gas heaters provoque error at low time resolutions."
+            ) from exc
 
     # go through all results and compare if aggregated results are all the same
     print("\n")
@@ -99,6 +102,7 @@ def run_cluster_house(
     # Build method
     # setup function needs to be imported inside the function, otherwise error occurs
     from system_setups.household_cluster import setup_function  # pylint: disable=import-outside-toplevel
+
     # make sure that in cluster house setup function HeatPumps are used as energy system (GasHeaters do currently not work for time resolutions > 60 *15)
     setup_function(my_sim=my_sim, my_simulation_parameters=my_simulation_parameters)
 

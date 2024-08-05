@@ -9,16 +9,17 @@ The component with the lowest source weight is activated first.
 # clean
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Any, List, Tuple, Union
+from typing import Any, List, Tuple, Union, Optional
 
 from dataclasses_json import dataclass_json
-
+import pandas as pd
 from hisim import component as cp
 from hisim import dynamic_component
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.component import ComponentInput, ComponentOutput
 from hisim.simulationparameters import SimulationParameters
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
 
 __authors__ = ""
 __copyright__ = ""
@@ -1148,7 +1149,79 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
 
         return available_surplus_electricity_in_watt
 
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        sh_heatpump_electricity_from_grid_in_kilowatt_hour: Optional[float] = None
+        dhw_heatpump_electricity_from_grid_in_kilowatt_hour: Optional[float] = None
+        occupancy_electricity_from_grid_in_kilowatt_hour: Optional[float] = None
 
+        list_of_kpi_entries: List[KpiEntry] = []
+        for index, output in enumerate(all_outputs):
+            if output.component_name == self.component_name:
+
+                if self.dhw_heat_pump_class_name in output.field_name:
+                    dhw_hp_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
+                        postprocessing_results.iloc[:, index] < 0.0
+                    ]
+                    dhw_heatpump_electricity_from_grid_in_kilowatt_hour = abs(
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=dhw_hp_electricity_from_grid_in_watt_series,
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
+                    )
+                elif self.advanced_heat_pump_class_name in output.field_name:
+                    sh_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
+                        postprocessing_results.iloc[:, index] < 0.0
+                    ]
+                    sh_heatpump_electricity_from_grid_in_kilowatt_hour = abs(
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=sh_electricity_from_grid_in_watt_series,
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
+                    )
+                elif self.occupancy_class_name in output.field_name:
+                    occupancy_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
+                        postprocessing_results.iloc[:, index] < 0.0
+                    ]
+
+                    occupancy_electricity_from_grid_in_kilowatt_hour = abs(
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=occupancy_electricity_from_grid_in_watt_series,
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
+                    )
+
+        # make kpi entry
+        sh_heatpump_electricity_from_grid_entry = KpiEntry(
+            name="Space heating heat pump electricity from grid",
+            unit="kWh",
+            value=sh_heatpump_electricity_from_grid_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(sh_heatpump_electricity_from_grid_entry)
+        dhw_heatpump_electricity_from_grid_entry = KpiEntry(
+            name="Domestic hot water heat pump electricity from grid",
+            unit="kWh",
+            value=dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(dhw_heatpump_electricity_from_grid_entry)
+        occupancy_electricity_from_grid_entry = KpiEntry(
+            name="Residents' electricity consumption from grid",
+            unit="kWh",
+            value=occupancy_electricity_from_grid_in_kilowatt_hour,
+            tag=KpiTagEnumClass.RESIDENTS,
+            description=self.component_name
+        )
+        list_of_kpi_entries.append(occupancy_electricity_from_grid_entry)
+
+        return list_of_kpi_entries
 """
                 ***IN PROGRESS***
     def distribute_available_surplus_from_district_to_building_parallel(

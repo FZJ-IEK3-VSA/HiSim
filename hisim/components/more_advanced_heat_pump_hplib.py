@@ -347,11 +347,6 @@ class MoreAdvancedHeatPumpHPLib(Component):
             else config.minimum_idle_time_in_seconds
         )
 
-        postprocessing_flag = [
-            InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
-            OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
-        ]
-
         # Component has states
         self.state = MoreAdvancedHeatPumpHPLibState(
             time_on_heating=0,
@@ -493,7 +488,6 @@ class MoreAdvancedHeatPumpHPLib(Component):
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             postprocessing_flag=[
-                InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
                 OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
             ],
             output_description="Electricity input power for cooling in Watt",
@@ -623,7 +617,10 @@ class MoreAdvancedHeatPumpHPLib(Component):
             field_name=self.ElectricalInputPowerTotal,
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
-            postprocessing_flag=postprocessing_flag,
+            postprocessing_flag=[
+            InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+            OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+            ],
             output_description="Electricity input power for total HP in Watt",
         )
 

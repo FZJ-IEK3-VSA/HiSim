@@ -515,7 +515,6 @@ class Car(cp.Component):
 
             # sum / extract most common value from data to match hisim time resolution
             if minutes_per_timestep > 1:
-                print("meters driven will be summed up")
                 self.meters_driven = self.resample_meters_driven(
                     meters_driven=self.meters_driven,
                     seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep,

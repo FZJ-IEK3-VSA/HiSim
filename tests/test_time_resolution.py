@@ -28,16 +28,23 @@ PATH = "../system_setups/household_cluster.py"
 @pytest.mark.base
 def test_cluster_houe_for_several_time_resolutions():
     """Test cluster house for several time resolutions."""
+
     opex_consumption_dict: Dict = {}
     yearly_results_dict: Dict = {}
     for seconds_per_timestep in [60 * 15, 60 * 30, 60 * 60]:
-        print("seconds per timestep", seconds_per_timestep)
+        print("\n")
+        print("Seconds per timestep ", seconds_per_timestep)
         # run simulation of cluster house
-        result_dict, opex_consumption_dict = run_cluster_house(
-            seconds_per_timestep=seconds_per_timestep,
-            yearly_result_dict=yearly_results_dict,
-            opex_consumptions_dict=opex_consumption_dict,
-        )
+        try:
+            result_dict, opex_consumption_dict = run_cluster_house(
+                seconds_per_timestep=seconds_per_timestep,
+                yearly_result_dict=yearly_results_dict,
+                opex_consumptions_dict=opex_consumption_dict,
+            )
+        except Exception as exc:
+            raise ValueError(f"Cluster house simulation with time resolution {seconds_per_timestep}s is not possible. "
+                  "Please make sure that only heat pumps are used for space heating and domestic hot water "
+                  "because the gas heaters provoque error at low time resolutions.") from exc
 
     # go through all results and compare if aggregated results are all the same
     print("\n")

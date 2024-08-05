@@ -26,7 +26,7 @@ PATH = "../system_setups/household_cluster.py"
 
 @utils.measure_execution_time
 @pytest.mark.base
-def test_cluster_houe_for_several_time_resolutions():
+def test_cluster_house_for_several_time_resolutions():
     """Test cluster house for several time resolutions."""
 
     opex_consumption_dict: Dict = {}

@@ -280,12 +280,13 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
 
         self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())
         self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
+        # self.add_dynamic_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_dhw_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_advanced_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_advanced_battery())
 
     def get_default_connections_from_pv_system(
-        self,
+            self,
     ):
         """Get pv system default connections."""
 
@@ -311,7 +312,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
         return dynamic_connections
 
     def get_default_connections_from_utsp_occupancy(
-        self,
+            self,
     ):
         """Get utsp occupancy default connections."""
 
@@ -320,11 +321,11 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
         )
 
         dynamic_connections = []
-        occupancy_class_name = UtspLpgConnector.get_classname()
+        self.occupancy_class_name = UtspLpgConnector.get_classname()
         dynamic_connections.append(
             dynamic_component.DynamicComponentConnection(
                 source_component_class=UtspLpgConnector,
-                source_class_name=occupancy_class_name,
+                source_class_name=self.occupancy_class_name,
                 source_component_field_name=UtspLpgConnector.ElectricityOutput,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
@@ -333,7 +334,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
             )
         )
         self.add_component_output(
-            source_output_name=f"ElectricityToOrFromGridOf{occupancy_class_name}_",
+            source_output_name=f"ElectricityToOrFromGridOf{self.occupancy_class_name}_",
             source_tags=[
                 lt.ComponentType.RESIDENTS,
                 lt.InandOutputType.ELECTRICITY_TARGET,
@@ -345,19 +346,81 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
         )
         return dynamic_connections
 
+    def get_default_connections_from_more_advanced_heat_pump(
+            self,
+    ):
+        """Get advanced heat pump default connections."""
+
+        from hisim.components.more_advanced_heat_pump_hplib import \
+            MoreAdvancedHeatPumpHPLib  # pylint: disable=import-outside-toplevel
+
+        dynamic_connections = []
+        self.more_advanced_heat_pump_class_name = MoreAdvancedHeatPumpHPLib.get_classname()
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=MoreAdvancedHeatPumpHPLib,
+                source_class_name=self.more_advanced_heat_pump_class_name,
+                source_component_field_name=MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.ComponentType.HEAT_PUMP_BUILDING,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
+                ],
+                source_weight=2,
+            )
+        )
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=MoreAdvancedHeatPumpHPLib,
+                source_class_name=self.more_advanced_heat_pump_class_name,
+                source_component_field_name=MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.ComponentType.HEAT_PUMP_DHW,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
+                ],
+                source_weight=3,
+            )
+        )
+        self.add_component_output(
+            source_output_name=f"ElectricityToOrFromGridOfSH{self.more_advanced_heat_pump_class_name}_",
+            source_tags=[
+                lt.ComponentType.HEAT_PUMP_BUILDING,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_weight=2,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for Heating Heat Pump. ",
+        )
+        self.add_component_output(
+            source_output_name=f"ElectricityToOrFromGridOfDHW{self.more_advanced_heat_pump_class_name}_",
+            source_tags=[
+                lt.ComponentType.HEAT_PUMP_DHW,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_weight=3,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for DHW Heat Pump. ",
+        )
+        return dynamic_connections
+
     def get_default_connections_from_advanced_heat_pump(
-        self,
+            self,
     ):
         """Get advanced heat pump default connections."""
 
         from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib  # pylint: disable=import-outside-toplevel
 
         dynamic_connections = []
-        advanced_heat_pump_class_name = HeatPumpHplib.get_classname()
+        self.advanced_heat_pump_class_name = HeatPumpHplib.get_classname()
         dynamic_connections.append(
             dynamic_component.DynamicComponentConnection(
                 source_component_class=HeatPumpHplib,
-                source_class_name=advanced_heat_pump_class_name,
+                source_class_name=self.advanced_heat_pump_class_name,
                 source_component_field_name=HeatPumpHplib.ElectricalInputPower,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
@@ -369,7 +432,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
             )
         )
         self.add_component_output(
-            source_output_name=f"ElectricityToOrFromGridOf{advanced_heat_pump_class_name}_",
+            source_output_name=f"ElectricityToOrFromGridOf{self.advanced_heat_pump_class_name}_",
             source_tags=[
                 lt.ComponentType.HEAT_PUMP_BUILDING,
                 lt.InandOutputType.ELECTRICITY_TARGET,
@@ -382,7 +445,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
         return dynamic_connections
 
     def get_default_connections_from_dhw_heat_pump(
-        self,
+            self,
     ):
         """Get dhw heat pump default connections."""
 
@@ -391,26 +454,26 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
         )
 
         dynamic_connections = []
-        dhw_heat_pump_class_name = ModularHeatPump.get_classname()
+        self.dhw_heat_pump_class_name = ModularHeatPump.get_classname()
         dynamic_connections.append(
             dynamic_component.DynamicComponentConnection(
                 source_component_class=ModularHeatPump,
-                source_class_name=dhw_heat_pump_class_name,
+                source_class_name=self.dhw_heat_pump_class_name,
                 source_component_field_name=ModularHeatPump.ElectricityOutput,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.HEAT_PUMP_DHW, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
-                source_weight=2,
+                source_weight=3,
             )
         )
 
         self.add_component_output(
-            source_output_name=f"ElectricityToOrFromGridOf{dhw_heat_pump_class_name}_",
+            source_output_name=f"ElectricityToOrFromGridOf{self.dhw_heat_pump_class_name}_",
             source_tags=[
                 lt.ComponentType.HEAT_PUMP_DHW,
                 lt.InandOutputType.ELECTRICITY_TARGET,
             ],
-            source_weight=2,
+            source_weight=3,
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for dhw heat pump.",
@@ -418,7 +481,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
         return dynamic_connections
 
     def get_default_connections_from_advanced_battery(
-        self,
+            self,
     ):
         """Get advanced battery default connections."""
 
@@ -1222,6 +1285,8 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
         list_of_kpi_entries.append(occupancy_electricity_from_grid_entry)
 
         return list_of_kpi_entries
+
+
 """
                 ***IN PROGRESS***
     def distribute_available_surplus_from_district_to_building_parallel(

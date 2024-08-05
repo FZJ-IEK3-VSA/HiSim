@@ -270,6 +270,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
 
         self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())
         self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
+        # self.add_dynamic_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_dhw_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_advanced_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_advanced_battery())
@@ -332,6 +333,67 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
             source_load_type=lt.LoadTypes.ELECTRICITY,
             source_unit=lt.Units.WATT,
             output_description="Target electricity for Occupancy. ",
+        )
+        return dynamic_connections
+
+    def get_default_connections_from_more_advanced_heat_pump(
+            self,
+    ):
+        """Get advanced heat pump default connections."""
+
+        from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLib  # pylint: disable=import-outside-toplevel
+
+        dynamic_connections = []
+        self.more_advanced_heat_pump_class_name = MoreAdvancedHeatPumpHPLib.get_classname()
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=MoreAdvancedHeatPumpHPLib,
+                source_class_name=self.more_advanced_heat_pump_class_name,
+                source_component_field_name=MoreAdvancedHeatPumpHPLib.ElectricalInputPowerSH,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.ComponentType.HEAT_PUMP_BUILDING,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
+                ],
+                source_weight=2,
+            )
+        )
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=MoreAdvancedHeatPumpHPLib,
+                source_class_name=self.more_advanced_heat_pump_class_name,
+                source_component_field_name=MoreAdvancedHeatPumpHPLib.ElectricalInputPowerDHW,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.ComponentType.HEAT_PUMP_DHW,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
+                ],
+                source_weight=3,
+            )
+        )
+        self.add_component_output(
+            source_output_name=f"ElectricityToOrFromGridOfSH{self.more_advanced_heat_pump_class_name}_",
+            source_tags=[
+                lt.ComponentType.HEAT_PUMP_BUILDING,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_weight=2,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for Heating Heat Pump. ",
+        )
+        self.add_component_output(
+            source_output_name=f"ElectricityToOrFromGridOfDHW{self.more_advanced_heat_pump_class_name}_",
+            source_tags=[
+                lt.ComponentType.HEAT_PUMP_DHW,
+                lt.InandOutputType.ELECTRICITY_TARGET,
+            ],
+            source_weight=3,
+            source_load_type=lt.LoadTypes.ELECTRICITY,
+            source_unit=lt.Units.WATT,
+            output_description="Target electricity for Heating Heat Pump. ",
         )
         return dynamic_connections
 
@@ -742,6 +804,27 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                             timeresolution=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
+
+                #     #todo: anpassen das passt und prüfen an welcher stelle sh und welche dhw ist
+                # elif self.more_advanced_heat_pump_class_name in output.field_name:
+                #     sh_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
+                #         postprocessing_results.iloc[:, index] < 0.0
+                #     ]
+                #     sh_heatpump_electricity_from_grid_in_kilowatt_hour = abs(
+                #         KpiHelperClass.compute_total_energy_from_power_timeseries(
+                #             power_timeseries_in_watt=sh_electricity_from_grid_in_watt_series,
+                #             timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                #         )
+                #     )
+                #     dhw_hp_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
+                #         postprocessing_results.iloc[:, index] < 0.0
+                #         ]
+                #     dhw_heatpump_electricity_from_grid_in_kilowatt_hour = abs(
+                #         KpiHelperClass.compute_total_energy_from_power_timeseries(
+                #             power_timeseries_in_watt=dhw_hp_electricity_from_grid_in_watt_series,
+                #             timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                #         )
+                #     )
                 elif self.advanced_heat_pump_class_name in output.field_name:
                     sh_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
                         postprocessing_results.iloc[:, index] < 0.0

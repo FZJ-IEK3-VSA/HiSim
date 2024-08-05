@@ -10,8 +10,6 @@ import os
 from typing import List, Tuple, Union, Dict, Optional
 from pathlib import Path
 import pandas as pd
-
-import hisim.components.building
 from hisim.component import ComponentOutput
 from hisim.component_wrapper import ComponentWrapper
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes
@@ -23,7 +21,6 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, 
 
 
 class KpiPreparation:
-
     """Class for generating and calculating key performance indicators."""
 
     def __init__(self, post_processing_data_transfer: PostProcessingDataTransfer):
@@ -39,7 +36,7 @@ class KpiPreparation:
         self.get_all_component_kpis(wrapped_components=self.wrapped_components)
 
     def filter_results_according_to_postprocessing_flags(
-        self, all_outputs: List, results: pd.DataFrame, building_objects_in_district: str
+        self, all_outputs: List, results: pd.DataFrame, building_objects_in_district: str,
     ) -> pd.DataFrame:
         """Filter results according to postprocessing flags and get consumption, production, battery charge and battery discharge.
 
@@ -60,7 +57,7 @@ class KpiPreparation:
         output: ComponentOutput
 
         for index, output in enumerate(all_outputs):
-            if building_objects_in_district in str(output):
+            if building_objects_in_district in str(output.get_pretty_name()):
                 if output.postprocessing_flag is not None:
                     if InandOutputType.ELECTRICITY_PRODUCTION in output.postprocessing_flag:
                         total_production_ids.append(index)
@@ -116,7 +113,7 @@ class KpiPreparation:
         return energy_in_kilowatt_hour
 
     def compute_electricity_consumption_and_production_and_battery_kpis(
-        self, result_dataframe: pd.DataFrame, building_objects_in_district
+        self, result_dataframe: pd.DataFrame, building_objects_in_district: str,
     ) -> Tuple[float, float, float]:
         """Compute electricity consumption and production and battery kpis."""
 
@@ -211,7 +208,7 @@ class KpiPreparation:
         result_dataframe: pd.DataFrame,
         electricity_production_in_kilowatt_hour: float,
         electricity_consumption_in_kilowatt_hour: float,
-        building_objects_in_district,
+        building_objects_in_district: str,
     ) -> Tuple[float, float, pd.DataFrame]:
         """Computes the self consumption, grid injection, autarky and battery losses if electricty production is bigger than zero."""
 
@@ -276,13 +273,22 @@ class KpiPreparation:
 
         # make kpi entry
         grid_injection_entry = KpiEntry(
-            name="Grid injection of electricity", unit="kWh", value=grid_injection_in_kilowatt_hour, tag=KpiTagEnumClass.GENERAL
+            name="Grid injection of electricity",
+            unit="kWh",
+            value=grid_injection_in_kilowatt_hour,
+            tag=KpiTagEnumClass.GENERAL,
         )
         self_consumption_entry = KpiEntry(
-            name="Self-consumption of electricity", unit="kWh", value=self_consumption_in_kilowatt_hour, tag=KpiTagEnumClass.GENERAL
+            name="Self-consumption of electricity",
+            unit="kWh",
+            value=self_consumption_in_kilowatt_hour,
+            tag=KpiTagEnumClass.GENERAL,
         )
         self_consumption_rate_entry = KpiEntry(
-            name="Self-consumption rate of electricity", unit="%", value=self_consumption_rate_in_percent, tag=KpiTagEnumClass.GENERAL
+            name="Self-consumption rate of electricity",
+            unit="%",
+            value=self_consumption_rate_in_percent,
+            tag=KpiTagEnumClass.GENERAL,
         )
         autarkie_rate_entry = KpiEntry(
             name="Autarky rate of electricity", unit="%", value=autarky_rate_in_percent, tag=KpiTagEnumClass.GENERAL
@@ -325,7 +331,9 @@ class KpiPreparation:
             battery_losses_in_kilowatt_hour,
         )
 
-    def get_electricity_to_and_from_grid_from_electricty_meter(self, building_objects_in_district) -> Tuple[Optional[float], Optional[float]]:
+    def get_electricity_to_and_from_grid_from_electricty_meter(
+        self, building_objects_in_district: str,
+    ) -> Tuple[Optional[float], Optional[float]]:
         """Get electricity to and from grid from electricity meter."""
 
         total_energy_from_grid_in_kwh: Optional[float] = None
@@ -349,7 +357,7 @@ class KpiPreparation:
         self,
         total_electricity_consumption_in_kilowatt_hour: float,
         electricity_from_grid_in_kilowatt_hour: Optional[float],
-        building_objects_in_district,
+        building_objects_in_district: str,
     ) -> Optional[float]:
         """Return the relative electricity demand."""
         if electricity_from_grid_in_kilowatt_hour is None:
@@ -384,7 +392,7 @@ class KpiPreparation:
     def compute_autarky_according_to_solar_htw_berlin(
         self,
         relative_electricty_demand_in_percent: Optional[float],
-        building_objects_in_district,
+        building_objects_in_district: str,
     ) -> None:
         """Return the autarky rate according to solar htw berlin.
 
@@ -409,13 +417,15 @@ class KpiPreparation:
         )
 
         # update kpi collection dict
-        self.kpi_collection_dict_unsorted[building_objects_in_district].update({autarky_rate_entry.name: autarky_rate_entry.to_dict()})
+        self.kpi_collection_dict_unsorted[building_objects_in_district].update(
+            {autarky_rate_entry.name: autarky_rate_entry.to_dict()}
+        )
 
     def compute_self_consumption_rate_according_to_solar_htw_berlin(
         self,
         total_electricity_production_in_kilowatt_hour: float,
         electricity_to_grid_in_kilowatt_hour: Optional[float],
-        building_objects_in_district,
+        building_objects_in_district: str,
     ) -> None:
         """Return self-consumption according to solar htw berlin.
 
@@ -451,7 +461,7 @@ class KpiPreparation:
         )
 
     def compute_ratio_between_two_values_and_set_as_kpi(
-        self, denominator_value: float, numerator_value: float, kpi_name: str, building_objects_in_district
+        self, denominator_value: float, numerator_value: float, kpi_name: str, building_objects_in_district: str,
     ) -> None:
         """Compute the ratio of two values.
 
@@ -538,7 +548,7 @@ class KpiPreparation:
         electricity_consumption_in_kilowatt_hour: float,
         grid_injection_in_kilowatt_hour: float,
         self_consumption_in_kilowatt_hour: float,
-        building_objects_in_district
+        building_objects_in_district: str,
     ) -> None:
         """Compute energy prices and co2 emissions."""
 
@@ -730,7 +740,7 @@ class KpiPreparation:
     def get_all_component_kpis(self, wrapped_components: List[ComponentWrapper]) -> None:
         """Go through all components and get their KPIs if implemented."""
         my_component_kpi_entry_list: List[KpiEntry]
-        all_objects_in_district = {}
+        all_objects_in_district: dict = {}
 
         for wrapped_component in wrapped_components:
             my_component = wrapped_component.my_component
@@ -740,17 +750,19 @@ class KpiPreparation:
             else:
                 all_objects_in_district[my_component_class_name] = [my_component.component_name]
 
-        #todo: if abfrage, ob überhaupt mehrere gleice komponenten vorhanden, wenn nicht ist auch kein quartier
+        # todo: if abfrage, ob überhaupt mehrere gleice komponenten vorhanden, wenn nicht ist auch kein quartier
         # sondern nur ein gebäude und dann kann orgignal code bleiben --> dann einfach auf "Geb1" oder so setzen damit rest was folgt klappt
 
         building_objects_in_district = set()
-        for key, value_list in all_objects_in_district.items():
+        for value_list in all_objects_in_district.values():
             for name in value_list:
                 building_name = name.split('_')[0]
                 building_objects_in_district.add(building_name)
 
         self.building_objects_in_district_list = list(building_objects_in_district)
-        self.kpi_collection_dict_unsorted = {building_objects: {} for building_objects in self.building_objects_in_district_list}
+        self.kpi_collection_dict_unsorted = {
+            building_objects: {} for building_objects in self.building_objects_in_district_list
+        }
 
         for wrapped_component in wrapped_components:
             my_component = wrapped_component.my_component

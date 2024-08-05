@@ -16,7 +16,6 @@ from hisim.postprocessing.kpi_computation.kpi_preparation import KpiPreparation
 
 @dataclass
 class KpiGenerator(JSONWizard, KpiPreparation):
-
     """Class for generating and calculating key performance indicators."""
 
     post_processing_data_transfer: PostProcessingDataTransfer
@@ -37,7 +36,9 @@ class KpiGenerator(JSONWizard, KpiPreparation):
         """Create kpi collection and write back into post processing data transfer."""
         # get filtered result dataframe
         self.filtered_result_dataframe = self.filter_results_according_to_postprocessing_flags(
-            all_outputs=self.all_outputs, results=self.results, building_objects_in_district=building_objects_in_district,
+            all_outputs=self.all_outputs,
+            results=self.results,
+            building_objects_in_district=building_objects_in_district,
         )
 
         # get consumption and production and battery kpis
@@ -61,7 +62,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             denominator_value=pv_production_in_kilowatt_hour,
             numerator_value=total_electricity_consumption_in_kilowatt_hour,
             kpi_name="Ratio between PV production and total consumption",
-            building_objects_in_district=building_objects_in_district
+            building_objects_in_district=building_objects_in_district,
         )
 
         # get self-consumption, autarkie, injection
@@ -84,18 +85,18 @@ class KpiGenerator(JSONWizard, KpiPreparation):
         relative_electricity_demand_from_grid_in_percent = self.compute_relative_electricity_demand(
             total_electricity_consumption_in_kilowatt_hour=total_electricity_consumption_in_kilowatt_hour,
             electricity_from_grid_in_kilowatt_hour=total_electricity_from_grid_in_kwh,
-            building_objects_in_district=building_objects_in_district
+            building_objects_in_district=building_objects_in_district,
         )
         # get self-consumption rate according to solar htw berlin
         self.compute_self_consumption_rate_according_to_solar_htw_berlin(
             total_electricity_production_in_kilowatt_hour=total_electricity_production_in_kilowatt_hour,
             electricity_to_grid_in_kilowatt_hour=total_electricity_to_grid_in_kwh,
-            building_objects_in_district=building_objects_in_district
+            building_objects_in_district=building_objects_in_district,
         )
         # get autarky rate according to solar htw berlin
         self.compute_autarky_according_to_solar_htw_berlin(
             relative_electricty_demand_in_percent=relative_electricity_demand_from_grid_in_percent,
-            building_objects_in_district=building_objects_in_district
+            building_objects_in_district=building_objects_in_district,
         )
 
         # get energy prices and co2 emissions
@@ -107,7 +108,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             electricity_consumption_in_kilowatt_hour=total_electricity_consumption_in_kilowatt_hour,
             grid_injection_in_kilowatt_hour=grid_injection_in_kilowatt_hour,
             self_consumption_in_kilowatt_hour=self_consumption_in_kilowatt_hour,
-            building_objects_in_district=building_objects_in_district
+            building_objects_in_district=building_objects_in_district,
         )
         # get capex and opex costs
         self.read_opex_and_capex_costs_from_results()
@@ -133,9 +134,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
         for row in table:
             wrapped_row = []
             for cell in row:
-                wrapped_cell = "\n".join(
-                    [cell[i:i + 80] for i in range(0, len(cell), 80)]
-                )
+                wrapped_cell = "\n".join([cell[i : i + 80] for i in range(0, len(cell), 80)])
                 wrapped_row.append(wrapped_cell)
             wrapped_table_data.append(wrapped_row)
 
@@ -146,7 +145,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
 
         # kpi_collection_dict_sorted: Dict[str, Dict] = {}
 
-        kpi_collection_dict_sorted = {building_objects: {} for building_objects in self.building_objects_in_district_list}
+        kpi_collection_dict_sorted: Dict[str, Dict] = {building_objects: {} for building_objects in self.building_objects_in_district_list}
 
         for building_object in self.building_objects_in_district_list:
             # get all tags and use as keys for sorted kpi dict

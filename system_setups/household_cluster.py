@@ -159,7 +159,7 @@ def setup_function(
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
         # my_simulation_parameters.logging_level = 4
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
@@ -474,7 +474,7 @@ def setup_function(
     # set charging power from battery and controller to same value, to reduce error in simulation of battery
     my_car_battery_config.p_inv_custom = charging_power * 1e3
     # lower threshold for soc of car battery in clever case. This enables more surplus charging. Surplus control of car
-    my_car_battery_controller_config.battery_set = 0.4
+    my_car_battery_controller_config.battery_set = 0.6
     # Build Electric Vehicles
     my_car_information = generic_car.GenericCarInformation(my_occupancy_instance=my_occupancy)
     my_cars: List[generic_car.Car] = []

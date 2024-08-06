@@ -33,16 +33,12 @@ class ElectricityMeterConfig(cp.ConfigBase):
         return ElectricityMeter.get_full_classname()
 
     name: str
-    total_energy_to_grid_in_kwh: None
-    total_energy_from_grid_in_kwh: None
 
     @classmethod
     def get_electricity_meter_default_config(cls):
         """Gets a default ElectricityMeter."""
         return ElectricityMeterConfig(
             name="ElectricityMeter",
-            total_energy_to_grid_in_kwh=None,
-            total_energy_from_grid_in_kwh=None,
         )
 
 
@@ -409,14 +405,16 @@ class ElectricityMeter(DynamicComponent):
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
+        total_energy_to_grid_in_kwh: Optional[float]  = None
+        total_energy_from_grid_in_kwh: Optional[float]  = None
         for index, output in enumerate(all_outputs):
             if output.component_name == self.config.name:
                 if output.field_name == self.ElectricityToGrid:
                     # Todo: check component name from system_setups: find another way of using the correct outputs
-                    self.config.total_energy_to_grid_in_kwh = postprocessing_results.iloc[:, index].sum() * 1e-3
+                    total_energy_to_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3,2)
 
                 elif output.field_name == self.ElectricityFromGrid:
-                    self.config.total_energy_from_grid_in_kwh = postprocessing_results.iloc[:, index].sum() * 1e-3
+                    total_energy_from_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3,2)
 
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year
@@ -426,14 +424,14 @@ class ElectricityMeter(DynamicComponent):
         revenue_euro_per_unit = emissions_and_cost_factors.electricity_to_grid_revenue_in_euro_per_kwh
 
         opex_cost_per_simulated_period_in_euro = (
-            self.config.total_energy_from_grid_in_kwh * euro_per_unit
-            - self.config.total_energy_to_grid_in_kwh * revenue_euro_per_unit
+            total_energy_from_grid_in_kwh * euro_per_unit
+            - total_energy_to_grid_in_kwh * revenue_euro_per_unit
         )
-        co2_per_simulated_period_in_kg = self.config.total_energy_from_grid_in_kwh * co2_per_unit
+        co2_per_simulated_period_in_kg = total_energy_from_grid_in_kwh * co2_per_unit
         opex_cost_data_class = OpexCostDataClass(
             opex_cost=opex_cost_per_simulated_period_in_euro,
             co2_footprint=co2_per_simulated_period_in_kg,
-            consumption=self.config.total_energy_from_grid_in_kwh,
+            consumption=total_energy_from_grid_in_kwh,
         )
 
         return opex_cost_data_class

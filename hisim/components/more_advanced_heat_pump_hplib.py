@@ -1329,7 +1329,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     sum(postprocessing_results.iloc[:, index])
                     * self.my_simulation_parameters.seconds_per_timestep
                     / 3.6e6,
-                    1,
+                    2,
                 )
         opex_cost_data_class = OpexCostDataClass(
             opex_cost=self.calc_maintenance_cost(),

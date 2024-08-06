@@ -23,10 +23,10 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, 
 class KpiPreparation:
     """Class for generating and calculating key performance indicators."""
 
-    def __init__(self, post_processing_data_transfer: PostProcessingDataTransfer):
+    def __init__(self, post_processing_data_transfer: PostProcessingDataTransfer, building_objects_in_district_list: list):
         """Initialize further variables."""
         self.post_processing_data_transfer = post_processing_data_transfer
-        self.building_objects_in_district_list: list = [str]
+        self.building_objects_in_district_list = building_objects_in_district_list
         self.kpi_collection_dict_unsorted: Dict = {}
         # get important variables
         self.wrapped_components = self.post_processing_data_transfer.wrapped_components
@@ -657,7 +657,7 @@ class KpiPreparation:
             }
         )
 
-    def read_opex_and_capex_costs_from_results(self):
+    def read_opex_and_capex_costs_from_results(self, building_object: str):
         """Get CAPEX and OPEX costs for simulated period.
 
         This function will read the opex and capex costs from the results.
@@ -671,8 +671,8 @@ class KpiPreparation:
         )
         if Path(opex_results_path).exists():
             opex_df = pd.read_csv(opex_results_path, index_col=0)
-            total_operational_cost_per_simulated_period = opex_df["Operational Costs in EUR"].iloc[-1]
-            total_operational_emissions_per_simulated_period = opex_df["Operational C02 footprint in kg"].iloc[-1]
+            total_operational_cost_per_simulated_period = opex_df["Operational Costs in EUR"].loc[building_object+"_Total"]
+            total_operational_emissions_per_simulated_period = opex_df["Operational C02 footprint in kg"].loc[building_object+"_Total"]
         else:
             log.warning("OPEX-costs for components are not calculated yet. Set PostProcessingOptions.COMPUTE_OPEX")
             total_operational_cost_per_simulated_period = 0
@@ -680,8 +680,12 @@ class KpiPreparation:
 
         if Path(capex_results_path).exists():
             capex_df = pd.read_csv(capex_results_path, index_col=0)
-            total_investment_cost_per_simulated_period = capex_df["Investment in EUR"].iloc[-1]
-            total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint in kg"].iloc[-1]
+            print(capex_df)
+            total_investment_cost_per_simulated_period = capex_df["Investment in EUR"].loc[building_object+"_Total_per_simulated_period"]
+            print("#############################")
+            print(total_investment_cost_per_simulated_period)
+            print("###############################")
+            total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint in kg"].loc[building_object+"_Total_per_simulated_period"]
         else:
             log.warning("CAPEX-costs for components are not calculated yet. Set PostProcessingOptions.COMPUTE_CAPEX")
             total_investment_cost_per_simulated_period = 0
@@ -726,7 +730,7 @@ class KpiPreparation:
         )
 
         # update kpi collection dict
-        self.kpi_collection_dict_unsorted.update(
+        self.kpi_collection_dict_unsorted[building_object].update(
             {
                 total_investment_cost_per_simulated_period_entry.name: total_investment_cost_per_simulated_period_entry.to_dict(),
                 total_device_co2_footprint_per_simulated_period_entry.name: total_device_co2_footprint_per_simulated_period_entry.to_dict(),
@@ -740,26 +744,7 @@ class KpiPreparation:
     def get_all_component_kpis(self, wrapped_components: List[ComponentWrapper]) -> None:
         """Go through all components and get their KPIs if implemented."""
         my_component_kpi_entry_list: List[KpiEntry]
-        all_objects_in_district: dict = {}
 
-        for wrapped_component in wrapped_components:
-            my_component = wrapped_component.my_component
-            my_component_class_name = my_component.get_classname()
-            if my_component_class_name in all_objects_in_district:
-                all_objects_in_district[my_component_class_name].append(my_component.component_name)
-            else:
-                all_objects_in_district[my_component_class_name] = [my_component.component_name]
-
-        # todo: if abfrage, ob überhaupt mehrere gleice komponenten vorhanden, wenn nicht ist auch kein quartier
-        # sondern nur ein gebäude und dann kann orgignal code bleiben --> dann einfach auf "Geb1" oder so setzen damit rest was folgt klappt
-
-        building_objects_in_district = set()
-        for value_list in all_objects_in_district.values():
-            for name in value_list:
-                building_name = name.split('_')[0]
-                building_objects_in_district.add(building_name)
-
-        self.building_objects_in_district_list = list(building_objects_in_district)
         self.kpi_collection_dict_unsorted = {
             building_objects: {} for building_objects in self.building_objects_in_district_list
         }

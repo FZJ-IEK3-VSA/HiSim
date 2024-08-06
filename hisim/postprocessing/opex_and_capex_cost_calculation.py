@@ -16,6 +16,7 @@ def opex_calculation(
     all_outputs: List,
     postprocessing_results: pd.DataFrame,
     simulation_parameters: SimulationParameters,
+    building_objects_in_district_list: list,
 ) -> List:
     """Loops over all components and calls opex cost calculation."""
     total_operational_co2_footprint = 0.0
@@ -28,27 +29,43 @@ def opex_calculation(
     ]
     opex_table_as_list_of_list = []
 
-    for component in components:
-        component_unwrapped = component.my_component
-        # cost and co2_footprint are calculated per simulated period
-        opex_cost_data_class: OpexCostDataClass = component_unwrapped.get_cost_opex(
-            all_outputs=all_outputs,
-            postprocessing_results=postprocessing_results,
-        )
-        cost = opex_cost_data_class.opex_cost
-        co2_footprint = opex_cost_data_class.co2_footprint
-        consumption = opex_cost_data_class.consumption
-        total_operational_cost += cost
-        total_operational_co2_footprint += co2_footprint
+    for building_object in building_objects_in_district_list:
+        total_operational_co2_footprint_building_object = 0.0
+        total_operational_cost_building_object = 0.0
+        for component in components:
+            component_unwrapped = component.my_component
+            if building_object in str(component_unwrapped.component_name):
+                # cost and co2_footprint are calculated per simulated period
+                opex_cost_data_class: OpexCostDataClass = component_unwrapped.get_cost_opex(
+                    all_outputs=all_outputs,
+                    postprocessing_results=postprocessing_results,
+                )
+                cost = opex_cost_data_class.opex_cost
+                co2_footprint = opex_cost_data_class.co2_footprint
+                consumption = opex_cost_data_class.consumption
+                total_operational_cost_building_object += cost
+                total_operational_co2_footprint_building_object += co2_footprint
+                opex_table_as_list_of_list.append(
+                    [
+                        component_unwrapped.component_name,
+                        round(cost, 2),
+                        round(co2_footprint, 2),
+                        round(consumption,2),
+                    ]
+                )
 
         opex_table_as_list_of_list.append(
             [
-                component_unwrapped.component_name,
-                round(cost, 2),
-                round(co2_footprint, 2),
-                consumption,
+                f"{building_object}_Total",
+                round(total_operational_cost_building_object, 2),
+                round(total_operational_co2_footprint_building_object, 2),
+                "---",
             ]
         )
+        opex_table_as_list_of_list.append(["--------", "--------", "--------", "--------"])
+
+        total_operational_cost += total_operational_cost_building_object
+        total_operational_co2_footprint += total_operational_co2_footprint_building_object
 
     opex_table_as_list_of_list.append(
         [
@@ -70,6 +87,7 @@ def opex_calculation(
 def capex_calculation(
     components: List[ComponentWrapper],
     simulation_parameters: SimulationParameters,
+    building_objects_in_district_list: list,
 ) -> List:
     """Loops over all components and calls capex cost calculation."""
     seconds_per_year = 365 * 24 * 60 * 60
@@ -86,69 +104,102 @@ def capex_calculation(
     ]
     capex_table_as_list_of_list = []
 
-    for component in components:
-        component_unwrapped = component.my_component
-        capex, co2_footprint, lifetime = component_unwrapped.get_cost_capex(
-            config=component_unwrapped.config,
-        )
 
-        if lifetime > 0:
-            # lifetime is per default set to 1.0 in class cp.Component to avoid devide by zero error
+    for building_object in building_objects_in_district_list:
+        total_investment_cost_building_object = 0.0
+        total_device_co2_footprint_building_object = 0.0
+        total_investment_cost_per_simulated_period_building_object = 0.0
+        total_device_co2_footprint_per_simulated_period_building_object = 0.0
 
-            # battery costs and emissions are calculated per used cycles not per simulation period  # better aproximation of aging
-            if isinstance(component_unwrapped, Battery) and hasattr(
-                component_unwrapped, "get_battery_aging_information"
-            ):
-                (
-                    virtual_number_of_full_charge_cycles,
-                    lifetime_in_cycles,
-                ) = component_unwrapped.get_battery_aging_information()
-                if lifetime_in_cycles > 0:
-                    capex_per_simulated_period = (capex / lifetime_in_cycles) * (virtual_number_of_full_charge_cycles)
-                    device_co2_footprint_per_simulated_period = (co2_footprint / lifetime_in_cycles) * (
-                        virtual_number_of_full_charge_cycles
+        for component in components:
+            component_unwrapped = component.my_component
+            if building_object in str(component_unwrapped.component_name):
+                capex, co2_footprint, lifetime = component_unwrapped.get_cost_capex(
+                    config=component_unwrapped.config,
+                )
+                if lifetime > 0:
+                    # lifetime is per default set to 1.0 in class cp.Component to avoid devide by zero error
+
+                    # battery costs and emissions are calculated per used cycles not per simulation period  # better aproximation of aging
+                    if isinstance(component_unwrapped, Battery) and hasattr(
+                            component_unwrapped, "get_battery_aging_information"
+                    ):
+                        (
+                            virtual_number_of_full_charge_cycles,
+                            lifetime_in_cycles,
+                        ) = component_unwrapped.get_battery_aging_information()
+                        if lifetime_in_cycles > 0:
+                            capex_per_simulated_period_building_object = (capex / lifetime_in_cycles) * (
+                                virtual_number_of_full_charge_cycles)
+                            device_co2_footprint_per_simulated_period_building_object = (co2_footprint / lifetime_in_cycles) * (
+                                virtual_number_of_full_charge_cycles
+                            )
+                        else:
+                            log.warning(
+                                f"capex calculation not valid. Check lifetime_in_cycles in Configuration of {component.my_component}"
+                            )
+                    else:
+                        capex_per_simulated_period_building_object = (capex / lifetime) * (
+                                simulation_parameters.duration.total_seconds() / seconds_per_year
+                        )
+                        device_co2_footprint_per_simulated_period_building_object = (co2_footprint / lifetime) * (
+                                simulation_parameters.duration.total_seconds() / seconds_per_year
+                        )
+                    total_investment_cost_building_object += capex
+                    total_device_co2_footprint_building_object += co2_footprint
+                    total_investment_cost_per_simulated_period_building_object += capex_per_simulated_period_building_object
+                    total_device_co2_footprint_per_simulated_period_building_object += device_co2_footprint_per_simulated_period_building_object
+
+                    capex_table_as_list_of_list.append(
+                        [
+                            component_unwrapped.component_name,
+                            round(capex_per_simulated_period_building_object, 2),
+                            round(device_co2_footprint_per_simulated_period_building_object, 2),
+                            lifetime,
+                        ]
                     )
+
                 else:
                     log.warning(
-                        f"capex calculation not valid. Check lifetime_in_cycles in Configuration of {component}"
-                    )
-            else:
-                capex_per_simulated_period = (capex / lifetime) * (
-                    simulation_parameters.duration.total_seconds() / seconds_per_year
-                )
-                device_co2_footprint_per_simulated_period = (co2_footprint / lifetime) * (
-                    simulation_parameters.duration.total_seconds() / seconds_per_year
-                )
-            total_investment_cost += capex
-            total_device_co2_footprint += co2_footprint
-            total_investment_cost_per_simulated_period += capex_per_simulated_period
-            total_device_co2_footprint_per_simulated_period += device_co2_footprint_per_simulated_period
+                        f"capex calculation not valid. Check lifetime in Configuration of {component.my_component}")
 
-            capex_table_as_list_of_list.append(
-                [
-                    component_unwrapped.component_name,
-                    round(capex_per_simulated_period, 2),
-                    round(device_co2_footprint_per_simulated_period, 2),
-                    lifetime,
-                ]
-            )
-        else:
-            log.warning(f"capex calculation not valid. Check lifetime in Configuration of {component}")
+        capex_table_as_list_of_list.append(
+            [
+                f"{building_object}_Total",
+                round(total_investment_cost_building_object, 2),
+                round(total_device_co2_footprint_building_object, 2),
+                "---",
+            ]
+        )
+        capex_table_as_list_of_list.append(
+            [
+                f"{building_object}_Total_per_simulated_period",
+                round(total_investment_cost_per_simulated_period_building_object, 2),
+                round(total_device_co2_footprint_per_simulated_period_building_object, 2),
+                "---",
+            ]
+        )
+        capex_table_as_list_of_list.append(["--------", "--------", "--------", "--------"])
+
+        total_investment_cost += total_investment_cost_building_object
+        total_device_co2_footprint += total_device_co2_footprint_building_object
+        total_investment_cost_per_simulated_period += total_investment_cost_per_simulated_period_building_object
+        total_device_co2_footprint_per_simulated_period += total_device_co2_footprint_per_simulated_period_building_object
 
     capex_table_as_list_of_list.append(
         [
             "Total",
             round(total_investment_cost, 2),
             round(total_device_co2_footprint, 2),
-            0,
+            "---",
         ]
     )
     capex_table_as_list_of_list.append(
         [
-            "Total_per_simualted_period",
+            "Total_per_simulated_period",
             round(total_investment_cost_per_simulated_period, 2),
             round(total_device_co2_footprint_per_simulated_period, 2),
-            0,
+            "---",
         ]
     )
 

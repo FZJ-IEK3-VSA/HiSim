@@ -19,10 +19,11 @@ class KpiGenerator(JSONWizard, KpiPreparation):
     """Class for generating and calculating key performance indicators."""
 
     post_processing_data_transfer: PostProcessingDataTransfer
+    building_objects_in_district_list: list
 
     def __post_init__(self):
         """Build the dataclass from input data."""
-        super().__init__(post_processing_data_transfer=self.post_processing_data_transfer)
+        super().__init__(post_processing_data_transfer=self.post_processing_data_transfer,building_objects_in_district_list=self.building_objects_in_district_list)
 
         for building_objects_in_district in self.building_objects_in_district_list:
             self.create_kpi_collection(building_objects_in_district)
@@ -111,7 +112,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             building_objects_in_district=building_objects_in_district,
         )
         # get capex and opex costs
-        self.read_opex_and_capex_costs_from_results()
+        self.read_opex_and_capex_costs_from_results(building_object=building_objects_in_district)
 
     def return_table_for_report(self):
         """Return a table with all kpis for the report."""
@@ -122,6 +123,8 @@ class KpiGenerator(JSONWizard, KpiPreparation):
                 table.append([f"{building_object}", f"{kpi_tag}", "", ""])
                 table.append(["--------", "--------------------", "", ""])
                 for kpi_name, kpi_entry in kpi_entries.items():
+                    print(kpi_entry)
+                    print(building_object)
                     value = kpi_entry["value"]
                     if value is not None:
                         value = round(value, 2)

@@ -124,6 +124,9 @@ class Units(str, enum.Enum):
     # Speed
     METER_PER_SECOND = "m/s"
 
+    # Distance
+    METER = "m"
+
     # Energy
     WATT_HOUR = "Wh"
     KWH = "kWh"

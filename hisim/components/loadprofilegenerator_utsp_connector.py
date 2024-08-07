@@ -63,7 +63,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     travel_route_set: JsonReference
     transportation_device_set: JsonReference
     charging_station_set: JsonReference
-    consumption: float
+    consumption_in_kwh: float
     profile_with_washing_machine_and_dishwasher: bool
     predictive_control: bool
     predictive: bool
@@ -89,7 +89,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
             travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
             transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
             charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
-            consumption=0,
+            consumption_in_kwh=0,
             profile_with_washing_machine_and_dishwasher=True,
             predictive_control=False,
             predictive=False,
@@ -802,18 +802,20 @@ class UtspLpgConnector(cp.Component):
         because part of electricity consumption is feed by PV
         """
         for index, output in enumerate(all_outputs):
-            if output.component_name == "UTSPConnector" and output.load_type == lt.LoadTypes.ELECTRICITY:
-                self.utsp_config.consumption = round(
-                    sum(postprocessing_results.iloc[:, index])
-                    * self.my_simulation_parameters.seconds_per_timestep
-                    / 3.6e6,
-                    1,
+            if output.component_name == self.config.name and output.load_type == lt.LoadTypes.ELECTRICITY and output.field_name == self.ElectricityOutput:
+                occupancy_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]
+                self.utsp_config.consumption_in_kwh = (
+                KpiHelperClass.compute_total_energy_from_power_timeseries(
+                    power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
+                    timeresolution=self.my_simulation_parameters.seconds_per_timestep)
                 )
 
         opex_cost_data_class = OpexCostDataClass(
-            opex_cost=0,
-            co2_footprint=0,
-            consumption=self.utsp_config.consumption,
+            opex_energy_cost_in_euro=0,
+            opex_maintenance_cost_in_euro=0,
+            co2_footprint_in_kg=0,
+            consumption_in_kwh=self.utsp_config.consumption_in_kwh,
+            loadtype=lt.LoadTypes.ELECTRICITY
         )
 
         return opex_cost_data_class

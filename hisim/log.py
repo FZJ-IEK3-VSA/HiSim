@@ -75,8 +75,12 @@ def log(prio: int, message: str, logging_message_path: str = LOGGING_DEFAULT_PAT
         os.makedirs(logging_message_path)
 
     file_name = os.path.join(logging_message_path, "hisim_simulation.log")
-    with open(file_name, "a", encoding="utf-8") as filestream:
-        filestream.write(message + "\n")
+    try:
+        with open(file_name, "a", encoding="utf-8") as filestream:
+            filestream.write(message + "\n")
+    except Exception:
+        print("hisim_simulation.log could not be appended. "
+              "This might happen when too many simultaneous simulations are running.")
 
 
 def log_profile_file(message: str, logging_message_path: str = LOGGING_DEFAULT_PATH) -> None:
@@ -86,6 +90,9 @@ def log_profile_file(message: str, logging_message_path: str = LOGGING_DEFAULT_P
         os.makedirs(logging_message_path)
 
     file_name = os.path.join(logging_message_path, "profiling_timeuse.log")
-
-    with open(file_name, "a", encoding="utf-8") as filestream:
-        filestream.write(message + "\n")
+    try:
+        with open(file_name, "a", encoding="utf-8") as filestream:
+            filestream.write(message + "\n")
+    except Exception:
+        print("profiling_timeuse.log could not be appended. "
+              "This might happen when too many simultaneous simulations are running.")

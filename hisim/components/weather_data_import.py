@@ -438,10 +438,10 @@ class WeatherDataImport:
             weather_df = weather_df.reset_index(drop=True)
             weather_df = weather_df.drop(weather_df.index[-1])
 
-            if weather_df.isna().any(axis=None):
-                raise KeyError(
-                    "The DataFrame weather_df contains NaN values. Check data or increase radius for station search."
-                )
+            # if weather_df.isna().any(axis=None):
+            #     raise KeyError(
+            #         "The DataFrame weather_df contains NaN values. Check data or increase radius for station search."
+            #     )
 
             if weather_df.eq("nan").any().any():
                 raise KeyError(

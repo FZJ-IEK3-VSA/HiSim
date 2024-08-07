@@ -291,7 +291,7 @@ class GasMeter(DynamicComponent):
         for index, output in enumerate(all_outputs):
             if output.component_name == self.config.name:
                 if output.field_name == self.GasFromGrid:
-                    self.config.total_energy_from_grid_in_kwh = postprocessing_results.iloc[:, index].sum() * 1e-3
+                    self.config.total_energy_from_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 2)
 
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year
@@ -302,9 +302,11 @@ class GasMeter(DynamicComponent):
         opex_cost_per_simulated_period_in_euro = self.config.total_energy_from_grid_in_kwh * euro_per_unit
         co2_per_simulated_period_in_kg = self.config.total_energy_from_grid_in_kwh * co2_per_unit
         opex_cost_data_class = OpexCostDataClass(
-            opex_cost=opex_cost_per_simulated_period_in_euro,
-            co2_footprint=co2_per_simulated_period_in_kg,
-            consumption=self.config.total_energy_from_grid_in_kwh,
+            opex_energy_cost_in_euro=opex_cost_per_simulated_period_in_euro,
+            opex_maintenance_cost_in_euro=0,
+            co2_footprint_in_kg=co2_per_simulated_period_in_kg,
+            consumption_in_kwh=self.config.total_energy_from_grid_in_kwh,
+            loadtype=lt.LoadTypes.GAS
         )
 
         return opex_cost_data_class
@@ -334,17 +336,17 @@ class GasMeter(DynamicComponent):
         # try to get opex costs
         opex_costs = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)
         opex_costs_in_euro_entry = KpiEntry(
-            name="Opex costs of gas consumption",
+            name="Opex costs of gas consumption from grid",
             unit="Euro",
-            value=opex_costs.opex_cost,
+            value=opex_costs.opex_energy_cost_in_euro,
             tag=KpiTagEnumClass.GAS_METER,
             description=self.component_name,
         )
         list_of_kpi_entries.append(opex_costs_in_euro_entry)
         co2_footprint_in_kg_entry = KpiEntry(
-            name="CO2 footprint of gas consumption",
+            name="CO2 footprint of gas consumption from grid",
             unit="kg",
-            value=opex_costs.co2_footprint,
+            value=opex_costs.co2_footprint_in_kg,
             tag=KpiTagEnumClass.GAS_METER,
             description=self.component_name,
         )

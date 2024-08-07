@@ -1326,7 +1326,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         """
         for index, output in enumerate(all_outputs):
             if (
-                output.component_name == "MoreAdvancedHeatPumpHPLib" and output.load_type == LoadTypes.ELECTRICITY
+                output.component_name == "MoreAdvancedHeatPumpHPLib" and output.load_type == LoadTypes.ELECTRICITY and output.field_name == self.ElectricalInputPowerTotal
             ):  # Todo: check component name from system_setups: find another way of using only heatpump-outputs
                 self.config.consumption = round(
                     sum(postprocessing_results.iloc[:, index])
@@ -1335,9 +1335,11 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     1,
                 )
         opex_cost_data_class = OpexCostDataClass(
-            opex_cost=self.calc_maintenance_cost(),
-            co2_footprint=0,
-            consumption=self.config.consumption,
+            opex_energy_cost_in_euro=0,
+            opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
+            co2_footprint_in_kg=0,
+            consumption_in_kwh=self.config.consumption,
+            loadtype=LoadTypes.ELECTRICITY
         )
 
         return opex_cost_data_class

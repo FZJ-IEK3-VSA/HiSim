@@ -319,20 +319,20 @@ class GasHeater(Component):
         for index, output in enumerate(all_outputs):
             if output.component_name == self.config.name and output.load_type == lt.LoadTypes.GAS:
                 self.config.consumption_in_kilowatt_hour = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
+
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year
         )
         co2_per_unit = emissions_and_cost_factors.gas_footprint_in_kg_per_kwh
-        euro_per_unit = emissions_and_cost_factors.gas_costs_in_euro_per_kwh
-
-        opex_cost_per_simulated_period_in_euro = self.config.consumption_in_kilowatt_hour * euro_per_unit
         co2_per_simulated_period_in_kg = self.config.consumption_in_kilowatt_hour * co2_per_unit
 
-        opex_cost_per_simulated_period_in_euro += self.calc_maintenance_cost()
+        # energy costs and co2 and everything will be considered in gas meter
         opex_cost_data_class = OpexCostDataClass(
-            opex_cost=opex_cost_per_simulated_period_in_euro,
-            co2_footprint=co2_per_simulated_period_in_kg,
-            consumption=self.config.consumption_in_kilowatt_hour,
+            opex_energy_cost_in_euro=0,
+            opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
+            co2_footprint_in_kg=co2_per_simulated_period_in_kg,
+            consumption_in_kwh=self.config.consumption_in_kilowatt_hour,
+            loadtype=lt.LoadTypes.GAS
         )
 
         return opex_cost_data_class

@@ -150,14 +150,14 @@ class HeatPumpConfig(cp.ConfigBase):
 
     @classmethod
     def get_scaled_waterheating_to_number_of_apartments(
-        cls, number_of_apartments: float, default_power_in_watt: float = 3000
+        cls, number_of_apartments: float, default_power_in_watt: float = 3000, name: str = "DHWHeatPump",
     ) -> "HeatPumpConfig":
         """Gets a default heat pump with scaling according to number of apartments."""
 
         # scale with number of apartments
         power_th_in_watt: float = default_power_in_watt * number_of_apartments
         config = HeatPumpConfig(
-            name="DHWHeatPump",
+            name=name,
             source_weight=1,
             manufacturer="Viessmann Werke GmbH & Co KG",
             device_name="Vitocal 300-A AWO-AC 301.B07",

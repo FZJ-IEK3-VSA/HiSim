@@ -160,10 +160,10 @@ class CarConfig(cp.ConfigBase):
         return Car.get_full_classname()
 
     @classmethod
-    def get_default_diesel_config(cls) -> Any:
+    def get_default_diesel_config(cls, name: str = "Car",) -> Any:
         """Defines default configuration for diesel vehicle."""
         config = CarConfig(
-            name="Car",
+            name=name,
             source_weight=1,
             fuel=lt.LoadTypes.DIESEL,
             consumption_per_km=0.06,

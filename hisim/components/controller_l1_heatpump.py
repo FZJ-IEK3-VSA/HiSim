@@ -66,10 +66,10 @@ class L1HeatPumpConfig(ConfigBase):
         return L1HeatPumpController.get_full_classname()
 
     @staticmethod
-    def get_default_config_heat_source_controller(name: str) -> "L1HeatPumpConfig":
+    def get_default_config_heat_source_controller(name: str = "Controller",) -> "L1HeatPumpConfig":
         """Returns default configuration for the controller of building heating."""
         config = L1HeatPumpConfig(
-            name="Controller" + name,
+            name=name,
             source_weight=1,
             t_min_heating_in_celsius=19.5,
             t_max_heating_in_celsius=20.5,
@@ -83,12 +83,12 @@ class L1HeatPumpConfig(ConfigBase):
 
     @staticmethod
     def get_default_config_heat_source_controller_buffer(
-        name: str,
+        name: str = "Controller",
     ) -> "L1HeatPumpConfig":
         """Returns default configuration for the controller of buffer heating."""
         # minus - 1 in heating season, so that buffer heats up one day ahead, and modelling to building works.
         config = L1HeatPumpConfig(
-            name="Controller" + name,
+            name=name,
             source_weight=1,
             t_min_heating_in_celsius=30.0,
             t_max_heating_in_celsius=40.0,
@@ -101,10 +101,10 @@ class L1HeatPumpConfig(ConfigBase):
         return config
 
     @staticmethod
-    def get_default_config_heat_source_controller_dhw(name: str) -> "L1HeatPumpConfig":
+    def get_default_config_heat_source_controller_dhw(name: str = "Controller") -> "L1HeatPumpConfig":
         """Returns default configuration for the controller of a drain hot water storage."""
         config = L1HeatPumpConfig(
-            name="Controller" + name,
+            name=name,
             source_weight=1,
             t_min_heating_in_celsius=40.0,
             t_max_heating_in_celsius=60.0,

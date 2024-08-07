@@ -2,7 +2,7 @@
 
 # clean
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -35,10 +35,10 @@ class ElectricityMeterConfig(cp.ConfigBase):
     name: str
 
     @classmethod
-    def get_electricity_meter_default_config(cls):
+    def get_electricity_meter_default_config(cls, name: str = "ElectricityMeter",):
         """Gets a default ElectricityMeter."""
         return ElectricityMeterConfig(
-            name="ElectricityMeter",
+            name=name,
         )
 
 
@@ -455,15 +455,15 @@ class ElectricityMeter(DynamicComponent):
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
-        total_energy_from_grid_in_kwh: Optional[float] = None
-        total_energy_to_grid_in_kwh: Optional[float] = None
+        total_energy_from_grid_in_kwh: float
+        total_energy_to_grid_in_kwh: float
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
             if output.component_name == self.config.name and output.load_type == lt.LoadTypes.ELECTRICITY:
                 if output.field_name == self.ElectricityFromGrid:
-                    total_energy_from_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 1)
+                    total_energy_from_grid_in_kwh = postprocessing_results.iloc[:, index].sum() * 1e-3
                 elif output.field_name == self.ElectricityToGrid:
-                    total_energy_to_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 1)
+                    total_energy_to_grid_in_kwh = postprocessing_results.iloc[:, index].sum() * 1e-3
 
         total_energy_from_grid_in_kwh_entry = KpiEntry(
             name="Total energy from grid",

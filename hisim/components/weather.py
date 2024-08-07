@@ -387,7 +387,7 @@ class WeatherConfig(ConfigBase):
         return Weather.get_full_classname()
 
     @classmethod
-    def get_default(cls, location_entry: Any) -> Any:
+    def get_default(cls, location_entry: Any, name: str = "Weather") -> Any:
         """Gets the default configuration for Aachen."""
         if not isinstance(location_entry, LocationEnum):
             if location_entry in LocationEnum._member_names_:  # pylint: disable=W0212
@@ -408,7 +408,7 @@ class WeatherConfig(ConfigBase):
             location_entry.value[3],
         )
         config = WeatherConfig(
-            name="Weather",
+            name=name,
             location=location_entry.value[0],
             source_path=path,
             data_source=location_entry.value[4],

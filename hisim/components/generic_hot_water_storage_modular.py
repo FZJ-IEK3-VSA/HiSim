@@ -74,14 +74,14 @@ class StorageConfig(cp.ConfigBase):
         return HotWaterStorage.get_full_classname()
 
     @classmethod
-    def get_default_config_for_boiler(cls) -> "StorageConfig":
+    def get_default_config_for_boiler(cls, name: str = "DHWBoiler",) -> "StorageConfig":
         """Returns default configuration for boiler."""
 
         volume = 230
         radius = (volume * 1e-3 / (4 * np.pi)) ** (1 / 3)  # l to m^3 so that radius is given in m
         surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
         config = StorageConfig(
-            name="DHWBoiler",
+            name=name,
             use=lt.ComponentType.BOILER,
             source_weight=1,
             volume=volume,
@@ -98,7 +98,7 @@ class StorageConfig(cp.ConfigBase):
 
     @classmethod
     def get_scaled_config_for_boiler_to_number_of_apartments(
-        cls, number_of_apartments: float, default_volume_in_liter: float = 230.0
+        cls, number_of_apartments: float, default_volume_in_liter: float = 230.0, name: str = "DHWBoiler",
     ) -> "StorageConfig":
         """Returns default configuration for boiler."""
 
@@ -106,7 +106,7 @@ class StorageConfig(cp.ConfigBase):
         radius = (volume * 1e-3 / (4 * np.pi)) ** (1 / 3)  # l to m^3 so that radius is given in m
         surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
         config = StorageConfig(
-            name="DHWBoiler",
+            name=name,
             use=lt.ComponentType.BOILER,
             source_weight=1,
             volume=volume,
@@ -122,14 +122,14 @@ class StorageConfig(cp.ConfigBase):
         return config
 
     @staticmethod
-    def get_default_config_buffer(power: float = 2000, volume: float = 500) -> Any:
+    def get_default_config_buffer(name: str = "Buffer", power: float = 2000, volume: float = 500) -> Any:
         """Returns default configuration for buffer (radius:height = 1:4)."""
         # volume = r^2 * pi * h = r^2 * pi * 4r = 4 * r^3 * pi
         radius = (volume * 1e-3 / (4 * np.pi)) ** (1 / 3)  # l to m^3 so that radius is given in m
         # cylinder surface area = floor and ceiling area + lateral surface
         surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
         config = StorageConfig(
-            name="Buffer",
+            name=name,
             use=lt.ComponentType.BUFFER,
             source_weight=1,
             volume=0,

@@ -1120,9 +1120,6 @@ class PostProcessor:
             else:
                 all_objects_in_district[my_component_class_name] = [my_component.component_name]
 
-        # todo: if abfrage, ob überhaupt mehrere gleice komponenten vorhanden, wenn nicht ist auch kein quartier
-        # sondern nur ein gebäude und dann kann orgignal code bleiben --> dann einfach auf "Geb1" oder so setzen damit rest was folgt klappt
-
         building_objects_in_district = set()
         for value_list in all_objects_in_district.values():
             for name in value_list:

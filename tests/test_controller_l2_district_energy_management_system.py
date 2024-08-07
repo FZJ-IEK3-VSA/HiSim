@@ -85,12 +85,15 @@ def test_house(
 
     # =================================================================================================================================
     # Build Components
+    building_name = "BUI1"
+
     heating_reference_temperature_in_celsius = -7.0
 
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home(
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
+    my_building_config.name = building_name + "_" + my_building_config.name
     my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     # Add to simulator
@@ -98,6 +101,7 @@ def test_house(
 
     # Build Occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
+    my_occupancy_config.name = building_name + "_" + my_occupancy_config.name
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
@@ -106,6 +110,7 @@ def test_house(
 
     # Build Weather
     my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
+    my_weather_config.name = building_name + "_" + my_weather_config.name
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     # Add to simulator
     my_sim.add_component(my_weather)
@@ -115,6 +120,7 @@ def test_house(
         rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2,
         share_of_maximum_pv_potential=1.0,
     )
+    my_photovoltaic_system_config.name = building_name + "_" + my_photovoltaic_system_config.name
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -129,6 +135,7 @@ def test_house(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
+    my_heat_distribution_controller_config.name = building_name + "_" + my_heat_distribution_controller_config.name
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
         my_simulation_parameters=my_simulation_parameters,
         config=my_heat_distribution_controller_config,
@@ -145,6 +152,7 @@ def test_house(
             heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
         )
     )
+    my_heat_pump_controller_config.name = building_name + "_" + my_heat_pump_controller_config.name
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
         config=my_heat_pump_controller_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -157,7 +165,7 @@ def test_house(
         heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
         heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
     )
-
+    my_heat_pump_config.name = building_name + "_" + my_heat_pump_config.name
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
         config=my_heat_pump_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -166,10 +174,13 @@ def test_house(
     my_sim.add_component(my_heat_pump, connect_automatically=True)
 
     # Build Heat Distribution System
-    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-        water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
-        absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2
+    my_heat_distribution_system_config = (
+        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+            absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+        )
     )
+    my_heat_distribution_system_config.name = building_name + "_" + my_heat_distribution_system_config.name
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -183,6 +194,7 @@ def test_house(
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
         sizing_option=simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
     )
+    my_simple_heat_water_storage_config.name = building_name + "_" + my_simple_heat_water_storage_config.name
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -195,19 +207,20 @@ def test_house(
         number_of_apartments=my_building_information.number_of_apartments,
         default_power_in_watt=6000,
     )
-
+    my_dhw_heatpump_config.name = building_name + "_" + my_dhw_heatpump_config.name
     my_dhw_heatpump_controller_config = (
         controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
             name="DHWHeatpumpController"
         )
     )
-
+    my_dhw_heatpump_controller_config.name = building_name + "_" + my_dhw_heatpump_controller_config.name
     my_dhw_storage_config = (
         generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
             number_of_apartments=my_building_information.number_of_apartments,
             default_volume_in_liter=450,
         )
     )
+    my_dhw_storage_config.name = building_name + "_" + my_dhw_storage_config.name
     my_dhw_storage_config.compute_default_cycle(
         temperature_difference_in_kelvin=my_dhw_heatpump_controller_config.t_max_heating_in_celsius
         - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
@@ -231,14 +244,19 @@ def test_house(
     my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
 
     # Build Electricity Meter
+    my_electricity_meter_config = electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config()
+    my_electricity_meter_config.name = building_name + "_" + my_electricity_meter_config.name
+
     my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,
-        config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
+        config=my_electricity_meter_config,
     )
 
     # Build EMS
     my_electricity_controller_config = controller_l2_district_energy_management_system.EMSDistrictConfig.get_default_config_ems(
-        strategy=controller_l2_district_energy_management_system.EMSControlStrategy.BUILDING_OPTIMIZEOWNCONSUMPTION_PARALLEL)
+        strategy=controller_l2_district_energy_management_system.EMSControlStrategy.BUILDING_OPTIMIZEOWNCONSUMPTION_PARALLEL
+    )
+    my_electricity_controller_config.name = building_name + "_" + my_electricity_controller_config.name
 
     my_electricity_controller = controller_l2_district_energy_management_system.L2GenericDistrictEnergyManagementSystem(
         my_simulation_parameters=my_simulation_parameters,
@@ -249,6 +267,7 @@ def test_house(
     my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
         total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt
     )
+    my_advanced_battery_config.name = building_name + "_" + my_advanced_battery_config.name
     my_advanced_battery = advanced_battery_bslib.Battery(
         my_simulation_parameters=my_simulation_parameters,
         config=my_advanced_battery_config,
@@ -325,11 +344,13 @@ def test_house(
     ) as file:
         jsondata = json.load(file)
 
+    jsondata = jsondata[building_name]
+
     # Get general KPI values
     total_consumption_kpi_in_kilowatt_hour = jsondata["General"]["Total electricity consumption"].get("value")
-    electricity_from_grid_kpi_in_kilowatt_hour = jsondata["General"]["Total energy from grid"].get("value")
-    electricity_to_grid_kpi_in_kilowatt_hour = jsondata["General"]["Total energy to grid"].get("value")
-    other_kpi_grid_injection_in_kilowatt_hour = jsondata["General"]["Grid injection"].get("value")
+    electricity_from_grid_kpi_in_kilowatt_hour = jsondata["Electricity Meter"]["Total energy from grid"].get("value")
+    electricity_to_grid_kpi_in_kilowatt_hour = jsondata["Electricity Meter"]["Total energy to grid"].get("value")
+    other_kpi_grid_injection_in_kilowatt_hour = jsondata["General"]["Grid injection of electricity"].get("value")
 
     # Get battery KPI values
     battery_charging_energy_in_kilowatt_hour = jsondata["Battery"]["Battery charging energy"].get("value")
@@ -357,9 +378,9 @@ def test_house(
         + domestic_hot_water_heatpump_total_consumption_kpi_in_kilowatt_hour
         + battery_losses_in_kilowatt_hour
     )
-    print("occupancy total consumption component output ", residents_total_consumption_kpi_in_kilowatt_hour)
-    print("sh hp total consumption component output ", space_heating_heatpump_total_consumption_kpi_in_kilowatt_hour)
-    print("dhw hp total consumption component output ", domestic_hot_water_heatpump_total_consumption_kpi_in_kilowatt_hour)
+    print("occupancy total consumption ", residents_total_consumption_kpi_in_kilowatt_hour)
+    print("sh hp total consumption ", space_heating_heatpump_total_consumption_kpi_in_kilowatt_hour)
+    print("dhw hp total consumption ", domestic_hot_water_heatpump_total_consumption_kpi_in_kilowatt_hour)
     print("\n")
 
     # Get grid consumptions of components
@@ -379,14 +400,14 @@ def test_house(
         - battery_discharging_energy_in_kilowatt_hour
     )
 
-    print("occupancy grid consumption ems output ", residents_grid_consumption_kpi_in_kilowatt_hour)
-    print("sh hp grid consumption ems output ", space_heating_heatpump_grid_consumption_kpi_in_kilowatt_hour)
-    print("dhw hp grid consumption ems output ", domestic_hot_water_heatpump_grid_consumption_kpi_in_kilowatt_hour)
+    print("occupancy grid consumption ", residents_grid_consumption_kpi_in_kilowatt_hour)
+    print("sh hp grid consumption ", space_heating_heatpump_grid_consumption_kpi_in_kilowatt_hour)
+    print("dhw hp grid consumption ", domestic_hot_water_heatpump_grid_consumption_kpi_in_kilowatt_hour)
     print("\n")
 
     # Get EMS output TotalElectricityConsumption
     simulation_results_ems_total_consumption_in_watt = my_sim.results_data_frame[
-        "L2EMSElectricityController - TotalElectricityConsumption [Electricity - W]"
+        building_name + "_" + "L2EMSElectricityController - TotalElectricityConsumption [Electricity - W]"
     ]
 
     ems_total_consumption_in_kilowatt_hour = (
@@ -395,8 +416,12 @@ def test_house(
 
     # Get EMS output ElectricityToOrFromGrid -> get grid consumption by filterig only values < 0
     simulation_results_ems_grid_consumption_in_watt = abs(
-        my_sim.results_data_frame["L2EMSElectricityController - TotalElectricityToOrFromGrid [Electricity - W]"].loc[
-            my_sim.results_data_frame["L2EMSElectricityController - TotalElectricityToOrFromGrid [Electricity - W]"]
+        my_sim.results_data_frame[
+            building_name + "_" + "L2EMSElectricityController - TotalElectricityToOrFromGrid [Electricity - W]"
+        ].loc[
+            my_sim.results_data_frame[
+                building_name + "_" + "L2EMSElectricityController - TotalElectricityToOrFromGrid [Electricity - W]"
+            ]
             < 0.0
         ]
     )
@@ -406,9 +431,12 @@ def test_house(
 
     # Get EMS output ElectricityToOrFromGrid -> get grid injection by filterig only values > 0
     simulation_results_ems_grid_injection_in_watt = my_sim.results_data_frame[
-        "L2EMSElectricityController - TotalElectricityToOrFromGrid [Electricity - W]"
+        building_name + "_" + "L2EMSElectricityController - TotalElectricityToOrFromGrid [Electricity - W]"
     ].loc[
-        my_sim.results_data_frame["L2EMSElectricityController - TotalElectricityToOrFromGrid [Electricity - W]"] > 0.0
+        my_sim.results_data_frame[
+            building_name + "_" + "L2EMSElectricityController - TotalElectricityToOrFromGrid [Electricity - W]"
+        ]
+        > 0.0
     ]
     ems_grid_injection_in_kilowatt_hour = (
         sum(simulation_results_ems_grid_injection_in_watt) * seconds_per_timestep / 3.6e6
@@ -418,7 +446,7 @@ def test_house(
     # Test total electricity consumption
     print("ems total consumption ", ems_total_consumption_in_kilowatt_hour)
     print("kpi total consumption ", total_consumption_kpi_in_kilowatt_hour)
-    print("sum of components' total consumptions components outputs ", sum_component_total_consumptions_in_kilowatt_hour)
+    print("sum of components' total consumptions ", sum_component_total_consumptions_in_kilowatt_hour)
     print("\n")
     np.testing.assert_allclose(
         ems_total_consumption_in_kilowatt_hour,
@@ -434,7 +462,7 @@ def test_house(
     # Test grid consumption
     print("ems grid consumption ", ems_grid_consumption_in_kilowatt_hour)
     print("kpi grid consumption ", electricity_from_grid_kpi_in_kilowatt_hour)
-    print("sum of components' grid consumptions ems outputs", sum_component_grid_consumptions_in_kilowatt_hour)
+    print("sum of components' grid consumptions ", sum_component_grid_consumptions_in_kilowatt_hour)
     print("\n")
     np.testing.assert_allclose(
         ems_grid_consumption_in_kilowatt_hour,

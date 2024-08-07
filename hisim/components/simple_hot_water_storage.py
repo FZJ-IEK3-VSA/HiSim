@@ -94,6 +94,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
     def get_scaled_hot_water_storage(
         cls,
         max_thermal_power_in_watt_of_heating_system: float,
+        name: str = "SimpleHotWaterStorage",
         temperature_difference_between_flow_and_return_in_celsius: float = 7.0,
         sizing_option: HotWaterStorageSizingEnum = HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM,
     ) -> "SimpleHotWaterStorageConfig":
@@ -135,7 +136,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int] = PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP
 
         config = SimpleHotWaterStorageConfig(
-            name="SimpleHotWaterStorage",
+            name=name,
             volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,
             heat_exchanger_is_present=True,  # until now stratified mode is causing problems, so heat exchanger mode is recommended

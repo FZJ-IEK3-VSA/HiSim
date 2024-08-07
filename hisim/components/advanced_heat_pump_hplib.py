@@ -118,13 +118,14 @@ class HeatPumpHplibConfig(ConfigBase):
         cls,
         heating_load_of_building_in_watt: Quantity[float, Watt],
         heating_reference_temperature_in_celsius: Quantity[float, Celsius] = Quantity(-7.0, Celsius),
+        name: str = "AdvancedHeatPumpHPLib",
     ) -> "HeatPumpHplibConfig":
         """Gets a default heat pump with scaling according to heating load of the building."""
 
         set_thermal_output_power_in_watt: Quantity[float, Watt] = heating_load_of_building_in_watt
 
         return HeatPumpHplibConfig(
-            name="AdvancedHeatPumpHPLib",
+            name=name,
             model="Generic",
             group_id=1,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
@@ -926,11 +927,11 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
 
     @classmethod
     def get_default_generic_heat_pump_controller_config(
-        cls, heat_distribution_system_type: Any, mode: int = 2
+        cls, heat_distribution_system_type: Any, mode: int = 2, name: str = "HeatPumpController",
     ) -> "HeatPumpHplibControllerL1Config":
         """Gets a default Generic Heat Pump Controller."""
         return HeatPumpHplibControllerL1Config(
-            name="HeatPumpController",
+            name=name,
             mode=mode,
             set_heating_threshold_outside_temperature_in_celsius=16.0,
             set_cooling_threshold_outside_temperature_in_celsius=20.0,

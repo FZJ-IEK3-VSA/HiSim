@@ -84,13 +84,14 @@ class HeatDistributionConfig(cp.ConfigBase):
         cls,
         water_mass_flow_rate_in_kg_per_second: float,
         absolute_conditioned_floor_area_in_m2: float,
+        name: str = "HeatDistributionSystem",
         position_hot_water_storage_in_system: Union[
             PositionHotWaterStorageInSystemSetup, int
         ] = PositionHotWaterStorageInSystemSetup.PARALLEL,
     ) -> Any:
         """Get a default heat distribution system config."""
         config = HeatDistributionConfig(
-            name="HeatDistributionSystem",
+            name=name,
             water_mass_flow_rate_in_kg_per_second=water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
             position_hot_water_storage_in_system=position_hot_water_storage_in_system,

@@ -96,10 +96,14 @@ class ElectricityMeter(DynamicComponent):
             unit=lt.Units.WATT,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityToGridInWatt} will follow.",
-            postprocessing_flag=[
-                lt.InandOutputType.ELECTRICITY_PRODUCTION,
-                lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
-            ] if any(word in self.name.lower() for word in ["quartier", "district"]) else [],
+            postprocessing_flag=(
+                [
+                    lt.InandOutputType.ELECTRICITY_PRODUCTION,
+                    lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+                ]
+                if any(word in self.name.lower() for word in ["quartier", "district"])
+                else []
+            ),
         )
         self.electricity_from_grid_in_watt_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -108,10 +112,14 @@ class ElectricityMeter(DynamicComponent):
             unit=lt.Units.WATT,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityFromGridInWatt} will follow.",
-            postprocessing_flag=[
-                lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
-                lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
-            ] if any(word in self.name.lower() for word in ["quartier", "district"]) else [],
+            postprocessing_flag=(
+                [
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                    lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+                ]
+                if any(word in self.name.lower() for word in ["quartier", "district"])
+                else []
+            ),
         )
         self.electricity_available_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -357,13 +365,19 @@ class ElectricityMeter(DynamicComponent):
         # set outputs
         stsv.set_output_value(
             self.electricity_to_grid_in_watt_channel,
-            difference_between_production_and_consumption_in_watt
-            if difference_between_production_and_consumption_in_watt > 0 else 0,
+            (
+                difference_between_production_and_consumption_in_watt
+                if difference_between_production_and_consumption_in_watt > 0
+                else 0
+            ),
         )
         stsv.set_output_value(
             self.electricity_from_grid_in_watt_channel,
-            -difference_between_production_and_consumption_in_watt
-            if difference_between_production_and_consumption_in_watt < 0 else 0,
+            (
+                -difference_between_production_and_consumption_in_watt
+                if difference_between_production_and_consumption_in_watt < 0
+                else 0
+            ),
         )
 
         stsv.set_output_value(
@@ -405,16 +419,16 @@ class ElectricityMeter(DynamicComponent):
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
-        total_energy_to_grid_in_kwh: Optional[float]  = None
-        total_energy_from_grid_in_kwh: Optional[float]  = None
+        total_energy_to_grid_in_kwh: float
+        total_energy_from_grid_in_kwh: float
         for index, output in enumerate(all_outputs):
             if output.component_name == self.config.name:
                 if output.field_name == self.ElectricityToGrid:
                     # Todo: check component name from system_setups: find another way of using the correct outputs
-                    total_energy_to_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3,2)
+                    total_energy_to_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 2)
 
                 elif output.field_name == self.ElectricityFromGrid:
-                    total_energy_from_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3,2)
+                    total_energy_from_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 2)
 
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year
@@ -424,8 +438,7 @@ class ElectricityMeter(DynamicComponent):
         revenue_euro_per_unit = emissions_and_cost_factors.electricity_to_grid_revenue_in_euro_per_kwh
 
         opex_cost_per_simulated_period_in_euro = (
-            total_energy_from_grid_in_kwh * euro_per_unit
-            - total_energy_to_grid_in_kwh * revenue_euro_per_unit
+            total_energy_from_grid_in_kwh * euro_per_unit - total_energy_to_grid_in_kwh * revenue_euro_per_unit
         )
         co2_per_simulated_period_in_kg = total_energy_from_grid_in_kwh * co2_per_unit
         opex_cost_data_class = OpexCostDataClass(

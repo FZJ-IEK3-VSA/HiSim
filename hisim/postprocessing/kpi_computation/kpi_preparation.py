@@ -23,7 +23,9 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, 
 class KpiPreparation:
     """Class for generating and calculating key performance indicators."""
 
-    def __init__(self, post_processing_data_transfer: PostProcessingDataTransfer, building_objects_in_district_list: list):
+    def __init__(
+        self, post_processing_data_transfer: PostProcessingDataTransfer, building_objects_in_district_list: list
+    ):
         """Initialize further variables."""
         self.post_processing_data_transfer = post_processing_data_transfer
         self.building_objects_in_district_list = building_objects_in_district_list
@@ -36,7 +38,10 @@ class KpiPreparation:
         self.get_all_component_kpis(wrapped_components=self.wrapped_components)
 
     def filter_results_according_to_postprocessing_flags(
-        self, all_outputs: List, results: pd.DataFrame, building_objects_in_district: str,
+        self,
+        all_outputs: List,
+        results: pd.DataFrame,
+        building_objects_in_district: str,
     ) -> pd.DataFrame:
         """Filter results according to postprocessing flags and get consumption, production, battery charge and battery discharge.
 
@@ -113,7 +118,9 @@ class KpiPreparation:
         return energy_in_kilowatt_hour
 
     def compute_electricity_consumption_and_production_and_battery_kpis(
-        self, result_dataframe: pd.DataFrame, building_objects_in_district: str,
+        self,
+        result_dataframe: pd.DataFrame,
+        building_objects_in_district: str,
     ) -> Tuple[float, float, float]:
         """Compute electricity consumption and production and battery kpis."""
 
@@ -332,7 +339,8 @@ class KpiPreparation:
         )
 
     def get_electricity_to_and_from_grid_from_electricty_meter(
-        self, building_objects_in_district: str,
+        self,
+        building_objects_in_district: str,
     ) -> Tuple[Optional[float], Optional[float]]:
         """Get electricity to and from grid from electricity meter."""
 
@@ -461,7 +469,11 @@ class KpiPreparation:
         )
 
     def compute_ratio_between_two_values_and_set_as_kpi(
-        self, denominator_value: float, numerator_value: float, kpi_name: str, building_objects_in_district: str,
+        self,
+        denominator_value: float,
+        numerator_value: float,
+        kpi_name: str,
+        building_objects_in_district: str,
     ) -> None:
         """Compute the ratio of two values.
 
@@ -472,7 +484,9 @@ class KpiPreparation:
         ratio_in_percent_entry = KpiEntry(name=kpi_name, unit="%", value=ratio_in_percent, tag=KpiTagEnumClass.GENERAL)
 
         # update kpi collection dict
-        self.kpi_collection_dict_unsorted[building_objects_in_district].update({ratio_in_percent_entry.name: ratio_in_percent_entry.to_dict()})
+        self.kpi_collection_dict_unsorted[building_objects_in_district].update(
+            {ratio_in_percent_entry.name: ratio_in_percent_entry.to_dict()}
+        )
 
     def read_in_fuel_costs(self) -> pd.DataFrame:
         """Reads data for costs and co2 emissions of fuels from csv."""
@@ -657,7 +671,7 @@ class KpiPreparation:
             }
         )
 
-    def read_opex_and_capex_costs_from_results(self, building_object: str):
+    def read_opex_and_capex_costs_from_results(self, building_object: str) -> None:
         """Get CAPEX and OPEX costs for simulated period.
 
         This function will read the opex and capex costs from the results.
@@ -671,8 +685,12 @@ class KpiPreparation:
         )
         if Path(opex_results_path).exists():
             opex_df = pd.read_csv(opex_results_path, index_col=0, sep=";")
-            total_operational_cost_per_simulated_period = opex_df["Operational Costs in EUR"].loc[building_object+"_Total"]
-            total_operational_emissions_per_simulated_period = opex_df["Operational C02 footprint in kg"].loc[building_object+"_Total"]
+            total_operational_cost_per_simulated_period = opex_df["Operational Costs in EUR"].loc[
+                building_object + "_Total"
+            ]
+            total_operational_emissions_per_simulated_period = opex_df["Operational C02 footprint in kg"].loc[
+                building_object + "_Total"
+            ]
         else:
             log.warning("OPEX-costs for components are not calculated yet. Set PostProcessingOptions.COMPUTE_OPEX")
             total_operational_cost_per_simulated_period = 0
@@ -680,8 +698,12 @@ class KpiPreparation:
 
         if Path(capex_results_path).exists():
             capex_df = pd.read_csv(capex_results_path, index_col=0, sep=";")
-            total_investment_cost_per_simulated_period = capex_df["Investment in EUR"].loc[building_object+"_Total_per_simulated_period"]
-            total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint in kg"].loc[building_object+"_Total_per_simulated_period"]
+            total_investment_cost_per_simulated_period = capex_df["Investment in EUR"].loc[
+                building_object + "_Total_per_simulated_period"
+            ]
+            total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint in kg"].loc[
+                building_object + "_Total_per_simulated_period"
+            ]
         else:
             log.warning("CAPEX-costs for components are not calculated yet. Set PostProcessingOptions.COMPUTE_CAPEX")
             total_investment_cost_per_simulated_period = 0

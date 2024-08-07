@@ -23,7 +23,10 @@ class KpiGenerator(JSONWizard, KpiPreparation):
 
     def __post_init__(self):
         """Build the dataclass from input data."""
-        super().__init__(post_processing_data_transfer=self.post_processing_data_transfer,building_objects_in_district_list=self.building_objects_in_district_list)
+        super().__init__(
+            post_processing_data_transfer=self.post_processing_data_transfer,
+            building_objects_in_district_list=self.building_objects_in_district_list,
+        )
 
         for building_objects_in_district in self.building_objects_in_district_list:
             self.create_kpi_collection(building_objects_in_district)
@@ -146,7 +149,9 @@ class KpiGenerator(JSONWizard, KpiPreparation):
 
         # kpi_collection_dict_sorted: Dict[str, Dict] = {}
 
-        kpi_collection_dict_sorted: Dict[str, Dict] = {building_objects: {} for building_objects in self.building_objects_in_district_list}
+        kpi_collection_dict_sorted: Dict[str, Dict] = {
+            building_objects: {} for building_objects in self.building_objects_in_district_list
+        }
 
         for building_object in self.building_objects_in_district_list:
             # get all tags and use as keys for sorted kpi dict

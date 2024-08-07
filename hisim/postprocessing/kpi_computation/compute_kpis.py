@@ -123,8 +123,6 @@ class KpiGenerator(JSONWizard, KpiPreparation):
                 table.append([f"{building_object}", f"{kpi_tag}", "", ""])
                 table.append(["--------", "--------------------", "", ""])
                 for kpi_name, kpi_entry in kpi_entries.items():
-                    print(kpi_entry)
-                    print(building_object)
                     value = kpi_entry["value"]
                     if value is not None:
                         value = round(value, 2)

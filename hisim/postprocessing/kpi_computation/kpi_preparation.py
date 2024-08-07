@@ -670,7 +670,7 @@ class KpiPreparation:
             self.simulation_parameters.result_directory, "operational_costs_co2_footprint.csv"
         )
         if Path(opex_results_path).exists():
-            opex_df = pd.read_csv(opex_results_path, index_col=0)
+            opex_df = pd.read_csv(opex_results_path, index_col=0, sep=";")
             total_operational_cost_per_simulated_period = opex_df["Operational Costs in EUR"].loc[building_object+"_Total"]
             total_operational_emissions_per_simulated_period = opex_df["Operational C02 footprint in kg"].loc[building_object+"_Total"]
         else:
@@ -679,12 +679,8 @@ class KpiPreparation:
             total_operational_emissions_per_simulated_period = 0
 
         if Path(capex_results_path).exists():
-            capex_df = pd.read_csv(capex_results_path, index_col=0)
-            print(capex_df)
+            capex_df = pd.read_csv(capex_results_path, index_col=0, sep=";")
             total_investment_cost_per_simulated_period = capex_df["Investment in EUR"].loc[building_object+"_Total_per_simulated_period"]
-            print("#############################")
-            print(total_investment_cost_per_simulated_period)
-            print("###############################")
             total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint in kg"].loc[building_object+"_Total_per_simulated_period"]
         else:
             log.warning("CAPEX-costs for components are not calculated yet. Set PostProcessingOptions.COMPUTE_CAPEX")

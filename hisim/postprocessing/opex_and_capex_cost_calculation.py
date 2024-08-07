@@ -62,7 +62,6 @@ def opex_calculation(
                 "---",
             ]
         )
-        opex_table_as_list_of_list.append(["--------", "--------", "--------", "--------"])
 
         total_operational_cost += total_operational_cost_building_object
         total_operational_co2_footprint += total_operational_co2_footprint_building_object
@@ -77,7 +76,7 @@ def opex_calculation(
     )
     pathname = os.path.join(simulation_parameters.result_directory, "operational_costs_co2_footprint.csv")
     opex_df = pd.DataFrame(opex_table_as_list_of_list, columns=headline)
-    opex_df.to_csv(pathname, index=False, header=True, encoding="utf8")
+    opex_df.to_csv(pathname, index=False, header=True, encoding="utf8", sep=";")
 
     opex_table_as_list_of_list.insert(0, headline)
 
@@ -179,7 +178,6 @@ def capex_calculation(
                 "---",
             ]
         )
-        capex_table_as_list_of_list.append(["--------", "--------", "--------", "--------"])
 
         total_investment_cost += total_investment_cost_building_object
         total_device_co2_footprint += total_device_co2_footprint_building_object
@@ -205,7 +203,7 @@ def capex_calculation(
 
     pathname = os.path.join(simulation_parameters.result_directory, "investment_cost_co2_footprint.csv")
     capex_df = pd.DataFrame(capex_table_as_list_of_list, columns=headline)
-    capex_df.to_csv(pathname, index=False, header=True, encoding="utf8")
+    capex_df.to_csv(pathname, index=False, header=True, encoding="utf8", sep=";")
 
     capex_table_as_list_of_list.insert(0, headline)
 

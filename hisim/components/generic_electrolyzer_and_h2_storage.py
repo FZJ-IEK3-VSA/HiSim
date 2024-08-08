@@ -72,6 +72,7 @@ class ElectrolyzerWithStorageConfig(ConfigBase):
 class ElectrolyzerWithHydrogenStorageConfig(ConfigBase):
     """Electrolyzer with hydrogen storage config class."""
 
+    building: str
     name: str
     min_capacity: float  # [kg_H2]
     max_capacity: float  # [kg_H2]
@@ -88,9 +89,10 @@ class ElectrolyzerWithHydrogenStorageConfig(ConfigBase):
         return HydrogenStorage.get_full_classname()
 
     @classmethod
-    def get_default_config(cls):
+    def get_default_config(cls, building: str = "BUI1",):
         """Get default config."""
         config = ElectrolyzerWithHydrogenStorageConfig(
+            building=building,
             name="ElectrolyzerWithHydrogenStorage",
             min_capacity=0,
             max_capacity=500,

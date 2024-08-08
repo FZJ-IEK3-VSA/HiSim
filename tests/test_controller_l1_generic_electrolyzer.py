@@ -31,6 +31,7 @@ def test_electrolyzer_controller():
     # Setup Electrolyzer
 
     my_controller_config = controller_l1_electrolyzer_h2.ElectrolyzerControllerConfig(
+        building="BUI1",
         name=name,
         nom_load=nom_load,
         min_load=min_load,

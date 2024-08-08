@@ -47,6 +47,7 @@ def test_hydrogen_generator():
     # Set Hydrogen Generator
     my_electrolyzer_config = (
         generic_electrolyzer_and_h2_storage.ElectrolyzerWithStorageConfig(
+            building="BUI1",
             name="ElectrolyzerWithStorage",
             waste_energy=waste_energy,
             min_power=min_power,
@@ -63,6 +64,7 @@ def test_hydrogen_generator():
     )
     my_hydrogen_storage_config = (
         generic_electrolyzer_and_h2_storage.ElectrolyzerWithHydrogenStorageConfig(
+            building="BUI1",
             name="ElectrolyzerWithHydrogenStorage",
             min_capacity=min_capacity,
             max_capacity=max_capacity,

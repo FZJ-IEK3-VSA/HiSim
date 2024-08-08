@@ -35,7 +35,7 @@ class SimpleHeatSourceType(IntEnum):
 class SimpleHeatSourceConfig(cp.ConfigBase):
     """Configuration of a generic HeatSource."""
 
-    building: str
+    building_name: str
     name: str
     power_th_in_watt: float
     temperature_in_celsius: float
@@ -49,11 +49,11 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
     @classmethod
     def get_default_config_const_power(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "SimpleHeatSourceConfig":
         """Returns default configuration of a Heat Source used for heating."""
         config = SimpleHeatSourceConfig(
-            building=building,
+            building_name=building_name,
             name="HeatingHeatSourceConstPower",
             const_source=SimpleHeatSourceType.THERMALPOWER,
             power_th_in_watt=5000.0,
@@ -64,11 +64,11 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
     @classmethod
     def get_default_config_const_temperature(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "SimpleHeatSourceConfig":
         """Returns default configuration of a Heat Source used for heating."""
         config = SimpleHeatSourceConfig(
-            building=building,
+            building_name=building_name,
             name="HeatingHeatSourceConstTemperature",
             const_source=SimpleHeatSourceType.TEMPERATURE,
             power_th_in_watt=0,
@@ -105,7 +105,7 @@ class SimpleHeatSource(cp.Component):
         """Initialize the class."""
 
         super().__init__(
-            name=config.building + "_" + config.name,
+            name=config.building_name + "_" + config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

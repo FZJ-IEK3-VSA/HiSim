@@ -39,7 +39,7 @@ class CHPConfig(ConfigBase):
         """Return the full class name of the base class."""
         return CHP.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     min_operation_time: float
     min_idle_time: float
@@ -61,11 +61,11 @@ class CHPConfig(ConfigBase):
     @classmethod
     def get_default_config(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Get default config."""
         config = CHPConfig(
-            building=building,
+            building_name=building_name,
             name="CHP",
             min_operation_time=60,
             min_idle_time=15,
@@ -181,7 +181,7 @@ class CHP(Component):
         """Initialize the class."""
         self.chp_config = config
         super().__init__(
-            name=self.chp_config.building + "_" + self.chp_config.name,
+            name=self.chp_config.building_name + "_" + self.chp_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

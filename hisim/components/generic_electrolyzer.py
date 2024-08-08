@@ -29,7 +29,7 @@ __status__ = ""
 class GenericElectrolyzerConfig(cp.ConfigBase):
     """Generic electrolyzer config."""
 
-    building: str
+    building_name: str
     #: name of the electrolyer
     name: str
     #: priority of the component in hierachy: the higher the number the lower the priority
@@ -46,11 +46,11 @@ class GenericElectrolyzerConfig(cp.ConfigBase):
     @staticmethod
     def get_default_config(
         p_el: float,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "GenericElectrolyzerConfig":
         """Returns the default configuration of an electrolyzer."""
         config = GenericElectrolyzerConfig(
-            building=building,
+            building_name=building_name,
             name="Electrolyzer",
             source_weight=1,
             min_power=p_el * 0.5,
@@ -108,7 +108,7 @@ class GenericElectrolyzer(cp.Component):
         """Initialize an instance."""
 
         super().__init__(
-            name=config.building + "_" + config.name + "_w" + str(config.source_weight),
+            name=config.building_name + "_" + config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

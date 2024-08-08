@@ -43,8 +43,8 @@ class BatteryConfig(ConfigBase):
         """Return the full class name of the base class."""
         return Battery.get_full_classname()
 
-    #: building in which component is
-    building: str
+    #: building_name in which component is
+    building_name: str
     #: name of the device
     name: str
     #: priority of the device in hierachy: the higher the number the lower the priority
@@ -71,13 +71,13 @@ class BatteryConfig(ConfigBase):
     maintenance_cost_as_percentage_of_investment: float
 
     @classmethod
-    def get_default_config(cls, building: str = "BUI1", name: str = "Battery") -> "BatteryConfig":
+    def get_default_config(cls, building_name: str = "BUI1", name: str = "Battery") -> "BatteryConfig":
         """Returns default configuration of battery."""
         custom_battery_capacity_generic_in_kilowatt_hour = (
             10  # size/capacity of battery should be approx. the same as default pv power
         )
         config = BatteryConfig(
-            building=building,
+            building_name=building_name,
             name=name,
             # https://www.energieinstitut.at/die-richtige-groesse-von-batteriespeichern/
             custom_battery_capacity_generic_in_kilowatt_hour=custom_battery_capacity_generic_in_kilowatt_hour,
@@ -98,7 +98,7 @@ class BatteryConfig(ConfigBase):
 
     @classmethod
     def get_scaled_battery(
-        cls, total_pv_power_in_watt_peak: float, building: str = "BUI1", name: str = "Battery"
+        cls, total_pv_power_in_watt_peak: float, building_name: str = "BUI1", name: str = "Battery"
     ) -> "BatteryConfig":
         """Returns scaled configuration of battery according to pv power."""
         custom_battery_capacity_generic_in_kilowatt_hour = (
@@ -106,7 +106,7 @@ class BatteryConfig(ConfigBase):
         )  # size/capacity of battery should be approx. the same as default pv power
         c_rate = 0.5  # 0.5C corresponds to 0.5/h for fully charging or discharging
         config = BatteryConfig(
-            building=building,
+            building_name=building_name,
             name=name,
             # https://www.energieinstitut.at/die-richtige-groesse-von-batteriespeichern/
             custom_battery_capacity_generic_in_kilowatt_hour=custom_battery_capacity_generic_in_kilowatt_hour,
@@ -155,7 +155,7 @@ class Battery(Component):
         """Loads the parameters of the specified battery storage."""
         self.battery_config = config
         super().__init__(
-            name=self.battery_config.building
+            name=self.battery_config.building_name
             + "_"
             + self.battery_config.name
             + "_w"

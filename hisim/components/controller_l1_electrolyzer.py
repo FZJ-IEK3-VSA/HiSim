@@ -21,7 +21,7 @@ from hisim.simulationparameters import SimulationParameters
 class L1ElectrolyzerControllerConfig(cp.ConfigBase):
     """Electrolyzer Controller Config."""
 
-    building: str
+    building_name: str
     #: name of the device
     name: str
     #: priority of the device in hierachy: the higher the number the lower the priority
@@ -37,11 +37,11 @@ class L1ElectrolyzerControllerConfig(cp.ConfigBase):
 
     @staticmethod
     def get_default_config(
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "L1ElectrolyzerControllerConfig":
         """Returns the default configuration of an electrolyzer controller."""
         config = L1ElectrolyzerControllerConfig(
-            building=building,
+            building_name=building_name,
             name="L1 Electrolyzer Controller",
             source_weight=1,
             min_operation_time_in_seconds=14400,
@@ -107,7 +107,7 @@ class L1GenericElectrolyzerController(cp.Component):
     AvailableElectricity = "AvailableElectricity"
 
     # Similar components to connect to:
-    # 1. Building
+    # 1. building_name
     @utils.measure_execution_time
     def __init__(
         self,
@@ -118,7 +118,7 @@ class L1GenericElectrolyzerController(cp.Component):
         """Initialize the class."""
 
         super().__init__(
-            name=config.building + "_" + config.name + "_w" + str(config.source_weight),
+            name=config.building_name + "_" + config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

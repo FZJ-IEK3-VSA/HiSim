@@ -66,7 +66,7 @@ class HeatDistributionConfig(cp.ConfigBase):
         """Return the full class name of the base class."""
         return HeatDistribution.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     water_mass_flow_rate_in_kg_per_second: float
     absolute_conditioned_floor_area_in_m2: float
@@ -86,14 +86,14 @@ class HeatDistributionConfig(cp.ConfigBase):
         water_mass_flow_rate_in_kg_per_second: float,
         absolute_conditioned_floor_area_in_m2: float,
         name: str = "HeatDistributionSystem",
-        building: str = "BUI1",
+        building_name: str = "BUI1",
         position_hot_water_storage_in_system: Union[
             PositionHotWaterStorageInSystemSetup, int
         ] = PositionHotWaterStorageInSystemSetup.PARALLEL,
     ) -> Any:
         """Get a default heat distribution system config."""
         config = HeatDistributionConfig(
-            building=building,
+            building_name=building_name,
             name=name,
             water_mass_flow_rate_in_kg_per_second=water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
@@ -155,7 +155,7 @@ class HeatDistribution(cp.Component):
     ) -> None:
         """Construct all the neccessary attributes."""
         super().__init__(
-            name=config.building + "_" + config.name,
+            name=config.building_name + "_" + config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -750,7 +750,7 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return HeatDistributionController.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     heating_system: Union[HeatDistributionSystemType, int]
     set_heating_threshold_outside_temperature_in_celsius: Optional[float]
@@ -767,12 +767,12 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
         set_cooling_temperature_for_building_in_celsius: float,
         heating_reference_temperature_in_celsius: float = -7.0,
         heating_system: Union[HeatDistributionSystemType, int] = HeatDistributionSystemType.FLOORHEATING,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "HeatDistributionControllerConfig":
         """Gets a default HeatDistribution Controller."""
 
         return HeatDistributionControllerConfig(
-            building=building,
+            building_name=building_name,
             name="HeatDistributionController",
             heating_system=heating_system,
             set_heating_threshold_outside_temperature_in_celsius=16.0,
@@ -815,7 +815,7 @@ class HeatDistributionController(cp.Component):
         """Construct all the neccessary attributes."""
         self.hsd_controller_config = config
         super().__init__(
-            name=config.building + "_" + self.hsd_controller_config.name,
+            name=config.building_name + "_" + self.hsd_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

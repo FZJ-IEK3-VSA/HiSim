@@ -31,7 +31,7 @@ __status__ = "development"
 class L2GenericHeatConfig(cp.ConfigBase):
     """L2 Controller Config."""
 
-    building: str
+    building_name: str
     name: str
     source_weight: int
     t_min_heating_in_celsius: float
@@ -50,11 +50,11 @@ class L2GenericHeatConfig(cp.ConfigBase):
     @staticmethod
     def get_default_config_heating(
         name: str,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Default config for the heating controller."""
         config = L2GenericHeatConfig(
-            building=building,
+            building_name=building_name,
             name="L2HeatingTemperatureController_" + name,
             source_weight=1,
             t_min_heating_in_celsius=20.0,
@@ -70,11 +70,11 @@ class L2GenericHeatConfig(cp.ConfigBase):
     @staticmethod
     def get_default_config_buffer_heating(
         name: str,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Default Config for the buffer temperature."""
         config = L2GenericHeatConfig(
-            building=building,
+            building_name=building_name,
             name="L2BufferTemperatureController_" + name,
             source_weight=1,
             t_min_heating_in_celsius=30.0,
@@ -90,11 +90,11 @@ class L2GenericHeatConfig(cp.ConfigBase):
     @staticmethod
     def get_default_config_waterheating(
         name: str,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Generate Default Config for a DHW controller."""
         config = L2GenericHeatConfig(
-            building=building,
+            building_name=building_name,
             name="L2DHWTemperatureController_" + name,
             source_weight=1,
             t_min_heating_in_celsius=50.0,
@@ -206,7 +206,7 @@ class L2GenericHeatController(cp.Component):
         if not config.__class__.__name__ == L2GenericHeatConfig.__name__:
             raise ValueError("Wrong config class.")
         super().__init__(
-            name=config.building + "_" + config.name + "_w" + str(config.source_weight),
+            name=config.building_name + "_" + config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

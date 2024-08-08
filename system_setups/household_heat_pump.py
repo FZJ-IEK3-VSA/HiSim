@@ -138,7 +138,7 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
             # heating_system=heating_system,
             # heat_pump_controller_mode=heat_pump_controller_mode,
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-                building="BUI1",
+                building_name="BUI1",
                 data_acquisition_mode=loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP,
                 household=Households.CHR01_Couple_both_at_Work,
                 energy_intensity=EnergyIntensityType.EnergySaving,

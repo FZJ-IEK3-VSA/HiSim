@@ -32,7 +32,7 @@ class RsocBatteryControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return RsocBatteryController.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     nom_load_soec: float
     min_load_soec: float
@@ -59,13 +59,13 @@ class RsocBatteryControllerConfig(ConfigBase):
         cls,
         rsoc_name: str,
         operation_mode: float,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Configure rsoc."""
         config_json = cls.read_config(rsoc_name)
 
         config = RsocBatteryControllerConfig(
-            building=building,
+            building_name=building_name,
             name="rSOC and Battery Controller",  # config_json.get("name", "")
             nom_load_soec=config_json.get("nom_load_soec", 0.0),
             min_load_soec=config_json.get("min_load_soec", 0.0),
@@ -113,7 +113,7 @@ class RsocBatteryController(Component):
         self.operation_mode = config.operation_mode
 
         super().__init__(
-            name=config.building + "_" + self.ptxcontrollerconfig.name,
+            name=config.building_name + "_" + self.ptxcontrollerconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

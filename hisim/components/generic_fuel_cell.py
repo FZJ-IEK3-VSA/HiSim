@@ -42,7 +42,7 @@ class FuelCellConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return FuelCell.get_full_classname()
 
-    building: str
+    building_name: str
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters
     name: str
@@ -60,11 +60,11 @@ class FuelCellConfig(cp.ConfigBase):
     @classmethod
     def get_default_pem_fuel_cell_config(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Gets a default PEM Eletrolyzer."""
         return FuelCellConfig(
-            building=building,
+            building_name=building_name,
             name="PEM_Fuel_Cell",
             type="PEM",
             nom_output=100.0,  # [kW]
@@ -90,12 +90,12 @@ class FuelCellConfig(cp.ConfigBase):
     def config_fuel_cell(
         cls,
         fuel_cell_name: str,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Get config of fuel cell."""
         config_json = cls.read_config(fuel_cell_name)
         config = FuelCellConfig(
-            building=building,
+            building_name=building_name,
             name="FuelCell",  # config_json.get("name", "")
             type=config_json.get("type", ""),
             nom_output=config_json.get("nom_output", 0.0),
@@ -180,7 +180,7 @@ class FuelCell(cp.Component):
         self.ramp_down_rate = config.ramp_down_rate
 
         super().__init__(
-            name=config.building + "_" + self.fuelcellconfig.name,
+            name=config.building_name + "_" + self.fuelcellconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

@@ -35,7 +35,7 @@ class RsocConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return Rsoc.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     # SOEC
     nom_load_soec: float  # [kW]
@@ -65,13 +65,13 @@ class RsocConfig(cp.ConfigBase):
     def config_rsoc(
         cls,
         rsoc_name: str,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Initializes the config variables based on the JSON-file."""
 
         config_json = cls.read_config(rsoc_name)
         config = RsocConfig(
-            building=building,
+            building_name=building_name,
             name=rsoc_name,  # config_json.get("name", "")
             nom_load_soec=config_json.get("nom_load_soec", 0.0),
             min_load_soec=config_json.get("min_load_soec", 0.0),
@@ -165,7 +165,7 @@ class Rsoc(cp.Component):
         self.ramp_down_rate_sofc = config.ramp_down_rate_sofc
 
         super().__init__(
-            name=config.building + "_" + self.rsocconfig.name,
+            name=config.building_name + "_" + self.rsocconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

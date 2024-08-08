@@ -49,7 +49,7 @@ class WindturbineConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return Windturbine.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     # Typename of the wind turbine.
     turbine_type: str
@@ -95,11 +95,11 @@ class WindturbineConfig(ConfigBase):
     @classmethod
     def get_default_windturbine_config(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "WindturbineConfig":
         """Gets a default windturbine."""
         return WindturbineConfig(
-            building=building,
+            building_name=building_name,
             name="Windturbine",
             turbine_type="V126/3300",
             hub_height=137,
@@ -151,7 +151,7 @@ class Windturbine(cp.Component):
         self.windturbineconfig = config
 
         super().__init__(
-            name=config.building + "_" + self.windturbineconfig.name + "_w" + str(self.windturbineconfig.source_weight),
+            name=config.building_name + "_" + self.windturbineconfig.name + "_w" + str(self.windturbineconfig.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

@@ -29,7 +29,7 @@ __status__ = "development"
 class L1Config(ConfigBase):
     """L1 Runtime Config."""
 
-    building: str
+    building_name: str
     name: str
     source_weight: int
     min_operation_time_in_seconds: int
@@ -38,11 +38,11 @@ class L1Config(ConfigBase):
     @staticmethod
     def get_default_config(
         name: str,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Default config."""
         config = L1Config(
-            building=building,
+            building_name=building_name,
             name="RuntimeController_" + name,
             source_weight=1,
             min_operation_time_in_seconds=3600,
@@ -53,11 +53,11 @@ class L1Config(ConfigBase):
     @staticmethod
     def get_default_config_heatpump(
         name: str,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Gets a default config for heat pumps."""
         config = L1Config(
-            building=building,
+            building_name=building_name,
             name="L1RuntimeController" + name,
             source_weight=1,
             min_operation_time_in_seconds=3600 * 3,
@@ -130,7 +130,7 @@ class L1GenericRuntimeController(cp.Component):
     L1RunTimeSignal = "L1RunTimeSignal"
 
     # Similar components to connect to:
-    # 1. Building
+    # 1. building_name
     @utils.measure_execution_time
     def __init__(
         self,
@@ -140,7 +140,7 @@ class L1GenericRuntimeController(cp.Component):
     ) -> None:
         """Initializes the controller."""
         super().__init__(
-            name=config.building + "_" + config.name + "_w" + str(config.source_weight),
+            name=config.building_name + "_" + config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

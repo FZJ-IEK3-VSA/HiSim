@@ -34,7 +34,7 @@ __status__ = "development"
 class ChargingStationConfig(cp.ConfigBase):
     """Definition of the configuration of Charging Station and the set point for the control."""
 
-    building: str
+    building_name: str
     #: name of the device
     name: str
     #: priority of the device in hierachy: the higher the number the lower the priority
@@ -62,7 +62,7 @@ class ChargingStationConfig(cp.ConfigBase):
     @staticmethod
     def get_default_config(
         charging_station_set: JsonReference = ChargingStationSets.Charging_At_Home_with_03_7_kW,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "ChargingStationConfig":
         """Returns default configuration of charging station and desired SOC Level."""
         charging_power = float((charging_station_set.Name or "").split("with ")[1].split(" kW")[0])
@@ -70,7 +70,7 @@ class ChargingStationConfig(cp.ConfigBase):
             charging_power * 1e3 * 0.1
         )  # 10 % of charging power for acceptable efficiencies
         config = ChargingStationConfig(
-            building=building,
+            building_name=building_name,
             name="L1EVChargeControl",
             source_weight=1,
             charging_station_set=charging_station_set,
@@ -124,7 +124,7 @@ class L1Controller(cp.Component):
     ) -> None:
         """Initializes Car."""
         super().__init__(
-            name=config.building + "_" + config.name + "_w" + str(config.source_weight),
+            name=config.building_name + "_" + config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

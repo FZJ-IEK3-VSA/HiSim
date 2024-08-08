@@ -32,7 +32,7 @@ class PTXControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return PTXController.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     nom_load: float
     min_load: float
@@ -53,7 +53,7 @@ class PTXControllerConfig(ConfigBase):
         cls,
         electrolyzer_name: str,
         operation_mode: str,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Sets the according parameters for the chosen electrolyzer.
 
@@ -65,7 +65,7 @@ class PTXControllerConfig(ConfigBase):
         config_json = cls.read_config(electrolyzer_name)
 
         config = PTXControllerConfig(
-            building=building,
+            building_name=building_name,
             name="L2PtXController",  # config_json.get("name", "")
             nom_load=config_json.get("nom_load", 0.0),
             min_load=config_json.get("min_load", 0.0),
@@ -104,7 +104,7 @@ class PTXController(Component):
         self.operation_mode = config.operation_mode
 
         super().__init__(
-            name=config.building + "_" + self.ptxcontrollerconfig.name,
+            name=config.building_name + "_" + self.ptxcontrollerconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

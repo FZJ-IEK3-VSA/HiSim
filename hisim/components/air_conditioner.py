@@ -41,7 +41,7 @@ class AirConditionerConfig(ConfigBase):
         """Return the full class name of the base class."""
         return AirConditioner.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     manufacturer: str
     model_name: str
@@ -53,11 +53,11 @@ class AirConditionerConfig(ConfigBase):
     @classmethod
     def get_default_air_conditioner_config(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Get default configuration of air-conditioner."""
         config = AirConditionerConfig(
-            building=building,
+            building_name=building_name,
             name="AirConditioner",
             manufacturer="Panasonic",
             model_name="CS-RE18JKE/CU-RE18JKE",
@@ -79,7 +79,7 @@ class AirConditionerControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return AirConditionerController.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     t_air_heating: float
     t_air_cooling: float
@@ -88,11 +88,11 @@ class AirConditionerControllerConfig(ConfigBase):
     @classmethod
     def get_default_air_conditioner_controller_config(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Get default configuration of air-conditioner controller."""
         config = AirConditionerControllerConfig(
-            building=building,
+            building_name=building_name,
             name="AirConditioner",
             t_air_heating=18.0,
             t_air_cooling=26.0,
@@ -189,7 +189,7 @@ class AirConditioner(cp.Component):
         self.previous_state = AirConditionerState()
 
         super().__init__(
-            name=self.air_conditioner_config.building + "_" + self.air_conditioner_config.name,
+            name=self.air_conditioner_config.building_name + "_" + self.air_conditioner_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

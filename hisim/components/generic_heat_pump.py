@@ -48,7 +48,7 @@ class GenericHeatPumpConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return GenericHeatPump.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     manufacturer: str
     heat_pump_name: str
@@ -58,11 +58,11 @@ class GenericHeatPumpConfig(cp.ConfigBase):
     @classmethod
     def get_default_generic_heat_pump_config(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Gets a default Generic Heat Pump."""
         return GenericHeatPumpConfig(
-            building=building,
+            building_name=building_name,
             name="HeatPump",
             heat_pump_name="Vitocal 300-A AWO-AC 301.B07",
             manufacturer="Viessmann Werke GmbH & Co KG",
@@ -81,7 +81,7 @@ class GenericHeatPumpControllerConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return GenericHeatPumpController.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     temperature_air_heating_in_celsius: float
     temperature_air_cooling_in_celsius: float
@@ -89,10 +89,10 @@ class GenericHeatPumpControllerConfig(cp.ConfigBase):
     mode: int
 
     @classmethod
-    def get_default_generic_heat_pump_controller_config(cls, building: str = "BUI1",) -> Any:
+    def get_default_generic_heat_pump_controller_config(cls, building_name: str = "BUI1",) -> Any:
         """Gets a default Generic Heat Pump Controller."""
         return GenericHeatPumpControllerConfig(
-            building=building,
+            building_name=building_name,
             name="HeatPumpController",
             temperature_air_heating_in_celsius=18.0,
             temperature_air_cooling_in_celsius=26.0,
@@ -197,7 +197,7 @@ class GenericHeatPump(cp.Component):
         """Construct all the necessary attributes."""
         self.heatpump_config = config
         super().__init__(
-            name=config.building + "_" + self.heatpump_config.name,
+            name=config.building_name + "_" + self.heatpump_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

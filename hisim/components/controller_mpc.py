@@ -53,7 +53,7 @@ class MpcControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return MpcController.get_full_classname()
 
-    building: str
+    building_name: str
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters
     name: str
@@ -115,11 +115,11 @@ class MpcControllerConfig(ConfigBase):
     @classmethod
     def get_default_config(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Gets a default MPC controller."""
         return MpcControllerConfig(
-            building=building,
+            building_name=building_name,
             name="MpcController",
             mpc_scheme="optimization_once_aday_only",
             min_comfort_temp=21.0,
@@ -228,7 +228,7 @@ class MpcController(cp.Component):
         """Constructs all the neccessary attributes."""
 
         super().__init__(
-            name=config.building + "_" + config.name,
+            name=config.building_name + "_" + config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

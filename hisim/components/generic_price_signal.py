@@ -36,7 +36,7 @@ class PriceSignalConfig(cp.ConfigBase):
         """Return the full class name of the base class."""
         return PriceSignal.get_full_classname()
 
-    building: str
+    building_name: str
     #: name of the price signal
     name: str
     country: str
@@ -52,11 +52,11 @@ class PriceSignalConfig(cp.ConfigBase):
     @classmethod
     def get_default_price_signal_config(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Default configuration for price signal."""
         config = PriceSignalConfig(
-            building=building,
+            building_name=building_name,
             name="PriceSignal",
             country="Germany",
             pricing_scheme="fixed",
@@ -101,7 +101,7 @@ class PriceSignal(cp.Component):
         """
         self.price_signal_config = config
         super().__init__(
-            name=config.building + "_" + self.price_signal_config.name,
+            name=config.building_name + "_" + self.price_signal_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

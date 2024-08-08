@@ -35,7 +35,7 @@ __status__ = "development"
 class L1CHPControllerConfig(ConfigBase):
     """CHP Controller Config."""
 
-    building: str
+    building_name: str
     #: name of the device
     name: str
     #: priority of the device in hierachy: the higher the number the lower the priority
@@ -65,11 +65,11 @@ class L1CHPControllerConfig(ConfigBase):
 
     @staticmethod
     def get_default_config_chp(
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "L1CHPControllerConfig":
         """Returns default configuration for the CHP controller."""
         config = L1CHPControllerConfig(
-            building=building,
+            building_name=building_name,
             name="CHP Controller",
             source_weight=1,
             use=LoadTypes.GAS,
@@ -88,11 +88,11 @@ class L1CHPControllerConfig(ConfigBase):
 
     @staticmethod
     def get_default_config_fuel_cell(
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "L1CHPControllerConfig":
         """Returns default configuration for the fuel cell controller."""
         config = L1CHPControllerConfig(
-            building=building,
+            building_name=building_name,
             name="Fuel Cell Controller",
             source_weight=1,
             use=LoadTypes.HYDROGEN,
@@ -111,12 +111,12 @@ class L1CHPControllerConfig(ConfigBase):
 
     @staticmethod
     def get_default_config_chp_with_buffer(
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "L1CHPControllerConfig":
         """Returns default configuration for the CHP controller, when buffer storage for heating is available."""
         # minus - 1 in heating season, so that buffer heats up one day ahead, and modelling to building works.
         config = L1CHPControllerConfig(
-            building=building,
+            building_name=building_name,
             name="CHP Controller",
             source_weight=1,
             use=LoadTypes.GAS,
@@ -135,12 +135,12 @@ class L1CHPControllerConfig(ConfigBase):
 
     @staticmethod
     def get_default_config_fuel_cell_with_buffer(
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "L1CHPControllerConfig":
         """Returns default configuration for the fuel cell controller, when buffer storage for heating is available."""
         # minus - 1 in heating season, so that buffer heats up one day ahead, and modelling to building works.
         config = L1CHPControllerConfig(
-            building=building,
+            building_name=building_name,
             name="CHP Controller",
             source_weight=1,
             use=LoadTypes.HYDROGEN,
@@ -246,7 +246,7 @@ class L1CHPController(cp.Component):
         if not config.__class__.__name__ == L1CHPControllerConfig.__name__:
             raise ValueError("Wrong config class. Got a " + config.__class__.__name__)
         super().__init__(
-            name=config.building + "_" + config.name + "_w" + str(config.source_weight),
+            name=config.building_name + "_" + config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

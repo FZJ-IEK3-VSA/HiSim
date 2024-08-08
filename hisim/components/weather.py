@@ -372,7 +372,7 @@ class LocationEnum(Enum):
 class WeatherConfig(ConfigBase):
     """Configuration class for Weather."""
 
-    building: str
+    building_name: str
     name: str
     location: str
     source_path: str
@@ -389,7 +389,7 @@ class WeatherConfig(ConfigBase):
         cls,
         location_entry: Any,
         name: str = "Weather",
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Gets the default configuration for Aachen."""
         if not isinstance(location_entry, LocationEnum):
@@ -411,7 +411,7 @@ class WeatherConfig(ConfigBase):
             location_entry.value[3],
         )
         config = WeatherConfig(
-            building=building,
+            building_name=building_name,
             name=name,
             location=location_entry.value[0],
             source_path=path,
@@ -466,7 +466,7 @@ class Weather(Component):
         self.parameter_string = my_simulation_parameters.get_unique_key()
 
         super().__init__(
-            name=config.building + "_" + self.weather_config.name,
+            name=config.building_name + "_" + self.weather_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

@@ -31,7 +31,7 @@ class IdealizedHeaterConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return IdealizedElectricHeater.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     set_heating_temperature_for_building_in_celsius: float
     set_cooling_temperature_for_building_in_celsius: float
@@ -39,11 +39,11 @@ class IdealizedHeaterConfig(cp.ConfigBase):
     @classmethod
     def get_default_config(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Gets a default Idealized Heater."""
         return IdealizedHeaterConfig(
-            building=building,
+            building_name=building_name,
             name="IdealizedHeater",
             set_heating_temperature_for_building_in_celsius=19.5,
             set_cooling_temperature_for_building_in_celsius=23.5,
@@ -71,7 +71,7 @@ class IdealizedElectricHeater(cp.Component):
     ) -> None:
         """Construct all the neccessary attributes."""
         super().__init__(
-            name=config.building + "_" + config.name,
+            name=config.building_name + "_" + config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

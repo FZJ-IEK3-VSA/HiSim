@@ -40,7 +40,7 @@ class ComponentNameConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return ComponentName.get_full_classname()
 
-    building: str
+    building_name: str
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters
     name: str
@@ -50,11 +50,11 @@ class ComponentNameConfig(ConfigBase):
     @classmethod
     def get_default_template_component(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Gets a default ComponentName."""
         return ComponentNameConfig(
-            building=building,
+            building_name=building_name,
             name="ComponentName default",
             loadtype=loadtypes.LoadTypes.ELECTRICITY,
             unit=loadtypes.Units.WATT,
@@ -133,7 +133,7 @@ class ComponentName(Component):
         """Constructs all the neccessary attributes."""
         self.componentnameconfig = config
         super().__init__(
-            name=config.building + "_" + self.componentnameconfig.name,
+            name=config.building_name + "_" + self.componentnameconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

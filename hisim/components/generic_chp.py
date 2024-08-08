@@ -32,7 +32,7 @@ __status__ = "development"
 class CHPConfig(cp.ConfigBase):
     """Defininition of configuration of combined heat and power plant (CHP)."""
 
-    building: str
+    building_name: str
     #: name of the CHP
     name: str
     #: priority of the component in hierachy: the higher the number the lower the priority
@@ -49,11 +49,11 @@ class CHPConfig(cp.ConfigBase):
     @staticmethod
     def get_default_config_chp(
         thermal_power: float,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "CHPConfig":
         """Get default config chp."""
         config = CHPConfig(
-            building=building,
+            building_name=building_name,
             name="CHP",
             source_weight=1,
             use=lt.LoadTypes.GAS,
@@ -66,11 +66,11 @@ class CHPConfig(cp.ConfigBase):
     @staticmethod
     def get_default_config_fuelcell(
         thermal_power: float,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "CHPConfig":
         """Get default config fuel cell."""
         config = CHPConfig(
-            building=building,
+            building_name=building_name,
             name="CHP",
             source_weight=1,
             use=lt.LoadTypes.HYDROGEN,
@@ -118,7 +118,7 @@ class SimpleCHP(cp.Component):
     ) -> None:
         """Initializes the class."""
         super().__init__(
-            name=config.building + "_" + config.name + "_w" + str(config.source_weight),
+            name=config.building_name + "_" + config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

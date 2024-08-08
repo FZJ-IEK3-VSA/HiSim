@@ -71,7 +71,7 @@ class PVSystemConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return PVSystem.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     time: int
     location: str
@@ -106,12 +106,12 @@ class PVSystemConfig(ConfigBase):
         power_in_watt: float = 10e3,
         share_of_maximum_pv_potential: float = 1.0,
         location: str = "Aachen",
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "PVSystemConfig":
         """Gets a default PV system."""
         power_in_watt = power_in_watt * share_of_maximum_pv_potential
         return PVSystemConfig(
-            building=building,
+            building_name=building_name,
             time=2019,
             power_in_watt=power_in_watt,
             load_module_data=False,
@@ -144,7 +144,7 @@ class PVSystemConfig(ConfigBase):
         module_name: str = "Hanwha HSL60P6-PA-4-250T [2013]",
         module_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
         location: str = "Aachen",
-        building: str = "BUI1",
+        building_name: str = "BUI1",
         load_module_data: bool = False,
     ) -> "PVSystemConfig":
         """Gets a default PV system with scaling according to rooftop area."""
@@ -155,7 +155,7 @@ class PVSystemConfig(ConfigBase):
             module_database=module_database,
         )
         return PVSystemConfig(
-            building=building,
+            building_name=building_name,
             time=2019,
             power_in_watt=total_pv_power_in_watt,
             load_module_data=load_module_data,
@@ -295,7 +295,7 @@ class PVSystem(cp.Component):
             "open_rack_glass_glass"
         ]
         super().__init__(
-            name=config.building + "_" + self.pvconfig.name + "_w" + str(self.pvconfig.source_weight),
+            name=config.building_name + "_" + self.pvconfig.name + "_w" + str(self.pvconfig.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -391,11 +391,11 @@ class PVSystem(cp.Component):
         power_in_watt: float = 10e3,
         source_weight: int = 1,
         share_of_maximum_pv_potential: float = 1.0,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Get default config."""
         config = PVSystemConfig(
-            building=building,
+            building_name=building_name,
             name="PVSystem",
             time=2019,
             location="Aachen",

@@ -134,7 +134,7 @@ class GenericCarInformation:
 class CarConfig(cp.ConfigBase):
     """Definition of configuration of Car."""
 
-    building: str
+    building_name: str
     #: name of the car
     name: str
     #: priority of the component in hierachy: the higher the number the lower the priority
@@ -163,11 +163,11 @@ class CarConfig(cp.ConfigBase):
     def get_default_diesel_config(
         cls,
         name: str = "Car",
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Defines default configuration for diesel vehicle."""
         config = CarConfig(
-            building=building,
+            building_name=building_name,
             name=name,
             source_weight=1,
             fuel=lt.LoadTypes.DIESEL,
@@ -183,11 +183,11 @@ class CarConfig(cp.ConfigBase):
     @classmethod
     def get_default_ev_config(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Defines default configuration for electric vehicle."""
         config = CarConfig(
-            building=building,
+            building_name=building_name,
             name="Car",
             source_weight=1,
             fuel=lt.LoadTypes.ELECTRICITY,
@@ -231,7 +231,7 @@ class Car(cp.Component):
     ) -> None:
         """Initializes Car."""
         super().__init__(
-            name=config.building + "_" + config.name + "_w" + str(config.source_weight),
+            name=config.building_name + "_" + config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

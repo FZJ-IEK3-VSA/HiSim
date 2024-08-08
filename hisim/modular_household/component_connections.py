@@ -146,7 +146,7 @@ def configure_smart_devices(
             generic_smart_device.SmartDevice(
                 config=generic_smart_device.SmartDeviceConfig(
                     name="SmartDevice",
-                    building="BUI1",
+                    building_name="BUI1",
                     identifier=device,
                     source_weight=count,
                     smart_devices_included=smart_devices_included,
@@ -384,7 +384,7 @@ def configure_battery(
             custom_pv_inverter_power_generic_in_watt=battery_capacity * 0.5 * 1e3,
             source_weight=count,
             system_id="SG1",
-            building="BUI1",
+            building_name="BUI1",
             name="Battery",
             charge_in_kwh=0,
             discharge_in_kwh=0,

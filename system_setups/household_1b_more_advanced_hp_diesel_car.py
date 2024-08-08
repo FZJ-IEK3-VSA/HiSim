@@ -112,7 +112,7 @@ class HouseholdMoreAdvancedHPDieselCarConfig(SystemSetupConfigBase):
             building_type="blub",
             number_of_apartments=int(my_building_information.number_of_apartments),
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-                building="BUI1",
+                building_name="BUI1",
                 data_acquisition_mode=loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP,
                 household=Households.CHR01_Couple_both_at_Work,
                 energy_intensity=EnergyIntensityType.EnergySaving,

@@ -48,7 +48,7 @@ class EMSConfig(cp.ConfigBase):
         """Return the full class name of the base class."""
         return L2GenericEnergyManagementSystem.get_full_classname()
 
-    building: str
+    building_name: str
     #: name of the device
     name: str
     # control strategy, more or less obsolete because only "optimize_own_consumption" is used at the moment.
@@ -67,11 +67,11 @@ class EMSConfig(cp.ConfigBase):
     def get_default_config_ems(
         cls,
         name: str = "L2EMSElectricityController",
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "EMSConfig":
         """Default Config for Energy Management System."""
         config = EMSConfig(
-            building=building,
+            building_name=building_name,
             name=name,
             strategy="optimize_own_consumption",
             limit_to_shave=0,
@@ -170,7 +170,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         super().__init__(
             my_component_inputs=self.my_component_inputs,
             my_component_outputs=self.my_component_outputs,
-            name=config.building + "_" + self.ems_config.name,
+            name=config.building_name + "_" + self.ems_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

@@ -54,7 +54,7 @@ class LpgDataAcquisitionMode(enum.Enum):
 class UtspLpgConnectorConfig(cp.ConfigBase):
     """Config class for UtspLpgConnector. Contains LPG parameters and UTSP connection parameters."""
 
-    building: str
+    building_name: str
     name: str
     data_acquisition_mode: LpgDataAcquisitionMode
     household: Union[JsonReference, List[JsonReference]]
@@ -78,12 +78,12 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     @classmethod
     def get_default_utsp_connector_config(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Creates a default configuration. Chooses default values for the LPG parameters."""
 
         config = UtspLpgConnectorConfig(
-            building=building,
+            building_name=building_name,
             name="UTSPConnector",
             data_acquisition_mode=LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE,
             household=Households.CHR01_Couple_both_at_Work,
@@ -143,7 +143,7 @@ class UtspLpgConnector(cp.Component):
         """Initializes the component and retrieves the LPG data."""
         self.utsp_config = config
         super().__init__(
-            name=config.building + "_" + self.utsp_config.name,
+            name=config.building_name + "_" + self.utsp_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

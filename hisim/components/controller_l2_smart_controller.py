@@ -25,7 +25,7 @@ from hisim.simulationparameters import SimulationParameters
 class SmartControllerConfig(ConfigBase):
     """Smart Controller Config."""
 
-    building: str
+    building_name: str
     name: str
 
     @classmethod
@@ -36,11 +36,11 @@ class SmartControllerConfig(ConfigBase):
     @classmethod
     def get_default_config_ems(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Default Config for Energy Management System."""
         config = SmartControllerConfig(
-            building=building,
+            building_name=building_name,
             name=" SmartController",
         )
         return config
@@ -58,7 +58,7 @@ class SmartController(Component):
     ) -> None:
         """Construct all necessary attributes."""
         super().__init__(
-            name=config.building + "_" + config.name,
+            name=config.building_name + "_" + config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -73,7 +73,7 @@ class SmartController(Component):
         for controller_name in controllers:
             if "HeatPump" in controller_name:
                 ghpcc = GenericHeatPumpControllerConfig(
-                    building="BUI1",
+                    building_name="BUI1",
                     name="generic heat pump controller",
                     temperature_air_heating_in_celsius=15,
                     temperature_air_cooling_in_celsius=25,

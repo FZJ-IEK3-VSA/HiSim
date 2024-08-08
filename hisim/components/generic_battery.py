@@ -84,7 +84,7 @@ class GenericBatteryConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return GenericBattery.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     manufacturer: str
     model: str
@@ -95,11 +95,11 @@ class GenericBatteryConfig(cp.ConfigBase):
     @classmethod
     def get_default_config(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Gets a default config."""
         return GenericBatteryConfig(
-            building=building,
+            building_name=building_name,
             name="Generic Battery",
             manufacturer="sonnen",
             model="sonnenBatterie 10 - 11,5 kWh",
@@ -119,17 +119,17 @@ class BatteryControllerConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return BatteryController.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
 
     @classmethod
     def get_default_config(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Gets a default config."""
         return BatteryControllerConfig(
-            building=building,
+            building_name=building_name,
             name="Battery Controller",
         )
 
@@ -162,7 +162,7 @@ class GenericBattery(cp.Component):
     ) -> None:
         """Initialize the class."""
         super().__init__(
-            name=config.building + "_" + config.name,
+            name=config.building_name + "_" + config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

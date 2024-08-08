@@ -63,7 +63,7 @@ class HeatPumpHplibConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return HeatPumpHplib.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     model: str
     group_id: int
@@ -89,7 +89,7 @@ class HeatPumpHplibConfig(ConfigBase):
         cls,
         set_thermal_output_power_in_watt: Quantity[float, Watt] = Quantity(8000, Watt),
         heating_reference_temperature_in_celsius: Quantity[float, Celsius] = Quantity(-7.0, Celsius),
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "HeatPumpHplibConfig":
         """Gets a default HPLib Heat Pump.
 
@@ -97,7 +97,7 @@ class HeatPumpHplibConfig(ConfigBase):
         https://github.com/FZJ-IEK3-VSA/hplib/blob/main/hplib/hplib.py l.135 "fit_p_th_ref.
         """
         return HeatPumpHplibConfig(
-            building=building,
+            building_name=building_name,
             name="AdvancedHeatPumpHPLib",
             model="Generic",
             group_id=1,
@@ -122,14 +122,14 @@ class HeatPumpHplibConfig(ConfigBase):
         heating_load_of_building_in_watt: Quantity[float, Watt],
         heating_reference_temperature_in_celsius: Quantity[float, Celsius] = Quantity(-7.0, Celsius),
         name: str = "AdvancedHeatPumpHPLib",
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "HeatPumpHplibConfig":
-        """Gets a default heat pump with scaling according to heating load of the building."""
+        """Gets a default heat pump with scaling according to heating load of the building_name."""
 
         set_thermal_output_power_in_watt: Quantity[float, Watt] = heating_load_of_building_in_watt
 
         return HeatPumpHplibConfig(
-            building=building,
+            building_name=building_name,
             name=name,
             model="Generic",
             group_id=1,
@@ -202,7 +202,7 @@ class HeatPumpHplib(Component):
 
         """
         super().__init__(
-            name=config.building + "_" + config.name,
+            name=config.building_name + "_" + config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -922,7 +922,7 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
         """Returns the full class name of the base class."""
         return HeatPumpHplibController.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     mode: int
     set_heating_threshold_outside_temperature_in_celsius: Optional[float]
@@ -934,12 +934,12 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
         cls,
         heat_distribution_system_type: Any,
         mode: int = 2,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
         name: str = "HeatPumpController",
     ) -> "HeatPumpHplibControllerL1Config":
         """Gets a default Generic Heat Pump Controller."""
         return HeatPumpHplibControllerL1Config(
-            building=building,
+            building_name=building_name,
             name=name,
             mode=mode,
             set_heating_threshold_outside_temperature_in_celsius=16.0,
@@ -977,7 +977,7 @@ class HeatPumpHplibController(Component):
         """Construct all the neccessary attributes."""
         self.heatpump_controller_config = config
         super().__init__(
-            name=self.heatpump_controller_config.building + "_" + self.heatpump_controller_config.name,
+            name=self.heatpump_controller_config.building_name + "_" + self.heatpump_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

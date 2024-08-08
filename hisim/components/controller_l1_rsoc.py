@@ -35,7 +35,7 @@ class RsocControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return RsocController.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
 
     nom_load_soec: float
@@ -65,13 +65,13 @@ class RsocControllerConfig(ConfigBase):
     def config_rsoc(
         cls,
         rsoc_name: str,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Initializes the config variables based on the JSON-file."""
 
         config_json = cls.read_config(rsoc_name)
         config = RsocControllerConfig(
-            building=building,
+            building_name=building_name,
             name="rSCO l1 Controller",
             nom_load_soec=config_json.get("nom_load_soec", 0.0),
             min_load_soec=config_json.get("min_load_soec", 0.0),
@@ -138,7 +138,7 @@ class RsocController(Component):
         self.standby_load = 100.0
 
         super().__init__(
-            name=config.building + "_" + self.rsoccontrollerconfig.name,
+            name=config.building_name + "_" + self.rsoccontrollerconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

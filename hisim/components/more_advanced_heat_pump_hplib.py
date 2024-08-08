@@ -92,7 +92,7 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return MoreAdvancedHeatPumpHPLib.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     model: str
     heat_source: str
@@ -124,7 +124,7 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     @classmethod
     def get_default_generic_advanced_hp_lib(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
         name: str = "MoreAdvancedHeatPumpHPLib",
         set_thermal_output_power_in_watt: Quantity[float, Watt] = Quantity(8000, Watt),
         heating_reference_temperature_in_celsius: Quantity[float, Celsius] = Quantity(-7.0, Celsius),
@@ -139,7 +139,7 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
         https://github.com/FZJ-IEK3-VSA/HPLib/blob/main/HPLib/HPLib.py l.135 "fit_p_th_ref.
         """
         return MoreAdvancedHeatPumpHPLibConfig(
-            building=building,
+            building_name=building_name,
             name=name,
             model="Generic",
             heat_source="air",
@@ -171,7 +171,7 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
         cls,
         heating_load_of_building_in_watt: Quantity[float, Watt],
         name: str = "MoreAdvancedHeatPumpHPLib",
-        building: str = "BUI1",
+        building_name: str = "BUI1",
         heating_reference_temperature_in_celsius: Quantity[float, Celsius] = Quantity(-7.0, Celsius),
         massflow_nominal_secondary_side_in_kg_per_s: Quantity[float, KilogramPerSecond] = Quantity(
             0.333, KilogramPerSecond
@@ -183,7 +183,7 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
         set_thermal_output_power_in_watt: Quantity[float, Watt] = heating_load_of_building_in_watt
 
         return MoreAdvancedHeatPumpHPLibConfig(
-            building=building,
+            building_name=building_name,
             name=name,
             model="Generic",
             heat_source="air",
@@ -282,7 +282,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         """Loads the parameters of the specified heat pump."""
 
         super().__init__(
-            name=config.building + "_" + config.name,
+            name=config.building_name + "_" + config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -1804,7 +1804,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return MoreAdvancedHeatPumpHPLibControllerSpaceHeating.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     mode: int
     set_heating_threshold_outside_temperature_in_celsius: Optional[float]
@@ -1818,13 +1818,13 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(ConfigBase):
         cls,
         heat_distribution_system_type: Any,
         name: str = "MoreAdvancedHeatPumpHPLibControllerSpaceHeating",
-        building: str = "BUI1",
+        building_name: str = "BUI1",
         upper_temperature_offset_for_state_conditions_in_celsius: float = 5.0,
         lower_temperature_offset_for_state_conditions_in_celsius: float = 5.0,
     ) -> "MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig":
         """Gets a default Generic Heat Pump Controller."""
         return MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(
-            building=building,
+            building_name=building_name,
             name=name,
             mode=1,
             set_heating_threshold_outside_temperature_in_celsius=16.0,
@@ -1877,7 +1877,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
         """Construct all the neccessary attributes."""
         self.heatpump_controller_config = config
         super().__init__(
-            name=config.building + "_" + self.heatpump_controller_config.name,
+            name=config.building_name + "_" + self.heatpump_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -2268,7 +2268,7 @@ class MoreAdvancedHeatPumpHPLibControllerDHWConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return MoreAdvancedHeatPumpHPLibControllerDHW.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     #: lower set temperature of DHW Storage, given in °C
     t_min_dhw_storage_in_celsius: float
@@ -2283,11 +2283,11 @@ class MoreAdvancedHeatPumpHPLibControllerDHWConfig(ConfigBase):
     def get_default_dhw_controller_config(
         cls,
         name: str = "HeatPumpControllerDHW",
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "MoreAdvancedHeatPumpHPLibControllerDHWConfig":
         """Gets a default Generic Heat Pump Controller."""
         return MoreAdvancedHeatPumpHPLibControllerDHWConfig(
-            building=building,
+            building_name=building_name,
             name=name,
             t_min_dhw_storage_in_celsius=40.0,
             t_max_dhw_storage_in_celsius=60.0,
@@ -2322,7 +2322,7 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
         """Construct all the neccessary attributes."""
         self.heatpump_controller_dhw_config = config
         super().__init__(
-            name=config.building + "_" + self.heatpump_controller_dhw_config.name,
+            name=config.building_name + "_" + self.heatpump_controller_dhw_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

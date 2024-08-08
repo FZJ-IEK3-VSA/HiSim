@@ -34,7 +34,7 @@ __status__ = "development"
 class L2HeatSmartConfig(cp.ConfigBase):
     """L2 Config class."""
 
-    building: str
+    building_name: str
     name: str
     source_weight: int
     temperature_min_heating: float
@@ -164,7 +164,7 @@ class L2HeatSmartController(cp.Component):
         if not config.__class__.__name__ == L2HeatSmartConfig.__name__:
             raise ValueError("Wrong config class: " + config.__class__.__name__)
         super().__init__(
-            name=config.building + "_" + config.name + "_w" + str(config.source_weight),
+            name=config.building_name + "_" + config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -254,11 +254,11 @@ class L2HeatSmartController(cp.Component):
 
     @staticmethod
     def get_default_config_heating(
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Get default config heating."""
         config = L2HeatSmartConfig(
-            building=building,
+            building_name=building_name,
             name="L2HeatingTemperatureController",
             source_weight=1,
             temperature_min_heating=20.0,
@@ -275,11 +275,11 @@ class L2HeatSmartController(cp.Component):
 
     @staticmethod
     def get_default_config_buffer_heating(
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Get default config buffer heating."""
         config = L2HeatSmartConfig(
-            building=building,
+            building_name=building_name,
             name="L2BufferTemperatureController",
             source_weight=1,
             temperature_min_heating=40.0,
@@ -296,11 +296,11 @@ class L2HeatSmartController(cp.Component):
 
     @staticmethod
     def get_default_config_waterheating(
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Get default config waterheating."""
         config = L2HeatSmartConfig(
-            building=building,
+            building_name=building_name,
             name="L2DHWTemperatureController",
             source_weight=1,
             temperature_min_heating=50.0,

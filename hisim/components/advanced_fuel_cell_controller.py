@@ -290,7 +290,7 @@ class ExtendedController(Component):
     ) -> None:
         """Initialize the class."""
         super().__init__(
-            name=config.building + "_" + component_name,
+            name=config.building_name + "_" + component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

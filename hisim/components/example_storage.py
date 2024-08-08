@@ -70,7 +70,7 @@ class SimpleStorageConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return SimpleStorage.get_full_classname()
 
-    building: str
+    building_name: str
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters
     name: str
@@ -81,11 +81,11 @@ class SimpleStorageConfig(ConfigBase):
     @classmethod
     def get_default_thermal_storage(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Gets a default Simple Storage."""
         return SimpleStorageConfig(
-            building=building,
+            building_name=building_name,
             name="Simple Thermal Storage",
             loadtype=lt.LoadTypes.WARM_WATER,
             unit=lt.Units.KWH,
@@ -111,7 +111,7 @@ class SimpleStorage(Component):
         """Constructs all the neccessary attributes for the SimpleStorage object."""
         self.simplestorageconfig = config
         super().__init__(
-            name=config.building + "_" + self.simplestorageconfig.name,
+            name=config.building_name + "_" + self.simplestorageconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

@@ -34,7 +34,7 @@ class HeatStorageConfig(ConfigBase):
         """Return the full class name of the base class."""
         return HeatStorage.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     volume_sp_heating_water: float
     volume_sp_warm_water: float
@@ -46,11 +46,11 @@ class HeatStorageConfig(ConfigBase):
     @classmethod
     def get_default_heat_storage_config(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Get default config."""
         config = HeatStorageConfig(
-            building=building,
+            building_name=building_name,
             name="HeatStorage",
             volume_sp_heating_water=1000,
             volume_sp_warm_water=100,
@@ -72,7 +72,7 @@ class HeatStorageControllerConfig(ConfigBase):
         """Return the full class name of the base class."""
         return HeatStorageController.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     initial_temperature_building: float
     initial_temperature_heating_storage: float
@@ -82,11 +82,11 @@ class HeatStorageControllerConfig(ConfigBase):
     def get_default_heat_storage_controller_config(
         cls,
         heating_load_of_building_in_watt: float,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Get default config."""
         config = HeatStorageControllerConfig(
-            building=building,
+            building_name=building_name,
             name="HeatStorageController",
             initial_temperature_building=20,
             initial_temperature_heating_storage=35,
@@ -150,7 +150,7 @@ class HeatStorage(Component):
         """Initialize the class."""
         self.heat_storage_config = config
         super().__init__(
-            name=config.building + "_" + self.heat_storage_config.name,
+            name=config.building_name + "_" + self.heat_storage_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

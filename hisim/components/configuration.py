@@ -13,7 +13,7 @@ from hisim.component import ConfigBase
 class WarmWaterStorageConfig(ConfigBase):
     """Warm water storage config class."""
 
-    building: str
+    building_name: str
     name: str
     tank_diameter: float  # [m]
     tank_height: float  # [m]
@@ -25,11 +25,11 @@ class WarmWaterStorageConfig(ConfigBase):
     @classmethod
     def get_default_config(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Gets a default config."""
         return WarmWaterStorageConfig(
-            building=building,
+            building_name=building_name,
             name="WarmWaterStorage",
             tank_diameter=1,  # 0.9534        # [m]
             tank_height=2,  # 3.15              # [m]
@@ -197,7 +197,7 @@ class PVConfig:
 class ExtendedControllerConfig(ConfigBase):
     """Extended controller config class."""
 
-    building: str
+    building_name: str
     name: str
     # Active Components
     chp: bool
@@ -214,11 +214,11 @@ class ExtendedControllerConfig(ConfigBase):
     @classmethod
     def get_default_config(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Gets a default ExtendedControllerConfig."""
         return ExtendedControllerConfig(
-            building=building,
+            building_name=building_name,
             name="Example Component",
             chp=True,
             gas_heater=True,

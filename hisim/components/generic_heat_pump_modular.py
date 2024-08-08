@@ -37,7 +37,7 @@ __status__ = "development"
 class HeatPumpConfig(cp.ConfigBase):
     """Configuration of a HeatPump."""
 
-    building: str
+    building_name: str
     #: name of the device
     name: str
     #: priority of the device in energy management system: the higher the number the lower the priority
@@ -70,12 +70,12 @@ class HeatPumpConfig(cp.ConfigBase):
 
     @staticmethod
     def get_default_config_heating(
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "HeatPumpConfig":
         """Returns default configuration of a heat pump used for heating."""
         power_th: float = 6200  # W
         config = HeatPumpConfig(
-            building=building,
+            building_name=building_name,
             name="HeatingHeatPump",
             source_weight=1,
             manufacturer="Viessmann Werke GmbH & Co KG",
@@ -93,12 +93,12 @@ class HeatPumpConfig(cp.ConfigBase):
 
     @staticmethod
     def get_default_config_waterheating(
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "HeatPumpConfig":
         """Returns default configuration of a heat pump used for water heating."""
         power_th: float = 3000  # W
         config = HeatPumpConfig(
-            building=building,
+            building_name=building_name,
             name="DHWHeatPump",
             source_weight=1,
             manufacturer="Viessmann Werke GmbH & Co KG",
@@ -116,12 +116,12 @@ class HeatPumpConfig(cp.ConfigBase):
 
     @staticmethod
     def get_default_config_heating_electric(
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "HeatPumpConfig":
         """Returns default configuartion of simple electrical heating system with a COP of one."""
         power_th: float = 6200  # W
         config = HeatPumpConfig(
-            building=building,
+            building_name=building_name,
             name="HeatingHeatingRod",
             source_weight=1,
             manufacturer="dummy",
@@ -139,12 +139,12 @@ class HeatPumpConfig(cp.ConfigBase):
 
     @staticmethod
     def get_default_config_waterheating_electric(
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "HeatPumpConfig":
         """Returns default configuration of electrical heating rod for boiler."""
         power_th: float = 3000  # W
         config = HeatPumpConfig(
-            building=building,
+            building_name=building_name,
             name="DHWHeatingRod",
             source_weight=1,
             manufacturer="dummy",
@@ -166,14 +166,14 @@ class HeatPumpConfig(cp.ConfigBase):
         number_of_apartments: float,
         default_power_in_watt: float = 3000,
         name: str = "DHWHeatPump",
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "HeatPumpConfig":
         """Gets a default heat pump with scaling according to number of apartments."""
 
         # scale with number of apartments
         power_th_in_watt: float = default_power_in_watt * number_of_apartments
         config = HeatPumpConfig(
-            building=building,
+            building_name=building_name,
             name=name,
             source_weight=1,
             manufacturer="Viessmann Werke GmbH & Co KG",
@@ -207,7 +207,7 @@ class ModularHeatPump(cp.Component):
 
     The generic_heatpump_modular differs to generic_heatpump in the sense that the minimal runtime is not in the component,
     but in the related controller.
-    This implementation does not consider cooling of buildings.
+    This implementation does not consider cooling of building_names.
 
     Components to connect to:
     (1) Weather
@@ -232,7 +232,7 @@ class ModularHeatPump(cp.Component):
     ):
         """Initialize the class."""
         super().__init__(
-            name=config.building + "_" + config.name + "_w" + str(config.source_weight),
+            name=config.building_name + "_" + config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

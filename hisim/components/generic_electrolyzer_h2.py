@@ -36,7 +36,7 @@ class ElectrolyzerConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return Electrolyzer.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     electrolyzer_type: str
     nom_load: float  # [kW]
@@ -51,11 +51,11 @@ class ElectrolyzerConfig(cp.ConfigBase):
     @classmethod
     def get_default_alkaline_electrolyzer_config(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Gets a default Alkaline Eletrolyzer."""
         config = ElectrolyzerConfig(
-            building=building,
+            building_name=building_name,
             name="Alkaline_electrolyzer",
             electrolyzer_type="Alkaline",
             nom_load=100.0,  # [kW]
@@ -92,14 +92,14 @@ class ElectrolyzerConfig(cp.ConfigBase):
     def config_electrolyzer(
         cls,
         electrolyzer_name: str,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Initializes the config variables based on the JSON-file."""
 
         config_json = cls.read_config(electrolyzer_name)
 
         config = ElectrolyzerConfig(
-            building=building,
+            building_name=building_name,
             name="Electrolyzer",  # config_json.get("name", "")
             electrolyzer_type=config_json.get("electrolyzer_type"),
             nom_load=config_json.get("nom_load", 0.0),
@@ -195,7 +195,7 @@ class Electrolyzer(cp.Component):
         self.ramp_down_rate = config.ramp_down_rate
 
         super().__init__(
-            name=config.building + "_" + self.electrolyzerconfig.name,
+            name=config.building_name + "_" + self.electrolyzerconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

@@ -32,7 +32,7 @@ class XTPControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return XTPController.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     nom_output: float
     min_output: float
@@ -53,13 +53,13 @@ class XTPControllerConfig(ConfigBase):
         cls,
         fuel_cell_name: str,
         operation_mode: str,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Sets the according parameters for the chosen fuel cell."""
         config_json = cls.read_config(fuel_cell_name)
 
         config = XTPControllerConfig(
-            building=building,
+            building_name=building_name,
             name="L2XTPController",  # config_json.get("name", "")
             nom_output=config_json.get("nom_output", 0.0),
             min_output=config_json.get("min_output", 0.0),
@@ -97,7 +97,7 @@ class XTPController(Component):
         self.operation_mode = config.operation_mode
 
         super().__init__(
-            name=config.building + "_" + self.xtpcontrollerconfig.name,
+            name=config.building_name + "_" + self.xtpcontrollerconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

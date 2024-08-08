@@ -81,7 +81,7 @@ class BuildingConfig(cp.ConfigBase):
         """Return the full class name of the base class."""
         return Building.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     heating_reference_temperature_in_celsius: float
     building_code: str
@@ -103,11 +103,11 @@ class BuildingConfig(cp.ConfigBase):
         set_cooling_temperature_in_celsius: float = 25.0,
         heating_reference_temperature_in_celsius: float = -7.0,
         max_thermal_building_demand_in_watt: Optional[float] = None,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Get a default Building."""
         config = BuildingConfig(
-            building=building,
+            building_name=building_name,
             name="Building",
             building_code="DE.N.SFH.05.Gen.ReEx.001.002",
             building_heat_capacity_class="medium",
@@ -230,7 +230,7 @@ class Building(cp.Component):
         self.buildingconfig = config
 
         super().__init__(
-            name=self.buildingconfig.building + "_" + self.buildingconfig.name,
+            name=self.buildingconfig.building_name + "_" + self.buildingconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

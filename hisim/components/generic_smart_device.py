@@ -44,7 +44,7 @@ class SmartDeviceConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return SmartDevice.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     identifier: str
     source_weight: int
@@ -53,11 +53,11 @@ class SmartDeviceConfig(cp.ConfigBase):
     @classmethod
     def get_default_config(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Gets a default config."""
         return SmartDeviceConfig(
-            building=building,
+            building_name=building_name,
             name="Smart Device",
             identifier="Identifier",
             source_weight=1,
@@ -150,7 +150,7 @@ class SmartDevice(cp.Component):
         """Initialize the class."""
 
         super().__init__(
-            name=config.building + "_" + config.identifier.replace("/", "-") + "_w" + str(config.source_weight),
+            name=config.building_name + "_" + config.identifier.replace("/", "-") + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

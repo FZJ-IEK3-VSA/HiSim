@@ -101,7 +101,7 @@ def setup_function(
 
     my_fuel_cell_controller_l2 = XTPController(
         my_simulation_parameters=my_simulation_parameters,
-        config=XTPControllerConfig.control_fuel_cell(fuel_cell_name=fuel_cell_name, operation_mode=operation_mode, building="BUI1",),
+        config=XTPControllerConfig.control_fuel_cell(fuel_cell_name=fuel_cell_name, operation_mode=operation_mode, building_name="BUI1",),
     )
     my_fuel_cell_controller = FuelCellController(
         my_simulation_parameters=my_simulation_parameters,
@@ -115,7 +115,7 @@ def setup_function(
     my_electrolyzer_controller_l2 = PTXController(
         my_simulation_parameters=my_simulation_parameters,
         config=PTXControllerConfig.control_electrolyzer(
-            building="BUI1",
+            building_name="BUI1",
             electrolyzer_name=electrolyzer_name,
             operation_mode=operation_mode,
         ),
@@ -167,7 +167,7 @@ def setup_function(
 
     my_building = Building(
         config=BuildingConfig(
-            building="BUI1",
+            building_name="BUI1",
             name="Building_1",
             building_code="DE.N.SFH.05.Gen.ReEx.001.002",
             building_heat_capacity_class="medium",
@@ -191,7 +191,7 @@ def setup_function(
     # Build Heat Pump Controller
     my_heat_pump_controller = GenericHeatPumpController(
         config=GenericHeatPumpControllerConfig(
-            building="BUI1",
+            building_name="BUI1",
             name="GenericHeatPumpController",
             temperature_air_heating_in_celsius=19.0,
             temperature_air_cooling_in_celsius=24.0,

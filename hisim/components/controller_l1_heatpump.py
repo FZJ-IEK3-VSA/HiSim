@@ -40,7 +40,7 @@ __status__ = "development"
 class L1HeatPumpConfig(ConfigBase):
     """L1 Controller Config."""
 
-    building: str
+    building_name: str
     #: name of the device
     name: str
     #: priority of the device in hierachy: the higher the number the lower the priority
@@ -68,11 +68,11 @@ class L1HeatPumpConfig(ConfigBase):
     @staticmethod
     def get_default_config_heat_source_controller(
         name: str = "Controller",
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "L1HeatPumpConfig":
         """Returns default configuration for the controller of building heating."""
         config = L1HeatPumpConfig(
-            building=building,
+            building_name=building_name,
             name=name,
             source_weight=1,
             t_min_heating_in_celsius=19.5,
@@ -88,12 +88,12 @@ class L1HeatPumpConfig(ConfigBase):
     @staticmethod
     def get_default_config_heat_source_controller_buffer(
         name: str = "Controller",
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "L1HeatPumpConfig":
         """Returns default configuration for the controller of buffer heating."""
         # minus - 1 in heating season, so that buffer heats up one day ahead, and modelling to building works.
         config = L1HeatPumpConfig(
-            building=building,
+            building_name=building_name,
             name=name,
             source_weight=1,
             t_min_heating_in_celsius=30.0,
@@ -109,11 +109,11 @@ class L1HeatPumpConfig(ConfigBase):
     @staticmethod
     def get_default_config_heat_source_controller_dhw(
         name: str = "Controller",
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> "L1HeatPumpConfig":
         """Returns default configuration for the controller of a drain hot water storage."""
         config = L1HeatPumpConfig(
-            building=building,
+            building_name=building_name,
             name=name,
             source_weight=1,
             t_min_heating_in_celsius=40.0,
@@ -197,7 +197,7 @@ class L1HeatPumpController(cp.Component):
         if not config.__class__.__name__ == L1HeatPumpConfig.__name__:
             raise ValueError("Wrong config class. Got a " + config.__class__.__name__)
         super().__init__(
-            name=config.building + "_" + config.name + "_w" + str(config.source_weight),
+            name=config.building_name + "_" + config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

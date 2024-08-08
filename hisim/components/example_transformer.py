@@ -24,7 +24,7 @@ class ExampleTransformerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return ExampleTransformer.get_full_classname()
 
-    building: str
+    building_name: str
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters
     name: str
@@ -34,11 +34,11 @@ class ExampleTransformerConfig(ConfigBase):
     @classmethod
     def get_default_transformer(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Gets a default Transformer."""
         return ExampleTransformerConfig(
-            building=building,
+            building_name=building_name,
             name="Example Transformer default",
             loadtype=lt.LoadTypes.ANY,
             unit=lt.Units.ANY,
@@ -79,7 +79,7 @@ class ExampleTransformer(Component):
         """Constructs all the neccessary attributes."""
         self.transformerconfig = config
         super().__init__(
-            name=config.building + "_" + self.transformerconfig.name,
+            name=config.building_name + "_" + self.transformerconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

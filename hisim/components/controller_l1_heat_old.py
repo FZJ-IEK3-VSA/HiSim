@@ -23,7 +23,7 @@ class ControllerHeatConfig(cp.ConfigBase):
         """Return the full class name of the base class."""
         return ControllerHeat.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     temperature_storage_target_warm_water: float
     temperature_storage_target_heating_water: float
@@ -33,11 +33,11 @@ class ControllerHeatConfig(cp.ConfigBase):
     @classmethod
     def get_default_controller_heat_l1(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Get a default Building."""
         config = ControllerHeatConfig(
-            building=building,
+            building_name=building_name,
             name="ControllerHeatL1",
             temperature_storage_target_warm_water=50,
             temperature_storage_target_heating_water=35,
@@ -121,7 +121,7 @@ class ControllerHeat(cp.Component):
         """Initialize the class."""
         self.controller_heat_config = config
         super().__init__(
-            name=config.building + "_" + self.controller_heat_config.name,
+            name=config.building_name + "_" + self.controller_heat_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

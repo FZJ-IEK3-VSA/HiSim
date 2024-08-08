@@ -33,7 +33,7 @@ class ElectrolyzerControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return ElectrolyzerController.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     nom_load: float
     min_load: float
@@ -45,11 +45,11 @@ class ElectrolyzerControllerConfig(ConfigBase):
     @classmethod
     def get_default_electrolyzer_controller_config(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Get a default electrolyzer controller config."""
         config = ElectrolyzerControllerConfig(
-            building=building,
+            building_name=building_name,
             name="DefaultElectrolyzerController",
             nom_load=100.0,
             min_load=10.0,
@@ -73,7 +73,7 @@ class ElectrolyzerControllerConfig(ConfigBase):
     def control_electrolyzer(
         cls,
         electrolyzer_name: str,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Initializes the config variables based on the JSON-file."""
 
@@ -81,7 +81,7 @@ class ElectrolyzerControllerConfig(ConfigBase):
         log.information("Electrolyzer config: " + str(config_json))
 
         config = ElectrolyzerControllerConfig(
-            building=building,
+            building_name=building_name,
             name="L1ElectrolyzerController",  # config_json.get("name", "")
             nom_load=config_json.get("nom_load", 0.0),
             min_load=config_json.get("min_load", 0.0),
@@ -124,7 +124,7 @@ class ElectrolyzerController(Component):
         self.cold_start_time = config.cold_start_time
 
         super().__init__(
-            name=config.building + "_" + self.controllerconfig.name,
+            name=config.building_name + "_" + self.controllerconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

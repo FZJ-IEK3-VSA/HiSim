@@ -35,7 +35,7 @@ __status__ = "development"
 class VehiclePureConfig(cp.ConfigBase):
     """Vehicle Pure Config class."""
 
-    building: str
+    building_name: str
     name: str
     manufacturer: str
     model: str
@@ -50,11 +50,11 @@ class VehiclePureConfig(cp.ConfigBase):
     @classmethod
     def get_default_config(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Gets a default config."""
         return VehiclePureConfig(
-            building=building,
+            building_name=building_name,
             name="Electrical Charger",
             manufacturer="Tesla",
             model="Model 3 v3",
@@ -68,7 +68,7 @@ class VehiclePureConfig(cp.ConfigBase):
 class EVChargerControllerConfig(cp.ConfigBase):
     """Electrical vehicle charger controller config class."""
 
-    building: str
+    building_name: str
     name: str
     mode: int
 
@@ -80,13 +80,13 @@ class EVChargerControllerConfig(cp.ConfigBase):
     @classmethod
     def get_default_config(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Gets a default config."""
         return EVChargerControllerConfig(
             name="ElectricalChargerController",
             mode=1,
-            building=building,
+            building_name=building_name,
         )
 
 
@@ -95,7 +95,7 @@ class EVChargerControllerConfig(cp.ConfigBase):
 class VehicleConfig(cp.ConfigBase):
     """Vehicle config class."""
 
-    building: str
+    building_name: str
     name: str
     manufacturer: str
     model: str
@@ -109,11 +109,11 @@ class VehicleConfig(cp.ConfigBase):
     @classmethod
     def get_default_config(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Gets a default config."""
         return VehicleConfig(
-            building=building,
+            building_name=building_name,
             name="ElectricVehicle",
             manufacturer="Renault",
             model="Zoe v3",
@@ -126,7 +126,7 @@ class VehicleConfig(cp.ConfigBase):
 class EVChargerConfig(cp.ConfigBase):
     """Electrical vehicle config class."""
 
-    building: str
+    building_name: str
     name: str
     manufacturer: str
     charger_name: str
@@ -140,11 +140,11 @@ class EVChargerConfig(cp.ConfigBase):
     @classmethod
     def get_default_config(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Gets a default config."""
         return EVChargerConfig(
-            building=building,
+            building_name=building_name,
             name="EV_Charger",
             manufacturer="myenergi",
             charger_name="Wallbox ZAPPI 222TW",
@@ -179,7 +179,7 @@ class VehiclePure(cp.Component):
     ) -> None:
         """Initialize the class."""
         super().__init__(
-            name=config.building + "_" + config.name,
+            name=config.building_name + "_" + config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

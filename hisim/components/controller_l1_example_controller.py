@@ -28,7 +28,7 @@ __status__ = "development"
 class SimpleControllerConfig(ConfigBase):
     """Config class."""
 
-    building: str
+    building_name: str
     name: str
 
     @classmethod
@@ -39,10 +39,10 @@ class SimpleControllerConfig(ConfigBase):
     @classmethod
     def get_default_config(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Returns default config."""
-        config = SimpleControllerConfig(name="SimpleController", building=building)
+        config = SimpleControllerConfig(name="SimpleController", building_name=building_name)
         return config
 
 
@@ -62,7 +62,7 @@ class SimpleController(Component):
         """Initialize the class."""
 
         super().__init__(
-            name=config.building + "_" + name,
+            name=config.building_name + "_" + name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

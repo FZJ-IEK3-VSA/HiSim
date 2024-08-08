@@ -40,8 +40,8 @@ __status__ = "development"
 class CarBatteryConfig(ConfigBase):
     """Configuration of a Car Battery."""
 
-    #: building in which component is
-    building: str
+    #: building_name in which component is
+    building_name: str
     #: name of the device
     name: str
     #: priority of the device in hierachy: the higher the number the lower the priority
@@ -63,10 +63,10 @@ class CarBatteryConfig(ConfigBase):
         return CarBattery.get_full_classname()
 
     @classmethod
-    def get_default_config(cls, building: str = "BUI1", name: str = "CarBattery") -> "CarBatteryConfig":
+    def get_default_config(cls, building_name: str = "BUI1", name: str = "CarBattery") -> "CarBatteryConfig":
         """Returns default configuration of a Car Battery."""
         config = CarBatteryConfig(
-            building=building,
+            building_name=building_name,
             name=name,
             system_id="SG1",
             p_inv_custom=1e4,
@@ -106,7 +106,7 @@ class CarBattery(Component):
         """Loads the parameters of the specified battery storage."""
         self.battery_config = config
         super().__init__(
-            name=self.battery_config.building + "_" + config.name + "_w" + str(config.source_weight),
+            name=self.battery_config.building_name + "_" + config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

@@ -32,18 +32,18 @@ class GasMeterConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return GasMeter.get_full_classname()
 
-    building: str
+    building_name: str
     name: str
     total_energy_from_grid_in_kwh: None
 
     @classmethod
     def get_gas_meter_default_config(
         cls,
-        building: str = "BUI1",
+        building_name: str = "BUI1",
     ) -> Any:
         """Gets a default GasMeter."""
         return GasMeterConfig(
-            building=building,
+            building_name=building_name,
             name="GasMeter",
             total_energy_from_grid_in_kwh=None,
         )
@@ -78,7 +78,7 @@ class GasMeter(DynamicComponent):
         super().__init__(
             self.my_component_inputs,
             self.my_component_outputs,
-            name=config.building + "_" + self.name,
+            name=config.building_name + "_" + self.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

@@ -89,7 +89,7 @@ class ElectrolyzerWithHydrogenStorageConfig(ConfigBase):
         return HydrogenStorage.get_full_classname()
 
     @classmethod
-    def get_default_config(cls, building: str = "BUI1",):
+    def get_default_config(cls, building: str = "BUI1",) -> Any:
         """Get default config."""
         config = ElectrolyzerWithHydrogenStorageConfig(
             building=building,

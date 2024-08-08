@@ -427,8 +427,13 @@ class ElectricityMeter(DynamicComponent):
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
         total_energy_to_grid_in_kwh: float
         total_energy_from_grid_in_kwh: float
+        print(self.config.name)
+        print("----------------------")
         for index, output in enumerate(all_outputs):
             if output.component_name == self.config.name:
+                print(output.component_name)
+                print(output.field_name)
+                print("+++++++++++++++++++++++++++++++++++++++")
                 if output.field_name == self.ElectricityToGrid:
                     # Todo: check component name from system_setups: find another way of using the correct outputs
                     total_energy_to_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 2)

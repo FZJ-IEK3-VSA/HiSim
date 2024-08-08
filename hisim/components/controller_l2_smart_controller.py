@@ -73,7 +73,8 @@ class SmartController(Component):
         for controller_name in controllers:
             if "HeatPump" in controller_name:
                 ghpcc = GenericHeatPumpControllerConfig(
-                    "generic heat pump controller",
+                    building="BUI1",
+                    name="generic heat pump controller",
                     temperature_air_heating_in_celsius=15,
                     temperature_air_cooling_in_celsius=25,
                     offset=0,

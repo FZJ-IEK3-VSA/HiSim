@@ -38,7 +38,7 @@ class XTPControllerConfig(ConfigBase):
     min_output: float
     max_output: float
     standby_load: float
-    operation_mode: float
+    operation_mode: str
 
     @staticmethod
     def read_config(fuel_cell_name):
@@ -52,7 +52,7 @@ class XTPControllerConfig(ConfigBase):
     def control_fuel_cell(
         cls,
         fuel_cell_name: str,
-        operation_mode: float,
+        operation_mode: str,
         building: str = "BUI1",
     ) -> Any:
         """Sets the according parameters for the chosen fuel cell."""

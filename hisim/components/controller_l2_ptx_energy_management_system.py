@@ -38,7 +38,7 @@ class PTXControllerConfig(ConfigBase):
     min_load: float
     max_load: float
     standby_load: float
-    operation_mode: float
+    operation_mode: str
 
     @staticmethod
     def read_config(electrolyzer_name):
@@ -52,7 +52,7 @@ class PTXControllerConfig(ConfigBase):
     def control_electrolyzer(
         cls,
         electrolyzer_name: str,
-        operation_mode: float,
+        operation_mode: str,
         building: str = "BUI1",
     ) -> Any:
         """Sets the according parameters for the chosen electrolyzer.

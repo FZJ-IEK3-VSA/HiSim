@@ -121,6 +121,7 @@ def setup_function(
     # Build Heat Pump Controller
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
         config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config(
+            building="BUI1",
             name="HeatPumpHplibController",
             mode=hp_controller_mode,
             set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_pump_in_celsius,

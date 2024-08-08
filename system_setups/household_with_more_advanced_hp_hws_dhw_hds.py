@@ -118,6 +118,7 @@ def setup_function(
     # Build Heat Pump Controller for hot water (heating building)
     my_heatpump_controller_sh_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(
         name="HeatPumpControllerSH",
+        building="BUI1",
         mode=hp_controller_mode,
         set_heating_threshold_outside_temperature_in_celsius=set_heating_threshold_outside_temperature_for_heat_pump_in_celsius,
         set_cooling_threshold_outside_temperature_in_celsius=set_cooling_threshold_outside_temperature_for_heat_pump_in_celsius,

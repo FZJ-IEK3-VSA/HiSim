@@ -189,6 +189,7 @@ def setup_function(
 
     my_building_config = building.BuildingConfig(
         name="Building_1",
+        building="BUI1",
         building_code=building_code,
         building_heat_capacity_class="medium",
         initial_internal_temperature_in_celsius=23,
@@ -232,6 +233,7 @@ def setup_function(
             profile_with_washing_machine_and_dishwasher=not smart_devices_included,
             predictive_control=False,
             predictive=False,
+            building="BUI1"
         )
 
         my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(

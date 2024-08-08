@@ -213,6 +213,7 @@ def air_conditioned_house(
 
     """Building (1/2)"""
     my_building_config = building.BuildingConfig(
+        building="BUI1",
         name="Building1",
         building_code=building_code,
         building_heat_capacity_class=building_class,
@@ -256,6 +257,7 @@ def air_conditioned_house(
 
     """Photovoltaic System"""
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig(
+        building="BUI1",
         time=time,
         location=location,
         power_in_watt=power,
@@ -291,6 +293,7 @@ def air_conditioned_house(
 
     """Price signal"""  # mpc
     my_price_signal_config = generic_price_signal.PriceSignalConfig(
+        building="BUI1",
         name="PriceSignal",
         country="Spain",
         pricing_scheme=pricing_scheme,
@@ -310,6 +313,7 @@ def air_conditioned_house(
 
     """Air Conditioner"""
     my_air_conditioner_config = air_conditioner.AirConditionerConfig(
+        building="BUI1",
         name="AirConditioner",
         model_name=ac_model,
         manufacturer=ac_manufacturer,
@@ -336,6 +340,7 @@ def air_conditioned_house(
     """Generic Battery"""  # mpc
     if control == "MPC":
         my_battery_config = generic_battery.GenericBatteryConfig(
+            building="BUI1",
             manufacturer=batt_manufacturer,
             model=batt_model,
             soc=batt_soc,
@@ -352,6 +357,7 @@ def air_conditioned_house(
     """Model Predictive Controller"""  # mpc
     if control == "MPC":
         my_mpc_controller_config = controller_mpc.MpcControllerConfig(
+            building="BUI1",
             mpc_scheme=mpc_scheme,
             min_comfort_temp=min_comfort_temp,
             max_comfort_temp=max_comfort_temp,

@@ -81,6 +81,7 @@ class GenericHeatPumpControllerConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return GenericHeatPumpController.get_full_classname()
 
+    building: str
     name: str
     temperature_air_heating_in_celsius: float
     temperature_air_cooling_in_celsius: float
@@ -88,9 +89,10 @@ class GenericHeatPumpControllerConfig(cp.ConfigBase):
     mode: int
 
     @classmethod
-    def get_default_generic_heat_pump_controller_config(cls):
+    def get_default_generic_heat_pump_controller_config(cls, building: str = "BUI1",) -> Any:
         """Gets a default Generic Heat Pump Controller."""
         return GenericHeatPumpControllerConfig(
+            building=building,
             name="HeatPumpController",
             temperature_air_heating_in_celsius=18.0,
             temperature_air_cooling_in_celsius=26.0,

@@ -325,7 +325,7 @@ class GasHeater(Component):
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of energy and maintenance costs."""
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.config.name and output.load_type == lt.LoadTypes.GAS:
+            if output.component_name == self.component_name and output.load_type == lt.LoadTypes.GAS:
                 self.config.consumption_in_kilowatt_hour = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year
@@ -355,7 +355,7 @@ class GasHeater(Component):
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
             if (
-                output.component_name == self.config.name
+                output.component_name == self.component_name
                 and output.field_name == self.GasDemand
                 and output.load_type == lt.LoadTypes.GAS
             ):

@@ -238,6 +238,10 @@ def test_house(
     ) as file:
         jsondata = json.load(file)
 
+    jsondata = jsondata["BUI1"]
+
+    print(jsondata)
+
     gas_consumption_in_kilowatt_hour = jsondata["Gas Meter"]["Total gas demand from grid"].get("value")
     gas_consumption_for_space_heating_in_kilowatt_hour = jsondata["Gas Heater For Space Heating"][
         "Gas consumption for space heating"

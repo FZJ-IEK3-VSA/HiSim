@@ -86,8 +86,7 @@ def test_house(
 
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home(building_name=building_name,
-        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
-    )
+        heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,)
     my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     # Add to simulator
@@ -110,12 +109,10 @@ def test_house(
     # Build PV
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(building_name=building_name,
         rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2,
-        share_of_maximum_pv_potential=1.0,
-    )
+        share_of_maximum_pv_potential=1.0,)
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
-        my_simulation_parameters=my_simulation_parameters,
-    )
+        my_simulation_parameters=my_simulation_parameters,)
     # Add to simulator
     my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
 

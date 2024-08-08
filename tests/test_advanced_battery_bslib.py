@@ -33,7 +33,7 @@ def test_advanced_battery_bslib():
     maintenance_cost_as_percentage_of_investment = 0.02
 
     my_advanced_battery_config = advanced_battery_bslib.BatteryConfig(
-        building="BUI1",
+        building_name="BUI1",
         system_id=system_id,
         custom_pv_inverter_power_generic_in_watt=p_inv_custom,
         custom_battery_capacity_generic_in_kilowatt_hour=e_bat_custom,

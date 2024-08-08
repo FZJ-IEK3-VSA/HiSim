@@ -32,7 +32,7 @@ def test_electrolyzer():
     # ===================================================================================================================
     # Setup Electrolyzer
     my_electrolyzer_config = generic_electrolyzer_h2.ElectrolyzerConfig(
-        building="BUI1",
+        building_name="BUI1",
         name=name,
         electrolyzer_type=electrolyzer_type,
         nom_load=nom_load,

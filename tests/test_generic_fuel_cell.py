@@ -34,7 +34,7 @@ def test_electrolyzer():
     # ===================================================================================================================
     # Setup Electrolyzer
     my_fuelcell_config = generic_fuel_cell.FuelCellConfig(
-        building="BUI1",
+        building_name="BUI1",
         name=name,
         type=type_electrolyzer,
         nom_output=nom_output,

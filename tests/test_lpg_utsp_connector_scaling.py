@@ -106,7 +106,7 @@ def initialize_lpg_utsp_connector_and_return_results(
 
     # Build occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
-        building="BUI1",
+        building_name="BUI1",
         name="UTSPConnector",
         data_acquisition_mode=data_acquisition_mode,
         household=households,

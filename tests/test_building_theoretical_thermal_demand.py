@@ -99,7 +99,7 @@ def test_house_with_idealized_electric_heater_for_heating_test(
     )
     # Build Fake Heater Config
     my_idealized_electric_heater_config = idealized_electric_heater.IdealizedHeaterConfig(
-        building="BUI1",
+        building_name="BUI1",
         name="IdealizedElectricHeater",
         set_heating_temperature_for_building_in_celsius=set_heating_temperature_for_building_in_celsius,
         set_cooling_temperature_for_building_in_celsius=set_cooling_temperature_for_building_in_celsius,
@@ -198,7 +198,7 @@ def test_house_with_idealized_electric_heater_for_heating_test(
     # Test Air Temperature of Building
 
     building_indoor_air_temperatures = my_sim.results_data_frame[
-        "Building - TemperatureIndoorAir [Temperature - °C]"
+        "BUI1" + "_" + "Building - TemperatureIndoorAir [Temperature - °C]"
     ]
 
     for air_temperature in building_indoor_air_temperatures.values:

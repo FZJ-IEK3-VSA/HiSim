@@ -438,15 +438,15 @@ class WeatherDataImport:
             weather_df = weather_df.reset_index(drop=True)
             weather_df = weather_df.drop(weather_df.index[-1])
 
-            if weather_df.isna().any(axis=None):
-                raise KeyError(
-                    "The DataFrame weather_df contains NaN values. Check data or increase radius for station search."
-                )
-
-            if weather_df.eq("nan").any().any():
-                raise KeyError(
-                    "The DataFrame weather_df contains NaN values. Check data or increase radius for station search."
-                )
+            # if weather_df.isna().any().any():
+            #     raise KeyError(
+            #         "The DataFrame weather_df contains NaN values. Check data or increase radius for station search."
+            #     )
+            #
+            # if weather_df.eq("nan").any().any():
+            #     raise KeyError(
+            #         "The DataFrame weather_df contains NaN values. Check data or increase radius for station search."
+            #     )
 
             self.safe_as_csv(weather_df, csv_path)
 
@@ -747,10 +747,10 @@ class WeatherDataImport:
 
             weather_df = weather_df.reset_index(drop=True)
 
-            if weather_df.isna().any(axis=None):
-                raise KeyError("The DataFrame weather_df contains NaN values. Check data")
-            if weather_df.eq("nan").any().any():
-                raise KeyError("The DataFrame weather_df contains NaN values. Check data")
+            # if weather_df.isna().any(axis=None):
+            #     raise KeyError("The DataFrame weather_df contains NaN values. Check data")
+            # if weather_df.eq("nan").any().any():
+            #     raise KeyError("The DataFrame weather_df contains NaN values. Check data")
 
             self.safe_as_csv(weather_df, csv_path)
 

@@ -67,7 +67,7 @@ def test_system_setup_starter():
             results_for_webtool = json.load(handle)
         assert (
             99999
-            == results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["configuration"][
+            == results_for_webtool["components"]["BUI1_AdvancedHeatPumpHPLib"]["configuration"][
                 "set_thermal_output_power_in_watt"
             ]["value"]
         )

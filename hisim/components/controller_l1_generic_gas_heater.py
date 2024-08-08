@@ -38,7 +38,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class GenericGasHeaterControllerL1Config(ConfigBase):
-
     """Gas-heater Controller Config Class."""
 
     @classmethod
@@ -46,6 +45,7 @@ class GenericGasHeaterControllerL1Config(ConfigBase):
         """Returns the full class name of the base class."""
         return GenericGasHeaterControllerL1.get_full_classname()
 
+    building: str
     name: str
     mode: int
     set_heating_threshold_outside_temperature_in_celsius: Optional[float]
@@ -54,9 +54,13 @@ class GenericGasHeaterControllerL1Config(ConfigBase):
     set_temperature_difference_for_full_power: float
 
     @classmethod
-    def get_default_generic_gas_heater_controller_config(cls) -> "GenericGasHeaterControllerL1Config":
+    def get_default_generic_gas_heater_controller_config(
+        cls,
+        building: str = "BUI1",
+    ) -> "GenericGasHeaterControllerL1Config":
         """Gets a default Generic Heat Pump Controller."""
         return GenericGasHeaterControllerL1Config(
+            building=building,
             name="GenericGasHeaterController",
             mode=1,
             set_heating_threshold_outside_temperature_in_celsius=16.0,
@@ -67,11 +71,14 @@ class GenericGasHeaterControllerL1Config(ConfigBase):
 
     @classmethod
     def get_scaled_generic_gas_heater_controller_config(
-        cls, heating_load_of_building_in_watt: float
+        cls,
+        heating_load_of_building_in_watt: float,
+        building: str = "BUI1",
     ) -> "GenericGasHeaterControllerL1Config":
         """Gets a default Generic Heat Pump Controller."""
         maximal_thermal_power_in_watt = heating_load_of_building_in_watt
         return GenericGasHeaterControllerL1Config(
+            building=building,
             name="GenericGasHeaterController",
             mode=1,
             set_heating_threshold_outside_temperature_in_celsius=16.0,
@@ -82,7 +89,6 @@ class GenericGasHeaterControllerL1Config(ConfigBase):
 
 
 class GenericGasHeaterControllerL1(Component):
-
     """Gas Heater Controller based on HeatPumpHplibControllerL1 (in advanced_heat_oump_hplib).
 
     It takes data from other
@@ -121,7 +127,7 @@ class GenericGasHeaterControllerL1(Component):
         """Construct all the neccessary attributes."""
         self.gas_heater_controller_config = config
         super().__init__(
-            self.gas_heater_controller_config.name,
+            name=config.building + "_" + self.gas_heater_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

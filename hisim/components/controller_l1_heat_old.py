@@ -1,4 +1,5 @@
 """Controller l1 heat old module."""
+
 # clean
 
 # Generic/Built-in
@@ -15,7 +16,6 @@ from hisim import utils
 @dataclass_json
 @dataclass
 class ControllerHeatConfig(cp.ConfigBase):
-
     """Configuration of the Controller Heat class."""
 
     @classmethod
@@ -23,6 +23,7 @@ class ControllerHeatConfig(cp.ConfigBase):
         """Return the full class name of the base class."""
         return ControllerHeat.get_full_classname()
 
+    building: str
     name: str
     temperature_storage_target_warm_water: float
     temperature_storage_target_heating_water: float
@@ -32,9 +33,11 @@ class ControllerHeatConfig(cp.ConfigBase):
     @classmethod
     def get_default_controller_heat_l1(
         cls,
+        building: str = "BUI1",
     ) -> Any:
         """Get a default Building."""
         config = ControllerHeatConfig(
+            building=building,
             name="ControllerHeatL1",
             temperature_storage_target_warm_water=50,
             temperature_storage_target_heating_water=35,
@@ -45,7 +48,6 @@ class ControllerHeatConfig(cp.ConfigBase):
 
 
 class ControllerState:
-
     """Controller state.
 
     Save State if Heater Components were supposed to run
@@ -89,7 +91,6 @@ class ControllerState:
 
 
 class ControllerHeat(cp.Component):
-
     """Controller heat.
 
     Controlls energy flows for heat demand.
@@ -120,7 +121,7 @@ class ControllerHeat(cp.Component):
         """Initialize the class."""
         self.controller_heat_config = config
         super().__init__(
-            name=self.controller_heat_config.name,
+            name=config.building + "_" + self.controller_heat_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

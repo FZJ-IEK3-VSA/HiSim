@@ -44,6 +44,7 @@ class GenericGasHeaterConfig(ConfigBase):
         """Return the full class name of the base class."""
         return GasHeater.get_full_classname()
 
+    building: str
     name: str
     is_modulating: bool
     minimal_thermal_power_in_watt: float  # [W]
@@ -69,10 +70,12 @@ class GenericGasHeaterConfig(ConfigBase):
     @classmethod
     def get_default_gasheater_config(
         cls,
+        building: str = "BUI1",
     ) -> Any:
         """Get a default Building."""
         maximal_power_in_watt: float = 12_000  # W
         config = GenericGasHeaterConfig(
+            building=building,
             name="GenericGasHeater",
             temperature_delta_in_celsius=10,
             maximal_power_in_watt=maximal_power_in_watt,
@@ -94,10 +97,15 @@ class GenericGasHeaterConfig(ConfigBase):
         return config
 
     @classmethod
-    def get_scaled_gasheater_config(cls, heating_load_of_building_in_watt: float) -> "GenericGasHeaterConfig":
+    def get_scaled_gasheater_config(
+        cls,
+        heating_load_of_building_in_watt: float,
+        building: str = "BUI1",
+    ) -> "GenericGasHeaterConfig":
         """Get a default Building."""
         maximal_power_in_watt: float = heating_load_of_building_in_watt  # W
         config = GenericGasHeaterConfig(
+            building=building,
             name="GenericGasHeater",
             temperature_delta_in_celsius=10,
             maximal_power_in_watt=maximal_power_in_watt,
@@ -145,7 +153,7 @@ class GasHeater(Component):
         """Construct all the neccessary attributes."""
         self.gasheater_config = config
         super().__init__(
-            name=self.gasheater_config.name,
+            name=config.building + "_" + self.gasheater_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

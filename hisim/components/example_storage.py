@@ -4,6 +4,7 @@
 
 # Generic/Built-in
 import copy
+from typing import Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -15,7 +16,6 @@ from hisim.component import ConfigBase
 
 
 class ExampleStorageState:
-
     """A class to simulate the Example Storage State."""
 
     def __init__(self, min_val: float, max_val: float) -> None:
@@ -63,7 +63,6 @@ class ExampleStorageState:
 @dataclass_json
 @dataclass
 class SimpleStorageConfig(ConfigBase):
-
     """Configuration of the Simple Storage."""
 
     @classmethod
@@ -71,6 +70,7 @@ class SimpleStorageConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return SimpleStorage.get_full_classname()
 
+    building: str
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters
     name: str
@@ -79,9 +79,13 @@ class SimpleStorageConfig(ConfigBase):
     capacity: float
 
     @classmethod
-    def get_default_thermal_storage(cls):
+    def get_default_thermal_storage(
+        cls,
+        building: str = "BUI1",
+    ) -> Any:
         """Gets a default Simple Storage."""
         return SimpleStorageConfig(
+            building=building,
             name="Simple Thermal Storage",
             loadtype=lt.LoadTypes.WARM_WATER,
             unit=lt.Units.KWH,
@@ -90,7 +94,6 @@ class SimpleStorageConfig(ConfigBase):
 
 
 class SimpleStorage(Component):
-
     """A class to simulate the Simple Storage."""
 
     ChargingAmount = "Charging Amount"
@@ -108,7 +111,7 @@ class SimpleStorage(Component):
         """Constructs all the neccessary attributes for the SimpleStorage object."""
         self.simplestorageconfig = config
         super().__init__(
-            self.simplestorageconfig.name,
+            name=config.building + "_" + self.simplestorageconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

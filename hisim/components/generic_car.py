@@ -34,7 +34,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class GenericCarInformation:
-
     """Class for collecting important generic car parameters from occupancy."""
 
     def __init__(self, my_occupancy_instance: UtspLpgConnector):
@@ -135,6 +134,7 @@ class GenericCarInformation:
 class CarConfig(cp.ConfigBase):
     """Definition of configuration of Car."""
 
+    building: str
     #: name of the car
     name: str
     #: priority of the component in hierachy: the higher the number the lower the priority
@@ -160,9 +160,14 @@ class CarConfig(cp.ConfigBase):
         return Car.get_full_classname()
 
     @classmethod
-    def get_default_diesel_config(cls, name: str = "Car",) -> Any:
+    def get_default_diesel_config(
+        cls,
+        name: str = "Car",
+        building: str = "BUI1",
+    ) -> Any:
         """Defines default configuration for diesel vehicle."""
         config = CarConfig(
+            building=building,
             name=name,
             source_weight=1,
             fuel=lt.LoadTypes.DIESEL,
@@ -176,9 +181,13 @@ class CarConfig(cp.ConfigBase):
         return config
 
     @classmethod
-    def get_default_ev_config(cls) -> Any:
+    def get_default_ev_config(
+        cls,
+        building: str = "BUI1",
+    ) -> Any:
         """Defines default configuration for electric vehicle."""
         config = CarConfig(
+            building=building,
             name="Car",
             source_weight=1,
             fuel=lt.LoadTypes.ELECTRICITY,
@@ -222,7 +231,7 @@ class Car(cp.Component):
     ) -> None:
         """Initializes Car."""
         super().__init__(
-            name=config.name + "_w" + str(config.source_weight),
+            name=config.building + "_" + config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

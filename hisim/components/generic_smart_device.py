@@ -4,13 +4,14 @@ Takes load profiles and time windows, where the activation can be shifted within
 The device is activated at the end of the time window when no surplus was available. This file contains the class SmartDevice and SmartDevice State,
 the configuration is automatically adopted from the information provided by the LPG.
 """
+
 # clean
 
 # Generic/Built-in
 import json
 import math as ma
 from os import path
-from typing import List
+from typing import List, Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import pandas as pd
@@ -36,7 +37,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class SmartDeviceConfig(cp.ConfigBase):
-
     """Configuration of the smart device."""
 
     @classmethod
@@ -44,15 +44,20 @@ class SmartDeviceConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return SmartDevice.get_full_classname()
 
+    building: str
     name: str
     identifier: str
     source_weight: int
     smart_devices_included: bool
 
     @classmethod
-    def get_default_config(cls):
+    def get_default_config(
+        cls,
+        building: str = "BUI1",
+    ) -> Any:
         """Gets a default config."""
         return SmartDeviceConfig(
+            building=building,
             name="Smart Device",
             identifier="Identifier",
             source_weight=1,
@@ -61,7 +66,6 @@ class SmartDeviceConfig(cp.ConfigBase):
 
 
 class SmartDeviceState:
-
     """State representing smart appliance."""
 
     def __init__(
@@ -122,7 +126,6 @@ class SmartDeviceState:
 
 
 class SmartDevice(cp.Component):
-
     """Smart device class.
 
     Class component that provides availablity and profiles of flexible smart devices like shiftable (in time) washing machines and dishwashers.
@@ -147,7 +150,7 @@ class SmartDevice(cp.Component):
         """Initialize the class."""
 
         super().__init__(
-            name=config.identifier.replace("/", "-") + "_w" + str(config.source_weight),
+            name=config.building + "_" + config.identifier.replace("/", "-") + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

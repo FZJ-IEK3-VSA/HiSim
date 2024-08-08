@@ -24,7 +24,6 @@ __status__ = ""
 
 
 class SimpleHeatSourceType(IntEnum):
-
     """Set Heat Source Types."""
 
     THERMALPOWER = 1
@@ -34,9 +33,9 @@ class SimpleHeatSourceType(IntEnum):
 @dataclass_json
 @dataclass
 class SimpleHeatSourceConfig(cp.ConfigBase):
-
     """Configuration of a generic HeatSource."""
 
+    building: str
     name: str
     power_th_in_watt: float
     temperature_in_celsius: float
@@ -48,9 +47,13 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
         return SimpleHeatSource.get_full_classname()
 
     @classmethod
-    def get_default_config_const_power(cls) -> "SimpleHeatSourceConfig":
+    def get_default_config_const_power(
+        cls,
+        building: str = "BUI1",
+    ) -> "SimpleHeatSourceConfig":
         """Returns default configuration of a Heat Source used for heating."""
         config = SimpleHeatSourceConfig(
+            building=building,
             name="HeatingHeatSourceConstPower",
             const_source=SimpleHeatSourceType.THERMALPOWER,
             power_th_in_watt=5000.0,
@@ -59,9 +62,13 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
         return config
 
     @classmethod
-    def get_default_config_const_temperature(cls) -> "SimpleHeatSourceConfig":
+    def get_default_config_const_temperature(
+        cls,
+        building: str = "BUI1",
+    ) -> "SimpleHeatSourceConfig":
         """Returns default configuration of a Heat Source used for heating."""
         config = SimpleHeatSourceConfig(
+            building=building,
             name="HeatingHeatSourceConstTemperature",
             const_source=SimpleHeatSourceType.TEMPERATURE,
             power_th_in_watt=0,
@@ -71,7 +78,6 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
 
 
 class SimpleHeatSourceState:
-
     """Heat source state class saves the state of the heat source."""
 
     def __init__(self, state: int = 0):
@@ -84,7 +90,6 @@ class SimpleHeatSourceState:
 
 
 class SimpleHeatSource(cp.Component):
-
     """Heat Source implementation."""
 
     # Outputs
@@ -100,7 +105,7 @@ class SimpleHeatSource(cp.Component):
         """Initialize the class."""
 
         super().__init__(
-            name=config.name,
+            name=config.building + "_" + config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

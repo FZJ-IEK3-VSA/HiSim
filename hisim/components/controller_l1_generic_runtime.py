@@ -1,4 +1,5 @@
 """ Generic runtime controller. """
+
 # -*- coding: utf-8 -*-
 # clean
 import importlib
@@ -26,18 +27,22 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class L1Config(ConfigBase):
-
     """L1 Runtime Config."""
 
+    building: str
     name: str
     source_weight: int
     min_operation_time_in_seconds: int
     min_idle_time_in_seconds: int
 
     @staticmethod
-    def get_default_config(name: str) -> Any:
+    def get_default_config(
+        name: str,
+        building: str = "BUI1",
+    ) -> Any:
         """Default config."""
         config = L1Config(
+            building=building,
             name="RuntimeController_" + name,
             source_weight=1,
             min_operation_time_in_seconds=3600,
@@ -46,9 +51,13 @@ class L1Config(ConfigBase):
         return config
 
     @staticmethod
-    def get_default_config_heatpump(name: str) -> Any:
+    def get_default_config_heatpump(
+        name: str,
+        building: str = "BUI1",
+    ) -> Any:
         """Gets a default config for heat pumps."""
         config = L1Config(
+            building=building,
             name="L1RuntimeController" + name,
             source_weight=1,
             min_operation_time_in_seconds=3600 * 3,
@@ -58,7 +67,6 @@ class L1Config(ConfigBase):
 
 
 class L1GenericRuntimeControllerState:
-
     """The data class saves the state of the controller."""
 
     def __init__(
@@ -96,7 +104,6 @@ class L1GenericRuntimeControllerState:
 
 
 class L1GenericRuntimeController(cp.Component):
-
     """L1 Heat Pump Controller.
 
     It takes care of the operation of the heat pump only in terms of running times.
@@ -133,7 +140,7 @@ class L1GenericRuntimeController(cp.Component):
     ) -> None:
         """Initializes the controller."""
         super().__init__(
-            name=config.name + "_w" + str(config.source_weight),
+            name=config.building + "_" + config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

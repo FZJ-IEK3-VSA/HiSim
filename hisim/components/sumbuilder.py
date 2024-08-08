@@ -1,4 +1,5 @@
 """ Contains functions to sum up multiple inputs. """
+
 # clean
 from dataclasses import dataclass
 from typing import Any, List
@@ -14,7 +15,6 @@ from hisim.simulationparameters import SimulationParameters
 @dataclass_json
 @dataclass
 class SumBuilderConfig(cp.ConfigBase):
-
     """Electricity Grid Config."""
 
     @classmethod
@@ -33,7 +33,6 @@ class SumBuilderConfig(cp.ConfigBase):
 
 
 class CalculateOperation(cp.Component):
-
     """Arbitrary mathematical operations."""
 
     operations_available = ["Sum", "Subtract", "Multiply", "Divide"]
@@ -126,7 +125,6 @@ class CalculateOperation(cp.Component):
 
 
 class SumBuilderForTwoInputs(Component):
-
     """Adds two outputs."""
 
     SumInput1 = "Input 1"
@@ -200,7 +198,6 @@ class SumBuilderForTwoInputs(Component):
 
 
 class SumBuilderForThreeInputs(Component):
-
     """Sum builder for three inputs."""
 
     SumInput1 = "Input 1"

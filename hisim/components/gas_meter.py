@@ -2,7 +2,7 @@
 
 # clean
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Any
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -32,13 +32,18 @@ class GasMeterConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return GasMeter.get_full_classname()
 
+    building: str
     name: str
     total_energy_from_grid_in_kwh: None
 
     @classmethod
-    def get_gas_meter_default_config(cls):
+    def get_gas_meter_default_config(
+        cls,
+        building: str = "BUI1",
+    ) -> Any:
         """Gets a default GasMeter."""
         return GasMeterConfig(
+            building=building,
             name="GasMeter",
             total_energy_from_grid_in_kwh=None,
         )
@@ -73,8 +78,8 @@ class GasMeter(DynamicComponent):
         super().__init__(
             self.my_component_inputs,
             self.my_component_outputs,
-            self.name,
-            my_simulation_parameters,
+            name=config.building + "_" + self.name,
+            my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
         )
@@ -232,7 +237,9 @@ class GasMeter(DynamicComponent):
         )
         # Production of Gas positve sign
         # Consumption of Gas negative sign
-        difference_between_production_and_consumption_in_watt_hour = production_in_watt_hour - consumption_uncontrolled_in_watt_hour
+        difference_between_production_and_consumption_in_watt_hour = (
+            production_in_watt_hour - consumption_uncontrolled_in_watt_hour
+        )
 
         # calculate cumulative production and consumption
         cumulative_production_in_watt_hour = self.state.cumulative_production_in_watt_hour + production_in_watt_hour

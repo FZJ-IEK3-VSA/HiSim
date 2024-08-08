@@ -1,7 +1,8 @@
 """L2 Controller for PtX Buffer Battery operation."""
+
 # clean
 import os
-from typing import List
+from typing import List, Any
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -24,7 +25,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class RsocBatteryControllerConfig(ConfigBase):
-
     """Configutation of the rSOC and Battery Controller."""
 
     @classmethod
@@ -32,6 +32,7 @@ class RsocBatteryControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return RsocBatteryController.get_full_classname()
 
+    building: str
     name: str
     nom_load_soec: float
     min_load_soec: float
@@ -54,11 +55,17 @@ class RsocBatteryControllerConfig(ConfigBase):
             return data.get("rSOC variants", {}).get(rsoc_name, {})
 
     @classmethod
-    def confic_rsoc(cls, rsoc_name, operation_mode):
+    def confic_rsoc(
+        cls,
+        rsoc_name: str,
+        operation_mode: float,
+        building: str = "BUI1",
+    ) -> Any:
         """Configure rsoc."""
         config_json = cls.read_config(rsoc_name)
 
         config = RsocBatteryControllerConfig(
+            building=building,
             name="rSOC and Battery Controller",  # config_json.get("name", "")
             nom_load_soec=config_json.get("nom_load_soec", 0.0),
             min_load_soec=config_json.get("min_load_soec", 0.0),
@@ -74,7 +81,6 @@ class RsocBatteryControllerConfig(ConfigBase):
 
 
 class RsocBatteryController(Component):
-
     """rSOC and Battery  Controller."""
 
     # Inputs
@@ -107,7 +113,7 @@ class RsocBatteryController(Component):
         self.operation_mode = config.operation_mode
 
         super().__init__(
-            name=self.ptxcontrollerconfig.name,
+            name=config.building + "_" + self.ptxcontrollerconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

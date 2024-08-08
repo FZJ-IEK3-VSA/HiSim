@@ -33,9 +33,9 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class L1CHPControllerConfig(ConfigBase):
-
     """CHP Controller Config."""
 
+    building: str
     #: name of the device
     name: str
     #: priority of the device in hierachy: the higher the number the lower the priority
@@ -64,9 +64,12 @@ class L1CHPControllerConfig(ConfigBase):
     min_idle_time_in_seconds: int
 
     @staticmethod
-    def get_default_config_chp() -> "L1CHPControllerConfig":
+    def get_default_config_chp(
+        building: str = "BUI1",
+    ) -> "L1CHPControllerConfig":
         """Returns default configuration for the CHP controller."""
         config = L1CHPControllerConfig(
+            building=building,
             name="CHP Controller",
             source_weight=1,
             use=LoadTypes.GAS,
@@ -84,9 +87,12 @@ class L1CHPControllerConfig(ConfigBase):
         return config
 
     @staticmethod
-    def get_default_config_fuel_cell() -> "L1CHPControllerConfig":
+    def get_default_config_fuel_cell(
+        building: str = "BUI1",
+    ) -> "L1CHPControllerConfig":
         """Returns default configuration for the fuel cell controller."""
         config = L1CHPControllerConfig(
+            building=building,
             name="Fuel Cell Controller",
             source_weight=1,
             use=LoadTypes.HYDROGEN,
@@ -104,10 +110,13 @@ class L1CHPControllerConfig(ConfigBase):
         return config
 
     @staticmethod
-    def get_default_config_chp_with_buffer() -> "L1CHPControllerConfig":
+    def get_default_config_chp_with_buffer(
+        building: str = "BUI1",
+    ) -> "L1CHPControllerConfig":
         """Returns default configuration for the CHP controller, when buffer storage for heating is available."""
         # minus - 1 in heating season, so that buffer heats up one day ahead, and modelling to building works.
         config = L1CHPControllerConfig(
+            building=building,
             name="CHP Controller",
             source_weight=1,
             use=LoadTypes.GAS,
@@ -125,10 +134,13 @@ class L1CHPControllerConfig(ConfigBase):
         return config
 
     @staticmethod
-    def get_default_config_fuel_cell_with_buffer() -> "L1CHPControllerConfig":
+    def get_default_config_fuel_cell_with_buffer(
+        building: str = "BUI1",
+    ) -> "L1CHPControllerConfig":
         """Returns default configuration for the fuel cell controller, when buffer storage for heating is available."""
         # minus - 1 in heating season, so that buffer heats up one day ahead, and modelling to building works.
         config = L1CHPControllerConfig(
+            building=building,
             name="CHP Controller",
             source_weight=1,
             use=LoadTypes.HYDROGEN,
@@ -147,7 +159,6 @@ class L1CHPControllerConfig(ConfigBase):
 
 
 class L1CHPControllerState:
-
     """Data class that saves the state of the CHP controller."""
 
     def __init__(
@@ -201,7 +212,6 @@ class L1CHPControllerState:
 
 
 class L1CHPController(cp.Component):
-
     """L1 combined heat and power (CHP) or Fuel Cell Controller.
 
     Is activated when both Electricity and Heat are demanded. Decides if heat is transferred to
@@ -236,7 +246,7 @@ class L1CHPController(cp.Component):
         if not config.__class__.__name__ == L1CHPControllerConfig.__name__:
             raise ValueError("Wrong config class. Got a " + config.__class__.__name__)
         super().__init__(
-            name=config.name + "_w" + str(config.source_weight),
+            name=config.building + "_" + config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

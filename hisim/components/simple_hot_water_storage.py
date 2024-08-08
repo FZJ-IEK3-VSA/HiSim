@@ -29,7 +29,6 @@ __status__ = "dev"
 
 
 class HotWaterStorageSizingEnum(IntEnum):
-
     """Set Simple Hot Water Storage sizing options."""
 
     SIZE_ACCORDING_TO_HEAT_PUMP = 1
@@ -37,7 +36,6 @@ class HotWaterStorageSizingEnum(IntEnum):
 
 
 class PositionHotWaterStorageInSystemSetup(IntEnum):
-
     """Set Simple Hot Water Storage Position options."""
 
     PARALLEL_TO_HEAT_PUMP = 1
@@ -54,6 +52,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         """Return the full class name of the base class."""
         return SimpleHotWaterStorage.get_full_classname()
 
+    building: str
     name: str
     volume_heating_water_storage_in_liter: float
     heat_transfer_coefficient_in_watt_per_m2_per_kelvin: float
@@ -73,11 +72,15 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
     @classmethod
     def get_default_simplehotwaterstorage_config(
         cls,
+        building: str = "BUI1",
     ) -> "SimpleHotWaterStorageConfig":
         """Get a default simplehotwaterstorage config."""
         volume_heating_water_storage_in_liter: float = 500
-        position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int] = PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP
+        position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int] = (
+            PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP
+        )
         config = SimpleHotWaterStorageConfig(
+            building=building,
             name="SimpleHotWaterStorage",
             volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,
@@ -95,6 +98,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         cls,
         max_thermal_power_in_watt_of_heating_system: float,
         name: str = "SimpleHotWaterStorage",
+        building: str = "BUI1",
         temperature_difference_between_flow_and_return_in_celsius: float = 7.0,
         sizing_option: HotWaterStorageSizingEnum = HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM,
     ) -> "SimpleHotWaterStorageConfig":
@@ -133,9 +137,12 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         else:
             raise ValueError(f"Sizing option for Simple Hot Water Storage {sizing_option} is unvalid.")
 
-        position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int] = PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP
+        position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int] = (
+            PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP
+        )
 
         config = SimpleHotWaterStorageConfig(
+            building=building,
             name=name,
             volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,
@@ -202,7 +209,7 @@ class SimpleHotWaterStorage(cp.Component):
     ) -> None:
         """Construct all the neccessary attributes."""
         super().__init__(
-            name=config.name,
+            name=config.building + "_" + config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

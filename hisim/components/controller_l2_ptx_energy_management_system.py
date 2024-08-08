@@ -1,7 +1,8 @@
 """ L2 Controller for PtX Buffer Battery operation. """
+
 # clean
 import os
-from typing import List
+from typing import List, Any
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -24,7 +25,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class PTXControllerConfig(ConfigBase):
-
     """Configutation of the PtX  Controller."""
 
     @classmethod
@@ -32,6 +32,7 @@ class PTXControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return PTXController.get_full_classname()
 
+    building: str
     name: str
     nom_load: float
     min_load: float
@@ -48,7 +49,12 @@ class PTXControllerConfig(ConfigBase):
             return data.get("Electrolyzer variants", {}).get(electrolyzer_name, {})
 
     @classmethod
-    def control_electrolyzer(cls, electrolyzer_name, operation_mode):
+    def control_electrolyzer(
+        cls,
+        electrolyzer_name: str,
+        operation_mode: float,
+        building: str = "BUI1",
+    ) -> Any:
         """Sets the according parameters for the chosen electrolyzer.
 
         The operations mode can be used to select how the electrolyser is operated:
@@ -59,6 +65,7 @@ class PTXControllerConfig(ConfigBase):
         config_json = cls.read_config(electrolyzer_name)
 
         config = PTXControllerConfig(
+            building=building,
             name="L2PtXController",  # config_json.get("name", "")
             nom_load=config_json.get("nom_load", 0.0),
             min_load=config_json.get("min_load", 0.0),
@@ -70,7 +77,6 @@ class PTXControllerConfig(ConfigBase):
 
 
 class PTXController(Component):
-
     """PtX  Controller."""
 
     # Inputs
@@ -98,7 +104,7 @@ class PTXController(Component):
         self.operation_mode = config.operation_mode
 
         super().__init__(
-            name=self.ptxcontrollerconfig.name,
+            name=config.building + "_" + self.ptxcontrollerconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

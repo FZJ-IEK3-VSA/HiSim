@@ -17,7 +17,6 @@ from hisim.component import ConfigBase
 @dataclass_json
 @dataclass
 class TransformerConfig(ConfigBase):
-
     """Configuration of the Example Transformer."""
 
     @classmethod
@@ -37,7 +36,6 @@ class TransformerConfig(ConfigBase):
 
 
 class Transformer(Component):
-
     """The Example Transformer class.
 
     It is used to modify input values and return them as new output values.

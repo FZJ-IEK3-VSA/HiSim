@@ -28,9 +28,9 @@ __status__ = ""
 @dataclass_json
 @dataclass
 class ElectrolyzerWithStorageConfig(ConfigBase):
-
     """Electrolyzer wit storage config class."""
 
+    building: str
     name: str
     waste_energy: float  # [W]
     min_power: float  # [W]
@@ -47,9 +47,13 @@ class ElectrolyzerWithStorageConfig(ConfigBase):
         return AdvancedElectrolyzer.get_full_classname()
 
     @classmethod
-    def get_default_config(cls):
+    def get_default_config(
+        cls,
+        building: str = "BUI1",
+    ) -> Any:
         """Get default config."""
         config = ElectrolyzerWithStorageConfig(
+            building=building,
             name="ElectrolyzerWithStorage",
             waste_energy=400,  # [W]
             min_power=1_200,  # [W]
@@ -66,7 +70,6 @@ class ElectrolyzerWithStorageConfig(ConfigBase):
 @dataclass_json
 @dataclass
 class ElectrolyzerWithHydrogenStorageConfig(ConfigBase):
-
     """Electrolyzer with hydrogen storage config class."""
 
     name: str
@@ -102,7 +105,6 @@ class ElectrolyzerWithHydrogenStorageConfig(ConfigBase):
 
 
 class ElectrolyzerSimulation:
-
     """Electrolyzer simulation class."""
 
     def __init__(
@@ -239,7 +241,6 @@ class ElectrolyzerSimulation:
 
 
 class AdvancedElectrolyzer(Component):
-
     """Advanced Electrolyzer class."""
 
     # input
@@ -264,7 +265,7 @@ class AdvancedElectrolyzer(Component):
         """Initialize the class."""
 
         super().__init__(
-            config.name,
+            name=config.building + "_" + config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -449,7 +450,6 @@ class AdvancedElectrolyzer(Component):
 
 
 class HydrogenStorageSimulation:
-
     """Hydrogen storage simulation class.
 
     Hydrogen storage to store hydrogen which is produced by the electrolyzer.
@@ -597,7 +597,6 @@ class HydrogenStorageSimulation:
 
 
 class HydrogenStorage(Component):
-
     """Hydrogen storage class."""
 
     # input

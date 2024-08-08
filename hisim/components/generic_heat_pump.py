@@ -6,6 +6,7 @@ This module contains the following classes:
     3. HeatPumpController
 
 """
+
 # clean
 
 # Generic/Built-in
@@ -40,7 +41,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class GenericHeatPumpConfig(cp.ConfigBase):
-
     """Config for the generic heat pump."""
 
     @classmethod
@@ -48,6 +48,7 @@ class GenericHeatPumpConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return GenericHeatPump.get_full_classname()
 
+    building: str
     name: str
     manufacturer: str
     heat_pump_name: str
@@ -55,9 +56,13 @@ class GenericHeatPumpConfig(cp.ConfigBase):
     min_idle_time: float
 
     @classmethod
-    def get_default_generic_heat_pump_config(cls):
+    def get_default_generic_heat_pump_config(
+        cls,
+        building: str = "BUI1",
+    ) -> Any:
         """Gets a default Generic Heat Pump."""
         return GenericHeatPumpConfig(
+            building=building,
             name="HeatPump",
             heat_pump_name="Vitocal 300-A AWO-AC 301.B07",
             manufacturer="Viessmann Werke GmbH & Co KG",
@@ -69,7 +74,6 @@ class GenericHeatPumpConfig(cp.ConfigBase):
 @dataclass_json
 @dataclass
 class GenericHeatPumpControllerConfig(cp.ConfigBase):
-
     """Controller for the generic heat pump."""
 
     @classmethod
@@ -96,7 +100,6 @@ class GenericHeatPumpControllerConfig(cp.ConfigBase):
 
 
 class GenericHeatPumpState:
-
     """Heat Pump State class.
 
     It determines the state of the heat pump.
@@ -146,7 +149,6 @@ class GenericHeatPumpState:
 
 
 class GenericHeatPump(cp.Component):
-
     """Heat pump class.
 
     It does support a refrigeration cycle.
@@ -193,7 +195,7 @@ class GenericHeatPump(cp.Component):
         """Construct all the necessary attributes."""
         self.heatpump_config = config
         super().__init__(
-            self.heatpump_config.name,
+            name=config.building + "_" + self.heatpump_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -552,7 +554,6 @@ class GenericHeatPump(cp.Component):
 
 
 class GenericHeatPumpController(cp.Component):
-
     """Heat Pump Controller.
 
     It takes data from other

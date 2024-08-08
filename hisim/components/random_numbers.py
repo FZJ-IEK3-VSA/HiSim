@@ -17,7 +17,6 @@ from hisim.simulationparameters import SimulationParameters
 @dataclass_json
 @dataclass
 class RandomNumbersConfig(ConfigBase):
-
     """Configuration of the Random Numbers."""
 
     @classmethod
@@ -42,7 +41,6 @@ class RandomNumbersConfig(ConfigBase):
 
 
 class RandomNumbers(Component):
-
     """Random number class."""
 
     RandomOutput: str = "Random Numbers"

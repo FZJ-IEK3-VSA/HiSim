@@ -1,4 +1,5 @@
 """ Controller for the generic_electrolyzer_h2 component. """
+
 # clean
 import os
 from typing import List, Any
@@ -25,7 +26,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class ElectrolyzerControllerConfig(ConfigBase):
-
     """Configutation of the Simple Electrolyzer Controller."""
 
     @classmethod
@@ -33,6 +33,7 @@ class ElectrolyzerControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return ElectrolyzerController.get_full_classname()
 
+    building: str
     name: str
     nom_load: float
     min_load: float
@@ -44,9 +45,11 @@ class ElectrolyzerControllerConfig(ConfigBase):
     @classmethod
     def get_default_electrolyzer_controller_config(
         cls,
+        building: str = "BUI1",
     ) -> Any:
         """Get a default electrolyzer controller config."""
         config = ElectrolyzerControllerConfig(
+            building=building,
             name="DefaultElectrolyzerController",
             nom_load=100.0,
             min_load=10.0,
@@ -67,13 +70,18 @@ class ElectrolyzerControllerConfig(ConfigBase):
             return data.get("Electrolyzer variants", {}).get(electrolyzer_name, {})
 
     @classmethod
-    def control_electrolyzer(cls, electrolyzer_name):
+    def control_electrolyzer(
+        cls,
+        electrolyzer_name: str,
+        building: str = "BUI1",
+    ) -> Any:
         """Initializes the config variables based on the JSON-file."""
 
         config_json = cls.read_config(electrolyzer_name)
         log.information("Electrolyzer config: " + str(config_json))
 
         config = ElectrolyzerControllerConfig(
+            building=building,
             name="L1ElectrolyzerController",  # config_json.get("name", "")
             nom_load=config_json.get("nom_load", 0.0),
             min_load=config_json.get("min_load", 0.0),
@@ -86,7 +94,6 @@ class ElectrolyzerControllerConfig(ConfigBase):
 
 
 class ElectrolyzerController(Component):
-
     """Electrolyzer Controller class."""
 
     # Inputs
@@ -117,7 +124,7 @@ class ElectrolyzerController(Component):
         self.cold_start_time = config.cold_start_time
 
         super().__init__(
-            name=self.controllerconfig.name,
+            name=config.building + "_" + self.controllerconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

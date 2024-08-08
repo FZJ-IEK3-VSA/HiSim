@@ -1,7 +1,8 @@
 """Idealized Electric Heater Module."""
+
 # clean
 # Owned
-from typing import List
+from typing import List, Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import hisim.component as cp
@@ -23,7 +24,6 @@ __status__ = ""
 @dataclass_json
 @dataclass
 class IdealizedHeaterConfig(cp.ConfigBase):
-
     """Configuration of the Idealized Heater."""
 
     @classmethod
@@ -31,14 +31,19 @@ class IdealizedHeaterConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return IdealizedElectricHeater.get_full_classname()
 
+    building: str
     name: str
     set_heating_temperature_for_building_in_celsius: float
     set_cooling_temperature_for_building_in_celsius: float
 
     @classmethod
-    def get_default_config(cls):
+    def get_default_config(
+        cls,
+        building: str = "BUI1",
+    ) -> Any:
         """Gets a default Idealized Heater."""
         return IdealizedHeaterConfig(
+            building=building,
             name="IdealizedHeater",
             set_heating_temperature_for_building_in_celsius=19.5,
             set_cooling_temperature_for_building_in_celsius=23.5,
@@ -46,7 +51,6 @@ class IdealizedHeaterConfig(cp.ConfigBase):
 
 
 class IdealizedElectricHeater(cp.Component):
-
     """Idealized Electric Heater System."""
 
     # Inputs
@@ -67,7 +71,7 @@ class IdealizedElectricHeater(cp.Component):
     ) -> None:
         """Construct all the neccessary attributes."""
         super().__init__(
-            "IdealizedElectricHeater",
+            name=config.building + "_" + config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

@@ -21,7 +21,12 @@ from hisim import utils
 from hisim.component import ComponentInput, ComponentOutput
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
-from hisim.components import more_advanced_heat_pump_hplib, advanced_heat_pump_hplib, generic_heat_pump_modular, loadprofilegenerator_utsp_connector
+from hisim.components import (
+    more_advanced_heat_pump_hplib,
+    advanced_heat_pump_hplib,
+    generic_heat_pump_modular,
+    loadprofilegenerator_utsp_connector,
+)
 
 __authors__ = "Maximilian Hillen"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -43,6 +48,7 @@ class EMSConfig(cp.ConfigBase):
         """Return the full class name of the base class."""
         return L2GenericEnergyManagementSystem.get_full_classname()
 
+    building: str
     #: name of the device
     name: str
     # control strategy, more or less obsolete because only "optimize_own_consumption" is used at the moment.
@@ -58,10 +64,15 @@ class EMSConfig(cp.ConfigBase):
     space_heating_water_storage_temperature_offset_value: float
 
     @classmethod
-    def get_default_config_ems(cls) -> "EMSConfig":
+    def get_default_config_ems(
+        cls,
+        name: str = "L2EMSElectricityController",
+        building: str = "BUI1",
+    ) -> "EMSConfig":
         """Default Config for Energy Management System."""
         config = EMSConfig(
-            name="L2EMSElectricityController",
+            building=building,
+            name=name,
             strategy="optimize_own_consumption",
             limit_to_shave=0,
             building_indoor_temperature_offset_value=2,
@@ -159,7 +170,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         super().__init__(
             my_component_inputs=self.my_component_inputs,
             my_component_outputs=self.my_component_outputs,
-            name=self.ems_config.name,
+            name=config.building + "_" + self.ems_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -813,7 +824,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 elif more_advanced_heat_pump_class_name in output.field_name:
                     if "SH" in output.field_name:
                         sh_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
-                            postprocessing_results.iloc[:, index] < 0.0]
+                            postprocessing_results.iloc[:, index] < 0.0
+                        ]
                         sh_heatpump_electricity_from_grid_in_kilowatt_hour = abs(
                             KpiHelperClass.compute_total_energy_from_power_timeseries(
                                 power_timeseries_in_watt=sh_electricity_from_grid_in_watt_series,
@@ -822,7 +834,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                         )
                     elif "DHW" in output.field_name:
                         dhw_hp_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
-                            postprocessing_results.iloc[:, index] < 0.0]
+                            postprocessing_results.iloc[:, index] < 0.0
+                        ]
                         dhw_heatpump_electricity_from_grid_in_kilowatt_hour = abs(
                             KpiHelperClass.compute_total_energy_from_power_timeseries(
                                 power_timeseries_in_watt=dhw_hp_electricity_from_grid_in_watt_series,

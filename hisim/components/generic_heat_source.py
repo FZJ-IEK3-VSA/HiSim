@@ -32,9 +32,9 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class HeatSourceConfig(cp.ConfigBase):
-
     """Configuration of a generic HeatSource."""
 
+    building: str
     #: name of the device
     name: str
     #: priority of the device in hierachy: the higher the number the lower the priority
@@ -54,9 +54,13 @@ class HeatSourceConfig(cp.ConfigBase):
         return HeatSource.get_full_classname()
 
     @classmethod
-    def get_default_config_heating(cls) -> "HeatSourceConfig":
+    def get_default_config_heating(
+        cls,
+        building: str = "BUI1",
+    ) -> "HeatSourceConfig":
         """Returns default configuration of a Heat Source used for heating."""
         config = HeatSourceConfig(
+            building=building,
             name="HeatingHeatSource",
             source_weight=1,
             fuel=lt.LoadTypes.DISTRICTHEATING,
@@ -67,9 +71,13 @@ class HeatSourceConfig(cp.ConfigBase):
         return config
 
     @classmethod
-    def get_default_config_waterheating_with_district_heating(cls) -> "HeatSourceConfig":
+    def get_default_config_waterheating_with_district_heating(
+        cls,
+        building: str = "BUI1",
+    ) -> "HeatSourceConfig":
         """Returns default configuration of a Heat Source used for water heating (DHW)."""
         config = HeatSourceConfig(
+            building=building,
             name="DHWHeatSource",
             source_weight=1,
             fuel=lt.LoadTypes.DISTRICTHEATING,
@@ -85,6 +93,7 @@ class HeatSourceConfig(cp.ConfigBase):
         max_warm_water_demand_in_liter: float,
         scaling_factor_according_to_number_of_apartments: float,
         seconds_per_timestep: int,
+        building: str = "BUI1",
     ) -> "HeatSourceConfig":
         """Returns default configuration of a Heat Source used for water heating (DHW)."""
         # use importlib for importing the other component in order to avoid circular-import errors
@@ -109,6 +118,7 @@ class HeatSourceConfig(cp.ConfigBase):
             water_vs_heating=lt.InandOutputType.HEATING,
         )
         config = HeatSourceConfig(
+            building=building,
             name="DHWHeatSource",
             source_weight=1,
             fuel=lt.LoadTypes.GAS,
@@ -120,7 +130,6 @@ class HeatSourceConfig(cp.ConfigBase):
 
 
 class HeatSourceState:
-
     """Heat source state class saves the state of the heat source."""
 
     def __init__(self, state: int = 0):
@@ -133,7 +142,6 @@ class HeatSourceState:
 
 
 class HeatSource(cp.Component):
-
     """Heat Source implementation.
 
     District Heating, Oil Heating or Gas Heating. Heat is converted with given efficiency.
@@ -158,7 +166,7 @@ class HeatSource(cp.Component):
         """Initialize the class."""
 
         super().__init__(
-            config.name + "_w" + str(config.source_weight),
+            name=config.building + "_" + config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

@@ -2,6 +2,7 @@
 
 # clean
 
+from typing import Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import control
@@ -29,7 +30,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class PIDControllerConfig(cp.ConfigBase):
-
     """Configuration of the PID Controller."""
 
     @classmethod
@@ -37,18 +37,22 @@ class PIDControllerConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return PIDController.get_full_classname()
 
+    building: str
     name: str
 
     @classmethod
-    def get_default_config(cls):
+    def get_default_config(
+        cls,
+        building: str = "BUI1",
+    ) -> Any:
         """Gets a default pid controller."""
         return PIDControllerConfig(
+            building=building,
             name="PIDController",
         )
 
 
 class PIDState:
-
     """Represents the current internal state of the PID."""
 
     def __init__(
@@ -81,7 +85,6 @@ class PIDState:
 
 
 class PIDController(cp.Component):
-
     """PID Controller class.
 
     The controller has a derivative gain = 0 which makes it PI Only
@@ -114,7 +117,7 @@ class PIDController(cp.Component):
     ) -> None:
         """Constructs all the neccessary attributes."""
         super().__init__(
-            config.name,
+            name=config.building + "_" + config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

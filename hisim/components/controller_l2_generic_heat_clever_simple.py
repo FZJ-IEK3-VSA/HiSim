@@ -32,9 +32,9 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class L2HeatSmartConfig(cp.ConfigBase):
-
     """L2 Config class."""
 
+    building: str
     name: str
     source_weight: int
     temperature_min_heating: float
@@ -54,7 +54,6 @@ class L2HeatSmartConfig(cp.ConfigBase):
 
 
 class L2HeatSmartControllerState:
-
     """Controller state class that saves the state of the heat pump."""
 
     def __init__(
@@ -109,7 +108,6 @@ class L2HeatSmartControllerState:
 
 
 class L2HeatSmartController(cp.Component):
-
     """L2 heat pump controller.
 
     Processes signals ensuring comfort temperature of building.
@@ -166,7 +164,7 @@ class L2HeatSmartController(cp.Component):
         if not config.__class__.__name__ == L2HeatSmartConfig.__name__:
             raise ValueError("Wrong config class: " + config.__class__.__name__)
         super().__init__(
-            name=config.name + "_w" + str(config.source_weight),
+            name=config.building + "_" + config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -255,9 +253,12 @@ class L2HeatSmartController(cp.Component):
         return connections
 
     @staticmethod
-    def get_default_config_heating():
+    def get_default_config_heating(
+        building: str = "BUI1",
+    ) -> Any:
         """Get default config heating."""
         config = L2HeatSmartConfig(
+            building=building,
             name="L2HeatingTemperatureController",
             source_weight=1,
             temperature_min_heating=20.0,
@@ -273,9 +274,12 @@ class L2HeatSmartController(cp.Component):
         return config
 
     @staticmethod
-    def get_default_config_buffer_heating():
+    def get_default_config_buffer_heating(
+        building: str = "BUI1",
+    ) -> Any:
         """Get default config buffer heating."""
         config = L2HeatSmartConfig(
+            building=building,
             name="L2BufferTemperatureController",
             source_weight=1,
             temperature_min_heating=40.0,
@@ -291,9 +295,12 @@ class L2HeatSmartController(cp.Component):
         return config
 
     @staticmethod
-    def get_default_config_waterheating():
+    def get_default_config_waterheating(
+        building: str = "BUI1",
+    ) -> Any:
         """Get default config waterheating."""
         config = L2HeatSmartConfig(
+            building=building,
             name="L2DHWTemperatureController",
             source_weight=1,
             temperature_min_heating=50.0,

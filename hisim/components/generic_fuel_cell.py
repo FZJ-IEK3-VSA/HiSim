@@ -4,7 +4,7 @@
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 import os
-from typing import List
+from typing import List, Any
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -35,7 +35,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class FuelCellConfig(cp.ConfigBase):
-
     """Configuration of the Example Transformer."""
 
     @classmethod
@@ -43,6 +42,7 @@ class FuelCellConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return FuelCell.get_full_classname()
 
+    building: str
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters
     name: str
@@ -58,9 +58,13 @@ class FuelCellConfig(cp.ConfigBase):
     # H_s_h2 = 33.33 #kWh/kg
 
     @classmethod
-    def get_default_pem_fuel_cell_config(cls):
+    def get_default_pem_fuel_cell_config(
+        cls,
+        building: str = "BUI1",
+    ) -> Any:
         """Gets a default PEM Eletrolyzer."""
         return FuelCellConfig(
+            building=building,
             name="PEM_Fuel_Cell",
             type="PEM",
             nom_output=100.0,  # [kW]
@@ -83,10 +87,15 @@ class FuelCellConfig(cp.ConfigBase):
             return data.get("Fuel Cell variants", {}).get(fuel_cell_name, {})
 
     @classmethod
-    def config_fuel_cell(cls, fuel_cell_name):
+    def config_fuel_cell(
+        cls,
+        fuel_cell_name: str,
+        building: str = "BUI1",
+    ) -> Any:
         """Get config of fuel cell."""
         config_json = cls.read_config(fuel_cell_name)
         config = FuelCellConfig(
+            building=building,
             name="FuelCell",  # config_json.get("name", "")
             type=config_json.get("type", ""),
             nom_output=config_json.get("nom_output", 0.0),
@@ -102,7 +111,6 @@ class FuelCellConfig(cp.ConfigBase):
 
 
 class FuelCell(cp.Component):
-
     """The Example Transformer class.
 
     It is used to modify input values and return them as new output values.
@@ -172,7 +180,7 @@ class FuelCell(cp.Component):
         self.ramp_down_rate = config.ramp_down_rate
 
         super().__init__(
-            name=self.fuelcellconfig.name,
+            name=config.building + "_" + self.fuelcellconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

@@ -3,7 +3,7 @@
 # clean
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
-from typing import List
+from typing import List, Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -17,7 +17,6 @@ from hisim.component import ConfigBase
 @dataclass_json
 @dataclass
 class ExampleTransformerConfig(ConfigBase):
-
     """Configuration of the Example Transformer."""
 
     @classmethod
@@ -25,6 +24,7 @@ class ExampleTransformerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return ExampleTransformer.get_full_classname()
 
+    building: str
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters
     name: str
@@ -32,9 +32,13 @@ class ExampleTransformerConfig(ConfigBase):
     unit: lt.Units
 
     @classmethod
-    def get_default_transformer(cls):
+    def get_default_transformer(
+        cls,
+        building: str = "BUI1",
+    ) -> Any:
         """Gets a default Transformer."""
         return ExampleTransformerConfig(
+            building=building,
             name="Example Transformer default",
             loadtype=lt.LoadTypes.ANY,
             unit=lt.Units.ANY,
@@ -42,7 +46,6 @@ class ExampleTransformerConfig(ConfigBase):
 
 
 class ExampleTransformer(Component):
-
     """The Example Transformer class.
 
     It is used to modify input values and return them as new output values.
@@ -76,7 +79,7 @@ class ExampleTransformer(Component):
         """Constructs all the neccessary attributes."""
         self.transformerconfig = config
         super().__init__(
-            self.transformerconfig.name,
+            name=config.building + "_" + self.transformerconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

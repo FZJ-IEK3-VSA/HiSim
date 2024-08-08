@@ -52,7 +52,6 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
 
     """Configuration for with advanced heat pump and diesel car."""
 
-    building_name: str
     building_type: str
     number_of_apartments: int
     occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig
@@ -77,15 +76,13 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
     def get_default(cls) -> "HouseholdAdvancedHPDieselCarConfig":
         """Get default HouseholdAdvancedHPDieselCarConfig."""
 
-        building_name = "BUI1"
         heating_reference_temperature_in_celsius: float = -7
 
         building_config = building.BuildingConfig.get_default_german_single_family_home(
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius
         )
-        building_config.name = building_name + "_" + building_config.name
 
-        household_config = cls.get_scaled_default(building_config, building_name)
+        household_config = cls.get_scaled_default(building_config)
 
         household_config.hp_config.set_thermal_output_power_in_watt = Quantity(
             6000, Watt  # default value leads to switching on-off very often
@@ -98,7 +95,6 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
     def get_scaled_default(
         cls,
         building_config: building.BuildingConfig,
-        building_name: str,
         options: HouseholdAdvancedHPDieselCarOptions = HouseholdAdvancedHPDieselCarOptions(),
     ) -> "HouseholdAdvancedHPDieselCarConfig":
         """Get scaled default HouseholdAdvancedHPDieselCarConfig."""
@@ -113,12 +109,10 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
             heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
             heating_reference_temperature_in_celsius=my_building_information.heating_reference_temperature_in_celsius,
         )
-        hds_controller_config.name = building_name + "_" + hds_controller_config.name
         my_hds_controller_information = heat_distribution_system.HeatDistributionControllerInformation(
             config=hds_controller_config
         )
         household_config = HouseholdAdvancedHPDieselCarConfig(
-            building_name="BUI1",
             building_type="blub",
             number_of_apartments=int(my_building_information.number_of_apartments),
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
@@ -129,7 +123,8 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
                 travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
                 transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
                 charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
-                name=building_name + "_" + "UTSPConnector",
+                name="UTSPConnector",
+                building="BUI1",
                 consumption=0.0,
                 profile_with_washing_machine_and_dishwasher=True,
                 predictive_control=False,
@@ -140,38 +135,32 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
             hds_config=(
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
                     water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
-                    absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
-                    name=building_name + "_" + "HeatDistributionSystem",
+                    absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2
                 )
             ),
             hp_controller_config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(
-                heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type,
-                name=building_name + "_" + "HeatPumpHplibController",
+                heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
             ),
             hp_config=advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-                name=building_name + "_" + "HeatPumpHPLib",
                 heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
                 heating_reference_temperature_in_celsius=Quantity(my_building_information.heating_reference_temperature_in_celsius, Celsius),
             ),
             simple_hot_water_storage_config=simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
-                name=building_name + "_" + "SimpleHotWaterStorage",
                 max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
                 temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
                 sizing_option=simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
             ),
             dhw_heatpump_config=generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
-                name=building_name + "_" + "DHWHeatPump",
                 number_of_apartments=int(my_building_information.number_of_apartments)
             ),
             dhw_heatpump_controller_config=controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-                name=building_name + "_" + "DHWHeatpumpController"
+                name="DHWHeatpumpController"
             ),
             dhw_storage_config=generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
-                name=building_name + "_" + "DHWStorage",
                 number_of_apartments=int(my_building_information.number_of_apartments)
             ),
-            car_config=generic_car.CarConfig.get_default_diesel_config(name=building_name + "_" + "DieselCar",),
-            electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(name=building_name + "_" + "ElectricityMeter",),
+            car_config=generic_car.CarConfig.get_default_diesel_config(),
+            electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
         )
 
         # adjust HeatPump
@@ -263,7 +252,7 @@ def setup_function(
 
     # Build Weather
     my_weather = weather.Weather(
-        config=weather.WeatherConfig.get_default(weather.LocationEnum.AACHEN, name=my_config.building_name + "_" + "Weather"),
+        config=weather.WeatherConfig.get_default(weather.LocationEnum.AACHEN),
         my_simulation_parameters=my_simulation_parameters,
     )
 
@@ -280,6 +269,7 @@ def setup_function(
 
     # Build Heat Pump Controller
     my_heat_pump_controller_config = my_config.hp_controller_config
+    my_heat_pump_controller_config.name = "HeatPumpHplibController"
 
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
         config=my_heat_pump_controller_config,
@@ -288,6 +278,7 @@ def setup_function(
 
     # Build Heat Pump
     my_heat_pump_config = my_config.hp_config
+    my_heat_pump_config.name = "HeatPumpHPLib"
 
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
         config=my_heat_pump_config,
@@ -313,6 +304,7 @@ def setup_function(
     my_dhw_heatpump_controller_config = my_config.dhw_heatpump_controller_config
 
     my_dhw_storage_config = my_config.dhw_storage_config
+    my_dhw_storage_config.name = "DHWStorage"
     my_dhw_storage_config.compute_default_cycle(
         temperature_difference_in_kelvin=my_dhw_heatpump_controller_config.t_max_heating_in_celsius
         - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
@@ -336,6 +328,7 @@ def setup_function(
     my_car_information = generic_car.GenericCarInformation(my_occupancy_instance=my_occupancy)
 
     my_car_config = my_config.car_config
+    my_car_config.name = "DieselCar"
 
     # create all cars
     my_cars: List[generic_car.Car] = []

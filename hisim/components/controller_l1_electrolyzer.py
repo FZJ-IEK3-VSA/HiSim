@@ -3,6 +3,7 @@
 The controller looks at the available surplus electricity and passes the signal to the electrolyzer accordingly.
 In addition the controller takes care of minimum operation and indle times and the available capacity in the hydrogen storage.
 """
+
 # clean
 import importlib
 from dataclasses import dataclass
@@ -18,9 +19,9 @@ from hisim.simulationparameters import SimulationParameters
 @dataclass_json
 @dataclass
 class L1ElectrolyzerControllerConfig(cp.ConfigBase):
-
     """Electrolyzer Controller Config."""
 
+    building: str
     #: name of the device
     name: str
     #: priority of the device in hierachy: the higher the number the lower the priority
@@ -35,9 +36,12 @@ class L1ElectrolyzerControllerConfig(cp.ConfigBase):
     h2_soc_threshold: float
 
     @staticmethod
-    def get_default_config() -> "L1ElectrolyzerControllerConfig":
+    def get_default_config(
+        building: str = "BUI1",
+    ) -> "L1ElectrolyzerControllerConfig":
         """Returns the default configuration of an electrolyzer controller."""
         config = L1ElectrolyzerControllerConfig(
+            building=building,
             name="L1 Electrolyzer Controller",
             source_weight=1,
             min_operation_time_in_seconds=14400,
@@ -49,7 +53,6 @@ class L1ElectrolyzerControllerConfig(cp.ConfigBase):
 
 
 class L1ElectrolyzerControllerState:
-
     """Data class for saving the state of the electrolyzer controller."""
 
     def __init__(
@@ -85,7 +88,6 @@ class L1ElectrolyzerControllerState:
 
 
 class L1GenericElectrolyzerController(cp.Component):
-
     """Controller of the Electrolyzer.
 
     It takes the available surplus electricity of the energy management system and passes it to the electrolyzer.
@@ -116,7 +118,7 @@ class L1GenericElectrolyzerController(cp.Component):
         """Initialize the class."""
 
         super().__init__(
-            name=config.name + "_w" + str(config.source_weight),
+            name=config.building + "_" + config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

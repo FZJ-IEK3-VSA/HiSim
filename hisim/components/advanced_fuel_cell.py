@@ -32,7 +32,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class CHPConfig(ConfigBase):
-
     """CHP Config class."""
 
     @classmethod
@@ -40,6 +39,7 @@ class CHPConfig(ConfigBase):
         """Return the full class name of the base class."""
         return CHP.get_full_classname()
 
+    building: str
     name: str
     min_operation_time: float
     min_idle_time: float
@@ -59,9 +59,13 @@ class CHPConfig(ConfigBase):
     delta_temperature: float
 
     @classmethod
-    def get_default_config(cls) -> Any:
+    def get_default_config(
+        cls,
+        building: str = "BUI1",
+    ) -> Any:
         """Get default config."""
         config = CHPConfig(
+            building=building,
             name="CHP",
             min_operation_time=60,
             min_idle_time=15,
@@ -84,7 +88,6 @@ class CHPConfig(ConfigBase):
 
 
 class CHPConfigAdvanced:
-
     """CHP config advanced class."""
 
     def __init__(self) -> None:
@@ -131,7 +134,6 @@ class CHPConfigAdvanced:
 
 
 class CHPState:
-
     """CHP state class."""
 
     def __init__(self, start_timestep=None, electricity_output=0.0, cycle_number=None):
@@ -148,7 +150,6 @@ class CHPState:
 
 
 class CHP(Component):
-
     """CHP class.
 
     Simulate chp efficiency (cop) as well as electrical (p_el) &
@@ -180,7 +181,7 @@ class CHP(Component):
         """Initialize the class."""
         self.chp_config = config
         super().__init__(
-            name=self.chp_config.name,
+            name=self.chp_config.building + "_" + self.chp_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

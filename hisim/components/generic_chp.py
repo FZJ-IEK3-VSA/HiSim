@@ -5,6 +5,7 @@ or also a fuel cell. In this implementation the CHP does not modulate: it is eit
 on or off. When it runs, it outputs a constant thermal and electrical power signal
 and needs a constant input of hydrogen or natural gas.
 """
+
 # clean
 
 from dataclasses import dataclass
@@ -29,9 +30,9 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class CHPConfig(cp.ConfigBase):
-
     """Defininition of configuration of combined heat and power plant (CHP)."""
 
+    building: str
     #: name of the CHP
     name: str
     #: priority of the component in hierachy: the higher the number the lower the priority
@@ -46,9 +47,13 @@ class CHPConfig(cp.ConfigBase):
     p_fuel: float
 
     @staticmethod
-    def get_default_config_chp(thermal_power: float) -> "CHPConfig":
+    def get_default_config_chp(
+        thermal_power: float,
+        building: str = "BUI1",
+    ) -> "CHPConfig":
         """Get default config chp."""
         config = CHPConfig(
+            building=building,
             name="CHP",
             source_weight=1,
             use=lt.LoadTypes.GAS,
@@ -59,9 +64,13 @@ class CHPConfig(cp.ConfigBase):
         return config
 
     @staticmethod
-    def get_default_config_fuelcell(thermal_power: float) -> "CHPConfig":
+    def get_default_config_fuelcell(
+        thermal_power: float,
+        building: str = "BUI1",
+    ) -> "CHPConfig":
         """Get default config fuel cell."""
         config = CHPConfig(
+            building=building,
             name="CHP",
             source_weight=1,
             use=lt.LoadTypes.HYDROGEN,
@@ -73,7 +82,6 @@ class CHPConfig(cp.ConfigBase):
 
 
 class GenericCHPState:
-
     """Generic chp state class saves the state of the CHP."""
 
     def __init__(self, state: int) -> None:
@@ -86,7 +94,6 @@ class GenericCHPState:
 
 
 class SimpleCHP(cp.Component):
-
     """Simulates CHP operation with constant electical and thermal power as well as constant fuel consumption.
 
     Components to connect to:
@@ -111,7 +118,7 @@ class SimpleCHP(cp.Component):
     ) -> None:
         """Initializes the class."""
         super().__init__(
-            name=config.name + "_w" + str(config.source_weight),
+            name=config.building + "_" + config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

@@ -2,6 +2,7 @@
 
 # clean
 
+from typing import Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hisim.component import ConfigBase
@@ -10,9 +11,9 @@ from hisim.component import ConfigBase
 @dataclass_json
 @dataclass
 class WarmWaterStorageConfig(ConfigBase):
-
     """Warm water storage config class."""
 
+    building: str
     name: str
     tank_diameter: float  # [m]
     tank_height: float  # [m]
@@ -22,9 +23,13 @@ class WarmWaterStorageConfig(ConfigBase):
     slice_height_minimum: float  # [m]
 
     @classmethod
-    def get_default_config(cls):
+    def get_default_config(
+        cls,
+        building: str = "BUI1",
+    ) -> Any:
         """Gets a default config."""
         return WarmWaterStorageConfig(
+            building=building,
             name="WarmWaterStorage",
             tank_diameter=1,  # 0.9534        # [m]
             tank_height=2,  # 3.15              # [m]
@@ -36,7 +41,6 @@ class WarmWaterStorageConfig(ConfigBase):
 
 
 class CHPControllerConfig:
-
     """Chp controller config.
 
     The CHP controller is used to implement an on and off hysteresis
@@ -63,7 +67,6 @@ class CHPControllerConfig:
 
 
 class GasHeaterConfig:
-
     """Gas heater config class."""
 
     is_modulating = True
@@ -77,7 +80,6 @@ class GasHeaterConfig:
 
 
 class GasControllerConfig:
-
     """Gas controller config class.
 
     This controller works like the CHP controller, but switches on later so the CHP is used more often.
@@ -97,7 +99,6 @@ class GasControllerConfig:
 
 
 class LoadConfig:
-
     """Load config."""
 
     # massflow_load_minute = 2.5          # [kg/min]
@@ -115,7 +116,6 @@ class LoadConfig:
 
 
 class ElectricityDemandConfig:
-
     """Electricity demand config class."""
 
     kwh_per_year = 6000
@@ -123,7 +123,6 @@ class ElectricityDemandConfig:
 
 
 class HouseholdWarmWaterDemandConfig:
-
     """Household warm water demand config."""
 
     freshwater_temperature = 10  # [°C]
@@ -140,7 +139,6 @@ class HouseholdWarmWaterDemandConfig:
 
 
 class HydrogenStorageConfig:
-
     """Hydrogen storage config class."""
 
     # combination of
@@ -162,7 +160,6 @@ class HydrogenStorageConfig:
 
 
 class AdvElectrolyzerConfig:
-
     """Adv electrolyzer config class."""
 
     waste_energy = 400  # [W]   # 400
@@ -190,7 +187,6 @@ class AdvElectrolyzerConfig:
 
 
 class PVConfig:
-
     """PV config class."""
 
     peak_power = 20_000  # [W]
@@ -199,9 +195,9 @@ class PVConfig:
 @dataclass_json
 @dataclass
 class ExtendedControllerConfig(ConfigBase):
-
     """Extended controller config class."""
 
+    building: str
     name: str
     # Active Components
     chp: bool
@@ -216,9 +212,13 @@ class ExtendedControllerConfig(ConfigBase):
     maximum_autarky: bool
 
     @classmethod
-    def get_default_config(cls):
+    def get_default_config(
+        cls,
+        building: str = "BUI1",
+    ) -> Any:
         """Gets a default ExtendedControllerConfig."""
         return ExtendedControllerConfig(
+            building=building,
             name="Example Component",
             chp=True,
             gas_heater=True,
@@ -233,7 +233,6 @@ class ExtendedControllerConfig(ConfigBase):
 
 
 class PhysicsConfig:
-
     """Physics config class."""
 
     water_density = 1000  # [kg/m^3]
@@ -260,7 +259,6 @@ class PhysicsConfig:
 @dataclass_json
 @dataclass
 class EmissionFactorsAndCostsForFuelsConfig:
-
     """Emission factors and costs for fuels config class."""
 
     electricity_costs_in_euro_per_kwh: float  # EUR/kWh

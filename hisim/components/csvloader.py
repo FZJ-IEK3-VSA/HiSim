@@ -18,7 +18,6 @@ from hisim.simulationparameters import SimulationParameters
 @dataclass_json
 @dataclass
 class CSVLoaderConfig(cp.ConfigBase):
-
     """Csvloader config class."""
 
     component_name: str
@@ -39,7 +38,6 @@ class CSVLoaderConfig(cp.ConfigBase):
 
 
 class CSVLoader(cp.Component):
-
     """Csvloader class.
 
     Class component loads CSV file containing some

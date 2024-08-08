@@ -43,7 +43,6 @@ from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDict
 
 
 class LpgDataAcquisitionMode(enum.Enum):
-
     """Set LPG Data Acquisition Mode."""
 
     USE_PREDEFINED_PROFILE = "use_predefined_profile"
@@ -53,9 +52,9 @@ class LpgDataAcquisitionMode(enum.Enum):
 @dataclass_json
 @dataclass
 class UtspLpgConnectorConfig(cp.ConfigBase):
-
     """Config class for UtspLpgConnector. Contains LPG parameters and UTSP connection parameters."""
 
+    building: str
     name: str
     data_acquisition_mode: LpgDataAcquisitionMode
     household: Union[JsonReference, List[JsonReference]]
@@ -77,10 +76,14 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
         return UtspLpgConnector.get_full_classname()
 
     @classmethod
-    def get_default_utsp_connector_config(cls) -> Any:
+    def get_default_utsp_connector_config(
+        cls,
+        building: str = "BUI1",
+    ) -> Any:
         """Creates a default configuration. Chooses default values for the LPG parameters."""
 
         config = UtspLpgConnectorConfig(
+            building=building,
             name="UTSPConnector",
             data_acquisition_mode=LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE,
             household=Households.CHR01_Couple_both_at_Work,
@@ -100,7 +103,6 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
 
 
 class UtspLpgConnector(cp.Component):
-
     """Component that provides data from the LoadProfileGenerator.
 
     This component provides the heating generated, the electricity and water consumed
@@ -141,7 +143,7 @@ class UtspLpgConnector(cp.Component):
         """Initializes the component and retrieves the LPG data."""
         self.utsp_config = config
         super().__init__(
-            name=self.utsp_config.name,
+            name=config.building + "_" + self.utsp_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -302,9 +304,7 @@ class UtspLpgConnector(cp.Component):
         resolution = datetime.timedelta(seconds=seconds)
         return str(resolution)
 
-    def get_profiles_from_utsp(
-        self, lpg_households: Union[JsonReference, List[JsonReference]], guid: str
-    ) -> Tuple[
+    def get_profiles_from_utsp(self, lpg_households: Union[JsonReference, List[JsonReference]], guid: str) -> Tuple[
         Union[str, List],
         Union[str, List],
         Union[str, List],
@@ -1408,9 +1408,10 @@ class UtspLpgConnector(cp.Component):
                 if output.field_name == self.ElectricityOutput:
                     occupancy_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]
                     occupancy_total_electricity_consumption_in_kilowatt_hour = (
-                    KpiHelperClass.compute_total_energy_from_power_timeseries(
-                        power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep)
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
                     )
                     break
 
@@ -1420,7 +1421,7 @@ class UtspLpgConnector(cp.Component):
             unit="kWh",
             value=occupancy_total_electricity_consumption_in_kilowatt_hour,
             tag=KpiTagEnumClass.RESIDENTS,
-            description=self.component_name
+            description=self.component_name,
         )
 
         list_of_kpi_entries = [occupancy_total_electricity_consumption_entry]

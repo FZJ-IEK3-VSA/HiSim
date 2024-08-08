@@ -32,12 +32,18 @@ class ElectricityMeterConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return ElectricityMeter.get_full_classname()
 
+    building: str
     name: str
 
     @classmethod
-    def get_electricity_meter_default_config(cls, name: str = "ElectricityMeter",):
+    def get_electricity_meter_default_config(
+        cls,
+        name: str = "ElectricityMeter",
+        building: str = "BUI1",
+    ) -> "ElectricityMeterConfig":
         """Gets a default ElectricityMeter."""
         return ElectricityMeterConfig(
+            building=building,
             name=name,
         )
 
@@ -74,8 +80,8 @@ class ElectricityMeter(DynamicComponent):
         super().__init__(
             self.my_component_inputs,
             self.my_component_outputs,
-            self.name,
-            my_simulation_parameters,
+            name=config.building + "_" + self.name,
+            my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
         )

@@ -10,6 +10,7 @@ Additionally it contains examples for doc strings according to the sphinx format
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from copy import deepcopy
+from typing import Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -32,7 +33,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class ComponentNameConfig(ConfigBase):
-
     """Configuration of the ComponentName."""
 
     @classmethod
@@ -40,6 +40,7 @@ class ComponentNameConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return ComponentName.get_full_classname()
 
+    building: str
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters
     name: str
@@ -47,9 +48,13 @@ class ComponentNameConfig(ConfigBase):
     unit: loadtypes.Units
 
     @classmethod
-    def get_default_template_component(cls):
+    def get_default_template_component(
+        cls,
+        building: str = "BUI1",
+    ) -> Any:
         """Gets a default ComponentName."""
         return ComponentNameConfig(
+            building=building,
             name="ComponentName default",
             loadtype=loadtypes.LoadTypes.ELECTRICITY,
             unit=loadtypes.Units.WATT,
@@ -57,7 +62,6 @@ class ComponentNameConfig(ConfigBase):
 
 
 class ComponentName(Component):
-
     """Some instructions to document a class.
 
     First write a summary of the class that is as accurate as possible.
@@ -129,7 +133,7 @@ class ComponentName(Component):
         """Constructs all the neccessary attributes."""
         self.componentnameconfig = config
         super().__init__(
-            self.componentnameconfig.name,
+            name=config.building + "_" + self.componentnameconfig.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -197,7 +201,6 @@ class ComponentName(Component):
 
 @dataclass
 class ComponentNameState:
-
     """The data class saves the state of the simulation results.
 
     Parameters

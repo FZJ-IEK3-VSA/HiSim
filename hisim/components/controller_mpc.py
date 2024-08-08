@@ -3,7 +3,7 @@
 # clean
 
 import datetime
-from typing import List, Optional
+from typing import List, Optional, Any
 
 # from typing import Any
 from dataclasses import dataclass
@@ -46,7 +46,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class MpcControllerConfig(ConfigBase):
-
     """Configuration of the MPC Controller."""
 
     @classmethod
@@ -54,6 +53,7 @@ class MpcControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return MpcController.get_full_classname()
 
+    building: str
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters
     name: str
@@ -113,9 +113,13 @@ class MpcControllerConfig(ConfigBase):
     prediction_horizon: Optional[int]
 
     @classmethod
-    def get_default_config(cls):
+    def get_default_config(
+        cls,
+        building: str = "BUI1",
+    ) -> Any:
         """Gets a default MPC controller."""
         return MpcControllerConfig(
+            building=building,
             name="MpcController",
             mpc_scheme="optimization_once_aday_only",
             min_comfort_temp=21.0,
@@ -174,7 +178,6 @@ class MpcControllerConfig(ConfigBase):
 
 
 class MPCcontrollerState:
-
     """Controller state."""
 
     def __init__(self, t_m: float, soc: float, cost_optimal_thermal_power: list):
@@ -189,7 +192,6 @@ class MPCcontrollerState:
 
 
 class MpcController(cp.Component):
-
     """MPC Controller class."""
 
     # Inputs
@@ -226,7 +228,7 @@ class MpcController(cp.Component):
         """Constructs all the neccessary attributes."""
 
         super().__init__(
-            config.name,
+            name=config.building + "_" + config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

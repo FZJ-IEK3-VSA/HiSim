@@ -40,9 +40,9 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class L1BuildingHeatingConfig(cp.ConfigBase):
-
     """Configuration of Building Controller."""
 
+    building: str
     #: name of the device
     name: str
     #: priority of the device in hierachy: the higher the number the lower the priority
@@ -59,9 +59,13 @@ class L1BuildingHeatingConfig(cp.ConfigBase):
     day_of_heating_season_end: int
 
     @staticmethod
-    def get_default_config_heating(name: str) -> Any:
+    def get_default_config_heating(
+        name: str,
+        building: str = "BUI1",
+    ) -> Any:
         """Default config for the heating controller."""
         config = L1BuildingHeatingConfig(
+            building=building,
             name="L1BuildingTemperatureController" + name,
             source_weight=1,
             t_min_heating_in_celsius=19.5,
@@ -74,7 +78,6 @@ class L1BuildingHeatingConfig(cp.ConfigBase):
 
 
 class L1BuildingHeatControllerState:
-
     """Data class that saves the state of the controller."""
 
     def __init__(self, state: float = 0):
@@ -87,7 +90,6 @@ class L1BuildingHeatControllerState:
 
 
 class L1BuildingHeatController(cp.Component):
-
     """L1 building controller. Processes signals ensuring comfort temperature of building.
 
     Gets temperature of building to control as input, as well as a signal from the energy management system to increase the set temperatur of the buffer storage.
@@ -121,7 +123,7 @@ class L1BuildingHeatController(cp.Component):
         if not config.__class__.__name__ == L1BuildingHeatingConfig.__name__:
             raise ValueError("Wrong config class.")
         super().__init__(
-            name=config.name + "_w" + str(config.source_weight),
+            name=config.building + "_" + config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

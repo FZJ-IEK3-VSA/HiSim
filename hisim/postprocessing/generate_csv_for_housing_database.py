@@ -216,7 +216,8 @@ def generate_csv_for_database(
 
     remaining_electricity_annual = 0.0
     remaining_electricity_seasonal = np.array([0.0] * 6)
-
+    day = None
+    night = None
     # get indices for day and night:
     for index, output in enumerate(all_outputs):
         for elem in wrapped_components:

@@ -313,7 +313,7 @@ class Car(cp.Component):
         opex_cost_per_simulated_period_in_euro = None
         co2_per_simulated_period_in_kg = None
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.config.name + "_w" + str(self.config.source_weight):
+            if output.component_name == self.component_name:
                 if output.unit == lt.Units.LITER:
                     self.config.consumption = round(sum(postprocessing_results.iloc[:, index]), 1)
                     emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(

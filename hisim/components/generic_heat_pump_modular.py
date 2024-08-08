@@ -423,7 +423,7 @@ class ModularHeatPump(cp.Component):
         """
         for index, output in enumerate(all_outputs):
             if (
-                output.component_name == self.config.name + "_w" + str(self.config.source_weight)
+                output.component_name == self.component_name
                 and output.load_type == lt.LoadTypes.ELECTRICITY
             ):  # Todo: check component name from system_setups: find another way of using only heatpump-outputs
                 self.config.consumption = round(

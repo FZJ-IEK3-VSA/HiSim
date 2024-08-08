@@ -802,7 +802,7 @@ class UtspLpgConnector(cp.Component):
         because part of electricity consumption is feed by PV
         """
         for index, output in enumerate(all_outputs):
-            if output.component_name == "UTSPConnector" and output.load_type == lt.LoadTypes.ELECTRICITY:
+            if output.component_name == self.component_name and output.load_type == lt.LoadTypes.ELECTRICITY:
                 self.utsp_config.consumption = round(
                     sum(postprocessing_results.iloc[:, index])
                     * self.my_simulation_parameters.seconds_per_timestep

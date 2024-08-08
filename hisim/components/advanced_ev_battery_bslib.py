@@ -259,7 +259,7 @@ class CarBattery(Component):
         for index, output in enumerate(all_outputs):
             if (
                 output.postprocessing_flag is not None
-                and output.component_name == self.battery_config.name + "_w" + str(self.battery_config.source_weight)
+                and output.component_name == self.component_name
             ):
                 if InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
                     self.battery_config.charge = round(

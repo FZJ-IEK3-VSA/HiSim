@@ -1404,7 +1404,7 @@ class UtspLpgConnector(cp.Component):
         occupancy_total_electricity_consumption_in_kilowatt_hour: Optional[float] = None
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.config.name:
+            if output.component_name == self.component_name:
                 if output.field_name == self.ElectricityOutput:
                     occupancy_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]
                     occupancy_total_electricity_consumption_in_kilowatt_hour = (

@@ -65,6 +65,7 @@ def test_house(
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_SINGLE_DAYS)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_CAPEX)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
@@ -86,14 +87,12 @@ def test_house(
     # =================================================================================================================================
     # Build Components
     building_name = "BUI1"
-
     heating_reference_temperature_in_celsius = -7.0
 
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home(
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
-    my_building_config.name = building_name + "_" + my_building_config.name
     my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
     # Add to simulator
@@ -101,7 +100,6 @@ def test_house(
 
     # Build Occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
-    my_occupancy_config.name = building_name + "_" + my_occupancy_config.name
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters
     )
@@ -110,7 +108,6 @@ def test_house(
 
     # Build Weather
     my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
-    my_weather_config.name = building_name + "_" + my_weather_config.name
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     # Add to simulator
     my_sim.add_component(my_weather)
@@ -120,7 +117,6 @@ def test_house(
         rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2,
         share_of_maximum_pv_potential=1.0,
     )
-    my_photovoltaic_system_config.name = building_name + "_" + my_photovoltaic_system_config.name
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -135,7 +131,6 @@ def test_house(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
-    my_heat_distribution_controller_config.name = building_name + "_" + my_heat_distribution_controller_config.name
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
         my_simulation_parameters=my_simulation_parameters,
         config=my_heat_distribution_controller_config,
@@ -152,7 +147,6 @@ def test_house(
             heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
         )
     )
-    my_heat_pump_controller_config.name = building_name + "_" + my_heat_pump_controller_config.name
     my_heat_pump_controller = advanced_heat_pump_hplib.HeatPumpHplibController(
         config=my_heat_pump_controller_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -165,7 +159,6 @@ def test_house(
         heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
         heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
     )
-    my_heat_pump_config.name = building_name + "_" + my_heat_pump_config.name
     my_heat_pump = advanced_heat_pump_hplib.HeatPumpHplib(
         config=my_heat_pump_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -180,7 +173,6 @@ def test_house(
             absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
         )
     )
-    my_heat_distribution_system_config.name = building_name + "_" + my_heat_distribution_system_config.name
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -194,7 +186,6 @@ def test_house(
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
         sizing_option=simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
     )
-    my_simple_heat_water_storage_config.name = building_name + "_" + my_simple_heat_water_storage_config.name
     my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -207,20 +198,17 @@ def test_house(
         number_of_apartments=my_building_information.number_of_apartments,
         default_power_in_watt=6000,
     )
-    my_dhw_heatpump_config.name = building_name + "_" + my_dhw_heatpump_config.name
     my_dhw_heatpump_controller_config = (
         controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
             name="DHWHeatpumpController"
         )
     )
-    my_dhw_heatpump_controller_config.name = building_name + "_" + my_dhw_heatpump_controller_config.name
     my_dhw_storage_config = (
         generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
             number_of_apartments=my_building_information.number_of_apartments,
             default_volume_in_liter=450,
         )
     )
-    my_dhw_storage_config.name = building_name + "_" + my_dhw_storage_config.name
     my_dhw_storage_config.compute_default_cycle(
         temperature_difference_in_kelvin=my_dhw_heatpump_controller_config.t_max_heating_in_celsius
         - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
@@ -245,7 +233,6 @@ def test_house(
 
     # Build Electricity Meter
     my_electricity_meter_config = electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config()
-    my_electricity_meter_config.name = building_name + "_" + my_electricity_meter_config.name
 
     my_electricity_meter = electricity_meter.ElectricityMeter(
         my_simulation_parameters=my_simulation_parameters,
@@ -256,7 +243,6 @@ def test_house(
     my_electricity_controller_config = controller_l2_district_energy_management_system.EMSDistrictConfig.get_default_config_ems(
         strategy=controller_l2_district_energy_management_system.EMSControlStrategy.BUILDING_OPTIMIZEOWNCONSUMPTION_PARALLEL
     )
-    my_electricity_controller_config.name = building_name + "_" + my_electricity_controller_config.name
 
     my_electricity_controller = controller_l2_district_energy_management_system.L2GenericDistrictEnergyManagementSystem(
         my_simulation_parameters=my_simulation_parameters,
@@ -267,7 +253,6 @@ def test_house(
     my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
         total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt
     )
-    my_advanced_battery_config.name = building_name + "_" + my_advanced_battery_config.name
     my_advanced_battery = advanced_battery_bslib.Battery(
         my_simulation_parameters=my_simulation_parameters,
         config=my_advanced_battery_config,

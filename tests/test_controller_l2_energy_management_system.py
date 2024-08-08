@@ -61,6 +61,7 @@ def test_house(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_CAPEX)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON)
 
@@ -80,6 +81,7 @@ def test_house(
 
     # =================================================================================================================================
     # Build Components
+    building_name = "BUI1"
     heating_reference_temperature_in_celsius = -7.0
 
     # Build Building
@@ -295,6 +297,10 @@ def test_house(
     ) as file:
         jsondata = json.load(file)
 
+    jsondata = jsondata[building_name]
+
+    print(jsondata)
+
     # Get general KPI values
     total_consumption_kpi_in_kilowatt_hour = jsondata["General"]["Total electricity consumption"].get("value")
     electricity_from_grid_kpi_in_kilowatt_hour = jsondata["Electricity Meter"]["Total energy from grid"].get("value")
@@ -356,7 +362,7 @@ def test_house(
 
     # Get EMS output TotalElectricityConsumption
     simulation_results_ems_total_consumption_in_watt = my_sim.results_data_frame[
-        "L2EMSElectricityController - TotalElectricityConsumption [Electricity - W]"
+        building_name + "_" + "L2EMSElectricityController - TotalElectricityConsumption [Electricity - W]"
     ]
 
     ems_total_consumption_in_kilowatt_hour = (
@@ -365,8 +371,8 @@ def test_house(
 
     # Get EMS output ElectricityToOrFromGrid -> get grid consumption by filterig only values < 0
     simulation_results_ems_grid_consumption_in_watt = abs(
-        my_sim.results_data_frame["L2EMSElectricityController - TotalElectricityToOrFromGrid [Electricity - W]"].loc[
-            my_sim.results_data_frame["L2EMSElectricityController - TotalElectricityToOrFromGrid [Electricity - W]"]
+        my_sim.results_data_frame[building_name + "_" + "L2EMSElectricityController - TotalElectricityToOrFromGrid [Electricity - W]"].loc[
+            my_sim.results_data_frame[building_name + "_" + "L2EMSElectricityController - TotalElectricityToOrFromGrid [Electricity - W]"]
             < 0.0
         ]
     )
@@ -376,9 +382,9 @@ def test_house(
 
     # Get EMS output ElectricityToOrFromGrid -> get grid injection by filterig only values > 0
     simulation_results_ems_grid_injection_in_watt = my_sim.results_data_frame[
-        "L2EMSElectricityController - TotalElectricityToOrFromGrid [Electricity - W]"
+        building_name + "_" + "L2EMSElectricityController - TotalElectricityToOrFromGrid [Electricity - W]"
     ].loc[
-        my_sim.results_data_frame["L2EMSElectricityController - TotalElectricityToOrFromGrid [Electricity - W]"] > 0.0
+        my_sim.results_data_frame[building_name + "_" + "L2EMSElectricityController - TotalElectricityToOrFromGrid [Electricity - W]"] > 0.0
     ]
     ems_grid_injection_in_kilowatt_hour = (
         sum(simulation_results_ems_grid_injection_in_watt) * seconds_per_timestep / 3.6e6

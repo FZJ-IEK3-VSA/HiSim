@@ -1402,7 +1402,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.config.name:
+            if output.component_name == self.component_name:
                 number_of_heat_pump_cycles = self.get_heatpump_cycles(
                     output=output, index=index, postprocessing_results=postprocessing_results
                 )

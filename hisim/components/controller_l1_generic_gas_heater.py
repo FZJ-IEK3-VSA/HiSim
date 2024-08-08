@@ -72,11 +72,11 @@ class GenericGasHeaterControllerL1Config(ConfigBase):
     @classmethod
     def get_scaled_generic_gas_heater_controller_config(
         cls,
-        heating_load_of_building_name_in_watt: float,
+        heating_load_of_building_in_watt: float,
         building_name: str = "BUI1",
     ) -> "GenericGasHeaterControllerL1Config":
         """Gets a default Generic Heat Pump Controller."""
-        maximal_thermal_power_in_watt = heating_load_of_building_name_in_watt
+        maximal_thermal_power_in_watt = heating_load_of_building_in_watt
         return GenericGasHeaterControllerL1Config(
             building_name=building_name,
             name="GenericGasHeaterController",

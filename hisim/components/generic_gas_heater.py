@@ -99,11 +99,11 @@ class GenericGasHeaterConfig(ConfigBase):
     @classmethod
     def get_scaled_gasheater_config(
         cls,
-        heating_load_of_building_name_in_watt: float,
+        heating_load_of_building_in_watt: float,
         building_name: str = "BUI1",
     ) -> "GenericGasHeaterConfig":
         """Get a default building_name."""
-        maximal_power_in_watt: float = heating_load_of_building_name_in_watt  # W
+        maximal_power_in_watt: float = heating_load_of_building_in_watt  # W
         config = GenericGasHeaterConfig(
             building_name=building_name,
             name="GenericGasHeater",

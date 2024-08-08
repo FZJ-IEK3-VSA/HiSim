@@ -37,6 +37,7 @@ def test_heat_pump_hplib():
 
     # Initialize component
     heatpump_config = HeatPumpHplibConfig(
+        building="BUI1",
         name="Heat Pump",
         model=model,
         group_id=group_id,

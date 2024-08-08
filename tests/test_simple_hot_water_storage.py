@@ -44,6 +44,7 @@ def simulate_simple_water_storage(
     # ===================================================================================================================
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig(
+        building="BUI1",
         name=hws_name,
         volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
         heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,

@@ -46,6 +46,7 @@ def compute_energy_from_power(power_timeseries: pd.Series, seconds_per_timestep:
 
 def compute_seasonal(
     csv_frame_seasonal: pd.DataFrame,
+    simulation_parameters: SimulationParameters,
     index_in_seasonal_frame: Tuple[str, str],
     factor: float,
     output: pd.Series,
@@ -64,8 +65,8 @@ def compute_seasonal(
     csv_frame_seasonal.loc[index_in_seasonal_frame, "Summer-Day"] = (
         output_day[
             (
-                (output_day.index > dt.datetime(year=2019, month=6, day=21, hour=0))
-                & (output_day.index < dt.datetime(year=2019, month=9, day=23, hour=0))
+                (output_day.index > dt.datetime(year=simulation_parameters.year, month=6, day=21, hour=0))
+                & (output_day.index < dt.datetime(year=simulation_parameters.year, month=9, day=23, hour=0))
             )
         ].sum()
         * factor
@@ -73,8 +74,8 @@ def compute_seasonal(
     csv_frame_seasonal.loc[index_in_seasonal_frame, "Summer-Night"] = (
         output_night[
             (
-                (output_night.index > dt.datetime(year=2019, month=6, day=21, hour=12))
-                & (output_night.index < dt.datetime(year=2019, month=9, day=23, hour=12))
+                (output_night.index > dt.datetime(year=simulation_parameters.year, month=6, day=21, hour=12))
+                & (output_night.index < dt.datetime(year=simulation_parameters.year, month=9, day=23, hour=12))
             )
         ].sum()
         * factor
@@ -82,8 +83,8 @@ def compute_seasonal(
     csv_frame_seasonal.loc[index_in_seasonal_frame, "Winter-Day"] = (
         output_day[
             (
-                (output_day.index > dt.datetime(year=2019, month=12, day=21, hour=0))
-                | (output_day.index < dt.datetime(year=2019, month=3, day=23, hour=0))
+                (output_day.index > dt.datetime(year=simulation_parameters.year, month=12, day=21, hour=0))
+                | (output_day.index < dt.datetime(year=simulation_parameters.year, month=3, day=23, hour=0))
             )
         ].sum()
         * factor
@@ -91,8 +92,8 @@ def compute_seasonal(
     csv_frame_seasonal.loc[index_in_seasonal_frame, "Winter-Night"] = (
         output_night[
             (
-                (output_night.index > dt.datetime(year=2019, month=12, day=21, hour=12))
-                | (output_night.index < dt.datetime(year=2019, month=3, day=23, hour=12))
+                (output_night.index > dt.datetime(year=simulation_parameters.year, month=12, day=21, hour=12))
+                | (output_night.index < dt.datetime(year=simulation_parameters.year, month=3, day=23, hour=12))
             )
         ].sum()
         * factor
@@ -100,12 +101,12 @@ def compute_seasonal(
     csv_frame_seasonal.loc[index_in_seasonal_frame, "Intermediate-Day"] = (
         output_day[
             (
-                (output_day.index > dt.datetime(year=2019, month=3, day=23, hour=0))
-                & (output_day.index < dt.datetime(year=2019, month=6, day=21, hour=0))
+                (output_day.index > dt.datetime(year=simulation_parameters.year, month=3, day=23, hour=0))
+                & (output_day.index < dt.datetime(year=simulation_parameters.year, month=6, day=21, hour=0))
             )
             | (
-                (output_day.index > dt.datetime(year=2019, month=9, day=23, hour=0))
-                & (output_day.index < dt.datetime(year=2019, month=12, day=21, hour=0))
+                (output_day.index > dt.datetime(year=simulation_parameters.year, month=9, day=23, hour=0))
+                & (output_day.index < dt.datetime(year=simulation_parameters.year, month=12, day=21, hour=0))
             )
         ].sum()
         * factor
@@ -113,12 +114,12 @@ def compute_seasonal(
     csv_frame_seasonal.loc[index_in_seasonal_frame, "Intermediate-Night"] = (
         output_night[
             (
-                (output_night.index > dt.datetime(year=2019, month=3, day=23, hour=12))
-                & (output_night.index < dt.datetime(year=2019, month=6, day=21, hour=12))
+                (output_night.index > dt.datetime(year=simulation_parameters.year, month=3, day=23, hour=12))
+                & (output_night.index < dt.datetime(year=simulation_parameters.year, month=6, day=21, hour=12))
             )
             | (
-                (output_night.index > dt.datetime(year=2019, month=9, day=23, hour=12))
-                & (output_night.index < dt.datetime(year=2019, month=12, day=21, hour=12))
+                (output_night.index > dt.datetime(year=simulation_parameters.year, month=9, day=23, hour=12))
+                & (output_night.index < dt.datetime(year=simulation_parameters.year, month=12, day=21, hour=12))
             )
         ].sum()
         * factor
@@ -235,6 +236,7 @@ def generate_csv_for_database(
                             sum(results.iloc[:, index]) * 1e-3
                         )
                         csv_frame_seasonal = compute_seasonal(
+                            simulation_parameters=simulation_parameters,
                             csv_frame_seasonal=csv_frame_seasonal,
                             index_in_seasonal_frame=(
                                 "WaterHeating",
@@ -248,6 +250,7 @@ def generate_csv_for_database(
                     elif LoadTypes.GAS in output.postprocessing_flag:
                         csv_frame_annual[("WaterHeating", "Gas [kWh]")] = sum(results.iloc[:, index]) * 1e-3
                         csv_frame_seasonal = compute_seasonal(
+                            simulation_parameters=simulation_parameters,
                             csv_frame_seasonal=csv_frame_seasonal,
                             index_in_seasonal_frame=("WaterHeating", "Gas [kWh]"),
                             output=results.iloc[:, index],
@@ -258,6 +261,7 @@ def generate_csv_for_database(
                     elif LoadTypes.OIL in output.postprocessing_flag:
                         csv_frame_annual[("WaterHeating", "Oil [l]")] = sum(results.iloc[:, index])
                         csv_frame_seasonal = compute_seasonal(
+                            simulation_parameters=simulation_parameters,
                             csv_frame_seasonal=csv_frame_seasonal,
                             index_in_seasonal_frame=("WaterHeating", "Oil [l]"),
                             output=results.iloc[:, index],
@@ -274,6 +278,7 @@ def generate_csv_for_database(
                                 )
                             )
                             csv_frame_seasonal = compute_seasonal(
+                                simulation_parameters=simulation_parameters,
                                 csv_frame_seasonal=csv_frame_seasonal,
                                 index_in_seasonal_frame=(
                                     "WaterHeating",
@@ -290,6 +295,7 @@ def generate_csv_for_database(
                                 seconds_per_timestep=simulation_parameters.seconds_per_timestep,
                             )
                             csv_frame_seasonal = compute_seasonal(
+                                simulation_parameters=simulation_parameters,
                                 csv_frame_seasonal=csv_frame_seasonal,
                                 index_in_seasonal_frame=(
                                     "WaterHeating",
@@ -306,6 +312,7 @@ def generate_csv_for_database(
                             sum(results.iloc[:, index]) * 1e-3
                         )
                         csv_frame_seasonal = compute_seasonal(
+                            simulation_parameters=simulation_parameters,
                             csv_frame_seasonal=csv_frame_seasonal,
                             index_in_seasonal_frame=(
                                 "SpaceHeating",
@@ -319,6 +326,7 @@ def generate_csv_for_database(
                     elif LoadTypes.GAS in output.postprocessing_flag:
                         csv_frame_annual[("SpaceHeating", "Gas [kWh]")] = sum(results.iloc[:, index]) * 1e-3
                         csv_frame_seasonal = compute_seasonal(
+                            simulation_parameters=simulation_parameters,
                             csv_frame_seasonal=csv_frame_seasonal,
                             index_in_seasonal_frame=("SpaceHeating", "Gas [kWh]"),
                             factor=1e-3,
@@ -329,6 +337,7 @@ def generate_csv_for_database(
                     elif LoadTypes.OIL in output.postprocessing_flag:
                         csv_frame_annual[("SpaceHeating", "Oil [l]")] = sum(results.iloc[:, index])
                         csv_frame_seasonal = compute_seasonal(
+                            simulation_parameters=simulation_parameters,
                             csv_frame_seasonal=csv_frame_seasonal,
                             index_in_seasonal_frame=("SpaceHeating", "Oil [l]"),
                             factor=1,
@@ -345,6 +354,7 @@ def generate_csv_for_database(
                                 )
                             )
                             csv_frame_seasonal = compute_seasonal(
+                                simulation_parameters=simulation_parameters,
                                 csv_frame_seasonal=csv_frame_seasonal,
                                 index_in_seasonal_frame=(
                                     "SpaceHeating",
@@ -361,6 +371,7 @@ def generate_csv_for_database(
                                 seconds_per_timestep=simulation_parameters.seconds_per_timestep,
                             )
                             csv_frame_seasonal = compute_seasonal(
+                                simulation_parameters=simulation_parameters,
                                 csv_frame_seasonal=csv_frame_seasonal,
                                 index_in_seasonal_frame=(
                                     "SpaceHeating",
@@ -375,6 +386,7 @@ def generate_csv_for_database(
                     if LoadTypes.DIESEL in output.postprocessing_flag:
                         csv_frame_annual[("Transport", "Diesel [l]")] = sum(results.iloc[:, index])
                         csv_frame_seasonal = compute_seasonal(
+                            simulation_parameters=simulation_parameters,
                             csv_frame_seasonal=csv_frame_seasonal,
                             index_in_seasonal_frame=("Transport", "Diesel [l]"),
                             factor=1,
@@ -388,6 +400,7 @@ def generate_csv_for_database(
                             seconds_per_timestep=simulation_parameters.seconds_per_timestep,
                         )
                         csv_frame_seasonal = compute_seasonal(
+                            simulation_parameters=simulation_parameters,
                             csv_frame_seasonal=csv_frame_seasonal,
                             index_in_seasonal_frame=("Transport", "Electricity [kWh]"),
                             factor=simulation_parameters.seconds_per_timestep / 3.6e6,
@@ -401,6 +414,7 @@ def generate_csv_for_database(
                         seconds_per_timestep=simulation_parameters.seconds_per_timestep,
                     )
                     remaining_electricity_seasonal_item = compute_seasonal(
+                        simulation_parameters=simulation_parameters,
                         csv_frame_seasonal=csv_frame_seasonal,
                         index_in_seasonal_frame=("RemainingLoad", "Electricity [kWh]"),
                         factor=simulation_parameters.seconds_per_timestep / 3.6e6,
@@ -417,6 +431,7 @@ def generate_csv_for_database(
                         seconds_per_timestep=simulation_parameters.seconds_per_timestep,
                     )
                     remaining_electricity_seasonal_item = compute_seasonal(
+                        simulation_parameters=simulation_parameters,
                         csv_frame_seasonal=csv_frame_seasonal,
                         index_in_seasonal_frame=("RemainingLoad", "Electricity [kWh]"),
                         factor=simulation_parameters.seconds_per_timestep / 3.6e6,

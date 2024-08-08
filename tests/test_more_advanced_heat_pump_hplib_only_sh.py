@@ -40,6 +40,7 @@ def test_heat_pump_hplib_new():
 
     # Initialize component
     heatpump_config = MoreAdvancedHeatPumpHPLibConfig(
+        building="BUI1",
         name="Heat Pump",
         model=model,
         heat_source="air",

@@ -39,6 +39,7 @@ def test_electrolyzer():
     # ===================================================================================================================
     # Setup Electrolyzer
     my_rsoc_config = generic_rsoc.RsocConfig(
+        building="BUI1",
         name=name,
         nom_load_soec=nom_load_soec,
         min_load_soec=min_load_soec,

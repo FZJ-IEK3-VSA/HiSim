@@ -196,9 +196,6 @@ class KpiPreparation:
             value=battery_discharging_energy_in_kilowatt_hour,
             tag=KpiTagEnumClass.BATTERY,
         )
-        battery_losses_entry = KpiEntry(
-            name="Battery losses", unit="kWh", value=battery_losses_in_kilowatt_hour, tag=KpiTagEnumClass.BATTERY
-        )
 
         # update kpi collection dict
         self.kpi_collection_dict_unsorted.update(
@@ -208,7 +205,6 @@ class KpiPreparation:
                 pv_production_entry.name: pv_production_entry.to_dict(),
                 battery_charging_entry.name: battery_charging_entry.to_dict(),
                 battery_discharging_entry.name: battery_discharging_entry.to_dict(),
-                battery_losses_entry.name: battery_losses_entry.to_dict(),
             }
         )
 

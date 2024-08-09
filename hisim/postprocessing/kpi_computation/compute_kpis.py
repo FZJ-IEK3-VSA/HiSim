@@ -118,7 +118,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
         # now sort kpi dict entries according to tags
         for kpi_name, entry in kpi_collection_dict_unsorted.items():
             for tag, tag_dict in kpi_collection_dict_sorted.items():
-                if entry["tag"] in tag:
+                if entry["tag"] == tag:
                     tag_dict.update({kpi_name: entry})
 
         return kpi_collection_dict_sorted

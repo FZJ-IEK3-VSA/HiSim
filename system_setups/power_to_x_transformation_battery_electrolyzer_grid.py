@@ -101,6 +101,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
 
     # Setup new CSV loader object
     my_csv_loader = CSVLoaderConfig(
+        building_name="BUI1",
         name="CSV",
         component_name=component_name,
         csv_filename=csv_filename,

@@ -62,11 +62,7 @@ class KpiPreparation:
         output: ComponentOutput
 
         for index, output in enumerate(all_outputs):
-            print("#####################################")
-            print(output.component_name)
             if building_objects_in_district in str(output.get_pretty_name()):
-                print(output.get_pretty_name())
-                print(output.postprocessing_flag)
                 if output.postprocessing_flag is not None:
                     if InandOutputType.ELECTRICITY_PRODUCTION in output.postprocessing_flag:
                         total_production_ids.append(index)

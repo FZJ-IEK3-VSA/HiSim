@@ -116,8 +116,8 @@ def test_household_heat_pump_system_setup_starter_pv():
     # find the component.
     pv_con_dicts = [
         {
-            "From": {"Component": "PVSystem_w0", "Field": "ElectricityOutput"},
-            "To": {"Component": "ElectricityMeter", "Field": f"Input_PVSystem_w0_ElectricityOutput_{i}"},
+            "From": {"Component": "BUI1_PVSystem_w0", "Field": "ElectricityOutput"},
+            "To": {"Component": "BUI1_ElectricityMeter", "Field": f"Input_BUI1_PVSystem_w0_ElectricityOutput_{i}"},
         }
         for i in range(3)
     ]

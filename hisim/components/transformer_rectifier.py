@@ -74,7 +74,7 @@ class Transformer(Component):
             my_display_config=my_display_config,
         )
         self.input1: ComponentInput = self.add_input(
-            self.transformerconfig.name,
+            self.component_name,
             Transformer.TransformerInput,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KILOWATT,
@@ -82,7 +82,7 @@ class Transformer(Component):
         )
 
         self.output1: ComponentOutput = self.add_output(
-            self.transformerconfig.name,
+            self.component_name,
             Transformer.TransformerOutput,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KILOWATT,

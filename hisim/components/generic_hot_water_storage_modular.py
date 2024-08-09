@@ -19,7 +19,7 @@ from dataclasses_json import dataclass_json
 import hisim.component as cp
 import hisim.log
 from hisim import loadtypes as lt
-from hisim.component import OpexCostDataClass
+from hisim.component import OpexCostDataClass, CapexCostDataClass
 from hisim.components import (
     controller_l1_building_heating,
     generic_chp,
@@ -530,9 +530,13 @@ class HotWaterStorage(cp.Component):
         raise Exception("Modular storage must be defined either as buffer or as boiler.")
 
     @staticmethod
-    def get_cost_capex(config: StorageConfig) -> Tuple[float, float, float]:
+    def get_cost_capex(config: StorageConfig) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        return config.cost, config.co2_footprint, config.lifetime
+        capex_cost_data_class = CapexCostDataClass(
+            capex_investment_cost_in_euro=config.cost,
+            device_co2_footprint_in_kg=config.co2_footprint,
+            lifetime_in_years=config.lifetime)
+        return capex_cost_data_class
 
     def get_cost_opex(
         self,

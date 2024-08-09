@@ -24,6 +24,7 @@ from hisim.component import (
     ConfigBase,
     ComponentConnection,
     OpexCostDataClass,
+    CapexCostDataClass,
     DisplayConfig,
 )
 from hisim.components import weather, simple_hot_water_storage, heat_distribution_system
@@ -614,9 +615,14 @@ class HeatPumpHplib(Component):
         self.state.on_off_previous = on_off
 
     @staticmethod
-    def get_cost_capex(config: HeatPumpHplibConfig) -> Tuple[float, float, float]:
+    def get_cost_capex(config: HeatPumpHplibConfig) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        return config.cost.value, config.co2_footprint.value, config.lifetime.value
+        capex_cost_data_class = CapexCostDataClass(
+            capex_investment_cost_in_euro=config.cost.value,
+            device_co2_footprint_in_kg=config.co2_footprint.value,
+            lifetime_in_years=config.lifetime.value
+        )
+        return capex_cost_data_class
 
     def get_cost_opex(
         self,

@@ -17,7 +17,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.components.configuration import PhysicsConfig
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim.component import OpexCostDataClass
+from hisim.component import OpexCostDataClass, CapexCostDataClass
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 
 __authors__ = "Katharina Rieck, Noah Pflugradt"
@@ -563,9 +563,14 @@ class HeatDistribution(cp.Component):
         )
 
     @staticmethod
-    def get_cost_capex(config: HeatDistributionConfig) -> Tuple[float, float, float]:
+    def get_cost_capex(config: HeatDistributionConfig) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        return config.cost, config.co2_footprint, config.lifetime
+        capex_cost_data_class = CapexCostDataClass(
+            capex_investment_cost_in_euro=config.cost,
+            device_co2_footprint_in_kg=config.co2_footprint,
+            lifetime_in_years=config.lifetime
+        )
+        return capex_cost_data_class
 
     def get_cost_opex(
         self,

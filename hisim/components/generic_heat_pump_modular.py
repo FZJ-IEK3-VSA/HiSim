@@ -12,7 +12,7 @@ from dataclasses_json import dataclass_json
 
 import hisim.loadtypes as lt
 from hisim import component as cp
-from hisim.component import OpexCostDataClass
+from hisim.component import OpexCostDataClass, CapexCostDataClass
 
 # Owned
 from hisim import utils
@@ -392,9 +392,14 @@ class ModularHeatPump(cp.Component):
         stsv.set_output_value(self.electricity_output_channel, electric_power * power_modifier)
 
     @staticmethod
-    def get_cost_capex(config: HeatPumpConfig) -> Tuple[float, float, float]:
+    def get_cost_capex(config: HeatPumpConfig) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        return config.cost, config.co2_footprint, config.lifetime
+        capex_cost_data_class = CapexCostDataClass(
+            capex_investment_cost_in_euro=config.cost,
+            device_co2_footprint_in_kg=config.co2_footprint,
+            lifetime_in_years=config.lifetime
+        )
+        return capex_cost_data_class
 
     def get_cost_opex(
         self,

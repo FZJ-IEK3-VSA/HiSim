@@ -399,14 +399,10 @@ class Component:
         return OpexCostDataClass.get_default_opex_cost_data_class()
 
     @staticmethod
-    def get_cost_capex(config: ConfigBase) -> Tuple[float, float, float]:
+    def get_cost_capex(config: ConfigBase) -> CapexCostDataClass:
         # pylint: disable=unused-argument
-        """Calculates lifetime, total capital expenditure cost and total co2 footprint of production of device.
-
-        :return: [capex in euro, co2 footprint in kg, lifetime]
-        :rtype: Tuple[float,float, float]
-        """
-        return 0, 0, 1
+        """Calculates lifetime, total capital expenditure cost and total co2 footprint of production of device."""
+        return CapexCostDataClass.get_default_capex_cost_data_class()
 
     def get_component_kpi_entries(
         self,
@@ -420,7 +416,7 @@ class Component:
     def calc_maintenance_cost(self) -> float:
         """Calc maintenance_cost per simulated period as share of capex of component."""
         seconds_per_year = 365 * 24 * 60 * 60
-        investment = self.get_cost_capex(self.config)[0]
+        investment = self.get_cost_capex(self.config).capex_investment_cost_in_euro
 
         # add maintenance costs per simulated period
         maintenance_cost_per_simulated_period_in_euro: float = (
@@ -450,7 +446,6 @@ class Component:
         """Abstract. Gets called after the iterations are finished at each time step for potential debugging purposes."""
         pass  # noqa
 
-
 @dataclass
 class OpexCostDataClass:
 
@@ -471,4 +466,22 @@ class OpexCostDataClass:
             co2_footprint_in_kg=0,
             consumption_in_kwh=0,
             loadtype=lt.LoadTypes.ANY
+        )
+
+@dataclass
+class CapexCostDataClass:
+
+    """Return element of type CapexCostDataClass in function get_capex_cost from Component."""
+
+    capex_investment_cost_in_euro: float
+    device_co2_footprint_in_kg: float
+    lifetime_in_years: float
+
+    @classmethod
+    def get_default_capex_cost_data_class(cls) -> CapexCostDataClass:
+        """Return the Default for all Components without Capex Costs."""
+        return CapexCostDataClass(
+            capex_investment_cost_in_euro=0,
+            device_co2_footprint_in_kg=0,
+            lifetime_in_years=1
         )

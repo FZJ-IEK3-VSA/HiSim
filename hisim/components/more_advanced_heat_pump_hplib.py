@@ -34,6 +34,7 @@ from hisim.component import (
     ComponentConnection,
     OpexCostDataClass,
     DisplayConfig,
+    CapexCostDataClass
 )
 from hisim.components import weather, simple_hot_water_storage, heat_distribution_system
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
@@ -1310,9 +1311,14 @@ class MoreAdvancedHeatPumpHPLib(Component):
         self.state.delta_t = self.heatpump.delta_t
 
     @staticmethod
-    def get_cost_capex(config: MoreAdvancedHeatPumpHPLibConfig) -> Tuple[float, float, float]:
+    def get_cost_capex(config: MoreAdvancedHeatPumpHPLibConfig) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        return config.cost.value, config.co2_footprint.value, config.lifetime.value
+        capex_cost_data_class = CapexCostDataClass(
+            capex_investment_cost_in_euro=config.cost.value,
+            device_co2_footprint_in_kg=config.co2_footprint.value,
+            lifetime_in_years=config.lifetime.value
+        )
+        return capex_cost_data_class
 
     def get_cost_opex(
         self,

@@ -17,7 +17,7 @@ from windpowerlib import ModelChain, WindTurbine
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim.component import ConfigBase, OpexCostDataClass
+from hisim.component import ConfigBase, OpexCostDataClass, CapexCostDataClass
 from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
 
@@ -321,9 +321,14 @@ class Windturbine(cp.Component):
         stsv.set_output_value(self.electricity_output_channel, electric_power_output_windturbine_in_watt)
 
     @staticmethod
-    def get_cost_capex(config: WindturbineConfig) -> Tuple[float, float, float]:
+    def get_cost_capex(config: WindturbineConfig) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        return config.cost, config.co2_footprint, config.lifetime
+        capex_cost_data_class = CapexCostDataClass(
+            capex_investment_cost_in_euro=config.cost,
+            device_co2_footprint_in_kg=config.co2_footprint,
+            lifetime_in_years=config.lifetime
+        )
+        return capex_cost_data_class
 
     def get_cost_opex(
         self,

@@ -602,3 +602,29 @@ class KpiPreparation:
                     + my_component.component_name
                     + " was not successful. KPI method is maybe not implemented yet."
                 )
+
+    # def get_opex_and_capex_costs_for_each_component(self, wrapped_components: List[ComponentWrapper]) -> None:
+    #     """Go through all components and get their opex and capex costs if implemented."""
+    #     my_component_opex_dataclass: List[KpiEntry]
+    #     for wrapped_component in wrapped_components:
+    #         my_component = wrapped_component.my_component
+    #         # get opex and capex of respective component
+
+    #         my_component_opex_dataclass = my_component.get_cost_opex(
+    #             all_outputs=self.all_outputs, postprocessing_results=self.results
+    #         )
+    #         my_component_capex_dataclass = my_component.get_cost_opex(
+    #             all_outputs=self.all_outputs, postprocessing_results=self.results
+    #         )
+
+    #         if my_component_opex_dataclass != []:
+    #             log.debug("KPI generation for " + my_component.component_name + " was successful.")
+    #             # add all KPI entries to kpi dict
+    #             for kpi_entry in my_component_opex_dataclass:
+    #                 self.kpi_collection_dict_unsorted[kpi_entry.name] = kpi_entry.to_dict()
+    #         else:
+    #             log.debug(
+    #                 "KPI generation for "
+    #                 + my_component.component_name
+    #                 + " was not successful. KPI method is maybe not implemented yet."
+    #             )

@@ -17,7 +17,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.components import generic_car
 from hisim.components import advanced_ev_battery_bslib
-from hisim.component import OpexCostDataClass
+from hisim.component import OpexCostDataClass, CapexCostDataClass
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -328,9 +328,14 @@ class L1Controller(cp.Component):
         return lines
 
     @staticmethod
-    def get_cost_capex(config: ChargingStationConfig) -> Tuple[float, float, float]:
+    def get_cost_capex(config: ChargingStationConfig) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        return config.cost, config.co2_footprint, config.lifetime
+        capex_cost_data_class = CapexCostDataClass(
+            capex_investment_cost_in_euro=config.cost,
+            device_co2_footprint_in_kg=config.co2_footprint,
+            lifetime_in_years=config.lifetime
+        )
+        return capex_cost_data_class
 
     def get_cost_opex(
         self,

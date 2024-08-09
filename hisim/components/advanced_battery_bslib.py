@@ -19,9 +19,11 @@ from hisim.component import (
     ConfigBase,
     OpexCostDataClass,
     DisplayConfig,
+    CapexCostDataClass
 )
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
 from hisim.simulationparameters import SimulationParameters
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -266,10 +268,15 @@ class Battery(Component):
         return self.battery_config.get_string_dict()
 
     @staticmethod
-    def get_cost_capex(config: BatteryConfig) -> Tuple[float, float, float]:
+    def get_cost_capex(config: BatteryConfig) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
         # Todo: think about livetime in cycles not in years
-        return config.cost, config.co2_footprint, config.lifetime
+        capex_cost_data_class = CapexCostDataClass(
+            capex_investment_cost_in_euro=config.cost,
+            device_co2_footprint_in_kg=config.co2_footprint,
+            lifetime_in_years=config.lifetime
+        )
+        return capex_cost_data_class
 
     def get_cost_opex(
         self,

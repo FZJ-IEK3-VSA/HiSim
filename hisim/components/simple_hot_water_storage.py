@@ -13,7 +13,7 @@ from dataclasses_json import dataclass_json
 import hisim.component as cp
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim.component import SingleTimeStepValues, ComponentInput, ComponentOutput, OpexCostDataClass, DisplayConfig
+from hisim.component import SingleTimeStepValues, ComponentInput, ComponentOutput, OpexCostDataClass, DisplayConfig, CapexCostDataClass
 from hisim.components.configuration import PhysicsConfig
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.simulationparameters import SimulationParameters
@@ -876,9 +876,14 @@ class SimpleHotWaterStorage(cp.Component):
     @staticmethod
     def get_cost_capex(
         config: SimpleHotWaterStorageConfig,
-    ) -> Tuple[float, float, float]:
+    ) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        return config.cost, config.co2_footprint, config.lifetime
+        capex_cost_data_class = CapexCostDataClass(
+            capex_investment_cost_in_euro=config.cost,
+            device_co2_footprint_in_kg=config.co2_footprint,
+            lifetime_in_years=config.lifetime
+        )
+        return capex_cost_data_class
 
     def get_cost_opex(
         self,

@@ -1329,6 +1329,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
         )
         return capex_cost_data_class
+
     def get_cost_opex(
         self,
         all_outputs: List,

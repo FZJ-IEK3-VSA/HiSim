@@ -71,14 +71,24 @@ class KpiPreparation:
                     or InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED in output.postprocessing_flag
                 ):
                     total_consumption_ids.append(index)
-                    log.debug("Output considered in total electricity consumption " + output.full_name + " " + str(output.unit))
+                    log.debug(
+                        "Output considered in total electricity consumption "
+                        + output.full_name
+                        + " "
+                        + str(output.unit)
+                    )
 
                 elif InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
                     if ComponentType.BATTERY in output.postprocessing_flag:
                         battery_charge_discharge_ids.append(index)
                     elif ComponentType.CAR_BATTERY in output.postprocessing_flag:
                         total_consumption_ids.append(index)
-                        log.debug("Output considered in total electricity consumption " + output.full_name + " " + str(output.unit))
+                        log.debug(
+                            "Output considered in total electricity consumption "
+                            + output.full_name
+                            + " "
+                            + str(output.unit)
+                        )
             else:
                 continue
 
@@ -153,7 +163,10 @@ class KpiPreparation:
             total_electricity_consumption_in_kilowatt_hour + battery_losses_in_kilowatt_hour
         )
         log.debug("Battery losses " + str(battery_losses_in_kilowatt_hour))
-        log.debug("Total electricity consumption (battery losses included) " + str(total_electricity_consumption_in_kilowatt_hour))
+        log.debug(
+            "Total electricity consumption (battery losses included) "
+            + str(total_electricity_consumption_in_kilowatt_hour)
+        )
 
         # make kpi entry
         total_consumtion_entry = KpiEntry(
@@ -274,13 +287,22 @@ class KpiPreparation:
 
         # make kpi entry
         grid_injection_entry = KpiEntry(
-            name="Grid injection of electricity", unit="kWh", value=grid_injection_in_kilowatt_hour, tag=KpiTagEnumClass.GENERAL
+            name="Grid injection of electricity",
+            unit="kWh",
+            value=grid_injection_in_kilowatt_hour,
+            tag=KpiTagEnumClass.GENERAL,
         )
         self_consumption_entry = KpiEntry(
-            name="Self-consumption of electricity", unit="kWh", value=self_consumption_in_kilowatt_hour, tag=KpiTagEnumClass.GENERAL
+            name="Self-consumption of electricity",
+            unit="kWh",
+            value=self_consumption_in_kilowatt_hour,
+            tag=KpiTagEnumClass.GENERAL,
         )
         self_consumption_rate_entry = KpiEntry(
-            name="Self-consumption rate of electricity", unit="%", value=self_consumption_rate_in_percent, tag=KpiTagEnumClass.GENERAL
+            name="Self-consumption rate of electricity",
+            unit="%",
+            value=self_consumption_rate_in_percent,
+            tag=KpiTagEnumClass.GENERAL,
         )
         autarkie_rate_entry = KpiEntry(
             name="Autarky rate of electricity", unit="%", value=autarky_rate_in_percent, tag=KpiTagEnumClass.GENERAL
@@ -379,8 +401,7 @@ class KpiPreparation:
         return relative_electricity_demand_from_grid_in_percent
 
     def compute_autarky_according_to_solar_htw_berlin(
-        self,
-        relative_electricty_demand_in_percent: Optional[float],
+        self, relative_electricty_demand_in_percent: Optional[float],
     ) -> None:
         """Return the autarky rate according to solar htw berlin.
 
@@ -555,7 +576,10 @@ class KpiPreparation:
         total_cost_entry = KpiEntry(
             name="Total costs for simulated period",
             unit="EUR",
-            value=total_maintenance_cost_per_simulated_period + total_investment_cost_per_simulated_period + gas_costs_in_euro + electricity_costs_in_euro,
+            value=total_maintenance_cost_per_simulated_period
+            + total_investment_cost_per_simulated_period
+            + gas_costs_in_euro
+            + electricity_costs_in_euro,
             tag=KpiTagEnumClass.COSTS,
         )
         total_emissions_entry = KpiEntry(
@@ -603,14 +627,20 @@ class KpiPreparation:
                     + " was not successful. KPI method is maybe not implemented yet."
                 )
             # add opex and capex costs if they exist
-            my_component_opex_dataclass, my_component_capex_dataclass = self.get_opex_and_capex_costs_for_each_component(my_component=my_component)
-            self.add_opex_costs_to_component_kpi_list(my_component_opex_dataclass=my_component_opex_dataclass, my_component_name=my_component.component_name)
+            (
+                my_component_opex_dataclass,
+                my_component_capex_dataclass,
+            ) = self.get_opex_and_capex_costs_for_each_component(my_component=my_component)
+            self.add_opex_costs_to_component_kpi_list(
+                my_component_opex_dataclass=my_component_opex_dataclass, my_component_name=my_component.component_name
+            )
 
             if my_component_capex_dataclass is not None:
                 pass
-                
 
-    def get_opex_and_capex_costs_for_each_component(self, my_component: Component) -> Tuple[OpexCostDataClass, CapexCostDataClass]:
+    def get_opex_and_capex_costs_for_each_component(
+        self, my_component: Component
+    ) -> Tuple[OpexCostDataClass, CapexCostDataClass]:
         """Go through all components and get their opex and capex costs if implemented."""
 
         my_component_opex_dataclass = my_component.get_cost_opex(
@@ -621,20 +651,45 @@ class KpiPreparation:
         )
         return my_component_opex_dataclass, my_component_capex_dataclass
 
-
-    def add_opex_costs_to_component_kpi_list(self, my_component_opex_dataclass: OpexCostDataClass, my_component_name: str) -> None:
+    def add_opex_costs_to_component_kpi_list(
+        self, my_component_opex_dataclass: OpexCostDataClass, my_component_name: str
+    ) -> None:
         """Add component opex values to kpi list."""
         # check if kpi_tag exists
         if my_component_opex_dataclass.kpi_tag is not None:
-            opex_energy_cost_entry = KpiEntry(name=f"Opex energy costs for {my_component_name}", unit="Euro", value=my_component_opex_dataclass.opex_energy_cost_in_euro, description=my_component_name, tag=my_component_opex_dataclass.kpi_tag)
-            opex_maintenance_cost_entry = KpiEntry(name=f"Maintenance costs for {my_component_name}", unit="Euro", value=my_component_opex_dataclass.opex_maintenance_cost_in_euro, description=my_component_name, tag=my_component_opex_dataclass.kpi_tag)
-            co2_footprint_entry = KpiEntry(name=f"CO2 emissions for {my_component_name}", unit="kg", value=my_component_opex_dataclass.co2_footprint_in_kg, description=my_component_name, tag=my_component_opex_dataclass.kpi_tag)
-            consumption_entry = KpiEntry(name=f"Consumption for {my_component_name}", unit="kWh", value=my_component_opex_dataclass.consumption_in_kwh, description=my_component_name, tag=my_component_opex_dataclass.kpi_tag)
+            opex_energy_cost_entry = KpiEntry(
+                name=f"Opex energy costs for {my_component_name}",
+                unit="Euro",
+                value=my_component_opex_dataclass.opex_energy_cost_in_euro,
+                description=my_component_name,
+                tag=my_component_opex_dataclass.kpi_tag,
+            )
+            opex_maintenance_cost_entry = KpiEntry(
+                name=f"Maintenance costs for {my_component_name}",
+                unit="Euro",
+                value=my_component_opex_dataclass.opex_maintenance_cost_in_euro,
+                description=my_component_name,
+                tag=my_component_opex_dataclass.kpi_tag,
+            )
+            co2_footprint_entry = KpiEntry(
+                name=f"CO2 emissions for {my_component_name}",
+                unit="kg",
+                value=my_component_opex_dataclass.co2_footprint_in_kg,
+                description=my_component_name,
+                tag=my_component_opex_dataclass.kpi_tag,
+            )
+            consumption_entry = KpiEntry(
+                name=f"Consumption for {my_component_name}",
+                unit="kWh",
+                value=my_component_opex_dataclass.consumption_in_kwh,
+                description=my_component_name,
+                tag=my_component_opex_dataclass.kpi_tag,
+            )
             # add kpi entries to dict
             self.kpi_collection_dict_unsorted[opex_energy_cost_entry.name] = opex_energy_cost_entry.to_dict()
             self.kpi_collection_dict_unsorted[opex_maintenance_cost_entry.name] = opex_maintenance_cost_entry.to_dict()
             self.kpi_collection_dict_unsorted[co2_footprint_entry.name] = co2_footprint_entry.to_dict()
             self.kpi_collection_dict_unsorted[consumption_entry.name] = consumption_entry.to_dict()
-            
+
         else:
             log.debug(f"Could not add Opex data of {my_component_name} to KPI lists because kpi_tag is None.")

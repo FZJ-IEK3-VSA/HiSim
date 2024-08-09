@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 # clean
 # Generic/Built-in
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional
 
 import numpy as np
 import pandas as pd

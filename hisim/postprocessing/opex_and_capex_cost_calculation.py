@@ -104,7 +104,6 @@ def capex_calculation(
         capex_cost_data_class: CapexCostDataClass = component_unwrapped.get_cost_capex(
             config=component_unwrapped.config,
         )
-        print(component_unwrapped.component_name)
 
         if capex_cost_data_class.lifetime_in_years > 0:
             # lifetime is per default set to 1.0 in class cp.Component to avoid devide by zero error

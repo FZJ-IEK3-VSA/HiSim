@@ -5,7 +5,7 @@ import hashlib
 # clean
 
 from dataclasses import dataclass
-from typing import Any, List, Tuple, Optional, Dict
+from typing import Any, List, Optional, Dict
 
 
 import numpy as np

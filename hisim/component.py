@@ -9,7 +9,7 @@ import os
 import dataclasses as dc
 import typing
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 import json
 import pandas as pd
 from dataclass_wizard import JSONWizard
@@ -446,6 +446,7 @@ class Component:
         """Abstract. Gets called after the iterations are finished at each time step for potential debugging purposes."""
         pass  # noqa
 
+
 @dataclass
 class OpexCostDataClass:
 
@@ -467,6 +468,7 @@ class OpexCostDataClass:
             consumption_in_kwh=0,
             loadtype=lt.LoadTypes.ANY
         )
+
 
 @dataclass
 class CapexCostDataClass:

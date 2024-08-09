@@ -4,7 +4,7 @@
 # Owned
 import importlib
 from dataclasses import dataclass
-from typing import List, Any, Tuple, Optional
+from typing import List, Any, Optional
 
 import pandas as pd
 from dataclasses_json import dataclass_json

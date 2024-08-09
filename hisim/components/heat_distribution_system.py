@@ -3,7 +3,7 @@
 # clean
 import importlib
 from enum import IntEnum
-from typing import List, Any, Optional, Tuple, Union
+from typing import List, Any, Optional, Union
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 

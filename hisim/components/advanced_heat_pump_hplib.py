@@ -8,7 +8,7 @@ import hashlib
 # clean
 import importlib
 from dataclasses import dataclass
-from typing import Any, List, Optional, Tuple, Dict
+from typing import Any, List, Optional, Dict
 
 import pandas as pd
 from dataclass_wizard import JSONWizard

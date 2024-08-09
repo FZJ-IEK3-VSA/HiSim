@@ -680,12 +680,6 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                     stsv=stsv,
                 )
             )
-            self.modify_set_temperatures_for_building_components_in_case_of_surplus_electricity_iterativ(
-                available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
-                stsv=stsv,
-                inputs_sorted=self.inputs_sorted,
-                component_types_sorted=self.component_types_sorted,
-            )
 
         if self.strategy == EMSControlStrategy.DISTRICT_OPTIMIZECONSUMPTION_PARALLEL:
             available_surplus_electricity_in_watt = (
@@ -695,12 +689,6 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                     available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
                     stsv=stsv,
                 )
-            )
-            self.modify_set_temperatures_for_building_components_in_case_of_surplus_electricity_iterativ(
-                available_surplus_electricity_in_watt=available_surplus_electricity_in_watt,
-                stsv=stsv,
-                inputs_sorted=self.inputs_sorted,
-                component_types_sorted=self.component_types_sorted,
             )
 
         stsv.set_output_value(self.total_electricity_to_or_from_grid, available_surplus_electricity_in_watt)
@@ -973,7 +961,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                                 available_surplus_electricity_in_watt_next_component
                             )
 
-                        available_surplus_electricity_in_watt = self.control_electricity_parallel(
+                        available_surplus_electricity_in_watt = self.control_electricity_and_modify_set_temperatures_for_component_parallel(
                             available_surplus_electricity_in_watt=available_surplus_electricity_in_watt_split,
                             stsv=stsv,
                             current_component_type=components_parameters[single_component]["component_type"],
@@ -1012,7 +1000,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                         single_component
                     ]
 
-                    available_surplus_electricity_in_watt = self.control_electricity_parallel(
+                    available_surplus_electricity_in_watt = self.control_electricity_and_modify_set_temperatures_for_component_parallel(
                         available_surplus_electricity_in_watt=available_surplus_electricity_in_watt_next_component,
                         stsv=stsv,
                         current_component_type=components_parameters[single_component]["component_type"],
@@ -1114,12 +1102,11 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
 
     def control_electricity_and_modify_set_temperatures_for_component_parallel(
         self,
-        available_surplus_electricity_in_watt: float,
-        stsv: cp.SingleTimeStepValues,
-        current_component_type: lt.ComponentType,
-        current_output: cp.ComponentOutput,
-        component_electricity_demand: dict,
-        electricity_demand_from_current_input_component_in_watt: float,
+            available_surplus_electricity_in_watt: float,
+            stsv: cp.SingleTimeStepValues,
+            current_component_type: lt.ComponentType,
+            current_output: cp.ComponentOutput,
+            electricity_demand_from_current_input_component_in_watt: float,
     ) -> float:
         """Calculates available surplus electricity.
 
@@ -1129,10 +1116,6 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
         electricity need is covered onsite or from grid.
         Electricity input if each component is saved in dict to make iteration possible when parallel distribution is used.
         """
-
-        electricity_demand_from_current_input_component_in_watt = abs(
-            electricity_demand_from_current_input_component_in_watt
-        )
 
         # if available_surplus_electricity > 0: electricity is fed into battery
         # if available_surplus_electricity < 0: electricity is taken from battery
@@ -1175,16 +1158,16 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
             # if surplus electricity is available, a part of the component's consumption can be covered onsite
             if available_surplus_electricity_in_watt > 0:
                 available_surplus_electricity_in_watt = (
-                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
+                    available_surplus_electricity_in_watt + electricity_demand_from_current_input_component_in_watt
                 )
                 stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
             # otherwise all of the component's consumption is taken from grid
             else:
                 stsv.set_output_value(
-                    output=current_output, value=-electricity_demand_from_current_input_component_in_watt
+                    output=current_output, value=electricity_demand_from_current_input_component_in_watt
                 )
                 available_surplus_electricity_in_watt = (
-                    available_surplus_electricity_in_watt - electricity_demand_from_current_input_component_in_watt
+                    available_surplus_electricity_in_watt + electricity_demand_from_current_input_component_in_watt
                 )
 
         # these are electricity PRODUCERS
@@ -1194,8 +1177,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
             )
             stsv.set_output_value(output=current_output, value=available_surplus_electricity_in_watt)
 
-        component_electricity_demand[current_component_type] = available_surplus_electricity_in_watt
-
+        # modify set temperatures directly to use surplus in right order of source weights
         if current_component_type == lt.ComponentType.HEAT_PUMP_BUILDING:
             if available_surplus_electricity_in_watt > 0:
                 stsv.set_output_value(

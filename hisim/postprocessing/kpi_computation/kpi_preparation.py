@@ -622,7 +622,7 @@ class KpiPreparation:
         return my_component_opex_dataclass, my_component_capex_dataclass
 
 
-    def add_opex_costs_to_component_kpi_list(self, my_component_opex_dataclass: OpexCostDataClass, kpi_collection_dict_unsorted: Dict, my_component_name: str):
+    def add_opex_costs_to_component_kpi_list(self, my_component_opex_dataclass: OpexCostDataClass, my_component_name: str):
         """Add component opex values to kpi list."""
         # check if kpi_tag exists
         if my_component_opex_dataclass.kpi_tag is not None:

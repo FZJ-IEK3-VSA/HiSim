@@ -874,8 +874,7 @@ class SimpleHotWaterStorage(cp.Component):
         return thermal_energy_difference_in_watt_hour
 
     @staticmethod
-    def get_cost_capex(
-        config: SimpleHotWaterStorageConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
+    def get_cost_capex(config: SimpleHotWaterStorageConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
         seconds_per_year = 365 * 24 * 60 * 60
         capex_per_simulated_period = (config.cost / config.lifetime) * (

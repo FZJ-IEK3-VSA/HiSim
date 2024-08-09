@@ -403,7 +403,7 @@ class PVSystem(cp.Component):
         return config
 
     @staticmethod
-    def get_cost_capex(config: PVSystemConfig) -> Tuple[float, float, float]:
+    def get_cost_capex(config: PVSystemConfig) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
         capex_cost_data_class = CapexCostDataClass(
             capex_investment_cost_in_euro=config.cost,

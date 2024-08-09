@@ -19,6 +19,7 @@ from hisim.component import (
     ConfigBase,
     OpexCostDataClass,
     DisplayConfig,
+    CapexCostDataClass
 )
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
@@ -306,9 +307,14 @@ class GasHeater(Component):
         stsv.set_output_value(self.gas_demand_channel, gas_demand_in_watt_hour)  # gas consumption
 
     @staticmethod
-    def get_cost_capex(config: GenericGasHeaterConfig) -> Tuple[float, float, float]:
+    def get_cost_capex(config: GenericGasHeaterConfig) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        return config.cost, config.co2_footprint, config.lifetime
+        capex_cost_data_class = CapexCostDataClass(
+            capex_investment_cost_in_euro=config.cost,
+            device_co2_footprint_in_kg=config.co2_footprint,
+            lifetime_in_years=config.lifetime
+        )
+        return capex_cost_data_class
 
     def get_cost_opex(
         self,

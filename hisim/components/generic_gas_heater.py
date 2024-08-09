@@ -44,6 +44,7 @@ class GenericGasHeaterConfig(ConfigBase):
         """Return the full class name of the base class."""
         return GasHeater.get_full_classname()
 
+    building_name: str
     name: str
     is_modulating: bool
     minimal_thermal_power_in_watt: float  # [W]
@@ -69,10 +70,12 @@ class GenericGasHeaterConfig(ConfigBase):
     @classmethod
     def get_default_gasheater_config(
         cls,
+        building_name: str = "BUI1",
     ) -> Any:
-        """Get a default Building."""
+        """Get a default building_name."""
         maximal_power_in_watt: float = 12_000  # W
         config = GenericGasHeaterConfig(
+            building_name=building_name,
             name="GenericGasHeater",
             temperature_delta_in_celsius=10,
             maximal_power_in_watt=maximal_power_in_watt,
@@ -94,10 +97,15 @@ class GenericGasHeaterConfig(ConfigBase):
         return config
 
     @classmethod
-    def get_scaled_gasheater_config(cls, heating_load_of_building_in_watt: float) -> "GenericGasHeaterConfig":
-        """Get a default Building."""
+    def get_scaled_gasheater_config(
+        cls,
+        heating_load_of_building_in_watt: float,
+        building_name: str = "BUI1",
+    ) -> "GenericGasHeaterConfig":
+        """Get a default building_name."""
         maximal_power_in_watt: float = heating_load_of_building_in_watt  # W
         config = GenericGasHeaterConfig(
+            building_name=building_name,
             name="GenericGasHeater",
             temperature_delta_in_celsius=10,
             maximal_power_in_watt=maximal_power_in_watt,
@@ -145,7 +153,7 @@ class GasHeater(Component):
         """Construct all the neccessary attributes."""
         self.gasheater_config = config
         super().__init__(
-            name=self.gasheater_config.name,
+            name=config.building_name + "_" + self.gasheater_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -317,7 +325,7 @@ class GasHeater(Component):
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of energy and maintenance costs."""
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.config.name and output.load_type == lt.LoadTypes.GAS:
+            if output.component_name == self.component_name and output.load_type == lt.LoadTypes.GAS:
                 self.config.consumption_in_kilowatt_hour = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year
@@ -347,7 +355,7 @@ class GasHeater(Component):
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
             if (
-                output.component_name == self.config.name
+                output.component_name == self.component_name
                 and output.field_name == self.GasDemand
                 and output.load_type == lt.LoadTypes.GAS
             ):

@@ -21,12 +21,14 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, 
 
 
 class KpiPreparation:
-
     """Class for generating and calculating key performance indicators."""
 
-    def __init__(self, post_processing_data_transfer: PostProcessingDataTransfer):
+    def __init__(
+        self, post_processing_data_transfer: PostProcessingDataTransfer, building_objects_in_district_list: list
+    ):
         """Initialize further variables."""
         self.post_processing_data_transfer = post_processing_data_transfer
+        self.building_objects_in_district_list = building_objects_in_district_list
         self.kpi_collection_dict_unsorted: Dict = {}
         # get important variables
         self.wrapped_components = self.post_processing_data_transfer.wrapped_components
@@ -36,7 +38,10 @@ class KpiPreparation:
         self.get_all_component_kpis(wrapped_components=self.wrapped_components)
 
     def filter_results_according_to_postprocessing_flags(
-        self, all_outputs: List, results: pd.DataFrame
+        self,
+        all_outputs: List,
+        results: pd.DataFrame,
+        building_objects_in_district: str,
     ) -> pd.DataFrame:
         """Filter results according to postprocessing flags and get consumption, production, battery charge and battery discharge.
 
@@ -57,29 +62,30 @@ class KpiPreparation:
         output: ComponentOutput
 
         for index, output in enumerate(all_outputs):
-            if output.postprocessing_flag is not None:
-                if InandOutputType.ELECTRICITY_PRODUCTION in output.postprocessing_flag:
-                    total_production_ids.append(index)
+            if building_objects_in_district in str(output.get_pretty_name()):
+                if output.postprocessing_flag is not None:
+                    if InandOutputType.ELECTRICITY_PRODUCTION in output.postprocessing_flag:
+                        total_production_ids.append(index)
 
-                elif (
-                    InandOutputType.ELECTRICITY_PRODUCTION in output.postprocessing_flag
-                    and ComponentType.PV in output.postprocessing_flag
-                ):
-                    pv_production_ids.append(index)
+                    elif (
+                        InandOutputType.ELECTRICITY_PRODUCTION in output.postprocessing_flag
+                        and ComponentType.PV in output.postprocessing_flag
+                    ):
+                        pv_production_ids.append(index)
 
-                elif (
-                    InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED in output.postprocessing_flag
-                    or InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED in output.postprocessing_flag
-                ):
-                    total_consumption_ids.append(index)
-
-                elif InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
-                    if ComponentType.BATTERY in output.postprocessing_flag:
-                        battery_charge_discharge_ids.append(index)
-                    elif ComponentType.CAR_BATTERY in output.postprocessing_flag:
+                    elif (
+                        InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED in output.postprocessing_flag
+                        or InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED in output.postprocessing_flag
+                    ):
                         total_consumption_ids.append(index)
-            else:
-                continue
+
+                    elif InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
+                        if ComponentType.BATTERY in output.postprocessing_flag:
+                            battery_charge_discharge_ids.append(index)
+                        elif ComponentType.CAR_BATTERY in output.postprocessing_flag:
+                            total_consumption_ids.append(index)
+                else:
+                    continue
 
         result_dataframe = pd.DataFrame()
         result_dataframe["total_consumption"] = (
@@ -112,7 +118,9 @@ class KpiPreparation:
         return energy_in_kilowatt_hour
 
     def compute_electricity_consumption_and_production_and_battery_kpis(
-        self, result_dataframe: pd.DataFrame
+        self,
+        result_dataframe: pd.DataFrame,
+        building_objects_in_district: str,
     ) -> Tuple[float, float, float]:
         """Compute electricity consumption and production and battery kpis."""
 
@@ -185,7 +193,7 @@ class KpiPreparation:
         )
 
         # update kpi collection dict
-        self.kpi_collection_dict_unsorted.update(
+        self.kpi_collection_dict_unsorted[building_objects_in_district].update(
             {
                 total_consumtion_entry.name: total_consumtion_entry.to_dict(),
                 total_production_entry.name: total_production_entry.to_dict(),
@@ -207,6 +215,7 @@ class KpiPreparation:
         result_dataframe: pd.DataFrame,
         electricity_production_in_kilowatt_hour: float,
         electricity_consumption_in_kilowatt_hour: float,
+        building_objects_in_district: str,
     ) -> Tuple[float, float, pd.DataFrame]:
         """Computes the self consumption, grid injection, autarky and battery losses if electricty production is bigger than zero."""
 
@@ -271,20 +280,29 @@ class KpiPreparation:
 
         # make kpi entry
         grid_injection_entry = KpiEntry(
-            name="Grid injection of electricity", unit="kWh", value=grid_injection_in_kilowatt_hour, tag=KpiTagEnumClass.GENERAL
+            name="Grid injection of electricity",
+            unit="kWh",
+            value=grid_injection_in_kilowatt_hour,
+            tag=KpiTagEnumClass.GENERAL,
         )
         self_consumption_entry = KpiEntry(
-            name="Self-consumption of electricity", unit="kWh", value=self_consumption_in_kilowatt_hour, tag=KpiTagEnumClass.GENERAL
+            name="Self-consumption of electricity",
+            unit="kWh",
+            value=self_consumption_in_kilowatt_hour,
+            tag=KpiTagEnumClass.GENERAL,
         )
         self_consumption_rate_entry = KpiEntry(
-            name="Self-consumption rate of electricity", unit="%", value=self_consumption_rate_in_percent, tag=KpiTagEnumClass.GENERAL
+            name="Self-consumption rate of electricity",
+            unit="%",
+            value=self_consumption_rate_in_percent,
+            tag=KpiTagEnumClass.GENERAL,
         )
         autarkie_rate_entry = KpiEntry(
             name="Autarky rate of electricity", unit="%", value=autarky_rate_in_percent, tag=KpiTagEnumClass.GENERAL
         )
 
         # update kpi collection dict
-        self.kpi_collection_dict_unsorted.update(
+        self.kpi_collection_dict_unsorted[building_objects_in_district].update(
             {
                 grid_injection_entry.name: grid_injection_entry.to_dict(),
                 self_consumption_entry.name: self_consumption_entry.to_dict(),
@@ -320,12 +338,15 @@ class KpiPreparation:
             battery_losses_in_kilowatt_hour,
         )
 
-    def get_electricity_to_and_from_grid_from_electricty_meter(self) -> Tuple[Optional[float], Optional[float]]:
+    def get_electricity_to_and_from_grid_from_electricty_meter(
+        self,
+        building_objects_in_district: str,
+    ) -> Tuple[Optional[float], Optional[float]]:
         """Get electricity to and from grid from electricity meter."""
 
         total_energy_from_grid_in_kwh: Optional[float] = None
         total_energy_to_grid_in_kwh: Optional[float] = None
-        for kpi_entry in self.kpi_collection_dict_unsorted.values():
+        for kpi_entry in self.kpi_collection_dict_unsorted[building_objects_in_district].values():
             if (
                 isinstance(kpi_entry["description"], str)
                 and ElectricityMeter.get_classname() in kpi_entry["description"]
@@ -344,6 +365,7 @@ class KpiPreparation:
         self,
         total_electricity_consumption_in_kilowatt_hour: float,
         electricity_from_grid_in_kilowatt_hour: Optional[float],
+        building_objects_in_district: str,
     ) -> Optional[float]:
         """Return the relative electricity demand."""
         if electricity_from_grid_in_kilowatt_hour is None:
@@ -370,7 +392,7 @@ class KpiPreparation:
         )
 
         # update kpi collection dict
-        self.kpi_collection_dict_unsorted.update(
+        self.kpi_collection_dict_unsorted[building_objects_in_district].update(
             {relative_electricity_demand_entry.name: relative_electricity_demand_entry.to_dict()}
         )
         return relative_electricity_demand_from_grid_in_percent
@@ -378,6 +400,7 @@ class KpiPreparation:
     def compute_autarky_according_to_solar_htw_berlin(
         self,
         relative_electricty_demand_in_percent: Optional[float],
+        building_objects_in_district: str,
     ) -> None:
         """Return the autarky rate according to solar htw berlin.
 
@@ -402,12 +425,15 @@ class KpiPreparation:
         )
 
         # update kpi collection dict
-        self.kpi_collection_dict_unsorted.update({autarky_rate_entry.name: autarky_rate_entry.to_dict()})
+        self.kpi_collection_dict_unsorted[building_objects_in_district].update(
+            {autarky_rate_entry.name: autarky_rate_entry.to_dict()}
+        )
 
     def compute_self_consumption_rate_according_to_solar_htw_berlin(
         self,
         total_electricity_production_in_kilowatt_hour: float,
         electricity_to_grid_in_kilowatt_hour: Optional[float],
+        building_objects_in_district: str,
     ) -> None:
         """Return self-consumption according to solar htw berlin.
 
@@ -438,12 +464,16 @@ class KpiPreparation:
         )
 
         # update kpi collection dict
-        self.kpi_collection_dict_unsorted.update(
+        self.kpi_collection_dict_unsorted[building_objects_in_district].update(
             {self_consumption_rate_entry.name: self_consumption_rate_entry.to_dict()}
         )
 
     def compute_ratio_between_two_values_and_set_as_kpi(
-        self, denominator_value: float, numerator_value: float, kpi_name: str
+        self,
+        denominator_value: float,
+        numerator_value: float,
+        kpi_name: str,
+        building_objects_in_district: str,
     ) -> None:
         """Compute the ratio of two values.
 
@@ -454,7 +484,9 @@ class KpiPreparation:
         ratio_in_percent_entry = KpiEntry(name=kpi_name, unit="%", value=ratio_in_percent, tag=KpiTagEnumClass.GENERAL)
 
         # update kpi collection dict
-        self.kpi_collection_dict_unsorted.update({ratio_in_percent_entry.name: ratio_in_percent_entry.to_dict()})
+        self.kpi_collection_dict_unsorted[building_objects_in_district].update(
+            {ratio_in_percent_entry.name: ratio_in_percent_entry.to_dict()}
+        )
 
     def read_in_fuel_costs(self) -> pd.DataFrame:
         """Reads data for costs and co2 emissions of fuels from csv."""
@@ -530,6 +562,7 @@ class KpiPreparation:
         electricity_consumption_in_kilowatt_hour: float,
         grid_injection_in_kilowatt_hour: float,
         self_consumption_in_kilowatt_hour: float,
+        building_objects_in_district: str,
     ) -> None:
         """Compute energy prices and co2 emissions."""
 
@@ -631,14 +664,14 @@ class KpiPreparation:
         )
 
         # update kpi collection dict
-        self.kpi_collection_dict_unsorted.update(
+        self.kpi_collection_dict_unsorted[building_objects_in_district].update(
             {
                 costs_for_energy_use_entry.name: costs_for_energy_use_entry.to_dict(),
                 co2_emission_entry.name: co2_emission_entry.to_dict(),
             }
         )
 
-    def read_opex_and_capex_costs_from_results(self):
+    def read_opex_and_capex_costs_from_results(self, building_object: str) -> None:
         """Get CAPEX and OPEX costs for simulated period.
 
         This function will read the opex and capex costs from the results.
@@ -651,18 +684,26 @@ class KpiPreparation:
             self.simulation_parameters.result_directory, "operational_costs_co2_footprint.csv"
         )
         if Path(opex_results_path).exists():
-            opex_df = pd.read_csv(opex_results_path, index_col=0)
-            total_operational_cost_per_simulated_period = opex_df["Operational Costs in EUR"].iloc[-1]
-            total_operational_emissions_per_simulated_period = opex_df["Operational C02 footprint in kg"].iloc[-1]
+            opex_df = pd.read_csv(opex_results_path, index_col=0, sep=";")
+            total_operational_cost_per_simulated_period = opex_df["Operational Costs in EUR"].loc[
+                building_object + "_Total"
+            ]
+            total_operational_emissions_per_simulated_period = opex_df["Operational C02 footprint in kg"].loc[
+                building_object + "_Total"
+            ]
         else:
             log.warning("OPEX-costs for components are not calculated yet. Set PostProcessingOptions.COMPUTE_OPEX")
             total_operational_cost_per_simulated_period = 0
             total_operational_emissions_per_simulated_period = 0
 
         if Path(capex_results_path).exists():
-            capex_df = pd.read_csv(capex_results_path, index_col=0)
-            total_investment_cost_per_simulated_period = capex_df["Investment in EUR"].iloc[-1]
-            total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint in kg"].iloc[-1]
+            capex_df = pd.read_csv(capex_results_path, index_col=0, sep=";")
+            total_investment_cost_per_simulated_period = capex_df["Investment in EUR"].loc[
+                building_object + "_Total_per_simulated_period"
+            ]
+            total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint in kg"].loc[
+                building_object + "_Total_per_simulated_period"
+            ]
         else:
             log.warning("CAPEX-costs for components are not calculated yet. Set PostProcessingOptions.COMPUTE_CAPEX")
             total_investment_cost_per_simulated_period = 0
@@ -707,7 +748,7 @@ class KpiPreparation:
         )
 
         # update kpi collection dict
-        self.kpi_collection_dict_unsorted.update(
+        self.kpi_collection_dict_unsorted[building_object].update(
             {
                 total_investment_cost_per_simulated_period_entry.name: total_investment_cost_per_simulated_period_entry.to_dict(),
                 total_device_co2_footprint_per_simulated_period_entry.name: total_device_co2_footprint_per_simulated_period_entry.to_dict(),
@@ -721,6 +762,11 @@ class KpiPreparation:
     def get_all_component_kpis(self, wrapped_components: List[ComponentWrapper]) -> None:
         """Go through all components and get their KPIs if implemented."""
         my_component_kpi_entry_list: List[KpiEntry]
+
+        self.kpi_collection_dict_unsorted = {
+            building_objects: {} for building_objects in self.building_objects_in_district_list
+        }
+
         for wrapped_component in wrapped_components:
             my_component = wrapped_component.my_component
             # get KPIs of respective component
@@ -733,7 +779,11 @@ class KpiPreparation:
                 log.debug("KPI generation for " + my_component.component_name + " was successful.")
                 # add all KPI entries to kpi dict
                 for kpi_entry in my_component_kpi_entry_list:
-                    self.kpi_collection_dict_unsorted[kpi_entry.name] = kpi_entry.to_dict()
+
+                    for object_name in self.kpi_collection_dict_unsorted.keys():
+                        if object_name in my_component.component_name:
+                            self.kpi_collection_dict_unsorted[object_name][kpi_entry.name] = kpi_entry.to_dict()
+                            break
             else:
                 log.debug(
                     "KPI generation for "

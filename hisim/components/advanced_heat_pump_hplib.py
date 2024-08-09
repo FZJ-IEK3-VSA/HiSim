@@ -63,6 +63,7 @@ class HeatPumpHplibConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return HeatPumpHplib.get_full_classname()
 
+    building_name: str
     name: str
     model: str
     group_id: int
@@ -88,6 +89,7 @@ class HeatPumpHplibConfig(ConfigBase):
         cls,
         set_thermal_output_power_in_watt: Quantity[float, Watt] = Quantity(8000, Watt),
         heating_reference_temperature_in_celsius: Quantity[float, Celsius] = Quantity(-7.0, Celsius),
+        building_name: str = "BUI1",
     ) -> "HeatPumpHplibConfig":
         """Gets a default HPLib Heat Pump.
 
@@ -95,6 +97,7 @@ class HeatPumpHplibConfig(ConfigBase):
         https://github.com/FZJ-IEK3-VSA/hplib/blob/main/hplib/hplib.py l.135 "fit_p_th_ref.
         """
         return HeatPumpHplibConfig(
+            building_name=building_name,
             name="AdvancedHeatPumpHPLib",
             model="Generic",
             group_id=1,
@@ -118,13 +121,16 @@ class HeatPumpHplibConfig(ConfigBase):
         cls,
         heating_load_of_building_in_watt: Quantity[float, Watt],
         heating_reference_temperature_in_celsius: Quantity[float, Celsius] = Quantity(-7.0, Celsius),
+        name: str = "AdvancedHeatPumpHPLib",
+        building_name: str = "BUI1",
     ) -> "HeatPumpHplibConfig":
-        """Gets a default heat pump with scaling according to heating load of the building."""
+        """Gets a default heat pump with scaling according to heating load of the building_name."""
 
         set_thermal_output_power_in_watt: Quantity[float, Watt] = heating_load_of_building_in_watt
 
         return HeatPumpHplibConfig(
-            name="AdvancedHeatPumpHPLib",
+            building_name=building_name,
+            name=name,
             model="Generic",
             group_id=1,
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
@@ -169,6 +175,7 @@ class HeatPumpHplib(Component):
     COP = "COP"  # -
     EER = "EER"  # -
     TemperatureOutput = "TemperatureOutput"  # °C
+    TemperatureInputWarmWater = "TemperatureInputWarmWater"  # °C
     MassFlowOutput = "MassFlowOutput"  # kg/s
     TimeOnHeating = "TimeOnHeating"  # s
     TimeOnCooling = "TimeOnCooling"  # s
@@ -195,7 +202,7 @@ class HeatPumpHplib(Component):
 
         """
         super().__init__(
-            name=config.name,
+            name=config.building_name + "_" + config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -356,6 +363,16 @@ class HeatPumpHplib(Component):
             load_type=LoadTypes.HEATING,
             unit=Units.CELSIUS,
             output_description="Temperature Output in °C",
+            postprocessing_flag=[
+                OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+            ],
+        )
+        self.t_in_warm_water: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.TemperatureInputWarmWater,
+            load_type=LoadTypes.HEATING,
+            unit=Units.CELSIUS,
+            output_description="Temperature Input in °C",
             postprocessing_flag=[
                 OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
             ],
@@ -602,6 +619,7 @@ class HeatPumpHplib(Component):
         stsv.set_output_value(self.cop, cop)
         stsv.set_output_value(self.eer, eer)
         stsv.set_output_value(self.t_out, t_out)
+        stsv.set_output_value(self.t_in_warm_water, t_in_secondary)
         stsv.set_output_value(self.m_dot, m_dot)
         stsv.set_output_value(self.time_on_heating, time_on_heating)
         stsv.set_output_value(self.time_on_cooling, time_on_cooling)
@@ -629,14 +647,12 @@ class HeatPumpHplib(Component):
         because part of electricity consumption is feed by PV
         """
         for index, output in enumerate(all_outputs):
-            if (
-                output.component_name == "HeatPumpHPLib" and output.load_type == LoadTypes.ELECTRICITY
-            ):  # Todo: check component name from system_setups: find another way of using only heatpump-outputs
+            if output.component_name == self.component_name and output.load_type == LoadTypes.ELECTRICITY:
                 self.config.consumption = round(
                     sum(postprocessing_results.iloc[:, index])
                     * self.my_simulation_parameters.seconds_per_timestep
                     / 3.6e6,
-                    1,
+                    2,
                 )
         opex_cost_data_class = OpexCostDataClass(
             opex_cost=self.calc_maintenance_cost(),
@@ -700,7 +716,7 @@ class HeatPumpHplib(Component):
 
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.config.name:
+            if output.component_name == self.component_name:
                 number_of_heat_pump_cycles = self.get_heatpump_cycles(
                     output=output, index=index, postprocessing_results=postprocessing_results
                 )
@@ -775,7 +791,7 @@ class HeatPumpHplib(Component):
             unit="-",
             value=number_of_heat_pump_cycles,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(number_of_heat_pump_cycles_entry)
 
@@ -784,7 +800,7 @@ class HeatPumpHplib(Component):
             unit="-",
             value=seasonal_performance_factor,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(seasonal_performance_factor_entry)
 
@@ -793,7 +809,7 @@ class HeatPumpHplib(Component):
             unit="-",
             value=seasonal_energy_efficiency_ratio,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(seasonal_energy_efficiency_entry)
 
@@ -802,7 +818,7 @@ class HeatPumpHplib(Component):
             unit="kWh",
             value=output_heating_energy_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(heating_output_energy_heatpump_entry)
 
@@ -811,7 +827,7 @@ class HeatPumpHplib(Component):
             unit="kWh",
             value=output_cooling_energy_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(cooling_output_energy_heatpump_entry)
 
@@ -820,7 +836,7 @@ class HeatPumpHplib(Component):
             unit="kWh",
             value=electrical_energy_for_heating_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(electrical_input_energy_for_heating_entry)
 
@@ -829,7 +845,7 @@ class HeatPumpHplib(Component):
             unit="kWh",
             value=electrical_energy_for_cooling_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(electrical_input_energy_for_cooling_entry)
 
@@ -838,7 +854,7 @@ class HeatPumpHplib(Component):
             unit="kWh",
             value=total_electrical_energy_input_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(electrical_input_energy_total_entry)
 
@@ -847,7 +863,7 @@ class HeatPumpHplib(Component):
             unit="h",
             value=heating_time_in_hours,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(heating_hours_entry)
 
@@ -856,7 +872,7 @@ class HeatPumpHplib(Component):
             unit="h",
             value=cooling_time_in_hours,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(cooling_hours_entry)
 
@@ -906,6 +922,7 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
         """Returns the full class name of the base class."""
         return HeatPumpHplibController.get_full_classname()
 
+    building_name: str
     name: str
     mode: int
     set_heating_threshold_outside_temperature_in_celsius: Optional[float]
@@ -914,11 +931,16 @@ class HeatPumpHplibControllerL1Config(ConfigBase):
 
     @classmethod
     def get_default_generic_heat_pump_controller_config(
-        cls, heat_distribution_system_type: Any, mode: int = 2
+        cls,
+        heat_distribution_system_type: Any,
+        mode: int = 2,
+        building_name: str = "BUI1",
+        name: str = "HeatPumpController",
     ) -> "HeatPumpHplibControllerL1Config":
         """Gets a default Generic Heat Pump Controller."""
         return HeatPumpHplibControllerL1Config(
-            name="HeatPumpController",
+            building_name=building_name,
+            name=name,
             mode=mode,
             set_heating_threshold_outside_temperature_in_celsius=16.0,
             set_cooling_threshold_outside_temperature_in_celsius=20.0,
@@ -955,7 +977,7 @@ class HeatPumpHplibController(Component):
         """Construct all the neccessary attributes."""
         self.heatpump_controller_config = config
         super().__init__(
-            self.heatpump_controller_config.name,
+            name=self.heatpump_controller_config.building_name + "_" + self.heatpump_controller_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

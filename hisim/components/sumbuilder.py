@@ -1,4 +1,5 @@
 """ Contains functions to sum up multiple inputs. """
+
 # clean
 from dataclasses import dataclass
 from typing import Any, List
@@ -14,7 +15,6 @@ from hisim.simulationparameters import SimulationParameters
 @dataclass_json
 @dataclass
 class SumBuilderConfig(cp.ConfigBase):
-
     """Electricity Grid Config."""
 
     @classmethod
@@ -22,6 +22,7 @@ class SumBuilderConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return SumBuilderForTwoInputs.get_full_classname()
 
+    building_name: str
     name: str
     loadtype: lt.LoadTypes
     unit: lt.Units
@@ -29,11 +30,10 @@ class SumBuilderConfig(cp.ConfigBase):
     @classmethod
     def get_sumbuilder_default_config(cls):
         """Gets a default Sumbuilder."""
-        return SumBuilderConfig(name="Sum", loadtype=lt.LoadTypes.ANY, unit=lt.Units.ANY)
+        return SumBuilderConfig(building_name="BUI1", name="Sum", loadtype=lt.LoadTypes.ANY, unit=lt.Units.ANY)
 
 
 class CalculateOperation(cp.Component):
-
     """Arbitrary mathematical operations."""
 
     operations_available = ["Sum", "Subtract", "Multiply", "Divide"]
@@ -47,7 +47,7 @@ class CalculateOperation(cp.Component):
     ) -> None:
         """Initializes the class."""
         super().__init__(
-            name=config.name,
+            name=config.building_name + "_" + config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -126,7 +126,6 @@ class CalculateOperation(cp.Component):
 
 
 class SumBuilderForTwoInputs(Component):
-
     """Adds two outputs."""
 
     SumInput1 = "Input 1"
@@ -141,7 +140,7 @@ class SumBuilderForTwoInputs(Component):
     ) -> None:
         """Initializes the class."""
         super().__init__(
-            name=config.name,
+            name=config.building_name + "_" + config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -200,7 +199,6 @@ class SumBuilderForTwoInputs(Component):
 
 
 class SumBuilderForThreeInputs(Component):
-
     """Sum builder for three inputs."""
 
     SumInput1 = "Input 1"
@@ -216,7 +214,7 @@ class SumBuilderForThreeInputs(Component):
     ) -> None:
         """Initializes the class."""
         super().__init__(
-            name=config.name,
+            name=config.building_name + "_" + config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

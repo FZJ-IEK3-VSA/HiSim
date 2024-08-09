@@ -35,6 +35,7 @@ def test_generic_heat_pump():
     # Set Heat Pump
     my_heat_pump = generic_heat_pump.GenericHeatPump(
         config=generic_heat_pump.GenericHeatPumpConfig(
+            building_name="BUI1",
             manufacturer=manufacturer,
             name="GenericHeatPump",
             heat_pump_name=heat_pump_name,
@@ -47,6 +48,7 @@ def test_generic_heat_pump():
     # Set Heat Pump Controller
     my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
         config=generic_heat_pump.GenericHeatPumpControllerConfig(
+            building_name="BUI1",
             name="GenericHeatPumpController",
             temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
             temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,

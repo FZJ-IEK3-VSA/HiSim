@@ -34,7 +34,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class GenericCarInformation:
-
     """Class for collecting important generic car parameters from occupancy."""
 
     def __init__(self, my_occupancy_instance: UtspLpgConnector):
@@ -135,6 +134,7 @@ class GenericCarInformation:
 class CarConfig(cp.ConfigBase):
     """Definition of configuration of Car."""
 
+    building_name: str
     #: name of the car
     name: str
     #: priority of the component in hierachy: the higher the number the lower the priority
@@ -160,10 +160,15 @@ class CarConfig(cp.ConfigBase):
         return Car.get_full_classname()
 
     @classmethod
-    def get_default_diesel_config(cls) -> Any:
+    def get_default_diesel_config(
+        cls,
+        name: str = "Car",
+        building_name: str = "BUI1",
+    ) -> Any:
         """Defines default configuration for diesel vehicle."""
         config = CarConfig(
-            name="Car",
+            building_name=building_name,
+            name=name,
             source_weight=1,
             fuel=lt.LoadTypes.DIESEL,
             consumption_per_km=0.06,
@@ -176,9 +181,13 @@ class CarConfig(cp.ConfigBase):
         return config
 
     @classmethod
-    def get_default_ev_config(cls) -> Any:
+    def get_default_ev_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Defines default configuration for electric vehicle."""
         config = CarConfig(
+            building_name=building_name,
             name="Car",
             source_weight=1,
             fuel=lt.LoadTypes.ELECTRICITY,
@@ -222,7 +231,7 @@ class Car(cp.Component):
     ) -> None:
         """Initializes Car."""
         super().__init__(
-            name=config.name + "_w" + str(config.source_weight),
+            name=config.building_name + "_" + config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -304,7 +313,7 @@ class Car(cp.Component):
         opex_cost_per_simulated_period_in_euro = None
         co2_per_simulated_period_in_kg = None
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.config.name + "_w" + str(self.config.source_weight):
+            if output.component_name == self.component_name:
                 if output.unit == lt.Units.LITER:
                     self.config.consumption = round(sum(postprocessing_results.iloc[:, index]), 1)
                     emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(

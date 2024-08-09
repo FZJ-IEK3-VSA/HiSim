@@ -21,10 +21,11 @@ from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnecto
 from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLib
 from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib
 
-from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
+# from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
 from hisim.components.electricity_meter import ElectricityMeter
 from hisim.components.generic_heat_pump_modular import ModularHeatPump
 from hisim.components.controller_l2_energy_management_system import L2GenericEnergyManagementSystem
+from hisim.components.controller_l2_district_energy_management_system import L2GenericDistrictEnergyManagementSystem
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes
 from hisim.utils import HISIMPATH
 from hisim import log
@@ -470,16 +471,16 @@ class KpiGenerator(JSONWizard):
         # go through all wrapped components and try to find electricity meter
         for wrapped_component in self.wrapped_components:
             if isinstance(wrapped_component.my_component, ElectricityMeter):
-                wrapped_electricty_meter_component = wrapped_component
+                wrapped_electricity_meter_component = wrapped_component
                 break
 
-        if not wrapped_electricty_meter_component:
+        if not wrapped_electricity_meter_component:
             log.information("Could not find the Electricity Meter component.")
             return None, None
 
         for column in self.results.columns:
 
-            if all(x in column.split(sep=" ") for x in [wrapped_electricty_meter_component.my_component.component_name]):
+            if all(x in column.split(sep=" ") for x in [wrapped_electricity_meter_component.my_component.component_name]):
                 for string in column.split(sep=" "):
 
                     if "ElectricityToGrid" in string.split(sep="_") :
@@ -1630,7 +1631,7 @@ class KpiGenerator(JSONWizard):
                     output_name_return_temperature = MoreAdvancedHeatPumpHPLib.TemperatureInputSH
                 elif isinstance(wrapped_component.my_component, HeatPumpHplib):
                     output_name_flow_temperature = HeatPumpHplib.TemperatureOutput
-                    output_name_return_temperature = SimpleHotWaterStorage.WaterTemperatureToHeatGenerator
+                    output_name_return_temperature = HeatPumpHplib.TemperatureInputWarmWater
 
                 (
                     mean_flow_temperature_in_celsius,
@@ -2149,7 +2150,7 @@ class KpiGenerator(JSONWizard):
         occupancy_electricity_from_grid_in_kilowatt_hour = None
 
         for wrapped_component in self.wrapped_components:
-            if isinstance(wrapped_component.my_component, L2GenericEnergyManagementSystem):
+            if isinstance(wrapped_component.my_component, (L2GenericEnergyManagementSystem, L2GenericDistrictEnergyManagementSystem)):
                 wrapped_ems_component = wrapped_component
                 break
         if not wrapped_ems_component:
@@ -2185,6 +2186,7 @@ class KpiGenerator(JSONWizard):
                             )
                         )
                     if "ElectricityToOrFromGridOfUtspLpgConnector" in string.split(sep="_"):
+
                         occupancy_electricity_from_grid_in_watt_series = self.results[column].loc[
                             self.results[column] < 0.0
                         ]

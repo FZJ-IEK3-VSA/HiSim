@@ -35,9 +35,9 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class HeatPumpConfig(cp.ConfigBase):
-
     """Configuration of a HeatPump."""
 
+    building_name: str
     #: name of the device
     name: str
     #: priority of the device in energy management system: the higher the number the lower the priority
@@ -69,10 +69,13 @@ class HeatPumpConfig(cp.ConfigBase):
         return ModularHeatPump.get_full_classname()
 
     @staticmethod
-    def get_default_config_heating() -> "HeatPumpConfig":
+    def get_default_config_heating(
+        building_name: str = "BUI1",
+    ) -> "HeatPumpConfig":
         """Returns default configuration of a heat pump used for heating."""
         power_th: float = 6200  # W
         config = HeatPumpConfig(
+            building_name=building_name,
             name="HeatingHeatPump",
             source_weight=1,
             manufacturer="Viessmann Werke GmbH & Co KG",
@@ -89,10 +92,13 @@ class HeatPumpConfig(cp.ConfigBase):
         return config
 
     @staticmethod
-    def get_default_config_waterheating() -> "HeatPumpConfig":
+    def get_default_config_waterheating(
+        building_name: str = "BUI1",
+    ) -> "HeatPumpConfig":
         """Returns default configuration of a heat pump used for water heating."""
         power_th: float = 3000  # W
         config = HeatPumpConfig(
+            building_name=building_name,
             name="DHWHeatPump",
             source_weight=1,
             manufacturer="Viessmann Werke GmbH & Co KG",
@@ -109,10 +115,13 @@ class HeatPumpConfig(cp.ConfigBase):
         return config
 
     @staticmethod
-    def get_default_config_heating_electric() -> "HeatPumpConfig":
+    def get_default_config_heating_electric(
+        building_name: str = "BUI1",
+    ) -> "HeatPumpConfig":
         """Returns default configuartion of simple electrical heating system with a COP of one."""
         power_th: float = 6200  # W
         config = HeatPumpConfig(
+            building_name=building_name,
             name="HeatingHeatingRod",
             source_weight=1,
             manufacturer="dummy",
@@ -129,10 +138,13 @@ class HeatPumpConfig(cp.ConfigBase):
         return config
 
     @staticmethod
-    def get_default_config_waterheating_electric() -> "HeatPumpConfig":
+    def get_default_config_waterheating_electric(
+        building_name: str = "BUI1",
+    ) -> "HeatPumpConfig":
         """Returns default configuration of electrical heating rod for boiler."""
         power_th: float = 3000  # W
         config = HeatPumpConfig(
+            building_name=building_name,
             name="DHWHeatingRod",
             source_weight=1,
             manufacturer="dummy",
@@ -150,14 +162,19 @@ class HeatPumpConfig(cp.ConfigBase):
 
     @classmethod
     def get_scaled_waterheating_to_number_of_apartments(
-        cls, number_of_apartments: float, default_power_in_watt: float = 3000
+        cls,
+        number_of_apartments: float,
+        default_power_in_watt: float = 3000,
+        name: str = "DHWHeatPump",
+        building_name: str = "BUI1",
     ) -> "HeatPumpConfig":
         """Gets a default heat pump with scaling according to number of apartments."""
 
         # scale with number of apartments
         power_th_in_watt: float = default_power_in_watt * number_of_apartments
         config = HeatPumpConfig(
-            name="DHWHeatPump",
+            building_name=building_name,
+            name=name,
             source_weight=1,
             manufacturer="Viessmann Werke GmbH & Co KG",
             device_name="Vitocal 300-A AWO-AC 301.B07",
@@ -174,7 +191,6 @@ class HeatPumpConfig(cp.ConfigBase):
 
 
 class ModularHeatPumpState:
-
     """Modular heat pump state saves the state of the heat pump."""
 
     def __init__(self, state: int = 0):
@@ -187,12 +203,11 @@ class ModularHeatPumpState:
 
 
 class ModularHeatPump(cp.Component):
-
     """Heat pump implementation.
 
     The generic_heatpump_modular differs to generic_heatpump in the sense that the minimal runtime is not in the component,
     but in the related controller.
-    This implementation does not consider cooling of buildings.
+    This implementation does not consider cooling of building_names.
 
     Components to connect to:
     (1) Weather
@@ -217,7 +232,7 @@ class ModularHeatPump(cp.Component):
     ):
         """Initialize the class."""
         super().__init__(
-            name=config.name + "_w" + str(config.source_weight),
+            name=config.building_name + "_" + config.name + "_w" + str(config.source_weight),
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -408,7 +423,7 @@ class ModularHeatPump(cp.Component):
         """
         for index, output in enumerate(all_outputs):
             if (
-                output.component_name == self.config.name + "_w" + str(self.config.source_weight)
+                output.component_name == self.component_name
                 and output.load_type == lt.LoadTypes.ELECTRICITY
             ):  # Todo: check component name from system_setups: find another way of using only heatpump-outputs
                 self.config.consumption = round(
@@ -459,7 +474,7 @@ class ModularHeatPump(cp.Component):
             unit="kWh",
             value=dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(dhw_heatpump_total_electricity_consumption_entry)
 
@@ -468,7 +483,7 @@ class ModularHeatPump(cp.Component):
             unit="kWh",
             value=dhw_heat_pump_heating_energy_output_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(dhw_heatpump_heating_energy_output_entry)
 

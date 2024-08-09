@@ -27,10 +27,12 @@ class ConfigBase(JSONWizard):
 
     """Base class for all configurations."""
 
+    building_name: str
     name: str
 
-    def __init__(self, name: str):
+    def __init__(self, building_name: str, name: str):
         """Initializes."""
+        self.building_name = building_name
         self.name = name
 
     @classmethod

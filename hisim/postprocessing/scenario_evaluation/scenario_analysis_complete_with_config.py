@@ -21,6 +21,7 @@ class ScenarioAnalysisConfig(ConfigBase):
 
     """Configuration for running a scenario analysis."""
 
+    building_name: str
     name: str
     data_format_type: str
     time_resolution_of_data_set: str
@@ -40,6 +41,7 @@ class ScenarioAnalysisConfig(ConfigBase):
         """Get default ScenarioAnalysisConfig."""
 
         return ScenarioAnalysisConfig(
+            building_name="BUI1",
             name="ScenarioAnalysisConfig_0",
             data_format_type=result_data_processing.DataFormatEnum.CSV.name,
             time_resolution_of_data_set=result_data_processing.ResultDataTypeEnum.YEARLY.name,

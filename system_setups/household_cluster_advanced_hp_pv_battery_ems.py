@@ -54,6 +54,7 @@ class BuildingPVWeatherConfig(ConfigBase):
 
     """Configuration for BuildingPv."""
 
+    building_name: str
     name: str
     building_id: str
     pv_azimuth: float
@@ -72,6 +73,7 @@ class BuildingPVWeatherConfig(ConfigBase):
         """Get default BuildingPVConfig."""
 
         return BuildingPVWeatherConfig(
+            building_name="BUI1",
             name="BuildingPVConfig",
             building_id="default_building",
             pv_azimuth=180,

@@ -180,6 +180,8 @@ def test_house(
     with open(os.path.join(my_sim._simulation_parameters.result_directory, "all_kpis.json"), "r", encoding="utf-8") as file:  # pylint: disable=W0212
         jsondata = json.load(file)
 
+    jsondata = jsondata["BUI1"]
+
     cumulative_consumption_kpi_in_kilowatt_hour = jsondata["General"]["Total electricity consumption"].get("value")
 
     cumulative_production_kpi_in_kilowatt_hour = jsondata["General"]["Total electricity production"].get("value")
@@ -189,22 +191,22 @@ def test_house(
     # simualtion results from grid energy balancer (last entry)
     simulation_results_electricity_meter_cumulative_production_in_watt_hour = (
         my_sim.results_data_frame[
-            "ElectricityMeter - CumulativeProduction [Electricity - Wh]"
+            "BUI1" + "_" + "ElectricityMeter - CumulativeProduction [Electricity - Wh]"
         ][-1]
     )
     simulation_results_electricity_meter_cumulative_consumption_in_watt_hour = (
         my_sim.results_data_frame[
-            "ElectricityMeter - CumulativeConsumption [Electricity - Wh]"
+            "BUI1" + "_" + "ElectricityMeter - CumulativeConsumption [Electricity - Wh]"
         ][-1]
     )
     simulation_results_electricity_from_grid_in_watt_hour = (
         my_sim.results_data_frame[
-            "ElectricityMeter - ElectricityFromGrid [Electricity - Wh]"
+            "BUI1" + "_" + "ElectricityMeter - ElectricityFromGrid [Electricity - Wh]"
         ]
     )
     simulation_results_electricity_consumption_in_watt_hour = (
         my_sim.results_data_frame[
-            "ElectricityMeter - ElectricityConsumption [Electricity - Wh]"
+            "BUI1" + "_" + "ElectricityMeter - ElectricityConsumption [Electricity - Wh]"
         ]
     )
     sum_electricity_from_grid_in_kilowatt_hour = sum(simulation_results_electricity_from_grid_in_watt_hour) / 1000

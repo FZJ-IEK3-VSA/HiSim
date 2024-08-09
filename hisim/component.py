@@ -399,7 +399,7 @@ class Component:
         return OpexCostDataClass.get_default_opex_cost_data_class()
 
     @staticmethod
-    def get_cost_capex(config: ConfigBase) -> CapexCostDataClass:
+    def get_cost_capex(config: ConfigBase, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         # pylint: disable=unused-argument
         """Calculates lifetime, total capital expenditure cost and total co2 footprint of production of device."""
         return CapexCostDataClass.get_default_capex_cost_data_class()
@@ -416,7 +416,7 @@ class Component:
     def calc_maintenance_cost(self) -> float:
         """Calc maintenance_cost per simulated period as share of capex of component."""
         seconds_per_year = 365 * 24 * 60 * 60
-        investment = self.get_cost_capex(self.config).capex_investment_cost_in_euro
+        investment = self.get_cost_capex(config=self.config, simulation_parameters=self.my_simulation_parameters).capex_investment_cost_in_euro
 
         # add maintenance costs per simulated period
         maintenance_cost_per_simulated_period_in_euro: float = (
@@ -478,6 +478,8 @@ class CapexCostDataClass:
     capex_investment_cost_in_euro: float
     device_co2_footprint_in_kg: float
     lifetime_in_years: float
+    capex_investment_cost_for_simulated_period_in_euro: float
+    device_co2_footprint_for_simulated_period_in_kg: float
 
     @classmethod
     def get_default_capex_cost_data_class(cls) -> CapexCostDataClass:
@@ -485,5 +487,7 @@ class CapexCostDataClass:
         return CapexCostDataClass(
             capex_investment_cost_in_euro=0,
             device_co2_footprint_in_kg=0,
-            lifetime_in_years=1
+            lifetime_in_years=1,
+            capex_investment_cost_for_simulated_period_in_euro=0,
+            device_co2_footprint_for_simulated_period_in_kg=0
         )

@@ -8,7 +8,6 @@ from hisim import log
 from hisim.simulationparameters import SimulationParameters
 from hisim.component_wrapper import ComponentWrapper
 from hisim.component import OpexCostDataClass, CapexCostDataClass
-from hisim.components.advanced_battery_bslib import Battery
 from hisim.components.electricity_meter import ElectricityMeter
 from hisim.components.gas_meter import GasMeter
 
@@ -82,7 +81,6 @@ def capex_calculation(
     simulation_parameters: SimulationParameters,
 ) -> List:
     """Loops over all components and calls capex cost calculation."""
-    seconds_per_year = 365 * 24 * 60 * 60
     total_investment_cost = 0.0
     total_device_co2_footprint = 0.0
     total_investment_cost_per_simulated_period = 0.0
@@ -102,46 +100,21 @@ def capex_calculation(
         #     config=component_unwrapped.config,
         # )
         capex_cost_data_class: CapexCostDataClass = component_unwrapped.get_cost_capex(
-            config=component_unwrapped.config,
+            config=component_unwrapped.config, simulation_parameters=simulation_parameters
         )
 
         if capex_cost_data_class.lifetime_in_years > 0:
-            # lifetime is per default set to 1.0 in class cp.Component to avoid devide by zero error
 
-            # battery costs and emissions are calculated per used cycles not per simulation period  # better aproximation of aging
-            if isinstance(component_unwrapped, Battery) and hasattr(
-                component_unwrapped, "get_battery_aging_information"
-            ):
-                (
-                    virtual_number_of_full_charge_cycles,
-                    lifetime_in_cycles,
-                ) = component_unwrapped.get_battery_aging_information()
-                if lifetime_in_cycles > 0:
-                    capex_per_simulated_period = (capex_cost_data_class.capex_investment_cost_in_euro / lifetime_in_cycles) * (virtual_number_of_full_charge_cycles)
-                    device_co2_footprint_per_simulated_period = (capex_cost_data_class.device_co2_footprint_in_kg / lifetime_in_cycles) * (
-                        virtual_number_of_full_charge_cycles
-                    )
-                else:
-                    log.warning(
-                        f"capex calculation not valid. Check lifetime_in_cycles in Configuration of {component}"
-                    )
-            else:
-                capex_per_simulated_period = (capex_cost_data_class.capex_investment_cost_in_euro / capex_cost_data_class.lifetime_in_years) * (
-                    simulation_parameters.duration.total_seconds() / seconds_per_year
-                )
-                device_co2_footprint_per_simulated_period = (capex_cost_data_class.device_co2_footprint_in_kg / capex_cost_data_class.lifetime_in_years) * (
-                    simulation_parameters.duration.total_seconds() / seconds_per_year
-                )
             total_investment_cost += capex_cost_data_class.capex_investment_cost_in_euro
             total_device_co2_footprint += capex_cost_data_class.device_co2_footprint_in_kg
-            total_investment_cost_per_simulated_period += capex_per_simulated_period
-            total_device_co2_footprint_per_simulated_period += device_co2_footprint_per_simulated_period
+            total_investment_cost_per_simulated_period += capex_cost_data_class.capex_investment_cost_for_simulated_period_in_euro
+            total_device_co2_footprint_per_simulated_period += capex_cost_data_class.device_co2_footprint_for_simulated_period_in_kg
 
             capex_table_as_list_of_list.append(
                 [
                     component_unwrapped.component_name,
-                    round(capex_per_simulated_period, 2),
-                    round(device_co2_footprint_per_simulated_period, 2),
+                    round(capex_cost_data_class.capex_investment_cost_for_simulated_period_in_euro, 2),
+                    round(capex_cost_data_class.device_co2_footprint_for_simulated_period_in_kg, 2),
                     capex_cost_data_class.lifetime_in_years,
                 ]
             )

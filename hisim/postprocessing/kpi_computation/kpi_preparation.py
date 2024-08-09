@@ -604,7 +604,7 @@ class KpiPreparation:
                 )
             # add opex and capex costs if they exist
             my_component_opex_dataclass, my_component_capex_dataclass = self.get_opex_and_capex_costs_for_each_component(my_component=my_component)
-            self.add_opex_costs_to_component_kpi_list(my_component_opex_dataclass=my_component_opex_dataclass, kpi_collection_dict_unsorted=self.kpi_collection_dict_unsorted, my_component_name=my_component.component_name)
+            self.add_opex_costs_to_component_kpi_list(my_component_opex_dataclass=my_component_opex_dataclass, my_component_name=my_component.component_name)
             
             if my_component_capex_dataclass is not None:
                 pass

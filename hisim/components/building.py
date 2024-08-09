@@ -1154,7 +1154,7 @@ class Building(cp.Component):
 
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.config.name:
+            if output.component_name == self.component_name:
                 list_of_kpi_entries = self.get_building_kpis_from_outputs(
                     output=output,
                     index=index,

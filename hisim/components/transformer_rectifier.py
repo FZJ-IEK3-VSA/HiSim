@@ -26,13 +26,14 @@ class TransformerConfig(ConfigBase):
 
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters
+    building_name: str
     name: str
     efficiency: float
 
     @classmethod
     def get_default_transformer(cls):
         """Gets a default Transformer."""
-        return TransformerConfig(name="Generic Transformer and rectifier Unit", efficiency=0.95)
+        return TransformerConfig(building_name="BUI1", name="Generic Transformer and rectifier Unit", efficiency=0.95)
 
 
 class Transformer(Component):
@@ -67,7 +68,7 @@ class Transformer(Component):
         """Constructs all the neccessary attributes."""
         self.transformerconfig = config
         super().__init__(
-            self.transformerconfig.name,
+            name=config.building_name + "_" + config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

@@ -80,7 +80,7 @@ class ElectricityMeter(DynamicComponent):
         super().__init__(
             self.my_component_inputs,
             self.my_component_outputs,
-            name=config.building_name + "_" + self.name,
+            name=config.building_name + "_" + config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -107,7 +107,8 @@ class ElectricityMeter(DynamicComponent):
                     lt.InandOutputType.ELECTRICITY_PRODUCTION,
                     lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
                 ]
-                if any(word in self.name.lower() for word in ["quartier", "district"])
+                if any(word in config.building_name.lower() for word in ["quartier", "bezirk", "district",
+                                                                         "area", "neighborhood"])
                 else []
             ),
         )
@@ -123,7 +124,8 @@ class ElectricityMeter(DynamicComponent):
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
                     lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
                 ]
-                if any(word in self.name.lower() for word in ["quartier", "district"])
+                if any(word in config.building_name.lower() for word in ["quartier", "bezirk", "district",
+                                                                         "area", "neighborhood"])
                 else []
             ),
         )

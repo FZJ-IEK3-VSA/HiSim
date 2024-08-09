@@ -608,7 +608,7 @@ class HeatDistribution(cp.Component):
 
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.config.name:
+            if output.component_name == self.component_name:
                 if output.field_name == self.ThermalPowerDelivered and output.load_type == lt.LoadTypes.HEATING:
                     # take only output values for heating
                     thermal_output_power_values_in_watt = postprocessing_results.iloc[:, index].loc[

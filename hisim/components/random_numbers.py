@@ -24,6 +24,7 @@ class RandomNumbersConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return RandomNumbers.get_full_classname()
 
+    building_name: str
     name: str
     timesteps: int
     minimum: float
@@ -33,6 +34,7 @@ class RandomNumbersConfig(ConfigBase):
     def get_default_config(cls):
         """Gets a default config."""
         return RandomNumbersConfig(
+            building_name="BUI1",
             name="RandomNumbers",
             timesteps=100,
             minimum=1,
@@ -53,7 +55,7 @@ class RandomNumbers(Component):
     ) -> None:
         """Initialize the class."""
         super().__init__(
-            name=config.name,
+            name=config.building_name + "_" + config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

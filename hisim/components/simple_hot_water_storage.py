@@ -909,6 +909,7 @@ class SimpleHotWaterStorageControllerConfig(cp.ConfigBase):
         """Return the full class name of the base class."""
         return SimpleHotWaterStorageController.get_full_classname()
 
+    building_name: str
     name: str
 
     @classmethod
@@ -917,6 +918,7 @@ class SimpleHotWaterStorageControllerConfig(cp.ConfigBase):
     ) -> Any:
         """Get a default simplehotwaterstorage controller config."""
         config = SimpleHotWaterStorageControllerConfig(
+            building_name="BUI1",
             name="SimpleHotWaterStorageController",
         )
         return config
@@ -940,7 +942,7 @@ class SimpleHotWaterStorageController(cp.Component):
         """Construct all the neccessary attributes."""
 
         super().__init__(
-            "SimpleHotWaterStorageController",
+            name=config.building_name + "_" + config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

@@ -1436,14 +1436,6 @@ class MoreAdvancedHeatPumpHPLib(Component):
                             timeresolution=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
-                    dhw_heatpump_heating_energy_output_entry = KpiEntry(
-                        name="Heating output energy of DHW heat pump",
-                        unit="kWh",
-                        value=dhw_heat_pump_heating_energy_output_in_kilowatt_hour,
-                        tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
-                        description=self.component_name,
-                    )
-                    list_of_kpi_entries.append(dhw_heatpump_heating_energy_output_entry)
 
                 elif output.field_name == self.ElectricalInputPowerSH:
                     # get electrical energie values for heating
@@ -1461,14 +1453,6 @@ class MoreAdvancedHeatPumpHPLib(Component):
                             timeresolution=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
-                    dhw_heatpump_total_electricity_consumption_entry = KpiEntry(
-                        name="DHW heat pump total electricity consumption",
-                        unit="kWh",
-                        value=dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour,
-                        tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
-                        description=self.component_name,
-                    )
-                    list_of_kpi_entries.append(dhw_heatpump_total_electricity_consumption_entry)
 
                 elif output.field_name == self.ElectricalInputPowerForCooling:
                     # get electrical energie values for cooling
@@ -1516,7 +1500,26 @@ class MoreAdvancedHeatPumpHPLib(Component):
         total_electrical_energy_input_in_kilowatt_hour = (
             electrical_energy_for_cooling_in_kilowatt_hour + electrical_energy_for_heating_in_kilowatt_hour
         )
+
         # make kpi entry
+        dhw_heatpump_heating_energy_output_entry = KpiEntry(
+            name="Heating output energy of DHW heat pump",
+            unit="kWh",
+            value=dhw_heat_pump_heating_energy_output_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(dhw_heatpump_heating_energy_output_entry)
+
+        dhw_heatpump_total_electricity_consumption_entry = KpiEntry(
+            name="DHW heat pump total electricity consumption",
+            unit="kWh",
+            value=dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(dhw_heatpump_total_electricity_consumption_entry)
+
         number_of_heat_pump_cycles_entry = KpiEntry(
             name="Number of SH heat pump cycles",
             unit="-",

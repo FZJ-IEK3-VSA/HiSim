@@ -1108,23 +1108,12 @@ class PostProcessor:
         return total_dict
 
     def get_building_object_in_district(self, ppdt: PostProcessingDataTransfer) -> list[str]:
-        """Get building names in district. If no district, single household is named "BUI1"."""
-
-        all_objects_in_district: dict = {}
-
-        for wrapped_component in ppdt.wrapped_components:
-            my_component = wrapped_component.my_component
-            my_component_class_name = my_component.get_classname()
-            if my_component_class_name in all_objects_in_district:
-                all_objects_in_district[my_component_class_name].append(my_component.component_name)
-            else:
-                all_objects_in_district[my_component_class_name] = [my_component.component_name]
+        """Get building names in district."""
 
         building_objects_in_district = set()
-        for value_list in all_objects_in_district.values():
-            for name in value_list:
-                building_name = name.split("_")[0]
-                building_objects_in_district.add(building_name)
+
+        for wrapped_component in ppdt.wrapped_components:
+            building_objects_in_district.add(wrapped_component.my_component.config.building_name)
 
         building_objects_in_district_list = list(building_objects_in_district)
 

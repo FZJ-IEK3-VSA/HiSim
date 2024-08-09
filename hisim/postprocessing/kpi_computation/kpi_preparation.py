@@ -605,12 +605,12 @@ class KpiPreparation:
             # add opex and capex costs if they exist
             my_component_opex_dataclass, my_component_capex_dataclass = self.get_opex_and_capex_costs_for_each_component(my_component=my_component)
             self.add_opex_costs_to_component_kpi_list(my_component_opex_dataclass=my_component_opex_dataclass, my_component_name=my_component.component_name)
-            
+
             if my_component_capex_dataclass is not None:
                 pass
                 
 
-    def get_opex_and_capex_costs_for_each_component(self, my_component: Component) -> None:
+    def get_opex_and_capex_costs_for_each_component(self, my_component: Component) -> Tuple[OpexCostDataClass, CapexCostDataClass]:
         """Go through all components and get their opex and capex costs if implemented."""
 
         my_component_opex_dataclass = my_component.get_cost_opex(
@@ -622,7 +622,7 @@ class KpiPreparation:
         return my_component_opex_dataclass, my_component_capex_dataclass
 
 
-    def add_opex_costs_to_component_kpi_list(self, my_component_opex_dataclass: OpexCostDataClass, my_component_name: str):
+    def add_opex_costs_to_component_kpi_list(self, my_component_opex_dataclass: OpexCostDataClass, my_component_name: str) -> None:
         """Add component opex values to kpi list."""
         # check if kpi_tag exists
         if my_component_opex_dataclass.kpi_tag is not None:

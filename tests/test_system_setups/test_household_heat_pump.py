@@ -87,6 +87,7 @@ def test_household_heat_pump_system_setup_starter_pv():
         "path_to_module": MY_PATH_TO_MODULE,
         "simulation_parameters": MY_SIMULATION_PARAMETERS,
         "building_config": {
+            "building_name": "BUI1",
             "name": "Building",
             "building_code": "DE.N.SFH.05.Gen.ReEx.001.002",
             "building_heat_capacity_class": "medium",

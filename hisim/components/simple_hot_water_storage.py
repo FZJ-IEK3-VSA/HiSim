@@ -17,6 +17,7 @@ from hisim.component import SingleTimeStepValues, ComponentInput, ComponentOutpu
 from hisim.components.configuration import PhysicsConfig
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.simulationparameters import SimulationParameters
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
 
 __authors__ = "Katharina Rieck, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -899,13 +900,14 @@ class SimpleHotWaterStorage(cp.Component):
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         # pylint: disable=unused-argument
-        """Calculate OPEX costs, consisting of maintenance costs for Heat Distribution System."""
+        """Calculate OPEX costs, consisting of maintenance costs for hot water storage."""
         opex_cost_data_class = OpexCostDataClass(
             opex_energy_cost_in_euro=0,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=0,
             consumption_in_kwh=0,
-            loadtype=lt.LoadTypes.ANY
+            loadtype=lt.LoadTypes.ANY,
+            kpi_tag=KpiTagEnumClass.STORAGE_HOT_WATER_SPACE_HEATING
         )
 
         return opex_cost_data_class

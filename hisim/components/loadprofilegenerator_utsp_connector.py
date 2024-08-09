@@ -815,7 +815,8 @@ class UtspLpgConnector(cp.Component):
             opex_maintenance_cost_in_euro=0,
             co2_footprint_in_kg=0,
             consumption_in_kwh=self.utsp_config.consumption_in_kwh,
-            loadtype=lt.LoadTypes.ELECTRICITY
+            loadtype=lt.LoadTypes.ELECTRICITY,
+            kpi_tag=KpiTagEnumClass.RESIDENTS
         )
 
         return opex_cost_data_class

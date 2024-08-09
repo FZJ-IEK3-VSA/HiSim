@@ -27,6 +27,10 @@ class KpiTagEnumClass(Enum):
     GAS_METER = "Gas Meter"
     ELECTRICITY_METER = "Electricity Meter"
     CAR = "Car"
+    CAR_BATTERY = "Car Battery"
+    ROOFTOP_PV = "Rooftop PV"
+    STORAGE_DOMESTIC_HOT_WATER = "Storage For Domestic Hot Water"
+    STORAGE_HOT_WATER_SPACE_HEATING = "Storage For Space Heating Hot Water"
 
 
 @dataclass

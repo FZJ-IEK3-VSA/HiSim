@@ -10,7 +10,7 @@ import os
 from typing import List, Tuple, Dict, Optional
 from pathlib import Path
 import pandas as pd
-from hisim.component import ComponentOutput
+from hisim.component import ComponentOutput, Component, OpexCostDataClass, CapexCostDataClass
 from hisim.component_wrapper import ComponentWrapper
 from hisim.loadtypes import ComponentType, InandOutputType
 from hisim import log
@@ -586,7 +586,6 @@ class KpiPreparation:
         for wrapped_component in wrapped_components:
             my_component = wrapped_component.my_component
             # get KPIs of respective component
-
             my_component_kpi_entry_list = my_component.get_component_kpi_entries(
                 all_outputs=self.all_outputs, postprocessing_results=self.results
             )
@@ -596,35 +595,46 @@ class KpiPreparation:
                 # add all KPI entries to kpi dict
                 for kpi_entry in my_component_kpi_entry_list:
                     self.kpi_collection_dict_unsorted[kpi_entry.name] = kpi_entry.to_dict()
+
             else:
                 log.debug(
                     "KPI generation for "
                     + my_component.component_name
                     + " was not successful. KPI method is maybe not implemented yet."
                 )
+            # add opex and capex costs if they exist
+            my_component_opex_dataclass, my_component_capex_dataclass = self.get_opex_and_capex_costs_for_each_component(my_component=my_component)
+            self.add_opex_costs_to_component_kpi_list(my_component_opex_dataclass=my_component_opex_dataclass, kpi_collection_dict_unsorted=self.kpi_collection_dict_unsorted, my_component_name=my_component.component_name)
+            
+            if my_component_capex_dataclass is not None:
+                pass
+                
 
-    # def get_opex_and_capex_costs_for_each_component(self, wrapped_components: List[ComponentWrapper]) -> None:
-    #     """Go through all components and get their opex and capex costs if implemented."""
-    #     my_component_opex_dataclass: List[KpiEntry]
-    #     for wrapped_component in wrapped_components:
-    #         my_component = wrapped_component.my_component
-    #         # get opex and capex of respective component
+    def get_opex_and_capex_costs_for_each_component(self, my_component: Component) -> None:
+        """Go through all components and get their opex and capex costs if implemented."""
 
-    #         my_component_opex_dataclass = my_component.get_cost_opex(
-    #             all_outputs=self.all_outputs, postprocessing_results=self.results
-    #         )
-    #         my_component_capex_dataclass = my_component.get_cost_opex(
-    #             all_outputs=self.all_outputs, postprocessing_results=self.results
-    #         )
+        my_component_opex_dataclass = my_component.get_cost_opex(
+            all_outputs=self.all_outputs, postprocessing_results=self.results
+        )
+        my_component_capex_dataclass = my_component.get_cost_capex(
+            config=my_component.config, simulation_parameters=my_component.my_simulation_parameters
+        )
+        return my_component_opex_dataclass, my_component_capex_dataclass
 
-    #         if my_component_opex_dataclass != []:
-    #             log.debug("KPI generation for " + my_component.component_name + " was successful.")
-    #             # add all KPI entries to kpi dict
-    #             for kpi_entry in my_component_opex_dataclass:
-    #                 self.kpi_collection_dict_unsorted[kpi_entry.name] = kpi_entry.to_dict()
-    #         else:
-    #             log.debug(
-    #                 "KPI generation for "
-    #                 + my_component.component_name
-    #                 + " was not successful. KPI method is maybe not implemented yet."
-    #             )
+
+    def add_opex_costs_to_component_kpi_list(self, my_component_opex_dataclass: OpexCostDataClass, kpi_collection_dict_unsorted: Dict, my_component_name: str):
+        """Add component opex values to kpi list."""
+        # check if kpi_tag exists
+        if my_component_opex_dataclass.kpi_tag is not None:
+            opex_energy_cost_entry = KpiEntry(name=f"Opex energy costs for {my_component_name}", unit="Euro", value=my_component_opex_dataclass.opex_energy_cost_in_euro, description=my_component_name, tag=my_component_opex_dataclass.kpi_tag)
+            opex_maintenance_cost_entry = KpiEntry(name=f"Maintenance costs for {my_component_name}", unit="Euro", value=my_component_opex_dataclass.opex_maintenance_cost_in_euro, description=my_component_name, tag=my_component_opex_dataclass.kpi_tag)
+            co2_footprint_entry = KpiEntry(name=f"CO2 emissions for {my_component_name}", unit="kg", value=my_component_opex_dataclass.co2_footprint_in_kg, description=my_component_name, tag=my_component_opex_dataclass.kpi_tag)
+            consumption_entry = KpiEntry(name=f"Consumption for {my_component_name}", unit="kWh", value=my_component_opex_dataclass.consumption_in_kwh, description=my_component_name, tag=my_component_opex_dataclass.kpi_tag)
+            # add kpi entries to dict
+            self.kpi_collection_dict_unsorted[opex_energy_cost_entry.name] = opex_energy_cost_entry.to_dict()
+            self.kpi_collection_dict_unsorted[opex_maintenance_cost_entry.name] = opex_maintenance_cost_entry.to_dict()
+            self.kpi_collection_dict_unsorted[co2_footprint_entry.name] = co2_footprint_entry.to_dict()
+            self.kpi_collection_dict_unsorted[consumption_entry.name] = consumption_entry.to_dict()
+            
+        else:
+            log.debug(f"Could not add Opex data of {my_component_name} to KPI lists because kpi_tag is None.")

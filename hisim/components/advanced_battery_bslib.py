@@ -24,6 +24,7 @@ from hisim.component import (
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
 
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -342,7 +343,8 @@ class Battery(Component):
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=0,
             consumption_in_kwh=battery_losses_in_kwh,
-            loadtype=LoadTypes.ELECTRICITY
+            loadtype=LoadTypes.ELECTRICITY,
+            kpi_tag=KpiTagEnumClass.BATTERY
         )
 
         return opex_cost_data_class

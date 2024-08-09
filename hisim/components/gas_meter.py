@@ -306,7 +306,8 @@ class GasMeter(DynamicComponent):
             opex_maintenance_cost_in_euro=0,
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
             consumption_in_kwh=self.config.total_energy_from_grid_in_kwh,
-            loadtype=lt.LoadTypes.GAS
+            loadtype=lt.LoadTypes.GAS,
+            kpi_tag=KpiTagEnumClass.GAS_METER
         )
 
         return opex_cost_data_class

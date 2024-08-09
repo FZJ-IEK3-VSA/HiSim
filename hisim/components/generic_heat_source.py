@@ -310,7 +310,8 @@ class HeatSource(cp.Component):
                 opex_maintenance_cost_in_euro=0,  # TODO: needs o be implemented still
                 co2_footprint_in_kg=co2_per_simulated_period_in_kg,
                 consumption_in_kwh=gas_consumption_in_kilowatt_hour,
-                loadtype=lt.LoadTypes.GAS
+                loadtype=lt.LoadTypes.GAS,
+                kpi_tag=KpiTagEnumClass.GAS_HEATER_DOMESTIC_HOT_WATER
             )
         else:
             opex_cost_data_class = OpexCostDataClass.get_default_opex_cost_data_class()

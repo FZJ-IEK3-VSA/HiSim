@@ -18,6 +18,7 @@ from hisim import log
 from hisim.components import generic_car
 from hisim.components import advanced_ev_battery_bslib
 from hisim.component import OpexCostDataClass, CapexCostDataClass
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -365,7 +366,8 @@ class L1Controller(cp.Component):
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=0,
             consumption_in_kwh=0,
-            loadtype=lt.LoadTypes.ELECTRICITY
+            loadtype=lt.LoadTypes.ELECTRICITY,
+            kpi_tag=KpiTagEnumClass.CAR_BATTERY
         )
 
         return opex_cost_data_class

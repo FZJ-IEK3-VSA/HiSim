@@ -625,6 +625,7 @@ class HeatPumpHplib(Component):
             co2_footprint_in_kg=0,
             consumption_in_kwh=self.config.consumption_in_kwh,
             loadtype=LoadTypes.ELECTRICITY,
+            kpi_tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING
         )
 
         return opex_cost_data_class

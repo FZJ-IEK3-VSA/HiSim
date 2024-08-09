@@ -348,7 +348,8 @@ class GasHeater(Component):
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
             consumption_in_kwh=self.config.consumption_in_kilowatt_hour,
-            loadtype=lt.LoadTypes.GAS
+            loadtype=lt.LoadTypes.GAS,
+            kpi_tag=KpiTagEnumClass.GAS_HEATER_SPACE_HEATING
         )
 
         return opex_cost_data_class

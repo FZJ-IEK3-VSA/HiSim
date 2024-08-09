@@ -437,7 +437,8 @@ class ModularHeatPump(cp.Component):
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=0,
             consumption_in_kwh=self.config.consumption_in_kwh,
-            loadtype=lt.LoadTypes.ELECTRICITY
+            loadtype=lt.LoadTypes.ELECTRICITY,
+            kpi_tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER
         )
 
         return opex_cost_data_class

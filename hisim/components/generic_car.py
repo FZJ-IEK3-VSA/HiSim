@@ -365,6 +365,7 @@ class Car(cp.Component):
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
             consumption_in_kwh=self.config.consumption_in_kwh,
             loadtype=self.config.fuel,
+            kpi_tag=KpiTagEnumClass.CAR
         )
 
         return opex_cost_data_class

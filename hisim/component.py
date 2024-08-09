@@ -18,7 +18,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 # Package
 
 
@@ -457,6 +457,7 @@ class OpexCostDataClass:
     co2_footprint_in_kg: float
     consumption_in_kwh: float
     loadtype: lt.LoadTypes
+    kpi_tag: Optional[KpiTagEnumClass]
 
     @classmethod
     def get_default_opex_cost_data_class(cls) -> OpexCostDataClass:
@@ -466,7 +467,8 @@ class OpexCostDataClass:
             opex_maintenance_cost_in_euro=0,
             co2_footprint_in_kg=0,
             consumption_in_kwh=0,
-            loadtype=lt.LoadTypes.ANY
+            loadtype=lt.LoadTypes.ANY,
+            kpi_tag=None
         )
 
 
@@ -480,6 +482,7 @@ class CapexCostDataClass:
     lifetime_in_years: float
     capex_investment_cost_for_simulated_period_in_euro: float
     device_co2_footprint_for_simulated_period_in_kg: float
+    kpi_tag: Optional[KpiTagEnumClass] = None
 
     @classmethod
     def get_default_capex_cost_data_class(cls) -> CapexCostDataClass:
@@ -489,5 +492,6 @@ class CapexCostDataClass:
             device_co2_footprint_in_kg=0,
             lifetime_in_years=1,
             capex_investment_cost_for_simulated_period_in_euro=0,
-            device_co2_footprint_for_simulated_period_in_kg=0
+            device_co2_footprint_for_simulated_period_in_kg=0,
+            kpi_tag=None
         )

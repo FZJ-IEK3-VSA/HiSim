@@ -162,11 +162,6 @@ class KpiPreparation:
         total_electricity_consumption_in_kilowatt_hour = (
             total_electricity_consumption_in_kilowatt_hour + battery_losses_in_kilowatt_hour
         )
-        log.debug("Battery losses " + str(battery_losses_in_kilowatt_hour))
-        log.debug(
-            "Total electricity consumption (battery losses included) "
-            + str(total_electricity_consumption_in_kilowatt_hour)
-        )
 
         # make kpi entry
         total_consumtion_entry = KpiEntry(
@@ -509,7 +504,6 @@ class KpiPreparation:
         )
         if Path(opex_results_path).exists():
             opex_df = pd.read_csv(opex_results_path, index_col=0)
-            log.debug("Opex df " + str(opex_df) + "\n")
             total_maintenance_cost_per_simulated_period = opex_df["Maintenance Costs in EUR"].iloc[-1]
 
         else:
@@ -518,7 +512,6 @@ class KpiPreparation:
 
         if Path(capex_results_path).exists():
             capex_df = pd.read_csv(capex_results_path, index_col=0)
-            log.debug("Capex df " + str(capex_df) + "\n")
             total_investment_cost_per_simulated_period = capex_df["Investment in EUR"].iloc[-1]
             total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint in kg"].iloc[-1]
         else:
@@ -616,12 +609,6 @@ class KpiPreparation:
                 for kpi_entry in my_component_kpi_entry_list:
                     self.kpi_collection_dict_unsorted[kpi_entry.name] = kpi_entry.to_dict()
 
-            else:
-                log.debug(
-                    "KPI generation for "
-                    + my_component.component_name
-                    + " was not successful. KPI method is maybe not implemented yet."
-                )
             # add opex and capex costs if they exist
             (
                 my_component_opex_dataclass,
@@ -687,15 +674,11 @@ class KpiPreparation:
             self.kpi_collection_dict_unsorted[co2_footprint_entry.name] = co2_footprint_entry.to_dict()
             self.kpi_collection_dict_unsorted[consumption_entry.name] = consumption_entry.to_dict()
 
-        else:
-            log.debug(f"Could not add Opex data of {my_component_name} to KPI lists because kpi_tag is None.")
-
     def add_capex_costs_to_component_kpi_list(
         self, my_component_capex_dataclass: CapexCostDataClass, my_component_name: str
     ) -> None:
         """Add component capex values to kpi list."""
         # check if kpi_tag exists
-        print(my_component_name, my_component_capex_dataclass.capex_investment_cost_in_euro)
         if my_component_capex_dataclass.kpi_tag is not None:
             capex_cost_entry = KpiEntry(
                 name=f"Capex investment costs for {my_component_name}",
@@ -738,6 +721,3 @@ class KpiPreparation:
             self.kpi_collection_dict_unsorted[lifetime_entry.name] = lifetime_entry.to_dict()
             self.kpi_collection_dict_unsorted[capex_cost_period_entry.name] = capex_cost_period_entry.to_dict()
             self.kpi_collection_dict_unsorted[co2_footprint_period_entry.name] = co2_footprint_period_entry.to_dict()
-
-        else:
-            print(f"Could not add Capex data of {my_component_name} to KPI lists because kpi_tag is None.")

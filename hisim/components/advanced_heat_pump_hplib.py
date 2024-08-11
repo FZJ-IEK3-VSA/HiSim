@@ -598,6 +598,7 @@ class HeatPumpHplib(Component):
             lifetime_in_years=config.lifetime.value,
             capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
             device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
+            kpi_tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING
         )
         return capex_cost_data_class
 

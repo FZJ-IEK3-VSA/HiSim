@@ -408,6 +408,7 @@ class ModularHeatPump(cp.Component):
             lifetime_in_years=config.lifetime,
             capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
             device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
+            kpi_tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER
         )
         return capex_cost_data_class
 

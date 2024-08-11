@@ -630,9 +630,9 @@ class KpiPreparation:
             self.add_opex_costs_to_component_kpi_list(
                 my_component_opex_dataclass=my_component_opex_dataclass, my_component_name=my_component.component_name
             )
-
-            if my_component_capex_dataclass is not None:
-                pass
+            self.add_capex_costs_to_component_kpi_list(
+                my_component_capex_dataclass=my_component_capex_dataclass, my_component_name=my_component.component_name
+            )
 
     def get_opex_and_capex_costs_for_each_component(
         self, my_component: Component
@@ -689,3 +689,55 @@ class KpiPreparation:
 
         else:
             log.debug(f"Could not add Opex data of {my_component_name} to KPI lists because kpi_tag is None.")
+
+    def add_capex_costs_to_component_kpi_list(
+        self, my_component_capex_dataclass: CapexCostDataClass, my_component_name: str
+    ) -> None:
+        """Add component capex values to kpi list."""
+        # check if kpi_tag exists
+        print(my_component_name, my_component_capex_dataclass.capex_investment_cost_in_euro)
+        if my_component_capex_dataclass.kpi_tag is not None:
+            capex_cost_entry = KpiEntry(
+                name=f"Capex investment costs for {my_component_name}",
+                unit="Euro",
+                value=my_component_capex_dataclass.capex_investment_cost_in_euro,
+                description=my_component_name,
+                tag=my_component_capex_dataclass.kpi_tag,
+            )
+            co2_footprint_entry = KpiEntry(
+                name=f"Device footprint for {my_component_name}",
+                unit="kg",
+                value=my_component_capex_dataclass.device_co2_footprint_in_kg,
+                description=my_component_name,
+                tag=my_component_capex_dataclass.kpi_tag,
+            )
+            lifetime_entry = KpiEntry(
+                name=f"Consumption for {my_component_name}",
+                unit="kWh",
+                value=my_component_capex_dataclass.lifetime_in_years,
+                description=my_component_name,
+                tag=my_component_capex_dataclass.kpi_tag,
+            )
+            capex_cost_period_entry = KpiEntry(
+                name=f"Capex investment costs for simulated period for {my_component_name}",
+                unit="Euro",
+                value=my_component_capex_dataclass.capex_investment_cost_for_simulated_period_in_euro,
+                description=my_component_name,
+                tag=my_component_capex_dataclass.kpi_tag,
+            )
+            co2_footprint_period_entry = KpiEntry(
+                name=f"Device footprint for simulated period for {my_component_name}",
+                unit="kg",
+                value=my_component_capex_dataclass.device_co2_footprint_for_simulated_period_in_kg,
+                description=my_component_name,
+                tag=my_component_capex_dataclass.kpi_tag,
+            )
+            # add kpi entries to dict
+            self.kpi_collection_dict_unsorted[capex_cost_entry.name] = capex_cost_entry.to_dict()
+            self.kpi_collection_dict_unsorted[co2_footprint_entry.name] = co2_footprint_entry.to_dict()
+            self.kpi_collection_dict_unsorted[lifetime_entry.name] = lifetime_entry.to_dict()
+            self.kpi_collection_dict_unsorted[capex_cost_period_entry.name] = capex_cost_period_entry.to_dict()
+            self.kpi_collection_dict_unsorted[co2_footprint_period_entry.name] = co2_footprint_period_entry.to_dict()
+
+        else:
+            print(f"Could not add Capex data of {my_component_name} to KPI lists because kpi_tag is None.")

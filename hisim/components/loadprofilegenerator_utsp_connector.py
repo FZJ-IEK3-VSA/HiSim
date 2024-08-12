@@ -829,7 +829,7 @@ class UtspLpgConnector(cp.Component):
 
         # check if cache_dir_path was chosen, otherwise use default cache_dir_path
         if cache_dir_path is None:
-            cache_dir_path = os.path.join(utils.hisim_abs_path, "inputs", "cache")
+            cache_dir_path = self.my_simulation_parameters.cache_dir_path
 
         # config household is list of jsonreferences and no other guid than default is given ("")
         # if the guid = "" and multiple households are given as a list, each household will be calculated and cached individually

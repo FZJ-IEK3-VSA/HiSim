@@ -1,6 +1,5 @@
 """ Defines the simulation parameters class. This defines how the simulation will proceed. """
 # clean
-import os
 from __future__ import annotations
 from typing import List, Optional
 import enum
@@ -9,7 +8,7 @@ import datetime
 from dataclasses import dataclass
 from dataclass_wizard import JSONWizard
 
-from hisim import log
+from hisim import log, utils
 from hisim.postprocessingoptions import PostProcessingOptions
 
 
@@ -38,7 +37,7 @@ class SimulationParameters(JSONWizard):
         logging_level: int = log.LogPrio.INFORMATION,
         skip_finished_results: bool = False,
         surplus_control: bool = True,
-        cache_dir_path: str = os.path.join(hisim_abs_path, "inputs", "cache"),
+        cache_dir_path: str = utils.HISIMPATH["cache_dir"],
     ):
         """Initializes the class."""
         self.start_date: datetime.datetime = start_date

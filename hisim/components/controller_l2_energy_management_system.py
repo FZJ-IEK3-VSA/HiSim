@@ -10,7 +10,7 @@ The component with the lowest source weight is activated first.
 from dataclasses import dataclass
 
 from typing import Any, List, Tuple, Optional
-
+from collections import OrderedDict
 from dataclasses_json import dataclass_json
 import pandas as pd
 from hisim import log
@@ -540,6 +540,8 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                     outputs_sorted.append(output)
                 else:
                     raise Exception("Dynamic input is not conncted to dynamic output")
+        outputs_sorted = list(OrderedDict.fromkeys(outputs_sorted))
+
         production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
         consumption_uncontrolled_inputs = self.get_dynamic_inputs(
             tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]

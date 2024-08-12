@@ -10,7 +10,7 @@ The component with the lowest source weight is activated first.
 from dataclasses import dataclass
 from enum import IntEnum
 from typing import Any, List, Tuple, Union, Optional
-
+from collections import OrderedDict
 from dataclasses_json import dataclass_json
 import pandas as pd
 from hisim import log
@@ -552,6 +552,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                     outputs_sorted.append(output)
                 else:
                     raise Exception("Dynamic input is not conncted to dynamic output")
+        outputs_sorted = list(OrderedDict.fromkeys(outputs_sorted))
         production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION])
         consumption_uncontrolled_inputs = self.get_dynamic_inputs(
             tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED]
@@ -653,7 +654,8 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
         available_surplus_electricity_in_watt = (
             self.state.production_in_watt - self.state.consumption_uncontrolled_in_watt
         )
-
+        # if timestep>9:
+        #     print("debug")
         if self.strategy == EMSControlStrategy.BUILDING_OPTIMIZEOWNCONSUMPTION_ITERATIV:
             available_surplus_electricity_in_watt = (
                 self.distribute_available_surplus_electricity_to_building_components_iterative(
@@ -971,6 +973,9 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
 
                         component_electricity_demand[single_component] = available_surplus_electricity_in_watt
 
+                        # if available_surplus_electricity_in_watt > 1254:
+                        #     print("debug")
+
                         if available_surplus_electricity_in_watt > 0:
                             surplus_next_iteration += available_surplus_electricity_in_watt
                             available_surplus_electricity_in_watt = 0
@@ -1224,6 +1229,10 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
+                print(output.component_name)
+                print(self.component_name)
+                print(output.field_name)
+                print("##############################")
                 if dhw_heat_pump_class_name in output.field_name:
                     dhw_hp_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
                         postprocessing_results.iloc[:, index] < 0.0

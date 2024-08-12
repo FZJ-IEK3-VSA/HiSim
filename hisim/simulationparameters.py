@@ -2,6 +2,7 @@
 # clean
 from __future__ import annotations
 import os
+import inspect
 from typing import List, Optional
 import enum
 
@@ -38,7 +39,7 @@ class SimulationParameters(JSONWizard):
         logging_level: int = log.LogPrio.INFORMATION,
         skip_finished_results: bool = False,
         surplus_control: bool = True,
-        cache_dir_path: str = os.path.abspath(os.path.join("hisim", "inputs", "cache"))
+        cache_dir_path: str = os.path.join(os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe()))), "inputs", "cache")  # type: ignore
     ):
         """Initializes the class."""
         self.start_date: datetime.datetime = start_date

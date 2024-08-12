@@ -604,7 +604,6 @@ class KpiPreparation:
             )
 
             if my_component_kpi_entry_list != []:
-                log.debug("KPI generation for " + my_component.component_name + " was successful.")
                 # add all KPI entries to kpi dict
                 for kpi_entry in my_component_kpi_entry_list:
                     self.kpi_collection_dict_unsorted[kpi_entry.name] = kpi_entry.to_dict()

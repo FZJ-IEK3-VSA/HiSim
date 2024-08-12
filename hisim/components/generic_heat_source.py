@@ -18,7 +18,7 @@ from hisim.components import controller_l1_heatpump
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig, EmissionFactorsAndCostsForFuelsConfig
-from hisim.component import OpexCostDataClass
+from hisim.component import OpexCostDataClass, CapexCostDataClass
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -48,6 +48,12 @@ class HeatSourceConfig(cp.ConfigBase):
     water_vs_heating: lt.InandOutputType
     #: efficiency of the fuel to heat conversion
     efficiency: float
+    #: CO2 footprint of investment in kg
+    co2_footprint: float
+    #: cost for investment in Euro
+    cost: float
+    #: lifetime in years
+    lifetime: float
 
     @classmethod
     def get_main_classname(cls):
@@ -64,6 +70,9 @@ class HeatSourceConfig(cp.ConfigBase):
             power_th=6200.0,
             water_vs_heating=lt.InandOutputType.HEATING,
             efficiency=1.0,
+            co2_footprint=0,
+            cost=0,
+            lifetime=1
         )
         return config
 
@@ -77,6 +86,9 @@ class HeatSourceConfig(cp.ConfigBase):
             power_th=3000.0,
             water_vs_heating=lt.InandOutputType.WATER_HEATING,
             efficiency=1.0,
+            co2_footprint=0,
+            cost=0,
+            lifetime=1
         )
         return config
 
@@ -116,6 +128,9 @@ class HeatSourceConfig(cp.ConfigBase):
             power_th=thermal_power_in_watt,
             water_vs_heating=lt.InandOutputType.WATER_HEATING,
             efficiency=efficiency,
+            co2_footprint=thermal_power_in_watt * 1e-3 * 49.47,  # value from emission_factros_and_costs_devices.csv
+            cost=7416,  # value from emission_factros_and_costs_devices.csv
+            lifetime=20,  # value from emission_factros_and_costs_devices.csv
         )
         return config
 
@@ -286,6 +301,29 @@ class HeatSource(cp.Component):
                 self.fuel_delivered_channel,
                 power_modifier * self.config.power_th * self.my_simulation_parameters.seconds_per_timestep / 3.6e3,
             )
+
+    @staticmethod
+    def get_cost_capex(config: HeatSourceConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
+        """Returns investment cost, CO2 emissions and lifetime."""
+        if config.fuel == lt.LoadTypes.GAS:
+            seconds_per_year = 365 * 24 * 60 * 60
+            capex_per_simulated_period = (config.cost / config.lifetime) * (
+                simulation_parameters.duration.total_seconds() / seconds_per_year
+            )
+            device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
+                simulation_parameters.duration.total_seconds() / seconds_per_year
+            )
+
+            capex_cost_data_class = CapexCostDataClass(
+                capex_investment_cost_in_euro=config.cost,
+                device_co2_footprint_in_kg=config.co2_footprint,
+                lifetime_in_years=config.lifetime,
+                capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
+                device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
+                kpi_tag=KpiTagEnumClass.GAS_HEATER_DOMESTIC_HOT_WATER
+            )
+            return capex_cost_data_class
+        return NotImplemented
 
     def get_cost_opex(
         self,

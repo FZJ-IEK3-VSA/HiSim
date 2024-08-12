@@ -146,7 +146,7 @@ def setup_function(
     # Set Simulation Parameters
     if my_simulation_parameters is None:
         year = 2021
-        seconds_per_timestep = 60 * 60
+        seconds_per_timestep = 60 * 15
         my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
@@ -160,7 +160,7 @@ def setup_function(
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
-        my_simulation_parameters.logging_level = 4
+        # my_simulation_parameters.logging_level = 4
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 

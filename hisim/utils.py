@@ -264,7 +264,6 @@ def get_cache_file(
     component_key: str,
     parameter_class: Any,
     my_simulation_parameters: SimulationParameters,
-    cache_dir_path: str = os.path.join(hisim_abs_path, "inputs", "cache"),
 ) -> Tuple[bool, str]:  # noqa
     """Gets a cache path for a given parameter set.
 
@@ -273,6 +272,7 @@ def get_cache_file(
     The idea is to have a unique file path for every possible configuration.
     """
     json_str = parameter_class.to_json()
+    cache_dir_path = my_simulation_parameters.cache_dir_path
     if my_simulation_parameters is None:
         raise ValueError("Simulation parameters was none.")
     simulation_parameter_str = my_simulation_parameters.get_unique_key()

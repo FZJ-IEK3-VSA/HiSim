@@ -4,8 +4,9 @@
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from dataclasses import dataclass
-from typing import List
+from typing import List, Tuple
 from enum import IntEnum
+import pandas as pd
 from dataclasses_json import dataclass_json
 
 # Import modules from HiSim
@@ -13,7 +14,7 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.loadtypes import Units
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentInput, ComponentConnection
+from hisim.component import ComponentInput, ComponentConnection, OpexCostDataClass
 from hisim.components import weather
 
 
@@ -45,6 +46,14 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
     power_th_in_watt: float
     temperature_in_celsius: float
     const_source: SimpleHeatSourceType
+    #: CO2 footprint of investment in kg
+    co2_footprint: float
+    #: cost for investment in Euro
+    cost: float
+    #: lifetime in years
+    lifetime: float
+    # maintenance cost as share of investment [0..1]
+    maintenance_cost_as_percentage_of_investment: float
 
     @classmethod
     def get_main_classname(cls):
@@ -63,6 +72,10 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
             const_source=SimpleHeatSourceType.CONSTANTTHERMALPOWER,
             power_th_in_watt=5000.0,
             temperature_in_celsius=5,
+            co2_footprint=100,  # Todo: check value
+            cost=2000,  # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
+            lifetime=25,  # value from emission_factors_and_costs_devices.csv
+            maintenance_cost_as_percentage_of_investment=10,  # from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
         )
         return config
 
@@ -78,6 +91,12 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
             const_source=SimpleHeatSourceType.CONSTANTTEMPERATURE,
             power_th_in_watt=0,
             temperature_in_celsius=5,
+            co2_footprint=100,  # Todo: check value
+            cost=2000,
+            # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
+            lifetime=25,  # value from emission_factors_and_costs_devices.csv
+            maintenance_cost_as_percentage_of_investment=10,
+            # from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
         )
         return config
 
@@ -93,6 +112,12 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
             const_source=SimpleHeatSourceType.BRINETEMPERATURE,
             power_th_in_watt=0,
             temperature_in_celsius=5,
+            co2_footprint=100,  # Todo: check value
+            cost=2000,
+            # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
+            lifetime=25,  # value from emission_factors_and_costs_devices.csv
+            maintenance_cost_as_percentage_of_investment=10,
+            # from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
         )
         return config
 
@@ -239,3 +264,25 @@ class SimpleHeatSource(cp.Component):
             )
 
             stsv.set_output_value(self.temperature_delivered_channel, t_brine)
+
+    @staticmethod
+    def get_cost_capex(
+        config: SimpleHeatSourceConfig,
+    ) -> Tuple[float, float, float]:
+        """Returns investment cost, CO2 emissions and lifetime."""
+        return config.cost, config.co2_footprint, config.lifetime
+
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> OpexCostDataClass:
+        # pylint: disable=unused-argument
+        """Calculate OPEX costs, consisting of maintenance costs for Heat Distribution System."""
+        opex_cost_data_class = OpexCostDataClass(
+            opex_cost=self.calc_maintenance_cost(),
+            co2_footprint=0,
+            consumption=0,
+        )
+
+        return opex_cost_data_class

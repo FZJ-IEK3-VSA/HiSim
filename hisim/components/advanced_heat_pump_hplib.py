@@ -81,8 +81,6 @@ class HeatPumpHplibConfig(ConfigBase):
     lifetime: Quantity[float, Years]
     # maintenance cost as share of investment [0..1]
     maintenance_cost_as_percentage_of_investment: float
-    #: consumption of the heatpump in kWh
-    consumption: Quantity[float, KilowattHour]
 
     @classmethod
     def get_default_generic_advanced_hp_lib(
@@ -113,7 +111,6 @@ class HeatPumpHplibConfig(ConfigBase):
             cost=Quantity(set_thermal_output_power_in_watt.value * 1e-3 * 1513.74, Euro),
             lifetime=Quantity(10, Years),  # value from emission_factors_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
-            consumption=Quantity(0, KilowattHour),
         )
 
     @classmethod
@@ -146,7 +143,6 @@ class HeatPumpHplibConfig(ConfigBase):
             # value from emission_factros_and_costs_devices.csv
             lifetime=Quantity(10, Years),
             maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
-            consumption=Quantity(0, KilowattHour),
         )
 
 
@@ -646,9 +642,11 @@ class HeatPumpHplib(Component):
         No electricity costs for components except for Electricity Meter,
         because part of electricity consumption is feed by PV
         """
+        consumption: float
+
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name and output.load_type == LoadTypes.ELECTRICITY:
-                self.config.consumption = round(
+                consumption = round(
                     sum(postprocessing_results.iloc[:, index])
                     * self.my_simulation_parameters.seconds_per_timestep
                     / 3.6e6,
@@ -657,7 +655,7 @@ class HeatPumpHplib(Component):
         opex_cost_data_class = OpexCostDataClass(
             opex_cost=self.calc_maintenance_cost(),
             co2_footprint=0,
-            consumption=self.config.consumption,
+            consumption=consumption,
         )
 
         return opex_cost_data_class

@@ -62,7 +62,6 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     travel_route_set: JsonReference
     transportation_device_set: JsonReference
     charging_station_set: JsonReference
-    consumption: float
     profile_with_washing_machine_and_dishwasher: bool
     predictive_control: bool
     predictive: bool
@@ -92,7 +91,6 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
             travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
             transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
             charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
-            consumption=0,
             profile_with_washing_machine_and_dishwasher=True,
             predictive_control=False,
             predictive=False,
@@ -801,9 +799,11 @@ class UtspLpgConnector(cp.Component):
         No electricity costs for components except for Electricity Meter,
         because part of electricity consumption is feed by PV
         """
+        consumption: float
+
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name and output.load_type == lt.LoadTypes.ELECTRICITY:
-                self.utsp_config.consumption = round(
+                consumption = round(
                     sum(postprocessing_results.iloc[:, index])
                     * self.my_simulation_parameters.seconds_per_timestep
                     / 3.6e6,
@@ -813,7 +813,7 @@ class UtspLpgConnector(cp.Component):
         opex_cost_data_class = OpexCostDataClass(
             opex_cost=0,
             co2_footprint=0,
-            consumption=self.utsp_config.consumption,
+            consumption=consumption,
         )
 
         return opex_cost_data_class

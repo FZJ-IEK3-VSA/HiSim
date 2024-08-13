@@ -229,7 +229,6 @@ def setup_function(
             travel_route_set=this_mobility_distance,
             transportation_device_set=this_mobility_set,
             charging_station_set=charging_station,
-            consumption=0,
             profile_with_washing_machine_and_dishwasher=not smart_devices_included,
             predictive_control=False,
             predictive=False,

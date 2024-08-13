@@ -121,7 +121,6 @@ class HouseholdMoreAdvancedHPDieselCarConfig(SystemSetupConfigBase):
                 transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
                 charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
                 name="UTSPConnector",
-                consumption=0.0,
                 profile_with_washing_machine_and_dishwasher=True,
                 predictive_control=False,
                 predictive=False,

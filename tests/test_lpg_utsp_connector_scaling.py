@@ -114,7 +114,6 @@ def initialize_lpg_utsp_connector_and_return_results(
         travel_route_set=travel_route_set,
         transportation_device_set=transportation_device_set,
         charging_station_set=charging_station_set,
-        consumption=0,
         profile_with_washing_machine_and_dishwasher=True,
         predictive_control=False,
         predictive=False,

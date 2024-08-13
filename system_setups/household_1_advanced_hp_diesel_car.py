@@ -125,7 +125,6 @@ class HouseholdAdvancedHPDieselCarConfig(SystemSetupConfigBase):
                 charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
                 name="UTSPConnector",
                 building_name="BUI1",
-                consumption=0.0,
                 profile_with_washing_machine_and_dishwasher=True,
                 predictive_control=False,
                 predictive=False,

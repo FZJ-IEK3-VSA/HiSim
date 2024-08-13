@@ -126,7 +126,6 @@ class HouseholdAdvancedHpEvPvBatteryConfig(SystemSetupConfigBase):
                 transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
                 charging_station_set=charging_station_set,
                 name="UTSPConnector",
-                consumption=0.0,
                 profile_with_washing_machine_and_dishwasher=True,
                 predictive_control=False,
                 predictive=False,

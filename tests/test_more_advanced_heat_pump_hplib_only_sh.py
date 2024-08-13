@@ -11,7 +11,7 @@ from hisim.components.more_advanced_heat_pump_hplib import (
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-from hisim.units import KilowattHour, Quantity, Watt, Celsius, Seconds, Kilogram, Euro, Years, KilogramPerSecond
+from hisim.units import Quantity, Watt, Celsius, Seconds, Kilogram, Euro, Years, KilogramPerSecond
 
 
 @pytest.mark.base

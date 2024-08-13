@@ -37,7 +37,6 @@ from hisim.units import (
     Kilogram,
     Euro,
     Years,
-    KilowattHour,
 )
 
 from hisim.simulationparameters import SimulationParameters

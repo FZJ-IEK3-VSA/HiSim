@@ -46,7 +46,6 @@ from hisim.units import (
     Kilogram,
     Euro,
     Years,
-    KilowattHour,
     KilogramPerSecond,
 )
 from hisim.components.configuration import PhysicsConfig

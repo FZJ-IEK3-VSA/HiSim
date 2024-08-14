@@ -397,14 +397,12 @@ class Component:
         # pylint: disable=unused-argument
         """Calculates operational cost, operational co2 footprint and consumption in kWh (for Diesel in l) during simulation time frame."""
         raise NotImplementedError(f"{self.component_name} has no opex costs implemented.")
-        # return OpexCostDataClass.get_default_opex_cost_data_class()
 
     @staticmethod
     def get_cost_capex(config: ConfigBase, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         # pylint: disable=unused-argument
         """Calculates lifetime, total capital expenditure cost and total co2 footprint of production of device."""
         raise NotImplementedError(f"{config.get_main_classname()} has no capex costs implemented.")
-        # return CapexCostDataClass.get_default_capex_cost_data_class()
 
     def get_component_kpi_entries(
         self,
@@ -414,7 +412,6 @@ class Component:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         # if the method is not implemented in the component return an empty list
         raise NotImplementedError(f"{self.component_name} has no kpis implemented.")
-        # return []
 
     def calc_maintenance_cost(self) -> float:
         """Calc maintenance_cost per simulated period as share of capex of component."""

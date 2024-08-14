@@ -451,9 +451,11 @@ class ElectricityMeter(DynamicComponent):
         )
         co2_per_simulated_period_in_kg = total_energy_from_grid_in_kwh * co2_per_unit
         opex_cost_data_class = OpexCostDataClass(
-            opex_cost=opex_cost_per_simulated_period_in_euro,
-            co2_footprint=co2_per_simulated_period_in_kg,
-            consumption=total_energy_from_grid_in_kwh,
+            opex_energy_cost_in_euro=opex_cost_per_simulated_period_in_euro,
+            opex_maintenance_cost_in_euro=0,
+            co2_footprint_in_kg=co2_per_simulated_period_in_kg,
+            consumption_in_kwh=total_energy_from_grid_in_kwh,
+            loadtype=lt.LoadTypes.ELECTRICITY
         )
 
         return opex_cost_data_class
@@ -495,17 +497,17 @@ class ElectricityMeter(DynamicComponent):
         # get opex costs
         opex_costs = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)
         opex_costs_in_euro_entry = KpiEntry(
-            name="Opex costs of electricity consumption",
+            name="Opex costs of electricity consumption from grid",
             unit="Euro",
-            value=opex_costs.opex_cost,
+            value=opex_costs.opex_energy_cost_in_euro,
             tag=KpiTagEnumClass.ELECTRICITY_METER,
             description=self.component_name,
         )
         list_of_kpi_entries.append(opex_costs_in_euro_entry)
         co2_footprint_in_kg_entry = KpiEntry(
-            name="CO2 footprint of electricity consumption",
+            name="CO2 footprint of electricity consumption from grid",
             unit="kg",
-            value=opex_costs.co2_footprint,
+            value=opex_costs.co2_footprint_in_kg,
             tag=KpiTagEnumClass.ELECTRICITY_METER,
             description=self.component_name,
         )

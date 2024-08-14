@@ -204,7 +204,13 @@ class ResultDataCollection:
                 # get set temperatures used in the simulation
                 if os.path.exists(scenario_data_information):
                     with open(scenario_data_information, "r", encoding="utf-8") as data_info_file:
-                        kpi_data = json.load(data_info_file)
+                        try:
+                            kpi_data = json.load(data_info_file)
+                        except Exception as exc:
+                            content = data_info_file.read()
+                            if content.strip() == "":
+                                raise ValueError("The json file is empty. Maybe run the simulation again. "
+                                      f"The concerned folder is {folder}") from exc
                         component_entries = kpi_data["componentEntries"]
                         for component in component_entries:
                             if "Building" in component["componentName"]:

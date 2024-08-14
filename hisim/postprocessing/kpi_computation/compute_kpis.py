@@ -16,6 +16,7 @@ from hisim.postprocessing.kpi_computation.kpi_preparation import KpiPreparation
 
 @dataclass
 class KpiGenerator(JSONWizard, KpiPreparation):
+
     """Class for generating and calculating key performance indicators."""
 
     post_processing_data_transfer: PostProcessingDataTransfer
@@ -70,11 +71,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
         )
 
         # get self-consumption, autarkie, injection
-        (
-            grid_injection_in_kilowatt_hour,
-            self_consumption_in_kilowatt_hour,
-            self.filtered_result_dataframe,
-        ) = self.compute_self_consumption_injection_autarky(
+        self.filtered_result_dataframe = self.compute_self_consumption_injection_autarky(
             result_dataframe=self.filtered_result_dataframe,
             electricity_consumption_in_kilowatt_hour=total_electricity_consumption_in_kilowatt_hour,
             electricity_production_in_kilowatt_hour=total_electricity_production_in_kilowatt_hour,
@@ -103,17 +100,6 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             building_objects_in_district=building_objects_in_district,
         )
 
-        # get energy prices and co2 emissions
-        self.compute_energy_prices_and_co2_emission(
-            result_dataframe=self.filtered_result_dataframe,
-            injection=self.filtered_result_dataframe["grid_injection_in_watt"],
-            self_consumption=self.filtered_result_dataframe["self_consumption_in_watt"],
-            electricity_production_in_kilowatt_hour=total_electricity_production_in_kilowatt_hour,
-            electricity_consumption_in_kilowatt_hour=total_electricity_consumption_in_kilowatt_hour,
-            grid_injection_in_kilowatt_hour=grid_injection_in_kilowatt_hour,
-            self_consumption_in_kilowatt_hour=self_consumption_in_kilowatt_hour,
-            building_objects_in_district=building_objects_in_district,
-        )
         # get capex and opex costs
         self.read_opex_and_capex_costs_from_results(building_object=building_objects_in_district)
 

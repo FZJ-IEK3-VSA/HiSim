@@ -581,9 +581,7 @@ class PostProcessor:
     ) -> PostProcessingDataTransfer:
         """Computes KPI's and writes them to report and to ppdt kpi collection."""
         # initialize kpi data class and compute all kpi values
-        kpi_data_class = KpiGenerator(
-            post_processing_data_transfer=ppdt, building_objects_in_district_list=building_objects_in_district_list
-        )
+        kpi_data_class = KpiGenerator(post_processing_data_transfer=ppdt)
         # write kpi table to report
         kpi_table = kpi_data_class.return_table_for_report()
         self.write_new_chapter_with_table_to_report(
@@ -1036,22 +1034,14 @@ class PostProcessor:
             for building_object in building_objects_in_district_list:
                 # Get KPIs from ppdt
                 kpi_collection_dict_general_values = ppdt.kpi_collection_dict[building_object]["General"]
-                kpi_collection_dict_cost_and_emission_values = ppdt.kpi_collection_dict[building_object][
-                    "Costs and Emissions"
-                ]
-                self_consumption_rate = kpi_collection_dict_general_values["Self-consumption rate of electricity"][
-                    "value"
-                ]
+                kpi_collection_dict_cost_values = ppdt.kpi_collection_dict[building_object]["Costs"]
+                kpi_collection_dict_emission_values = ppdt.kpi_collection_dict[building_object]["Emissions"]
+
+                self_consumption_rate = kpi_collection_dict_general_values["Self-consumption rate of electricity"]["value"]
                 autarky_rate = kpi_collection_dict_general_values["Autarky rate of electricity"]["value"]
-                grid_injection_in_kilowatt_hour = kpi_collection_dict_general_values["Grid injection of electricity"][
-                    "value"
-                ]
-                economic_cost = kpi_collection_dict_cost_and_emission_values["Total costs for simulated period"][
-                    "value"
-                ]
-                co2_cost = kpi_collection_dict_cost_and_emission_values["Total CO2 emissions for simulated period"][
-                    "value"
-                ]
+                grid_injection_in_kilowatt_hour = kpi_collection_dict_general_values["Grid injection of electricity"]["value"]
+                economic_cost = kpi_collection_dict_cost_values["Total costs for simulated period"]["value"]
+                co2_cost = kpi_collection_dict_emission_values["Total CO2 emissions for simulated period"]["value"]
 
                 # initialize json interface to pass kpi's to building_sizer
                 kpi_config = KPIConfig(

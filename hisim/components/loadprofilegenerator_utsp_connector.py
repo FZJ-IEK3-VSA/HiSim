@@ -43,6 +43,7 @@ from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDict
 
 
 class LpgDataAcquisitionMode(enum.Enum):
+
     """Set LPG Data Acquisition Mode."""
 
     USE_PREDEFINED_PROFILE = "use_predefined_profile"
@@ -52,6 +53,7 @@ class LpgDataAcquisitionMode(enum.Enum):
 @dataclass_json
 @dataclass
 class UtspLpgConnectorConfig(cp.ConfigBase):
+
     """Config class for UtspLpgConnector. Contains LPG parameters and UTSP connection parameters."""
 
     building_name: str
@@ -799,21 +801,22 @@ class UtspLpgConnector(cp.Component):
         No electricity costs for components except for Electricity Meter,
         because part of electricity consumption is feed by PV
         """
-        consumption: float
+        consumption_in_kwh: float
 
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.component_name and output.load_type == lt.LoadTypes.ELECTRICITY:
-                consumption = round(
-                    sum(postprocessing_results.iloc[:, index])
-                    * self.my_simulation_parameters.seconds_per_timestep
-                    / 3.6e6,
-                    1,
+            if output.component_name == self.component_name and output.load_type == lt.LoadTypes.ELECTRICITY and output.field_name == self.ElectricityOutput:
+                occupancy_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]
+                consumption_in_kwh = (KpiHelperClass.compute_total_energy_from_power_timeseries(
+                    power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
+                    timeresolution=self.my_simulation_parameters.seconds_per_timestep)
                 )
 
         opex_cost_data_class = OpexCostDataClass(
-            opex_cost=0,
-            co2_footprint=0,
-            consumption=consumption,
+            opex_energy_cost_in_euro=0,
+            opex_maintenance_cost_in_euro=0,
+            co2_footprint_in_kg=0,
+            consumption_in_kwh=consumption_in_kwh,
+            loadtype=lt.LoadTypes.ELECTRICITY
         )
 
         return opex_cost_data_class
@@ -1421,7 +1424,7 @@ class UtspLpgConnector(cp.Component):
             unit="kWh",
             value=occupancy_total_electricity_consumption_in_kilowatt_hour,
             tag=KpiTagEnumClass.RESIDENTS,
-            description=self.component_name,
+            description=self.component_name
         )
 
         list_of_kpi_entries = [occupancy_total_electricity_consumption_entry]

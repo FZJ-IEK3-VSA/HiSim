@@ -17,7 +17,8 @@ from hisim import log
 from hisim.components import controller_l1_heatpump
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
-from hisim.components.configuration import HouseholdWarmWaterDemandConfig
+from hisim.components.configuration import HouseholdWarmWaterDemandConfig, EmissionFactorsAndCostsForFuelsConfig
+from hisim.component import OpexCostDataClass
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -293,6 +294,36 @@ class HeatSource(cp.Component):
                 self.fuel_delivered_channel,
                 power_modifier * self.config.power_th * self.my_simulation_parameters.seconds_per_timestep / 3.6e3,
             )
+
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> OpexCostDataClass:
+        """Calculate OPEX costs, consisting of energy and maintenance costs."""
+        gas_consumption_in_kilowatt_hour: Optional[float] = None
+        for index, output in enumerate(all_outputs):
+            if output.component_name == self.component_name and output.load_type == lt.LoadTypes.GAS:
+                gas_consumption_in_kilowatt_hour = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
+        if gas_consumption_in_kilowatt_hour is not None:
+            emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
+                self.my_simulation_parameters.year
+            )
+            co2_per_unit = emissions_and_cost_factors.gas_footprint_in_kg_per_kwh
+            co2_per_simulated_period_in_kg = gas_consumption_in_kilowatt_hour * co2_per_unit
+
+            # energy costs and co2 and everything will be considered in gas meter
+            opex_cost_data_class = OpexCostDataClass(
+                opex_energy_cost_in_euro=0,
+                opex_maintenance_cost_in_euro=0,  # TODO: needs o be implemented still
+                co2_footprint_in_kg=co2_per_simulated_period_in_kg,
+                consumption_in_kwh=gas_consumption_in_kilowatt_hour,
+                loadtype=lt.LoadTypes.GAS
+            )
+        else:
+            opex_cost_data_class = OpexCostDataClass.get_default_opex_cost_data_class()
+
+        return opex_cost_data_class
 
     def get_component_kpi_entries(
         self,

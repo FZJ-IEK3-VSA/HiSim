@@ -357,18 +357,17 @@ class SmartDevice(cp.Component):
         """Get opex costs."""
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name and output.load_type == lt.LoadTypes.ELECTRICITY:
-                co2_per_unit = 0.4
-                euro_per_unit = 0.25
                 self.consumption = (
                     sum(postprocessing_results.iloc[:, index])
                     * self.my_simulation_parameters.seconds_per_timestep
                     / 3.6e6
                 )
-
         opex_cost_data_class = OpexCostDataClass(
-            opex_cost=self.consumption * euro_per_unit,
-            co2_footprint=self.consumption * co2_per_unit,
-            consumption=self.consumption,
+            opex_energy_cost_in_euro=0,
+            opex_maintenance_cost_in_euro=0,  # TODO: add maintenance costs
+            co2_footprint_in_kg=0,
+            consumption_in_kwh=self.consumption,
+            loadtype=lt.LoadTypes.ELECTRICITY
         )
 
         return opex_cost_data_class

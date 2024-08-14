@@ -248,9 +248,9 @@ def test_house(
         "Gas consumption for domestic hot water"
     ].get("value")
 
-    opex_costs_for_gas_in_euro = jsondata["Gas Meter"]["Opex costs of gas consumption"].get("value")
+    opex_costs_for_gas_in_euro = jsondata["Gas Meter"]["Opex costs of gas consumption from grid"].get("value")
 
-    co2_footprint_due_to_gas_use_in_kg = jsondata["Gas Meter"]["CO2 footprint of gas consumption"].get("value")
+    co2_footprint_due_to_gas_use_in_kg = jsondata["Gas Meter"]["CO2 footprint of gas consumption from grid"].get("value")
 
     log.information(
         "Gas consumption for space heating [kWh] " + str(gas_consumption_for_space_heating_in_kilowatt_hour)

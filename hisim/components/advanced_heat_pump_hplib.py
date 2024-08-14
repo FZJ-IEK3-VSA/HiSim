@@ -80,6 +80,8 @@ class HeatPumpHplibConfig(ConfigBase):
     lifetime: Quantity[float, Years]
     # maintenance cost as share of investment [0..1]
     maintenance_cost_as_percentage_of_investment: float
+    #: consumption of the heatpump in kWh
+    consumption: Quantity[float, KilowattHour]
 
     @classmethod
     def get_default_generic_advanced_hp_lib(
@@ -641,20 +643,22 @@ class HeatPumpHplib(Component):
         No electricity costs for components except for Electricity Meter,
         because part of electricity consumption is feed by PV
         """
-        consumption: float
+        consumption_in_kwh: float
 
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name and output.load_type == LoadTypes.ELECTRICITY:
-                consumption = round(
+                consumption_in_kwh = round(
                     sum(postprocessing_results.iloc[:, index])
                     * self.my_simulation_parameters.seconds_per_timestep
                     / 3.6e6,
-                    2,
+                    1,
                 )
         opex_cost_data_class = OpexCostDataClass(
-            opex_cost=self.calc_maintenance_cost(),
-            co2_footprint=0,
-            consumption=consumption,
+            opex_energy_cost_in_euro=0,
+            opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
+            co2_footprint_in_kg=0,
+            consumption_in_kwh=consumption_in_kwh,
+            loadtype=LoadTypes.ELECTRICITY
         )
 
         return opex_cost_data_class
@@ -833,7 +837,7 @@ class HeatPumpHplib(Component):
             unit="kWh",
             value=electrical_energy_for_heating_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
-            description=self.component_name,
+            description=self.component_name
         )
         list_of_kpi_entries.append(electrical_input_energy_for_heating_entry)
 
@@ -842,7 +846,7 @@ class HeatPumpHplib(Component):
             unit="kWh",
             value=electrical_energy_for_cooling_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
-            description=self.component_name,
+            description=self.component_name
         )
         list_of_kpi_entries.append(electrical_input_energy_for_cooling_entry)
 
@@ -851,7 +855,7 @@ class HeatPumpHplib(Component):
             unit="kWh",
             value=total_electrical_energy_input_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
-            description=self.component_name,
+            description=self.component_name
         )
         list_of_kpi_entries.append(electrical_input_energy_total_entry)
 
@@ -860,7 +864,7 @@ class HeatPumpHplib(Component):
             unit="h",
             value=heating_time_in_hours,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
-            description=self.component_name,
+            description=self.component_name
         )
         list_of_kpi_entries.append(heating_hours_entry)
 
@@ -869,7 +873,7 @@ class HeatPumpHplib(Component):
             unit="h",
             value=cooling_time_in_hours,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
-            description=self.component_name,
+            description=self.component_name
         )
         list_of_kpi_entries.append(cooling_hours_entry)
 

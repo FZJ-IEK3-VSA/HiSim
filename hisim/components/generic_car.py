@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 # -*- coding: utf-8 -*-
 from typing import List, Any, Tuple, Dict
+import numpy as np
 import pandas as pd
 from dataclasses_json import dataclass_json
 
@@ -20,6 +21,7 @@ from hisim.component import OpexCostDataClass
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -34,6 +36,7 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class GenericCarInformation:
+
     """Class for collecting important generic car parameters from occupancy."""
 
     def __init__(self, my_occupancy_instance: UtspLpgConnector):
@@ -152,7 +155,6 @@ class CarConfig(cp.ConfigBase):
     # maintenance cost as share of investment [0..1]
     maintenance_cost_as_percentage_of_investment: float
     #: consumption of the car in kWh or l
-    consumption: float
 
     @classmethod
     def get_main_classname(cls):
@@ -176,7 +178,6 @@ class CarConfig(cp.ConfigBase):
             cost=32035.0,
             lifetime=18,
             maintenance_cost_as_percentage_of_investment=0.02,
-            consumption=0,
         )
         return config
 
@@ -196,7 +197,6 @@ class CarConfig(cp.ConfigBase):
             cost=44498.0,
             maintenance_cost_as_percentage_of_investment=0.02,
             lifetime=18,
-            consumption=0,
         )
         return config
 
@@ -221,6 +221,7 @@ class Car(cp.Component):
     FuelConsumption = "FuelConsumption"
     ElectricityOutput = "ElectricityOutput"
     CarLocation = "CarLocation"
+    DrivenMeters = "DrivenMeters"
 
     def __init__(
         self,
@@ -268,6 +269,13 @@ class Car(cp.Component):
                 ],
                 output_description="Diesel Consumption of the car while driving [l].",
             )
+        self.driven_meters_output: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.DrivenMeters,
+            load_type=lt.LoadTypes.ANY,
+            unit=lt.Units.METER,
+            output_description="Driven distance in meters.",
+        )
 
     def i_save_state(self) -> None:
         """Saves actual state."""
@@ -303,6 +311,7 @@ class Car(cp.Component):
                 self.meters_driven[timestep] * self.config.consumption_per_km * 1e-3
             )  # conversion meter to kilometer
             stsv.set_output_value(self.fuel_consumption, liters_used)
+        stsv.set_output_value(self.driven_meters_output, self.meters_driven[timestep])
 
     def get_cost_opex(
         self,
@@ -310,44 +319,132 @@ class Car(cp.Component):
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of energy and maintenance costs."""
-        opex_cost_per_simulated_period_in_euro = None
         co2_per_simulated_period_in_kg = None
+        consumption_in_kwh: float
+        consumption_in_liter: float
+        energy_costs_in_euro = 0
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
-                if output.unit == lt.Units.LITER:
-                    self.config.consumption = round(sum(postprocessing_results.iloc[:, index]), 1)
+                if (
+                        output.field_name == self.FuelConsumption
+                        and output.unit == lt.Units.LITER
+                        and output.load_type == lt.LoadTypes.DIESEL
+                ):
+                    consumption_in_liter = round(sum(postprocessing_results.iloc[:, index]), 1)
+                    # heating value: https://nachhaltigmobil.schule/leistung-energie-verbrauch/#:~:text=Benzin%20hat%20einen%20Heizwert%20von,9%2C8%20kWh%20pro%20Liter.
+                    heating_value_of_diesel_in_kwh_per_liter = 9.8
+                    consumption_in_kwh = (
+                            heating_value_of_diesel_in_kwh_per_liter * consumption_in_liter
+                    )
                     emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
                         self.my_simulation_parameters.year
                     )
                     co2_per_unit = emissions_and_cost_factors.diesel_footprint_in_kg_per_l
                     euro_per_unit = emissions_and_cost_factors.diesel_costs_in_euro_per_l
 
-                    opex_cost_per_simulated_period_in_euro = (
-                        self.calc_maintenance_cost() + self.config.consumption * euro_per_unit
-                    )
-                    co2_per_simulated_period_in_kg = self.config.consumption * co2_per_unit
+                    energy_costs_in_euro = consumption_in_liter * euro_per_unit
+                    co2_per_simulated_period_in_kg = consumption_in_liter * co2_per_unit
 
-                elif output.unit == lt.Units.WATT:
-                    self.config.consumption = round(
-                        sum(postprocessing_results.iloc[:, index])
-                        * self.my_simulation_parameters.seconds_per_timestep
-                        / 3.6e6,
+                elif (
+                    output.field_name == self.ElectricityOutput
+                    and output.unit == lt.Units.WATT
+                    and output.load_type == lt.LoadTypes.ELECTRICITY
+                ):
+                    consumption_in_kwh = round(
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=postprocessing_results.iloc[:, index],
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        ),
                         1,
                     )
+                    consumption_in_liter = 0
                     # No electricity costs for components except for Electricity Meter, because part of electricity consumption is feed by PV
-                    opex_cost_per_simulated_period_in_euro = self.calc_maintenance_cost()
+                    energy_costs_in_euro = 0
                     co2_per_simulated_period_in_kg = 0.0
 
-        if opex_cost_per_simulated_period_in_euro is None or co2_per_simulated_period_in_kg is None:
+        if co2_per_simulated_period_in_kg is None:
             raise ValueError("Could not calculate OPEX for Car component.")
 
         opex_cost_data_class = OpexCostDataClass(
-            opex_cost=opex_cost_per_simulated_period_in_euro,
-            co2_footprint=co2_per_simulated_period_in_kg,
-            consumption=self.config.consumption,
+            opex_energy_cost_in_euro=energy_costs_in_euro,
+            opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
+            co2_footprint_in_kg=co2_per_simulated_period_in_kg,
+            consumption_in_kwh=consumption_in_kwh,
+            loadtype=self.config.fuel,
         )
 
         return opex_cost_data_class
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+
+        list_of_kpi_entries: List[KpiEntry] = []
+        for index, output in enumerate(all_outputs):
+            if (
+                output.component_name == self.component_name
+                and output.field_name == self.ElectricityOutput
+                and output.load_type == lt.LoadTypes.ELECTRICITY
+            ):
+                total_electricity_demand_in_kilowatt_hour = round(
+                    KpiHelperClass.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=postprocessing_results.iloc[:, index],
+                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    ),
+                    1,
+                )
+                my_kpi_entry = KpiEntry(
+                    name="Electricity demand for driving",
+                    unit="kWh",
+                    value=total_electricity_demand_in_kilowatt_hour,
+                    tag=KpiTagEnumClass.CAR,
+                    description=self.component_name,
+                )
+                list_of_kpi_entries.append(my_kpi_entry)
+                break
+            if (
+                output.component_name == self.component_name
+                and output.field_name == self.FuelConsumption
+                and output.load_type == lt.LoadTypes.DIESEL
+                and output.unit == lt.Units.LITER
+            ):
+                consumption_in_liter = round(sum(postprocessing_results.iloc[:, index]), 1)
+                # heating value: https://nachhaltigmobil.schule/leistung-energie-verbrauch/#:~:text=Benzin%20hat%20einen%20Heizwert%20von,9%2C8%20kWh%20pro%20Liter.
+                heating_value_of_diesel_in_kwh_per_liter = 9.8
+                consumption_in_kwh = round((heating_value_of_diesel_in_kwh_per_liter * consumption_in_liter), 1)
+
+                my_kpi_entry = KpiEntry(
+                    name="Diesel demand for driving",
+                    unit="liter",
+                    value=consumption_in_liter,
+                    tag=KpiTagEnumClass.CAR,
+                    description=self.component_name,
+                )
+                list_of_kpi_entries.append(my_kpi_entry)
+                my_kpi_entry_2 = KpiEntry(
+                    name="Diesel demand for driving",
+                    unit="kWh",
+                    value=consumption_in_kwh,
+                    tag=KpiTagEnumClass.CAR,
+                    description=self.component_name,
+                )
+                list_of_kpi_entries.append(my_kpi_entry_2)
+                break
+
+        distance_driven_in_km = round(sum(self.meters_driven) / 1000, 1)
+        my_kpi_entry_3 = KpiEntry(
+            name="Distance driven",
+            unit="km",
+            value=distance_driven_in_km,
+            tag=KpiTagEnumClass.CAR,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(my_kpi_entry_3)
+
+        return list_of_kpi_entries
 
     @staticmethod
     def get_cost_capex(config: CarConfig) -> Tuple[float, float, float]:
@@ -384,7 +481,6 @@ class Car(cp.Component):
             self.meters_driven = dataframe["meters_driven"].tolist()
 
         else:
-
             # compare time resolution of LPG to time resolution of hisim
             time_resolution_original = dt.datetime.strptime(self.time_resolution, "%H:%M:%S")
             seconds_per_timestep_original = (
@@ -397,10 +493,8 @@ class Car(cp.Component):
             )
 
             simulation_time_span = self.my_simulation_parameters.end_date - self.my_simulation_parameters.start_date
-            minutes_per_timestep = int(self.my_simulation_parameters.seconds_per_timestep / 60)
-            steps_desired = int(
-                simulation_time_span.days * 24 * (3600 / self.my_simulation_parameters.seconds_per_timestep)
-            )
+            # minutes_per_timestep = int(self.my_simulation_parameters.seconds_per_timestep / 60)
+            steps_desired = self.my_simulation_parameters.timesteps
             steps_desired_in_minutes = steps_desired * minutes_per_timestep
 
             # extract values for location and distance of car,
@@ -427,29 +521,43 @@ class Car(cp.Component):
 
             # sum / extract most common value from data to match hisim time resolution
             if minutes_per_timestep > 1:
-                for i in range(steps_desired):
-                    self.meters_driven.append(
-                        sum(self.meters_driven[i * minutes_per_timestep : (i + 1) * minutes_per_timestep])
-                    )  # sum
-                    location_list = self.car_location[
-                        i * minutes_per_timestep : (i + 1) * minutes_per_timestep
-                    ]  # extract list
-                    occurence_count = most_frequent(input_list=location_list)  # extract most common
-                    self.car_location.append(occurence_count)
+                self.meters_driven = self.resample_meters_driven(
+                    meters_driven=self.meters_driven,
+                    seconds_per_timestep=self.my_simulation_parameters.seconds_per_timestep,
+                )
+                self.car_location = [
+                    most_frequent(
+                        input_list=self.car_location[i * minutes_per_timestep : (i + 1) * minutes_per_timestep]
+                    )
+                    for i in range(steps_desired)
+                ]
             else:
                 self.meters_driven = self.meters_driven
                 self.car_location = self.car_location
 
             # save data in cache
-            database = pd.DataFrame(
-                {
-                    "car_location": self.car_location,
-                    "meters_driven": self.meters_driven,
-                }
-            )
-
+            database = pd.DataFrame({"car_location": self.car_location, "meters_driven": self.meters_driven})
             database.to_csv(cache_filepath)
             del database
+
+    def resample_meters_driven(self, meters_driven: List, seconds_per_timestep: int) -> Any:
+        """Resample meters driven according to simulation time resolution."""
+        # Convert seconds per timestep to minutes per timestep
+        minutes_per_timestep = seconds_per_timestep // 60
+
+        # Check the length of the input list
+        total_minutes = len(meters_driven)
+
+        # Calculate the number of complete timesteps
+        num_timesteps = total_minutes // minutes_per_timestep
+
+        # Trim the list to be a multiple of minutes_per_timestep
+        trimmed_meters_driven = meters_driven[: num_timesteps * minutes_per_timestep]
+
+        # Reshape and sum the data
+        reshaped_meters = np.reshape(trimmed_meters_driven, (num_timesteps, minutes_per_timestep))
+        resampled_meters = np.sum(reshaped_meters, axis=1)
+        return resampled_meters
 
     def write_to_report(self) -> List[str]:
         """Writes Car values to report."""

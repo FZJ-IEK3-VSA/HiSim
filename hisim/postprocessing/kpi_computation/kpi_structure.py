@@ -13,7 +13,8 @@ class KpiTagEnumClass(Enum):
     """Determine KPI tags as enums."""
 
     GENERAL = "General"
-    COSTS_AND_EMISSIONS = "Costs and Emissions"
+    COSTS = "Costs"
+    EMISSIONS = "Emissions"
     BUILDING = "Building"
     BATTERY = "Battery"
     HEAT_DISTRIBUTION_SYSTEM = "Heat Distribution System"
@@ -24,6 +25,7 @@ class KpiTagEnumClass(Enum):
     GAS_HEATER_DOMESTIC_HOT_WATER = "Gas Heater For Domestic Hot Water"
     GAS_METER = "Gas Meter"
     ELECTRICITY_METER = "Electricity Meter"
+    CAR = "Car"
 
 
 @dataclass

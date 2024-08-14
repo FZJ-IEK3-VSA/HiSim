@@ -9,6 +9,8 @@ from hisim.simulationparameters import SimulationParameters
 from hisim.component_wrapper import ComponentWrapper
 from hisim.component import OpexCostDataClass
 from hisim.components.advanced_battery_bslib import Battery
+from hisim.components.electricity_meter import ElectricityMeter
+from hisim.components.gas_meter import GasMeter
 
 
 def opex_calculation(
@@ -20,58 +22,69 @@ def opex_calculation(
 ) -> List:
     """Loops over all components and calls opex cost calculation."""
     total_operational_co2_footprint = 0.0
-    total_operational_cost = 0.0
+    total_opex_energy_cost = 0.0
+    total_opex_maintenance_cost = 0.0
+    total_consumption_in_kwh = 0.0
     headline: List[object] = [
         "Component",
-        "Operational Costs in EUR",
-        "Operational C02 footprint in kg",
+        "Maintenance Costs in EUR",
+        "Fuel CO2 Emissions in kg",
         "Consumption in kWh",
     ]
     opex_table_as_list_of_list = []
 
     for building_object in building_objects_in_district_list:
+        total_energy_cost_building_object = 0.0
+        total_maintenace_cost_building_object = 0.0
         total_operational_co2_footprint_building_object = 0.0
-        total_operational_cost_building_object = 0.0
         for component in components:
             component_unwrapped = component.my_component
             if building_object in str(component_unwrapped.component_name):
                 # cost and co2_footprint are calculated per simulated period
-                opex_cost_data_class: OpexCostDataClass = component_unwrapped.get_cost_opex(
-                    all_outputs=all_outputs,
-                    postprocessing_results=postprocessing_results,
-                )
-                cost = opex_cost_data_class.opex_cost
-                co2_footprint = opex_cost_data_class.co2_footprint
-                consumption = opex_cost_data_class.consumption
-                total_operational_cost_building_object += cost
-                total_operational_co2_footprint_building_object += co2_footprint
-                opex_table_as_list_of_list.append(
-                    [
-                        component_unwrapped.component_name,
-                        round(cost, 2),
-                        round(co2_footprint, 2),
-                        round(consumption, 2),
-                    ]
-                )
+                component_class_name = component_unwrapped.get_classname()
+                # get opex data for all components except Electricity and Gas Meter
+                if component_class_name != ElectricityMeter.get_classname() and component_class_name != GasMeter.get_classname():
+                    opex_cost_data_class: OpexCostDataClass = component_unwrapped.get_cost_opex(
+                        all_outputs=all_outputs,
+                        postprocessing_results=postprocessing_results,
+                    )
+                    cost_energy = opex_cost_data_class.opex_energy_cost_in_euro
+                    cost_maintenance = opex_cost_data_class.opex_maintenance_cost_in_euro
+                    co2_footprint = opex_cost_data_class.co2_footprint_in_kg
+                    consumption = opex_cost_data_class.consumption_in_kwh
+                    total_energy_cost_building_object += cost_energy
+                    total_maintenace_cost_building_object += cost_maintenance
+                    total_operational_co2_footprint_building_object += co2_footprint
+
+                    opex_table_as_list_of_list.append(
+                        [
+                            component_unwrapped.component_name,
+                            round(cost_maintenance, 2),
+                            round(co2_footprint, 2),
+                            round(consumption, 2),
+                        ]
+                    )
 
         opex_table_as_list_of_list.append(
             [
                 f"{building_object}_Total",
-                round(total_operational_cost_building_object, 2),
+                round(total_maintenace_cost_building_object, 2),
                 round(total_operational_co2_footprint_building_object, 2),
                 "---",
             ]
         )
 
-        total_operational_cost += total_operational_cost_building_object
-        total_operational_co2_footprint += total_operational_co2_footprint_building_object
+        total_opex_energy_cost += cost_energy
+        total_opex_maintenance_cost += cost_maintenance
+        total_operational_co2_footprint += co2_footprint
+        total_consumption_in_kwh += consumption
 
     opex_table_as_list_of_list.append(
         [
             "Total",
-            round(total_operational_cost, 2),
+            round(total_opex_maintenance_cost, 2),
             round(total_operational_co2_footprint, 2),
-            "---",
+            round(total_consumption_in_kwh, 2),
         ]
     )
     pathname = os.path.join(simulation_parameters.result_directory, "operational_costs_co2_footprint.csv")

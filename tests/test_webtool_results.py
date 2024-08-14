@@ -43,8 +43,6 @@ def test_webtool_results():
     with open(Path(my_simulation_parameters.result_directory).joinpath("results_for_webtool.json"), "rb") as handle:
         results_for_webtool = json.load(handle)
 
-    print(results_for_webtool)
-
     # Test single values
     assert isinstance(
         results_for_webtool["components"]["BUI1_AdvancedHeatPumpHPLib"]["operation"]["ThermalOutputPower"]["value"],
@@ -59,7 +57,7 @@ def test_webtool_results():
 
     # Test KPIs
     assert isinstance(
-        results_for_webtool["kpis"]["BUI1"]["Costs and Emissions"]["System operational costs for simulated period"]["value"],
+        results_for_webtool["kpis"]["BUI1"]["Costs"]["Maintenance costs for simulated period"]["value"],
         Number,
     )
 

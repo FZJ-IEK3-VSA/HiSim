@@ -6,6 +6,7 @@
 from typing import Any, List, Optional
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+import pandas as pd
 
 # Import modules from HiSim
 from hisim.component import (
@@ -16,12 +17,15 @@ from hisim.component import (
     ConfigBase,
     ComponentConnection,
     DisplayConfig,
+    OpexCostDataClass,
+    CapexCostDataClass
 )
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
 from hisim.components.weather import Weather
 from hisim.components.heat_distribution_system import HeatDistributionController
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
 
 # from hisim.components.generic_gas_heater import GasHeater
 
@@ -398,3 +402,26 @@ class GenericGasHeaterControllerL1(Component):
                 f"or heating threshold temperature {set_heating_threshold_temperature_in_celsius}°C is not acceptable."
             )
         return heating_mode
+
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> OpexCostDataClass:
+        """Calculate OPEX costs, consisting of electricity costs and revenues."""
+        opex_cost_data_class = OpexCostDataClass.get_default_opex_cost_data_class()
+        return opex_cost_data_class
+
+    @staticmethod
+    def get_cost_capex(config: GenericGasHeaterControllerL1Config, simulation_parameters: SimulationParameters) -> CapexCostDataClass:  # pylint: disable=unused-argument
+        """Returns investment cost, CO2 emissions and lifetime."""
+        capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
+        return capex_cost_data_class
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        return []

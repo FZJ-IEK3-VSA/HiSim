@@ -14,7 +14,7 @@ from typing import List, Any, Optional
 from dataclasses import dataclass
 import numpy as np
 from dataclasses_json import dataclass_json
-
+import pandas as pd
 
 from hisim import component as cp
 from hisim import log

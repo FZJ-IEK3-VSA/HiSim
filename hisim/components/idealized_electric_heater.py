@@ -4,6 +4,7 @@
 from typing import List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
+import pandas as pd
 import hisim.component as cp
 from hisim.component import OpexCostDataClass, CapexCostDataClass
 from hisim.simulationparameters import SimulationParameters
@@ -172,7 +173,7 @@ class IdealizedElectricHeater(cp.Component):
         return opex_cost_data_class
 
     @staticmethod
-    def get_cost_capex(config: WeatherConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:  # pylint: disable=unused-argument
+    def get_cost_capex(config: IdealizedHeaterConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
         capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
         return capex_cost_data_class

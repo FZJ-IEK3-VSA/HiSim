@@ -169,8 +169,8 @@ def setup_function(
     # Set System Parameters
 
     # Set heating systems for space heating and domestic hot water
-    space_heating_system = HeatingSystemType.GAS_HEATER
-    domestic_hot_water_heating_system = HeatingSystemType.GAS_HEATER
+    space_heating_system = HeatingSystemType.HEAT_PUMP
+    domestic_hot_water_heating_system = HeatingSystemType.HEAT_PUMP
     # Set Heat Pump Controller
     hp_controller_mode = 2  # mode 1 for heating/off and mode 2 for heating/cooling/off
     heating_reference_temperature_in_celsius = -7.0

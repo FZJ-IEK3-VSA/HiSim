@@ -17,7 +17,7 @@ from hisim.postprocessingoptions import PostProcessingOptions
 @utils.measure_execution_time
 def test_cluster_household_with_pv_battery_and_ems():
     """Single day."""
-    path = "../system_setups/household_cluster_advanced_hp_pv_battery_ems.py"
+    path = "../system_setups/household_cluster.py"
 
     my_simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     my_simulation_parameters.post_processing_options.append(

@@ -34,6 +34,7 @@ class HotWaterStorageSizingEnum(IntEnum):
 
     SIZE_ACCORDING_TO_HEAT_PUMP = 1
     SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM = 2
+    SIZE_ACCORDING_TO_GAS_HEATER = 3
 
 
 class PositionHotWaterStorageInSystemSetup(IntEnum):
@@ -128,6 +129,10 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         # otherwise use approximation: 60l per kw thermal power
         elif sizing_option == HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM:
             volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 60
+
+        # or for gas heaters make hws smaller because gas heaters are a bigger inertia than heat pump
+        elif sizing_option == HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER:
+            volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 20
 
         else:
             raise ValueError(f"Sizing option for Simple Hot Water Storage {sizing_option} is unvalid.")
@@ -883,9 +888,11 @@ class SimpleHotWaterStorage(cp.Component):
         # pylint: disable=unused-argument
         """Calculate OPEX costs, consisting of maintenance costs for Heat Distribution System."""
         opex_cost_data_class = OpexCostDataClass(
-            opex_cost=self.calc_maintenance_cost(),
-            co2_footprint=0,
-            consumption=0,
+            opex_energy_cost_in_euro=0,
+            opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
+            co2_footprint_in_kg=0,
+            consumption_in_kwh=0,
+            loadtype=lt.LoadTypes.ANY
         )
 
         return opex_cost_data_class

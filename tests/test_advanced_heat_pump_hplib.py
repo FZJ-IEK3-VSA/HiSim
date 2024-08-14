@@ -50,7 +50,7 @@ def test_heat_pump_hplib():
         cost=Quantity(p_th_set.value * 1e-3 * 1513.74, Euro),
         lifetime=Quantity(10, Years),
         maintenance_cost_as_percentage_of_investment=0.025,
-        consumption=Quantity(0, KilowattHour),
+        consumption_in_kwh=Quantity(0, KilowattHour),
     )
     heatpump = HeatPumpHplib(config=heatpump_config, my_simulation_parameters=simpars)
     heatpump.state = HeatPumpState(time_on_heating=0, time_off=0, time_on_cooling=0, on_off_previous=1)

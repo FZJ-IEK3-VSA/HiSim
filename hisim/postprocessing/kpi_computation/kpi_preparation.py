@@ -7,13 +7,12 @@ https://solar.htw-berlin.de/wp-content/uploads/WENIGER-2017-Vergleich-verschiede
 """
 
 import os
-from typing import List, Tuple, Union, Dict, Optional
+from typing import List, Tuple, Dict, Optional
 from pathlib import Path
 import pandas as pd
 from hisim.component import ComponentOutput
 from hisim.component_wrapper import ComponentWrapper
-from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes
-from hisim.utils import HISIMPATH
+from hisim.loadtypes import ComponentType, InandOutputType
 from hisim import log
 from hisim.components.electricity_meter import ElectricityMeter
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
@@ -72,12 +71,14 @@ class KpiPreparation:
                     or InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED in output.postprocessing_flag
                 ):
                     total_consumption_ids.append(index)
+                    log.debug("Output considered in total electricity consumption " + output.full_name + " " + str(output.unit))
 
                 elif InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
                     if ComponentType.BATTERY in output.postprocessing_flag:
                         battery_charge_discharge_ids.append(index)
                     elif ComponentType.CAR_BATTERY in output.postprocessing_flag:
                         total_consumption_ids.append(index)
+                        log.debug("Output considered in total electricity consumption " + output.full_name + " " + str(output.unit))
             else:
                 continue
 
@@ -151,6 +152,8 @@ class KpiPreparation:
         total_electricity_consumption_in_kilowatt_hour = (
             total_electricity_consumption_in_kilowatt_hour + battery_losses_in_kilowatt_hour
         )
+        log.debug("Battery losses " + str(battery_losses_in_kilowatt_hour))
+        log.debug("Total electricity consumption (battery losses included) " + str(total_electricity_consumption_in_kilowatt_hour))
 
         # make kpi entry
         total_consumtion_entry = KpiEntry(
@@ -207,7 +210,7 @@ class KpiPreparation:
         result_dataframe: pd.DataFrame,
         electricity_production_in_kilowatt_hour: float,
         electricity_consumption_in_kilowatt_hour: float,
-    ) -> Tuple[float, float, pd.DataFrame]:
+    ) -> pd.DataFrame:
         """Computes the self consumption, grid injection, autarky and battery losses if electricty production is bigger than zero."""
 
         if electricity_production_in_kilowatt_hour > 0:
@@ -292,7 +295,7 @@ class KpiPreparation:
                 autarkie_rate_entry.name: autarkie_rate_entry.to_dict(),
             }
         )
-        return grid_injection_in_kilowatt_hour, self_consumption_in_kilowatt_hour, result_dataframe
+        return result_dataframe
 
     def compute_battery_kpis(self, result_dataframe: pd.DataFrame) -> Tuple[float, float, float]:
         """Compute battery kpis."""
@@ -456,193 +459,30 @@ class KpiPreparation:
         # update kpi collection dict
         self.kpi_collection_dict_unsorted.update({ratio_in_percent_entry.name: ratio_in_percent_entry.to_dict()})
 
-    def read_in_fuel_costs(self) -> pd.DataFrame:
-        """Reads data for costs and co2 emissions of fuels from csv."""
-        price_frame = pd.read_csv(HISIMPATH["fuel_costs"], sep=";", usecols=[0, 2, 4])
-        price_frame.index = price_frame["fuel type"]  # type: ignore
-        price_frame.drop(columns=["fuel type"], inplace=True)
-        return price_frame
-
-    def search_electricity_prices_in_results(
-        self, all_outputs: List, results: pd.DataFrame
-    ) -> Tuple["pd.Series[float]", "pd.Series[float]"]:
-        """Extracts electricity price consumption and electricity price production from results."""
-        electricity_price_consumption = pd.Series(dtype=pd.Float64Dtype())  # type: pd.Series[float]
-        electricity_price_injection = pd.Series(dtype=pd.Float64Dtype())  # type: pd.Series[float]
-        for index, output in enumerate(all_outputs):
-            if output.postprocessing_flag is not None:
-                if LoadTypes.PRICE in output.postprocessing_flag:
-                    if InandOutputType.ELECTRICITY_CONSUMPTION in output.postprocessing_flag:
-                        electricity_price_consumption = results.iloc[:, index]
-                    elif InandOutputType.ELECTRICITY_INJECTION in output.postprocessing_flag:
-                        electricity_price_injection = results.iloc[:, index]
-                    else:
-                        continue
-        return electricity_price_consumption, electricity_price_injection
-
-    def get_euro_and_co2(
-        self, fuel_costs: pd.DataFrame, fuel: Union[LoadTypes, InandOutputType]
-    ) -> Tuple[float, float]:
-        """Returns cost (Euro) of kWh of fuel and CO2 consumption (kg) of kWh of fuel."""
-        column = fuel_costs.iloc[fuel_costs.index == fuel.value]
-        return (float(column["Cost"].iloc[0]), float(column["Footprint"].iloc[0]))
-
-    def compute_cost_of_fuel_type(
-        self,
-        results: pd.DataFrame,
-        all_outputs: List,
-        timeresolution: int,
-        price_frame: pd.DataFrame,
-        fuel: LoadTypes,
-    ) -> Tuple[float, float]:
-        """Computes the cost of the fuel type."""
-        fuel_consumption = pd.Series(dtype=pd.Float64Dtype())  # type: pd.Series[float]
-        for index, output in enumerate(all_outputs):
-            if output.postprocessing_flag is not None:
-                if InandOutputType.FUEL_CONSUMPTION in output.postprocessing_flag:
-                    if fuel in output.postprocessing_flag:
-                        fuel_consumption = results.iloc[:, index]
-                    else:
-                        continue
-        if not fuel_consumption.empty:
-            if fuel in [LoadTypes.ELECTRICITY, LoadTypes.GAS, LoadTypes.DISTRICTHEATING]:
-                consumption_sum = self.compute_total_energy_from_power_timeseries(
-                    power_timeseries_in_watt=fuel_consumption, timeresolution=timeresolution
-                )
-            # convert from Wh to kWh
-            elif fuel in [LoadTypes.GAS, LoadTypes.DISTRICTHEATING]:
-                consumption_sum = sum(fuel_consumption) * 1e-3
-            # stay with liters
-            else:
-                consumption_sum = sum(fuel_consumption)
-        else:
-            consumption_sum = 0
-
-        price, co2 = self.get_euro_and_co2(fuel_costs=price_frame, fuel=fuel)
-        return consumption_sum * price, consumption_sum * co2
-
-    def compute_energy_prices_and_co2_emission(
-        self,
-        result_dataframe: pd.DataFrame,
-        injection: pd.Series,
-        self_consumption: pd.Series,
-        electricity_production_in_kilowatt_hour: float,
-        electricity_consumption_in_kilowatt_hour: float,
-        grid_injection_in_kilowatt_hour: float,
-        self_consumption_in_kilowatt_hour: float,
-    ) -> None:
-        """Compute energy prices and co2 emissions."""
-
-        # initialize prices
-        total_costs_for_energy_use_in_euro: float = 0.0
-        total_co2_emitted_due_to_energy_use_in_kilogram: float = 0.0
-        total_costs_for_electricity_use_in_euro: float = 0.0
-        total_co2_emitted_due_to_electricity_use_in_kilogram: float = 0.0
-
-        price_frame = self.read_in_fuel_costs()
-
-        (
-            electricity_price_consumption,
-            electricity_price_injection,
-        ) = self.search_electricity_prices_in_results(all_outputs=self.all_outputs, results=self.results)
-        # Electricity Price
-        electricity_price_constant, co2_price_constant = self.get_euro_and_co2(
-            fuel_costs=price_frame, fuel=LoadTypes.ELECTRICITY
-        )
-        electricity_inj_price_constant, _ = self.get_euro_and_co2(fuel_costs=price_frame, fuel=LoadTypes.ELECTRICITY)
-
-        if electricity_production_in_kilowatt_hour > 0:
-            # evaluate electricity price
-            if not electricity_price_injection.empty:
-                total_costs_for_electricity_use_in_euro = (
-                    total_costs_for_electricity_use_in_euro
-                    - self.compute_total_energy_from_power_timeseries(
-                        power_timeseries_in_watt=injection[injection > 0] * electricity_price_injection[injection > 0],
-                        timeresolution=self.simulation_parameters.seconds_per_timestep,
-                    )
-                )
-                total_costs_for_electricity_use_in_euro = (
-                    total_costs_for_electricity_use_in_euro
-                    + self.compute_total_energy_from_power_timeseries(
-                        power_timeseries_in_watt=result_dataframe["total_consumption"] - self_consumption,
-                        timeresolution=self.simulation_parameters.seconds_per_timestep,
-                    )
-                )  # Todo: is this correct? (maybe not so important, only used if generic_price_signal is used
-            else:
-                total_costs_for_electricity_use_in_euro = (
-                    total_costs_for_electricity_use_in_euro
-                    - grid_injection_in_kilowatt_hour * electricity_inj_price_constant
-                    + (electricity_consumption_in_kilowatt_hour - self_consumption_in_kilowatt_hour)
-                    * electricity_price_constant
-                )
-
-        else:
-            if not electricity_price_consumption.empty:
-                # substract self consumption from consumption for bill calculation
-                total_costs_for_electricity_use_in_euro = (
-                    total_costs_for_electricity_use_in_euro
-                    + self.compute_total_energy_from_power_timeseries(
-                        power_timeseries_in_watt=result_dataframe["total_consumption"] * electricity_price_consumption,
-                        timeresolution=self.simulation_parameters.seconds_per_timestep,
-                    )
-                )
-            else:
-                total_costs_for_electricity_use_in_euro = (
-                    total_costs_for_electricity_use_in_euro
-                    + electricity_consumption_in_kilowatt_hour * electricity_price_constant
-                )
-
-        total_co2_emitted_due_to_electricity_use_in_kilogram = (
-            total_co2_emitted_due_to_electricity_use_in_kilogram
-            + (electricity_consumption_in_kilowatt_hour - self_consumption_in_kilowatt_hour) * co2_price_constant
-        )
-
-        # compute cost and co2 for LoadTypes other than electricity
-        for fuel in [
-            LoadTypes.GAS,
-            LoadTypes.OIL,
-            LoadTypes.DISTRICTHEATING,
-            LoadTypes.DIESEL,
-        ]:
-            fuel_price_in_euro, fuel_co2_emission_in_kg = self.compute_cost_of_fuel_type(
-                results=self.results,
-                all_outputs=self.all_outputs,
-                timeresolution=self.simulation_parameters.seconds_per_timestep,
-                price_frame=price_frame,
-                fuel=fuel,
-            )
-            total_co2_emitted_due_to_energy_use_in_kilogram = (
-                total_co2_emitted_due_to_electricity_use_in_kilogram + fuel_co2_emission_in_kg
-            )
-            total_costs_for_energy_use_in_euro = total_costs_for_electricity_use_in_euro + fuel_price_in_euro
-
-        # make kpi entry
-        costs_for_energy_use_entry = KpiEntry(
-            name="Total cost for energy use",
-            unit="EUR",
-            value=total_costs_for_energy_use_in_euro,
-            tag=KpiTagEnumClass.COSTS_AND_EMISSIONS,
-        )
-        co2_emission_entry = KpiEntry(
-            name="Total CO2 emission due to energy use",
-            unit="kg",
-            value=total_co2_emitted_due_to_energy_use_in_kilogram,
-            tag=KpiTagEnumClass.COSTS_AND_EMISSIONS,
-        )
-
-        # update kpi collection dict
-        self.kpi_collection_dict_unsorted.update(
-            {
-                costs_for_energy_use_entry.name: costs_for_energy_use_entry.to_dict(),
-                co2_emission_entry.name: co2_emission_entry.to_dict(),
-            }
-        )
-
     def read_opex_and_capex_costs_from_results(self):
         """Get CAPEX and OPEX costs for simulated period.
 
         This function will read the opex and capex costs from the results.
         """
+        # get costs and emissions from electricity meter and gas meter
+        electricity_costs_in_euro: float = 0
+        electricity_co2_in_kg: float = 0
+        gas_costs_in_euro: float = 0
+        gas_co2_in_kg: float = 0
+
+        for kpi_name, kpi_entry in self.kpi_collection_dict_unsorted.items():
+            if kpi_entry["tag"] == KpiTagEnumClass.ELECTRICITY_METER.value:
+                if kpi_name == "Opex costs of electricity consumption from grid":
+                    electricity_costs_in_euro = kpi_entry["value"]
+                if kpi_name == "CO2 footprint of electricity consumption from grid":
+                    electricity_co2_in_kg = kpi_entry["value"]
+
+            elif kpi_entry["tag"] == KpiTagEnumClass.GAS_METER.value:
+                if kpi_name == "Opex costs of gas consumption from grid":
+                    gas_costs_in_euro = kpi_entry["value"]
+                if kpi_name == "CO2 footprint of gas consumption from grid":
+                    gas_co2_in_kg = kpi_entry["value"]
+
         # get CAPEX and OPEX costs for simulated period
         capex_results_path = os.path.join(
             self.simulation_parameters.result_directory, "investment_cost_co2_footprint.csv"
@@ -652,15 +492,16 @@ class KpiPreparation:
         )
         if Path(opex_results_path).exists():
             opex_df = pd.read_csv(opex_results_path, index_col=0)
-            total_operational_cost_per_simulated_period = opex_df["Operational Costs in EUR"].iloc[-1]
-            total_operational_emissions_per_simulated_period = opex_df["Operational C02 footprint in kg"].iloc[-1]
+            log.debug("Opex df " + str(opex_df) + "\n")
+            total_maintenance_cost_per_simulated_period = opex_df["Maintenance Costs in EUR"].iloc[-1]
+
         else:
             log.warning("OPEX-costs for components are not calculated yet. Set PostProcessingOptions.COMPUTE_OPEX")
-            total_operational_cost_per_simulated_period = 0
-            total_operational_emissions_per_simulated_period = 0
+            total_maintenance_cost_per_simulated_period = 0
 
         if Path(capex_results_path).exists():
             capex_df = pd.read_csv(capex_results_path, index_col=0)
+            log.debug("Capex df " + str(capex_df) + "\n")
             total_investment_cost_per_simulated_period = capex_df["Investment in EUR"].iloc[-1]
             total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint in kg"].iloc[-1]
         else:
@@ -669,50 +510,71 @@ class KpiPreparation:
             total_device_co2_footprint_per_simulated_period = 0
 
         # make kpi entry
+        total_electricity_costs_entry = KpiEntry(
+            name="Costs of grid electricity for simulated period",
+            unit="EUR",
+            value=electricity_costs_in_euro,
+            tag=KpiTagEnumClass.COSTS,
+        )
+        total_electricity_co2_footprint_entry = KpiEntry(
+            name="CO2 footprint of grid electricity for simulated period",
+            unit="kg",
+            value=electricity_co2_in_kg,
+            tag=KpiTagEnumClass.EMISSIONS,
+        )
+        total_gas_costs_entry = KpiEntry(
+            name="Costs of grid gas for simulated period",
+            unit="EUR",
+            value=gas_costs_in_euro,
+            tag=KpiTagEnumClass.COSTS,
+        )
+        total_gas_co2_emissions_entry = KpiEntry(
+            name="CO2 footprint of grid gas for simulated period",
+            unit="kg",
+            value=gas_co2_in_kg,
+            tag=KpiTagEnumClass.EMISSIONS,
+        )
         total_investment_cost_per_simulated_period_entry = KpiEntry(
             name="Investment costs for equipment per simulated period",
             unit="EUR",
             value=total_investment_cost_per_simulated_period,
-            tag=KpiTagEnumClass.COSTS_AND_EMISSIONS,
+            tag=KpiTagEnumClass.COSTS,
         )
         total_device_co2_footprint_per_simulated_period_entry = KpiEntry(
             name="CO2 footprint for equipment per simulated period",
             unit="kg",
             value=total_device_co2_footprint_per_simulated_period,
-            tag=KpiTagEnumClass.COSTS_AND_EMISSIONS,
+            tag=KpiTagEnumClass.EMISSIONS,
         )
-        total_operational_cost_entry = KpiEntry(
-            name="System operational costs for simulated period",
+        total_maintenance_cost_entry = KpiEntry(
+            name="Maintenance costs for simulated period",
             unit="EUR",
-            value=total_operational_cost_per_simulated_period,
-            tag=KpiTagEnumClass.COSTS_AND_EMISSIONS,
-        )
-        total_operational_emissions_entry = KpiEntry(
-            name="System operational emissions for simulated period",
-            unit="kg",
-            value=total_operational_emissions_per_simulated_period,
-            tag=KpiTagEnumClass.COSTS_AND_EMISSIONS,
+            value=total_maintenance_cost_per_simulated_period,
+            tag=KpiTagEnumClass.COSTS,
         )
         total_cost_entry = KpiEntry(
             name="Total costs for simulated period",
             unit="EUR",
-            value=total_operational_cost_per_simulated_period + total_investment_cost_per_simulated_period,
-            tag=KpiTagEnumClass.COSTS_AND_EMISSIONS,
+            value=total_maintenance_cost_per_simulated_period + total_investment_cost_per_simulated_period + gas_costs_in_euro + electricity_costs_in_euro,
+            tag=KpiTagEnumClass.COSTS,
         )
         total_emissions_entry = KpiEntry(
             name="Total CO2 emissions for simulated period",
             unit="kg",
-            value=total_operational_emissions_per_simulated_period + total_device_co2_footprint_per_simulated_period,
-            tag=KpiTagEnumClass.COSTS_AND_EMISSIONS,
+            value=total_device_co2_footprint_per_simulated_period + gas_co2_in_kg + electricity_co2_in_kg,
+            tag=KpiTagEnumClass.EMISSIONS,
         )
 
         # update kpi collection dict
         self.kpi_collection_dict_unsorted.update(
             {
+                total_electricity_costs_entry.name: total_electricity_costs_entry.to_dict(),
+                total_electricity_co2_footprint_entry.name: total_electricity_co2_footprint_entry.to_dict(),
+                total_gas_costs_entry.name: total_gas_costs_entry.to_dict(),
+                total_gas_co2_emissions_entry.name: total_gas_co2_emissions_entry.to_dict(),
                 total_investment_cost_per_simulated_period_entry.name: total_investment_cost_per_simulated_period_entry.to_dict(),
                 total_device_co2_footprint_per_simulated_period_entry.name: total_device_co2_footprint_per_simulated_period_entry.to_dict(),
-                total_operational_cost_entry.name: total_operational_cost_entry.to_dict(),
-                total_operational_emissions_entry.name: total_operational_emissions_entry.to_dict(),
+                total_maintenance_cost_entry.name: total_maintenance_cost_entry.to_dict(),
                 total_cost_entry.name: total_cost_entry.to_dict(),
                 total_emissions_entry.name: total_emissions_entry.to_dict(),
             }

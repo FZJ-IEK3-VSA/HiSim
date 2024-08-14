@@ -81,7 +81,7 @@ class HeatPumpHplibConfig(ConfigBase):
     # maintenance cost as share of investment [0..1]
     maintenance_cost_as_percentage_of_investment: float
     #: consumption of the heatpump in kWh
-    consumption: Quantity[float, KilowattHour]
+    consumption_in_kwh: Quantity[float, KilowattHour]
 
     @classmethod
     def get_default_generic_advanced_hp_lib(
@@ -110,7 +110,7 @@ class HeatPumpHplibConfig(ConfigBase):
             cost=Quantity(set_thermal_output_power_in_watt.value * 1e-3 * 1513.74, Euro),
             lifetime=Quantity(10, Years),  # value from emission_factors_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
-            consumption=Quantity(0, KilowattHour),
+            consumption_in_kwh=Quantity(0, KilowattHour),
         )
 
     @classmethod
@@ -140,7 +140,7 @@ class HeatPumpHplibConfig(ConfigBase):
             # value from emission_factros_and_costs_devices.csv
             lifetime=Quantity(10, Years),
             maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
-            consumption=Quantity(0, KilowattHour),
+            consumption_in_kwh=Quantity(0, KilowattHour),
         )
 
 
@@ -630,18 +630,20 @@ class HeatPumpHplib(Component):
         """
         for index, output in enumerate(all_outputs):
             if (
-                output.component_name == "HeatPumpHPLib" and output.load_type == LoadTypes.ELECTRICITY
+                output.component_name == self.component_name and output.load_type == LoadTypes.ELECTRICITY and output.field_name == self.ElectricalInputPower
             ):  # Todo: check component name from system_setups: find another way of using only heatpump-outputs
-                self.config.consumption = round(
+                self.config.consumption_in_kwh = round(
                     sum(postprocessing_results.iloc[:, index])
                     * self.my_simulation_parameters.seconds_per_timestep
                     / 3.6e6,
                     1,
                 )
         opex_cost_data_class = OpexCostDataClass(
-            opex_cost=self.calc_maintenance_cost(),
-            co2_footprint=0,
-            consumption=self.config.consumption,
+            opex_energy_cost_in_euro=0,
+            opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
+            co2_footprint_in_kg=0,
+            consumption_in_kwh=self.config.consumption_in_kwh,
+            loadtype=LoadTypes.ELECTRICITY
         )
 
         return opex_cost_data_class

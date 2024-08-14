@@ -255,6 +255,7 @@ class CarBattery(Component):
 
         electricity_consumption is considered vor generic_car already
         """
+        battery_losses_in_kwh: float = 0.0
         for index, output in enumerate(all_outputs):
             if (
                 output.postprocessing_flag is not None
@@ -272,13 +273,16 @@ class CarBattery(Component):
                         * self.my_simulation_parameters.seconds_per_timestep
                         / 3.6e6,
                         1,
-                    )
+                    ) * (-1)
+                    battery_losses_in_kwh = self.battery_config.charge - self.battery_config.discharge
         # Todo: Battery Aging like in component advanced_battery_bslib? Or is this considered in maintenance cost of car?
 
         opex_cost_data_class = OpexCostDataClass(
-            opex_cost=0,
-            co2_footprint=0,
-            consumption=0,
+            opex_energy_cost_in_euro=0,
+            opex_maintenance_cost_in_euro=0,
+            co2_footprint_in_kg=0,
+            consumption_in_kwh=battery_losses_in_kwh,
+            loadtype=LoadTypes.ELECTRICITY
         )
 
         return opex_cost_data_class

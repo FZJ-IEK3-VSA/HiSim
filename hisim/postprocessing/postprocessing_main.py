@@ -829,7 +829,7 @@ class PostProcessor:
         # save the json config
         json_generator_config.save_to_json(
             filename=os.path.join(
-                self.result_data_folder_for_scenario_evaluation, "data_information_for_scenario_evaluation.json"
+                self.result_data_folder_for_scenario_evaluation, "data_for_scenario_evaluation.json"
             )
         )
 

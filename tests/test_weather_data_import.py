@@ -1,5 +1,6 @@
 """Test for weather data import."""
 import datetime
+import shutil
 import pytest
 from hisim.components.weather_data_import import WeatherDataImport
 
@@ -15,7 +16,7 @@ def test_weather_data_import():
     start_date = datetime.datetime(year=2023, month=1, day=1, hour=0, minute=0, second=0)
     end_date = datetime.datetime(year=2024, month=1, day=1, hour=0, minute=0, second=0)
 
-    result_directory = "test"
+    result_directory = "test_weather_data_import"
 
     WeatherDataImport(
         start_date=start_date,
@@ -27,3 +28,5 @@ def test_weather_data_import():
         distance_weather_stations=30,
         weather_data_source="DWD_10MIN",
     )
+
+    shutil.rmtree(result_directory)  # remove result directory

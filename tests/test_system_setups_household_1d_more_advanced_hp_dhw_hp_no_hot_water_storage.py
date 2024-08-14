@@ -22,7 +22,7 @@ def test_basic_household():
         os.remove(config_filename)
 
     path = "../system_setups/household_1d_more_advanced_hp_dhw_hp_no_hot_water_storage.py"
-    mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
+    mysimpar = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
     mysimpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
     hisim_main.main(path, mysimpar)
     log.information(os.getcwd())

@@ -7,13 +7,12 @@ https://solar.htw-berlin.de/wp-content/uploads/WENIGER-2017-Vergleich-verschiede
 """
 
 import os
-from typing import List, Tuple, Union, Dict, Optional
+from typing import List, Tuple, Dict, Optional
 from pathlib import Path
 import pandas as pd
 from hisim.component import ComponentOutput
 from hisim.component_wrapper import ComponentWrapper
-from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes
-from hisim.utils import HISIMPATH
+from hisim.loadtypes import ComponentType, InandOutputType
 from hisim import log
 from hisim.components.electricity_meter import ElectricityMeter
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
@@ -525,7 +524,7 @@ class KpiPreparation:
             self.simulation_parameters.result_directory, "operational_costs_co2_footprint.csv"
         )
         if Path(opex_results_path).exists():
-            opex_df = pd.read_csv(opex_results_path, index_col=0)
+            opex_df = pd.read_csv(opex_results_path, index_col=0, sep=";")
             log.debug("Opex df " + str(opex_df) + "\n")
             total_maintenance_cost_per_simulated_period = opex_df["Maintenance Costs in EUR"].loc[
                 building_object + "_Total"
@@ -536,7 +535,7 @@ class KpiPreparation:
             total_maintenance_cost_per_simulated_period = 0
 
         if Path(capex_results_path).exists():
-            capex_df = pd.read_csv(capex_results_path, index_col=0)
+            capex_df = pd.read_csv(capex_results_path, index_col=0, sep=";")
             log.debug("Capex df " + str(capex_df) + "\n")
             total_investment_cost_per_simulated_period = capex_df["Investment in EUR"].loc[
                 building_object + "_Total_per_simulated_period"

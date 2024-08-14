@@ -35,8 +35,9 @@ def opex_calculation(
 
     for building_object in building_objects_in_district_list:
         total_energy_cost_building_object = 0.0
-        total_maintenace_cost_building_object = 0.0
+        total_maintenance_cost_building_object = 0.0
         total_operational_co2_footprint_building_object = 0.0
+        total_consumption_in_kwh_building_object = 0.0
         for component in components:
             component_unwrapped = component.my_component
             if building_object in str(component_unwrapped.component_name):
@@ -53,8 +54,9 @@ def opex_calculation(
                     co2_footprint = opex_cost_data_class.co2_footprint_in_kg
                     consumption = opex_cost_data_class.consumption_in_kwh
                     total_energy_cost_building_object += cost_energy
-                    total_maintenace_cost_building_object += cost_maintenance
+                    total_maintenance_cost_building_object += cost_maintenance
                     total_operational_co2_footprint_building_object += co2_footprint
+                    total_consumption_in_kwh_building_object += consumption
 
                     opex_table_as_list_of_list.append(
                         [
@@ -68,16 +70,16 @@ def opex_calculation(
         opex_table_as_list_of_list.append(
             [
                 f"{building_object}_Total",
-                round(total_maintenace_cost_building_object, 2),
+                round(total_maintenance_cost_building_object, 2),
                 round(total_operational_co2_footprint_building_object, 2),
-                "---",
+                round(total_consumption_in_kwh_building_object, 2),
             ]
         )
 
-        total_opex_energy_cost += cost_energy
-        total_opex_maintenance_cost += cost_maintenance
-        total_operational_co2_footprint += co2_footprint
-        total_consumption_in_kwh += consumption
+        total_opex_energy_cost += total_energy_cost_building_object
+        total_opex_maintenance_cost += total_maintenance_cost_building_object
+        total_operational_co2_footprint += total_operational_co2_footprint_building_object
+        total_consumption_in_kwh += total_consumption_in_kwh_building_object
 
     opex_table_as_list_of_list.append(
         [
@@ -182,17 +184,18 @@ def capex_calculation(
 
         capex_table_as_list_of_list.append(
             [
-                f"{building_object}_Total",
-                round(total_investment_cost_building_object, 2),
-                round(total_device_co2_footprint_building_object, 2),
-                "---",
-            ]
-        )
-        capex_table_as_list_of_list.append(
-            [
                 f"{building_object}_Total_per_simulated_period",
                 round(total_investment_cost_per_simulated_period_building_object, 2),
                 round(total_device_co2_footprint_per_simulated_period_building_object, 2),
+                "---",
+            ]
+        )
+
+        capex_table_as_list_of_list.append(
+            [
+                f"{building_object}_Total",
+                round(total_investment_cost_building_object, 2),
+                round(total_device_co2_footprint_building_object, 2),
                 "---",
             ]
         )
@@ -206,17 +209,18 @@ def capex_calculation(
 
     capex_table_as_list_of_list.append(
         [
-            "Total",
-            round(total_investment_cost, 2),
-            round(total_device_co2_footprint, 2),
-            "---",
-        ]
-    )
-    capex_table_as_list_of_list.append(
-        [
             "Total_per_simulated_period",
             round(total_investment_cost_per_simulated_period, 2),
             round(total_device_co2_footprint_per_simulated_period, 2),
+            "---",
+        ]
+    )
+
+    capex_table_as_list_of_list.append(
+        [
+            "Total",
+            round(total_investment_cost, 2),
+            round(total_device_co2_footprint, 2),
             "---",
         ]
     )

@@ -133,8 +133,6 @@ class KpiGenerator(JSONWizard, KpiPreparation):
     def sort_kpi_collection_according_to_kpi_tags(self, kpi_collection_dict_unsorted: Dict) -> Dict:
         """Sort KPI collection dict according to KPI tags."""
 
-        # kpi_collection_dict_sorted: Dict[str, Dict] = {}
-
         kpi_collection_dict_sorted: Dict[str, Dict] = {
             building_objects: {} for building_objects in self.building_objects_in_district_list
         }

@@ -581,7 +581,8 @@ class PostProcessor:
     ) -> PostProcessingDataTransfer:
         """Computes KPI's and writes them to report and to ppdt kpi collection."""
         # initialize kpi data class and compute all kpi values
-        kpi_data_class = KpiGenerator(post_processing_data_transfer=ppdt)
+        kpi_data_class = KpiGenerator(post_processing_data_transfer=ppdt,
+                                      building_objects_in_district_list=building_objects_in_district_list)
         # write kpi table to report
         kpi_table = kpi_data_class.return_table_for_report()
         self.write_new_chapter_with_table_to_report(

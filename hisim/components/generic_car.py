@@ -322,7 +322,7 @@ class Car(cp.Component):
         co2_per_simulated_period_in_kg = None
         consumption_in_kwh: float
         consumption_in_liter: float
-        energy_costs_in_euro = 0
+        energy_costs_in_euro = 0.0
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
                 if (
@@ -333,9 +333,8 @@ class Car(cp.Component):
                     consumption_in_liter = round(sum(postprocessing_results.iloc[:, index]), 1)
                     # heating value: https://nachhaltigmobil.schule/leistung-energie-verbrauch/#:~:text=Benzin%20hat%20einen%20Heizwert%20von,9%2C8%20kWh%20pro%20Liter.
                     heating_value_of_diesel_in_kwh_per_liter = 9.8
-                    consumption_in_kwh = (
-                            heating_value_of_diesel_in_kwh_per_liter * consumption_in_liter
-                    )
+                    consumption_in_kwh = heating_value_of_diesel_in_kwh_per_liter * consumption_in_liter
+
                     emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
                         self.my_simulation_parameters.year
                     )

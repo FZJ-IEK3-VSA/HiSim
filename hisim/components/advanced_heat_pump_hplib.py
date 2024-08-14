@@ -80,8 +80,6 @@ class HeatPumpHplibConfig(ConfigBase):
     lifetime: Quantity[float, Years]
     # maintenance cost as share of investment [0..1]
     maintenance_cost_as_percentage_of_investment: float
-    #: consumption of the heatpump in kWh
-    consumption: Quantity[float, KilowattHour]
 
     @classmethod
     def get_default_generic_advanced_hp_lib(

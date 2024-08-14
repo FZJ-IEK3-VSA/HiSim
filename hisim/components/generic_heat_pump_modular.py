@@ -112,7 +112,7 @@ class HeatPumpConfig(cp.ConfigBase):
         return config
 
     @staticmethod
-    def get_default_config_heating_electric() -> "HeatPumpConfig":
+    def get_default_config_heating_electric(building_name: str = "BUI1",) -> "HeatPumpConfig":
         """Returns default configuartion of simple electrical heating system with a COP of one."""
         power_th: float = 6200  # W
         config = HeatPumpConfig(
@@ -420,8 +420,8 @@ class ModularHeatPump(cp.Component):
 
         for index, output in enumerate(all_outputs):
             if (
-                output.component_name == self.component_name
-                and output.load_type == lt.LoadTypes.ELECTRICITY and output.field_name == self.ElectricityOutput
+                    output.component_name == self.component_name
+                    and output.load_type == lt.LoadTypes.ELECTRICITY and output.field_name == self.ElectricityOutput
             ):  # Todo: check component name from system_setups: find another way of using only heatpump-outputs
                 consumption_in_kwh = round(
                     sum(postprocessing_results.iloc[:, index])

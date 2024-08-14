@@ -339,6 +339,7 @@ class Battery(Component):
                     ) * (-1)
                     battery_losses_in_kwh = self.battery_config.charge_in_kwh - self.battery_config.discharge_in_kwh
 
+
         opex_cost_data_class = OpexCostDataClass(
             opex_energy_cost_in_euro=0,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),

@@ -162,6 +162,8 @@ class KpiPreparation:
         total_electricity_consumption_in_kilowatt_hour = (
             total_electricity_consumption_in_kilowatt_hour + battery_losses_in_kilowatt_hour
         )
+        log.debug("Battery losses " + str(battery_losses_in_kilowatt_hour))
+        log.debug("Total electricity consumption (battery losses included) " + str(total_electricity_consumption_in_kilowatt_hour))
 
         # make kpi entry
         total_consumtion_entry = KpiEntry(
@@ -512,6 +514,7 @@ class KpiPreparation:
 
         if Path(capex_results_path).exists():
             capex_df = pd.read_csv(capex_results_path, index_col=0)
+            log.debug("Capex df " + str(capex_df) + "\n")
             total_investment_cost_per_simulated_period = capex_df["Investment in EUR"].iloc[-1]
             total_device_co2_footprint_per_simulated_period = capex_df["Device CO2-footprint in kg"].iloc[-1]
         else:

@@ -296,7 +296,6 @@ class CarBattery(Component):
         capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
         return capex_cost_data_class
 
-
     def get_component_kpi_entries(
         self,
         all_outputs: List,

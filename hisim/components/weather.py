@@ -922,6 +922,7 @@ class Weather(Component):
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         return []
 
+
 def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Any:
     """Reads a test reference year file and gets the GHI, DHI and DNI from it.
 

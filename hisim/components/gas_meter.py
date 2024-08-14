@@ -355,12 +355,12 @@ class GasMeter(DynamicComponent):
 
         return list_of_kpi_entries
 
-
     @staticmethod
     def get_cost_capex(config: GasMeterConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
         capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
         return capex_cost_data_class
+
 
 @dataclass
 class GasMeterState:

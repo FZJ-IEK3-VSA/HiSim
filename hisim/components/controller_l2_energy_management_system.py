@@ -791,3 +791,26 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         list_of_kpi_entries.append(occupancy_electricity_from_grid_entry)
 
         return list_of_kpi_entries
+
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> cp.OpexCostDataClass:
+        """Calculate OPEX costs, consisting of electricity costs and revenues."""
+        opex_cost_data_class = cp.OpexCostDataClass.get_default_opex_cost_data_class()
+        return opex_cost_data_class
+
+    @staticmethod
+    def get_cost_capex(config: EMSConfig, simulation_parameters: SimulationParameters) -> cp.CapexCostDataClass:  # pylint: disable=unused-argument
+        """Returns investment cost, CO2 emissions and lifetime."""
+        capex_cost_data_class = cp.CapexCostDataClass.get_default_capex_cost_data_class()
+        return capex_cost_data_class
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        return []

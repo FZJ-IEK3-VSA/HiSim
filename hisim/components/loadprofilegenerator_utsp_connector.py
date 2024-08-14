@@ -791,36 +791,6 @@ class UtspLpgConnector(cp.Component):
         """Adds a report entry for this component."""
         return self.utsp_config.get_string_dict()
 
-    def get_cost_opex(
-        self,
-        all_outputs: List,
-        postprocessing_results: pd.DataFrame,
-    ) -> OpexCostDataClass:
-        """Calculate OPEX costs, snd write total energy consumption to component-config.
-
-        No electricity costs for components except for Electricity Meter,
-        because part of electricity consumption is feed by PV
-        """
-        for index, output in enumerate(all_outputs):
-            if output.component_name == self.config.name and output.load_type == lt.LoadTypes.ELECTRICITY and output.field_name == self.ElectricityOutput:
-                occupancy_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]
-                self.utsp_config.consumption_in_kwh = (
-                KpiHelperClass.compute_total_energy_from_power_timeseries(
-                    power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
-                    timeresolution=self.my_simulation_parameters.seconds_per_timestep)
-                )
-
-        opex_cost_data_class = OpexCostDataClass(
-            opex_energy_cost_in_euro=0,
-            opex_maintenance_cost_in_euro=0,
-            co2_footprint_in_kg=0,
-            consumption_in_kwh=self.utsp_config.consumption_in_kwh,
-            loadtype=lt.LoadTypes.ELECTRICITY,
-            kpi_tag=KpiTagEnumClass.RESIDENTS
-        )
-
-        return opex_cost_data_class
-
     def get_list_of_file_exists_bools_and_cache_file_paths(self, cache_dir_path: Optional[str]) -> Tuple[List, List]:
         """Check if file exists and get cache_filepath and put in list."""
 
@@ -1428,3 +1398,39 @@ class UtspLpgConnector(cp.Component):
 
         list_of_kpi_entries = [occupancy_total_electricity_consumption_entry]
         return list_of_kpi_entries
+
+    @staticmethod
+    def get_cost_capex(config: UtspLpgConnectorConfig, simulation_parameters: SimulationParameters) -> cp.CapexCostDataClass:  # pylint: disable=unused-argument
+        """Returns investment cost, CO2 emissions and lifetime."""
+        capex_cost_data_class = cp.CapexCostDataClass.get_default_capex_cost_data_class()
+        return capex_cost_data_class
+
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> OpexCostDataClass:
+        """Calculate OPEX costs, snd write total energy consumption to component-config.
+
+        No electricity costs for components except for Electricity Meter,
+        because part of electricity consumption is feed by PV
+        """
+        for index, output in enumerate(all_outputs):
+            if output.component_name == self.config.name and output.load_type == lt.LoadTypes.ELECTRICITY and output.field_name == self.ElectricityOutput:
+                occupancy_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]
+                self.utsp_config.consumption_in_kwh = (
+                KpiHelperClass.compute_total_energy_from_power_timeseries(
+                    power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
+                    timeresolution=self.my_simulation_parameters.seconds_per_timestep)
+                )
+
+        opex_cost_data_class = OpexCostDataClass(
+            opex_energy_cost_in_euro=0,
+            opex_maintenance_cost_in_euro=0,
+            co2_footprint_in_kg=0,
+            consumption_in_kwh=self.utsp_config.consumption_in_kwh,
+            loadtype=lt.LoadTypes.ELECTRICITY,
+            kpi_tag=KpiTagEnumClass.RESIDENTS
+        )
+
+        return opex_cost_data_class

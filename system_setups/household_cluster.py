@@ -146,7 +146,7 @@ def setup_function(
     # Set Simulation Parameters
     if my_simulation_parameters is None:
         year = 2021
-        seconds_per_timestep = 60 * 15
+        seconds_per_timestep = 60 * 60
         my_simulation_parameters = SimulationParameters.full_year(
             year=year, seconds_per_timestep=seconds_per_timestep
         )

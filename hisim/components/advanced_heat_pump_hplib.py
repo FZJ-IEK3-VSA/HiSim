@@ -1264,6 +1264,29 @@ class HeatPumpHplibController(Component):
 
         return cooling_mode
 
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> OpexCostDataClass:
+        """Calculate OPEX costs, consisting of electricity costs and revenues."""
+        opex_cost_data_class = OpexCostDataClass.get_default_opex_cost_data_class()
+        return opex_cost_data_class
+
+    @staticmethod
+    def get_cost_capex(config: HeatPumpHplibControllerL1Config, simulation_parameters: SimulationParameters) -> CapexCostDataClass:  # pylint: disable=unused-argument
+        """Returns investment cost, CO2 emissions and lifetime."""
+        capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
+        return capex_cost_data_class
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        return []
+
 
 @dataclass
 class CalculationRequest(JSONWizard):

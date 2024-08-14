@@ -24,7 +24,7 @@ from hisim.component import (
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
 
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -339,7 +339,6 @@ class Battery(Component):
                     ) * (-1)
                     battery_losses_in_kwh = self.battery_config.charge_in_kwh - self.battery_config.discharge_in_kwh
 
-
         opex_cost_data_class = OpexCostDataClass(
             opex_energy_cost_in_euro=0,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
@@ -350,6 +349,14 @@ class Battery(Component):
         )
 
         return opex_cost_data_class
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        return []
 
 
 @dataclass

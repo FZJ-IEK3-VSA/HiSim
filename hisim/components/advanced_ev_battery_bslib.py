@@ -21,10 +21,11 @@ from hisim.component import (
     SingleTimeStepValues,
     OpexCostDataClass,
     DisplayConfig,
+    CapexCostDataClass
 )
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
 
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -288,6 +289,21 @@ class CarBattery(Component):
         )
 
         return opex_cost_data_class
+
+    @staticmethod
+    def get_cost_capex(config: CarBatteryConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:  # pylint: disable=unused-argument
+        """Returns investment cost, CO2 emissions and lifetime."""
+        capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
+        return capex_cost_data_class
+
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        return []
 
 
 @dataclass

@@ -574,6 +574,7 @@ class GenericHeatPump(cp.Component):
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         return []
 
+
 class GenericHeatPumpController(cp.Component):
 
     """Heat Pump Controller.

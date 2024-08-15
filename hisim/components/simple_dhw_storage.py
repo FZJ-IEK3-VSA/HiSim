@@ -65,7 +65,7 @@ class SimpleDHWStorageConfig(cp.ConfigBase):
             building_name=building_name,
             name="DHWStorage",
             volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
-            heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,
+            heat_transfer_coefficient_in_watt_per_m2_per_kelvin=0.36,
             co2_footprint=100,  # Todo: check value
             cost=volume_heating_water_storage_in_liter * 14.51,  # value from emission_factros_and_costs_devices.csv
             lifetime=25,  # value from emission_factors_and_costs_devices.csv
@@ -90,7 +90,7 @@ class SimpleDHWStorageConfig(cp.ConfigBase):
             building_name=building_name,
             name=name,
             volume_heating_water_storage_in_liter=volume,
-            heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,
+            heat_transfer_coefficient_in_watt_per_m2_per_kelvin=0.36,
             co2_footprint=100,  # Todo: check value
             cost=volume * 14.51,  # value from emission_factros_and_costs_devices.csv
             lifetime=25,  # value from emission_factors_and_costs_devices.csv
@@ -159,7 +159,7 @@ class SimpleDHWStorage(cp.Component):
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
         self.waterstorageconfig = config
 
-        self.mean_water_temperature_in_water_storage_in_celsius: float = 45
+        self.mean_water_temperature_in_water_storage_in_celsius: float = 60
 
         self.build()
 

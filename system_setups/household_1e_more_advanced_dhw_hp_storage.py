@@ -344,9 +344,9 @@ def setup_function(
         my_building, my_heat_distribution_controller, my_hot_water_storage)
 
     #################################
-    my_heatpump.connect_only_predefined_connections(
-        my_heatpump_controller_space_heating, my_heatpump_controller_dhw, my_weather, my_hot_water_storage,
-        )
+    my_heatpump.connect_only_predefined_connections(my_heatpump_controller_space_heating,
+                                                    my_heatpump_controller_dhw, my_weather, my_hot_water_storage,)
+
     my_heatpump.connect_input(
         my_heatpump.TemperatureInputSecondary_DHW,
         my_dhw_storage.component_name,

@@ -83,7 +83,7 @@ class HouseholdMoreAdvancedHPDieselCarConfig(SystemSetupConfigBase):
         household_config.hp_config.set_thermal_output_power_in_watt = Quantity(
             6000, Watt  # default value leads to switching on-off very often
         )
-        household_config.dhw_storage_config.volume_heating_water_storage_in_liter = 130  # default(volume = 230) leads to an error
+        household_config.dhw_storage_config.volume_heating_water_storage_in_liter = 250  # default(volume = 230) leads to an error
 
         return household_config
 
@@ -149,7 +149,7 @@ class HouseholdMoreAdvancedHPDieselCarConfig(SystemSetupConfigBase):
                 sizing_option=simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
             ),
             dhw_heatpump_controller_config=more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.get_default_dhw_controller_config(),
-            dhw_storage_config=generic_hot_water_storage_modular_kopie2.SimpleDHWStorageConfig.get_default_simpledhwstorage_config(),
+            dhw_storage_config=simple_dhw_storage.SimpleDHWStorageConfig.get_default_simpledhwstorage_config(),
             car_config=generic_car.CarConfig.get_default_diesel_config(),
             electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
         )
@@ -294,7 +294,7 @@ def setup_function(
     my_dhw_storage_config = my_config.dhw_storage_config
     my_dhw_storage_config.name = "DHWStorage"
 
-    my_dhw_storage = generic_hot_water_storage_modular_kopie2.SimpleDHWStorage(
+    my_dhw_storage = simple_dhw_storage.SimpleDHWStorage(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 

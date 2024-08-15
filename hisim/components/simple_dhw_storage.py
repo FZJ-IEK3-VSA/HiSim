@@ -7,8 +7,7 @@ DHW hot water storage or as buffer storage.
 
 import importlib
 from dataclasses import dataclass
-from typing import List, Any, Tuple, Union
-from enum import IntEnum
+from typing import List, Any, Tuple
 import numpy as np
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -81,7 +80,6 @@ class SimpleDHWStorageConfig(cp.ConfigBase):
         default_volume_in_liter: float = 350.0,
         name: str = "DHWStorage",
         building_name: str = "BUI1",
-
     ) -> "SimpleDHWStorageConfig":
         """Gets a default storage with scaling according to number of apartments."""
 
@@ -319,7 +317,7 @@ class SimpleDHWStorage(cp.Component):
         return connections
 
     def get_default_connections_from_utsp(
-            self,
+        self,
     ) -> List[cp.ComponentConnection]:
         """Get advanced het pump default connections."""
 
@@ -338,7 +336,9 @@ class SimpleDHWStorage(cp.Component):
         )
         return connections
 
-    def build(self,) -> None:
+    def build(
+        self,
+    ) -> None:
         """Build function.
 
         The function sets important constants an parameters for the calculations.
@@ -346,8 +346,8 @@ class SimpleDHWStorage(cp.Component):
         self.drain_water_temperature = configuration.HouseholdWarmWaterDemandConfig.freshwater_temperature
 
         self.warm_water_temperature = (
-                configuration.HouseholdWarmWaterDemandConfig.ww_temperature_demand
-                - configuration.HouseholdWarmWaterDemandConfig.temperature_difference_hot
+            configuration.HouseholdWarmWaterDemandConfig.ww_temperature_demand
+            - configuration.HouseholdWarmWaterDemandConfig.temperature_difference_hot
         )
 
         self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = (
@@ -361,8 +361,8 @@ class SimpleDHWStorage(cp.Component):
 
         # physical parameters of storage
         self.water_mass_in_storage_in_kg = (
-                self.density_water_at_40_degree_celsius_in_kg_per_liter
-                * self.waterstorageconfig.volume_heating_water_storage_in_liter
+            self.density_water_at_40_degree_celsius_in_kg_per_liter
+            * self.waterstorageconfig.volume_heating_water_storage_in_liter
         )
         self.heat_transfer_coefficient_in_watt_per_m2_per_kelvin = (
             self.waterstorageconfig.heat_transfer_coefficient_in_watt_per_m2_per_kelvin
@@ -398,14 +398,20 @@ class SimpleDHWStorage(cp.Component):
 
         # Get inputs --------------------------------------------------------------------------------------------------------
 
-        state_controller = stsv.get_input_value(self.state_channel)
-
         water_temperature_input_of_dhw_in_celsius = self.drain_water_temperature
         water_temperature_output_of_dhw_in_celsius = self.warm_water_temperature
-        water_mass_flow_rate_of_dhw_in_kg_per_second = stsv.get_input_value(self.water_consumption_channel)*self.density_water_at_40_degree_celsius_in_kg_per_liter/self.seconds_per_timestep
-        
-        water_temperature_from_heat_generator_in_celsius = stsv.get_input_value(self.water_temperature_heat_generator_input_channel)
-        water_mass_flow_rate_from_heat_generator_in_kg_per_second = stsv.get_input_value(self.water_mass_flow_rate_heat_generator_input_channel)
+        water_mass_flow_rate_of_dhw_in_kg_per_second = (
+            stsv.get_input_value(self.water_consumption_channel)
+            * self.density_water_at_40_degree_celsius_in_kg_per_liter
+            / self.seconds_per_timestep
+        )
+
+        water_temperature_from_heat_generator_in_celsius = stsv.get_input_value(
+            self.water_temperature_heat_generator_input_channel
+        )
+        water_mass_flow_rate_from_heat_generator_in_kg_per_second = stsv.get_input_value(
+            self.water_mass_flow_rate_heat_generator_input_channel
+        )
 
         # Water Temperature Limit Check  --------------------------------------------------------------------------------------------------------
 
@@ -458,9 +464,7 @@ class SimpleDHWStorage(cp.Component):
             water_temperature_hot_in_celsius=water_temperature_output_of_dhw_in_celsius,
         )
 
-        (heat_loss_in_watt,
-        temperature_loss_in_celsius_per_timestep
-        ) = self.calculate_heat_loss_and_temperature_loss(
+        (heat_loss_in_watt, temperature_loss_in_celsius_per_timestep) = self.calculate_heat_loss_and_temperature_loss(
             storage_surface_in_m2=self.storage_surface_in_m2,
             seconds_per_timestep=self.seconds_per_timestep,
             mean_water_temperature_in_water_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
@@ -482,7 +486,6 @@ class SimpleDHWStorage(cp.Component):
             previous_mean_water_temperature_in_water_storage_in_celsius=self.state.mean_water_temperature_in_celsius,
         )
 
-        water_temperature_to_dhw_in_celsius = self.state.mean_water_temperature_in_celsius
         water_temperature_to_heat_generator_in_celsius = self.state.mean_water_temperature_in_celsius
 
         # Set outputs -------------------------------------------------------------------------------------------------------
@@ -548,8 +551,8 @@ class SimpleDHWStorage(cp.Component):
         self.state.heat_loss_in_watt = heat_loss_in_watt
         self.state.temperature_loss_in_celsius_per_timestep = temperature_loss_in_celsius_per_timestep
 
-
-        self.state.mean_water_temperature_in_celsius = (self.mean_water_temperature_in_water_storage_in_celsius- temperature_loss_in_celsius_per_timestep
+        self.state.mean_water_temperature_in_celsius = (
+            self.mean_water_temperature_in_water_storage_in_celsius - temperature_loss_in_celsius_per_timestep
         )
 
     def calculate_masses_of_water_flows(
@@ -563,9 +566,7 @@ class SimpleDHWStorage(cp.Component):
         mass_of_input_water_flows_from_heat_generator_in_kg = (
             water_mass_flow_rate_from_heat_generator_in_kg_per_second * seconds_per_timestep
         )
-        mass_of_input_water_flows_of_dhw_in_kg = (
-            water_mass_flow_rate_of_dhw_in_kg_per_second * seconds_per_timestep
-        )
+        mass_of_input_water_flows_of_dhw_in_kg = water_mass_flow_rate_of_dhw_in_kg_per_second * seconds_per_timestep
 
         return (
             mass_of_input_water_flows_from_heat_generator_in_kg,
@@ -586,8 +587,7 @@ class SimpleDHWStorage(cp.Component):
         mean_water_temperature_in_water_storage_in_celsius = (
             water_mass_in_storage_in_kg * previous_mean_water_temperature_in_water_storage_in_celsius
             + mass_of_input_water_flows_from_heat_generator_in_kg * water_temperature_from_heat_generator_in_celsius
-            + mass_of_input_water_flows_of_dhw_in_kg
-            * water_temperature_input_of_dhw_in_celsius
+            + mass_of_input_water_flows_of_dhw_in_kg * water_temperature_input_of_dhw_in_celsius
         ) / (
             water_mass_in_storage_in_kg
             + mass_of_input_water_flows_from_heat_generator_in_kg
@@ -693,7 +693,7 @@ class SimpleDHWStorage(cp.Component):
             (1 / 3600)
             * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
             * water_mass_in_kg
-            * (water_temperature_hot_in_celsius-water_temperature_cold_in_celsius)
+            * (water_temperature_hot_in_celsius - water_temperature_cold_in_celsius)
         )
 
         return thermal_energy_of_input_water_flow_in_watt_hour
@@ -729,8 +729,7 @@ class SimpleDHWStorage(cp.Component):
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=0,
             consumption_in_kwh=0,
-            loadtype=lt.LoadTypes.ANY
+            loadtype=lt.LoadTypes.ANY,
         )
 
         return opex_cost_data_class
-

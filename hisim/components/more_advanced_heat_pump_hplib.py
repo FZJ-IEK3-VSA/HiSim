@@ -1260,7 +1260,6 @@ class MoreAdvancedHeatPumpHPLib(Component):
         stsv.set_output_value(self.eer, eer)
         stsv.set_output_value(self.heatpump_state, on_off)
         stsv.set_output_value(self.t_in_sh, t_in_secondary_sh)
-        stsv.set_output_value(self.t_in_dhw, t_in_secondary_dhw)
         stsv.set_output_value(self.t_out_sh, t_out_sh)
         stsv.set_output_value(self.m_dot_sh, m_dot_sh)
         stsv.set_output_value(self.time_on_heating, time_on_heating)
@@ -1289,6 +1288,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         if self.with_domestic_hot_water_preparation:
             stsv.set_output_value(self.p_th_dhw, p_th_dhw)
             stsv.set_output_value(self.p_el_dhw, p_el_dhw)
+            stsv.set_output_value(self.t_in_dhw, t_in_secondary_dhw)
             stsv.set_output_value(self.t_out_dhw, t_out_dhw)
             stsv.set_output_value(self.m_dot_dhw, m_dot_dhw)
             stsv.set_output_value(self.thermal_energy_hp_dhw_channel, thermal_energy_hp_dhw_in_watt_hour)

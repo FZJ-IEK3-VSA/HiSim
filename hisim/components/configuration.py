@@ -236,7 +236,7 @@ class PhysicsConfig:
     """Physics config class."""
 
     water_density = 1000  # [kg/m^3]
-    water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin = 4_180  # J/kgK
+    water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin = 4180  # J/kgK
     water_specific_heat_capacity_in_watthour_per_kilogramm_per_kelvin = 1.163  # Wh/kgK
 
     # Schmidt 2020: Wasserstofftechnik  S.170ff

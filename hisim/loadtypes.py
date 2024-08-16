@@ -130,6 +130,8 @@ class Units(str, enum.Enum):
     # Energy
     WATT_HOUR = "Wh"
     KWH = "kWh"
+    JOULE = "J"
+    KILOJOULE = "kJ"
 
     # Volume
     LITER = "L"

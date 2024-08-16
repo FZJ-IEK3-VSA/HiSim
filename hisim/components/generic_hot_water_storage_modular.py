@@ -83,7 +83,7 @@ class StorageConfig(cp.ConfigBase):
     ) -> "StorageConfig":
         """Returns default configuration for boiler."""
 
-        volume = 230
+        volume = 250
         radius = (volume * 1e-3 / (4 * np.pi)) ** (1 / 3)  # l to m^3 so that radius is given in m
         surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
         config = StorageConfig(
@@ -107,7 +107,7 @@ class StorageConfig(cp.ConfigBase):
     def get_scaled_config_for_boiler_to_number_of_apartments(
         cls,
         number_of_apartments: float,
-        default_volume_in_liter: float = 230.0,
+        default_volume_in_liter: float = 250.0,
         name: str = "DHWBoiler",
         building_name: str = "BUI1",
     ) -> "StorageConfig":
@@ -350,7 +350,7 @@ class HotWaterStorage(cp.Component):
             self.component_name,
             self.PowerFromHotWaterStorage,
             lt.LoadTypes.HEATING,
-            lt.Units.WATT,
+            lt.Units.KILOJOULE,
             postprocessing_flag=[
                 lt.InandOutputType.DISCHARGE,
                 self.use,

@@ -59,7 +59,7 @@ class SimpleDHWStorageConfig(cp.ConfigBase):
         building_name: str = "BUI1",
     ) -> "SimpleDHWStorageConfig":
         """Get a default simplehotwaterstorage config."""
-        volume_heating_water_storage_in_liter: float = 350
+        volume_heating_water_storage_in_liter: float = 250
 
         config = SimpleDHWStorageConfig(
             building_name=building_name,
@@ -77,7 +77,7 @@ class SimpleDHWStorageConfig(cp.ConfigBase):
     def get_scaled_dhw_storage(
         cls,
         number_of_apartments: int = 1,
-        default_volume_in_liter: float = 350.0,
+        default_volume_in_liter: float = 250.0,
         name: str = "DHWStorage",
         building_name: str = "BUI1",
     ) -> "SimpleDHWStorageConfig":
@@ -137,7 +137,8 @@ class SimpleDHWStorage(cp.Component):
     ThermalEnergyFromHeatGenerator = "ThermalEnergyFromHeatGenerator"
     ThermalEnergyConsumptionDHW = "ThermalEnergyConsumptionDHW"
     ThermalEnergyIncreaseInStorage = "ThermalEnergyIncreaseInStorage"
-
+    ThermalPowerConsumptionDHW = "ThermalPowerConsumptionDHW"
+    ThermalPowerFromHeatGenerator = "ThermalPowerFromHeatGenerator"
     StandbyHeatLoss = "StandbyHeatLoss"
 
     @utils.measure_execution_time
@@ -286,6 +287,23 @@ class SimpleDHWStorage(cp.Component):
             lt.Units.WATT,
             output_description=f"here a description for {self.StandbyHeatLoss} will follow.",
         )
+
+        self.thermal_power_dhw_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.ThermalPowerConsumptionDHW,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=f"here a description for {self.ThermalPowerConsumptionDHW} will follow.",
+        )
+
+        self.thermal_power_from_heat_generator_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.ThermalPowerFromHeatGenerator,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=f"here a description for {self.ThermalPowerFromHeatGenerator} will follow.",
+        )
+
         self.add_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
         self.add_default_connections(self.get_default_connections_from_utsp())
 
@@ -464,6 +482,8 @@ class SimpleDHWStorage(cp.Component):
             water_temperature_hot_in_celsius=water_temperature_output_of_dhw_in_celsius,
         )
 
+        # calc thermal power
+        # ------------------------------
         (heat_loss_in_watt, temperature_loss_in_celsius_per_timestep) = self.calculate_heat_loss_and_temperature_loss(
             storage_surface_in_m2=self.storage_surface_in_m2,
             seconds_per_timestep=self.seconds_per_timestep,
@@ -471,6 +491,16 @@ class SimpleDHWStorage(cp.Component):
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=self.heat_transfer_coefficient_in_watt_per_m2_per_kelvin,
             mass_in_storage_in_kg=self.water_mass_in_storage_in_kg,
             ambient_temperature_in_celsius=self.ambient_temperature_in_celsius,
+        )
+        thermal_power_from_heat_generator_in_watt = self.calculate_thermal_power_of_water_flow(
+            water_mass_flow_in_kg_per_s=water_mass_flow_rate_from_heat_generator_in_kg_per_second,
+            water_temperature_cold_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
+            water_temperature_hot_in_celsius=water_temperature_from_heat_generator_in_celsius,
+        )
+        thermal_power_consumption_of_dhw_in_watt = self.calculate_thermal_power_of_water_flow(
+            water_mass_flow_in_kg_per_s=water_mass_flow_rate_of_dhw_in_kg_per_second,
+            water_temperature_cold_in_celsius=water_temperature_input_of_dhw_in_celsius,
+            water_temperature_hot_in_celsius=water_temperature_output_of_dhw_in_celsius,
         )
 
         # calc water temperatures
@@ -544,6 +574,15 @@ class SimpleDHWStorage(cp.Component):
             heat_loss_in_watt,
         )
 
+        stsv.set_output_value(
+            self.thermal_power_dhw_channel,
+            thermal_power_consumption_of_dhw_in_watt,
+        )
+
+        stsv.set_output_value(
+            self.thermal_power_from_heat_generator_channel,
+            thermal_power_from_heat_generator_in_watt,
+        )
         # Set state -------------------------------------------------------------------------------------------------------
 
         # calc heat loss in W and the temperature loss
@@ -709,6 +748,19 @@ class SimpleDHWStorage(cp.Component):
         )
 
         return thermal_energy_difference_in_watt_hour
+
+    def calculate_thermal_power_of_water_flow(
+        self, water_mass_flow_in_kg_per_s: float, water_temperature_cold_in_celsius: float, water_temperature_hot_in_celsius: float
+    ) -> float:
+        """Calculate thermal energy of the water flow with respect to 0°C temperature."""
+
+        thermal_power_of_input_water_flow_in_watt = (
+            self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
+            * water_mass_flow_in_kg_per_s
+            * (water_temperature_hot_in_celsius - water_temperature_cold_in_celsius)
+        )
+
+        return thermal_power_of_input_water_flow_in_watt
 
     @staticmethod
     def get_cost_capex(

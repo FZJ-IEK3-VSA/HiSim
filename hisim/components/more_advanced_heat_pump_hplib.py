@@ -1336,7 +1336,8 @@ class MoreAdvancedHeatPumpHPLib(Component):
         consumption_in_kwh: float
 
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.component_name and output.load_type == LoadTypes.ELECTRICITY:
+            if (output.component_name == self.component_name and output.load_type == LoadTypes.ELECTRICITY and
+                    output.field_name == self.ElectricalInputPowerTotal) :
                 consumption_in_kwh = round(
                     sum(postprocessing_results.iloc[:, index])
                     * self.my_simulation_parameters.seconds_per_timestep

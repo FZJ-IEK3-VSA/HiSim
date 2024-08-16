@@ -83,7 +83,7 @@ class HouseholdMoreAdvancedHPDieselCarDHWStorageConfig(SystemSetupConfigBase):
         household_config.hp_config.set_thermal_output_power_in_watt = Quantity(
             6000, Watt  # default value leads to switching on-off very often
         )
-        household_config.dhw_storage_config.volume_heating_water_storage_in_liter = 250  # default(volume = 230) leads to an error
+        household_config.dhw_storage_config.volume_heating_water_storage_in_liter = 100  # default(volume = 230) leads to an error
 
         return household_config
 
@@ -92,7 +92,7 @@ class HouseholdMoreAdvancedHPDieselCarDHWStorageConfig(SystemSetupConfigBase):
             cls,
             building_config: building.BuildingConfig,
             options: HouseholdMoreAdvancedHPDieselCarDHWStorageOptions = HouseholdMoreAdvancedHPDieselCarDHWStorageOptions()
-    ) -> "HouseholdMoreAdvancedHPDieselCarConfig":
+    ) -> "HouseholdMoreAdvancedHPDieselCarDHWStorageConfig":
         """Get scaled default HouseholdMoreAdvancedHPDieselCarConfig."""
 
         set_heating_threshold_outside_temperature_in_celsius: float = 16.0

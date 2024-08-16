@@ -124,7 +124,6 @@ class SimpleDHWStorage(cp.Component):
     WaterTemperatureFromHeatGenerator = "WaterTemperatureFromHeatGenerator"
     WaterMassFlowRateFromHeatGenerator = "WaterMassFlowRateFromHeatGenerator"
     WaterConsumption = "WaterConsumption"
-    State = "State"
 
     # Output
     # WaterTemperatureInputDHW = "WaterTemperatureInputDHW"
@@ -194,9 +193,6 @@ class SimpleDHWStorage(cp.Component):
             lt.LoadTypes.WARM_WATER,
             lt.Units.KG_PER_SEC,
             True,
-        )
-        self.state_channel: cp.ComponentInput = self.add_input(
-            self.component_name, self.State, lt.LoadTypes.ANY, lt.Units.ANY, False
         )
 
         # Output channels

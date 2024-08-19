@@ -65,6 +65,8 @@ class ElectricityMeter(DynamicComponent):
     CumulativeProduction = "CumulativeProduction"
     ElectricityToGridInWatt = "ElectricityToGridInWatt"
     ElectricityFromGridInWatt = "ElectricityFromGridInWatt"
+    ElectricityProductionInWatt = "ElectricityProductionInWatt"
+    ElectricityConsumptionInWatt = "ElectricityConsumptionInWatt"
 
     def __init__(
         self,
@@ -102,15 +104,6 @@ class ElectricityMeter(DynamicComponent):
             unit=lt.Units.WATT,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityToGridInWatt} will follow.",
-            postprocessing_flag=(
-                [
-                    lt.InandOutputType.ELECTRICITY_PRODUCTION,
-                    lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
-                ]
-                if any(word in config.building_name.lower() for word in ["quartier", "bezirk", "district",
-                                                                         "area", "neighborhood"])
-                else []
-            ),
         )
         self.electricity_from_grid_in_watt_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -119,6 +112,23 @@ class ElectricityMeter(DynamicComponent):
             unit=lt.Units.WATT,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityFromGridInWatt} will follow.",
+        )
+        self.electricity_production_in_watt_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricityProductionInWatt,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.ElectricityProductionInWatt} will follow.",
+        )
+
+        self.electricity_consumption_uncontrolled_in_watt_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricityConsumptionInWatt,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.ElectricityConsumptionInWatt} will follow.",
             postprocessing_flag=(
                 [
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
@@ -386,6 +396,16 @@ class ElectricityMeter(DynamicComponent):
                 if difference_between_production_and_consumption_in_watt < 0
                 else 0
             ),
+        )
+
+        stsv.set_output_value(
+            self.electricity_production_in_watt_channel,
+            production_in_watt,
+        )
+
+        stsv.set_output_value(
+            self.electricity_consumption_uncontrolled_in_watt_channel,
+            consumption_uncontrolled_in_watt,
         )
 
         stsv.set_output_value(

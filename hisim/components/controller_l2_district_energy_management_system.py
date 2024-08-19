@@ -9,7 +9,7 @@ The component with the lowest source weight is activated first.
 # clean
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Any, List, Tuple, Union, Optional
+from typing import Any, List, Tuple, Union
 from collections import OrderedDict
 from dataclasses_json import dataclass_json
 import pandas as pd
@@ -152,7 +152,12 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
     ElectricityToElectrolyzerTarget = "ElectricityToElectrolyzerTarget"
 
     TotalElectricityToOrFromGrid = "TotalElectricityToOrFromGrid"
+    TotalElectricityToGrid = "TotalElectricityToGrid"
+    TotalElectricityFromGrid = "TotalElectricityFromGrid"
     TotalElectricityConsumption = "TotalElectricityConsumption"
+    ElectricityProduction = "ElectricityProduction"
+    TotalElectricityConsumptionEMSControlled = "TotalElectricityConsumptionEMSControlled"
+    TotalElectricityConsumptionUnControlled = "TotalElectricityConsumptionUnControlled"
     BuildingIndoorTemperatureModifier = "BuildingIndoorTemperatureModifier"  # connect to HDS controller and Building
     DomesticHotWaterStorageTemperatureModifier = (
         "DomesticHotWaterStorageTemperatureModifier"  # used for L1HeatPumpController  # Todo: change name?
@@ -235,6 +240,24 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
             output_description=f"here a description for {self.TotalElectricityToOrFromGrid} will follow.",
         )
 
+        self.total_electricity_to_grid: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.TotalElectricityToGrid,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.TotalElectricityToGrid} will follow.",
+        )
+
+        self.total_electricity_from_grid: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.TotalElectricityFromGrid,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.TotalElectricityFromGrid} will follow.",
+        )
+
         self.total_electricity_consumption_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.TotalElectricityConsumption,
@@ -242,6 +265,33 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
             unit=lt.Units.WATT,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.TotalElectricityConsumption} will follow.",
+        )
+
+        self.total_electricity_consumption_ems_controlled_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.TotalElectricityConsumptionEMSControlled,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.TotalElectricityConsumptionEMSControlled} will follow.",
+        )
+
+        self.electricity_production_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricityProduction,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.ElectricityProduction} will follow.",
+        )
+
+        self.total_electricity_consumption_uncontrolled_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.TotalElectricityConsumptionUnControlled,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.TotalElectricityConsumptionUnControlled} will follow.",
         )
 
         self.building_indoor_temperature_modifier: cp.ComponentOutput = self.add_output(
@@ -693,10 +743,18 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
             )
 
         stsv.set_output_value(self.total_electricity_to_or_from_grid, available_surplus_electricity_in_watt)
+        stsv.set_output_value(self.total_electricity_to_grid, available_surplus_electricity_in_watt if available_surplus_electricity_in_watt > 0
+                else 0)
+        stsv.set_output_value(self.total_electricity_from_grid, -available_surplus_electricity_in_watt if available_surplus_electricity_in_watt < 0
+                else 0)
         stsv.set_output_value(
             self.total_electricity_consumption_channel,
             self.state.consumption_uncontrolled_in_watt + self.state.consumption_ems_controlled_in_watt,
         )
+
+        stsv.set_output_value(self.electricity_production_channel, self.state.production_in_watt)
+        stsv.set_output_value(self.total_electricity_consumption_uncontrolled_channel, self.state.consumption_uncontrolled_in_watt)
+        stsv.set_output_value(self.total_electricity_consumption_ems_controlled_channel, self.state.consumption_ems_controlled_in_watt)
         """
         elif self.strategy == "seasonal_storage":
             self.seasonal_storage(delta_demand=delta_demand, stsv=stsv)
@@ -1213,9 +1271,9 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
-        sh_heatpump_electricity_from_grid_in_kilowatt_hour: Optional[float] = None
-        dhw_heatpump_electricity_from_grid_in_kilowatt_hour: Optional[float] = None
-        occupancy_electricity_from_grid_in_kilowatt_hour: Optional[float] = None
+        sh_heatpump_electricity_from_grid_in_kilowatt_hour: float
+        dhw_heatpump_electricity_from_grid_in_kilowatt_hour: float
+        occupancy_electricity_from_grid_in_kilowatt_hour: float
 
         advanced_heat_pump_class_name = advanced_heat_pump_hplib.HeatPumpHplib.get_classname()
         more_advanced_heat_pump_class_name = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib.get_classname()
@@ -1236,7 +1294,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                         )
                     )
                 elif more_advanced_heat_pump_class_name in output.field_name:
-                    if "SH" in output.field_name:
+                    if "SH" in str(output.field_name):
                         sh_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
                             postprocessing_results.iloc[:, index] < 0.0
                         ]

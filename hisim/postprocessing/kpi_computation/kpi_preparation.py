@@ -56,6 +56,7 @@ class KpiPreparation:
         total_consumption_ids = []
         total_production_ids = []
         pv_production_ids = []
+        windturbine_production_ids = []
         battery_charge_discharge_ids = []
 
         index: int
@@ -72,6 +73,12 @@ class KpiPreparation:
                         and ComponentType.PV in output.postprocessing_flag
                     ):
                         pv_production_ids.append(index)
+
+                    elif (
+                        InandOutputType.ELECTRICITY_PRODUCTION in output.postprocessing_flag
+                        and ComponentType.WINDTURBINE in output.postprocessing_flag
+                    ):
+                        windturbine_production_ids.append(index)
 
                     elif (
                         InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED in output.postprocessing_flag
@@ -97,7 +104,10 @@ class KpiPreparation:
             pd.DataFrame(results.iloc[:, total_production_ids]).clip(lower=0).sum(axis=1)
         )
         result_dataframe["pv_production"] = (
-            pd.DataFrame(results.iloc[:, total_production_ids]).clip(lower=0).sum(axis=1)
+            pd.DataFrame(results.iloc[:, pv_production_ids]).clip(lower=0).sum(axis=1)
+        )
+        result_dataframe["windturbine_production"] = (
+            pd.DataFrame(results.iloc[:, windturbine_production_ids]).clip(lower=0).sum(axis=1)
         )
 
         result_dataframe["battery_charge"] = (
@@ -123,7 +133,7 @@ class KpiPreparation:
         self,
         result_dataframe: pd.DataFrame,
         building_objects_in_district: str,
-    ) -> Tuple[float, float, float]:
+    ) -> Tuple[float, float, float, float]:
         """Compute electricity consumption and production and battery kpis."""
 
         # sum consumption and production over time
@@ -145,6 +155,13 @@ class KpiPreparation:
         pv_production_in_kilowatt_hour = round(
             self.compute_total_energy_from_power_timeseries(
                 power_timeseries_in_watt=result_dataframe["pv_production"],
+                timeresolution=self.simulation_parameters.seconds_per_timestep,
+            ),
+            1,
+        )
+        windturbine_production_in_kilowatt_hour = round(
+            self.compute_total_energy_from_power_timeseries(
+                power_timeseries_in_watt=result_dataframe["windturbine_production"],
                 timeresolution=self.simulation_parameters.seconds_per_timestep,
             ),
             1,
@@ -180,6 +197,10 @@ class KpiPreparation:
         pv_production_entry = KpiEntry(
             name="PV production", unit="kWh", value=pv_production_in_kilowatt_hour, tag=KpiTagEnumClass.GENERAL
         )
+        windturbine_production_entry = KpiEntry(
+            name="Windturbine production", unit="kWh", value=windturbine_production_in_kilowatt_hour, tag=KpiTagEnumClass.GENERAL
+        )
+
         battery_charging_entry = KpiEntry(
             name="Battery charging energy",
             unit="kWh",
@@ -202,6 +223,7 @@ class KpiPreparation:
                 total_consumtion_entry.name: total_consumtion_entry.to_dict(),
                 total_production_entry.name: total_production_entry.to_dict(),
                 pv_production_entry.name: pv_production_entry.to_dict(),
+                windturbine_production_entry.name: windturbine_production_entry.to_dict(),
                 battery_charging_entry.name: battery_charging_entry.to_dict(),
                 battery_discharging_entry.name: battery_discharging_entry.to_dict(),
                 battery_losses_entry.name: battery_losses_entry.to_dict(),
@@ -212,6 +234,7 @@ class KpiPreparation:
             total_electricity_consumption_in_kilowatt_hour,
             total_electricity_production_in_kilowatt_hour,
             pv_production_in_kilowatt_hour,
+            windturbine_production_in_kilowatt_hour,
         )
 
     def compute_self_consumption_injection_autarky(

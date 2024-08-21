@@ -545,6 +545,8 @@ class KpiPreparation:
         electricity_co2_in_kg: float = 0
         gas_costs_in_euro: float = 0
         gas_co2_in_kg: float = 0
+        heating_costs_in_euro: float = 0
+        heating_co2_in_kg: float = 0
 
         for kpi_name, kpi_entry in self.kpi_collection_dict_unsorted[building_object].items():
             if kpi_entry["tag"] == KpiTagEnumClass.ELECTRICITY_METER.value:
@@ -558,6 +560,12 @@ class KpiPreparation:
                     gas_costs_in_euro = kpi_entry["value"]
                 if kpi_name == "CO2 footprint of gas consumption from grid":
                     gas_co2_in_kg = kpi_entry["value"]
+
+            elif kpi_entry["tag"] == KpiTagEnumClass.HEATING_METER.value:
+                if kpi_name == "Opex costs of heat consumption in building":
+                    heating_costs_in_euro = kpi_entry["value"]
+                if kpi_name == "CO2 footprint of heat consumption in building":
+                    heating_co2_in_kg = kpi_entry["value"]
 
         # get CAPEX and OPEX costs for simulated period
         capex_results_path = os.path.join(
@@ -616,6 +624,18 @@ class KpiPreparation:
             value=gas_co2_in_kg,
             tag=KpiTagEnumClass.EMISSIONS,
         )
+        total_heat_costs_entry = KpiEntry(
+            name="Costs of heat consumption in building for simulated period",
+            unit="EUR",
+            value=heating_costs_in_euro,
+            tag=KpiTagEnumClass.COSTS,
+        )
+        total_heat_co2_emissions_entry = KpiEntry(
+            name="CO2 footprint of heat consumption in building for simulated period",
+            unit="kg",
+            value=heating_co2_in_kg,
+            tag=KpiTagEnumClass.EMISSIONS,
+        )
         total_investment_cost_per_simulated_period_entry = KpiEntry(
             name="Investment costs for equipment per simulated period",
             unit="EUR",
@@ -654,6 +674,8 @@ class KpiPreparation:
                 total_electricity_co2_footprint_entry.name: total_electricity_co2_footprint_entry.to_dict(),
                 total_gas_costs_entry.name: total_gas_costs_entry.to_dict(),
                 total_gas_co2_emissions_entry.name: total_gas_co2_emissions_entry.to_dict(),
+                total_heat_costs_entry.name: total_heat_costs_entry.to_dict(),
+                total_heat_co2_emissions_entry.name: total_heat_co2_emissions_entry.to_dict(),
                 total_investment_cost_per_simulated_period_entry.name: total_investment_cost_per_simulated_period_entry.to_dict(),
                 total_device_co2_footprint_per_simulated_period_entry.name: total_device_co2_footprint_per_simulated_period_entry.to_dict(),
                 total_maintenance_cost_entry.name: total_maintenance_cost_entry.to_dict(),

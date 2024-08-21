@@ -252,6 +252,8 @@ class InandOutputType(str, enum.Enum):
     DISCHARGE = "Discharge"
     GAS_PRODUCTION = "GasProduction"
     GAS_CONSUMPTION_UNCONTROLLED = "Gas consumption without any control"
+    HEAT_DELIVERED = "HEAT_DELIVERED"
+    HEAT_CONSUMPTION = "HEAT_CONSUMPTION"
 
     # Heating
     HEAT_TO_BUILDING = "HeatToBuilding"

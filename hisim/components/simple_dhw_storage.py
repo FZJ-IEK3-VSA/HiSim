@@ -19,6 +19,7 @@ from hisim.component import SingleTimeStepValues, ComponentInput, ComponentOutpu
 from hisim.components.configuration import PhysicsConfig
 from hisim.components import configuration
 from hisim.simulationparameters import SimulationParameters
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 
 __authors__ = ""
 __copyright__ = ""
@@ -781,3 +782,35 @@ class SimpleDHWStorage(cp.Component):
         )
 
         return opex_cost_data_class
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        thermal_power_DHW_consumption_in_kilowatt_hour: float
+        list_of_kpi_entries: List[KpiEntry] = []
+        for index, output in enumerate(all_outputs):
+            if output.component_name == self.component_name:
+                if output.field_name == self.ThermalPowerConsumptionDHW:
+                    thermal_power_DHW_consumption_in_watt_series = postprocessing_results.iloc[:, index]
+                    thermal_power_DHW_consumption_in_kilowatt_hour = (
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=thermal_power_DHW_consumption_in_watt_series,
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
+                    )
+                    break
+
+        # make kpi entry
+        occupancy_total_electricity_consumption_entry = KpiEntry(
+            name="Residents' total thermal dhw consumption",
+            unit="kWh",
+            value=thermal_power_DHW_consumption_in_kilowatt_hour,
+            tag=KpiTagEnumClass.RESIDENTS,
+            description=self.component_name
+        )
+
+        list_of_kpi_entries.append(occupancy_total_electricity_consumption_entry)
+        return list_of_kpi_entries

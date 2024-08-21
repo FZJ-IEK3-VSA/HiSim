@@ -1,4 +1,4 @@
-"""Gas meter module to measure gas consumption, costs and co2 emission. """
+"""Heating meter module to measure gas consumption, costs and co2 emission. """
 
 # clean
 from dataclasses import dataclass
@@ -19,55 +19,50 @@ from hisim.dynamic_component import (
     DynamicComponentConnection,
 )
 from hisim.simulationparameters import SimulationParameters
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
 
 
 @dataclass_json
 @dataclass
-class GasMeterConfig(cp.ConfigBase):
-    """Gas Meter Config."""
+class HeatingMeterConfig(cp.ConfigBase):
+    """Heating Meter Config."""
 
     @classmethod
     def get_main_classname(cls):
         """Returns the full class name of the base class."""
-        return GasMeter.get_full_classname()
+        return HeatingMeter.get_full_classname()
 
     building_name: str
     name: str
-    total_energy_from_grid_in_kwh: None
 
     @classmethod
-    def get_gas_meter_default_config(
+    def get_heating_meter_default_config(
         cls,
         building_name: str = "BUI1",
     ) -> Any:
         """Gets a default GasMeter."""
-        return GasMeterConfig(
+        return HeatingMeterConfig(
             building_name=building_name,
-            name="GasMeter",
-            total_energy_from_grid_in_kwh=None,
+            name="HeatingMeter",
         )
 
 
-class GasMeter(DynamicComponent):
-    """Gas meter class.
+class HeatingMeter(DynamicComponent):
+    """Heating meter class.
 
-    It calculates the gas production and consumption dynamically for all components.
-    So far only gas consumers are represented here but gas producers can be added here too.
     """
 
     # Outputs
-    GasAvailable = "GasAvailable"
-    GasFromGrid = "GasFromGrid"
-    GasConsumption = "GasConsumption"
-    GasProduction = "GasProduction"
+    HeatAvailable = "HeatAvailable"
+    HeatConsumption = "HeatConsumption"
+    HeatProduction = "HeatProduction"
     CumulativeConsumption = "CumulativeConsumption"
     CumulativeProduction = "CumulativeProduction"
 
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: GasMeterConfig,
+        config: HeatingMeterConfig,
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(display_in_webtool=True),
     ):
         """Initialize the component."""
@@ -93,83 +88,123 @@ class GasMeter(DynamicComponent):
         self.previous_state = self.state.self_copy()
 
         # Outputs
-        self.gas_available_channel: cp.ComponentOutput = self.add_output(
+        self.heat_available_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.GasAvailable,
-            load_type=lt.LoadTypes.GAS,
+            field_name=self.HeatAvailable,
+            load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT,
             sankey_flow_direction=False,
-            output_description=f"here a description for {self.GasAvailable} will follow.",
+            output_description=f"here a description for {self.HeatAvailable} will follow.",
         )
 
-        self.gas_from_grid_channel: cp.ComponentOutput = self.add_output(
+        self.heat_consumption_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.GasFromGrid,
-            load_type=lt.LoadTypes.GAS,
+            field_name=self.HeatConsumption,
+            load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
-            output_description=f"here a description for {self.GasFromGrid} will follow.",
-            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
+            output_description=f"here a description for {self.HeatConsumption} will follow.",
         )
 
-        self.gas_consumption_channel: cp.ComponentOutput = self.add_output(
+        self.heat_production_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.GasConsumption,
-            load_type=lt.LoadTypes.GAS,
+            field_name=self.HeatProduction,
+            load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
-            output_description=f"here a description for {self.GasConsumption} will follow.",
+            output_description=f"here a description for {self.HeatProduction} will follow.",
         )
 
-        self.gas_production_channel: cp.ComponentOutput = self.add_output(
-            object_name=self.component_name,
-            field_name=self.GasProduction,
-            load_type=lt.LoadTypes.GAS,
-            unit=lt.Units.WATT_HOUR,
-            sankey_flow_direction=False,
-            output_description=f"here a description for {self.GasProduction} will follow.",
-        )
-
-        self.cumulative_gas_consumption_channel: cp.ComponentOutput = self.add_output(
+        self.cumulative_heat_consumption_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.CumulativeConsumption,
-            load_type=lt.LoadTypes.GAS,
+            load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.CumulativeConsumption} will follow.",
         )
 
-        self.cumulative_gas_production_channel: cp.ComponentOutput = self.add_output(
+        self.cumulative_heat_production_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.CumulativeProduction,
-            load_type=lt.LoadTypes.GAS,
+            load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.CumulativeProduction} will follow.",
         )
 
-        self.add_dynamic_default_connections(self.get_default_connections_from_generic_gas_heater())
+        self.add_dynamic_default_connections(self.get_default_connections_from_heat_distribution_system())
+        self.add_dynamic_default_connections(self.get_default_connections_from_simple_dhw_storage())
+        self.add_dynamic_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_generic_heat_source())
 
-    def get_default_connections_from_generic_gas_heater(
+    def get_default_connections_from_heat_distribution_system(
         self,
     ):
         """Get gas heater default connections."""
 
-        from hisim.components.generic_gas_heater import (  # pylint: disable=import-outside-toplevel
-            GasHeater,
+        from hisim.components.heat_distribution_system import (  # pylint: disable=import-outside-toplevel
+            HeatDistribution,
         )
 
         dynamic_connections = []
-        gas_heater_class_name = GasHeater.get_classname()
+        heat_distribution_class_name = HeatDistribution.get_classname()
         dynamic_connections.append(
             dynamic_component.DynamicComponentConnection(
-                source_component_class=GasHeater,
-                source_class_name=gas_heater_class_name,
-                source_component_field_name=GasHeater.GasDemand,
-                source_load_type=lt.LoadTypes.GAS,
-                source_unit=lt.Units.WATT_HOUR,
-                source_tags=[lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED],
+                source_component_class=HeatDistribution,
+                source_class_name=heat_distribution_class_name,
+                source_component_field_name=HeatDistribution.ThermalPowerDelivered,
+                source_load_type=lt.LoadTypes.HEATING,
+                source_unit=lt.Units.WATT,
+                source_tags=[lt.InandOutputType.HEAT_CONSUMPTION],
+                source_weight=999,
+            )
+        )
+        return dynamic_connections
+
+    def get_default_connections_from_simple_dhw_storage(
+        self,
+    ):
+        """Get gas heater default connections."""
+
+        from hisim.components.simple_dhw_storage import (  # pylint: disable=import-outside-toplevel
+            SimpleDHWStorage,
+        )
+
+        dynamic_connections = []
+        dhw_storage_class_name = SimpleDHWStorage.get_classname()
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=SimpleDHWStorage,
+                source_class_name=dhw_storage_class_name,
+                source_component_field_name=SimpleDHWStorage.ThermalPowerConsumptionDHW,
+                source_load_type=lt.LoadTypes.HEATING,
+                source_unit=lt.Units.WATT,
+                source_tags=[lt.InandOutputType.HEAT_CONSUMPTION],
+                source_weight=999,
+            )
+        )
+        return dynamic_connections
+
+    def get_default_connections_from_more_advanced_heat_pump(
+        self,
+    ):
+        """Get gas heater default connections."""
+
+        from hisim.components.more_advanced_heat_pump_hplib import (  # pylint: disable=import-outside-toplevel
+            MoreAdvancedHeatPumpHPLib,
+        )
+
+        dynamic_connections = []
+        hp_class_name = MoreAdvancedHeatPumpHPLib.get_classname()
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=MoreAdvancedHeatPumpHPLib,
+                source_class_name=hp_class_name,
+                source_component_field_name=MoreAdvancedHeatPumpHPLib.ThermalOutputPowerTotal,
+                source_load_type=lt.LoadTypes.HEATING,
+                source_unit=lt.Units.WATT,
+                source_tags=[lt.InandOutputType.HEAT_DELIVERED],
                 source_weight=999,
             )
         )
@@ -188,12 +223,10 @@ class GasMeter(DynamicComponent):
             DynamicComponentConnection(
                 source_component_class=HeatSource,
                 source_class_name=heat_source_class_name,
-                source_component_field_name=HeatSource.FuelDelivered,
-                source_load_type=lt.LoadTypes.GAS,
-                source_unit=lt.Units.WATT_HOUR,
-                source_tags=[
-                    lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED,
-                ],
+                source_component_field_name=HeatSource.ThermalPowerDelivered,
+                source_load_type=lt.LoadTypes.HEATING,
+                source_unit=lt.Units.WATT,
+                source_tags=[lt.InandOutputType.HEAT_DELIVERED,],
                 source_weight=999,
             )
         )
@@ -223,20 +256,22 @@ class GasMeter(DynamicComponent):
         """Simulate the grid energy balancer."""
 
         if timestep == 0:
-            self.production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.GAS_PRODUCTION])
+            self.production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.HEAT_DELIVERED])
             self.consumption_uncontrolled_inputs = self.get_dynamic_inputs(
-                tags=[lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED]
+                tags=[lt.InandOutputType.HEAT_CONSUMPTION]
             )
 
-        # GAS #
 
         # get sum of production and consumption for all inputs for each iteration
-        production_in_watt_hour = sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])
+        production_in_watt_hour = (sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])
+                                   * self.seconds_per_timestep / 3600)
+
         consumption_uncontrolled_in_watt_hour = sum(
             [stsv.get_input_value(component_input=elem) for elem in self.consumption_uncontrolled_inputs]
-        )
-        # Production of Gas positve sign
-        # Consumption of Gas negative sign
+        ) * self.seconds_per_timestep / 3600
+
+        # Production of Heat positve sign
+        # Consumption of Heat negative sign
         difference_between_production_and_consumption_in_watt_hour = (
             production_in_watt_hour - consumption_uncontrolled_in_watt_hour
         )
@@ -247,42 +282,29 @@ class GasMeter(DynamicComponent):
             self.state.cumulative_consumption_in_watt_hour + consumption_uncontrolled_in_watt_hour
         )
 
-        # consumption is bigger than production -> gas from grid is needed
-        # change sign so that value becomes positive
-        if difference_between_production_and_consumption_in_watt_hour < 0:
-            gas_from_grid_in_watt_hour = -difference_between_production_and_consumption_in_watt_hour
-        # production is bigger -> gas can be fed into grid
-        elif difference_between_production_and_consumption_in_watt_hour > 0:
-            gas_from_grid_in_watt_hour = 0.0
-
-        # difference between production and consumption is zero
-        else:
-            gas_from_grid_in_watt_hour = 0.0
-
         # set outputs
         stsv.set_output_value(
-            self.gas_available_channel,
+            self.heat_available_channel,
             difference_between_production_and_consumption_in_watt_hour,
         )
 
-        stsv.set_output_value(self.gas_from_grid_channel, gas_from_grid_in_watt_hour)
         stsv.set_output_value(
-            self.gas_consumption_channel,
+            self.heat_consumption_channel,
             consumption_uncontrolled_in_watt_hour,
         )
 
         stsv.set_output_value(
-            self.gas_production_channel,
+            self.heat_production_channel,
             production_in_watt_hour,
         )
 
         stsv.set_output_value(
-            self.cumulative_gas_consumption_channel,
+            self.cumulative_heat_consumption_channel,
             cumulative_consumption_in_watt_hour,
         )
 
         stsv.set_output_value(
-            self.cumulative_gas_production_channel,
+            self.cumulative_heat_production_channel,
             cumulative_production_in_watt_hour,
         )
 
@@ -295,25 +317,31 @@ class GasMeter(DynamicComponent):
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of gas costs and revenues."""
-        total_energy_from_grid_in_kwh: float
+        total_used_energy_in_kwh: float
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
-                if output.field_name == self.GasFromGrid:
-                    total_energy_from_grid_in_kwh = postprocessing_results.iloc[:, index].sum() * 1e-3
+                if output.field_name == self.HeatConsumption:
+                    total_used_energy_in_watt = postprocessing_results.iloc[:, index].loc[
+                        postprocessing_results.iloc[:, index] > 0.0
+                    ]
+                    total_used_energy_in_kwh = KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=total_used_energy_in_watt,
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
 
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year
         )
-        co2_per_unit = emissions_and_cost_factors.gas_footprint_in_kg_per_kwh
-        euro_per_unit = emissions_and_cost_factors.gas_costs_in_euro_per_kwh
+        co2_per_unit = emissions_and_cost_factors.contracting_heating_footprint_in_kg_per_kwh
+        euro_per_unit = emissions_and_cost_factors.contracting_heating_costs_in_euro_per_kwh
 
-        opex_cost_per_simulated_period_in_euro = total_energy_from_grid_in_kwh * euro_per_unit
-        co2_per_simulated_period_in_kg = total_energy_from_grid_in_kwh * co2_per_unit
+        opex_cost_per_simulated_period_in_euro = total_used_energy_in_kwh * euro_per_unit
+        co2_per_simulated_period_in_kg = total_used_energy_in_kwh * co2_per_unit
         opex_cost_data_class = OpexCostDataClass(
             opex_energy_cost_in_euro=opex_cost_per_simulated_period_in_euro,
             opex_maintenance_cost_in_euro=0,
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
-            consumption_in_kwh=total_energy_from_grid_in_kwh,
+            consumption_in_kwh=total_used_energy_in_kwh,
             loadtype=lt.LoadTypes.GAS
         )
 
@@ -325,37 +353,44 @@ class GasMeter(DynamicComponent):
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
-        total_energy_from_grid_in_kwh: Optional[float] = None
+        total_used_energy_in_kwh: Optional[float] = None
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.component_name and output.load_type == lt.LoadTypes.GAS:
-                if output.field_name == self.GasFromGrid:
-                    total_energy_from_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 1)
+            if output.component_name == self.component_name and output.load_type == lt.LoadTypes.HEATING:
+                if output.field_name == self.HeatConsumption:
+                    total_used_energy_in_watt = postprocessing_results.iloc[:, index].loc[
+                        postprocessing_results.iloc[:, index] > 0.0
+                    ]
+                    total_used_energy_in_kwh = KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=total_used_energy_in_watt,
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
+
                     break
 
-        total_energy_from_grid_in_kwh_entry = KpiEntry(
-            name="Total gas demand from grid",
+        total_heating_energy_consumption_in_building_in_kwh_entry = KpiEntry(
+            name="Total heating energy used in building",
             unit="kWh",
-            value=total_energy_from_grid_in_kwh,
-            tag=KpiTagEnumClass.GAS_METER,
+            value=total_used_energy_in_kwh,
+            tag=KpiTagEnumClass.HEATING_METER,
             description=self.component_name,
         )
-        list_of_kpi_entries.append(total_energy_from_grid_in_kwh_entry)
+        list_of_kpi_entries.append(total_heating_energy_consumption_in_building_in_kwh_entry)
         # try to get opex costs
         opex_costs = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)
         opex_costs_in_euro_entry = KpiEntry(
-            name="Opex costs of gas consumption from grid",
+            name="Opex costs of heat consumption in building",
             unit="Euro",
             value=opex_costs.opex_energy_cost_in_euro,
-            tag=KpiTagEnumClass.GAS_METER,
+            tag=KpiTagEnumClass.HEATING_METER,
             description=self.component_name,
         )
         list_of_kpi_entries.append(opex_costs_in_euro_entry)
         co2_footprint_in_kg_entry = KpiEntry(
-            name="CO2 footprint of gas consumption from grid",
+            name="CO2 footprint of heat consumption in building",
             unit="kg",
             value=opex_costs.co2_footprint_in_kg,
-            tag=KpiTagEnumClass.GAS_METER,
+            tag=KpiTagEnumClass.HEATING_METER,
             description=self.component_name,
         )
         list_of_kpi_entries.append(co2_footprint_in_kg_entry)

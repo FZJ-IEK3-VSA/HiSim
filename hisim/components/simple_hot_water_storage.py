@@ -348,6 +348,7 @@ class SimpleHotWaterStorage(cp.Component):
         )
         self.add_default_connections(self.get_default_connections_from_heat_distribution_system())
         self.add_default_connections(self.get_default_connections_from_advanced_heat_pump())
+        self.add_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
         self.add_default_connections(self.get_default_connections_from_gasheater())
 
     def get_default_connections_from_heat_distribution_system(
@@ -400,6 +401,33 @@ class SimpleHotWaterStorage(cp.Component):
                 SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator,
                 hp_classname,
                 component_class.MassFlowOutput,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_more_advanced_heat_pump(
+        self,
+    ) -> List[cp.ComponentConnection]:
+        """Get advanced het pump default connections."""
+
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.more_advanced_heat_pump_hplib"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "MoreAdvancedHeatPumpHPLib")
+        connections = []
+        hp_classname = component_class.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator,
+                hp_classname,
+                component_class.TemperatureOutputSH,
+            )
+        )
+        connections.append(
+            cp.ComponentConnection(
+                SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator,
+                hp_classname,
+                component_class.MassFlowOutputSH,
             )
         )
         return connections

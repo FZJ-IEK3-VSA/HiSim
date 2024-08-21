@@ -264,8 +264,8 @@ class EmissionFactorsAndCostsForFuelsConfig:
     electricity_costs_in_euro_per_kwh: float  # EUR/kWh
     electricity_footprint_in_kg_per_kwh: float  # kgCO2eq/kWh
     electricity_to_grid_revenue_in_euro_per_kwh: float  # EUR/kWh
-    district_heating_costs_in_euro_per_kwh: float  # EUR/kWh
-    district_heating_footprint_in_kg_per_kwh: float  # kgCO2eq/kWh
+    contracting_heating_costs_in_euro_per_kwh: float  # EUR/kWh
+    contracting_heating_footprint_in_kg_per_kwh: float  # kgCO2eq/kWh
     gas_costs_in_euro_per_kwh: float  # EUR/kWh
     gas_footprint_in_kg_per_kwh: float  # kgCO2eq/kWh
     oil_costs_in_euro_per_l: float  # EUR/l
@@ -282,8 +282,8 @@ class EmissionFactorsAndCostsForFuelsConfig:
             electricity_costs_in_euro_per_kwh=0.2525,  # EUR/kWh
             electricity_footprint_in_kg_per_kwh=0.44,  # kgCO2eq/kWh
             electricity_to_grid_revenue_in_euro_per_kwh=0.2525,  # EUR/kWh  # Todo: Change Value!!!
-            district_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
-            district_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
+            contracting_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
+            contracting_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
             gas_costs_in_euro_per_kwh=0.0861,  # EUR/kWh
             gas_footprint_in_kg_per_kwh=0.24,  # kgCO2eq/kWh
             oil_costs_in_euro_per_l=1.159835766,  # EUR/l
@@ -308,8 +308,8 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 electricity_costs_in_euro_per_kwh=0.27825,  # EUR/kWh  # Source: [1]
                 electricity_footprint_in_kg_per_kwh=0.473,  # kgCO2eq/kWh  # Source: [5]
                 electricity_to_grid_revenue_in_euro_per_kwh=0.1205,  # EUR/kWh  # Source: [2]
-                district_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
-                district_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
+                contracting_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
+                contracting_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
                 gas_costs_in_euro_per_kwh=0.0664,  # EUR/kWh  # Source: [4]
                 gas_footprint_in_kg_per_kwh=0.24,  # kgCO2eq/kWh
                 oil_costs_in_euro_per_l=1.159835766,  # EUR/l
@@ -322,8 +322,8 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 electricity_costs_in_euro_per_kwh=0.295,  # EUR/kWh  # Source: [1]
                 electricity_footprint_in_kg_per_kwh=0.411,  # kgCO2eq/kWh  # Source: [5]
                 electricity_to_grid_revenue_in_euro_per_kwh=0.1072,  # EUR/kWh  # Source: [2]
-                district_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
-                district_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
+                contracting_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
+                contracting_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
                 gas_costs_in_euro_per_kwh=0.0728,  # EUR/kWh  # Source: [4]
                 gas_footprint_in_kg_per_kwh=0.24,  # kgCO2eq/kWh
                 oil_costs_in_euro_per_l=1.159835766,  # EUR/l
@@ -336,8 +336,8 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 electricity_costs_in_euro_per_kwh=0.3005,  # EUR/kWh  # Source: [1]
                 electricity_footprint_in_kg_per_kwh=0.369,  # kgCO2eq/kWh  # Source: [5]
                 electricity_to_grid_revenue_in_euro_per_kwh=0.0838,  # EUR/kWh  # Source: [2]
-                district_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
-                district_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
+                contracting_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
+                contracting_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
                 gas_costs_in_euro_per_kwh=0.0699,  # EUR/kWh  # Source: [4]
                 gas_footprint_in_kg_per_kwh=0.24,  # kgCO2eq/kWh
                 oil_costs_in_euro_per_l=1.159835766,  # EUR/l
@@ -350,8 +350,8 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 electricity_costs_in_euro_per_kwh=0.3005,  # EUR/kWh  # Source: [1]
                 electricity_footprint_in_kg_per_kwh=0.410,  # kgCO2eq/kWh  # Source: [5]
                 electricity_to_grid_revenue_in_euro_per_kwh=0.0753,  # EUR/kWh  # Source: [2]
-                district_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
-                district_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
+                contracting_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
+                contracting_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
                 gas_costs_in_euro_per_kwh=0.0745,  # EUR/kWh  # Source: [4]
                 gas_footprint_in_kg_per_kwh=0.24,  # kgCO2eq/kWh
                 oil_costs_in_euro_per_l=1.159835766,  # EUR/l
@@ -364,8 +364,8 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 electricity_costs_in_euro_per_kwh=0.43025,  # EUR/kWh  # Source: [1]
                 electricity_footprint_in_kg_per_kwh=0.434,  # kgCO2eq/kWh  # Source: [5]
                 electricity_to_grid_revenue_in_euro_per_kwh=0.0723,  # EUR/kWh  # Source: [2]
-                district_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
-                district_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
+                contracting_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
+                contracting_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
                 gas_costs_in_euro_per_kwh=0.0951,  # EUR/kWh  # Source: [4]
                 gas_footprint_in_kg_per_kwh=0.24,  # kgCO2eq/kWh
                 oil_costs_in_euro_per_l=1.159835766,  # EUR/l

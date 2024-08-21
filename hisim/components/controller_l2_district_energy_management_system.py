@@ -1430,7 +1430,6 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                             timeresolution=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
-                    print(total_electricity_consumption_in_watt)
                     electricity_consumption_total_entry = KpiEntry(
                         name="Total electricity consumption EMS",
                         unit="kWh",

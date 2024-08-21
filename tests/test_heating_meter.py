@@ -21,7 +21,7 @@ from hisim.components import (
     heat_distribution_system,
     generic_pv_system,
 )
-from hisim import utils, loadtypes
+from hisim import utils
 
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import log
@@ -50,7 +50,9 @@ def test_house(
 
     # Build Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only(year=year, seconds_per_timestep=seconds_per_timestep)
+        my_simulation_parameters = SimulationParameters.one_day_only(
+            year=year, seconds_per_timestep=seconds_per_timestep
+        )
 
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
@@ -140,27 +142,29 @@ def test_house(
     )
 
     # Build Heat Pump Controller for space heating
-    my_heatpump_controller_sh_config = (more_advanced_heat_pump_hplib.
-                                        MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.
-                                        get_default_space_heating_controller_config(heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type))
+    my_heatpump_controller_sh_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
+        heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
+    )
 
-    my_heatpump_controller_space_heating = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
-        config=my_heatpump_controller_sh_config,
-        my_simulation_parameters=my_simulation_parameters
+    my_heatpump_controller_space_heating = (
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
+            config=my_heatpump_controller_sh_config, my_simulation_parameters=my_simulation_parameters
+        )
     )
 
     # Build Heat Pump Controller for dhw
-    my_heatpump_controller_dhw_config = (more_advanced_heat_pump_hplib.
-                                         MoreAdvancedHeatPumpHPLibControllerDHWConfig.get_default_dhw_controller_config())
+    my_heatpump_controller_dhw_config = (
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHWConfig.get_default_dhw_controller_config()
+    )
 
     my_heatpump_controller_dhw = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW(
-        config=my_heatpump_controller_dhw_config,
-        my_simulation_parameters=my_simulation_parameters
+        config=my_heatpump_controller_dhw_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # Build Heat Pump
-    my_heatpump_config = (more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.
-                          get_default_generic_advanced_hp_lib())
+    my_heatpump_config = (
+        more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_default_generic_advanced_hp_lib()
+    )
     my_heatpump_config.with_domestic_hot_water_preparation = True
 
     my_heatpump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
@@ -241,7 +245,9 @@ def test_house(
 
     opex_costs_for_heat_in_euro = jsondata["Heating Meter"]["Opex costs of heat consumption in building"].get("value")
 
-    co2_footprint_due_to_heat_use_in_kg = jsondata["Heating Meter"]["CO2 footprint of heat consumption in building"].get("value")
+    co2_footprint_due_to_heat_use_in_kg = jsondata["Heating Meter"][
+        "CO2 footprint of heat consumption in building"
+    ].get("value")
 
     log.information(
         "Heat consumption for space heating [kWh] " + str(heat_consumption_for_space_heating_in_kilowatt_hour)

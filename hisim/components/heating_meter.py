@@ -21,6 +21,14 @@ from hisim.dynamic_component import (
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
 
+__authors__ = "Jonas Hoppe"
+__copyright__ = ""
+__credits__ = ["Jonas Hoppe"]
+__license__ = "-"
+__version__ = ""
+__maintainer__ = ""
+__status__ = ""
+
 
 @dataclass_json
 @dataclass
@@ -48,9 +56,7 @@ class HeatingMeterConfig(cp.ConfigBase):
 
 
 class HeatingMeter(DynamicComponent):
-    """Heating meter class.
-
-    """
+    """Heating meter class."""
 
     # Outputs
     HeatAvailable = "HeatAvailable"
@@ -84,7 +90,7 @@ class HeatingMeter(DynamicComponent):
 
         self.seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
         # Component has states
-        self.state = GasMeterState(cumulative_production_in_watt_hour=0, cumulative_consumption_in_watt_hour=0)
+        self.state = HeatingMeterState(cumulative_production_in_watt_hour=0, cumulative_consumption_in_watt_hour=0)
         self.previous_state = self.state.self_copy()
 
         # Outputs
@@ -226,7 +232,9 @@ class HeatingMeter(DynamicComponent):
                 source_component_field_name=HeatSource.ThermalPowerDelivered,
                 source_load_type=lt.LoadTypes.HEATING,
                 source_unit=lt.Units.WATT,
-                source_tags=[lt.InandOutputType.HEAT_DELIVERED,],
+                source_tags=[
+                    lt.InandOutputType.HEAT_DELIVERED,
+                ],
                 source_weight=999,
             )
         )
@@ -257,18 +265,20 @@ class HeatingMeter(DynamicComponent):
 
         if timestep == 0:
             self.production_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.HEAT_DELIVERED])
-            self.consumption_uncontrolled_inputs = self.get_dynamic_inputs(
-                tags=[lt.InandOutputType.HEAT_CONSUMPTION]
-            )
-
+            self.consumption_uncontrolled_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.HEAT_CONSUMPTION])
 
         # get sum of production and consumption for all inputs for each iteration
-        production_in_watt_hour = (sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])
-                                   * self.seconds_per_timestep / 3600)
+        production_in_watt_hour = (
+            sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])
+            * self.seconds_per_timestep
+            / 3600
+        )
 
-        consumption_uncontrolled_in_watt_hour = sum(
-            [stsv.get_input_value(component_input=elem) for elem in self.consumption_uncontrolled_inputs]
-        ) * self.seconds_per_timestep / 3600
+        consumption_uncontrolled_in_watt_hour = (
+            sum([stsv.get_input_value(component_input=elem) for elem in self.consumption_uncontrolled_inputs])
+            * self.seconds_per_timestep
+            / 3600
+        )
 
         # Production of Heat positve sign
         # Consumption of Heat negative sign
@@ -325,9 +335,9 @@ class HeatingMeter(DynamicComponent):
                         postprocessing_results.iloc[:, index] > 0.0
                     ]
                     total_used_energy_in_kwh = KpiHelperClass.compute_total_energy_from_power_timeseries(
-                            power_timeseries_in_watt=total_used_energy_in_watt,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
-                        )
+                        power_timeseries_in_watt=total_used_energy_in_watt,
+                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    )
 
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year
@@ -342,7 +352,7 @@ class HeatingMeter(DynamicComponent):
             opex_maintenance_cost_in_euro=0,
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
             consumption_in_kwh=total_used_energy_in_kwh,
-            loadtype=lt.LoadTypes.GAS
+            loadtype=lt.LoadTypes.GAS,
         )
 
         return opex_cost_data_class
@@ -362,9 +372,9 @@ class HeatingMeter(DynamicComponent):
                         postprocessing_results.iloc[:, index] > 0.0
                     ]
                     total_used_energy_in_kwh = KpiHelperClass.compute_total_energy_from_power_timeseries(
-                            power_timeseries_in_watt=total_used_energy_in_watt,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
-                        )
+                        power_timeseries_in_watt=total_used_energy_in_watt,
+                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    )
 
                     break
 
@@ -399,8 +409,8 @@ class HeatingMeter(DynamicComponent):
 
 
 @dataclass
-class GasMeterState:
-    """GasMeterState class."""
+class HeatingMeterState:
+    """HeatingMeterState class."""
 
     cumulative_production_in_watt_hour: float
     cumulative_consumption_in_watt_hour: float
@@ -409,7 +419,7 @@ class GasMeterState:
         self,
     ):
         """Copy the GasMeterState."""
-        return GasMeterState(
+        return HeatingMeterState(
             self.cumulative_production_in_watt_hour,
             self.cumulative_consumption_in_watt_hour,
         )

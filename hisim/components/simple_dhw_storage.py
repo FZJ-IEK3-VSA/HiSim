@@ -789,15 +789,15 @@ class SimpleDHWStorage(cp.Component):
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
-        thermal_power_DHW_consumption_in_kilowatt_hour: float
+        thermal_power_dhw_consumption_in_kilowatt_hour: float
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
                 if output.field_name == self.ThermalPowerConsumptionDHW:
-                    thermal_power_DHW_consumption_in_watt_series = postprocessing_results.iloc[:, index]
-                    thermal_power_DHW_consumption_in_kilowatt_hour = (
+                    thermal_power_dhw_consumption_in_watt_series = postprocessing_results.iloc[:, index]
+                    thermal_power_dhw_consumption_in_kilowatt_hour = (
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
-                            power_timeseries_in_watt=thermal_power_DHW_consumption_in_watt_series,
+                            power_timeseries_in_watt=thermal_power_dhw_consumption_in_watt_series,
                             timeresolution=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
@@ -807,7 +807,7 @@ class SimpleDHWStorage(cp.Component):
         occupancy_total_electricity_consumption_entry = KpiEntry(
             name="Residents' total thermal dhw consumption",
             unit="kWh",
-            value=thermal_power_DHW_consumption_in_kilowatt_hour,
+            value=thermal_power_dhw_consumption_in_kilowatt_hour,
             tag=KpiTagEnumClass.RESIDENTS,
             description=self.component_name
         )

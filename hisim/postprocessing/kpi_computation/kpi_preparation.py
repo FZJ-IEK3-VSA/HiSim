@@ -625,13 +625,13 @@ class KpiPreparation:
             tag=KpiTagEnumClass.EMISSIONS,
         )
         total_heat_costs_entry = KpiEntry(
-            name="Costs of heat consumption in building for simulated period",
+            name="Costs of grid heat to building for simulated period",
             unit="EUR",
             value=heating_costs_in_euro,
             tag=KpiTagEnumClass.COSTS,
         )
         total_heat_co2_emissions_entry = KpiEntry(
-            name="CO2 footprint of heat consumption in building for simulated period",
+            name="CO2 footprint of grid heat consumption to building for simulated period",
             unit="kg",
             value=heating_co2_in_kg,
             tag=KpiTagEnumClass.EMISSIONS,

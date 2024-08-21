@@ -120,8 +120,16 @@ class ElectricityMeter(DynamicComponent):
             unit=lt.Units.WATT,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.ElectricityProductionInWatt} will follow.",
+            postprocessing_flag=(
+                [
+                    lt.InandOutputType.ELECTRICITY_PRODUCTION,
+                    lt.ComponentType.BUILDINGS,
+                    lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+                ]
+                if any(word in config.building_name for word in lt.DistrictNames)
+                else []
+            ),
         )
-
         self.electricity_consumption_uncontrolled_in_watt_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ElectricityConsumptionInWatt,
@@ -132,10 +140,10 @@ class ElectricityMeter(DynamicComponent):
             postprocessing_flag=(
                 [
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                    lt.ComponentType.BUILDINGS,
                     lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
                 ]
-                if any(word in config.building_name.lower() for word in ["quartier", "bezirk", "district",
-                                                                         "area", "neighborhood"])
+                if any(word in config.building_name for word in lt.DistrictNames)
                 else []
             ),
         )

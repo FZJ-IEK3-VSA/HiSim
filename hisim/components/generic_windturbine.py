@@ -237,7 +237,10 @@ class Windturbine(cp.Component):
             field_name=self.ElectricityOutput,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
-            postprocessing_flag=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
+            postprocessing_flag=[
+                lt.ComponentType.WINDTURBINE,
+                lt.InandOutputType.ELECTRICITY_PRODUCTION,
+            ],
             output_description=f"here a description for Windturbine {self.ElectricityOutput} will follow.",
         )
 

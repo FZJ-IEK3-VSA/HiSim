@@ -52,6 +52,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             total_electricity_production_in_kilowatt_hour,
             pv_production_in_kilowatt_hour,
             windturbine_production_in_kilowatt_hour,
+            building_production_in_kilowatt_hour,
         ) = self.compute_electricity_consumption_and_production_and_battery_kpis(
             result_dataframe=self.filtered_result_dataframe, building_objects_in_district=building_objects_in_district
         )
@@ -75,6 +76,13 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             denominator_value=windturbine_production_in_kilowatt_hour,
             numerator_value=total_electricity_consumption_in_kilowatt_hour,
             kpi_name="Ratio between Windturbine production and total consumption",
+            building_objects_in_district=building_objects_in_district,
+        )
+        # get ratio between building production and total consumption
+        self.compute_ratio_between_two_values_and_set_as_kpi(
+            denominator_value=building_production_in_kilowatt_hour,
+            numerator_value=total_electricity_consumption_in_kilowatt_hour,
+            kpi_name="Ratio between Building production and total consumption",
             building_objects_in_district=building_objects_in_district,
         )
 

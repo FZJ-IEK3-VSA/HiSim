@@ -261,3 +261,15 @@ class InandOutputType(str, enum.Enum):
 
     WATER_HEATING = "WaterHeating"
     HEATING = "Heating"
+
+
+@enum.unique
+class DistrictNames(str, enum.Enum):
+
+    """Names of Districts."""
+
+    QUARTIER = "QUARTIER"
+    BEZIRK = "BEZIRK"
+    DISTRICT = "DISTRICT"
+    AREA = "AREA"
+    NEIGHBORHOOD = "NEIGHBORHOOD"

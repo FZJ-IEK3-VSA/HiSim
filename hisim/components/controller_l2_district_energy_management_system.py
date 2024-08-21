@@ -9,7 +9,7 @@ The component with the lowest source weight is activated first.
 # clean
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Any, List, Tuple, Union
+from typing import Any, List, Tuple, Union, Optional
 from collections import OrderedDict
 from dataclasses_json import dataclass_json
 import pandas as pd
@@ -264,6 +264,15 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
             sankey_flow_direction=False,
+            # postprocessing_flag=(
+            #     [
+            #         lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+            #         lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+            #     ]
+            #     if any(word in config.building_name.lower() for word in ["quartier", "bezirk", "district",
+            #                                                              "area", "neighborhood"])
+            #     else []
+            # ),
             output_description=f"here a description for {self.TotalElectricityConsumption} will follow.",
         )
 
@@ -743,18 +752,26 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
             )
 
         stsv.set_output_value(self.total_electricity_to_or_from_grid, available_surplus_electricity_in_watt)
-        stsv.set_output_value(self.total_electricity_to_grid, available_surplus_electricity_in_watt if available_surplus_electricity_in_watt > 0
-                else 0)
-        stsv.set_output_value(self.total_electricity_from_grid, -available_surplus_electricity_in_watt if available_surplus_electricity_in_watt < 0
-                else 0)
+        stsv.set_output_value(
+            self.total_electricity_to_grid,
+            available_surplus_electricity_in_watt if available_surplus_electricity_in_watt > 0 else 0,
+        )
+        stsv.set_output_value(
+            self.total_electricity_from_grid,
+            -available_surplus_electricity_in_watt if available_surplus_electricity_in_watt < 0 else 0,
+        )
         stsv.set_output_value(
             self.total_electricity_consumption_channel,
             self.state.consumption_uncontrolled_in_watt + self.state.consumption_ems_controlled_in_watt,
         )
 
         stsv.set_output_value(self.electricity_production_channel, self.state.production_in_watt)
-        stsv.set_output_value(self.total_electricity_consumption_uncontrolled_channel, self.state.consumption_uncontrolled_in_watt)
-        stsv.set_output_value(self.total_electricity_consumption_ems_controlled_channel, self.state.consumption_ems_controlled_in_watt)
+        stsv.set_output_value(
+            self.total_electricity_consumption_uncontrolled_channel, self.state.consumption_uncontrolled_in_watt
+        )
+        stsv.set_output_value(
+            self.total_electricity_consumption_ems_controlled_channel, self.state.consumption_ems_controlled_in_watt
+        )
         """
         elif self.strategy == "seasonal_storage":
             self.seasonal_storage(delta_demand=delta_demand, stsv=stsv)
@@ -1161,11 +1178,11 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
 
     def control_electricity_and_modify_set_temperatures_for_component_parallel(
         self,
-            available_surplus_electricity_in_watt: float,
-            stsv: cp.SingleTimeStepValues,
-            current_component_type: lt.ComponentType,
-            current_output: cp.ComponentOutput,
-            electricity_demand_from_current_input_component_in_watt: float,
+        available_surplus_electricity_in_watt: float,
+        stsv: cp.SingleTimeStepValues,
+        current_component_type: lt.ComponentType,
+        current_output: cp.ComponentOutput,
+        electricity_demand_from_current_input_component_in_watt: float,
     ) -> float:
         """Calculates available surplus electricity.
 
@@ -1271,9 +1288,6 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
-        sh_heatpump_electricity_from_grid_in_kilowatt_hour: float
-        dhw_heatpump_electricity_from_grid_in_kilowatt_hour: float
-        occupancy_electricity_from_grid_in_kilowatt_hour: float
 
         advanced_heat_pump_class_name = advanced_heat_pump_hplib.HeatPumpHplib.get_classname()
         more_advanced_heat_pump_class_name = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib.get_classname()
@@ -1293,6 +1307,14 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                             timeresolution=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
+                    dhw_heatpump_electricity_from_grid_entry = KpiEntry(
+                        name="Domestic hot water heat pump electricity from grid",
+                        unit="kWh",
+                        value=dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
+                        tag=KpiTagEnumClass.EMS,
+                        description=self.component_name,
+                    )
+                    list_of_kpi_entries.append(dhw_heatpump_electricity_from_grid_entry)
                 elif more_advanced_heat_pump_class_name in output.field_name:
                     if "SH" in str(output.field_name):
                         sh_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
@@ -1304,6 +1326,15 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                                 timeresolution=self.my_simulation_parameters.seconds_per_timestep,
                             )
                         )
+                        # make kpi entry
+                        sh_heatpump_electricity_from_grid_entry = KpiEntry(
+                            name="Space heating heat pump electricity from grid",
+                            unit="kWh",
+                            value=sh_heatpump_electricity_from_grid_in_kilowatt_hour,
+                            tag=KpiTagEnumClass.EMS,
+                            description=self.component_name,
+                        )
+                        list_of_kpi_entries.append(sh_heatpump_electricity_from_grid_entry)
                     elif "DHW" in output.field_name:
                         dhw_hp_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
                             postprocessing_results.iloc[:, index] < 0.0
@@ -1314,6 +1345,14 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                                 timeresolution=self.my_simulation_parameters.seconds_per_timestep,
                             )
                         )
+                        dhw_heatpump_electricity_from_grid_entry = KpiEntry(
+                            name="Domestic hot water heat pump electricity from grid",
+                            unit="kWh",
+                            value=dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
+                            tag=KpiTagEnumClass.EMS,
+                            description=self.component_name,
+                        )
+                        list_of_kpi_entries.append(dhw_heatpump_electricity_from_grid_entry)
                     else:
                         log.warning(f"No DHW oder SH named in output {output.field_name} of {output.component_name}")
                 elif advanced_heat_pump_class_name in output.field_name:
@@ -1326,6 +1365,15 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                             timeresolution=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
+                    # make kpi entry
+                    sh_heatpump_electricity_from_grid_entry = KpiEntry(
+                        name="Space heating heat pump electricity from grid",
+                        unit="kWh",
+                        value=sh_heatpump_electricity_from_grid_in_kilowatt_hour,
+                        tag=KpiTagEnumClass.EMS,
+                        description=self.component_name,
+                    )
+                    list_of_kpi_entries.append(sh_heatpump_electricity_from_grid_entry)
                 elif occupancy_class_name in output.field_name:
                     occupancy_electricity_from_grid_in_watt_series = postprocessing_results.iloc[:, index].loc[
                         postprocessing_results.iloc[:, index] < 0.0
@@ -1337,32 +1385,140 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                             timeresolution=self.my_simulation_parameters.seconds_per_timestep,
                         )
                     )
-
-        # make kpi entry
-        sh_heatpump_electricity_from_grid_entry = KpiEntry(
-            name="Space heating heat pump electricity from grid",
-            unit="kWh",
-            value=sh_heatpump_electricity_from_grid_in_kilowatt_hour,
-            tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
-            description=self.component_name,
-        )
-        list_of_kpi_entries.append(sh_heatpump_electricity_from_grid_entry)
-        dhw_heatpump_electricity_from_grid_entry = KpiEntry(
-            name="Domestic hot water heat pump electricity from grid",
-            unit="kWh",
-            value=dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
-            tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
-            description=self.component_name,
-        )
-        list_of_kpi_entries.append(dhw_heatpump_electricity_from_grid_entry)
-        occupancy_electricity_from_grid_entry = KpiEntry(
-            name="Residents' electricity consumption from grid",
-            unit="kWh",
-            value=occupancy_electricity_from_grid_in_kilowatt_hour,
-            tag=KpiTagEnumClass.RESIDENTS,
-            description=self.component_name,
-        )
-        list_of_kpi_entries.append(occupancy_electricity_from_grid_entry)
+                    occupancy_electricity_from_grid_entry = KpiEntry(
+                        name="Residents' electricity consumption from grid",
+                        unit="kWh",
+                        value=occupancy_electricity_from_grid_in_kilowatt_hour,
+                        tag=KpiTagEnumClass.EMS,
+                        description=self.component_name,
+                    )
+                    list_of_kpi_entries.append(occupancy_electricity_from_grid_entry)
+                elif output.field_name == self.TotalElectricityConsumptionEMSControlled:
+                    total_electricity_consumption_ems_controlled_in_watt = postprocessing_results.iloc[:, index].loc[
+                        postprocessing_results.iloc[:, index] > 0.0
+                    ]
+                    total_electricity_consumption_ems_controlled_in_kilowatt_hour = abs(
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=total_electricity_consumption_ems_controlled_in_watt,
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
+                    )
+                    electricity_consumption_ems_controlled_entry = KpiEntry(
+                        name="EMS controlled electricity consumption",
+                        unit="kWh",
+                        value=total_electricity_consumption_ems_controlled_in_kilowatt_hour,
+                        tag=KpiTagEnumClass.EMS,
+                        description=self.component_name,
+                    )
+                    list_of_kpi_entries.append(electricity_consumption_ems_controlled_entry)
+                elif output.field_name == self.TotalElectricityConsumptionUnControlled:
+                    total_electricity_consumption_ems_uncontrolled_in_watt = postprocessing_results.iloc[:, index].loc[
+                        postprocessing_results.iloc[:, index] > 0.0
+                    ]
+                    total_electricity_consumption_ems_uncontrolled_in_kilowatt_hour = abs(
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=total_electricity_consumption_ems_uncontrolled_in_watt,
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
+                    )
+                    electricity_consumption_ems_uncontrolled_entry = KpiEntry(
+                        name="EMS uncontrolled electricity consumption",
+                        unit="kWh",
+                        value=total_electricity_consumption_ems_uncontrolled_in_kilowatt_hour,
+                        tag=KpiTagEnumClass.EMS,
+                        description=self.component_name,
+                    )
+                    list_of_kpi_entries.append(electricity_consumption_ems_uncontrolled_entry)
+                elif output.field_name == self.TotalElectricityConsumption:
+                    total_electricity_consumption_in_watt = postprocessing_results.iloc[:, index].loc[
+                        postprocessing_results.iloc[:, index] < 0.0
+                    ]
+                    total_electricity_consumption_in_kilowatt_hour = abs(
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=total_electricity_consumption_in_watt,
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
+                    )
+                    electricity_consumption_total_entry = KpiEntry(
+                        name="Total electricity consumption",
+                        unit="kWh",
+                        value=total_electricity_consumption_in_kilowatt_hour,
+                        tag=KpiTagEnumClass.EMS,
+                        description=self.component_name,
+                    )
+                    list_of_kpi_entries.append(electricity_consumption_total_entry)
+                elif output.field_name == self.SurplusUnusedFromDistrictEMSOutput:
+                    total_electricity_surplus_from_district_in_watt = postprocessing_results.iloc[:, index].loc[
+                        postprocessing_results.iloc[:, index] > 0.0
+                    ]
+                    total_electricity_surplus_from_district_in_kilowatt_hour = abs(
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=total_electricity_surplus_from_district_in_watt,
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
+                    )
+                    electricity_surplus_from_district_entry = KpiEntry(
+                        name="EMS surplus from District EMS",
+                        unit="kWh",
+                        value=total_electricity_surplus_from_district_in_kilowatt_hour,
+                        tag=KpiTagEnumClass.EMS,
+                        description=self.component_name,
+                    )
+                    list_of_kpi_entries.append(electricity_surplus_from_district_entry)
+                elif output.field_name == self.ElectricityProduction:
+                    total_production_in_watt = postprocessing_results.iloc[:, index].loc[
+                        postprocessing_results.iloc[:, index] > 0.0
+                    ]
+                    total_production_in_kilowatt_hour = abs(
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=total_production_in_watt,
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
+                    )
+                    electricity_production_entry = KpiEntry(
+                        name="Production",
+                        unit="kWh",
+                        value=total_production_in_kilowatt_hour,
+                        tag=KpiTagEnumClass.EMS,
+                        description=self.component_name,
+                    )
+                    list_of_kpi_entries.append(electricity_production_entry)
+                elif output.field_name == self.TotalElectricityFromGrid:
+                    total_electricity_from_grid_in_watt = postprocessing_results.iloc[:, index].loc[
+                        postprocessing_results.iloc[:, index] > 0.0
+                    ]
+                    total_electricity_from_grid_in_kilowatt_hour = abs(
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=total_electricity_from_grid_in_watt,
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
+                    )
+                    electricity_from_grid_entry = KpiEntry(
+                        name="Total electricity from grid",
+                        unit="kWh",
+                        value=total_electricity_from_grid_in_kilowatt_hour,
+                        tag=KpiTagEnumClass.EMS,
+                        description=self.component_name,
+                    )
+                    list_of_kpi_entries.append(electricity_from_grid_entry)
+                elif output.field_name == self.TotalElectricityToGrid:
+                    total_electricity_to_grid_in_watt = postprocessing_results.iloc[:, index].loc[
+                        postprocessing_results.iloc[:, index] > 0.0
+                    ]
+                    total_electricity_to_grid_in_kilowatt_hour = abs(
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=total_electricity_to_grid_in_watt,
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
+                    )
+                    electricity_to_grid_entry = KpiEntry(
+                        name="Total electricity to grid",
+                        unit="kWh",
+                        value=total_electricity_to_grid_in_kilowatt_hour,
+                        tag=KpiTagEnumClass.EMS,
+                        description=self.component_name,
+                    )
+                    list_of_kpi_entries.append(electricity_to_grid_entry)
 
         return list_of_kpi_entries
 

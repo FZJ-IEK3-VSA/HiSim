@@ -9,7 +9,7 @@ The component with the lowest source weight is activated first.
 # clean
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import Any, List, Tuple, Union, Optional
+from typing import Any, List, Tuple, Union
 from collections import OrderedDict
 from dataclasses_json import dataclass_json
 import pandas as pd

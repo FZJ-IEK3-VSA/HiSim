@@ -11,6 +11,7 @@ from hisim.component import OpexCostDataClass
 from hisim.components.advanced_battery_bslib import Battery
 from hisim.components.electricity_meter import ElectricityMeter
 from hisim.components.gas_meter import GasMeter
+from hisim.components.heating_meter import HeatingMeter
 from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLib
 from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib
 from hisim.components.generic_heat_pump_modular import ModularHeatPump
@@ -58,7 +59,9 @@ def opex_calculation(
                 # cost and co2_footprint are calculated per simulated period
                 component_class_name = component_unwrapped.get_classname()
                 # get opex data for all components except Electricity and Gas Meter
-                if component_class_name != ElectricityMeter.get_classname() and component_class_name != GasMeter.get_classname():
+                if (component_class_name != ElectricityMeter.get_classname() and
+                        component_class_name != GasMeter.get_classname() and
+                        component_class_name != HeatingMeter.get_classname()):
                     opex_cost_data_class: OpexCostDataClass = component_unwrapped.get_cost_opex(
                         all_outputs=all_outputs,
                         postprocessing_results=postprocessing_results,

@@ -219,7 +219,7 @@ class WeatherDataImport:
                     raise KeyError(
                         f"Note: {60 * 24 * 365 /10 - len(time_df)+1} entries for an entire year are missing. Too much!"
                     )
-
+            print("Write Weather Data into Dataframe.")
             temperature_dwd_df = (
                 values[values["parameter"] == "temperature_air_mean_200"]
                 .groupby("date")["value"]
@@ -449,7 +449,7 @@ class WeatherDataImport:
             #     )
 
             self.safe_as_csv(weather_df, csv_path)
-
+        print("Safe Weatherdata successfully in .csv.")
         self.csv_path = csv_path
 
     def era5_request(

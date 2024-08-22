@@ -16,7 +16,6 @@ from hisim.postprocessing.kpi_computation.kpi_preparation import KpiPreparation
 
 @dataclass
 class KpiGenerator(JSONWizard, KpiPreparation):
-
     """Class for generating and calculating key performance indicators."""
 
     post_processing_data_transfer: PostProcessingDataTransfer

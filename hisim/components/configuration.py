@@ -302,6 +302,8 @@ class EmissionFactorsAndCostsForFuelsConfig:
         [3]: https://de.statista.com/statistik/daten/studie/779/umfrage/durchschnittspreis-fuer-dieselkraftstoff-seit-dem-jahr-1950/
         [4]: https://de.statista.com/statistik/daten/studie/168286/umfrage/entwicklung-der-gaspreise-fuer-haushaltskunden-seit-2006/
         [5]: https://de.statista.com/statistik/daten/studie/38897/umfrage/co2-emissionsfaktor-fuer-den-strommix-in-deutschland-seit-1990/
+        [6]: https://www.destatis.de/DE/Themen/Wirtschaft/Preise/Erdgas-Strom-DurchschnittsPreise/_inhalt.html#421258
+        [7]: https://de.statista.com/statistik/daten/studie/250114/umfrage/preis-fuer-fernwaerme-nach-anschlusswert-in-deutschland/
         """
         if year == 2018:
             return EmissionFactorsAndCostsForFuelsConfig(
@@ -371,6 +373,20 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 oil_costs_in_euro_per_l=1.159835766,  # EUR/l
                 oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
                 diesel_costs_in_euro_per_l=1.96,  # EUR/l  # Source: [3]
+                diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
+            )
+        if year == 2023:
+            return EmissionFactorsAndCostsForFuelsConfig(
+                electricity_costs_in_euro_per_kwh=0.4175,  # EUR/kWh  # Source: [6]
+                electricity_footprint_in_kg_per_kwh=0.380,  # kgCO2eq/kWh  # Source: [5]
+                electricity_to_grid_revenue_in_euro_per_kwh=0.0733,  # EUR/kWh  # Source: [2]
+                contracting_heating_costs_in_euro_per_kwh=0.147,  # EUR/kWh  # Source: [7]
+                contracting_heating_footprint_in_kg_per_kwh=0.1823,  # kgCO2eq/kWh
+                gas_costs_in_euro_per_kwh=0.1141,  # EUR/kWh  # Source: [6]
+                gas_footprint_in_kg_per_kwh=0.247,  # kgCO2eq/kWh
+                oil_costs_in_euro_per_l=1.159835766,  # EUR/l
+                oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
+                diesel_costs_in_euro_per_l=1.73,  # EUR/l  # Source: [3]
                 diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
             )
 

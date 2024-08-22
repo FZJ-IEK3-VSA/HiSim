@@ -44,7 +44,7 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
     building_name: str
     name: str
     power_th_in_watt: float
-    temperature_in_celsius: float
+    temperature_out_in_celsius: float
     const_source: SimpleHeatSourceType
     #: CO2 footprint of investment in kg
     co2_footprint: float
@@ -71,10 +71,10 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
             name="HeatingHeatSourceConstPower",
             const_source=SimpleHeatSourceType.CONSTANTTHERMALPOWER,
             power_th_in_watt=5000.0,
-            temperature_in_celsius=5,
+            temperature_out_in_celsius=5,
             co2_footprint=100,  # Todo: check value
             cost=2000,  # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
-            lifetime=25,  # value from emission_factors_and_costs_devices.csv
+            lifetime=25,
             maintenance_cost_as_percentage_of_investment=10,  # from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
         )
         return config
@@ -90,7 +90,7 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
             name="HeatingHeatSourceConstTemperature",
             const_source=SimpleHeatSourceType.CONSTANTTEMPERATURE,
             power_th_in_watt=0,
-            temperature_in_celsius=5,
+            temperature_out_in_celsius=5,
             co2_footprint=100,  # Todo: check value
             cost=2000,
             # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
@@ -111,7 +111,7 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
             name="HeatingHeatSourceVarBrinetemperature",
             const_source=SimpleHeatSourceType.BRINETEMPERATURE,
             power_th_in_watt=0,
-            temperature_in_celsius=5,
+            temperature_out_in_celsius=5,
             co2_footprint=100,  # Todo: check value
             cost=2000,
             # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
@@ -139,10 +139,12 @@ class SimpleHeatSource(cp.Component):
 
     # Inputs
     DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
+    MassFlow = "MassFlow"
+    TemperatureInput = "TemperatureInput"
 
     # Outputs
     ThermalPowerDelivered = "ThermalPowerDelivered"
-    TemperatureDelivered = "TemperatureDelivered"
+    TemperatureOutput = "TemperatureOutput"
 
     def __init__(
         self,
@@ -172,23 +174,39 @@ class SimpleHeatSource(cp.Component):
             unit=Units.CELSIUS,
             mandatory=True,
         )
+
+        self.massflow_input_channel: ComponentInput = self.add_input(
+            object_name=self.component_name,
+            field_name=self.MassFlow,
+            load_type=lt.LoadTypes.VOLUME,
+            unit=Units.KG_PER_SEC,
+            mandatory=False,
+        )
+
+        self.temperature_input_channel: ComponentInput = self.add_input(
+            object_name=self.component_name,
+            field_name=self.TemperatureInput,
+            load_type=lt.LoadTypes.TEMPERATURE,
+            unit=Units.CELSIUS,
+            mandatory=False,
+        )
+
         # Outputs
-        if self.config.const_source == SimpleHeatSourceType.CONSTANTTHERMALPOWER:
-            self.thermal_power_delivered_channel: cp.ComponentOutput = self.add_output(
+        self.thermal_power_delivered_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ThermalPowerDelivered,
+            load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT,
+            output_description="Thermal Power Delivered",
+        )
+        if self.config.const_source in [SimpleHeatSourceType.CONSTANTTEMPERATURE,
+                                        SimpleHeatSourceType.BRINETEMPERATURE]:
+            self.temperature_output_channel: cp.ComponentOutput = self.add_output(
                 object_name=self.component_name,
-                field_name=self.ThermalPowerDelivered,
-                load_type=lt.LoadTypes.HEATING,
-                unit=lt.Units.WATT,
-                output_description="Thermal Power Delivered",
-            )
-        elif self.config.const_source in [SimpleHeatSourceType.CONSTANTTEMPERATURE,
-                                          SimpleHeatSourceType.BRINETEMPERATURE]:
-            self.temperature_delivered_channel: cp.ComponentOutput = self.add_output(
-                object_name=self.component_name,
-                field_name=self.TemperatureDelivered,
+                field_name=self.TemperatureOutput,
                 load_type=lt.LoadTypes.TEMPERATURE,
                 unit=lt.Units.CELSIUS,
-                output_description="Temperature Delivered",
+                output_description="Temperature Output",
             )
 
         self.add_default_connections(self.get_default_connections_from_weather())
@@ -216,7 +234,7 @@ class SimpleHeatSource(cp.Component):
         if self.config.const_source == SimpleHeatSourceType.CONSTANTTHERMALPOWER:
             lines.append(f"Power: {self.config.power_th_in_watt * 1e-3:4.0f} kW")
         if self.config.const_source == SimpleHeatSourceType.CONSTANTTEMPERATURE:
-            lines.append(f"Temperature : {self.config.temperature_in_celsius} °C")
+            lines.append(f"Temperature : {self.config.temperature_out_in_celsius} °C")
         if self.config.const_source == SimpleHeatSourceType.BRINETEMPERATURE:
             lines.append("Temperature : .... °C")
         return lines
@@ -244,11 +262,22 @@ class SimpleHeatSource(cp.Component):
             self.daily_avg_outside_temperature_input_channel
         )
 
+        massflow_in_kg_per_sec = stsv.get_input_value(
+            self.massflow_input_channel
+        )
+        temperature_input_in_celsius = stsv.get_input_value(
+            self.temperature_input_channel
+        )
+
         if self.config.const_source == SimpleHeatSourceType.CONSTANTTHERMALPOWER:
             stsv.set_output_value(self.thermal_power_delivered_channel, self.config.power_th_in_watt)
 
         if self.config.const_source == SimpleHeatSourceType.CONSTANTTEMPERATURE:
-            stsv.set_output_value(self.temperature_delivered_channel, self.config.temperature_in_celsius)
+            thermal_power_in_watt = (massflow_in_kg_per_sec * 4180 *
+                                     (self.config.temperature_out_in_celsius - temperature_input_in_celsius))
+
+            stsv.set_output_value(self.thermal_power_delivered_channel, thermal_power_in_watt)
+            stsv.set_output_value(self.temperature_output_channel, self.config.temperature_out_in_celsius)
 
         if self.config.const_source == SimpleHeatSourceType.BRINETEMPERATURE:
             """From hplib: Calculate the soil temperature by the average Temperature of the day.
@@ -256,14 +285,17 @@ class SimpleHeatSource(cp.Component):
             added 9 points at -15°C average day at 3°C soil temperature in order to prevent higher
             temperature of soil below -10°C."""
 
-            t_brine = (
+            t_brine_out = (
                 -0.0003 * daily_avg_outside_temperature_in_celsius**3
                 + 0.0086 * daily_avg_outside_temperature_in_celsius**2
                 + 0.3047 * daily_avg_outside_temperature_in_celsius
                 + 5.0647
             )
+            thermal_power_in_watt = (massflow_in_kg_per_sec * 4180 *
+                                     (t_brine_out - temperature_input_in_celsius))
 
-            stsv.set_output_value(self.temperature_delivered_channel, t_brine)
+            stsv.set_output_value(self.thermal_power_delivered_channel, thermal_power_in_watt)
+            stsv.set_output_value(self.temperature_output_channel, t_brine_out)
 
     @staticmethod
     def get_cost_capex(

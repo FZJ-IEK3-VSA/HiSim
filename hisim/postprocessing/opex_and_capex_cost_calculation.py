@@ -71,9 +71,7 @@ def opex_calculation(
                     total_operational_co2_footprint_building_object += co2_footprint
                     total_consumption_in_kwh_building_object += consumption
 
-                    if (isinstance(component_unwrapped, MoreAdvancedHeatPumpHPLib) or
-                            isinstance(component_unwrapped, HeatPumpHplib) or
-                            isinstance(component_unwrapped, ModularHeatPump)):
+                    if isinstance(component_unwrapped, (HeatPumpHplib, ModularHeatPump, MoreAdvancedHeatPumpHPLib)):
                         pass
                     else:
                         total_energy_cost_building_object_without_hp += cost_energy
@@ -221,9 +219,7 @@ def capex_calculation(
                         device_co2_footprint_per_simulated_period_building_object
                     )
 
-                    if (isinstance(component_unwrapped, MoreAdvancedHeatPumpHPLib) or
-                            isinstance(component_unwrapped, HeatPumpHplib) or
-                            isinstance(component_unwrapped, ModularHeatPump)):
+                    if isinstance(component_unwrapped, (HeatPumpHplib, ModularHeatPump, MoreAdvancedHeatPumpHPLib)):
                         pass
                     else:
                         total_investment_cost_building_object_without_hp += capex

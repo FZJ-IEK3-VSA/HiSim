@@ -20,7 +20,6 @@ from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, 
 
 
 class KpiPreparation:
-
     """Class for generating and calculating key performance indicators."""
 
     def __init__(
@@ -79,14 +78,24 @@ class KpiPreparation:
                         or InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED in output.postprocessing_flag
                     ):
                         total_consumption_ids.append(index)
-                        log.debug("Output considered in total electricity consumption " + output.full_name + " " + str(output.unit))
+                        log.debug(
+                            "Output considered in total electricity consumption "
+                            + output.full_name
+                            + " "
+                            + str(output.unit)
+                        )
 
                     if InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
                         if ComponentType.BATTERY in output.postprocessing_flag:
                             battery_charge_discharge_ids.append(index)
                         elif ComponentType.CAR_BATTERY in output.postprocessing_flag:
                             total_consumption_ids.append(index)
-                            log.debug("Output considered in total electricity consumption " + output.full_name + " " + str(output.unit))
+                            log.debug(
+                                "Output considered in total electricity consumption "
+                                + output.full_name
+                                + " "
+                                + str(output.unit)
+                            )
                 else:
                     continue
 
@@ -100,9 +109,7 @@ class KpiPreparation:
         result_dataframe["building_production"] = (
             pd.DataFrame(results.iloc[:, buildings_production_ids]).clip(lower=0).sum(axis=1)
         )
-        result_dataframe["pv_production"] = (
-            pd.DataFrame(results.iloc[:, pv_production_ids]).clip(lower=0).sum(axis=1)
-        )
+        result_dataframe["pv_production"] = pd.DataFrame(results.iloc[:, pv_production_ids]).clip(lower=0).sum(axis=1)
         result_dataframe["windturbine_production"] = (
             pd.DataFrame(results.iloc[:, windturbine_production_ids]).clip(lower=0).sum(axis=1)
         )
@@ -183,7 +190,10 @@ class KpiPreparation:
             total_electricity_consumption_in_kilowatt_hour + battery_losses_in_kilowatt_hour
         )
         log.debug("Battery losses " + str(battery_losses_in_kilowatt_hour))
-        log.debug("Total electricity consumption (battery losses included) " + str(total_electricity_consumption_in_kilowatt_hour))
+        log.debug(
+            "Total electricity consumption (battery losses included) "
+            + str(total_electricity_consumption_in_kilowatt_hour)
+        )
 
         # make kpi entry
         total_consumtion_entry = KpiEntry(
@@ -199,22 +209,19 @@ class KpiPreparation:
             tag=KpiTagEnumClass.GENERAL,
         )
         pv_production_entry = KpiEntry(
-            name="PV production",
-            unit="kWh",
-            value=pv_production_in_kilowatt_hour,
-            tag=KpiTagEnumClass.GENERAL
+            name="PV production", unit="kWh", value=pv_production_in_kilowatt_hour, tag=KpiTagEnumClass.GENERAL
         )
         windturbine_production_entry = KpiEntry(
             name="Windturbine production",
             unit="kWh",
             value=windturbine_production_in_kilowatt_hour,
-            tag=KpiTagEnumClass.GENERAL
+            tag=KpiTagEnumClass.GENERAL,
         )
         building_production_entry = KpiEntry(
             name="Building production",
             unit="kWh",
             value=building_production_in_kilowatt_hour,
-            tag=KpiTagEnumClass.GENERAL
+            tag=KpiTagEnumClass.GENERAL,
         )
         battery_charging_entry = KpiEntry(
             name="Battery charging energy",
@@ -229,10 +236,7 @@ class KpiPreparation:
             tag=KpiTagEnumClass.BATTERY,
         )
         battery_losses_entry = KpiEntry(
-            name="Battery losses",
-            unit="kWh",
-            value=battery_losses_in_kilowatt_hour,
-            tag=KpiTagEnumClass.BATTERY
+            name="Battery losses", unit="kWh", value=battery_losses_in_kilowatt_hour, tag=KpiTagEnumClass.BATTERY
         )
 
         # update kpi collection dict
@@ -669,13 +673,20 @@ class KpiPreparation:
         total_cost_entry = KpiEntry(
             name="Total costs for simulated period",
             unit="EUR",
-            value=total_maintenance_cost_per_simulated_period + total_investment_cost_per_simulated_period + gas_costs_in_euro + electricity_costs_in_euro + heating_costs_in_euro,
+            value=total_maintenance_cost_per_simulated_period
+            + total_investment_cost_per_simulated_period
+            + gas_costs_in_euro
+            + electricity_costs_in_euro
+            + heating_costs_in_euro,
             tag=KpiTagEnumClass.COSTS,
         )
         total_emissions_entry = KpiEntry(
             name="Total CO2 emissions for simulated period",
             unit="kg",
-            value=total_device_co2_footprint_per_simulated_period + gas_co2_in_kg + electricity_co2_in_kg + heating_co2_in_kg,
+            value=total_device_co2_footprint_per_simulated_period
+            + gas_co2_in_kg
+            + electricity_co2_in_kg
+            + heating_co2_in_kg,
             tag=KpiTagEnumClass.EMISSIONS,
         )
 
@@ -700,13 +711,20 @@ class KpiPreparation:
         total_cost_without_hp_entry = KpiEntry(
             name="Total costs without heatpump for simulated period",
             unit="EUR",
-            value=total_maintenance_cost_per_simulated_period_without_hp + total_investment_cost_per_simulated_period_without_hp + gas_costs_in_euro + electricity_costs_in_euro + heating_costs_in_euro,
+            value=total_maintenance_cost_per_simulated_period_without_hp
+            + total_investment_cost_per_simulated_period_without_hp
+            + gas_costs_in_euro
+            + electricity_costs_in_euro
+            + heating_costs_in_euro,
             tag=KpiTagEnumClass.COSTS,
         )
         total_emissions_without_hp_entry = KpiEntry(
             name="Total CO2 emissions without heatpump for simulated period",
             unit="kg",
-            value=total_device_co2_footprint_per_simulated_period_without_hp + gas_co2_in_kg + electricity_co2_in_kg + heating_co2_in_kg,
+            value=total_device_co2_footprint_per_simulated_period_without_hp
+            + gas_co2_in_kg
+            + electricity_co2_in_kg
+            + heating_co2_in_kg,
             tag=KpiTagEnumClass.EMISSIONS,
         )
 

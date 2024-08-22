@@ -14,6 +14,7 @@ from hisim.components.gas_meter import GasMeter
 from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLib
 from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib
 from hisim.components.generic_heat_pump_modular import ModularHeatPump
+from hisim.components.simple_const_heat_source import SimpleHeatSource
 
 
 def opex_calculation(
@@ -71,7 +72,8 @@ def opex_calculation(
                     total_operational_co2_footprint_building_object += co2_footprint
                     total_consumption_in_kwh_building_object += consumption
 
-                    if isinstance(component_unwrapped, (HeatPumpHplib, ModularHeatPump, MoreAdvancedHeatPumpHPLib)):
+                    if isinstance(component_unwrapped, (HeatPumpHplib, ModularHeatPump,
+                                                        MoreAdvancedHeatPumpHPLib, SimpleHeatSource)):
                         pass
                     else:
                         total_energy_cost_building_object_without_hp += cost_energy
@@ -219,7 +221,8 @@ def capex_calculation(
                         device_co2_footprint_per_simulated_period_building_object
                     )
 
-                    if isinstance(component_unwrapped, (HeatPumpHplib, ModularHeatPump, MoreAdvancedHeatPumpHPLib)):
+                    if isinstance(component_unwrapped, (HeatPumpHplib, ModularHeatPump,
+                                                        MoreAdvancedHeatPumpHPLib, SimpleHeatSource)):
                         pass
                     else:
                         total_investment_cost_building_object_without_hp += capex

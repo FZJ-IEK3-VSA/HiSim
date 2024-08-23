@@ -59,9 +59,11 @@ def opex_calculation(
                 # cost and co2_footprint are calculated per simulated period
                 component_class_name = component_unwrapped.get_classname()
                 # get opex data for all components except Electricity and Gas Meter
-                if (component_class_name != ElectricityMeter.get_classname() and
-                        component_class_name != GasMeter.get_classname() and
-                        component_class_name != HeatingMeter.get_classname()):
+                if (
+                    component_class_name != ElectricityMeter.get_classname()
+                    and component_class_name != GasMeter.get_classname()
+                    and component_class_name != HeatingMeter.get_classname()
+                ):
                     opex_cost_data_class: OpexCostDataClass = component_unwrapped.get_cost_opex(
                         all_outputs=all_outputs,
                         postprocessing_results=postprocessing_results,
@@ -75,8 +77,10 @@ def opex_calculation(
                     total_operational_co2_footprint_building_object += co2_footprint
                     total_consumption_in_kwh_building_object += consumption
 
-                    if isinstance(component_unwrapped, (HeatPumpHplib, ModularHeatPump,
-                                                        MoreAdvancedHeatPumpHPLib, SimpleHeatSource)):
+                    if isinstance(
+                        component_unwrapped,
+                        (HeatPumpHplib, ModularHeatPump, MoreAdvancedHeatPumpHPLib, SimpleHeatSource),
+                    ):
                         pass
                     else:
                         total_energy_cost_building_object_without_hp += cost_energy
@@ -111,6 +115,21 @@ def opex_calculation(
             ]
         )
 
+        opex_table_as_list_of_list.append(
+            [
+                f"{building_object}_Total_only_heatpump",
+                round(total_maintenance_cost_building_object - total_maintenance_cost_building_object_without_hp, 2),
+                round(
+                    total_operational_co2_footprint_building_object
+                    - total_operational_co2_footprint_building_object_without_hp,
+                    2,
+                ),
+                round(
+                    total_consumption_in_kwh_building_object - total_consumption_in_kwh_building_object_without_hp, 2
+                ),
+            ]
+        )
+
         total_opex_energy_cost += total_energy_cost_building_object
         total_opex_maintenance_cost += total_maintenance_cost_building_object
         total_operational_co2_footprint += total_operational_co2_footprint_building_object
@@ -137,6 +156,15 @@ def opex_calculation(
             round(total_consumption_in_kwh_without_hp, 2),
         ]
     )
+    opex_table_as_list_of_list.append(
+        [
+            "Total_only_heatpump",
+            round(total_opex_maintenance_cost - total_opex_maintenance_cost_without_hp, 2),
+            round(total_operational_co2_footprint - total_operational_co2_footprint_without_hp, 2),
+            round(total_consumption_in_kwh - total_consumption_in_kwh_without_hp, 2),
+        ]
+    )
+
     pathname = os.path.join(simulation_parameters.result_directory, "operational_costs_co2_footprint.csv")
     opex_df = pd.DataFrame(opex_table_as_list_of_list, columns=headline)
     opex_df.to_csv(pathname, index=False, header=True, encoding="utf8", sep=";")
@@ -224,14 +252,20 @@ def capex_calculation(
                         device_co2_footprint_per_simulated_period_building_object
                     )
 
-                    if isinstance(component_unwrapped, (HeatPumpHplib, ModularHeatPump,
-                                                        MoreAdvancedHeatPumpHPLib, SimpleHeatSource)):
+                    if isinstance(
+                        component_unwrapped,
+                        (HeatPumpHplib, ModularHeatPump, MoreAdvancedHeatPumpHPLib, SimpleHeatSource),
+                    ):
                         pass
                     else:
                         total_investment_cost_building_object_without_hp += capex
                         total_device_co2_footprint_building_object_without_hp += co2_footprint
-                        total_investment_cost_per_simulated_period_building_object_without_hp += capex_per_simulated_period_building_object
-                        total_device_co2_footprint_per_simulated_period_building_object_without_hp += device_co2_footprint_per_simulated_period_building_object
+                        total_investment_cost_per_simulated_period_building_object_without_hp += (
+                            capex_per_simulated_period_building_object
+                        )
+                        total_device_co2_footprint_per_simulated_period_building_object_without_hp += (
+                            device_co2_footprint_per_simulated_period_building_object
+                        )
 
                     capex_table_as_list_of_list.append(
                         [
@@ -257,6 +291,22 @@ def capex_calculation(
         )
         capex_table_as_list_of_list.append(
             [
+                f"{building_object}_Total_per_simulated_period_only_heatpump",
+                round(
+                    total_investment_cost_per_simulated_period_building_object
+                    - total_investment_cost_per_simulated_period_building_object_without_hp,
+                    2,
+                ),
+                round(
+                    total_device_co2_footprint_per_simulated_period_building_object
+                    - total_device_co2_footprint_per_simulated_period_building_object_without_hp,
+                    2,
+                ),
+                "---",
+            ]
+        )
+        capex_table_as_list_of_list.append(
+            [
                 f"{building_object}_Total_per_simulated_period",
                 round(total_investment_cost_per_simulated_period_building_object, 2),
                 round(total_device_co2_footprint_per_simulated_period_building_object, 2),
@@ -268,6 +318,17 @@ def capex_calculation(
                 f"{building_object}_Total_without_heatpump",
                 round(total_investment_cost_building_object_without_hp, 2),
                 round(total_device_co2_footprint_building_object_without_hp, 2),
+                "---",
+            ]
+        )
+        capex_table_as_list_of_list.append(
+            [
+                f"{building_object}_Total_only_heatpump",
+                round(total_investment_cost_building_object - total_investment_cost_building_object_without_hp, 2),
+                round(
+                    total_device_co2_footprint_building_object - total_device_co2_footprint_building_object_without_hp,
+                    2,
+                ),
                 "---",
             ]
         )
@@ -290,7 +351,8 @@ def capex_calculation(
         total_investment_cost_without_hp += total_investment_cost_building_object_without_hp
         total_device_co2_footprint_without_hp += total_device_co2_footprint_building_object_without_hp
         total_investment_cost_per_simulated_period_without_hp += (
-            total_investment_cost_per_simulated_period_building_object_without_hp)
+            total_investment_cost_per_simulated_period_building_object_without_hp
+        )
         total_device_co2_footprint_per_simulated_period_without_hp += (
             total_device_co2_footprint_per_simulated_period_building_object_without_hp
         )
@@ -313,6 +375,20 @@ def capex_calculation(
     )
     capex_table_as_list_of_list.append(
         [
+            "Total_per_simulated_period_only_heatpump",
+            round(
+                total_investment_cost_per_simulated_period - total_investment_cost_per_simulated_period_without_hp, 2
+            ),
+            round(
+                total_device_co2_footprint_per_simulated_period
+                - total_device_co2_footprint_per_simulated_period_without_hp,
+                2,
+            ),
+            "---",
+        ]
+    )
+    capex_table_as_list_of_list.append(
+        [
             "Total",
             round(total_investment_cost, 2),
             round(total_device_co2_footprint, 2),
@@ -324,6 +400,14 @@ def capex_calculation(
             "Total_without_heatpump",
             round(total_investment_cost_without_hp, 2),
             round(total_device_co2_footprint_without_hp, 2),
+            "---",
+        ]
+    )
+    capex_table_as_list_of_list.append(
+        [
+            "Total_only_heatpump",
+            round(total_investment_cost - total_investment_cost_without_hp, 2),
+            round(total_device_co2_footprint - total_device_co2_footprint_without_hp, 2),
             "---",
         ]
     )

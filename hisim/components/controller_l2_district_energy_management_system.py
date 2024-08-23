@@ -166,6 +166,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
         "SpaceHeatingWaterStorageTemperatureModifier"  # used for HeatPumpHplibController
     )
     SurplusUnusedFromDistrictEMSOutput = "SurplusUnusedFromDistrictEMSOutput"
+    SurplusUnusedFromBuildingEMSOutput = "SurplusUnusedFromBuildingEMSOutput"
 
     CheckPeakShaving = "CheckPeakShaving"
 
@@ -338,6 +339,24 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
             sankey_flow_direction=False,
             output_description=f"here a description for {self.SurplusUnusedFromDistrictEMSOutput} will follow.",
         )
+        if any(word in config.building_name for word in lt.DistrictNames):
+            self.surplus_electricity_unused_to_district_ems_from_building_ems_output: cp.ComponentOutput = self.add_output(
+                object_name=self.component_name,
+                field_name=self.SurplusUnusedFromBuildingEMSOutput,
+                load_type=lt.LoadTypes.ELECTRICITY,
+                unit=lt.Units.WATT,
+                sankey_flow_direction=False,
+                output_description=f"here a description for {self.SurplusUnusedFromBuildingEMSOutput} will follow.",
+                postprocessing_flag=(
+                    [
+                        lt.InandOutputType.ELECTRICITY_PRODUCTION,
+                        lt.ComponentType.BUILDINGS,
+                        lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+                    ]
+                    if any(word in config.building_name for word in lt.DistrictNames)
+                    else []
+                ),
+            )
 
         self.add_dynamic_default_connections(self.get_default_connections_from_utsp_occupancy())
         self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
@@ -698,6 +717,18 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
         self.state.consumption_ems_controlled_in_watt = sum(
             [stsv.get_input_value(component_input=elem) for elem in self.consumption_ems_controlled_inputs]
         )
+
+        if any(word in self.config.building_name for word in lt.DistrictNames):
+            production_inputs_from_buildings = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_PRODUCTION,
+                                                                             lt.ComponentType.BUILDINGS])
+
+            building_electricity_surplus_unused = (
+                sum([stsv.get_input_value(component_input=elem) for elem in production_inputs_from_buildings]))
+
+            stsv.set_output_value(
+                self.surplus_electricity_unused_to_district_ems_from_building_ems_output,
+                building_electricity_surplus_unused,
+            )
 
         # Production of Electricity positve sign
         # Consumption of Electricity negative sign
@@ -1299,7 +1330,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                         )
                     )
                     dhw_heatpump_electricity_from_grid_entry = KpiEntry(
-                        name="Domestic hot water heat pump electricity from grid EMS",
+                        name=f"Domestic hot water heat pump electricity from grid{self.component_name}",
                         unit="kWh",
                         value=dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
                         tag=KpiTagEnumClass.EMS,
@@ -1319,7 +1350,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                         )
                         # make kpi entry
                         sh_heatpump_electricity_from_grid_entry = KpiEntry(
-                            name="Space heating heat pump electricity from grid EMS",
+                            name=f"Space heating heat pump electricity from grid {self.component_name}",
                             unit="kWh",
                             value=sh_heatpump_electricity_from_grid_in_kilowatt_hour,
                             tag=KpiTagEnumClass.EMS,
@@ -1337,7 +1368,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                             )
                         )
                         dhw_heatpump_electricity_from_grid_entry = KpiEntry(
-                            name="Domestic hot water heat pump electricity from grid EMS",
+                            name=f"Domestic hot water heat pump electricity from grid {self.component_name}",
                             unit="kWh",
                             value=dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
                             tag=KpiTagEnumClass.EMS,
@@ -1358,7 +1389,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                     )
                     # make kpi entry
                     sh_heatpump_electricity_from_grid_entry = KpiEntry(
-                        name="Space heating heat pump electricity from grid EMS",
+                        name=f"Space heating heat pump electricity from grid {self.component_name}",
                         unit="kWh",
                         value=sh_heatpump_electricity_from_grid_in_kilowatt_hour,
                         tag=KpiTagEnumClass.EMS,
@@ -1377,7 +1408,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                         )
                     )
                     occupancy_electricity_from_grid_entry = KpiEntry(
-                        name="Residents' electricity consumption from grid EMS",
+                        name=f"Residents' electricity consumption from grid {self.component_name}",
                         unit="kWh",
                         value=occupancy_electricity_from_grid_in_kilowatt_hour,
                         tag=KpiTagEnumClass.EMS,
@@ -1395,7 +1426,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                         )
                     )
                     electricity_consumption_ems_controlled_entry = KpiEntry(
-                        name="Controlled electricity consumption EMS",
+                        name=f"Controlled electricity consumption {self.component_name}",
                         unit="kWh",
                         value=total_electricity_consumption_ems_controlled_in_kilowatt_hour,
                         tag=KpiTagEnumClass.EMS,
@@ -1413,7 +1444,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                         )
                     )
                     electricity_consumption_ems_uncontrolled_entry = KpiEntry(
-                        name="Uncontrolled electricity consumption EMS",
+                        name=f"Uncontrolled electricity consumption {self.component_name}",
                         unit="kWh",
                         value=total_electricity_consumption_ems_uncontrolled_in_kilowatt_hour,
                         tag=KpiTagEnumClass.EMS,
@@ -1431,7 +1462,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                         )
                     )
                     electricity_consumption_total_entry = KpiEntry(
-                        name="Total electricity consumption EMS",
+                        name=f"Total electricity consumption {self.component_name}",
                         unit="kWh",
                         value=total_electricity_consumption_in_kilowatt_hour,
                         tag=KpiTagEnumClass.EMS,
@@ -1449,7 +1480,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                         )
                     )
                     electricity_surplus_from_district_entry = KpiEntry(
-                        name="Surplus from District EMS",
+                        name=f"Surplus from District {self.component_name}",
                         unit="kWh",
                         value=total_electricity_surplus_from_district_in_kilowatt_hour,
                         tag=KpiTagEnumClass.EMS,
@@ -1467,7 +1498,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                         )
                     )
                     electricity_production_entry = KpiEntry(
-                        name="Production EMS",
+                        name=f"Production {self.component_name}",
                         unit="kWh",
                         value=total_production_in_kilowatt_hour,
                         tag=KpiTagEnumClass.EMS,
@@ -1485,7 +1516,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                         )
                     )
                     electricity_from_grid_entry = KpiEntry(
-                        name="Total electricity from grid EMS",
+                        name=f"Total electricity from grid {self.component_name}",
                         unit="kWh",
                         value=total_electricity_from_grid_in_kilowatt_hour,
                         tag=KpiTagEnumClass.EMS,
@@ -1503,7 +1534,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                         )
                     )
                     electricity_to_grid_entry = KpiEntry(
-                        name="Total electricity to grid EMS",
+                        name=f"Total electricity to grid {self.component_name}",
                         unit="kWh",
                         value=total_electricity_to_grid_in_kilowatt_hour,
                         tag=KpiTagEnumClass.EMS,

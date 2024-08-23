@@ -109,11 +109,12 @@ class KpiPreparation:
         result_dataframe["building_production"] = (
             pd.DataFrame(results.iloc[:, buildings_production_ids]).clip(lower=0).sum(axis=1)
         )
-        result_dataframe["pv_production"] = pd.DataFrame(results.iloc[:, pv_production_ids]).clip(lower=0).sum(axis=1)
+        result_dataframe["pv_production"] = (
+            pd.DataFrame(results.iloc[:, pv_production_ids]).clip(lower=0).sum(axis=1)
+        )
         result_dataframe["windturbine_production"] = (
             pd.DataFrame(results.iloc[:, windturbine_production_ids]).clip(lower=0).sum(axis=1)
         )
-
         result_dataframe["battery_charge"] = (
             pd.DataFrame(results.iloc[:, battery_charge_discharge_ids]).clip(lower=0).sum(axis=1)
         )

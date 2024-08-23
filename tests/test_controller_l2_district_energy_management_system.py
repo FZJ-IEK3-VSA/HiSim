@@ -382,13 +382,13 @@ def test_house(
 
     # Get grid consumptions of components
     residents_grid_consumption_kpi_in_kilowatt_hour = jsondata["Energy Management System"][
-        "Residents' electricity consumption from grid EMS"
+        f"Residents' electricity consumption from grid {my_electricity_controller.component_name}"
     ].get("value")
     space_heating_heatpump_grid_consumption_kpi_in_kilowatt_hour = jsondata["Energy Management System"][
-        "Space heating heat pump electricity from grid EMS"
+        f"Space heating heat pump electricity from grid {my_electricity_controller.component_name}"
     ].get("value")
     domestic_hot_water_heatpump_grid_consumption_kpi_in_kilowatt_hour = jsondata["Energy Management System"][
-        "Domestic hot water heat pump electricity from grid EMS"
+        f"Domestic hot water heat pump electricity from grid {my_electricity_controller.component_name}"
     ].get("value")
     sum_component_grid_consumptions_in_kilowatt_hour = (
         residents_grid_consumption_kpi_in_kilowatt_hour

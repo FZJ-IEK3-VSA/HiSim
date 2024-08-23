@@ -757,6 +757,19 @@ class KpiPreparation:
             value=total_maintenance_cost_per_simulated_period_only_hp,
             tag=KpiTagEnumClass.COSTS,
         )
+        total_cost_only_hp_entry = KpiEntry(
+            name="Total costs only heatpump for simulated period",
+            unit="EUR",
+            value=total_maintenance_cost_per_simulated_period_only_hp
+                  + total_investment_cost_per_simulated_period_only_hp,
+            tag=KpiTagEnumClass.COSTS,
+        )
+        total_emissions_only_hp_entry = KpiEntry(
+            name="Total CO2 emissions only heatpump for simulated period",
+            unit="kg",
+            value=total_device_co2_footprint_per_simulated_period_only_hp,
+            tag=KpiTagEnumClass.EMISSIONS,
+        )
 
         # update kpi collection dict
         self.kpi_collection_dict_unsorted[building_object].update(
@@ -780,6 +793,8 @@ class KpiPreparation:
                 total_investment_cost_per_simulated_period_only_hp_entry.name: total_investment_cost_per_simulated_period_only_hp_entry.to_dict(),
                 total_device_co2_footprint_per_simulated_period_only_hp_entry.name: total_device_co2_footprint_per_simulated_period_only_hp_entry.to_dict(),
                 total_maintenance_cost_only_hp_entry.name: total_maintenance_cost_only_hp_entry.to_dict(),
+                total_cost_only_hp_entry.name: total_cost_only_hp_entry.to_dict(),
+                total_emissions_only_hp_entry.name: total_emissions_only_hp_entry.to_dict(),
             }
         )
 

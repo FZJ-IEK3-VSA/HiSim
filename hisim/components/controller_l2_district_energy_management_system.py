@@ -1330,7 +1330,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                         )
                     )
                     dhw_heatpump_electricity_from_grid_entry = KpiEntry(
-                        name=f"Domestic hot water heat pump electricity from grid{self.component_name}",
+                        name=f"Domestic hot water heat pump electricity from grid {self.component_name}",
                         unit="kWh",
                         value=dhw_heatpump_electricity_from_grid_in_kilowatt_hour,
                         tag=KpiTagEnumClass.EMS,

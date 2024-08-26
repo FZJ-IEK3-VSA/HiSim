@@ -266,6 +266,15 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
             unit=lt.Units.WATT,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.TotalElectricityConsumption} will follow.",
+            postprocessing_flag=(
+                [
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                    lt.ComponentType.BUILDINGS,
+                    lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+                ]
+                if any(word in config.building_name for word in lt.DistrictNames)
+                else []
+            ),
         )
 
         self.total_electricity_consumption_ems_controlled_channel: cp.ComponentOutput = self.add_output(

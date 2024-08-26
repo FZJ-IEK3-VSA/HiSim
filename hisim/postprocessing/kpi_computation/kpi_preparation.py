@@ -12,7 +12,7 @@ from pathlib import Path
 import pandas as pd
 from hisim.component import ComponentOutput
 from hisim.component_wrapper import ComponentWrapper
-from hisim.loadtypes import ComponentType, InandOutputType
+from hisim.loadtypes import ComponentType, InandOutputType, DistrictNames
 from hisim import log
 from hisim.components.electricity_meter import ElectricityMeter
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
@@ -58,6 +58,7 @@ class KpiPreparation:
         pv_production_ids = []
         windturbine_production_ids = []
         battery_charge_discharge_ids = []
+        buildings_consumption_ids = []
 
         index: int
         output: ComponentOutput
@@ -84,6 +85,8 @@ class KpiPreparation:
                             + " "
                             + str(output.unit)
                         )
+                        if ComponentType.BUILDINGS in output.postprocessing_flag:
+                            buildings_consumption_ids.append(index)
 
                     if InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
                         if ComponentType.BATTERY in output.postprocessing_flag:
@@ -102,6 +105,9 @@ class KpiPreparation:
         result_dataframe = pd.DataFrame()
         result_dataframe["total_consumption"] = (
             pd.DataFrame(results.iloc[:, total_consumption_ids]).clip(lower=0).sum(axis=1)
+        )
+        result_dataframe["building_consumption"] = (
+            pd.DataFrame(results.iloc[:, buildings_consumption_ids]).clip(lower=0).sum(axis=1)
         )
         result_dataframe["total_production"] = (
             pd.DataFrame(results.iloc[:, total_production_ids]).clip(lower=0).sum(axis=1)
@@ -136,6 +142,7 @@ class KpiPreparation:
         self,
         result_dataframe: pd.DataFrame,
         building_objects_in_district: str,
+        kpi_tag: KpiTagEnumClass,
     ) -> Tuple[float, float, float, float, float]:
         """Compute electricity consumption and production and battery kpis."""
 
@@ -143,6 +150,13 @@ class KpiPreparation:
         total_electricity_consumption_in_kilowatt_hour = round(
             self.compute_total_energy_from_power_timeseries(
                 power_timeseries_in_watt=result_dataframe["total_consumption"],
+                timeresolution=self.simulation_parameters.seconds_per_timestep,
+            ),
+            1,
+        )
+        building_electricity_consumption_in_kilowatt_hour = round(
+            self.compute_total_energy_from_power_timeseries(
+                power_timeseries_in_watt=result_dataframe["building_consumption"],
                 timeresolution=self.simulation_parameters.seconds_per_timestep,
             ),
             1,
@@ -199,29 +213,32 @@ class KpiPreparation:
             name="Total electricity consumption",
             unit="kWh",
             value=total_electricity_consumption_in_kilowatt_hour,
-            tag=KpiTagEnumClass.GENERAL,
+            tag=kpi_tag,
         )
+
         total_production_entry = KpiEntry(
             name="Total electricity production",
             unit="kWh",
             value=total_electricity_production_in_kilowatt_hour,
-            tag=KpiTagEnumClass.GENERAL,
+            tag=kpi_tag,
         )
         pv_production_entry = KpiEntry(
-            name="PV production", unit="kWh", value=pv_production_in_kilowatt_hour, tag=KpiTagEnumClass.GENERAL
+            name="PV production", unit="kWh", value=pv_production_in_kilowatt_hour, tag=kpi_tag
         )
         windturbine_production_entry = KpiEntry(
-            name="Windturbine production",
-            unit="kWh",
-            value=windturbine_production_in_kilowatt_hour,
-            tag=KpiTagEnumClass.GENERAL,
+            name="Windturbine production", unit="kWh", value=windturbine_production_in_kilowatt_hour, tag=kpi_tag
         )
-        building_production_entry = KpiEntry(
-            name="Building production",
-            unit="kWh",
-            value=building_production_in_kilowatt_hour,
-            tag=KpiTagEnumClass.GENERAL,
-        )
+        if building_objects_in_district in DistrictNames.__members__:
+            building_consumption_entry = KpiEntry(
+                name="Total building electricity consumption",
+                unit="kWh",
+                value=building_electricity_consumption_in_kilowatt_hour,
+                tag=kpi_tag,
+            )
+
+            building_production_entry = KpiEntry(
+                name="Building production", unit="kWh", value=building_production_in_kilowatt_hour, tag=kpi_tag
+            )
         battery_charging_entry = KpiEntry(
             name="Battery charging energy",
             unit="kWh",
@@ -245,12 +262,18 @@ class KpiPreparation:
                 total_production_entry.name: total_production_entry.to_dict(),
                 pv_production_entry.name: pv_production_entry.to_dict(),
                 windturbine_production_entry.name: windturbine_production_entry.to_dict(),
-                building_production_entry.name: building_production_entry.to_dict(),
                 battery_charging_entry.name: battery_charging_entry.to_dict(),
                 battery_discharging_entry.name: battery_discharging_entry.to_dict(),
                 battery_losses_entry.name: battery_losses_entry.to_dict(),
             }
         )
+        if building_objects_in_district in DistrictNames.__members__:
+            self.kpi_collection_dict_unsorted[building_objects_in_district].update(
+                {
+                    building_production_entry.name: building_production_entry.to_dict(),
+                    building_consumption_entry.name: building_consumption_entry.to_dict(),
+                }
+            )
 
         return (
             total_electricity_consumption_in_kilowatt_hour,
@@ -266,6 +289,7 @@ class KpiPreparation:
         electricity_production_in_kilowatt_hour: float,
         electricity_consumption_in_kilowatt_hour: float,
         building_objects_in_district: str,
+        kpi_tag: KpiTagEnumClass,
     ) -> pd.DataFrame:
         """Computes the self consumption, grid injection, autarky and battery losses if electricty production is bigger than zero."""
 
@@ -330,25 +354,16 @@ class KpiPreparation:
 
         # make kpi entry
         grid_injection_entry = KpiEntry(
-            name="Grid injection of electricity",
-            unit="kWh",
-            value=grid_injection_in_kilowatt_hour,
-            tag=KpiTagEnumClass.GENERAL,
+            name="Grid injection of electricity", unit="kWh", value=grid_injection_in_kilowatt_hour, tag=kpi_tag
         )
         self_consumption_entry = KpiEntry(
-            name="Self-consumption of electricity",
-            unit="kWh",
-            value=self_consumption_in_kilowatt_hour,
-            tag=KpiTagEnumClass.GENERAL,
+            name="Self-consumption of electricity", unit="kWh", value=self_consumption_in_kilowatt_hour, tag=kpi_tag
         )
         self_consumption_rate_entry = KpiEntry(
-            name="Self-consumption rate of electricity",
-            unit="%",
-            value=self_consumption_rate_in_percent,
-            tag=KpiTagEnumClass.GENERAL,
+            name="Self-consumption rate of electricity", unit="%", value=self_consumption_rate_in_percent, tag=kpi_tag
         )
         autarkie_rate_entry = KpiEntry(
-            name="Autarky rate of electricity", unit="%", value=autarky_rate_in_percent, tag=KpiTagEnumClass.GENERAL
+            name="Autarky rate of electricity", unit="%", value=autarky_rate_in_percent, tag=kpi_tag
         )
 
         # update kpi collection dict
@@ -416,6 +431,8 @@ class KpiPreparation:
         total_electricity_consumption_in_kilowatt_hour: float,
         electricity_from_grid_in_kilowatt_hour: Optional[float],
         building_objects_in_district: str,
+        kpi_tag: KpiTagEnumClass,
+        name: str = "Relative electricity demand from grid",
     ) -> Optional[float]:
         """Return the relative electricity demand."""
         if electricity_from_grid_in_kilowatt_hour is None:
@@ -435,10 +452,7 @@ class KpiPreparation:
 
         # make kpi entry
         relative_electricity_demand_entry = KpiEntry(
-            name="Relative electricity demand from grid",
-            unit="%",
-            value=relative_electricity_demand_from_grid_in_percent,
-            tag=KpiTagEnumClass.GENERAL,
+            name=name, unit="%", value=relative_electricity_demand_from_grid_in_percent, tag=kpi_tag
         )
 
         # update kpi collection dict
@@ -451,6 +465,8 @@ class KpiPreparation:
         self,
         relative_electricty_demand_in_percent: Optional[float],
         building_objects_in_district: str,
+        kpi_tag: KpiTagEnumClass,
+        name: str = "Autarky rate according to solar htw berlin",
     ) -> None:
         """Return the autarky rate according to solar htw berlin.
 
@@ -467,12 +483,7 @@ class KpiPreparation:
                 )
 
         # make kpi entry
-        autarky_rate_entry = KpiEntry(
-            name="Autarky rate according to solar htw berlin",
-            unit="%",
-            value=autraky_rate_in_percent,
-            tag=KpiTagEnumClass.GENERAL,
-        )
+        autarky_rate_entry = KpiEntry(name=name, unit="%", value=autraky_rate_in_percent, tag=kpi_tag)
 
         # update kpi collection dict
         self.kpi_collection_dict_unsorted[building_objects_in_district].update(
@@ -484,6 +495,8 @@ class KpiPreparation:
         total_electricity_production_in_kilowatt_hour: float,
         electricity_to_grid_in_kilowatt_hour: Optional[float],
         building_objects_in_district: str,
+        kpi_tag: KpiTagEnumClass,
+        name: str = "Self-consumption rate according to solar htw berlin",
     ) -> None:
         """Return self-consumption according to solar htw berlin.
 
@@ -507,10 +520,10 @@ class KpiPreparation:
 
         # make kpi entry
         self_consumption_rate_entry = KpiEntry(
-            name="Self-consumption rate according to solar htw berlin",
+            name=name,
             unit="%",
             value=self_consumption_rate_in_percent,
-            tag=KpiTagEnumClass.GENERAL,
+            tag=kpi_tag,
         )
 
         # update kpi collection dict
@@ -524,6 +537,7 @@ class KpiPreparation:
         numerator_value: float,
         kpi_name: str,
         building_objects_in_district: str,
+        kpi_tag: KpiTagEnumClass,
     ) -> None:
         """Compute the ratio of two values.
 
@@ -531,7 +545,12 @@ class KpiPreparation:
         """
         ratio_in_percent = denominator_value / numerator_value * 100
         # make kpi entry
-        ratio_in_percent_entry = KpiEntry(name=kpi_name, unit="%", value=ratio_in_percent, tag=KpiTagEnumClass.GENERAL)
+        ratio_in_percent_entry = KpiEntry(
+            name=kpi_name,
+            unit="%",
+            value=ratio_in_percent,
+            tag=kpi_tag,
+        )
 
         # update kpi collection dict
         self.kpi_collection_dict_unsorted[building_objects_in_district].update(
@@ -760,8 +779,9 @@ class KpiPreparation:
         total_cost_only_hp_entry = KpiEntry(
             name="Total costs only heatpump for simulated period",
             unit="EUR",
-            value=total_maintenance_cost_per_simulated_period_only_hp
-                  + total_investment_cost_per_simulated_period_only_hp,
+            value=(
+                total_maintenance_cost_per_simulated_period_only_hp + total_investment_cost_per_simulated_period_only_hp
+            ),
             tag=KpiTagEnumClass.COSTS,
         )
         total_emissions_only_hp_entry = KpiEntry(
@@ -797,6 +817,116 @@ class KpiPreparation:
                 total_emissions_only_hp_entry.name: total_emissions_only_hp_entry.to_dict(),
             }
         )
+
+    def create_overall_district_kpi_collection(self, district_name: str) -> Tuple[
+        float,
+        float,
+        float,
+    ]:
+        """Overall kpis for districts."""
+        electricity_consumption_all_single_buildings_in_kilowatt_hour = 0.0
+        electricity_produktion_all_single_buildings_in_kilowatt_hour = 0.0
+        self_consumption_all_single_buildings_in_kilowatt_hour = 0.0
+        electricity_production_district_in_kilowatt_hour = 0.0
+        electricity_consumption_district_in_kilowatt_hour = 0.0
+
+        for building_objects_in_district in self.building_objects_in_district_list:
+            if building_objects_in_district not in DistrictNames.__members__:
+                electricity_consumption_all_single_buildings_in_kilowatt_hour += self.kpi_collection_dict_unsorted[
+                    building_objects_in_district
+                ]["Total electricity consumption"]["value"]
+                electricity_produktion_all_single_buildings_in_kilowatt_hour += self.kpi_collection_dict_unsorted[
+                    building_objects_in_district
+                ]["Total electricity production"]["value"]
+                self_consumption_all_single_buildings_in_kilowatt_hour += self.kpi_collection_dict_unsorted[
+                    building_objects_in_district
+                ]["Self-consumption of electricity"]["value"]
+
+            if building_objects_in_district in DistrictNames.__members__:
+                electricity_production_district_in_kilowatt_hour += (
+                    self.kpi_collection_dict_unsorted[building_objects_in_district]["Total electricity production"][
+                        "value"
+                    ]
+                    - self.kpi_collection_dict_unsorted[building_objects_in_district]["Building production"]["value"]
+                )
+                electricity_consumption_district_in_kilowatt_hour += (
+                    self.kpi_collection_dict_unsorted[building_objects_in_district]["Total electricity consumption"][
+                        "value"
+                    ]
+                    - self.kpi_collection_dict_unsorted[building_objects_in_district][
+                        "Total building electricity consumption"
+                    ]["value"]
+                )
+
+        overall_production_district_in_kilowatt_hour = (
+            electricity_produktion_all_single_buildings_in_kilowatt_hour
+            + electricity_production_district_in_kilowatt_hour
+        )
+
+        overall_consumption_district_in_kilowatt_hour = (
+            electricity_consumption_all_single_buildings_in_kilowatt_hour
+            + electricity_consumption_district_in_kilowatt_hour
+        )
+
+        electricity_consumption_all_single_buildings_entry = KpiEntry(
+            name="Electricity consumption of all single buildings",
+            unit="kWh",
+            value=electricity_consumption_all_single_buildings_in_kilowatt_hour,
+            tag=KpiTagEnumClass.GENERAL,
+        )
+        electricity_production_all_single_buildings_entry = KpiEntry(
+            name="Electricity production of all single buildings",
+            unit="kWh",
+            value=electricity_produktion_all_single_buildings_in_kilowatt_hour,
+            tag=KpiTagEnumClass.GENERAL,
+        )
+        self_consumption_all_single_buildings_entry = KpiEntry(
+            name="Self-consumption of all single buildings",
+            unit="kWh",
+            value=self_consumption_all_single_buildings_in_kilowatt_hour,
+            tag=KpiTagEnumClass.GENERAL,
+        )
+        electricity_production_district_entry = KpiEntry(
+            name="Electricity production of district without buildings",
+            unit="kWh",
+            value=electricity_production_district_in_kilowatt_hour,
+            tag=KpiTagEnumClass.GENERAL,
+        )
+        electricity_consumption_district_entry = KpiEntry(
+            name="Electricity consumption of district without buildings",
+            unit="kWh",
+            value=electricity_consumption_district_in_kilowatt_hour,
+            tag=KpiTagEnumClass.GENERAL,
+        )
+        overall_production_district_in_kilowatt_hour_entry = KpiEntry(
+            name="Overall electricity production in district",
+            unit="kWh",
+            value=overall_production_district_in_kilowatt_hour,
+            tag=KpiTagEnumClass.GENERAL,
+        )
+        overall_consumption_district_in_kilowatt_hour_entry = KpiEntry(
+            name="Overall electricity consumption in district",
+            unit="kWh",
+            value=overall_consumption_district_in_kilowatt_hour,
+            tag=KpiTagEnumClass.GENERAL,
+        )
+
+        # update kpi collection dict
+        self.kpi_collection_dict_unsorted[district_name].update(
+            {
+                electricity_consumption_all_single_buildings_entry.name: electricity_consumption_all_single_buildings_entry.to_dict(),
+                electricity_production_all_single_buildings_entry.name: electricity_production_all_single_buildings_entry.to_dict(),
+                self_consumption_all_single_buildings_entry.name: self_consumption_all_single_buildings_entry.to_dict(),
+                electricity_production_district_entry.name: electricity_production_district_entry.to_dict(),
+                electricity_consumption_district_entry.name: electricity_consumption_district_entry.to_dict(),
+                overall_production_district_in_kilowatt_hour_entry.name: overall_production_district_in_kilowatt_hour_entry.to_dict(),
+                overall_consumption_district_in_kilowatt_hour_entry.name: overall_consumption_district_in_kilowatt_hour_entry.to_dict(),
+            }
+        )
+
+        return (overall_production_district_in_kilowatt_hour,
+                overall_consumption_district_in_kilowatt_hour,
+                self_consumption_all_single_buildings_in_kilowatt_hour)
 
     def get_all_component_kpis(self, wrapped_components: List[ComponentWrapper]) -> None:
         """Go through all components and get their KPIs if implemented."""

@@ -10,8 +10,9 @@ https://solar.htw-berlin.de/wp-content/uploads/WENIGER-2017-Vergleich-verschiede
 from typing import List, Dict
 from dataclasses import dataclass
 from dataclass_wizard import JSONWizard
+from hisim.loadtypes import DistrictNames
 from hisim.postprocessing.postprocessing_datatransfer import PostProcessingDataTransfer
-from hisim.postprocessing.kpi_computation.kpi_preparation import KpiPreparation
+from hisim.postprocessing.kpi_computation.kpi_preparation import KpiPreparation, KpiTagEnumClass
 
 
 @dataclass
@@ -31,9 +32,14 @@ class KpiGenerator(JSONWizard, KpiPreparation):
         for building_objects_in_district in self.building_objects_in_district_list:
             self.create_kpi_collection(building_objects_in_district)
 
+        for building_objects_in_district in self.building_objects_in_district_list:
+            if building_objects_in_district in DistrictNames.__members__:
+                self.create_overall_district_kpi(district_name=building_objects_in_district)
+
         self.kpi_collection_dict_sorted = self.sort_kpi_collection_according_to_kpi_tags(
             kpi_collection_dict_unsorted=self.kpi_collection_dict_unsorted
         )
+
         self.return_table_for_report()
 
     def create_kpi_collection(self, building_objects_in_district):
@@ -53,7 +59,13 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             windturbine_production_in_kilowatt_hour,
             building_production_in_kilowatt_hour,
         ) = self.compute_electricity_consumption_and_production_and_battery_kpis(
-            result_dataframe=self.filtered_result_dataframe, building_objects_in_district=building_objects_in_district
+            result_dataframe=self.filtered_result_dataframe,
+            building_objects_in_district=building_objects_in_district,
+            kpi_tag=(
+                KpiTagEnumClass.GENERAL
+                if building_objects_in_district not in DistrictNames.__members__
+                else KpiTagEnumClass.ELECTRICITY_GRID
+            ),
         )
 
         # get ratio between total production and total consumption
@@ -62,6 +74,11 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             numerator_value=total_electricity_consumption_in_kilowatt_hour,
             kpi_name="Ratio between total production and total consumption",
             building_objects_in_district=building_objects_in_district,
+            kpi_tag=(
+                KpiTagEnumClass.GENERAL
+                if building_objects_in_district not in DistrictNames.__members__
+                else KpiTagEnumClass.ELECTRICITY_GRID
+            ),
         )
         # get ratio between pv production and total consumption
         self.compute_ratio_between_two_values_and_set_as_kpi(
@@ -69,6 +86,11 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             numerator_value=total_electricity_consumption_in_kilowatt_hour,
             kpi_name="Ratio between PV production and total consumption",
             building_objects_in_district=building_objects_in_district,
+            kpi_tag=(
+                KpiTagEnumClass.GENERAL
+                if building_objects_in_district not in DistrictNames.__members__
+                else KpiTagEnumClass.ELECTRICITY_GRID
+            ),
         )
         # get ratio between wka production and total consumption
         self.compute_ratio_between_two_values_and_set_as_kpi(
@@ -76,6 +98,11 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             numerator_value=total_electricity_consumption_in_kilowatt_hour,
             kpi_name="Ratio between Windturbine production and total consumption",
             building_objects_in_district=building_objects_in_district,
+            kpi_tag=(
+                KpiTagEnumClass.GENERAL
+                if building_objects_in_district not in DistrictNames.__members__
+                else KpiTagEnumClass.ELECTRICITY_GRID
+            ),
         )
         # get ratio between building production and total consumption
         self.compute_ratio_between_two_values_and_set_as_kpi(
@@ -83,6 +110,11 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             numerator_value=total_electricity_consumption_in_kilowatt_hour,
             kpi_name="Ratio between Building production and total consumption",
             building_objects_in_district=building_objects_in_district,
+            kpi_tag=(
+                KpiTagEnumClass.GENERAL
+                if building_objects_in_district not in DistrictNames.__members__
+                else KpiTagEnumClass.ELECTRICITY_GRID
+            ),
         )
 
         # get self-consumption, autarkie, injection
@@ -91,6 +123,11 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             electricity_consumption_in_kilowatt_hour=total_electricity_consumption_in_kilowatt_hour,
             electricity_production_in_kilowatt_hour=total_electricity_production_in_kilowatt_hour,
             building_objects_in_district=building_objects_in_district,
+            kpi_tag=(
+                KpiTagEnumClass.GENERAL
+                if building_objects_in_district not in DistrictNames.__members__
+                else KpiTagEnumClass.ELECTRICITY_GRID
+            ),
         )
         # get electricity to and from grid
         (
@@ -102,21 +139,91 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             total_electricity_consumption_in_kilowatt_hour=total_electricity_consumption_in_kilowatt_hour,
             electricity_from_grid_in_kilowatt_hour=total_electricity_from_grid_in_kwh,
             building_objects_in_district=building_objects_in_district,
+            kpi_tag=(
+                KpiTagEnumClass.GENERAL
+                if building_objects_in_district not in DistrictNames.__members__
+                else KpiTagEnumClass.ELECTRICITY_GRID
+            ),
         )
         # get self-consumption rate according to solar htw berlin
         self.compute_self_consumption_rate_according_to_solar_htw_berlin(
             total_electricity_production_in_kilowatt_hour=total_electricity_production_in_kilowatt_hour,
             electricity_to_grid_in_kilowatt_hour=total_electricity_to_grid_in_kwh,
             building_objects_in_district=building_objects_in_district,
+            kpi_tag=(
+                KpiTagEnumClass.GENERAL
+                if building_objects_in_district not in DistrictNames.__members__
+                else KpiTagEnumClass.ELECTRICITY_GRID
+            ),
         )
         # get autarky rate according to solar htw berlin
         self.compute_autarky_according_to_solar_htw_berlin(
             relative_electricty_demand_in_percent=relative_electricity_demand_from_grid_in_percent,
             building_objects_in_district=building_objects_in_district,
+            kpi_tag=(
+                KpiTagEnumClass.GENERAL
+                if building_objects_in_district not in DistrictNames.__members__
+                else KpiTagEnumClass.ELECTRICITY_GRID
+            ),
         )
 
         # get capex and opex costs
         self.read_opex_and_capex_costs_from_results(building_object=building_objects_in_district)
+
+    def create_overall_district_kpi(self, district_name: str):
+        """Creation of overall district kpis."""
+
+        (overall_production_district_in_kilowatt_hour,
+         overall_consumption_district_in_kilowatt_hour,
+         self_consumption_all_single_buildings_in_kilowatt_hour) = (
+            self.create_overall_district_kpi_collection(district_name=district_name)
+        )
+
+        # get ratio between total production and total consumption
+        self.compute_ratio_between_two_values_and_set_as_kpi(
+            denominator_value=overall_production_district_in_kilowatt_hour,
+            numerator_value=overall_consumption_district_in_kilowatt_hour,
+            kpi_name="Overall ratio between total production and total consumption in district",
+            building_objects_in_district=district_name,
+            kpi_tag=KpiTagEnumClass.GENERAL,
+        )
+
+        # get electricity to and from grid
+        (
+            total_electricity_from_grid_in_kwh,
+            total_electricity_to_grid_in_kwh,
+        ) = self.get_electricity_to_and_from_grid_from_electricty_meter(district_name)
+        # get relative electricity demand
+        relative_electricity_demand_from_grid_in_percent = self.compute_relative_electricity_demand(
+            total_electricity_consumption_in_kilowatt_hour=overall_consumption_district_in_kilowatt_hour,
+            electricity_from_grid_in_kilowatt_hour=total_electricity_from_grid_in_kwh,
+            building_objects_in_district=district_name,
+            kpi_tag=KpiTagEnumClass.GENERAL,
+            name="Overall relative electricity demand from grid in district",
+        )
+
+        self.compute_ratio_between_two_values_and_set_as_kpi(
+            denominator_value=self_consumption_all_single_buildings_in_kilowatt_hour,
+            numerator_value=overall_consumption_district_in_kilowatt_hour,
+            kpi_name="Overall autarky rate of electricity in district",
+            building_objects_in_district=district_name,
+            kpi_tag=KpiTagEnumClass.GENERAL,
+        )
+
+        self.compute_self_consumption_rate_according_to_solar_htw_berlin(
+            total_electricity_production_in_kilowatt_hour=overall_production_district_in_kilowatt_hour,
+            electricity_to_grid_in_kilowatt_hour=total_electricity_to_grid_in_kwh,
+            building_objects_in_district=district_name,
+            kpi_tag=KpiTagEnumClass.GENERAL,
+            name="Overall self-consumption rate according to solar htw berlin in district",
+        )
+
+        self.compute_autarky_according_to_solar_htw_berlin(
+            relative_electricty_demand_in_percent=relative_electricity_demand_from_grid_in_percent,
+            building_objects_in_district=district_name,
+            kpi_tag=KpiTagEnumClass.GENERAL,
+            name="Overall autarky rate according to solar htw berlin in district",
+        )
 
     def return_table_for_report(self):
         """Return a table with all kpis for the report."""

@@ -28,6 +28,8 @@ class KpiTagEnumClass(Enum):
     ELECTRICITY_METER = "Electricity Meter"
     CAR = "Car"
     EMS = "Energy Management System"
+    ELECTRICITY_GRID = "Electricity Grid"
+    THERMAL_GRID = "Thermal Grid"
 
 
 @dataclass

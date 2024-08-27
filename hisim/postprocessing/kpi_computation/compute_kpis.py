@@ -181,6 +181,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
 
         self.create_overall_district_costs_collection(district_name=district_name)
         self.create_overall_district_emissions_collection(district_name=district_name)
+        self.create_overall_district_contracting_collection(district_name=district_name, all_outputs=self.all_outputs)
 
         # get ratio between total production and total consumption
         self.compute_ratio_between_two_values_and_set_as_kpi(

@@ -1435,6 +1435,125 @@ class KpiPreparation:
             }
         )
 
+    def create_overall_district_contracting_collection(self, district_name, all_outputs):
+        """If buildings are in contracting with district, heatpump costs and emissions are on district side."""
+
+        set_of_buildings_in_contracting = set()
+        for building_objekt in self.building_objects_in_district_list:
+            for output in all_outputs:
+                if building_objekt in output.component_name and district_name in output.component_name:
+                    set_of_buildings_in_contracting.add(building_objekt)
+
+        if district_name in set_of_buildings_in_contracting:
+            set_of_buildings_in_contracting.remove(district_name)
+        list_of_buildings_in_contracting = list(set_of_buildings_in_contracting)
+
+        print(list_of_buildings_in_contracting)
+
+        if len(list_of_buildings_in_contracting) == 0:
+            pass
+        else:
+            number_of_building_in_contracting = len(list_of_buildings_in_contracting)
+
+            total_co2_emissions_for_hp_of_building_per_simulated_period_contracting = 0.0
+            total_investment_cost_for_hp_of_building_per_simulated_period_contracting = 0.0
+            total_maintenance_cost_for_hp_of_building_per_simulated_period_contracting = 0.0
+
+            for building in list_of_buildings_in_contracting:
+                total_co2_emissions_for_hp_of_building_per_simulated_period_contracting += (
+                    self.kpi_collection_dict_unsorted[building][
+                        "CO2 footprint for equipment only heatpump per simulated period"
+                    ]["value"]
+                )
+                total_investment_cost_for_hp_of_building_per_simulated_period_contracting += (
+                    self.kpi_collection_dict_unsorted[building][
+                        "Investment costs for equipment only heatpump per simulated period"
+                    ]["value"]
+                )
+                total_maintenance_cost_for_hp_of_building_per_simulated_period_contracting += (
+                    self.kpi_collection_dict_unsorted[building][
+                        "Maintenance costs only heatpump for simulated period"
+                    ]["value"]
+                )
+
+            total_co2_emissions_of_district_grid_per_simulated_period_contracting = (
+                self.kpi_collection_dict_unsorted[district_name][
+                    "Total CO2 emissions for simulated period"
+                ]["value"]
+            )
+
+            total_costs_of_district_grid_per_simulated_period_contracting = (
+                self.kpi_collection_dict_unsorted[district_name][
+                    "Total costs for simulated period"
+                ]["value"]
+            )
+
+            overall_district_cost_contracting = \
+                (total_costs_of_district_grid_per_simulated_period_contracting +
+                 total_investment_cost_for_hp_of_building_per_simulated_period_contracting +
+                 total_maintenance_cost_for_hp_of_building_per_simulated_period_contracting)
+
+            overall_district_co2_emissions_contracting = \
+                (total_co2_emissions_of_district_grid_per_simulated_period_contracting +
+                 total_co2_emissions_for_hp_of_building_per_simulated_period_contracting)
+
+            number_of_building_in_contracting_entry = KpiEntry(
+                name="Number of buildings in district contracting",
+                unit="-",
+                value=number_of_building_in_contracting,
+                tag=KpiTagEnumClass.CONTRACTING,
+            )
+
+            total_co2_emissions_for_hp_of_building_in_contracting_entry = KpiEntry(
+                name="CO2 footprint of hp only of buildings in contracting",
+                unit="kg",
+                value=total_co2_emissions_for_hp_of_building_per_simulated_period_contracting,
+                tag=KpiTagEnumClass.CONTRACTING,
+            )
+
+            total_investment_cost_for_hp_of_building_in_contracting_entry = KpiEntry(
+                name="Investment cost of hp only of buildings in contracting",
+                unit="EUR",
+                value=total_investment_cost_for_hp_of_building_per_simulated_period_contracting,
+                tag=KpiTagEnumClass.CONTRACTING,
+            )
+
+            total_maintenance_cost_for_hp_of_building_contracting_entry = KpiEntry(
+                name="Maintenance cost of hp only of buildings in contracting",
+                unit="EUR",
+                value=total_maintenance_cost_for_hp_of_building_per_simulated_period_contracting,
+                tag=KpiTagEnumClass.CONTRACTING,
+            )
+            overall_district_cost_contracting_entry = KpiEntry(
+                name="Overall costs for grid and hp in contracting per simulated period",
+                unit="EUR",
+                value=overall_district_cost_contracting,
+                tag=KpiTagEnumClass.CONTRACTING,
+            )
+            overall_district_co2_emissions_contracting_entry = KpiEntry(
+                name="Overall CO2 footprint for grid and hp in contracting per simulated period",
+                unit="kg",
+                value=overall_district_co2_emissions_contracting,
+                tag=KpiTagEnumClass.CONTRACTING,
+            )
+
+            self.kpi_collection_dict_unsorted[district_name].update(
+                {
+                    number_of_building_in_contracting_entry.name:
+                        number_of_building_in_contracting_entry.to_dict(),
+                    total_co2_emissions_for_hp_of_building_in_contracting_entry.name:
+                        total_co2_emissions_for_hp_of_building_in_contracting_entry.to_dict(),
+                    total_investment_cost_for_hp_of_building_in_contracting_entry.name:
+                        total_investment_cost_for_hp_of_building_in_contracting_entry.to_dict(),
+                    total_maintenance_cost_for_hp_of_building_contracting_entry.name:
+                        total_maintenance_cost_for_hp_of_building_contracting_entry.to_dict(),
+                    overall_district_cost_contracting_entry.name:
+                        overall_district_cost_contracting_entry.to_dict(),
+                    overall_district_co2_emissions_contracting_entry.name:
+                        overall_district_co2_emissions_contracting_entry.to_dict(),
+                }
+            )
+
     def get_all_component_kpis(self, wrapped_components: List[ComponentWrapper]) -> None:
         """Go through all components and get their KPIs if implemented."""
         my_component_kpi_entry_list: List[KpiEntry]

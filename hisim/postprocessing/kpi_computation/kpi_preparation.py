@@ -650,55 +650,91 @@ class KpiPreparation:
             name="Costs of grid electricity for simulated period",
             unit="EUR",
             value=electricity_costs_in_euro,
-            tag=KpiTagEnumClass.COSTS,
+            tag=(
+                KpiTagEnumClass.COSTS
+                if building_object not in DistrictNames.__members__
+                else KpiTagEnumClass.COSTS_DISTRICT_GRID
+            ),
         )
         total_electricity_co2_footprint_entry = KpiEntry(
             name="CO2 footprint of grid electricity for simulated period",
             unit="kg",
             value=electricity_co2_in_kg,
-            tag=KpiTagEnumClass.EMISSIONS,
+            tag=(
+                KpiTagEnumClass.EMISSIONS
+                if building_object not in DistrictNames.__members__
+                else KpiTagEnumClass.EMISSIONS_DISTRICT_GRID
+            ),
         )
         total_gas_costs_entry = KpiEntry(
             name="Costs of grid gas for simulated period",
             unit="EUR",
             value=gas_costs_in_euro,
-            tag=KpiTagEnumClass.COSTS,
+            tag=(
+                KpiTagEnumClass.COSTS
+                if building_object not in DistrictNames.__members__
+                else KpiTagEnumClass.COSTS_DISTRICT_GRID
+            ),
         )
         total_gas_co2_emissions_entry = KpiEntry(
             name="CO2 footprint of grid gas for simulated period",
             unit="kg",
             value=gas_co2_in_kg,
-            tag=KpiTagEnumClass.EMISSIONS,
+            tag=(
+                KpiTagEnumClass.EMISSIONS
+                if building_object not in DistrictNames.__members__
+                else KpiTagEnumClass.EMISSIONS_DISTRICT_GRID
+            ),
         )
         total_heat_costs_entry = KpiEntry(
             name="Costs of grid heat to building for simulated period",
             unit="EUR",
             value=heating_costs_in_euro,
-            tag=KpiTagEnumClass.COSTS,
+            tag=(
+                KpiTagEnumClass.COSTS
+                if building_object not in DistrictNames.__members__
+                else KpiTagEnumClass.COSTS_DISTRICT_GRID
+            ),
         )
         total_heat_co2_emissions_entry = KpiEntry(
             name="CO2 footprint of grid heat consumption to building for simulated period",
             unit="kg",
             value=heating_co2_in_kg,
-            tag=KpiTagEnumClass.EMISSIONS,
+            tag=(
+                KpiTagEnumClass.EMISSIONS
+                if building_object not in DistrictNames.__members__
+                else KpiTagEnumClass.EMISSIONS_DISTRICT_GRID
+            ),
         )
         total_investment_cost_per_simulated_period_entry = KpiEntry(
             name="Investment costs for equipment per simulated period",
             unit="EUR",
             value=total_investment_cost_per_simulated_period,
-            tag=KpiTagEnumClass.COSTS,
+            tag=(
+                KpiTagEnumClass.COSTS
+                if building_object not in DistrictNames.__members__
+                else KpiTagEnumClass.COSTS_DISTRICT_GRID
+            ),
         )
         total_device_co2_footprint_per_simulated_period_entry = KpiEntry(
             name="CO2 footprint for equipment per simulated period",
             unit="kg",
             value=total_device_co2_footprint_per_simulated_period,
-            tag=KpiTagEnumClass.EMISSIONS,
+            tag=(
+                KpiTagEnumClass.EMISSIONS
+                if building_object not in DistrictNames.__members__
+                else KpiTagEnumClass.EMISSIONS_DISTRICT_GRID
+            ),
         )
         total_maintenance_cost_entry = KpiEntry(
             name="Maintenance costs for simulated period",
             unit="EUR",
             value=total_maintenance_cost_per_simulated_period,
-            tag=KpiTagEnumClass.COSTS,
+            tag=(
+                KpiTagEnumClass.COSTS
+                if building_object not in DistrictNames.__members__
+                else KpiTagEnumClass.COSTS_DISTRICT_GRID
+            ),
         )
         total_cost_entry = KpiEntry(
             name="Total costs for simulated period",
@@ -708,7 +744,11 @@ class KpiPreparation:
             + gas_costs_in_euro
             + electricity_costs_in_euro
             + heating_costs_in_euro,
-            tag=KpiTagEnumClass.COSTS,
+            tag=(
+                KpiTagEnumClass.COSTS
+                if building_object not in DistrictNames.__members__
+                else KpiTagEnumClass.COSTS_DISTRICT_GRID
+            ),
         )
         total_emissions_entry = KpiEntry(
             name="Total CO2 emissions for simulated period",
@@ -717,26 +757,42 @@ class KpiPreparation:
             + gas_co2_in_kg
             + electricity_co2_in_kg
             + heating_co2_in_kg,
-            tag=KpiTagEnumClass.EMISSIONS,
+            tag=(
+                KpiTagEnumClass.EMISSIONS
+                if building_object not in DistrictNames.__members__
+                else KpiTagEnumClass.EMISSIONS_DISTRICT_GRID
+            ),
         )
 
         total_investment_cost_per_simulated_period_without_hp_entry = KpiEntry(
             name="Investment costs for equipment without heatpump per simulated period",
             unit="EUR",
             value=total_investment_cost_per_simulated_period_without_hp,
-            tag=KpiTagEnumClass.COSTS,
+            tag=(
+                KpiTagEnumClass.COSTS
+                if building_object not in DistrictNames.__members__
+                else KpiTagEnumClass.COSTS_DISTRICT_GRID
+            ),
         )
         total_device_co2_footprint_per_simulated_period_without_hp_entry = KpiEntry(
             name="CO2 footprint for equipment without heatpump per simulated period",
             unit="kg",
             value=total_device_co2_footprint_per_simulated_period_without_hp,
-            tag=KpiTagEnumClass.EMISSIONS,
+            tag=(
+                KpiTagEnumClass.EMISSIONS
+                if building_object not in DistrictNames.__members__
+                else KpiTagEnumClass.EMISSIONS_DISTRICT_GRID
+            ),
         )
         total_maintenance_cost_without_hp_entry = KpiEntry(
             name="Maintenance costs without heatpump for simulated period",
             unit="EUR",
             value=total_maintenance_cost_per_simulated_period_without_hp,
-            tag=KpiTagEnumClass.COSTS,
+            tag=(
+                KpiTagEnumClass.COSTS
+                if building_object not in DistrictNames.__members__
+                else KpiTagEnumClass.COSTS_DISTRICT_GRID
+            ),
         )
         total_cost_without_hp_entry = KpiEntry(
             name="Total costs without heatpump for simulated period",
@@ -746,7 +802,11 @@ class KpiPreparation:
             + gas_costs_in_euro
             + electricity_costs_in_euro
             + heating_costs_in_euro,
-            tag=KpiTagEnumClass.COSTS,
+            tag=(
+                KpiTagEnumClass.COSTS
+                if building_object not in DistrictNames.__members__
+                else KpiTagEnumClass.COSTS_DISTRICT_GRID
+            ),
         )
         total_emissions_without_hp_entry = KpiEntry(
             name="Total CO2 emissions without heatpump for simulated period",
@@ -755,26 +815,42 @@ class KpiPreparation:
             + gas_co2_in_kg
             + electricity_co2_in_kg
             + heating_co2_in_kg,
-            tag=KpiTagEnumClass.EMISSIONS,
+            tag=(
+                KpiTagEnumClass.EMISSIONS
+                if building_object not in DistrictNames.__members__
+                else KpiTagEnumClass.EMISSIONS_DISTRICT_GRID
+            ),
         )
 
         total_investment_cost_per_simulated_period_only_hp_entry = KpiEntry(
             name="Investment costs for equipment only heatpump per simulated period",
             unit="EUR",
             value=total_investment_cost_per_simulated_period_only_hp,
-            tag=KpiTagEnumClass.COSTS,
+            tag=(
+                KpiTagEnumClass.COSTS
+                if building_object not in DistrictNames.__members__
+                else KpiTagEnumClass.COSTS_DISTRICT_GRID
+            ),
         )
         total_device_co2_footprint_per_simulated_period_only_hp_entry = KpiEntry(
             name="CO2 footprint for equipment only heatpump per simulated period",
             unit="kg",
             value=total_device_co2_footprint_per_simulated_period_only_hp,
-            tag=KpiTagEnumClass.EMISSIONS,
+            tag=(
+                KpiTagEnumClass.EMISSIONS
+                if building_object not in DistrictNames.__members__
+                else KpiTagEnumClass.EMISSIONS_DISTRICT_GRID
+            ),
         )
         total_maintenance_cost_only_hp_entry = KpiEntry(
             name="Maintenance costs only heatpump for simulated period",
             unit="EUR",
             value=total_maintenance_cost_per_simulated_period_only_hp,
-            tag=KpiTagEnumClass.COSTS,
+            tag=(
+                KpiTagEnumClass.COSTS
+                if building_object not in DistrictNames.__members__
+                else KpiTagEnumClass.COSTS_DISTRICT_GRID
+            ),
         )
         total_cost_only_hp_entry = KpiEntry(
             name="Total costs only heatpump for simulated period",
@@ -782,13 +858,21 @@ class KpiPreparation:
             value=(
                 total_maintenance_cost_per_simulated_period_only_hp + total_investment_cost_per_simulated_period_only_hp
             ),
-            tag=KpiTagEnumClass.COSTS,
+            tag=(
+                KpiTagEnumClass.COSTS
+                if building_object not in DistrictNames.__members__
+                else KpiTagEnumClass.COSTS_DISTRICT_GRID
+            ),
         )
         total_emissions_only_hp_entry = KpiEntry(
             name="Total CO2 emissions only heatpump for simulated period",
             unit="kg",
             value=total_device_co2_footprint_per_simulated_period_only_hp,
-            tag=KpiTagEnumClass.EMISSIONS,
+            tag=(
+                KpiTagEnumClass.EMISSIONS
+                if building_object not in DistrictNames.__members__
+                else KpiTagEnumClass.EMISSIONS_DISTRICT_GRID
+            ),
         )
 
         # update kpi collection dict
@@ -829,6 +913,7 @@ class KpiPreparation:
         self_consumption_all_single_buildings_in_kilowatt_hour = 0.0
         electricity_production_district_in_kilowatt_hour = 0.0
         electricity_consumption_district_in_kilowatt_hour = 0.0
+        self_consumption_district_in_kilowatt_hour = 0.0
 
         for building_objects_in_district in self.building_objects_in_district_list:
             if building_objects_in_district not in DistrictNames.__members__:
@@ -857,6 +942,9 @@ class KpiPreparation:
                         "Total building electricity consumption"
                     ]["value"]
                 )
+                self_consumption_district_in_kilowatt_hour += self.kpi_collection_dict_unsorted[
+                    building_objects_in_district
+                ]["Self-consumption of electricity"]["value"]
 
         overall_production_district_in_kilowatt_hour = (
             electricity_produktion_all_single_buildings_in_kilowatt_hour
@@ -866,6 +954,10 @@ class KpiPreparation:
         overall_consumption_district_in_kilowatt_hour = (
             electricity_consumption_all_single_buildings_in_kilowatt_hour
             + electricity_consumption_district_in_kilowatt_hour
+        )
+
+        overall_self_consumption_district_in_kilowatt_hour = (
+            self_consumption_all_single_buildings_in_kilowatt_hour + self_consumption_district_in_kilowatt_hour
         )
 
         electricity_consumption_all_single_buildings_entry = KpiEntry(
@@ -898,16 +990,28 @@ class KpiPreparation:
             value=electricity_consumption_district_in_kilowatt_hour,
             tag=KpiTagEnumClass.GENERAL,
         )
-        overall_production_district_in_kilowatt_hour_entry = KpiEntry(
+        self_consumption_district_entry = KpiEntry(
+            name="Self-consumption of district without buildings",
+            unit="kWh",
+            value=self_consumption_district_in_kilowatt_hour,
+            tag=KpiTagEnumClass.GENERAL,
+        )
+        overall_production_district_entry = KpiEntry(
             name="Overall electricity production in district",
             unit="kWh",
             value=overall_production_district_in_kilowatt_hour,
             tag=KpiTagEnumClass.GENERAL,
         )
-        overall_consumption_district_in_kilowatt_hour_entry = KpiEntry(
+        overall_consumption_district_entry = KpiEntry(
             name="Overall electricity consumption in district",
             unit="kWh",
             value=overall_consumption_district_in_kilowatt_hour,
+            tag=KpiTagEnumClass.GENERAL,
+        )
+        overall_self_consumption_district_entry = KpiEntry(
+            name="Overall self-consumption in district",
+            unit="kWh",
+            value=overall_self_consumption_district_in_kilowatt_hour,
             tag=KpiTagEnumClass.GENERAL,
         )
 
@@ -919,14 +1023,417 @@ class KpiPreparation:
                 self_consumption_all_single_buildings_entry.name: self_consumption_all_single_buildings_entry.to_dict(),
                 electricity_production_district_entry.name: electricity_production_district_entry.to_dict(),
                 electricity_consumption_district_entry.name: electricity_consumption_district_entry.to_dict(),
-                overall_production_district_in_kilowatt_hour_entry.name: overall_production_district_in_kilowatt_hour_entry.to_dict(),
-                overall_consumption_district_in_kilowatt_hour_entry.name: overall_consumption_district_in_kilowatt_hour_entry.to_dict(),
+                self_consumption_district_entry.name: self_consumption_district_entry.to_dict(),
+                overall_production_district_entry.name: overall_production_district_entry.to_dict(),
+                overall_consumption_district_entry.name: overall_consumption_district_entry.to_dict(),
+                overall_self_consumption_district_entry.name: overall_self_consumption_district_entry.to_dict(),
             }
         )
 
-        return (overall_production_district_in_kilowatt_hour,
-                overall_consumption_district_in_kilowatt_hour,
-                self_consumption_all_single_buildings_in_kilowatt_hour)
+        return (
+            overall_production_district_in_kilowatt_hour,
+            overall_consumption_district_in_kilowatt_hour,
+            overall_self_consumption_district_in_kilowatt_hour,
+        )
+
+    def create_overall_district_costs_collection(self, district_name):
+        """Overall kpis for districts."""
+
+        total_investment_cost_for_equipment_per_simulated_period_all_single_buildings = 0.0
+        total_investment_cost_per_simulated_period_without_hp_all_single_buildings = 0.0
+        total_investment_cost_per_simulated_period_only_hp_all_single_buildings = 0.0
+        total_maintenance_cost_per_simulated_period_all_single_buildings = 0.0
+        total_maintenance_cost_per_simulated_period_without_hp_all_single_buildings = 0.0
+        total_maintenance_cost_per_simulated_period_only_hp_all_single_buildings = 0.0
+
+        total_investment_cost_for_equipment_per_simulated_period_district = 0.0
+        total_investment_cost_per_simulated_period_without_hp_district = 0.0
+        total_investment_cost_per_simulated_period_only_hp_district = 0.0
+        total_maintenance_cost_per_simulated_period_district = 0.0
+        total_maintenance_cost_per_simulated_period_without_hp_district = 0.0
+        total_maintenance_cost_per_simulated_period_only_hp_district = 0.0
+
+        for building_objects_in_district in self.building_objects_in_district_list:
+            if building_objects_in_district not in DistrictNames.__members__:
+                total_investment_cost_for_equipment_per_simulated_period_all_single_buildings += (
+                    self.kpi_collection_dict_unsorted[building_objects_in_district][
+                        "Investment costs for equipment per simulated period"
+                    ]["value"]
+                )
+
+                total_investment_cost_per_simulated_period_without_hp_all_single_buildings += (
+                    self.kpi_collection_dict_unsorted[building_objects_in_district][
+                        "Investment costs for equipment without heatpump per simulated period"
+                    ]["value"]
+                )
+
+                total_investment_cost_per_simulated_period_only_hp_all_single_buildings += (
+                    self.kpi_collection_dict_unsorted[building_objects_in_district][
+                        "Investment costs for equipment only heatpump per simulated period"
+                    ]["value"]
+                )
+
+                total_maintenance_cost_per_simulated_period_all_single_buildings += self.kpi_collection_dict_unsorted[
+                    building_objects_in_district
+                ]["Maintenance costs for simulated period"]["value"]
+
+                total_maintenance_cost_per_simulated_period_without_hp_all_single_buildings += (
+                    self.kpi_collection_dict_unsorted[building_objects_in_district][
+                        "Maintenance costs without heatpump for simulated period"
+                    ]["value"]
+                )
+
+                total_maintenance_cost_per_simulated_period_only_hp_all_single_buildings += (
+                    self.kpi_collection_dict_unsorted[building_objects_in_district][
+                        "Maintenance costs only heatpump for simulated period"
+                    ]["value"]
+                )
+
+            if building_objects_in_district in DistrictNames.__members__:
+                total_investment_cost_for_equipment_per_simulated_period_district = self.kpi_collection_dict_unsorted[
+                    building_objects_in_district
+                ]["Investment costs for equipment per simulated period"]["value"]
+
+                total_investment_cost_per_simulated_period_without_hp_district = self.kpi_collection_dict_unsorted[
+                    building_objects_in_district
+                ]["Investment costs for equipment without heatpump per simulated period"]["value"]
+
+                total_investment_cost_per_simulated_period_only_hp_district = self.kpi_collection_dict_unsorted[
+                    building_objects_in_district
+                ]["Investment costs for equipment only heatpump per simulated period"]["value"]
+
+                total_maintenance_cost_per_simulated_period_district = self.kpi_collection_dict_unsorted[
+                    building_objects_in_district
+                ]["Maintenance costs for simulated period"]["value"]
+
+                total_maintenance_cost_per_simulated_period_without_hp_district = self.kpi_collection_dict_unsorted[
+                    building_objects_in_district
+                ]["Maintenance costs without heatpump for simulated period"]["value"]
+
+                total_maintenance_cost_per_simulated_period_only_hp_district = self.kpi_collection_dict_unsorted[
+                    building_objects_in_district
+                ]["Maintenance costs only heatpump for simulated period"]["value"]
+
+        overall_investment_cost_for_equipment_per_simulated_period_district = (
+            total_investment_cost_for_equipment_per_simulated_period_all_single_buildings
+            + total_investment_cost_for_equipment_per_simulated_period_district
+        )
+
+        overall_investment_cost_per_simulated_period_without_hp_district = (
+            total_investment_cost_per_simulated_period_without_hp_all_single_buildings
+            + total_investment_cost_per_simulated_period_without_hp_district
+        )
+
+        overall_investment_cost_per_simulated_period_only_hp_district = (
+            total_investment_cost_per_simulated_period_only_hp_all_single_buildings
+            + total_investment_cost_per_simulated_period_only_hp_district
+        )
+
+        overall_maintenance_cost_per_simulated_period_district = (
+            total_maintenance_cost_per_simulated_period_all_single_buildings
+            + total_maintenance_cost_per_simulated_period_district
+        )
+
+        overall_maintenance_cost_per_simulated_period_without_hp_district = (
+            total_maintenance_cost_per_simulated_period_without_hp_all_single_buildings
+            + total_maintenance_cost_per_simulated_period_without_hp_district
+        )
+
+        overall_maintenance_cost_per_simulated_period_only_hp_district = (
+            total_maintenance_cost_per_simulated_period_only_hp_all_single_buildings
+            + total_maintenance_cost_per_simulated_period_only_hp_district
+        )
+
+        total_investment_cost_for_equipment_per_simulated_period_all_single_buildings_entry = KpiEntry(
+            name="Total investment costs for equipment for all single buildings per simulated period",
+            unit="EUR",
+            value=total_investment_cost_for_equipment_per_simulated_period_all_single_buildings,
+            tag=KpiTagEnumClass.COSTS,
+        )
+        total_investment_cost_per_simulated_period_without_hp_all_single_buildings_entry = KpiEntry(
+            name="Total investment costs without heatpump for all single buildings per simulated period",
+            unit="EUR",
+            value=total_investment_cost_per_simulated_period_without_hp_all_single_buildings,
+            tag=KpiTagEnumClass.COSTS,
+        )
+        total_investment_cost_per_simulated_period_only_hp_all_single_buildings_entry = KpiEntry(
+            name="Total investment costs only heatpump for all single buildings per simulated period",
+            unit="EUR",
+            value=total_investment_cost_per_simulated_period_only_hp_all_single_buildings,
+            tag=KpiTagEnumClass.COSTS,
+        )
+        total_maintenance_cost_per_simulated_period_all_single_buildings_entry = KpiEntry(
+            name="Total maintenance costs for all single buildings per simulated period",
+            unit="EUR",
+            value=total_maintenance_cost_per_simulated_period_all_single_buildings,
+            tag=KpiTagEnumClass.COSTS,
+        )
+        total_maintenance_cost_per_simulated_period_without_hp_all_single_buildings_entry = KpiEntry(
+            name="Total maintenance costs without heatpump for all single buildings per simulated period",
+            unit="EUR",
+            value=total_maintenance_cost_per_simulated_period_without_hp_all_single_buildings,
+            tag=KpiTagEnumClass.COSTS,
+        )
+        total_maintenance_cost_per_simulated_period_only_hp_all_single_buildings_entry = KpiEntry(
+            name="Total maintenance costs only heatpump for all single buildings per simulated period",
+            unit="EUR",
+            value=total_maintenance_cost_per_simulated_period_only_hp_all_single_buildings,
+            tag=KpiTagEnumClass.COSTS,
+        )
+        total_investment_cost_for_equipment_per_simulated_period_district_entry = KpiEntry(
+            name="Total investment costs for equipment for district without buildings per simulated period",
+            unit="EUR",
+            value=total_investment_cost_for_equipment_per_simulated_period_district,
+            tag=KpiTagEnumClass.COSTS,
+        )
+        total_investment_cost_per_simulated_period_without_hp_district_entry = KpiEntry(
+            name="Total investment costs without heatpump for district per simulated period",
+            unit="EUR",
+            value=total_investment_cost_per_simulated_period_without_hp_district,
+            tag=KpiTagEnumClass.COSTS,
+        )
+        total_investment_cost_per_simulated_period_only_hp_district_entry = KpiEntry(
+            name="Total investment costs only heatpump for district per simulated period",
+            unit="EUR",
+            value=total_investment_cost_per_simulated_period_only_hp_district,
+            tag=KpiTagEnumClass.COSTS,
+        )
+        total_maintenance_cost_per_simulated_period_district_entry = KpiEntry(
+            name="Total maintenance costs for district without buildings per simulated period",
+            unit="EUR",
+            value=total_maintenance_cost_per_simulated_period_district,
+            tag=KpiTagEnumClass.COSTS,
+        )
+        total_maintenance_cost_per_simulated_period_without_hp_district_entry = KpiEntry(
+            name="Total maintenance costs without heatpump for district per simulated period",
+            unit="EUR",
+            value=total_maintenance_cost_per_simulated_period_without_hp_district,
+            tag=KpiTagEnumClass.COSTS,
+        )
+        total_maintenance_cost_per_simulated_period_only_hp_district_entry = KpiEntry(
+            name="Total maintenance costs only heatpump for district per simulated period",
+            unit="EUR",
+            value=total_maintenance_cost_per_simulated_period_only_hp_district,
+            tag=KpiTagEnumClass.COSTS,
+        )
+        overall_investment_cost_for_equipment_per_simulated_period_district_entry = KpiEntry(
+            name="Overall investment for equipment costs in district per simulated period",
+            unit="EUR",
+            value=overall_investment_cost_for_equipment_per_simulated_period_district,
+            tag=KpiTagEnumClass.COSTS,
+        )
+        overall_investment_cost_per_simulated_period_without_hp_district_entry = KpiEntry(
+            name="Overall investment costs without heatpump in district per simulated period",
+            unit="EUR",
+            value=overall_investment_cost_per_simulated_period_without_hp_district,
+            tag=KpiTagEnumClass.COSTS,
+        )
+        overall_investment_cost_per_simulated_period_only_hp_district_entry = KpiEntry(
+            name="Overall investment costs only heatpump in district per simulated period",
+            unit="EUR",
+            value=overall_investment_cost_per_simulated_period_only_hp_district,
+            tag=KpiTagEnumClass.COSTS,
+        )
+        overall_maintenance_cost_per_simulated_period_district_entry = KpiEntry(
+            name="Overall maintenance costs in district per simulated period",
+            unit="EUR",
+            value=overall_maintenance_cost_per_simulated_period_district,
+            tag=KpiTagEnumClass.COSTS,
+        )
+        overall_maintenance_cost_per_simulated_period_without_hp_district_entry = KpiEntry(
+            name="Overall maintenance costs without heatpump in district per simulated period",
+            unit="EUR",
+            value=overall_maintenance_cost_per_simulated_period_without_hp_district,
+            tag=KpiTagEnumClass.COSTS,
+        )
+        overall_maintenance_cost_per_simulated_period_only_hp_district_entry = KpiEntry(
+            name="Overall maintenance costs only heatpump in district per simulated period",
+            unit="EUR",
+            value=overall_maintenance_cost_per_simulated_period_only_hp_district,
+            tag=KpiTagEnumClass.COSTS,
+        )
+
+        self.kpi_collection_dict_unsorted[district_name].update(
+            {
+                total_investment_cost_for_equipment_per_simulated_period_all_single_buildings_entry.name:
+                    total_investment_cost_for_equipment_per_simulated_period_all_single_buildings_entry.to_dict(),
+                total_investment_cost_per_simulated_period_without_hp_all_single_buildings_entry.name:
+                    total_investment_cost_per_simulated_period_without_hp_all_single_buildings_entry.to_dict(),
+                total_investment_cost_per_simulated_period_only_hp_all_single_buildings_entry.name:
+                    total_investment_cost_per_simulated_period_only_hp_all_single_buildings_entry.to_dict(),
+                total_maintenance_cost_per_simulated_period_all_single_buildings_entry.name:
+                    total_maintenance_cost_per_simulated_period_all_single_buildings_entry.to_dict(),
+                total_maintenance_cost_per_simulated_period_without_hp_all_single_buildings_entry.name:
+                    total_maintenance_cost_per_simulated_period_without_hp_all_single_buildings_entry.to_dict(),
+                total_maintenance_cost_per_simulated_period_only_hp_all_single_buildings_entry.name:
+                    total_maintenance_cost_per_simulated_period_only_hp_all_single_buildings_entry.to_dict(),
+                total_investment_cost_for_equipment_per_simulated_period_district_entry.name:
+                    total_investment_cost_for_equipment_per_simulated_period_district_entry.to_dict(),
+                total_investment_cost_per_simulated_period_without_hp_district_entry.name:
+                    total_investment_cost_per_simulated_period_without_hp_district_entry.to_dict(),
+                total_investment_cost_per_simulated_period_only_hp_district_entry.name:
+                    total_investment_cost_per_simulated_period_only_hp_district_entry.to_dict(),
+                total_maintenance_cost_per_simulated_period_district_entry.name:
+                    total_maintenance_cost_per_simulated_period_district_entry.to_dict(),
+                total_maintenance_cost_per_simulated_period_without_hp_district_entry.name:
+                    total_maintenance_cost_per_simulated_period_without_hp_district_entry.to_dict(),
+                total_maintenance_cost_per_simulated_period_only_hp_district_entry.name:
+                    total_maintenance_cost_per_simulated_period_only_hp_district_entry.to_dict(),
+                overall_investment_cost_for_equipment_per_simulated_period_district_entry.name:
+                    overall_investment_cost_for_equipment_per_simulated_period_district_entry.to_dict(),
+                overall_investment_cost_per_simulated_period_without_hp_district_entry.name:
+                    overall_investment_cost_per_simulated_period_without_hp_district_entry.to_dict(),
+                overall_investment_cost_per_simulated_period_only_hp_district_entry.name:
+                    overall_investment_cost_per_simulated_period_only_hp_district_entry.to_dict(),
+                overall_maintenance_cost_per_simulated_period_district_entry.name:
+                    overall_maintenance_cost_per_simulated_period_district_entry.to_dict(),
+                overall_maintenance_cost_per_simulated_period_without_hp_district_entry.name:
+                    overall_maintenance_cost_per_simulated_period_without_hp_district_entry.to_dict(),
+                overall_maintenance_cost_per_simulated_period_only_hp_district_entry.name:
+                    overall_maintenance_cost_per_simulated_period_only_hp_district_entry.to_dict(),
+            }
+        )
+
+    def create_overall_district_emissions_collection(self, district_name):
+        """Overall kpis for districts."""
+
+        total_co2_emissions_for_equipment_per_simulated_period_all_single_buildings = 0.0
+        total_co2_emissions_for_equipment_per_simulated_period_without_hp_all_single_buildings = 0.0
+        total_co2_emissions_for_equipment_per_simulated_period_only_hp_all_single_buildings = 0.0
+
+        total_co2_emissions_for_equipment_per_simulated_period_district = 0.0
+        total_co2_emissions_for_equipment_per_simulated_period_without_hp_district = 0.0
+        total_co2_emissions_for_equipment_per_simulated_period_only_hp_district = 0.0
+
+        for building_objects_in_district in self.building_objects_in_district_list:
+            if building_objects_in_district not in DistrictNames.__members__:
+                total_co2_emissions_for_equipment_per_simulated_period_all_single_buildings += (
+                    self.kpi_collection_dict_unsorted[building_objects_in_district][
+                        "CO2 footprint for equipment per simulated period"
+                    ]["value"]
+                )
+
+                total_co2_emissions_for_equipment_per_simulated_period_without_hp_all_single_buildings += (
+                    self.kpi_collection_dict_unsorted[building_objects_in_district][
+                        "CO2 footprint for equipment without heatpump per simulated period"
+                    ]["value"]
+                )
+
+                total_co2_emissions_for_equipment_per_simulated_period_only_hp_all_single_buildings += (
+                    self.kpi_collection_dict_unsorted[building_objects_in_district][
+                        "CO2 footprint for equipment only heatpump per simulated period"
+                    ]["value"]
+                )
+
+            if building_objects_in_district in DistrictNames.__members__:
+                total_co2_emissions_for_equipment_per_simulated_period_district = self.kpi_collection_dict_unsorted[
+                    building_objects_in_district
+                ]["CO2 footprint for equipment per simulated period"]["value"]
+
+                total_co2_emissions_for_equipment_per_simulated_period_without_hp_district = (
+                    self.kpi_collection_dict_unsorted[building_objects_in_district][
+                        "CO2 footprint for equipment without heatpump per simulated period"
+                    ]["value"]
+                )
+
+                total_co2_emissions_for_equipment_per_simulated_period_only_hp_district = (
+                    self.kpi_collection_dict_unsorted[building_objects_in_district][
+                        "CO2 footprint for equipment only heatpump per simulated period"
+                    ]["value"]
+                )
+
+        overall_co2_emission_for_equipment_per_simulated_period_district = (
+            total_co2_emissions_for_equipment_per_simulated_period_all_single_buildings
+            + total_co2_emissions_for_equipment_per_simulated_period_district
+        )
+
+        overall_co2_emission_per_simulated_period_without_hp_district = (
+            total_co2_emissions_for_equipment_per_simulated_period_without_hp_all_single_buildings
+            + total_co2_emissions_for_equipment_per_simulated_period_without_hp_district
+        )
+
+        overall_co2_emission_per_simulated_period_only_hp_district = (
+            total_co2_emissions_for_equipment_per_simulated_period_only_hp_all_single_buildings
+            + total_co2_emissions_for_equipment_per_simulated_period_only_hp_district
+        )
+
+        total_co2_emissions_per_simulated_period_all_single_buildings_entry = KpiEntry(
+            name="CO2 footprint for equipment for all single buildings per simulated period",
+            unit="kg",
+            value=total_co2_emissions_for_equipment_per_simulated_period_all_single_buildings,
+            tag=KpiTagEnumClass.EMISSIONS,
+        )
+        total_co2_emissions_per_simulated_period_without_hp_all_single_buildings_entry = KpiEntry(
+            name="CO2 footprint for equipment without heatpump for all single buildings per simulated period",
+            unit="kg",
+            value=total_co2_emissions_for_equipment_per_simulated_period_without_hp_all_single_buildings,
+            tag=KpiTagEnumClass.EMISSIONS,
+        )
+        total_co2_emissions_per_simulated_period_only_hp_all_single_buildings_entry = KpiEntry(
+            name="CO2 footprint for equipment only heatpump for all single buildings per simulated period",
+            unit="kg",
+            value=total_co2_emissions_for_equipment_per_simulated_period_only_hp_all_single_buildings,
+            tag=KpiTagEnumClass.EMISSIONS,
+        )
+        total_co2_emissions_for_equipment_per_simulated_period_district_entry = KpiEntry(
+            name="CO2 footprint for equipment for district without buildings per simulated period",
+            unit="kg",
+            value=total_co2_emissions_for_equipment_per_simulated_period_district,
+            tag=KpiTagEnumClass.EMISSIONS,
+        )
+        total_co2_emissions_per_simulated_period_without_hp_district_entry = KpiEntry(
+            name="CO2 footprint for equipment without heatpump for district per simulated period",
+            unit="kg",
+            value=total_co2_emissions_for_equipment_per_simulated_period_without_hp_district,
+            tag=KpiTagEnumClass.EMISSIONS,
+        )
+        total_co2_emissions_per_simulated_period_only_hp_district_entry = KpiEntry(
+            name="CO2 footprint for equipment only heatpump for district per simulated period",
+            unit="kg",
+            value=total_co2_emissions_for_equipment_per_simulated_period_only_hp_district,
+            tag=KpiTagEnumClass.EMISSIONS,
+        )
+        overall_co2_emissions_for_equipment_per_simulated_period_district_entry = KpiEntry(
+            name="Overall CO2 footprint for equipment in district per simulated period",
+            unit="kg",
+            value=overall_co2_emission_for_equipment_per_simulated_period_district,
+            tag=KpiTagEnumClass.EMISSIONS,
+        )
+        overall_co2_emissions_per_simulated_period_without_hp_district_entry = KpiEntry(
+            name="Overall CO2 footprint for equipment without heatpump in district per simulated period",
+            unit="kg",
+            value=overall_co2_emission_per_simulated_period_without_hp_district,
+            tag=KpiTagEnumClass.EMISSIONS,
+        )
+        overall_co2_emissions_per_simulated_period_only_hp_district_entry = KpiEntry(
+            name="Overall CO2 footprint for equipment only heatpump in district per simulated period",
+            unit="kg",
+            value=overall_co2_emission_per_simulated_period_only_hp_district,
+            tag=KpiTagEnumClass.EMISSIONS,
+        )
+
+        self.kpi_collection_dict_unsorted[district_name].update(
+            {
+                total_co2_emissions_per_simulated_period_all_single_buildings_entry.name:
+                    total_co2_emissions_per_simulated_period_all_single_buildings_entry.to_dict(),
+                total_co2_emissions_per_simulated_period_without_hp_all_single_buildings_entry.name:
+                    total_co2_emissions_per_simulated_period_without_hp_all_single_buildings_entry.to_dict(),
+                total_co2_emissions_per_simulated_period_only_hp_all_single_buildings_entry.name:
+                    total_co2_emissions_per_simulated_period_only_hp_all_single_buildings_entry.to_dict(),
+                total_co2_emissions_for_equipment_per_simulated_period_district_entry.name:
+                    total_co2_emissions_for_equipment_per_simulated_period_district_entry.to_dict(),
+                total_co2_emissions_per_simulated_period_without_hp_district_entry.name:
+                    total_co2_emissions_per_simulated_period_without_hp_district_entry.to_dict(),
+                total_co2_emissions_per_simulated_period_only_hp_district_entry.name:
+                    total_co2_emissions_per_simulated_period_only_hp_district_entry.to_dict(),
+                overall_co2_emissions_for_equipment_per_simulated_period_district_entry.name:
+                    overall_co2_emissions_for_equipment_per_simulated_period_district_entry.to_dict(),
+                overall_co2_emissions_per_simulated_period_without_hp_district_entry.name:
+                    overall_co2_emissions_per_simulated_period_without_hp_district_entry.to_dict(),
+                overall_co2_emissions_per_simulated_period_only_hp_district_entry.name:
+                    overall_co2_emissions_per_simulated_period_only_hp_district_entry.to_dict(),
+            }
+        )
 
     def get_all_component_kpis(self, wrapped_components: List[ComponentWrapper]) -> None:
         """Go through all components and get their KPIs if implemented."""

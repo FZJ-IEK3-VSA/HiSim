@@ -30,6 +30,8 @@ class KpiTagEnumClass(Enum):
     EMS = "Energy Management System"
     ELECTRICITY_GRID = "Electricity Grid"
     THERMAL_GRID = "Thermal Grid"
+    COSTS_DISTRICT_GRID = "Costs Of District Grid"
+    EMISSIONS_DISTRICT_GRID = "Emissions Of District Grid"
 
 
 @dataclass

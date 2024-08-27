@@ -170,14 +170,17 @@ class KpiGenerator(JSONWizard, KpiPreparation):
         # get capex and opex costs
         self.read_opex_and_capex_costs_from_results(building_object=building_objects_in_district)
 
-    def create_overall_district_kpi(self, district_name: str):
+    def create_overall_district_kpi(self, district_name):
         """Creation of overall district kpis."""
 
-        (overall_production_district_in_kilowatt_hour,
-         overall_consumption_district_in_kilowatt_hour,
-         self_consumption_all_single_buildings_in_kilowatt_hour) = (
-            self.create_overall_district_kpi_collection(district_name=district_name)
-        )
+        (
+            overall_production_district_in_kilowatt_hour,
+            overall_consumption_district_in_kilowatt_hour,
+            overall_self_consumption_district_in_kilowatt_hour,
+        ) = self.create_overall_district_kpi_collection(district_name=district_name)
+
+        self.create_overall_district_costs_collection(district_name=district_name)
+        self.create_overall_district_emissions_collection(district_name=district_name)
 
         # get ratio between total production and total consumption
         self.compute_ratio_between_two_values_and_set_as_kpi(
@@ -203,7 +206,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
         )
 
         self.compute_ratio_between_two_values_and_set_as_kpi(
-            denominator_value=self_consumption_all_single_buildings_in_kilowatt_hour,
+            denominator_value=overall_self_consumption_district_in_kilowatt_hour,
             numerator_value=overall_consumption_district_in_kilowatt_hour,
             kpi_name="Overall autarky rate of electricity in district",
             building_objects_in_district=district_name,
@@ -267,7 +270,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             # now sort kpi dict entries according to tags
             for kpi_name, entry in kpi_collection_dict_unsorted[building_object].items():
                 for tag, tag_dict in kpi_collection_dict_sorted[building_object].items():
-                    if entry["tag"] in tag:
+                    if entry["tag"] is tag:
                         tag_dict.update({kpi_name: entry})
 
         return kpi_collection_dict_sorted

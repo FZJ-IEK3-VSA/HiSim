@@ -6,8 +6,12 @@ import win32com.client
 
 
 # Pfad zum Hauptordner, in dem sich die Unterordner mit Excel-Files befinden
-main_folder = 'C://Users//Standard//Desktop//hisim//results//1b20240625//'
-excel_filename = 'C://Users//Standard//Desktop//hisim//results//1b20240625//Gesamtergebnis.xlsx'
+main_folder = 'C://Users//Standard//Desktop//hisim//results//2a20240820//'
+excel_filename = 'C://Users//Standard//Desktop//hisim//results//2a20240820//Gesamtergebnis.xlsx'
+
+#main_folder = 'C://Users\Standard//Desktop//hisim//C4LResults//Auswertung//'
+#excel_filename = 'C://Users//Standard//Desktop//hisim//C4LResults//Auswertung//Gesamtergebnis.xlsx'
+
 
 def startexcelsavefile(excel_file_path):
 

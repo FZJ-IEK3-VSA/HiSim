@@ -1,2 +1,2 @@
 PreResultNumber,FuelCellPowerW,BatteryCapkWh,Inverter_Ratio,PreResultNumberUnit,FuelCellPowerWUnit,BatteryCapkWhUnit,Inverter_RatioUnit,szenario,szenarioUnit,prediction_horizon,prediction_horizonUnit,inverte_power_demand,inverte_power_demandUnit
-439,26565.0,62.0,1.0,-,W,kWh,-,1b,-,0,seconds,61361.0,W
+829,30993.0,11454.0,2.0,-,W,kWh,-,2a,-,10800,seconds,143175.0,W

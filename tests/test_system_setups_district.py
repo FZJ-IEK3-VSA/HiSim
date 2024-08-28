@@ -20,7 +20,7 @@ def test_district():
     path = "../system_setups/district_system_setup/simple_district.py"
 
     my_simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
-    my_simulation_parameters.logging_level=4
+
     my_simulation_parameters.post_processing_options.append(
         PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
     )

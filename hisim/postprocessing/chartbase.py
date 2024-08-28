@@ -112,7 +112,7 @@ class Chart:  # noqa: too-few-public-methods
 
     def rescale_y_axis(self, y_values: Any, units: Any) -> Tuple[Any, Any]:
         """Rescale y_values of plots."""
-        max_scale = np.max(np.abs(y_values))
+        max_scale = np.max(np.abs(y_values))   # type: ignore
 
         if units not in ["-", "%"]:
             scale = ""

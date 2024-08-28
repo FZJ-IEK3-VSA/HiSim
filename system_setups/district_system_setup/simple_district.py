@@ -7,7 +7,6 @@ from typing import Optional, Any
 import datetime
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-import simple_generic_household
 from hisim.simulator import SimulationParameters
 from hisim.components.weather import WeatherDataSourceEnum
 from hisim import loadtypes
@@ -18,6 +17,7 @@ from hisim.components import electricity_meter
 from hisim.components import controller_l2_district_energy_management_system
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import log
+from system_setups.district_system_setup import simple_generic_household
 
 
 __authors__ = "Jonas Hoppe"

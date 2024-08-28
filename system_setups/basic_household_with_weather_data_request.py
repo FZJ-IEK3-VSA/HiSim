@@ -7,11 +7,12 @@ import datetime
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
+from hisim.components.weather import WeatherDataSourceEnum
 from hisim.components import generic_pv_system
 from hisim.components import building
 from hisim.components import generic_heat_pump
 from hisim.components import electricity_meter
-from hisim.components import weather_data_import
+from hisim.components.weather_data_import import WeatherDataImport
 from hisim import utils
 from hisim import loadtypes
 
@@ -57,7 +58,7 @@ def setup_function(
 
     input_directory = utils.hisim_inputs
 
-    weather_data = weather_data_import.WeatherDataImport(
+    weather_data_import = WeatherDataImport(
         start_date=start_date,
         end_date=end_date,
         location=location,
@@ -65,7 +66,7 @@ def setup_function(
         longitude=longitude,
         path_input_folder=input_directory,
         distance_weather_stations=30,
-        weather_data_source="DWD_10MIN",
+        weather_data_source=WeatherDataSourceEnum.DWD_10MIN,
     )
 
     # =================================================================================================================================
@@ -108,8 +109,8 @@ def setup_function(
         building_name="BUI1",
         name="Weather",
         location=location,
-        source_path=weather_data.csv_path,
-        data_source=weather.WeatherDataSourceEnum[weather_data.weather_data_source],
+        source_path=weather_data_import.csv_path,
+        data_source=weather_data_import.weather_data_source,
         predictive_control=False, )
 
     my_weather = weather.Weather(

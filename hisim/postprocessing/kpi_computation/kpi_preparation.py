@@ -1448,8 +1448,6 @@ class KpiPreparation:
             set_of_buildings_in_contracting.remove(district_name)
         list_of_buildings_in_contracting = list(set_of_buildings_in_contracting)
 
-        print(list_of_buildings_in_contracting)
-
         if len(list_of_buildings_in_contracting) == 0:
             pass
         else:

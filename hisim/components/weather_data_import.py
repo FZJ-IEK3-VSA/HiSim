@@ -5,7 +5,11 @@ import urllib.request as url
 import datetime
 import pandas as pd
 from wetterdienst import Settings
-from wetterdienst.provider.dwd.observation import DwdObservationRequest
+from wetterdienst.provider.dwd.observation import (
+    DwdObservationParameter,
+    DwdObservationRequest,
+    DwdObservationResolution,
+)
 import numpy as np
 import cdsapi
 import xarray as xr
@@ -124,9 +128,17 @@ class WeatherDataImport:
                 ts_interpolation_use_nearby_station_distance=40,
             )
 
+            parameters = [DwdObservationParameter.MINUTE_10.TEMPERATURE_AIR_MEAN_2M,
+                          DwdObservationParameter.MINUTE_10.PRESSURE_AIR_SITE,
+                          DwdObservationParameter.MINUTE_10.WIND_DIRECTION,
+                          DwdObservationParameter.MINUTE_10.WIND_SPEED,
+                          DwdObservationParameter.MINUTE_10.RADIATION_SKY_SHORT_WAVE_DIFFUSE,
+                          DwdObservationParameter.MINUTE_10.RADIATION_GLOBAL,
+                          ]
+
             request = DwdObservationRequest(
-                parameter=["tt_10", "pp_10", "dd_10", "ff_10", "ds_10", "gs_10"],
-                resolution="10_minutes",
+                parameter=parameters,  # ["tt_10", "pp_10", "dd_10", "ff_10", "ds_10", "gs_10"],
+                resolution=DwdObservationResolution.MINUTE_10,  # "10_minutes",
                 start_date=str(self.start_date_for_weather_data),
                 end_date=str(self.end_date_for_weather_data),
                 settings=settings,

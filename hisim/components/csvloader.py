@@ -20,7 +20,8 @@ from hisim.simulationparameters import SimulationParameters
 class CSVLoaderConfig(cp.ConfigBase):
     """Csvloader config class."""
 
-    component_name: str
+    building_name: str
+    name: str
     csv_filename: str
     column: int
     loadtype: lt.LoadTypes
@@ -46,7 +47,7 @@ class CSVLoader(cp.Component):
 
     Parameters
     ----------
-    component_name: str
+    name: str
         Name of load profile from CSV file
     csv_filename: str
         Name of CSV filename containing the load profile data
@@ -82,8 +83,11 @@ class CSVLoader(cp.Component):
     ):
         """Initialize the class."""
         self.csvconfig = config
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=self.csvconfig.component_name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

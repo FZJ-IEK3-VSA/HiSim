@@ -191,23 +191,17 @@ def test_house(
     # simualtion results from grid energy balancer (last entry)
     simulation_results_electricity_meter_cumulative_production_in_watt_hour = (
         my_sim.results_data_frame[
-            "BUI1" + "_" + "ElectricityMeter - CumulativeProduction [Electricity - Wh]"
+           "ElectricityMeter - CumulativeProduction [Electricity - Wh]"
         ][-1]
     )
     simulation_results_electricity_meter_cumulative_consumption_in_watt_hour = (
-        my_sim.results_data_frame[
-            "BUI1" + "_" + "ElectricityMeter - CumulativeConsumption [Electricity - Wh]"
-        ][-1]
+        my_sim.results_data_frame["ElectricityMeter - CumulativeConsumption [Electricity - Wh]"][-1]
     )
     simulation_results_electricity_from_grid_in_watt_hour = (
-        my_sim.results_data_frame[
-            "BUI1" + "_" + "ElectricityMeter - ElectricityFromGrid [Electricity - Wh]"
-        ]
+        my_sim.results_data_frame["ElectricityMeter - ElectricityFromGrid [Electricity - Wh]"]
     )
     simulation_results_electricity_consumption_in_watt_hour = (
-        my_sim.results_data_frame[
-            "BUI1" + "_" + "ElectricityMeter - ElectricityConsumption [Electricity - Wh]"
-        ]
+        my_sim.results_data_frame["ElectricityMeter - ElectricityConsumption [Electricity - Wh]"]
     )
     sum_electricity_from_grid_in_kilowatt_hour = sum(simulation_results_electricity_from_grid_in_watt_hour) / 1000
     sum_electricity_consumption_in_kilowatt_hour = sum(simulation_results_electricity_consumption_in_watt_hour) / 1000

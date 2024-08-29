@@ -53,7 +53,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     seconds_per_timestep = 60
 
     # Set CSV Parameters
-    component_name = "CSV Loader"
+    building_name = "CSV Loader"
     csv_filename = "wind_generated_power_1_min.csv"
     column = 1  # The column number in the CSV file containing the load profile data
     loadtype = lt.LoadTypes.ELECTRICITY  # Replace with the desired load type
@@ -85,9 +85,8 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
 
     # Setup new CSV loader object
     my_csv_loader = CSVLoaderConfig(
-        building_name="BUI1",
+        building_name=building_name,
         name="CSV",
-        component_name=component_name,
         csv_filename=csv_filename,
         column=column,  # The column number in the CSV file containing the load profile data
         loadtype=loadtype,  # Replace with the desired load type
@@ -106,7 +105,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     my_transformer = Transformer(
         my_simulation_parameters=my_simulation_parameters,
         config=TransformerConfig(
-            building_name="BUI1",
+            building_name=building_name,
             name=name,
             efficiency=efficiency,
         ),

@@ -67,7 +67,7 @@ class BuildingPVWeatherConfig(ConfigBase):
 
     """Configuration for BuildingPv."""
 
-    #building_name: str
+    building_name: str
     name: str
     building_id: str
     pv_azimuth: float

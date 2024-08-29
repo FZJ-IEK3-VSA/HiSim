@@ -213,7 +213,8 @@ class PostProcessor:
                 if isinstance(elem.my_component, building.Building):
                     building_data = elem.my_component.my_building_information.buildingdata
                     for building_object in building_objects_in_district_list:
-                        if building_object in str(elem.my_component.component_name):
+                        if (building_object in str(elem.my_component.component_name) or
+                                not ppdt.simulation_parameters.multiple_buildings):
                             building_data["Object_Name"] = building_object
                     all_building_data = pd.concat([all_building_data, building_data], ignore_index=True)
 

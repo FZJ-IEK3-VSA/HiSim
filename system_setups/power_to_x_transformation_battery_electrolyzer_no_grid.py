@@ -100,9 +100,8 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
 
     # Setup new CSV loader object
     my_csv_loader = CSVLoaderConfig(
-        building_name="BUI1",
+        building_name=component_name,
         name="CSV",
-        component_name=component_name,
         csv_filename=csv_filename,
         column=column,  # The column number in the CSV file containing the load profile data
         loadtype=loadtype,  # Replace with the desired load type

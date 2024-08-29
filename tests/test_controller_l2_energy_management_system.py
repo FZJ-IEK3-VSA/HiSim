@@ -385,8 +385,7 @@ def test_house(
 
     # Get EMS output ElectricityToOrFromGrid -> get grid injection by filterig only values > 0
     simulation_results_ems_grid_injection_in_watt = my_sim.results_data_frame[
-       "L2EMSElectricityController - TotalElectricityToOrFromGrid [Electricity - W]"
-    ].loc[
+        "L2EMSElectricityController - TotalElectricityToOrFromGrid [Electricity - W]"].loc[
         my_sim.results_data_frame["L2EMSElectricityController - TotalElectricityToOrFromGrid [Electricity - W]"] > 0.0
     ]
     ems_grid_injection_in_kilowatt_hour = (

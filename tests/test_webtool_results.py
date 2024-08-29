@@ -34,7 +34,7 @@ def test_webtool_results():
 
     assert isinstance(
         results_daily_operation_for_webtool.loc[
-            "2021-01-01", "BUI1_AdvancedHeatPumpHPLib - ThermalOutputPower [Heating - W]"
+            "2021-01-01", "AdvancedHeatPumpHPLib - ThermalOutputPower [Heating - W]"
         ],
         Number,
     )
@@ -45,13 +45,13 @@ def test_webtool_results():
 
     # Test single values
     assert isinstance(
-        results_for_webtool["components"]["BUI1_AdvancedHeatPumpHPLib"]["operation"]["ThermalOutputPower"]["value"],
+        results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["operation"]["ThermalOutputPower"]["value"],
         Number,
     )
 
     # Test quantity
     assert isinstance(
-        results_for_webtool["components"]["BUI1_AdvancedHeatPumpHPLib"]["configuration"]["flow_temperature_in_celsius"]["unit"]["symbol"],
+        results_for_webtool["components"]["AdvancedHeatPumpHPLib"]["configuration"]["flow_temperature_in_celsius"]["unit"]["symbol"],
         str,
     )
 
@@ -68,6 +68,6 @@ def test_webtool_results():
         profiles_for_webtool = json.load(handle)
 
     assert isinstance(
-        profiles_for_webtool["BUI1_ElectricityMeter - ElectricityToGrid [Electricity - Wh]"]["2021-01-01T00:00:00.000"],
+        profiles_for_webtool["ElectricityMeter - ElectricityToGrid [Electricity - Wh]"]["2021-01-01T00:00:00.000"],
         Number,
     )

@@ -188,7 +188,7 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
     # =========================================================================================================================================================
     # Calculate annual heat pump heating energy
 
-    results_heating = my_sim.results_data_frame["BUI1" + "_" + "IdealizedElectricHeater - HeatingPowerDelivered [Heating - W]"]
+    results_heating = my_sim.results_data_frame["IdealizedElectricHeater - HeatingPowerDelivered [Heating - W]"]
 
     sum_heating_in_watt_timestep = sum(results_heating)
     log.information("sum heating [W*timestep] " + str(sum_heating_in_watt_timestep))

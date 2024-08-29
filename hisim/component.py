@@ -27,10 +27,10 @@ class ConfigBase(JSONWizard):
 
     """Base class for all configurations."""
 
-    building_name: str
+    #building_name: str
     name: str
 
-    def __init__(self, building_name: str, name: str):
+    def __init__(self, name: str, building_name: str = "BUI1"):
         """Initializes."""
         self.building_name = building_name
         self.name = name
@@ -233,6 +233,21 @@ class Component:
                 "Please check your components' configuration classes and inherit from ConfigBase class according to hisim/components/example_component.py.",
             )
         self.my_display_config: DisplayConfig = my_display_config
+        print("--------")
+        print(self.config)
+        print(self.component_name)
+        print(self.my_simulation_parameters)
+        print("--------------------")
+        print(self.get_component_name())
+
+    def get_component_name(self):
+        print(self.my_simulation_parameters)
+        if self.my_simulation_parameters.multiple_buildings:
+            name = str(self.config.building_name) + "_" + str(self.config.name)
+        else:
+            name = str(self.component_name)
+
+        return name
 
     def add_default_connections(self, connections: List[ComponentConnection]) -> None:
         """Adds a default connection list definition."""

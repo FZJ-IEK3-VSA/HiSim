@@ -96,7 +96,7 @@ class DistrictConfig:
             district_name=loadtypes.DistrictNames.DISTRICT.value,
             pv_district_building_name=loadtypes.DistrictNames.DISTRICT.value,
             name_pv_district="PV_Park",
-            nominal_power_pv_district=15000,
+            nominal_power_pv_district=0,
             module_database_pv_district=generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
             inverter_database_pv_district=generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,
             load_module_data_pv_district=False,
@@ -190,28 +190,15 @@ def setup_function(
 
     building_config_list = []
     for building_name in district_list_bui_names:
-        building_config_filename = my_sim.my_module_config
-
         my_building_config: simple_generic_household.GenericBuildingConfig
-
-        if isinstance(building_config_filename, str) and os.path.exists(building_config_filename.rstrip("\r")):
-            with open(building_config_filename.rstrip("\r"), encoding="unicode_escape") as system_config_file:
-                my_building_config = simple_generic_household.GenericBuildingConfig.from_json(system_config_file.read())  # type: ignore
-            parameter_names = list(simple_generic_household.GenericBuildingConfig.__annotations__.keys())
-            default_values = {k: getattr(my_building_config, k) for k in parameter_names}
-            parameter_values_list = [(param, default_values[param]) for param in parameter_names]
-            building_config_list.append(parameter_values_list)
-            log.information(f"Read system config from {building_config_filename}")
-            log.information("Config values: " + f"{my_building_config.to_dict}" + "\n")
-        else:
-            my_building_config = simple_generic_household.GenericBuildingConfig.get_default_generic_building_config(
-                building_name=building_name
-            )
-            parameter_names = list(simple_generic_household.GenericBuildingConfig.__annotations__.keys())
-            default_values = {k: getattr(my_building_config, k) for k in parameter_names}
-            parameter_values_list = [(param, default_values[param]) for param in parameter_names]
-            building_config_list.append(parameter_values_list)
-            log.information("No module config path from the simulator was given. Use default config.")
+        my_building_config = simple_generic_household.GenericBuildingConfig.get_default_generic_building_config(
+            building_name=building_name
+        )
+        parameter_names = list(simple_generic_household.GenericBuildingConfig.__annotations__.keys())
+        default_values = {k: getattr(my_building_config, k) for k in parameter_names}
+        parameter_values_list = [(param, default_values[param]) for param in parameter_names]
+        building_config_list.append(parameter_values_list)
+        log.information("No module config path from the simulator was given. Use default config.")
 
     bui_config = simple_generic_household.GenericBuildingConfig.get_default_generic_building_config()
     district_list = []

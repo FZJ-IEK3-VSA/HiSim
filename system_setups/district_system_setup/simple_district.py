@@ -143,7 +143,7 @@ def setup_function(
             end_date=my_config.end_date,
             seconds_per_timestep=my_config.seconds_per_timestep,
         )
-
+        my_simulation_parameters.multiple_buildings = True
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT)

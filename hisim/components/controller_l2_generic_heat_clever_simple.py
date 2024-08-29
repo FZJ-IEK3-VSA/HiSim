@@ -163,8 +163,11 @@ class L2HeatSmartController(cp.Component):
         """Initialize the class."""
         if not config.__class__.__name__ == L2HeatSmartConfig.__name__:
             raise ValueError("Wrong config class: " + config.__class__.__name__)
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=config.building_name + "_" + config.name + "_w" + str(config.source_weight),
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

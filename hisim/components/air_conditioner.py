@@ -188,8 +188,11 @@ class AirConditioner(cp.Component):
         self.state0 = AirConditionerState()
         self.previous_state = AirConditionerState()
 
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=self.air_conditioner_config.building_name + "_" + self.air_conditioner_config.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -603,8 +606,11 @@ class AirConditionerController(cp.Component):
         self.aircon_controller_mode: str = "not initalized yet"
         self.previous_aircon_controller_mode: str = "not initalized yet"
 
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=self.air_conditioner_controller_config.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

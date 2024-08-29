@@ -181,10 +181,13 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
         self.my_component_inputs: List[dynamic_component.DynamicConnectionInput] = []
         self.my_component_outputs: List[dynamic_component.DynamicConnectionOutput] = []
         self.ems_config = config
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
+            name=component_name,
             my_component_inputs=self.my_component_inputs,
             my_component_outputs=self.my_component_outputs,
-            name=config.building_name + "_" + self.ems_config.name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

@@ -120,8 +120,11 @@ class ControllerHeat(cp.Component):
     ) -> None:
         """Initialize the class."""
         self.controller_heat_config = config
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=config.building_name + "_" + self.controller_heat_config.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

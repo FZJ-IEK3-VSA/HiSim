@@ -277,8 +277,11 @@ class MoreAdvancedHeatPumpHPLib(Component):
     ):
         """Loads the parameters of the specified heat pump."""
 
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=config.building_name + "_" + config.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -1909,8 +1912,11 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
     ) -> None:
         """Construct all the neccessary attributes."""
         self.heatpump_controller_config = config
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=config.building_name + "_" + self.heatpump_controller_config.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -2354,8 +2360,11 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
     ) -> None:
         """Construct all the neccessary attributes."""
         self.heatpump_controller_dhw_config = config
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=config.building_name + "_" + self.heatpump_controller_dhw_config.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

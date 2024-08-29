@@ -21,6 +21,8 @@ def test_district():
 
     my_simulation_parameters = SimulationParameters.one_week_only(year=2021, seconds_per_timestep=60)
 
+    my_simulation_parameters.multiple_buildings = True
+
     my_simulation_parameters.post_processing_options.append(
         PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
     )

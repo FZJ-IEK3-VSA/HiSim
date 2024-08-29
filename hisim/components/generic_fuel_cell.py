@@ -179,8 +179,11 @@ class FuelCell(cp.Component):
         self.ramp_up_rate = config.ramp_up_rate
         self.ramp_down_rate = config.ramp_down_rate
 
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=config.building_name + "_" + self.fuelcellconfig.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

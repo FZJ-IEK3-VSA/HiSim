@@ -154,12 +154,12 @@ class Battery(Component):
     ):
         """Loads the parameters of the specified battery storage."""
         self.battery_config = config
+
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=self.battery_config.building_name
-            + "_"
-            + self.battery_config.name
-            + "_w"
-            + str(self.battery_config.source_weight),
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

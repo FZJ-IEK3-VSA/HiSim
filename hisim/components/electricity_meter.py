@@ -80,10 +80,13 @@ class ElectricityMeter(DynamicComponent):
         self.name = self.grid_energy_balancer_config.name
         self.my_component_inputs: List[DynamicConnectionInput] = []
         self.my_component_outputs: List[DynamicConnectionOutput] = []
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
             self.my_component_inputs,
             self.my_component_outputs,
-            name=config.building_name + "_" + config.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

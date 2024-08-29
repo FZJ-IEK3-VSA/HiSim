@@ -280,10 +280,11 @@ class HotWaterStorage(cp.Component):
     ):
         """Initializes instance of HotWaterStorage class."""
 
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            # my_component_inputs=self.my_component_inputs,
-            # my_component_outputs=self.my_component_outputs,
-            name=config.building_name + "_" + config.name + "_w" + str(config.source_weight),
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

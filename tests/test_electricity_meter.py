@@ -190,9 +190,7 @@ def test_house(
 
     # simualtion results from grid energy balancer (last entry)
     simulation_results_electricity_meter_cumulative_production_in_watt_hour = (
-        my_sim.results_data_frame[
-           "ElectricityMeter - CumulativeProduction [Electricity - Wh]"
-        ][-1]
+        my_sim.results_data_frame["ElectricityMeter - CumulativeProduction [Electricity - Wh]"][-1]
     )
     simulation_results_electricity_meter_cumulative_consumption_in_watt_hour = (
         my_sim.results_data_frame["ElectricityMeter - CumulativeConsumption [Electricity - Wh]"][-1]

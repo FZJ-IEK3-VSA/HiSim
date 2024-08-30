@@ -15,7 +15,7 @@ def test_basic_household_with_all_resultfiles():
     """One day with all options."""
     path = "../system_setups/basic_household.py"
 
-    mysimpar = SimulationParameters.one_day_only(
+    mysimpar = SimulationParameters.one_day_only_with_all_options(
         year=2021, seconds_per_timestep=60
     )
 

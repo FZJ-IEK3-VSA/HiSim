@@ -13,7 +13,7 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import SimulationParameters
 from hisim.system_setup_starter import make_system_setup
 
-MY_PATH_TO_MODULE ="../system_setups/household_heat_pump.py"
+MY_PATH_TO_MODULE = "../system_setups/household_heat_pump.py"
 MY_SIMULATION_PARAMETERS = {
     "start_date": "2021-01-01T00:00:00",
     "end_date": "2021-01-02T00:00:00",

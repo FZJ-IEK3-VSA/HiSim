@@ -143,7 +143,7 @@ class HeatingMeter(DynamicComponent):
         )
 
         self.add_dynamic_default_connections(self.get_default_connections_from_heat_distribution_system())
-        self.add_dynamic_default_connections(self.get_default_connections_from_simple_dhw_storage())
+        # self.add_dynamic_default_connections(self.get_default_connections_from_simple_dhw_storage())
         self.add_dynamic_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_generic_heat_source())
 
@@ -171,29 +171,29 @@ class HeatingMeter(DynamicComponent):
         )
         return dynamic_connections
 
-    def get_default_connections_from_simple_dhw_storage(
-        self,
-    ):
-        """Get gas heater default connections."""
-
-        from hisim.components.simple_dhw_storage import (  # pylint: disable=import-outside-toplevel
-            SimpleDHWStorage,
-        )
-
-        dynamic_connections = []
-        dhw_storage_class_name = SimpleDHWStorage.get_classname()
-        dynamic_connections.append(
-            dynamic_component.DynamicComponentConnection(
-                source_component_class=SimpleDHWStorage,
-                source_class_name=dhw_storage_class_name,
-                source_component_field_name=SimpleDHWStorage.ThermalPowerConsumptionDHW,
-                source_load_type=lt.LoadTypes.HEATING,
-                source_unit=lt.Units.WATT,
-                source_tags=[lt.InandOutputType.HEAT_CONSUMPTION],
-                source_weight=999,
-            )
-        )
-        return dynamic_connections
+    # def get_default_connections_from_simple_dhw_storage(
+    #     self,
+    # ):
+    #     """Get gas heater default connections."""
+    #
+    #     from hisim.components.simple_dhw_storage import (  # pylint: disable=import-outside-toplevel
+    #         SimpleDHWStorage,
+    #     )
+    #
+    #     dynamic_connections = []
+    #     dhw_storage_class_name = SimpleDHWStorage.get_classname()
+    #     dynamic_connections.append(
+    #         dynamic_component.DynamicComponentConnection(
+    #             source_component_class=SimpleDHWStorage,
+    #             source_class_name=dhw_storage_class_name,
+    #             source_component_field_name=SimpleDHWStorage.ThermalPowerConsumptionDHW,
+    #             source_load_type=lt.LoadTypes.HEATING,
+    #             source_unit=lt.Units.WATT,
+    #             source_tags=[lt.InandOutputType.HEAT_CONSUMPTION],
+    #             source_weight=999,
+    #         )
+    #     )
+    #     return dynamic_connections
 
     def get_default_connections_from_more_advanced_heat_pump(
         self,

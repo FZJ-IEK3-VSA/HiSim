@@ -112,7 +112,7 @@ def test_household_gas_heater_system_setup_starter_pv():
     # Automatic connections are created with an index, we check the first three indexes here, which should suffice to
     # find the component.
     pv_con_dicts = [
-        {"From": {"Component": "PVSystem_w0", "Field": "ElectricityOutput"}, "To":
+        {"From": {"Component": "PVSystem", "Field": "ElectricityOutput"}, "To":
             {"Component": "ElectricityMeter", "Field": f"Input_PVSystem_ElectricityOutput_{i}"}}
         for i in range(3)
     ]

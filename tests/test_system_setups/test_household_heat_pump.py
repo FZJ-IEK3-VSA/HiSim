@@ -13,7 +13,7 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulationparameters import SimulationParameters
 from hisim.system_setup_starter import make_system_setup
 
-MY_PATH_TO_MODULE = "../system_setups/household_heat_pump.py"
+MY_PATH_TO_MODULE =r"C:\Users\j.hoppe\Desktop\WQeff\WQeff_Simulation\HiSim_FORK\system_setups\household_heat_pump.py"# "../system_setups/household_heat_pump.py"
 MY_SIMULATION_PARAMETERS = {
     "start_date": "2021-01-01T00:00:00",
     "end_date": "2021-01-02T00:00:00",
@@ -116,8 +116,8 @@ def test_household_heat_pump_system_setup_starter_pv():
     # find the component.
     pv_con_dicts = [
         {
-            "From": {"Component": "BUI1_PVSystem_w0", "Field": "ElectricityOutput"},
-            "To": {"Component": "BUI1_ElectricityMeter", "Field": f"Input_PVSystem_ElectricityOutput_{i}"},
+            "From": {"Component": "PVSystem", "Field": "ElectricityOutput"},
+            "To": {"Component": "ElectricityMeter", "Field": f"Input_PVSystem_ElectricityOutput_{i}"},
         }
         for i in range(3)
     ]

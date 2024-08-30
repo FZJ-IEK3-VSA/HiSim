@@ -270,8 +270,8 @@ class DistrictNames(str, enum.Enum):
 
     """Names of Districts."""
 
-    QUARTIER = "QUARTIER"
-    BEZIRK = "BEZIRK"
-    DISTRICT = "DISTRICT"
-    AREA = "AREA"
-    NEIGHBORHOOD = "NEIGHBORHOOD"
+    QUARTIER = "Quartier"
+    BEZIRK = "Bezirk"
+    DISTRICT = "District"
+    AREA = "Area"
+    NEIGHBORHOOD = "Neighborhood"

@@ -25,6 +25,7 @@ class SimulationParameters(JSONWizard):
     result_directory: str
     skip_finished_results: bool
     surplus_control: bool
+    multiple_buildings: bool
 
     def __init__(
         self,
@@ -36,6 +37,7 @@ class SimulationParameters(JSONWizard):
         logging_level: int = log.LogPrio.INFORMATION,
         skip_finished_results: bool = False,
         surplus_control: bool = True,
+        multiple_buildings: bool = False,
     ):
         """Initializes the class."""
         self.start_date: datetime.datetime = start_date
@@ -52,6 +54,7 @@ class SimulationParameters(JSONWizard):
         self.result_directory: str = result_directory
         self.skip_finished_results: bool = skip_finished_results
         self.surplus_control = surplus_control
+        self.multiple_buildings = multiple_buildings
 
         self.figure_format = FigureFormat.PNG
 

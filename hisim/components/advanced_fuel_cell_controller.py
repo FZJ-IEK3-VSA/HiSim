@@ -19,7 +19,6 @@ from hisim import log
 
 
 class ExtendedControllerSimulation:
-
     """Extended Controller Simulation."""
 
     def __init__(self, config: ExtendedControllerConfig):
@@ -259,7 +258,6 @@ class ExtendedControllerSimulation:
 
 
 class ExtendedController(Component):
-
     """Extended Controller class."""
 
     # inputs
@@ -291,6 +289,9 @@ class ExtendedController(Component):
         my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Initialize the class."""
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
             name=component_name,
             my_simulation_parameters=my_simulation_parameters,

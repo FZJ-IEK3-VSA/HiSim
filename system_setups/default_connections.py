@@ -90,6 +90,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
 
     my_heat_pump_controller = generic_heat_pump.GenericHeatPumpController(
         config=generic_heat_pump.GenericHeatPumpControllerConfig(
+            building_name="BUI1",
             name="GenericHeatPumpController",
             temperature_air_heating_in_celsius=temperature_air_heating_in_celsius,
             temperature_air_cooling_in_celsius=temperature_air_cooling_in_celsius,

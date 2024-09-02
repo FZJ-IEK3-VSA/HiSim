@@ -1,7 +1,9 @@
 """Test for weather data import."""
 import datetime
+import shutil
 import pytest
 from hisim.components.weather_data_import import WeatherDataImport
+from hisim.components.weather import WeatherDataSourceEnum
 
 
 @pytest.mark.base
@@ -25,5 +27,7 @@ def test_weather_data_import():
         longitude=longitude,
         path_input_folder=result_directory,
         distance_weather_stations=30,
-        weather_data_source="DWD_10MIN",
+        weather_data_source=WeatherDataSourceEnum.DWD_10MIN,
     )
+
+    shutil.rmtree(result_directory)  # remove result directory

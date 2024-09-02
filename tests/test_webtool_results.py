@@ -57,7 +57,7 @@ def test_webtool_results():
 
     # Test KPIs
     assert isinstance(
-        results_for_webtool["kpis"]["Costs"]["Maintenance costs for simulated period"]["value"],
+        results_for_webtool["kpis"]["BUI1"]["Costs"]["Maintenance costs for simulated period"]["value"],
         Number,
     )
 

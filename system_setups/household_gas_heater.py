@@ -128,6 +128,7 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
             building_type="residential",
             number_of_apartments=my_building_information.number_of_apartments,
             occupancy_config=loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
+                building_name="BUI1",
                 data_acquisition_mode=loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP,
                 household=Households.CHR01_Couple_both_at_Work,
                 energy_intensity=EnergyIntensityType.EnergySaving,
@@ -136,7 +137,6 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
                 transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
                 charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
                 name="UTSPConnector",
-                consumption_in_kwh=0.0,
                 profile_with_washing_machine_and_dishwasher=True,
                 predictive_control=False,
                 predictive=False,

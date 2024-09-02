@@ -27,9 +27,9 @@ __status__ = ""
 @dataclass_json
 @dataclass
 class GenericElectrolyzerConfig(cp.ConfigBase):
-
     """Generic electrolyzer config."""
 
+    building_name: str
     #: name of the electrolyer
     name: str
     #: priority of the component in hierachy: the higher the number the lower the priority
@@ -44,9 +44,13 @@ class GenericElectrolyzerConfig(cp.ConfigBase):
     max_hydrogen_production_rate: float
 
     @staticmethod
-    def get_default_config(p_el: float) -> "GenericElectrolyzerConfig":
+    def get_default_config(
+        p_el: float,
+        building_name: str = "BUI1",
+    ) -> "GenericElectrolyzerConfig":
         """Returns the default configuration of an electrolyzer."""
         config = GenericElectrolyzerConfig(
+            building_name=building_name,
             name="Electrolyzer",
             source_weight=1,
             min_power=p_el * 0.5,
@@ -58,7 +62,6 @@ class GenericElectrolyzerConfig(cp.ConfigBase):
 
 
 class ElectrolyzerState:
-
     """Saves the state of the electrolyzer."""
 
     def __init__(self, hydrogen: float = 0, electricity: float = 0):
@@ -72,7 +75,6 @@ class ElectrolyzerState:
 
 
 class GenericElectrolyzer(cp.Component):
-
     """Generic electrolyzer component.
 
     The electrolyzer converts electrical energy [kWh] into hydrogen [kg]. It can
@@ -105,8 +107,11 @@ class GenericElectrolyzer(cp.Component):
     ):
         """Initialize an instance."""
 
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=config.name + "_w" + str(config.source_weight),
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

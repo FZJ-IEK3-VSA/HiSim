@@ -10,7 +10,6 @@ import numpy as np
 
 
 class KpiTagEnumClass(Enum):
-
     """Determine KPI tags as enums."""
 
     GENERAL = "General"
@@ -25,13 +24,19 @@ class KpiTagEnumClass(Enum):
     GAS_HEATER_SPACE_HEATING = "Gas Heater For Space Heating"
     GAS_HEATER_DOMESTIC_HOT_WATER = "Gas Heater For Domestic Hot Water"
     GAS_METER = "Gas Meter"
+    HEATING_METER = "Heating Meter"
     ELECTRICITY_METER = "Electricity Meter"
     CAR = "Car"
+    EMS = "Energy Management System"
+    ELECTRICITY_GRID = "Electricity Grid"
+    THERMAL_GRID = "Thermal Grid"
+    COSTS_DISTRICT_GRID = "Costs Of District Grid"
+    EMISSIONS_DISTRICT_GRID = "Emissions Of District Grid"
+    CONTRACTING = "Contracting"
 
 
 @dataclass
 class KpiEntry(JSONWizard):
-
     """Class for storing one kpi entry."""
 
     name: str
@@ -42,7 +47,6 @@ class KpiEntry(JSONWizard):
 
 
 class KpiHelperClass:
-
     """Class for providing some helper fucntions for calculating KPIs."""
 
     @staticmethod

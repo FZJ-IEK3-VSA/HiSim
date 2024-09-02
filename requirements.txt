@@ -3,7 +3,7 @@ pandas
 matplotlib
 seaborn
 reportlab
-pvlib==0.10.2
+pvlib # ==0.10.2
 openpyxl
 pytest
 sphinx
@@ -24,7 +24,7 @@ plotly
 ordered_set
 typing_extensions
 python-dotenv
-windpowerlib==0.2.1
+windpowerlib  # ==0.2.1
 wetterdienst
 cdsapi
 xarray

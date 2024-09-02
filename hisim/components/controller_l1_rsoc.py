@@ -1,7 +1,9 @@
 """ rSOC controller. """
+
 # clean
 import os
 import json
+from typing import Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hisim.component import ConfigBase, Component, ComponentInput, ComponentOutput, SingleTimeStepValues, DisplayConfig
@@ -26,7 +28,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class RsocControllerConfig(ConfigBase):
-
     """Config of the rSOC Controller."""
 
     @classmethod
@@ -34,6 +35,7 @@ class RsocControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return RsocController.get_full_classname()
 
+    building_name: str
     name: str
 
     nom_load_soec: float
@@ -60,11 +62,16 @@ class RsocControllerConfig(ConfigBase):
             return data.get("rSOC variants", {}).get(rsoc_name, {})
 
     @classmethod
-    def config_rsoc(cls, rsoc_name):
+    def config_rsoc(
+        cls,
+        rsoc_name: str,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Initializes the config variables based on the JSON-file."""
 
         config_json = cls.read_config(rsoc_name)
         config = RsocControllerConfig(
+            building_name=building_name,
             name="rSCO l1 Controller",
             nom_load_soec=config_json.get("nom_load_soec", 0.0),
             min_load_soec=config_json.get("min_load_soec", 0.0),
@@ -83,7 +90,6 @@ class RsocControllerConfig(ConfigBase):
 
 
 class RsocController(Component):
-
     """rSOC Controller class."""
 
     # Inputs
@@ -131,8 +137,11 @@ class RsocController(Component):
         self.warm_start_time = self.warm_start_time_soec
         self.standby_load = 100.0
 
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=self.rsoccontrollerconfig.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

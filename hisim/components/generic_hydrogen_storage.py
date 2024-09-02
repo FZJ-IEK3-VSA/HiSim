@@ -1,4 +1,5 @@
 """Generic hydrogen storage module."""
+
 # clean
 # -*- coding: utf-8 -*-
 # Owned
@@ -25,9 +26,9 @@ __status__ = ""
 @dataclass_json
 @dataclass
 class GenericHydrogenStorageConfig(cp.ConfigBase):
-
     """Generic hydrogen storage config class."""
 
+    building_name: str
     #: name of the device
     name: str
     #: priority of the device in hierachy: the higher the number the lower the priority
@@ -53,9 +54,11 @@ class GenericHydrogenStorageConfig(cp.ConfigBase):
         max_charging_rate: float = 2 / 3600,
         max_discharging_rate: float = 2 / 3600,
         source_weight: int = 1,
+        building_name: str = "BUI1",
     ) -> Any:
         """Returns default configuration for hydrogen storage."""
         config = GenericHydrogenStorageConfig(
+            building_name=building_name,
             name="HydrogenStorage",
             source_weight=source_weight,
             min_capacity=0,
@@ -70,7 +73,6 @@ class GenericHydrogenStorageConfig(cp.ConfigBase):
 
 
 class GenericHydrogenStorageState:
-
     """Generic hydrogen storage state that saves the state of the hydrogen storage."""
 
     def __init__(self, fill: float = 0) -> None:
@@ -83,7 +85,6 @@ class GenericHydrogenStorageState:
 
 
 class GenericHydrogenStorage(cp.Component):
-
     """Generic hydrogen storage is a simple implementation of a hydrogen storage.
 
     Components to connect to:
@@ -105,8 +106,11 @@ class GenericHydrogenStorage(cp.Component):
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initialize the class."""
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=config.name + "_w" + str(config.source_weight),
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

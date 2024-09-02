@@ -38,9 +38,10 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class CarBatteryConfig(ConfigBase):
-
     """Configuration of a Car Battery."""
 
+    #: building_name in which component is
+    building_name: str
     #: name of the device
     name: str
     #: priority of the device in hierachy: the higher the number the lower the priority
@@ -62,10 +63,11 @@ class CarBatteryConfig(ConfigBase):
         return CarBattery.get_full_classname()
 
     @classmethod
-    def get_default_config(cls) -> "CarBatteryConfig":
+    def get_default_config(cls, building_name: str = "BUI1", name: str = "CarBattery") -> "CarBatteryConfig":
         """Returns default configuration of a Car Battery."""
         config = CarBatteryConfig(
-            name="CarBattery",
+            building_name=building_name,
+            name=name,
             system_id="SG1",
             p_inv_custom=1e4,
             e_bat_custom=30,
@@ -77,7 +79,6 @@ class CarBatteryConfig(ConfigBase):
 
 
 class CarBattery(Component):
-
     """Car Battery class.
 
     Simulate state of charge and realized power of a ac coupled battery
@@ -104,8 +105,11 @@ class CarBattery(Component):
     ):
         """Loads the parameters of the specified battery storage."""
         self.battery_config = config
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=config.name + "_w" + str(config.source_weight),
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -259,7 +263,7 @@ class CarBattery(Component):
         for index, output in enumerate(all_outputs):
             if (
                 output.postprocessing_flag is not None
-                and output.component_name == self.battery_config.name + "_w" + str(self.battery_config.source_weight)
+                and output.component_name == self.component_name
             ):
                 if InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
                     self.battery_config.charge = round(
@@ -290,7 +294,6 @@ class CarBattery(Component):
 
 @dataclass
 class EVBatteryState:
-
     """Electric vehicle battery state class."""
 
     # state of charge of the battery

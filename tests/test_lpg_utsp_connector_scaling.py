@@ -106,6 +106,7 @@ def initialize_lpg_utsp_connector_and_return_results(
 
     # Build occupancy
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig(
+        building_name="BUI1",
         name="UTSPConnector",
         data_acquisition_mode=data_acquisition_mode,
         household=households,
@@ -113,7 +114,6 @@ def initialize_lpg_utsp_connector_and_return_results(
         travel_route_set=travel_route_set,
         transportation_device_set=transportation_device_set,
         charging_station_set=charging_station_set,
-        consumption_in_kwh=0.0,
         profile_with_washing_machine_and_dishwasher=True,
         predictive_control=False,
         predictive=False,

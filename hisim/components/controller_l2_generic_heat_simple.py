@@ -29,9 +29,9 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class L2GenericHeatConfig(cp.ConfigBase):
-
     """L2 Controller Config."""
 
+    building_name: str
     name: str
     source_weight: int
     t_min_heating_in_celsius: float
@@ -48,9 +48,13 @@ class L2GenericHeatConfig(cp.ConfigBase):
         return L2GenericHeatController.get_full_classname()
 
     @staticmethod
-    def get_default_config_heating(name: str) -> Any:
+    def get_default_config_heating(
+        name: str,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Default config for the heating controller."""
         config = L2GenericHeatConfig(
+            building_name=building_name,
             name="L2HeatingTemperatureController_" + name,
             source_weight=1,
             t_min_heating_in_celsius=20.0,
@@ -64,9 +68,13 @@ class L2GenericHeatConfig(cp.ConfigBase):
         return config
 
     @staticmethod
-    def get_default_config_buffer_heating(name: str) -> Any:
+    def get_default_config_buffer_heating(
+        name: str,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Default Config for the buffer temperature."""
         config = L2GenericHeatConfig(
+            building_name=building_name,
             name="L2BufferTemperatureController_" + name,
             source_weight=1,
             t_min_heating_in_celsius=30.0,
@@ -80,9 +88,13 @@ class L2GenericHeatConfig(cp.ConfigBase):
         return config
 
     @staticmethod
-    def get_default_config_waterheating(name: str) -> Any:
+    def get_default_config_waterheating(
+        name: str,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Generate Default Config for a DHW controller."""
         config = L2GenericHeatConfig(
+            building_name=building_name,
             name="L2DHWTemperatureController_" + name,
             source_weight=1,
             t_min_heating_in_celsius=50.0,
@@ -97,7 +109,6 @@ class L2GenericHeatConfig(cp.ConfigBase):
 
 
 class L2GenericHeatControllerState:
-
     """Data class that saves the state of the controller."""
 
     def __init__(
@@ -152,7 +163,6 @@ class L2GenericHeatControllerState:
 
 
 class L2GenericHeatController(cp.Component):
-
     """L2 heat pump controller. Processes signals ensuring comfort temperature of building.
 
     Gets available surplus electricity and the temperature of the storage or building to control as input,
@@ -195,8 +205,11 @@ class L2GenericHeatController(cp.Component):
         """For initializing."""
         if not config.__class__.__name__ == L2GenericHeatConfig.__name__:
             raise ValueError("Wrong config class.")
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=config.name + "_w" + str(config.source_weight),
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

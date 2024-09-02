@@ -33,9 +33,9 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class VehiclePureConfig(cp.ConfigBase):
-
     """Vehicle Pure Config class."""
 
+    building_name: str
     name: str
     manufacturer: str
     model: str
@@ -48,9 +48,13 @@ class VehiclePureConfig(cp.ConfigBase):
         return VehiclePure.get_full_classname()
 
     @classmethod
-    def get_default_config(cls):
+    def get_default_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Gets a default config."""
         return VehiclePureConfig(
+            building_name=building_name,
             name="Electrical Charger",
             manufacturer="Tesla",
             model="Model 3 v3",
@@ -62,9 +66,9 @@ class VehiclePureConfig(cp.ConfigBase):
 @dataclass_json
 @dataclass
 class EVChargerControllerConfig(cp.ConfigBase):
-
     """Electrical vehicle charger controller config class."""
 
+    building_name: str
     name: str
     mode: int
 
@@ -74,17 +78,24 @@ class EVChargerControllerConfig(cp.ConfigBase):
         return EVChargerController.get_full_classname()
 
     @classmethod
-    def get_default_config(cls):
+    def get_default_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Gets a default config."""
-        return EVChargerControllerConfig(name="ElectricalChargerController", mode=1)
+        return EVChargerControllerConfig(
+            name="ElectricalChargerController",
+            mode=1,
+            building_name=building_name,
+        )
 
 
 @dataclass_json
 @dataclass
 class VehicleConfig(cp.ConfigBase):
-
     """Vehicle config class."""
 
+    building_name: str
     name: str
     manufacturer: str
     model: str
@@ -96,9 +107,13 @@ class VehicleConfig(cp.ConfigBase):
         return Vehicle.get_full_classname()
 
     @classmethod
-    def get_default_config(cls):
+    def get_default_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Gets a default config."""
         return VehicleConfig(
+            building_name=building_name,
             name="ElectricVehicle",
             manufacturer="Renault",
             model="Zoe v3",
@@ -109,9 +124,9 @@ class VehicleConfig(cp.ConfigBase):
 @dataclass_json
 @dataclass
 class EVChargerConfig(cp.ConfigBase):
-
     """Electrical vehicle config class."""
 
+    building_name: str
     name: str
     manufacturer: str
     charger_name: str
@@ -123,9 +138,13 @@ class EVChargerConfig(cp.ConfigBase):
         return EVCharger.get_full_classname()
 
     @classmethod
-    def get_default_config(cls):
+    def get_default_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Gets a default config."""
         return EVChargerConfig(
+            building_name=building_name,
             name="EV_Charger",
             manufacturer="myenergi",
             charger_name="Wallbox ZAPPI 222TW",
@@ -134,7 +153,6 @@ class EVChargerConfig(cp.ConfigBase):
 
 
 class VehiclePure(cp.Component):
-
     """Vehicle component class.
 
     Parameters
@@ -160,8 +178,11 @@ class VehiclePure(cp.Component):
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initialize the class."""
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name="EV_charger",
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -309,7 +330,6 @@ class VehiclePure(cp.Component):
 
 
 class Vehicle(cp.Component):
-
     """Electric Vehicle Component.
 
     This is a alternative implementation, not fully working,
@@ -340,8 +360,11 @@ class Vehicle(cp.Component):
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initialize the class."""
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name="ElectricVehicle",
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -420,7 +443,6 @@ class Vehicle(cp.Component):
 
 
 class SimpleStorageState:
-
     """Simple Storage State class.
 
     Simplistic implementation for any type
@@ -536,7 +558,6 @@ class SimpleStorageState:
 
 
 class EVCharger(cp.Component):
-
     """Electric Vehicle Charger Component.
 
     Parameters
@@ -574,8 +595,11 @@ class EVCharger(cp.Component):
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initialize the class."""
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name="EVCharger",
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -802,7 +826,6 @@ class EVCharger(cp.Component):
 
 
 class EVChargerController(cp.Component):
-
     """Electricle vehicle controller class.
 
     Imports data from Load Profile Generator and
@@ -828,8 +851,11 @@ class EVChargerController(cp.Component):
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initialize the class."""
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name="EVChargerController",
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

@@ -34,7 +34,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class AirConditionerConfig(ConfigBase):
-
     """Class for configuration of air-conditioner."""
 
     @classmethod
@@ -42,6 +41,7 @@ class AirConditionerConfig(ConfigBase):
         """Return the full class name of the base class."""
         return AirConditioner.get_full_classname()
 
+    building_name: str
     name: str
     manufacturer: str
     model_name: str
@@ -51,9 +51,13 @@ class AirConditionerConfig(ConfigBase):
     # my_simulation_repository: Optional[cp.SimRepository] = None
 
     @classmethod
-    def get_default_air_conditioner_config(cls) -> Any:
+    def get_default_air_conditioner_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Get default configuration of air-conditioner."""
         config = AirConditionerConfig(
+            building_name=building_name,
             name="AirConditioner",
             manufacturer="Panasonic",
             model_name="CS-RE18JKE/CU-RE18JKE",
@@ -68,7 +72,6 @@ class AirConditionerConfig(ConfigBase):
 @dataclass_json
 @dataclass
 class AirConditionerControllerConfig(ConfigBase):
-
     """Class for configuration of air-conditioner controller."""
 
     @classmethod
@@ -76,15 +79,20 @@ class AirConditionerControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return AirConditionerController.get_full_classname()
 
+    building_name: str
     name: str
     t_air_heating: float
     t_air_cooling: float
     offset: float
 
     @classmethod
-    def get_default_air_conditioner_controller_config(cls) -> Any:
+    def get_default_air_conditioner_controller_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Get default configuration of air-conditioner controller."""
         config = AirConditionerControllerConfig(
+            building_name=building_name,
             name="AirConditioner",
             t_air_heating=18.0,
             t_air_cooling=26.0,
@@ -94,7 +102,6 @@ class AirConditionerControllerConfig(ConfigBase):
 
 
 class AirConditionerState:
-
     """Data class for saving the state of the air conditioner."""
 
     def __init__(
@@ -138,7 +145,6 @@ class AirConditionerState:
 
 
 class AirConditioner(cp.Component):
-
     """Class for air-conditioner."""
 
     # inputs
@@ -182,8 +188,11 @@ class AirConditioner(cp.Component):
         self.state0 = AirConditionerState()
         self.previous_state = AirConditionerState()
 
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=self.air_conditioner_config.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -558,7 +567,6 @@ class AirConditioner(cp.Component):
 
 
 class AirConditionerController(cp.Component):
-
     """Class for air-conditioner controller."""
 
     """It takes data from other
@@ -598,8 +606,11 @@ class AirConditionerController(cp.Component):
         self.aircon_controller_mode: str = "not initalized yet"
         self.previous_aircon_controller_mode: str = "not initalized yet"
 
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=self.air_conditioner_controller_config.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

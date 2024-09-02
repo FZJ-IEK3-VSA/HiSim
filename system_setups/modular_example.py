@@ -189,6 +189,7 @@ def setup_function(
 
     my_building_config = building.BuildingConfig(
         name="Building_1",
+        building_name="BUI1",
         building_code=building_code,
         building_heat_capacity_class="medium",
         initial_internal_temperature_in_celsius=23,
@@ -228,10 +229,10 @@ def setup_function(
             travel_route_set=this_mobility_distance,
             transportation_device_set=this_mobility_set,
             charging_station_set=charging_station,
-            consumption_in_kwh=0.0,
             profile_with_washing_machine_and_dishwasher=not smart_devices_included,
             predictive_control=False,
             predictive=False,
+            building_name="BUI1"
         )
 
         my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(

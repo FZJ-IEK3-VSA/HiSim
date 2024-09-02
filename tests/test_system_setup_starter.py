@@ -97,6 +97,7 @@ def test_system_setup_starter_scaling():
             "post_processing_options": [18, 19, 20, 22],
         },
         "building_config": {
+            "building_name": "BUI1",
             "name": "Building",
             "building_code": "DE.N.SFH.05.Gen.ReEx.001.002",
             "building_heat_capacity_class": "medium",

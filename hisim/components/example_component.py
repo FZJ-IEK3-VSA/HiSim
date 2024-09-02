@@ -3,7 +3,7 @@
 # clean
 
 # Generic/Built-in
-from typing import List, Optional
+from typing import List, Optional, Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -26,7 +26,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class ExampleComponentConfig(ConfigBase):
-
     """Configuration of the Example Component."""
 
     @classmethod
@@ -34,6 +33,7 @@ class ExampleComponentConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return ExampleComponent.get_full_classname()
 
+    building_name: str
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters
     name: str
@@ -45,9 +45,13 @@ class ExampleComponentConfig(ConfigBase):
     initial_temperature: Optional[float]
 
     @classmethod
-    def get_default_example_component(cls):
+    def get_default_example_component(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Gets a default Example Component."""
         return ExampleComponentConfig(
+            building_name=building_name,
             name="Example Component",
             electricity=-1e3,
             loadtype=lt.LoadTypes.HEATING,
@@ -59,7 +63,6 @@ class ExampleComponentConfig(ConfigBase):
 
 
 class ExampleComponent(Component):
-
     """Example Component class.
 
     It supports multiple Example Component values for fictitious scenarios.
@@ -96,8 +99,11 @@ class ExampleComponent(Component):
     ) -> None:
         """Constructs all the neccessary attributes."""
         self.examplecomponentconfig = config
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            self.examplecomponentconfig.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

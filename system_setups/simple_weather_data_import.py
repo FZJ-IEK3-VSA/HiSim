@@ -1,6 +1,7 @@
 """Simple function for weather data request."""
 import datetime
 from hisim.components.weather_data_import import WeatherDataImport
+from hisim.components.weather import WeatherDataSourceEnum
 from hisim import utils
 
 __authors__ = "Jonas Hoppe"
@@ -30,5 +31,5 @@ weather_data = WeatherDataImport(
     longitude=longitude,
     path_input_folder=input_directory,
     distance_weather_stations=30,
-    weather_data_source="DWD_10MIN",
+    weather_data_source=WeatherDataSourceEnum.DWD_10MIN,
 )

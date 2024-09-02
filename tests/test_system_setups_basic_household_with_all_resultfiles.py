@@ -18,5 +18,6 @@ def test_basic_household_with_all_resultfiles():
     mysimpar = SimulationParameters.one_day_only_with_all_options(
         year=2021, seconds_per_timestep=60
     )
+
     hisim_main.main(path, mysimpar)
     log.information(os.getcwd())

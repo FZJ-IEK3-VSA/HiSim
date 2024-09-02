@@ -26,9 +26,9 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class SimpleControllerConfig(ConfigBase):
-
     """Config class."""
 
+    building_name: str
     name: str
 
     @classmethod
@@ -37,14 +37,16 @@ class SimpleControllerConfig(ConfigBase):
         return SimpleController.get_full_classname()
 
     @classmethod
-    def get_default_config(cls) -> Any:
+    def get_default_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Returns default config."""
-        config = SimpleControllerConfig(name="SimpleController")
+        config = SimpleControllerConfig(name="SimpleController", building_name=building_name)
         return config
 
 
 class SimpleController(Component):
-
     """Simple controller class."""
 
     StorageFillLevel = "Fill Level Percent"
@@ -59,8 +61,11 @@ class SimpleController(Component):
     ) -> None:
         """Initialize the class."""
 
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

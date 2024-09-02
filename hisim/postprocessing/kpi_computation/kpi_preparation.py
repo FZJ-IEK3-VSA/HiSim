@@ -229,7 +229,7 @@ class KpiPreparation:
         windturbine_production_entry = KpiEntry(
             name="Windturbine production", unit="kWh", value=windturbine_production_in_kilowatt_hour, tag=kpi_tag
         )
-        if building_objects_in_district in DistrictNames.__members__:
+        if any(word in building_objects_in_district for word in DistrictNames):
             building_consumption_entry = KpiEntry(
                 name="Total building electricity consumption",
                 unit="kWh",
@@ -268,7 +268,7 @@ class KpiPreparation:
                 battery_losses_entry.name: battery_losses_entry.to_dict(),
             }
         )
-        if building_objects_in_district in DistrictNames.__members__:
+        if any(word in building_objects_in_district for word in DistrictNames):
             self.kpi_collection_dict_unsorted[building_objects_in_district].update(
                 {
                     building_production_entry.name: building_production_entry.to_dict(),
@@ -684,7 +684,7 @@ class KpiPreparation:
             value=electricity_costs_in_euro,
             tag=(
                 KpiTagEnumClass.COSTS
-                if building_object not in DistrictNames.__members__
+                if not any(word in building_object for word in DistrictNames)
                 else KpiTagEnumClass.COSTS_DISTRICT_GRID
             ),
         )
@@ -694,7 +694,7 @@ class KpiPreparation:
             value=electricity_co2_in_kg,
             tag=(
                 KpiTagEnumClass.EMISSIONS
-                if building_object not in DistrictNames.__members__
+                if not any(word in building_object for word in DistrictNames)
                 else KpiTagEnumClass.EMISSIONS_DISTRICT_GRID
             ),
         )
@@ -704,7 +704,7 @@ class KpiPreparation:
             value=gas_costs_in_euro,
             tag=(
                 KpiTagEnumClass.COSTS
-                if building_object not in DistrictNames.__members__
+                if not any(word in building_object for word in DistrictNames)
                 else KpiTagEnumClass.COSTS_DISTRICT_GRID
             ),
         )
@@ -714,7 +714,7 @@ class KpiPreparation:
             value=gas_co2_in_kg,
             tag=(
                 KpiTagEnumClass.EMISSIONS
-                if building_object not in DistrictNames.__members__
+                if not any(word in building_object for word in DistrictNames)
                 else KpiTagEnumClass.EMISSIONS_DISTRICT_GRID
             ),
         )
@@ -724,7 +724,7 @@ class KpiPreparation:
             value=heating_costs_in_euro,
             tag=(
                 KpiTagEnumClass.COSTS
-                if building_object not in DistrictNames.__members__
+                if not any(word in building_object for word in DistrictNames)
                 else KpiTagEnumClass.COSTS_DISTRICT_GRID
             ),
         )
@@ -734,7 +734,7 @@ class KpiPreparation:
             value=heating_co2_in_kg,
             tag=(
                 KpiTagEnumClass.EMISSIONS
-                if building_object not in DistrictNames.__members__
+                if not any(word in building_object for word in DistrictNames)
                 else KpiTagEnumClass.EMISSIONS_DISTRICT_GRID
             ),
         )
@@ -744,7 +744,7 @@ class KpiPreparation:
             value=total_investment_cost_per_simulated_period,
             tag=(
                 KpiTagEnumClass.COSTS
-                if building_object not in DistrictNames.__members__
+                if not any(word in building_object for word in DistrictNames)
                 else KpiTagEnumClass.COSTS_DISTRICT_GRID
             ),
         )
@@ -754,7 +754,7 @@ class KpiPreparation:
             value=total_device_co2_footprint_per_simulated_period,
             tag=(
                 KpiTagEnumClass.EMISSIONS
-                if building_object not in DistrictNames.__members__
+                if not any(word in building_object for word in DistrictNames)
                 else KpiTagEnumClass.EMISSIONS_DISTRICT_GRID
             ),
         )
@@ -764,7 +764,7 @@ class KpiPreparation:
             value=total_maintenance_cost_per_simulated_period,
             tag=(
                 KpiTagEnumClass.COSTS
-                if building_object not in DistrictNames.__members__
+                if not any(word in building_object for word in DistrictNames)
                 else KpiTagEnumClass.COSTS_DISTRICT_GRID
             ),
         )
@@ -778,7 +778,7 @@ class KpiPreparation:
             + heating_costs_in_euro,
             tag=(
                 KpiTagEnumClass.COSTS
-                if building_object not in DistrictNames.__members__
+                if not any(word in building_object for word in DistrictNames)
                 else KpiTagEnumClass.COSTS_DISTRICT_GRID
             ),
         )
@@ -791,7 +791,7 @@ class KpiPreparation:
             + heating_co2_in_kg,
             tag=(
                 KpiTagEnumClass.EMISSIONS
-                if building_object not in DistrictNames.__members__
+                if not any(word in building_object for word in DistrictNames)
                 else KpiTagEnumClass.EMISSIONS_DISTRICT_GRID
             ),
         )
@@ -802,7 +802,7 @@ class KpiPreparation:
             value=total_investment_cost_per_simulated_period_without_hp,
             tag=(
                 KpiTagEnumClass.COSTS
-                if building_object not in DistrictNames.__members__
+                if not any(word in building_object for word in DistrictNames)
                 else KpiTagEnumClass.COSTS_DISTRICT_GRID
             ),
         )
@@ -812,7 +812,7 @@ class KpiPreparation:
             value=total_device_co2_footprint_per_simulated_period_without_hp,
             tag=(
                 KpiTagEnumClass.EMISSIONS
-                if building_object not in DistrictNames.__members__
+                if not any(word in building_object for word in DistrictNames)
                 else KpiTagEnumClass.EMISSIONS_DISTRICT_GRID
             ),
         )
@@ -822,7 +822,7 @@ class KpiPreparation:
             value=total_maintenance_cost_per_simulated_period_without_hp,
             tag=(
                 KpiTagEnumClass.COSTS
-                if building_object not in DistrictNames.__members__
+                if not any(word in building_object for word in DistrictNames)
                 else KpiTagEnumClass.COSTS_DISTRICT_GRID
             ),
         )
@@ -836,7 +836,7 @@ class KpiPreparation:
             + heating_costs_in_euro,
             tag=(
                 KpiTagEnumClass.COSTS
-                if building_object not in DistrictNames.__members__
+                if not any(word in building_object for word in DistrictNames)
                 else KpiTagEnumClass.COSTS_DISTRICT_GRID
             ),
         )
@@ -849,7 +849,7 @@ class KpiPreparation:
             + heating_co2_in_kg,
             tag=(
                 KpiTagEnumClass.EMISSIONS
-                if building_object not in DistrictNames.__members__
+                if not any(word in building_object for word in DistrictNames)
                 else KpiTagEnumClass.EMISSIONS_DISTRICT_GRID
             ),
         )
@@ -860,7 +860,7 @@ class KpiPreparation:
             value=total_investment_cost_per_simulated_period_only_hp,
             tag=(
                 KpiTagEnumClass.COSTS
-                if building_object not in DistrictNames.__members__
+                if not any(word in building_object for word in DistrictNames)
                 else KpiTagEnumClass.COSTS_DISTRICT_GRID
             ),
         )
@@ -870,7 +870,7 @@ class KpiPreparation:
             value=total_device_co2_footprint_per_simulated_period_only_hp,
             tag=(
                 KpiTagEnumClass.EMISSIONS
-                if building_object not in DistrictNames.__members__
+                if not any(word in building_object for word in DistrictNames)
                 else KpiTagEnumClass.EMISSIONS_DISTRICT_GRID
             ),
         )
@@ -880,7 +880,7 @@ class KpiPreparation:
             value=total_maintenance_cost_per_simulated_period_only_hp,
             tag=(
                 KpiTagEnumClass.COSTS
-                if building_object not in DistrictNames.__members__
+                if not any(word in building_object for word in DistrictNames)
                 else KpiTagEnumClass.COSTS_DISTRICT_GRID
             ),
         )
@@ -892,7 +892,7 @@ class KpiPreparation:
             ),
             tag=(
                 KpiTagEnumClass.COSTS
-                if building_object not in DistrictNames.__members__
+                if not any(word in building_object for word in DistrictNames)
                 else KpiTagEnumClass.COSTS_DISTRICT_GRID
             ),
         )
@@ -902,7 +902,7 @@ class KpiPreparation:
             value=total_device_co2_footprint_per_simulated_period_only_hp,
             tag=(
                 KpiTagEnumClass.EMISSIONS
-                if building_object not in DistrictNames.__members__
+                if not any(word in building_object for word in DistrictNames)
                 else KpiTagEnumClass.EMISSIONS_DISTRICT_GRID
             ),
         )
@@ -948,7 +948,7 @@ class KpiPreparation:
         self_consumption_district_in_kilowatt_hour = 0.0
 
         for building_objects_in_district in self.building_objects_in_district_list:
-            if building_objects_in_district not in DistrictNames.__members__:
+            if not any(word in building_objects_in_district for word in DistrictNames):
                 electricity_consumption_all_single_buildings_in_kilowatt_hour += self.kpi_collection_dict_unsorted[
                     building_objects_in_district
                 ]["Total electricity consumption"]["value"]
@@ -959,7 +959,7 @@ class KpiPreparation:
                     building_objects_in_district
                 ]["Self-consumption of electricity"]["value"]
 
-            if building_objects_in_district in DistrictNames.__members__:
+            if any(word in building_objects_in_district for word in DistrictNames):
                 electricity_production_district_in_kilowatt_hour += (
                     self.kpi_collection_dict_unsorted[building_objects_in_district]["Total electricity production"][
                         "value"
@@ -1086,7 +1086,7 @@ class KpiPreparation:
         total_maintenance_cost_per_simulated_period_only_hp_district = 0.0
 
         for building_objects_in_district in self.building_objects_in_district_list:
-            if building_objects_in_district not in DistrictNames.__members__:
+            if not any(word in building_objects_in_district for word in DistrictNames):
                 total_investment_cost_for_equipment_per_simulated_period_all_single_buildings += (
                     self.kpi_collection_dict_unsorted[building_objects_in_district][
                         "Investment costs for equipment per simulated period"
@@ -1121,7 +1121,7 @@ class KpiPreparation:
                     ]["value"]
                 )
 
-            if building_objects_in_district in DistrictNames.__members__:
+            if any(word in building_objects_in_district for word in DistrictNames):
                 total_investment_cost_for_equipment_per_simulated_period_district = self.kpi_collection_dict_unsorted[
                     building_objects_in_district
                 ]["Investment costs for equipment per simulated period"]["value"]
@@ -1338,7 +1338,7 @@ class KpiPreparation:
         total_co2_emissions_for_equipment_per_simulated_period_only_hp_district = 0.0
 
         for building_objects_in_district in self.building_objects_in_district_list:
-            if building_objects_in_district not in DistrictNames.__members__:
+            if not any(word in building_objects_in_district for word in DistrictNames):
                 total_co2_emissions_for_equipment_per_simulated_period_all_single_buildings += (
                     self.kpi_collection_dict_unsorted[building_objects_in_district][
                         "CO2 footprint for equipment per simulated period"
@@ -1357,7 +1357,7 @@ class KpiPreparation:
                     ]["value"]
                 )
 
-            if building_objects_in_district in DistrictNames.__members__:
+            if any(word in building_objects_in_district for word in DistrictNames):
                 total_co2_emissions_for_equipment_per_simulated_period_district = self.kpi_collection_dict_unsorted[
                     building_objects_in_district
                 ]["CO2 footprint for equipment per simulated period"]["value"]

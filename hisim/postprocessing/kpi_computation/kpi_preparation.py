@@ -64,7 +64,7 @@ class KpiPreparation:
         output: ComponentOutput
 
         for index, output in enumerate(all_outputs):
-            if (building_objects_in_district in str(output.get_pretty_name()) or
+            if (building_objects_in_district == output.component_name.split("_")[0] or
                     not self.simulation_parameters.multiple_buildings):
                 if output.postprocessing_flag is not None:
                     if InandOutputType.ELECTRICITY_PRODUCTION in output.postprocessing_flag:
@@ -416,8 +416,8 @@ class KpiPreparation:
             if (
                 isinstance(kpi_entry["description"], str)
                 and ElectricityMeter.get_classname() in kpi_entry["description"]
+                and building_objects_in_district == kpi_entry["description"].split("_")[0]
             ):
-
                 if kpi_entry["name"] == "Total energy from grid" and kpi_entry["unit"] == "kWh":
                     total_energy_from_grid_in_kwh = kpi_entry["value"]
                 elif kpi_entry["name"] == "Total energy to grid" and kpi_entry["unit"] == "kWh":
@@ -1473,7 +1473,7 @@ class KpiPreparation:
         set_of_buildings_in_contracting = set()
         for building_objekt in self.building_objects_in_district_list:
             for output in all_outputs:
-                if building_objekt in output.component_name and district_name in output.component_name:
+                if building_objekt == output.component_name.split("_")[0] and district_name in output.component_name:
                     set_of_buildings_in_contracting.add(building_objekt)
 
         if district_name in set_of_buildings_in_contracting:
@@ -1606,7 +1606,7 @@ class KpiPreparation:
                 for kpi_entry in my_component_kpi_entry_list:
 
                     for object_name in self.kpi_collection_dict_unsorted.keys():
-                        if (object_name in my_component.component_name or
+                        if (object_name == my_component.component_name.split("_")[0] or
                                 not self.simulation_parameters.multiple_buildings):
                             self.kpi_collection_dict_unsorted[object_name][kpi_entry.name] = kpi_entry.to_dict()
                             break

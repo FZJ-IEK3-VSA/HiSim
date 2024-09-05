@@ -382,7 +382,7 @@ class HeatingMeter(DynamicComponent):
                     break
 
         total_heating_energy_consumption_in_building_in_kwh_entry = KpiEntry(
-            name="Total heating energy used in building",
+            name="Total heat consumption",
             unit="kWh",
             value=total_used_energy_in_kwh,
             tag=KpiTagEnumClass.HEATING_METER,
@@ -392,7 +392,7 @@ class HeatingMeter(DynamicComponent):
         # try to get opex costs
         opex_costs = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)
         opex_costs_in_euro_entry = KpiEntry(
-            name="Opex costs of heat consumption in building",
+            name="Opex costs of heat consumption",
             unit="Euro",
             value=opex_costs.opex_energy_cost_in_euro,
             tag=KpiTagEnumClass.HEATING_METER,
@@ -400,7 +400,7 @@ class HeatingMeter(DynamicComponent):
         )
         list_of_kpi_entries.append(opex_costs_in_euro_entry)
         co2_footprint_in_kg_entry = KpiEntry(
-            name="CO2 footprint of heat consumption in building",
+            name="CO2 footprint of heat consumption",
             unit="kg",
             value=opex_costs.co2_footprint_in_kg,
             tag=KpiTagEnumClass.HEATING_METER,

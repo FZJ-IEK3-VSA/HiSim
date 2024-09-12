@@ -40,6 +40,7 @@ class KpiTagEnumClass(Enum):
     COSTS_DISTRICT_GRID = "Costs Of District Grid"
     EMISSIONS_DISTRICT_GRID = "Emissions Of District Grid"
     CONTRACTING = "Contracting"
+    GENERIC_HEAT_SOURCE = "Generic Heat Source"
 
 
 @dataclass

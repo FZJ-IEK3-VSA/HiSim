@@ -228,13 +228,13 @@ def capex_calculation(
                     ):
                         pass
                     else:
-                        total_investment_cost_building_object_without_hp += capex
-                        total_device_co2_footprint_building_object_without_hp += co2_footprint
+                        total_investment_cost_building_object_without_hp += capex_cost_data_class.capex_investment_cost_in_euro
+                        total_device_co2_footprint_building_object_without_hp += capex_cost_data_class.device_co2_footprint_in_kg
                         total_investment_cost_per_simulated_period_building_object_without_hp += (
-                            capex_per_simulated_period_building_object
+                            capex_cost_data_class.capex_investment_cost_for_simulated_period_in_euro
                         )
                         total_device_co2_footprint_per_simulated_period_building_object_without_hp += (
-                            device_co2_footprint_per_simulated_period_building_object
+                            capex_cost_data_class.device_co2_footprint_for_simulated_period_in_kg
                         )
 
 

@@ -356,6 +356,7 @@ class HeatingMeter(DynamicComponent):
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
             consumption_in_kwh=total_used_energy_in_kwh,
             loadtype=lt.LoadTypes.GAS,
+            kpi_tag=KpiTagEnumClass.HEATING_METER
         )
 
         return opex_cost_data_class

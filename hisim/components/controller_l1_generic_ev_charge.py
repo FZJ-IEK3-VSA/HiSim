@@ -33,9 +33,9 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class ChargingStationConfig(cp.ConfigBase):
-
     """Definition of the configuration of Charging Station and the set point for the control."""
 
+    building_name: str
     #: name of the device
     name: str
     #: priority of the device in hierachy: the higher the number the lower the priority
@@ -63,6 +63,7 @@ class ChargingStationConfig(cp.ConfigBase):
     @staticmethod
     def get_default_config(
         charging_station_set: JsonReference = ChargingStationSets.Charging_At_Home_with_03_7_kW,
+        building_name: str = "BUI1",
     ) -> "ChargingStationConfig":
         """Returns default configuration of charging station and desired SOC Level."""
         charging_power = float((charging_station_set.Name or "").split("with ")[1].split(" kW")[0])
@@ -70,6 +71,7 @@ class ChargingStationConfig(cp.ConfigBase):
             charging_power * 1e3 * 0.1
         )  # 10 % of charging power for acceptable efficiencies
         config = ChargingStationConfig(
+            building_name=building_name,
             name="L1EVChargeControl",
             source_weight=1,
             charging_station_set=charging_station_set,
@@ -84,7 +86,6 @@ class ChargingStationConfig(cp.ConfigBase):
 
 
 class L1ControllerState:
-
     """Data class, which saves the state of the controller."""
 
     def __init__(self, power: float) -> None:
@@ -97,7 +98,6 @@ class L1ControllerState:
 
 
 class L1Controller(cp.Component):
-
     """Simulates EV charging and battery losses due to driving. Control according to constant SOC threshold and optional surplus control.
 
     Components to connect to:
@@ -124,8 +124,11 @@ class L1Controller(cp.Component):
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initializes Car."""
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=config.name + "_w" + str(config.source_weight),
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

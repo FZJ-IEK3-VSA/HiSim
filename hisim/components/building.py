@@ -37,6 +37,7 @@ The module contains the following classes:
     [2] I. Horvat et al. "Dynamic method for calculating energy need in HVAC systems." Transactions of Famena 40 (2016): 47-62.
 
 """
+
 # clean
 
 # Generic/Built-in
@@ -73,7 +74,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class BuildingConfig(cp.ConfigBase):
-
     """Configuration of the Building class."""
 
     @classmethod
@@ -81,6 +81,7 @@ class BuildingConfig(cp.ConfigBase):
         """Return the full class name of the base class."""
         return Building.get_full_classname()
 
+    building_name: str
     name: str
     heating_reference_temperature_in_celsius: float
     building_code: str
@@ -102,9 +103,11 @@ class BuildingConfig(cp.ConfigBase):
         set_cooling_temperature_in_celsius: float = 25.0,
         heating_reference_temperature_in_celsius: float = -7.0,
         max_thermal_building_demand_in_watt: Optional[float] = None,
+        building_name: str = "BUI1",
     ) -> Any:
         """Get a default Building."""
         config = BuildingConfig(
+            building_name=building_name,
             name="Building",
             building_code="DE.N.SFH.05.Gen.ReEx.001.002",
             building_heat_capacity_class="medium",
@@ -123,7 +126,6 @@ class BuildingConfig(cp.ConfigBase):
 
 
 class BuildingState:
-
     """BuildingState class."""
 
     def __init__(
@@ -156,7 +158,6 @@ class BuildingState:
 
 # class Building(dynamic_component.DynamicComponent):
 class Building(cp.Component):
-
     """Building class.
 
     This class calculates the thermal behaviour of the building based on the RC Simulator (** paper [1]) and the EN ISO 13790 norm (see header).
@@ -228,8 +229,11 @@ class Building(cp.Component):
         """Construct all the neccessary attributes."""
         self.buildingconfig = config
 
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=self.buildingconfig.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -242,7 +246,10 @@ class Building(cp.Component):
         self.set_cooling_temperature_in_celsius = self.buildingconfig.set_cooling_temperature_in_celsius
         self.window_open: int = 0
 
-        (self.is_in_cache, self.cache_file_path,) = utils.get_cache_file(
+        (
+            self.is_in_cache,
+            self.cache_file_path,
+        ) = utils.get_cache_file(
             self.component_name,
             self.buildingconfig,
             self.my_simulation_parameters,
@@ -1165,7 +1172,7 @@ class Building(cp.Component):
 
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.config.name:
+            if output.component_name == self.component_name:
                 list_of_kpi_entries = self.get_building_kpis_from_outputs(
                     output=output,
                     index=index,
@@ -1206,7 +1213,11 @@ class Building(cp.Component):
 
         # make kpi entries and append to list
         heating_load_in_watt_entry = KpiEntry(
-            name="Building heating load", unit="W", value=heating_load_in_watt, tag=KpiTagEnumClass.BUILDING, description=self.component_name
+            name="Building heating load",
+            unit="W",
+            value=heating_load_in_watt,
+            tag=KpiTagEnumClass.BUILDING,
+            description=self.component_name,
         )
         list_of_kpi_entries.append(heating_load_in_watt_entry)
 
@@ -1215,7 +1226,7 @@ class Building(cp.Component):
             unit="m2",
             value=scaled_conditioned_floor_area_in_m2,
             tag=KpiTagEnumClass.BUILDING,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(scaled_conditioned_floor_area_in_m2_entry)
 
@@ -1224,7 +1235,7 @@ class Building(cp.Component):
             unit="m2",
             value=scaled_rooftop_area_in_m2,
             tag=KpiTagEnumClass.BUILDING,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(scaled_rooftop_area_in_m2_entry)
 
@@ -1233,7 +1244,7 @@ class Building(cp.Component):
             unit="W/m2",
             value=specific_heating_load_in_watt_per_m2,
             tag=KpiTagEnumClass.BUILDING,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(specific_heating_load_in_watt_per_m2_entry)
 
@@ -1242,7 +1253,7 @@ class Building(cp.Component):
             unit="kWh/m2a",
             value=energy_need_for_heating_in_kilowatthour_per_m2_per_year_tabula_ref,
             tag=KpiTagEnumClass.BUILDING,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(specific_heat_demand_from_tabula_in_kwh_per_m2a_entry)
 
@@ -1303,7 +1314,7 @@ class Building(cp.Component):
                 unit="°C*h",
                 value=temperature_hours_of_building_being_below_heating_set_temperature,
                 tag=KpiTagEnumClass.BUILDING,
-                description=self.component_name
+                description=self.component_name,
             )
             list_of_kpi_entries.append(temperature_hours_of_building_below_heating_set_temperature_entry)
             temperature_hours_of_building_above_cooling_set_temperature_entry = KpiEntry(
@@ -1311,7 +1322,7 @@ class Building(cp.Component):
                 unit="°C*h",
                 value=temperature_hours_of_building_being_above_cooling_set_temperature,
                 tag=KpiTagEnumClass.BUILDING,
-                description=self.component_name
+                description=self.component_name,
             )
             list_of_kpi_entries.append(temperature_hours_of_building_above_cooling_set_temperature_entry)
             min_temperature_reached_in_celsius_entry = KpiEntry(
@@ -1319,7 +1330,7 @@ class Building(cp.Component):
                 unit="°C",
                 value=min_temperature_reached_in_celsius,
                 tag=KpiTagEnumClass.BUILDING,
-                description=self.component_name
+                description=self.component_name,
             )
             list_of_kpi_entries.append(min_temperature_reached_in_celsius_entry)
             max_temperature_reached_in_celsius_entry = KpiEntry(
@@ -1327,7 +1338,7 @@ class Building(cp.Component):
                 unit="°C",
                 value=max_temperature_reached_in_celsius,
                 tag=KpiTagEnumClass.BUILDING,
-                description=self.component_name
+                description=self.component_name,
             )
             list_of_kpi_entries.append(max_temperature_reached_in_celsius_entry)
         return list_of_kpi_entries
@@ -1354,7 +1365,7 @@ class Building(cp.Component):
                 unit="kWh",
                 value=energy_loss_from_transmission_in_kilowatt_hour,
                 tag=KpiTagEnumClass.BUILDING,
-                description=self.component_name
+                description=self.component_name,
             )
             list_of_kpi_entries.append(energy_loss_from_transmission_entry)
 
@@ -1370,7 +1381,7 @@ class Building(cp.Component):
                 unit="kWh",
                 value=energy_loss_from_ventilation_in_kilowatt_hour,
                 tag=KpiTagEnumClass.BUILDING,
-                description=self.component_name
+                description=self.component_name,
             )
             list_of_kpi_entries.append(energy_loss_from_ventilation_entry)
 
@@ -1385,7 +1396,7 @@ class Building(cp.Component):
                 unit="kWh",
                 value=energy_gains_from_solar_in_kilowatt_hour,
                 tag=KpiTagEnumClass.BUILDING,
-                description=self.component_name
+                description=self.component_name,
             )
             list_of_kpi_entries.append(energy_gains_from_solar_entry)
 
@@ -1400,7 +1411,7 @@ class Building(cp.Component):
                 unit="kWh",
                 value=energy_gains_from_internal_in_kilowatt_hour,
                 tag=KpiTagEnumClass.BUILDING,
-                description=self.component_name
+                description=self.component_name,
             )
             list_of_kpi_entries.append(energy_gains_from_internal_entry)
 
@@ -1417,7 +1428,7 @@ class Building(cp.Component):
                 unit="kWh",
                 value=energy_demand_calculated_based_on_tabula_in_kilowatt_hour,
                 tag=KpiTagEnumClass.BUILDING,
-                description=self.component_name
+                description=self.component_name,
             )
             list_of_kpi_entries.append(heat_demand_calculated_entry)
 
@@ -2124,7 +2135,6 @@ class Building(cp.Component):
 
 # =====================================================================================================================================
 class Window:
-
     """Based on the RC_BuildingSimulator project @[rc_buildingsimulator-jayathissa] (** Check header)."""
 
     def __init__(
@@ -2261,7 +2271,6 @@ class Window:
 @dataclass_json
 @dataclass
 class BuildingInformation:
-
     """Class for collecting important building parameters to pass to other components.
 
     The class reads the building config and collects all the important parameters of the buidling.

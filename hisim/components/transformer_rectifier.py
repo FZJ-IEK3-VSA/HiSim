@@ -17,7 +17,6 @@ from hisim.component import ConfigBase
 @dataclass_json
 @dataclass
 class TransformerConfig(ConfigBase):
-
     """Configuration of the Example Transformer."""
 
     @classmethod
@@ -27,17 +26,17 @@ class TransformerConfig(ConfigBase):
 
     # parameter_string: str
     # my_simulation_parameters: SimulationParameters
+    building_name: str
     name: str
     efficiency: float
 
     @classmethod
     def get_default_transformer(cls):
         """Gets a default Transformer."""
-        return TransformerConfig(name="Generic Transformer and rectifier Unit", efficiency=0.95)
+        return TransformerConfig(building_name="BUI1", name="Generic Transformer and rectifier Unit", efficiency=0.95)
 
 
 class Transformer(Component):
-
     """The Example Transformer class.
 
     It is used to modify input values and return them as new output values.
@@ -68,14 +67,17 @@ class Transformer(Component):
     ) -> None:
         """Constructs all the neccessary attributes."""
         self.transformerconfig = config
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            self.transformerconfig.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
         )
         self.input1: ComponentInput = self.add_input(
-            self.transformerconfig.name,
+            self.component_name,
             Transformer.TransformerInput,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KILOWATT,
@@ -83,7 +85,7 @@ class Transformer(Component):
         )
 
         self.output1: ComponentOutput = self.add_output(
-            self.transformerconfig.name,
+            self.component_name,
             Transformer.TransformerOutput,
             lt.LoadTypes.ELECTRICITY,
             lt.Units.KILOWATT,

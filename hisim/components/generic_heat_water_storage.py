@@ -27,7 +27,6 @@ __status__ = ""
 @dataclass_json
 @dataclass
 class HeatStorageConfig(ConfigBase):
-
     """Heat Storage Config class."""
 
     @classmethod
@@ -35,6 +34,7 @@ class HeatStorageConfig(ConfigBase):
         """Return the full class name of the base class."""
         return HeatStorage.get_full_classname()
 
+    building_name: str
     name: str
     volume_sp_heating_water: float
     volume_sp_warm_water: float
@@ -44,9 +44,13 @@ class HeatStorageConfig(ConfigBase):
     temperature_sp_hw: float
 
     @classmethod
-    def get_default_heat_storage_config(cls) -> Any:
+    def get_default_heat_storage_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Get default config."""
         config = HeatStorageConfig(
+            building_name=building_name,
             name="HeatStorage",
             volume_sp_heating_water=1000,
             volume_sp_warm_water=100,
@@ -61,7 +65,6 @@ class HeatStorageConfig(ConfigBase):
 @dataclass_json
 @dataclass
 class HeatStorageControllerConfig(ConfigBase):
-
     """Heat Storage Controller Config."""
 
     @classmethod
@@ -69,15 +72,21 @@ class HeatStorageControllerConfig(ConfigBase):
         """Return the full class name of the base class."""
         return HeatStorageController.get_full_classname()
 
+    building_name: str
     name: str
     initial_temperature_building: float
     initial_temperature_heating_storage: float
     heating_load_of_building_in_watt: float
 
     @classmethod
-    def get_default_heat_storage_controller_config(cls, heating_load_of_building_in_watt: float) -> Any:
+    def get_default_heat_storage_controller_config(
+        cls,
+        heating_load_of_building_in_watt: float,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Get default config."""
         config = HeatStorageControllerConfig(
+            building_name=building_name,
             name="HeatStorageController",
             initial_temperature_building=20,
             initial_temperature_heating_storage=35,
@@ -87,7 +96,6 @@ class HeatStorageControllerConfig(ConfigBase):
 
 
 class HeatStorageState:
-
     """Heat Storage State class."""
 
     def __init__(self, temperature_sp_ww: float, temperature_sp_hw: float) -> None:
@@ -104,7 +112,6 @@ class HeatStorageState:
 
 
 class HeatStorage(Component):
-
     """Heat Storage class.
 
     This is a combined storage: buffer storage for heating, and hot water storage for hot water demand.
@@ -142,8 +149,11 @@ class HeatStorage(Component):
     ) -> None:
         """Initialize the class."""
         self.heat_storage_config = config
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            self.heat_storage_config.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -427,7 +437,6 @@ class HeatStorage(Component):
 
 
 class HeatStorageController(cp.Component):
-
     """HeatStorageController class.
 
     Calculates on base of the maximal Building

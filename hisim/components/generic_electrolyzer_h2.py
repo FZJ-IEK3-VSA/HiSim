@@ -1,7 +1,8 @@
 """Green hydrogen electrolyzer."""
+
 # clean
 import os
-from typing import List
+from typing import List, Any
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -28,7 +29,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class ElectrolyzerConfig(cp.ConfigBase):
-
     """Configuration of the Electrolyzer."""
 
     @classmethod
@@ -36,6 +36,7 @@ class ElectrolyzerConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return Electrolyzer.get_full_classname()
 
+    building_name: str
     name: str
     electrolyzer_type: str
     nom_load: float  # [kW]
@@ -48,9 +49,13 @@ class ElectrolyzerConfig(cp.ConfigBase):
     # H_s_h2 = 33.33 #kWh/kg
 
     @classmethod
-    def get_default_alkaline_electrolyzer_config(cls):
+    def get_default_alkaline_electrolyzer_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Gets a default Alkaline Eletrolyzer."""
         config = ElectrolyzerConfig(
+            building_name=building_name,
             name="Alkaline_electrolyzer",
             electrolyzer_type="Alkaline",
             nom_load=100.0,  # [kW]
@@ -84,12 +89,17 @@ class ElectrolyzerConfig(cp.ConfigBase):
             return data_for_specific_electrolyzer
 
     @classmethod
-    def config_electrolyzer(cls, electrolyzer_name):
+    def config_electrolyzer(
+        cls,
+        electrolyzer_name: str,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Initializes the config variables based on the JSON-file."""
 
         config_json = cls.read_config(electrolyzer_name)
 
         config = ElectrolyzerConfig(
+            building_name=building_name,
             name="Electrolyzer",  # config_json.get("name", "")
             electrolyzer_type=config_json.get("electrolyzer_type"),
             nom_load=config_json.get("nom_load", 0.0),
@@ -104,7 +114,6 @@ class ElectrolyzerConfig(cp.ConfigBase):
 
 
 class Electrolyzer(cp.Component):
-
     """The Electrolszer class receives load and state inputs and calculates different outputs.
 
     Parameters
@@ -185,8 +194,11 @@ class Electrolyzer(cp.Component):
         self.ramp_up_rate = config.ramp_up_rate
         self.ramp_down_rate = config.ramp_down_rate
 
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=self.electrolyzerconfig.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

@@ -72,6 +72,7 @@ class PVSystemConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return PVSystem.get_full_classname()
 
+    building_name: str
     name: str
     time: int
     location: str
@@ -100,10 +101,18 @@ class PVSystemConfig(ConfigBase):
     prediction_horizon: Optional[int]
 
     @classmethod
-    def get_default_pv_system(cls, power_in_watt: float = 10e3, share_of_maximum_pv_potential: float = 1.0, location: str = "Aachen") -> "PVSystemConfig":
+    def get_default_pv_system(
+        cls,
+        name: str = "PVSystem",
+        power_in_watt: float = 10e3,
+        share_of_maximum_pv_potential: float = 1.0,
+        location: str = "Aachen",
+        building_name: str = "BUI1",
+    ) -> "PVSystemConfig":
         """Gets a default PV system."""
         power_in_watt = power_in_watt * share_of_maximum_pv_potential
         return PVSystemConfig(
+            building_name=building_name,
             time=2019,
             power_in_watt=power_in_watt,
             load_module_data=False,
@@ -112,7 +121,7 @@ class PVSystemConfig(ConfigBase):
             inverter_database=PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,
             module_name="Hanwha HSL60P6-PA-4-250T [2013]",
             inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
-            name="PVSystem",
+            name=name,
             azimuth=180,
             tilt=30,
             share_of_maximum_pv_potential=share_of_maximum_pv_potential,
@@ -131,10 +140,12 @@ class PVSystemConfig(ConfigBase):
     def get_scaled_pv_system(
         cls,
         rooftop_area_in_m2: float,
+        name: str = "PVSystem",
         share_of_maximum_pv_potential: float = 1.0,
         module_name: str = "Hanwha HSL60P6-PA-4-250T [2013]",
         module_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
         location: str = "Aachen",
+        building_name: str = "BUI1",
         load_module_data: bool = False,
     ) -> "PVSystemConfig":
         """Gets a default PV system with scaling according to rooftop area."""
@@ -145,6 +156,7 @@ class PVSystemConfig(ConfigBase):
             module_database=module_database,
         )
         return PVSystemConfig(
+            building_name=building_name,
             time=2019,
             power_in_watt=total_pv_power_in_watt,
             load_module_data=load_module_data,
@@ -153,7 +165,7 @@ class PVSystemConfig(ConfigBase):
             inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
             module_database=module_database,
             inverter_database=PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,
-            name="PVSystem",
+            name=name,
             azimuth=180,
             tilt=30,
             share_of_maximum_pv_potential=share_of_maximum_pv_potential,
@@ -283,8 +295,11 @@ class PVSystem(cp.Component):
         self.temperature_model_parameters = pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["sapm"][
             "open_rack_glass_glass"
         ]
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            self.pvconfig.name + "_w" + str(self.pvconfig.source_weight),
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -376,9 +391,15 @@ class PVSystem(cp.Component):
         self.add_default_connections(self.get_default_connections_from_weather())
 
     @staticmethod
-    def get_default_config(power_in_watt: float = 10e3, source_weight: int = 1, share_of_maximum_pv_potential: float = 1.0) -> Any:
+    def get_default_config(
+        power_in_watt: float = 10e3,
+        source_weight: int = 1,
+        share_of_maximum_pv_potential: float = 1.0,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Get default config."""
         config = PVSystemConfig(
+            building_name=building_name,
             name="PVSystem",
             time=2019,
             location="Aachen",

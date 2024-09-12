@@ -1,7 +1,8 @@
 """ L2 Controller for PtX Buffer Battery operation. """
+
 # clean
 import os
-from typing import List
+from typing import List, Any
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -24,7 +25,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class XTPControllerConfig(ConfigBase):
-
     """Configutation of the PtX  Controller."""
 
     @classmethod
@@ -32,12 +32,13 @@ class XTPControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return XTPController.get_full_classname()
 
+    building_name: str
     name: str
     nom_output: float
     min_output: float
     max_output: float
     standby_load: float
-    operation_mode: float
+    operation_mode: str
 
     @staticmethod
     def read_config(fuel_cell_name):
@@ -48,11 +49,17 @@ class XTPControllerConfig(ConfigBase):
             return data.get("Fuel Cell variants", {}).get(fuel_cell_name, {})
 
     @classmethod
-    def control_fuel_cell(cls, fuel_cell_name, operation_mode):
+    def control_fuel_cell(
+        cls,
+        fuel_cell_name: str,
+        operation_mode: str,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Sets the according parameters for the chosen fuel cell."""
         config_json = cls.read_config(fuel_cell_name)
 
         config = XTPControllerConfig(
+            building_name=building_name,
             name="L2XTPController",  # config_json.get("name", "")
             nom_output=config_json.get("nom_output", 0.0),
             min_output=config_json.get("min_output", 0.0),
@@ -64,7 +71,6 @@ class XTPControllerConfig(ConfigBase):
 
 
 class XTPController(Component):
-
     """XtP  Controller."""
 
     # Inputs
@@ -90,8 +96,11 @@ class XTPController(Component):
         self.standby_load = config.standby_load
         self.operation_mode = config.operation_mode
 
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=self.xtpcontrollerconfig.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

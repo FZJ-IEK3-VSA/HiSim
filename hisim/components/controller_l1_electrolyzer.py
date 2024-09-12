@@ -3,6 +3,7 @@
 The controller looks at the available surplus electricity and passes the signal to the electrolyzer accordingly.
 In addition the controller takes care of minimum operation and indle times and the available capacity in the hydrogen storage.
 """
+
 # clean
 import importlib
 from dataclasses import dataclass
@@ -18,9 +19,9 @@ from hisim.simulationparameters import SimulationParameters
 @dataclass_json
 @dataclass
 class L1ElectrolyzerControllerConfig(cp.ConfigBase):
-
     """Electrolyzer Controller Config."""
 
+    building_name: str
     #: name of the device
     name: str
     #: priority of the device in hierachy: the higher the number the lower the priority
@@ -35,9 +36,12 @@ class L1ElectrolyzerControllerConfig(cp.ConfigBase):
     h2_soc_threshold: float
 
     @staticmethod
-    def get_default_config() -> "L1ElectrolyzerControllerConfig":
+    def get_default_config(
+        building_name: str = "BUI1",
+    ) -> "L1ElectrolyzerControllerConfig":
         """Returns the default configuration of an electrolyzer controller."""
         config = L1ElectrolyzerControllerConfig(
+            building_name=building_name,
             name="L1 Electrolyzer Controller",
             source_weight=1,
             min_operation_time_in_seconds=14400,
@@ -49,7 +53,6 @@ class L1ElectrolyzerControllerConfig(cp.ConfigBase):
 
 
 class L1ElectrolyzerControllerState:
-
     """Data class for saving the state of the electrolyzer controller."""
 
     def __init__(
@@ -85,7 +88,6 @@ class L1ElectrolyzerControllerState:
 
 
 class L1GenericElectrolyzerController(cp.Component):
-
     """Controller of the Electrolyzer.
 
     It takes the available surplus electricity of the energy management system and passes it to the electrolyzer.
@@ -105,7 +107,7 @@ class L1GenericElectrolyzerController(cp.Component):
     AvailableElectricity = "AvailableElectricity"
 
     # Similar components to connect to:
-    # 1. Building
+    # 1. building_name
     @utils.measure_execution_time
     def __init__(
         self,
@@ -115,8 +117,11 @@ class L1GenericElectrolyzerController(cp.Component):
     ) -> None:
         """Initialize the class."""
 
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=config.name + "_w" + str(config.source_weight),
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

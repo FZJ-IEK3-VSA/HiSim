@@ -39,7 +39,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class BatteryConfig(ConfigBase):
-
     """Battery Configuration."""
 
     @classmethod
@@ -47,6 +46,8 @@ class BatteryConfig(ConfigBase):
         """Return the full class name of the base class."""
         return Battery.get_full_classname()
 
+    #: building_name in which component is
+    building_name: str
     #: name of the device
     name: str
     #: priority of the device in hierachy: the higher the number the lower the priority
@@ -73,13 +74,14 @@ class BatteryConfig(ConfigBase):
     maintenance_cost_as_percentage_of_investment: float
 
     @classmethod
-    def get_default_config(cls) -> "BatteryConfig":
+    def get_default_config(cls, building_name: str = "BUI1", name: str = "Battery") -> "BatteryConfig":
         """Returns default configuration of battery."""
         custom_battery_capacity_generic_in_kilowatt_hour = (
             10  # size/capacity of battery should be approx. the same as default pv power
         )
         config = BatteryConfig(
-            name="Battery",
+            building_name=building_name,
+            name=name,
             # https://www.energieinstitut.at/die-richtige-groesse-von-batteriespeichern/
             custom_battery_capacity_generic_in_kilowatt_hour=custom_battery_capacity_generic_in_kilowatt_hour,
             custom_pv_inverter_power_generic_in_watt=10 * 0.5 * 1e3,  # c-rate is 0.5C (0.5/h) here
@@ -98,14 +100,17 @@ class BatteryConfig(ConfigBase):
         return config
 
     @classmethod
-    def get_scaled_battery(cls, total_pv_power_in_watt_peak: float) -> "BatteryConfig":
+    def get_scaled_battery(
+        cls, total_pv_power_in_watt_peak: float, building_name: str = "BUI1", name: str = "Battery"
+    ) -> "BatteryConfig":
         """Returns scaled configuration of battery according to pv power."""
         custom_battery_capacity_generic_in_kilowatt_hour = (
             total_pv_power_in_watt_peak * 1e-3
         )  # size/capacity of battery should be approx. the same as default pv power
         c_rate = 0.5  # 0.5C corresponds to 0.5/h for fully charging or discharging
         config = BatteryConfig(
-            name="Battery",
+            building_name=building_name,
+            name=name,
             # https://www.energieinstitut.at/die-richtige-groesse-von-batteriespeichern/
             custom_battery_capacity_generic_in_kilowatt_hour=custom_battery_capacity_generic_in_kilowatt_hour,
             custom_pv_inverter_power_generic_in_watt=custom_battery_capacity_generic_in_kilowatt_hour * c_rate * 1e3,
@@ -126,7 +131,6 @@ class BatteryConfig(ConfigBase):
 
 
 class Battery(Component):
-
     """Battery class.
 
     Simulate state of charge and realized power of a ac coupled battery
@@ -153,8 +157,12 @@ class Battery(Component):
     ):
         """Loads the parameters of the specified battery storage."""
         self.battery_config = config
+
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=self.battery_config.name + "_w" + str(self.battery_config.source_weight),
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -322,7 +330,7 @@ class Battery(Component):
         for index, output in enumerate(all_outputs):
             if (
                 output.postprocessing_flag is not None
-                and output.component_name == self.battery_config.name + "_w" + str(self.battery_config.source_weight)
+                and output.component_name == self.component_name
             ):
                 if InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
                     self.battery_config.charge_in_kwh = round(
@@ -361,7 +369,6 @@ class Battery(Component):
 
 @dataclass
 class BatteryState:
-
     """Battery state class."""
 
     #: state of charge of the battery

@@ -20,6 +20,9 @@ def test_cluster_household_with_pv_battery_and_ems():
     path = "../system_setups/household_cluster.py"
 
     my_simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
+
     my_simulation_parameters.post_processing_options.append(
         PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
     )

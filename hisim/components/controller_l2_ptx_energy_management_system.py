@@ -1,7 +1,8 @@
 """ L2 Controller for PtX Buffer Battery operation. """
+
 # clean
 import os
-from typing import List
+from typing import List, Any
 import json
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
@@ -24,7 +25,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class PTXControllerConfig(ConfigBase):
-
     """Configutation of the PtX  Controller."""
 
     @classmethod
@@ -32,12 +32,13 @@ class PTXControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return PTXController.get_full_classname()
 
+    building_name: str
     name: str
     nom_load: float
     min_load: float
     max_load: float
     standby_load: float
-    operation_mode: float
+    operation_mode: str
 
     @staticmethod
     def read_config(electrolyzer_name):
@@ -48,7 +49,12 @@ class PTXControllerConfig(ConfigBase):
             return data.get("Electrolyzer variants", {}).get(electrolyzer_name, {})
 
     @classmethod
-    def control_electrolyzer(cls, electrolyzer_name, operation_mode):
+    def control_electrolyzer(
+        cls,
+        electrolyzer_name: str,
+        operation_mode: str,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Sets the according parameters for the chosen electrolyzer.
 
         The operations mode can be used to select how the electrolyser is operated:
@@ -59,6 +65,7 @@ class PTXControllerConfig(ConfigBase):
         config_json = cls.read_config(electrolyzer_name)
 
         config = PTXControllerConfig(
+            building_name=building_name,
             name="L2PtXController",  # config_json.get("name", "")
             nom_load=config_json.get("nom_load", 0.0),
             min_load=config_json.get("min_load", 0.0),
@@ -70,7 +77,6 @@ class PTXControllerConfig(ConfigBase):
 
 
 class PTXController(Component):
-
     """PtX  Controller."""
 
     # Inputs
@@ -97,8 +103,11 @@ class PTXController(Component):
         self.standby_load = config.standby_load
         self.operation_mode = config.operation_mode
 
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=self.ptxcontrollerconfig.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

@@ -2,6 +2,7 @@
 
 # clean
 
+from typing import Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from hisim.component import ConfigBase
@@ -10,9 +11,9 @@ from hisim.component import ConfigBase
 @dataclass_json
 @dataclass
 class WarmWaterStorageConfig(ConfigBase):
-
     """Warm water storage config class."""
 
+    building_name: str
     name: str
     tank_diameter: float  # [m]
     tank_height: float  # [m]
@@ -22,9 +23,13 @@ class WarmWaterStorageConfig(ConfigBase):
     slice_height_minimum: float  # [m]
 
     @classmethod
-    def get_default_config(cls):
+    def get_default_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Gets a default config."""
         return WarmWaterStorageConfig(
+            building_name=building_name,
             name="WarmWaterStorage",
             tank_diameter=1,  # 0.9534        # [m]
             tank_height=2,  # 3.15              # [m]
@@ -36,7 +41,6 @@ class WarmWaterStorageConfig(ConfigBase):
 
 
 class CHPControllerConfig:
-
     """Chp controller config.
 
     The CHP controller is used to implement an on and off hysteresis
@@ -63,7 +67,6 @@ class CHPControllerConfig:
 
 
 class GasHeaterConfig:
-
     """Gas heater config class."""
 
     is_modulating = True
@@ -77,7 +80,6 @@ class GasHeaterConfig:
 
 
 class GasControllerConfig:
-
     """Gas controller config class.
 
     This controller works like the CHP controller, but switches on later so the CHP is used more often.
@@ -97,7 +99,6 @@ class GasControllerConfig:
 
 
 class LoadConfig:
-
     """Load config."""
 
     # massflow_load_minute = 2.5          # [kg/min]
@@ -115,7 +116,6 @@ class LoadConfig:
 
 
 class ElectricityDemandConfig:
-
     """Electricity demand config class."""
 
     kwh_per_year = 6000
@@ -123,7 +123,6 @@ class ElectricityDemandConfig:
 
 
 class HouseholdWarmWaterDemandConfig:
-
     """Household warm water demand config."""
 
     freshwater_temperature = 10  # [°C]
@@ -140,7 +139,6 @@ class HouseholdWarmWaterDemandConfig:
 
 
 class HydrogenStorageConfig:
-
     """Hydrogen storage config class."""
 
     # combination of
@@ -162,7 +160,6 @@ class HydrogenStorageConfig:
 
 
 class AdvElectrolyzerConfig:
-
     """Adv electrolyzer config class."""
 
     waste_energy = 400  # [W]   # 400
@@ -190,7 +187,6 @@ class AdvElectrolyzerConfig:
 
 
 class PVConfig:
-
     """PV config class."""
 
     peak_power = 20_000  # [W]
@@ -199,9 +195,9 @@ class PVConfig:
 @dataclass_json
 @dataclass
 class ExtendedControllerConfig(ConfigBase):
-
     """Extended controller config class."""
 
+    building_name: str
     name: str
     # Active Components
     chp: bool
@@ -216,9 +212,13 @@ class ExtendedControllerConfig(ConfigBase):
     maximum_autarky: bool
 
     @classmethod
-    def get_default_config(cls):
+    def get_default_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Gets a default ExtendedControllerConfig."""
         return ExtendedControllerConfig(
+            building_name=building_name,
             name="Example Component",
             chp=True,
             gas_heater=True,
@@ -233,11 +233,10 @@ class ExtendedControllerConfig(ConfigBase):
 
 
 class PhysicsConfig:
-
     """Physics config class."""
 
     water_density = 1000  # [kg/m^3]
-    water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin = 4_180  # J/kgK
+    water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin = 4180  # J/kgK
     water_specific_heat_capacity_in_watthour_per_kilogramm_per_kelvin = 1.163  # Wh/kgK
 
     # Schmidt 2020: Wasserstofftechnik  S.170ff
@@ -260,14 +259,13 @@ class PhysicsConfig:
 @dataclass_json
 @dataclass
 class EmissionFactorsAndCostsForFuelsConfig:
-
     """Emission factors and costs for fuels config class."""
 
     electricity_costs_in_euro_per_kwh: float  # EUR/kWh
     electricity_footprint_in_kg_per_kwh: float  # kgCO2eq/kWh
     electricity_to_grid_revenue_in_euro_per_kwh: float  # EUR/kWh
-    district_heating_costs_in_euro_per_kwh: float  # EUR/kWh
-    district_heating_footprint_in_kg_per_kwh: float  # kgCO2eq/kWh
+    contracting_heating_costs_in_euro_per_kwh: float  # EUR/kWh
+    contracting_heating_footprint_in_kg_per_kwh: float  # kgCO2eq/kWh
     gas_costs_in_euro_per_kwh: float  # EUR/kWh
     gas_footprint_in_kg_per_kwh: float  # kgCO2eq/kWh
     oil_costs_in_euro_per_l: float  # EUR/l
@@ -284,8 +282,8 @@ class EmissionFactorsAndCostsForFuelsConfig:
             electricity_costs_in_euro_per_kwh=0.2525,  # EUR/kWh
             electricity_footprint_in_kg_per_kwh=0.44,  # kgCO2eq/kWh
             electricity_to_grid_revenue_in_euro_per_kwh=0.2525,  # EUR/kWh  # Todo: Change Value!!!
-            district_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
-            district_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
+            contracting_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
+            contracting_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
             gas_costs_in_euro_per_kwh=0.0861,  # EUR/kWh
             gas_footprint_in_kg_per_kwh=0.24,  # kgCO2eq/kWh
             oil_costs_in_euro_per_l=1.159835766,  # EUR/l
@@ -304,14 +302,16 @@ class EmissionFactorsAndCostsForFuelsConfig:
         [3]: https://de.statista.com/statistik/daten/studie/779/umfrage/durchschnittspreis-fuer-dieselkraftstoff-seit-dem-jahr-1950/
         [4]: https://de.statista.com/statistik/daten/studie/168286/umfrage/entwicklung-der-gaspreise-fuer-haushaltskunden-seit-2006/
         [5]: https://de.statista.com/statistik/daten/studie/38897/umfrage/co2-emissionsfaktor-fuer-den-strommix-in-deutschland-seit-1990/
+        [6]: https://www.destatis.de/DE/Themen/Wirtschaft/Preise/Erdgas-Strom-DurchschnittsPreise/_inhalt.html#421258
+        [7]: https://de.statista.com/statistik/daten/studie/250114/umfrage/preis-fuer-fernwaerme-nach-anschlusswert-in-deutschland/
         """
         if year == 2018:
             return EmissionFactorsAndCostsForFuelsConfig(
                 electricity_costs_in_euro_per_kwh=0.27825,  # EUR/kWh  # Source: [1]
                 electricity_footprint_in_kg_per_kwh=0.473,  # kgCO2eq/kWh  # Source: [5]
                 electricity_to_grid_revenue_in_euro_per_kwh=0.1205,  # EUR/kWh  # Source: [2]
-                district_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
-                district_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
+                contracting_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
+                contracting_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
                 gas_costs_in_euro_per_kwh=0.0664,  # EUR/kWh  # Source: [4]
                 gas_footprint_in_kg_per_kwh=0.24,  # kgCO2eq/kWh
                 oil_costs_in_euro_per_l=1.159835766,  # EUR/l
@@ -324,8 +324,8 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 electricity_costs_in_euro_per_kwh=0.295,  # EUR/kWh  # Source: [1]
                 electricity_footprint_in_kg_per_kwh=0.411,  # kgCO2eq/kWh  # Source: [5]
                 electricity_to_grid_revenue_in_euro_per_kwh=0.1072,  # EUR/kWh  # Source: [2]
-                district_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
-                district_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
+                contracting_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
+                contracting_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
                 gas_costs_in_euro_per_kwh=0.0728,  # EUR/kWh  # Source: [4]
                 gas_footprint_in_kg_per_kwh=0.24,  # kgCO2eq/kWh
                 oil_costs_in_euro_per_l=1.159835766,  # EUR/l
@@ -338,8 +338,8 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 electricity_costs_in_euro_per_kwh=0.3005,  # EUR/kWh  # Source: [1]
                 electricity_footprint_in_kg_per_kwh=0.369,  # kgCO2eq/kWh  # Source: [5]
                 electricity_to_grid_revenue_in_euro_per_kwh=0.0838,  # EUR/kWh  # Source: [2]
-                district_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
-                district_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
+                contracting_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
+                contracting_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
                 gas_costs_in_euro_per_kwh=0.0699,  # EUR/kWh  # Source: [4]
                 gas_footprint_in_kg_per_kwh=0.24,  # kgCO2eq/kWh
                 oil_costs_in_euro_per_l=1.159835766,  # EUR/l
@@ -352,8 +352,8 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 electricity_costs_in_euro_per_kwh=0.3005,  # EUR/kWh  # Source: [1]
                 electricity_footprint_in_kg_per_kwh=0.410,  # kgCO2eq/kWh  # Source: [5]
                 electricity_to_grid_revenue_in_euro_per_kwh=0.0753,  # EUR/kWh  # Source: [2]
-                district_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
-                district_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
+                contracting_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
+                contracting_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
                 gas_costs_in_euro_per_kwh=0.0745,  # EUR/kWh  # Source: [4]
                 gas_footprint_in_kg_per_kwh=0.24,  # kgCO2eq/kWh
                 oil_costs_in_euro_per_l=1.159835766,  # EUR/l
@@ -366,13 +366,27 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 electricity_costs_in_euro_per_kwh=0.43025,  # EUR/kWh  # Source: [1]
                 electricity_footprint_in_kg_per_kwh=0.434,  # kgCO2eq/kWh  # Source: [5]
                 electricity_to_grid_revenue_in_euro_per_kwh=0.0723,  # EUR/kWh  # Source: [2]
-                district_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
-                district_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
+                contracting_heating_costs_in_euro_per_kwh=0.0033,  # EUR/kWh
+                contracting_heating_footprint_in_kg_per_kwh=0.02,  # kgCO2eq/kWh
                 gas_costs_in_euro_per_kwh=0.0951,  # EUR/kWh  # Source: [4]
                 gas_footprint_in_kg_per_kwh=0.24,  # kgCO2eq/kWh
                 oil_costs_in_euro_per_l=1.159835766,  # EUR/l
                 oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
                 diesel_costs_in_euro_per_l=1.96,  # EUR/l  # Source: [3]
+                diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
+            )
+        if year == 2023:
+            return EmissionFactorsAndCostsForFuelsConfig(
+                electricity_costs_in_euro_per_kwh=0.4175,  # EUR/kWh  # Source: [6]
+                electricity_footprint_in_kg_per_kwh=0.380,  # kgCO2eq/kWh  # Source: [5]
+                electricity_to_grid_revenue_in_euro_per_kwh=0.0733,  # EUR/kWh  # Source: [2]
+                contracting_heating_costs_in_euro_per_kwh=0.147,  # EUR/kWh  # Source: [7]
+                contracting_heating_footprint_in_kg_per_kwh=0.1823,  # kgCO2eq/kWh
+                gas_costs_in_euro_per_kwh=0.1141,  # EUR/kWh  # Source: [6]
+                gas_footprint_in_kg_per_kwh=0.247,  # kgCO2eq/kWh
+                oil_costs_in_euro_per_l=1.159835766,  # EUR/l
+                oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
+                diesel_costs_in_euro_per_l=1.73,  # EUR/l  # Source: [3]
                 diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
             )
 

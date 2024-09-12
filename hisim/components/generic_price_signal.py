@@ -29,7 +29,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class PriceSignalConfig(cp.ConfigBase):
-
     """Price Signal config class."""
 
     @classmethod
@@ -37,6 +36,7 @@ class PriceSignalConfig(cp.ConfigBase):
         """Return the full class name of the base class."""
         return PriceSignal.get_full_classname()
 
+    building_name: str
     #: name of the price signal
     name: str
     country: str
@@ -50,9 +50,13 @@ class PriceSignalConfig(cp.ConfigBase):
     prediction_horizon: Optional[int]
 
     @classmethod
-    def get_default_price_signal_config(cls) -> Any:
+    def get_default_price_signal_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Default configuration for price signal."""
         config = PriceSignalConfig(
+            building_name=building_name,
             name="PriceSignal",
             country="Germany",
             pricing_scheme="fixed",
@@ -68,7 +72,6 @@ class PriceSignalConfig(cp.ConfigBase):
 
 
 class PriceSignal(cp.Component):
-
     """Price Signal class.
 
     Class component that provides price for electricity.
@@ -97,8 +100,11 @@ class PriceSignal(cp.Component):
         :type config: PriceSignalConfig
         """
         self.price_signal_config = config
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=self.price_signal_config.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

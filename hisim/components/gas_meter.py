@@ -2,7 +2,7 @@
 
 # clean
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Any
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -32,13 +32,18 @@ class GasMeterConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return GasMeter.get_full_classname()
 
+    building_name: str
     name: str
     total_energy_from_grid_in_kwh: None
 
     @classmethod
-    def get_gas_meter_default_config(cls):
+    def get_gas_meter_default_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Gets a default GasMeter."""
         return GasMeterConfig(
+            building_name=building_name,
             name="GasMeter",
             total_energy_from_grid_in_kwh=None,
         )
@@ -70,11 +75,14 @@ class GasMeter(DynamicComponent):
         self.name = self.grid_energy_balancer_config.name
         self.my_component_inputs: List[DynamicConnectionInput] = []
         self.my_component_outputs: List[DynamicConnectionOutput] = []
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            self.my_component_inputs,
-            self.my_component_outputs,
-            self.name,
-            my_simulation_parameters,
+            name=component_name,
+            my_component_inputs=self.my_component_inputs,
+            my_component_outputs=self.my_component_outputs,
+            my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
         )
@@ -232,7 +240,9 @@ class GasMeter(DynamicComponent):
         )
         # Production of Gas positve sign
         # Consumption of Gas negative sign
-        difference_between_production_and_consumption_in_watt_hour = production_in_watt_hour - consumption_uncontrolled_in_watt_hour
+        difference_between_production_and_consumption_in_watt_hour = (
+            production_in_watt_hour - consumption_uncontrolled_in_watt_hour
+        )
 
         # calculate cumulative production and consumption
         cumulative_production_in_watt_hour = self.state.cumulative_production_in_watt_hour + production_in_watt_hour
@@ -288,10 +298,11 @@ class GasMeter(DynamicComponent):
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of gas costs and revenues."""
+        total_energy_from_grid_in_kwh: float
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.config.name:
+            if output.component_name == self.component_name:
                 if output.field_name == self.GasFromGrid:
-                    self.config.total_energy_from_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 2)
+                    total_energy_from_grid_in_kwh = postprocessing_results.iloc[:, index].sum() * 1e-3
 
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year
@@ -299,8 +310,8 @@ class GasMeter(DynamicComponent):
         co2_per_unit = emissions_and_cost_factors.gas_footprint_in_kg_per_kwh
         euro_per_unit = emissions_and_cost_factors.gas_costs_in_euro_per_kwh
 
-        opex_cost_per_simulated_period_in_euro = self.config.total_energy_from_grid_in_kwh * euro_per_unit
-        co2_per_simulated_period_in_kg = self.config.total_energy_from_grid_in_kwh * co2_per_unit
+        opex_cost_per_simulated_period_in_euro = total_energy_from_grid_in_kwh * euro_per_unit
+        co2_per_simulated_period_in_kg = total_energy_from_grid_in_kwh * co2_per_unit
         opex_cost_data_class = OpexCostDataClass(
             opex_energy_cost_in_euro=opex_cost_per_simulated_period_in_euro,
             opex_maintenance_cost_in_euro=0,
@@ -321,7 +332,7 @@ class GasMeter(DynamicComponent):
         total_energy_from_grid_in_kwh: Optional[float] = None
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.config.name and output.load_type == lt.LoadTypes.GAS:
+            if output.component_name == self.component_name and output.load_type == lt.LoadTypes.GAS:
                 if output.field_name == self.GasFromGrid:
                     total_energy_from_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 1)
                     break

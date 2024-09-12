@@ -49,6 +49,7 @@ class WindturbineConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return Windturbine.get_full_classname()
 
+    building_name: str
     name: str
     # Typename of the wind turbine.
     turbine_type: str
@@ -92,9 +93,13 @@ class WindturbineConfig(ConfigBase):
     prediction_horizon: Optional[int]
 
     @classmethod
-    def get_default_windturbine_config(cls) -> "WindturbineConfig":
+    def get_default_windturbine_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> "WindturbineConfig":
         """Gets a default windturbine."""
         return WindturbineConfig(
+            building_name=building_name,
             name="Windturbine",
             turbine_type="V126/3300",
             hub_height=137,
@@ -134,6 +139,8 @@ class Windturbine(cp.Component):
 
     # Outputs
     ElectricityOutput = "ElectricityOutput"
+    ElectricitityEnergyOutput = "ElectricitityEnergyOutput"
+    CumulativeProduction = "CumulativeProduction"
 
     @utils.measure_execution_time
     def __init__(
@@ -145,8 +152,11 @@ class Windturbine(cp.Component):
         """Initialize the class."""
         self.windturbineconfig = config
 
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            self.windturbineconfig.name + "_w" + str(self.windturbineconfig.source_weight),
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -197,6 +207,9 @@ class Windturbine(cp.Component):
             hellman_exp=self.hellman_exp,
         )
 
+        self.state = WindturbineState(cumulative_production_in_watt_hour=0.0)
+        self.previous_state = self.state.self_copy()
+        # inputs
         self.t_out_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.TemperatureOutside,
@@ -205,7 +218,6 @@ class Windturbine(cp.Component):
             True,
         )
 
-        # inputs
         self.wind_speed_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.WindSpeed,
@@ -228,8 +240,31 @@ class Windturbine(cp.Component):
             field_name=self.ElectricityOutput,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
-            postprocessing_flag=[lt.InandOutputType.ELECTRICITY_PRODUCTION],
+            postprocessing_flag=[
+                lt.ComponentType.WINDTURBINE,
+                lt.InandOutputType.ELECTRICITY_PRODUCTION,
+            ],
             output_description=f"here a description for Windturbine {self.ElectricityOutput} will follow.",
+        )
+
+        self.electricity_energy_output_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricitityEnergyOutput,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT_HOUR,
+            postprocessing_flag=[
+                lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+            ],
+            output_description=f"Here a description for PV {self.ElectricitityEnergyOutput} will follow.",
+        )
+
+        self.cumulative_electricity_production_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.CumulativeProduction,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT_HOUR,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.CumulativeProduction} will follow.",
         )
 
         self.add_default_connections(self.get_default_connections_from_weather())
@@ -254,11 +289,11 @@ class Windturbine(cp.Component):
 
     def i_save_state(self) -> None:
         """Saves the state."""
-        pass
+        self.previous_state = self.state.self_copy()
 
     def i_restore_state(self) -> None:
         """Restores the state."""
-        pass
+        self.state = self.previous_state.self_copy()
 
     def write_to_report(self):
         """Write to the report."""
@@ -318,7 +353,16 @@ class Windturbine(cp.Component):
 
         electric_power_output_windturbine_in_watt = df_electric_power_output_windturbine_in_watt.iloc[0].iloc[0]
 
+        production_in_watt_hour = (electric_power_output_windturbine_in_watt *
+                                   self.my_simulation_parameters.seconds_per_timestep / 3600)
+
+        cumulative_production_in_watt_hour = self.state.cumulative_production_in_watt_hour + production_in_watt_hour
+
+        stsv.set_output_value(self.electricity_energy_output_channel, production_in_watt_hour)
         stsv.set_output_value(self.electricity_output_channel, electric_power_output_windturbine_in_watt)
+        stsv.set_output_value(self.cumulative_electricity_production_channel, cumulative_production_in_watt_hour)
+
+        self.state.cumulative_production_in_watt_hour = cumulative_production_in_watt_hour
 
     @staticmethod
     def get_cost_capex(config: WindturbineConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
@@ -412,4 +456,19 @@ class CalculationRequest(JSONWizard):
             + str(self.pressure_standorthoehe_in_pascal)
             + " "
             + str(self.roughness_length_in_m)
+        )
+
+
+@dataclass
+class WindturbineState:
+    """Windturbine class."""
+
+    cumulative_production_in_watt_hour: float
+
+    def self_copy(
+        self,
+    ):
+        """Copy the WindturbineState."""
+        return WindturbineState(
+            self.cumulative_production_in_watt_hour,
         )

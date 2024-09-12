@@ -5,10 +5,15 @@ import urllib.request as url
 import datetime
 import pandas as pd
 from wetterdienst import Settings
-from wetterdienst.provider.dwd.observation import DwdObservationRequest
+from wetterdienst.provider.dwd.observation import (
+    DwdObservationParameter,
+    DwdObservationRequest,
+    DwdObservationResolution,
+)
 import numpy as np
 import cdsapi
 import xarray as xr
+from hisim.components.weather import WeatherDataSourceEnum
 
 
 __authors__ = "Jonas Hoppe"
@@ -33,7 +38,7 @@ class WeatherDataImport:
         longitude: float,
         distance_weather_stations: float,
         path_input_folder: str,
-        weather_data_source: str,
+        weather_data_source: WeatherDataSourceEnum,
     ):
         """Initializes Data Request."""
         self.location = location
@@ -75,9 +80,9 @@ class WeatherDataImport:
 
         self.csv_path: str
 
-        if self.weather_data_source == "DWD_10MIN":
+        if self.weather_data_source == WeatherDataSourceEnum.DWD_10MIN:
             self.dwd_10min_request()
-        elif self.weather_data_source == "ERA5":
+        elif self.weather_data_source == WeatherDataSourceEnum.ERA5:
             self.era5_request()
         else:
             raise KeyError("Unknown data source. Only DWD_10MIN and ERA5.")
@@ -124,9 +129,17 @@ class WeatherDataImport:
                 ts_interpolation_use_nearby_station_distance=40,
             )
 
+            parameters = [DwdObservationParameter.MINUTE_10.TEMPERATURE_AIR_MEAN_2M,
+                          DwdObservationParameter.MINUTE_10.PRESSURE_AIR_SITE,
+                          DwdObservationParameter.MINUTE_10.WIND_DIRECTION,
+                          DwdObservationParameter.MINUTE_10.WIND_SPEED,
+                          DwdObservationParameter.MINUTE_10.RADIATION_SKY_SHORT_WAVE_DIFFUSE,
+                          DwdObservationParameter.MINUTE_10.RADIATION_GLOBAL,
+                          ]
+
             request = DwdObservationRequest(
-                parameter=["tt_10", "pp_10", "dd_10", "ff_10", "ds_10", "gs_10"],
-                resolution="10_minutes",
+                parameter=parameters,  # ["tt_10", "pp_10", "dd_10", "ff_10", "ds_10", "gs_10"],
+                resolution=DwdObservationResolution.MINUTE_10,  # "10_minutes",
                 start_date=str(self.start_date_for_weather_data),
                 end_date=str(self.end_date_for_weather_data),
                 settings=settings,
@@ -164,6 +177,11 @@ class WeatherDataImport:
 
             values = request.values.all().df
             values = values.to_pandas()
+
+            parameterlist = set()
+            for element in values["parameter"]:
+                parameterlist.add(element)
+            print(f"DWD Parameter names: {parameterlist}")
 
             date_df = pd.DataFrame(columns=["date"])
             date_df = pd.to_datetime(values["date"], utc=True)
@@ -219,9 +237,9 @@ class WeatherDataImport:
                     raise KeyError(
                         f"Note: {60 * 24 * 365 /10 - len(time_df)+1} entries for an entire year are missing. Too much!"
                     )
-
+            print("Write Weather Data into Dataframe.")
             temperature_dwd_df = (
-                values[values["parameter"] == "temperature_air_mean_200"]
+                values[values["parameter"] == "temperature_air_mean_2m"]
                 .groupby("date")["value"]
                 .apply(lambda x: ", ".join(map(str, x)))
                 .reset_index()
@@ -250,6 +268,9 @@ class WeatherDataImport:
             temperature_air_df = pd.DataFrame(temperatur_air_list, columns=["temperature"])
             temperature_air_df = temperature_air_df.interpolate(method="linear", limit_direction="backward")
 
+            if temperature_air_df.empty:
+                raise KeyError("temperature_air_df is empty --> error in weather data request. Change location")
+
             pressure_dwd_df = (
                 values[values["parameter"] == "pressure_air_site"]
                 .groupby("date")["value"]
@@ -277,6 +298,9 @@ class WeatherDataImport:
 
             pressure_df = pd.DataFrame(pressure_list, columns=["pressure"])
             pressure_df = pressure_df.interpolate(method="linear", limit_direction="backward")
+
+            if pressure_df.empty:
+                raise KeyError("pressure_df is empty --> error in weather data request. Change location")
 
             wind_direction_dwd_df = (
                 values[values["parameter"] == "wind_direction"]
@@ -309,6 +333,9 @@ class WeatherDataImport:
             wind_direction_df = pd.DataFrame(wind_direction_list, columns=["wind_direction"])
             wind_direction_df = wind_direction_df.interpolate(method="linear", limit_direction="backward")
 
+            if wind_direction_df.empty:
+                raise KeyError("wind_direction_df is empty --> error in weather data request. Change location")
+
             wind_speed_dwd_df = (
                 values[values["parameter"] == "wind_speed"]
                 .groupby("date")["value"]
@@ -336,6 +363,9 @@ class WeatherDataImport:
 
             wind_speed_df = pd.DataFrame(wind_speed_list, columns=["wind_speed"])
             wind_speed_df = wind_speed_df.interpolate(method="linear", limit_direction="backward")
+
+            if wind_speed_df.empty:
+                raise KeyError("wind_speed_df is empty --> error in weather data request. Change location")
 
             diffuse_irradiance_dwd_df = (
                 values[values["parameter"] == "radiation_sky_short_wave_diffuse"]
@@ -370,6 +400,9 @@ class WeatherDataImport:
             diffuse_irradiance_df = pd.DataFrame(diffuse_irradiance_list, columns=["diffuse_irradiance"])
             diffuse_irradiance_df = diffuse_irradiance_df.interpolate(method="linear", limit_direction="backward")
 
+            if diffuse_irradiance_df.empty:
+                raise KeyError("diffuse_irradiance_df is empty --> error in weather data request. Change location")
+
             global_irradiance_dwd_df = (
                 values[values["parameter"] == "radiation_global"]
                 .groupby("date")["value"]
@@ -402,6 +435,9 @@ class WeatherDataImport:
 
             global_irradiance_df = pd.DataFrame(global_irradiance_list, columns=["global_irradiance"])
             global_irradiance_df = global_irradiance_df.interpolate(method="linear", limit_direction="backward")
+
+            if global_irradiance_df.empty:
+                raise KeyError("global_irradiance_df is empty --> error in weather data request. Change location")
 
             weather_df = pd.DataFrame()
             weather_df = pd.concat(
@@ -438,18 +474,18 @@ class WeatherDataImport:
             weather_df = weather_df.reset_index(drop=True)
             weather_df = weather_df.drop(weather_df.index[-1])
 
-            # if weather_df.isna().any(axis=None):
+            # if weather_df.isna().any().any():
+            #     raise KeyError(
+            #         "The DataFrame weather_df contains NaN values. Check data or increase radius for station search."
+            #     )
+            #
+            # if weather_df.eq("nan").any().any():
             #     raise KeyError(
             #         "The DataFrame weather_df contains NaN values. Check data or increase radius for station search."
             #     )
 
-            if weather_df.eq("nan").any().any():
-                raise KeyError(
-                    "The DataFrame weather_df contains NaN values. Check data or increase radius for station search."
-                )
-
             self.safe_as_csv(weather_df, csv_path)
-
+        print("Safe Weatherdata successfully in .csv.")
         self.csv_path = csv_path
 
     def era5_request(
@@ -747,10 +783,10 @@ class WeatherDataImport:
 
             weather_df = weather_df.reset_index(drop=True)
 
-            if weather_df.isna().any(axis=None):
-                raise KeyError("The DataFrame weather_df contains NaN values. Check data")
-            if weather_df.eq("nan").any().any():
-                raise KeyError("The DataFrame weather_df contains NaN values. Check data")
+            # if weather_df.isna().any(axis=None):
+            #     raise KeyError("The DataFrame weather_df contains NaN values. Check data")
+            # if weather_df.eq("nan").any().any():
+            #     raise KeyError("The DataFrame weather_df contains NaN values. Check data")
 
             self.safe_as_csv(weather_df, csv_path)
 

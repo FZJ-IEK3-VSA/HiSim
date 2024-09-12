@@ -67,6 +67,7 @@ class BuildingPVWeatherConfig(ConfigBase):
 
     """Configuration for BuildingPv."""
 
+    building_name: str
     name: str
     building_id: str
     pv_azimuth: float
@@ -85,6 +86,7 @@ class BuildingPVWeatherConfig(ConfigBase):
         """Get default BuildingPVConfig."""
 
         return BuildingPVWeatherConfig(
+            building_name="BUI1",
             name="BuildingPVConfig",
             building_id="default_building",
             pv_azimuth=180,
@@ -641,9 +643,7 @@ def setup_function(
         further_result_folder_description=os.path.join(
             *[
                 further_result_folder_description,
-                f"PV-{share_of_maximum_pv_potential}"
-                f"-SH-{space_heating_system.name}-DHW-{domestic_hot_water_heating_system.name}",
-                f"weather-location-{weather_location}",
+
             ]
         ),
         variant_name="_",

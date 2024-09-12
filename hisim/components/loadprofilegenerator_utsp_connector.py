@@ -56,6 +56,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
 
     """Config class for UtspLpgConnector. Contains LPG parameters and UTSP connection parameters."""
 
+    building_name: str
     name: str
     data_acquisition_mode: LpgDataAcquisitionMode
     household: Union[JsonReference, List[JsonReference]]
@@ -63,7 +64,6 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     travel_route_set: JsonReference
     transportation_device_set: JsonReference
     charging_station_set: JsonReference
-    consumption_in_kwh: float
     profile_with_washing_machine_and_dishwasher: bool
     predictive_control: bool
     predictive: bool
@@ -77,10 +77,14 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
         return UtspLpgConnector.get_full_classname()
 
     @classmethod
-    def get_default_utsp_connector_config(cls) -> Any:
+    def get_default_utsp_connector_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Creates a default configuration. Chooses default values for the LPG parameters."""
 
         config = UtspLpgConnectorConfig(
+            building_name=building_name,
             name="UTSPConnector",
             data_acquisition_mode=LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE,
             household=Households.CHR01_Couple_both_at_Work,
@@ -89,7 +93,6 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
             travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
             transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
             charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
-            consumption_in_kwh=0,
             profile_with_washing_machine_and_dishwasher=True,
             predictive_control=False,
             predictive=False,
@@ -100,7 +103,6 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
 
 
 class UtspLpgConnector(cp.Component):
-
     """Component that provides data from the LoadProfileGenerator.
 
     This component provides the heating generated, the electricity and water consumed
@@ -140,8 +142,11 @@ class UtspLpgConnector(cp.Component):
     ) -> None:
         """Initializes the component and retrieves the LPG data."""
         self.utsp_config = config
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=self.utsp_config.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -302,9 +307,7 @@ class UtspLpgConnector(cp.Component):
         resolution = datetime.timedelta(seconds=seconds)
         return str(resolution)
 
-    def get_profiles_from_utsp(
-        self, lpg_households: Union[JsonReference, List[JsonReference]], guid: str
-    ) -> Tuple[
+    def get_profiles_from_utsp(self, lpg_households: Union[JsonReference, List[JsonReference]], guid: str) -> Tuple[
         Union[str, List],
         Union[str, List],
         Union[str, List],
@@ -1377,13 +1380,14 @@ class UtspLpgConnector(cp.Component):
         occupancy_total_electricity_consumption_in_kilowatt_hour: Optional[float] = None
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.config.name:
+            if output.component_name == self.component_name:
                 if output.field_name == self.ElectricityOutput:
                     occupancy_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]
                     occupancy_total_electricity_consumption_in_kilowatt_hour = (
-                    KpiHelperClass.compute_total_energy_from_power_timeseries(
-                        power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep)
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
                     )
                     break
 

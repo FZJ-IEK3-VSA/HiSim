@@ -4,6 +4,7 @@
 
 # Generic/Built-in
 import copy
+from typing import Any
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 
@@ -26,7 +27,6 @@ __status__ = "development"
 
 
 class GenericBatteryState:
-
     """Generic battery state class."""
 
     def __init__(
@@ -77,7 +77,6 @@ class GenericBatteryState:
 @dataclass_json
 @dataclass
 class GenericBatteryConfig(cp.ConfigBase):
-
     """Configuration of the Generic Battery."""
 
     @classmethod
@@ -85,6 +84,7 @@ class GenericBatteryConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return GenericBattery.get_full_classname()
 
+    building_name: str
     name: str
     manufacturer: str
     model: str
@@ -93,9 +93,13 @@ class GenericBatteryConfig(cp.ConfigBase):
     predictive: bool
 
     @classmethod
-    def get_default_config(cls):
+    def get_default_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Gets a default config."""
         return GenericBatteryConfig(
+            building_name=building_name,
             name="Generic Battery",
             manufacturer="sonnen",
             model="sonnenBatterie 10 - 11,5 kWh",
@@ -108,7 +112,6 @@ class GenericBatteryConfig(cp.ConfigBase):
 @dataclass_json
 @dataclass
 class BatteryControllerConfig(cp.ConfigBase):
-
     """Configuration of the Generic Battery Controller."""
 
     @classmethod
@@ -116,18 +119,22 @@ class BatteryControllerConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return BatteryController.get_full_classname()
 
+    building_name: str
     name: str
 
     @classmethod
-    def get_default_config(cls):
+    def get_default_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Gets a default config."""
         return BatteryControllerConfig(
+            building_name=building_name,
             name="Battery Controller",
         )
 
 
 class GenericBattery(cp.Component):
-
     """Generic Battery class."""
 
     # Imports
@@ -154,7 +161,15 @@ class GenericBattery(cp.Component):
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initialize the class."""
-        super().__init__("Battery", my_simulation_parameters, my_config=config, my_display_config=my_display_config)
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
+        super().__init__(
+            name=component_name,
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
+            my_display_config=my_display_config,
+        )
 
         self.build(manufacturer=config.manufacturer, model=config.model, base=config.base)
 
@@ -313,7 +328,6 @@ class GenericBattery(cp.Component):
 
 
 class BatteryController(cp.Component):
-
     """Battery Controller class."""
 
     ElectricityInput = "ElectricityInput"
@@ -326,8 +340,11 @@ class BatteryController(cp.Component):
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initialize the class."""
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=config.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

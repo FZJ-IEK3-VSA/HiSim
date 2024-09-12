@@ -40,7 +40,6 @@ https://github.com/FZJ-IEK3-VSA/tsib
 
 
 class WeatherDataSourceEnum(Enum):
-
     """Describes where the weather data is from. Used to choose the correct reading function."""
 
     DWD_TRY = 1
@@ -51,7 +50,6 @@ class WeatherDataSourceEnum(Enum):
 
 
 class LocationEnum(Enum):
-
     """contains all the locations and their corresponding directories."""
 
     AACHEN = (
@@ -373,9 +371,9 @@ class LocationEnum(Enum):
 
 @dataclass
 class WeatherConfig(ConfigBase):
-
     """Configuration class for Weather."""
 
+    building_name: str
     name: str
     location: str
     source_path: str
@@ -388,7 +386,12 @@ class WeatherConfig(ConfigBase):
         return Weather.get_full_classname()
 
     @classmethod
-    def get_default(cls, location_entry: Any) -> Any:
+    def get_default(
+        cls,
+        location_entry: Any,
+        name: str = "Weather",
+        building_name: str = "BUI1",
+    ) -> Any:
         """Gets the default configuration for Aachen."""
         if not isinstance(location_entry, LocationEnum):
             if location_entry in LocationEnum._member_names_:  # pylint: disable=W0212
@@ -409,7 +412,8 @@ class WeatherConfig(ConfigBase):
             location_entry.value[3],
         )
         config = WeatherConfig(
-            name="Weather",
+            building_name=building_name,
+            name=name,
             location=location_entry.value[0],
             source_path=path,
             data_source=location_entry.value[4],
@@ -419,7 +423,6 @@ class WeatherConfig(ConfigBase):
 
 
 class Weather(Component):
-
     """Provide thermal and solar conditions of local weather."""
 
     # Inputs
@@ -463,8 +466,11 @@ class Weather(Component):
         SingletonSimRepository().set_entry(key=SingletonDictKeyEnum.LOCATION, entry=self.weather_config.location)
         self.parameter_string = my_simulation_parameters.get_unique_key()
 
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=self.weather_config.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

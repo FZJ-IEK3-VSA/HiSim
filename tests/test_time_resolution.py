@@ -429,7 +429,7 @@ def run_cluster_house(
     # Get opex consumptions
     opex_results_path = os.path.join(my_simulation_parameters.result_directory, "operational_costs_co2_footprint.csv")
 
-    opex_df = pd.read_csv(opex_results_path, index_col=0)
+    opex_df = pd.read_csv(opex_results_path, index_col=0, sep=";")
 
     # append results to result dictionaries
     if yearly_result_dict == {} and opex_consumptions_dict == {}:

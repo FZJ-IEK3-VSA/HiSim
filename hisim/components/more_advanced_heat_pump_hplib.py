@@ -47,7 +47,6 @@ from hisim.units import (
     Kilogram,
     Euro,
     Years,
-    KilowattHour,
     KilogramPerSecond,
 )
 from hisim.components.configuration import PhysicsConfig
@@ -93,6 +92,7 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return MoreAdvancedHeatPumpHPLib.get_full_classname()
 
+    building_name: str
     name: str
     model: str
     heat_source: str
@@ -118,12 +118,12 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     lifetime: Quantity[float, Years]
     # maintenance cost as share of investment [0..1]
     maintenance_cost_as_percentage_of_investment: float
-    #: consumption of the heatpump in kWh
-    consumption: Quantity[float, KilowattHour]
 
     @classmethod
     def get_default_generic_advanced_hp_lib(
         cls,
+        building_name: str = "BUI1",
+        name: str = "MoreAdvancedHeatPumpHPLib",
         set_thermal_output_power_in_watt: Quantity[float, Watt] = Quantity(8000, Watt),
         heating_reference_temperature_in_celsius: Quantity[float, Celsius] = Quantity(-7.0, Celsius),
         massflow_nominal_secondary_side_in_kg_per_s: Quantity[float, KilogramPerSecond] = Quantity(
@@ -137,7 +137,8 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
         https://github.com/FZJ-IEK3-VSA/HPLib/blob/main/HPLib/HPLib.py l.135 "fit_p_th_ref.
         """
         return MoreAdvancedHeatPumpHPLibConfig(
-            name="MoreAdvancedHeatPumpHPLib",
+            building_name=building_name,
+            name=name,
             model="Generic",
             heat_source="air",
             group_id=1,
@@ -160,13 +161,14 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
             cost=Quantity(set_thermal_output_power_in_watt.value * 1e-3 * 1513.74, Euro),
             lifetime=Quantity(10, Years),  # value from emission_factors_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
-            consumption=Quantity(0, KilowattHour),
         )
 
     @classmethod
     def get_scaled_advanced_hp_lib(
         cls,
         heating_load_of_building_in_watt: Quantity[float, Watt],
+        name: str = "MoreAdvancedHeatPumpHPLib",
+        building_name: str = "BUI1",
         heating_reference_temperature_in_celsius: Quantity[float, Celsius] = Quantity(-7.0, Celsius),
         massflow_nominal_secondary_side_in_kg_per_s: Quantity[float, KilogramPerSecond] = Quantity(
             0.333, KilogramPerSecond
@@ -178,7 +180,8 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
         set_thermal_output_power_in_watt: Quantity[float, Watt] = heating_load_of_building_in_watt
 
         return MoreAdvancedHeatPumpHPLibConfig(
-            name="MoreAdvancedHeatPumpHPLib",
+            building_name=building_name,
+            name=name,
             model="Generic",
             heat_source="air",
             group_id=1,
@@ -202,7 +205,6 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
             # value from emission_factros_and_costs_devices.csv
             lifetime=Quantity(10, Years),
             maintenance_cost_as_percentage_of_investment=0.025,  # source:  VDI2067-1
-            consumption=Quantity(0, KilowattHour),
         )
 
 
@@ -239,6 +241,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
     EER = "EER"  # -
     HeatPumpOnOffState = "OnOffStateHeatpump"
     TemperatureInputSH = "TemperatureInputSpaceHeating"  # °C
+    TemperatureInputDHW = "TemperatureInputDHW"  # °C
     TemperatureOutputSH = "TemperatureOutputSpaceHeating"  # °C
     TemperatureOutputDHW = "TemperatureOutputDHW"  # °C
     MassFlowOutputSH = "MassFlowOutputSpaceHeating"  # kg/s
@@ -275,8 +278,11 @@ class MoreAdvancedHeatPumpHPLib(Component):
     ):
         """Loads the parameters of the specified heat pump."""
 
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=config.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -347,11 +353,6 @@ class MoreAdvancedHeatPumpHPLib(Component):
             if config.minimum_idle_time_in_seconds
             else config.minimum_idle_time_in_seconds
         )
-
-        postprocessing_flag = [
-            InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
-            OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
-        ]
 
         # Component has states
         self.state = MoreAdvancedHeatPumpHPLibState(
@@ -494,7 +495,6 @@ class MoreAdvancedHeatPumpHPLib(Component):
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
             postprocessing_flag=[
-                InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
                 OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
             ],
             output_description="Electricity input power for cooling in Watt",
@@ -624,7 +624,10 @@ class MoreAdvancedHeatPumpHPLib(Component):
             field_name=self.ElectricalInputPowerTotal,
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
-            postprocessing_flag=postprocessing_flag,
+            postprocessing_flag=[
+                InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+            ],
             output_description="Electricity input power for total HP in Watt",
         )
 
@@ -693,6 +696,14 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 load_type=LoadTypes.ELECTRICITY,
                 unit=Units.WATT,
                 output_description="Electricity input power for DHW in Watt",
+            )
+
+            self.t_in_dhw: ComponentOutput = self.add_output(
+                object_name=self.component_name,
+                field_name=self.TemperatureInputDHW,
+                load_type=LoadTypes.HEATING,
+                unit=Units.CELSIUS,
+                output_description="Temperature Input DHW in °C",
             )
 
             self.t_out_dhw: ComponentOutput = self.add_output(
@@ -791,6 +802,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         if self.with_domestic_hot_water_preparation:
             self.add_default_connections(self.get_default_connections_from_heat_pump_controller_dhw())
             self.add_default_connections(self.get_default_connections_from_dhw_storage())
+            # self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
 
     def get_default_connections_from_heat_pump_controller_space_heating(
         self,
@@ -888,6 +900,25 @@ class MoreAdvancedHeatPumpHPLib(Component):
             )
         )
         return connections
+
+    # def get_default_connections_from_simple_dhw_storage(
+    #         self,
+    # ):
+    #     """Get simple dhw water storage default connections."""
+    #     # use importlib for importing the other component in order to avoid circular-import errors
+    #     component_module_name = "hisim.components.simple_dhw_storage"
+    #     component_module = importlib.import_module(name=component_module_name)
+    #     component_class = getattr(component_module, "SimpleDHWStorage")
+    #     connections = []
+    #     dhw_classname = component_class.get_classname()
+    #     connections.append(
+    #         ComponentConnection(
+    #             MoreAdvancedHeatPumpHPLib.TemperatureInputSecondary_DHW,
+    #             dhw_classname,
+    #             component_class.WaterTemperatureToHeatGenerator,
+    #         )
+    #     )
+    #     return connections
 
     def write_to_report(self):
         """Write configuration to the report."""
@@ -1281,6 +1312,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         if self.with_domestic_hot_water_preparation:
             stsv.set_output_value(self.p_th_dhw, p_th_dhw)
             stsv.set_output_value(self.p_el_dhw, p_el_dhw)
+            stsv.set_output_value(self.t_in_dhw, t_in_secondary_dhw)
             stsv.set_output_value(self.t_out_dhw, t_out_dhw)
             stsv.set_output_value(self.m_dot_dhw, m_dot_dhw)
             stsv.set_output_value(self.thermal_energy_hp_dhw_channel, thermal_energy_hp_dhw_in_watt_hour)
@@ -1341,11 +1373,12 @@ class MoreAdvancedHeatPumpHPLib(Component):
         No electricity costs for components except for Electricity Meter,
         because part of electricity consumption is feed by PV
         """
+        consumption_in_kwh: float
+
         for index, output in enumerate(all_outputs):
-            if (
-                output.component_name == "MoreAdvancedHeatPumpHPLib" and output.load_type == LoadTypes.ELECTRICITY and output.field_name == self.ElectricalInputPowerTotal
-            ):  # Todo: check component name from system_setups: find another way of using only heatpump-outputs
-                self.config.consumption = round(
+            if (output.component_name == self.component_name and output.load_type == LoadTypes.ELECTRICITY and
+                    output.field_name == self.ElectricalInputPowerTotal) :
+                consumption_in_kwh = round(
                     sum(postprocessing_results.iloc[:, index])
                     * self.my_simulation_parameters.seconds_per_timestep
                     / 3.6e6,
@@ -1420,7 +1453,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.config.name:
+            if output.component_name == self.component_name:
                 number_of_heat_pump_cycles = self.get_heatpump_cycles(
                     output=output, index=index, postprocessing_results=postprocessing_results
                 )
@@ -1448,18 +1481,12 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     )
                 elif output.field_name == self.ThermalOutputPowerDHW:
                     dhw_heat_pump_heating_power_output_in_watt_series = postprocessing_results.iloc[:, index]
-                    dhw_heat_pump_heating_energy_output_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
-                        power_timeseries_in_watt=dhw_heat_pump_heating_power_output_in_watt_series,
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    dhw_heat_pump_heating_energy_output_in_kilowatt_hour = (
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=dhw_heat_pump_heating_power_output_in_watt_series,
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
                     )
-                    dhw_heatpump_heating_energy_output_entry = KpiEntry(
-                        name="Heating output energy of DHW heat pump",
-                        unit="kWh",
-                        value=dhw_heat_pump_heating_energy_output_in_kilowatt_hour,
-                        tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
-                        description=self.component_name
-                    )
-                    list_of_kpi_entries.append(dhw_heatpump_heating_energy_output_entry)
 
                 elif output.field_name == self.ElectricalInputPowerSH:
                     # get electrical energie values for heating
@@ -1471,18 +1498,12 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     )
                 elif output.field_name == self.ElectricalInputPowerDHW:
                     dhw_heat_pump_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]
-                    dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
-                        power_timeseries_in_watt=dhw_heat_pump_total_electricity_consumption_in_watt_series,
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour = (
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=dhw_heat_pump_total_electricity_consumption_in_watt_series,
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
                     )
-                    dhw_heatpump_total_electricity_consumption_entry = KpiEntry(
-                        name="DHW heat pump total electricity consumption",
-                        unit="kWh",
-                        value=dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour,
-                        tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
-                        description=self.component_name
-                    )
-                    list_of_kpi_entries.append(dhw_heatpump_total_electricity_consumption_entry)
 
                 elif output.field_name == self.ElectricalInputPowerForCooling:
                     # get electrical energie values for cooling
@@ -1530,7 +1551,26 @@ class MoreAdvancedHeatPumpHPLib(Component):
         total_electrical_energy_input_in_kilowatt_hour = (
             electrical_energy_for_cooling_in_kilowatt_hour + electrical_energy_for_heating_in_kilowatt_hour
         )
+
         # make kpi entry
+        dhw_heatpump_heating_energy_output_entry = KpiEntry(
+            name="Heating output energy of DHW heat pump",
+            unit="kWh",
+            value=dhw_heat_pump_heating_energy_output_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(dhw_heatpump_heating_energy_output_entry)
+
+        dhw_heatpump_total_electricity_consumption_entry = KpiEntry(
+            name="DHW heat pump total electricity consumption",
+            unit="kWh",
+            value=dhw_heat_pump_total_electricity_consumption_in_kilowatt_hour,
+            tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(dhw_heatpump_total_electricity_consumption_entry)
+
         number_of_heat_pump_cycles_entry = KpiEntry(
             name="Number of SH heat pump cycles",
             unit="-",
@@ -1818,6 +1858,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return MoreAdvancedHeatPumpHPLibControllerSpaceHeating.get_full_classname()
 
+    building_name: str
     name: str
     mode: int
     set_heating_threshold_outside_temperature_in_celsius: Optional[float]
@@ -1830,12 +1871,15 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(ConfigBase):
     def get_default_space_heating_controller_config(
         cls,
         heat_distribution_system_type: Any,
+        name: str = "MoreAdvancedHeatPumpHPLibControllerSpaceHeating",
+        building_name: str = "BUI1",
         upper_temperature_offset_for_state_conditions_in_celsius: float = 5.0,
         lower_temperature_offset_for_state_conditions_in_celsius: float = 5.0,
     ) -> "MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig":
         """Gets a default Generic Heat Pump Controller."""
         return MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig(
-            name="MoreAdvancedHeatPumpHPLibControllerSpaceHeating",
+            building_name=building_name,
+            name=name,
             mode=1,
             set_heating_threshold_outside_temperature_in_celsius=16.0,
             set_cooling_threshold_outside_temperature_in_celsius=20.0,
@@ -1886,8 +1930,11 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
     ) -> None:
         """Construct all the neccessary attributes."""
         self.heatpump_controller_config = config
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            self.heatpump_controller_config.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -2278,6 +2325,7 @@ class MoreAdvancedHeatPumpHPLibControllerDHWConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return MoreAdvancedHeatPumpHPLibControllerDHW.get_full_classname()
 
+    building_name: str
     name: str
     #: lower set temperature of DHW Storage, given in °C
     t_min_dhw_storage_in_celsius: float
@@ -2289,10 +2337,15 @@ class MoreAdvancedHeatPumpHPLibControllerDHWConfig(ConfigBase):
     p_th_max_dhw_in_watt: float
 
     @classmethod
-    def get_default_dhw_controller_config(cls):
+    def get_default_dhw_controller_config(
+        cls,
+        name: str = "HeatPumpControllerDHW",
+        building_name: str = "BUI1",
+    ) -> "MoreAdvancedHeatPumpHPLibControllerDHWConfig":
         """Gets a default Generic Heat Pump Controller."""
         return MoreAdvancedHeatPumpHPLibControllerDHWConfig(
-            name="HeatPumpControllerDHW",
+            building_name=building_name,
+            name=name,
             t_min_dhw_storage_in_celsius=40.0,
             t_max_dhw_storage_in_celsius=60.0,
             thermalpower_dhw_is_constant=False,  # false: modulation, true: constant power for dhw
@@ -2325,8 +2378,11 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
     ) -> None:
         """Construct all the neccessary attributes."""
         self.heatpump_controller_dhw_config = config
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            self.heatpump_controller_dhw_config.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -2383,6 +2439,7 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
         )
 
         self.add_default_connections(self.get_default_connections_from_dhw_storage())
+        # self.add_default_connections(self.get_default_connections_from_simple_dhw_storage())
 
     def get_default_connections_from_dhw_storage(
         self,
@@ -2402,6 +2459,25 @@ class MoreAdvancedHeatPumpHPLibControllerDHW(Component):
             )
         )
         return connections
+
+    # def get_default_connections_from_simple_dhw_storage(
+    #         self,
+    # ):
+    #     """Get simple dhw water storage default connections."""
+    #     # use importlib for importing the other component in order to avoid circular-import errors
+    #     component_module_name = "hisim.components.simple_dhw_storage"
+    #     component_module = importlib.import_module(name=component_module_name)
+    #     component_class = getattr(component_module, "SimpleDHWStorage")
+    #     connections = []
+    #     dhw_classname = component_class.get_classname()
+    #     connections.append(
+    #         ComponentConnection(
+    #             MoreAdvancedHeatPumpHPLibControllerDHW.WaterTemperatureInputFromDHWStorage,
+    #             dhw_classname,
+    #             component_class.WaterTemperatureToHeatGenerator,
+    #         )
+    #     )
+    #     return connections
 
     def build(
         self,

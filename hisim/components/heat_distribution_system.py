@@ -66,6 +66,7 @@ class HeatDistributionConfig(cp.ConfigBase):
         """Return the full class name of the base class."""
         return HeatDistribution.get_full_classname()
 
+    building_name: str
     name: str
     water_mass_flow_rate_in_kg_per_second: float
     absolute_conditioned_floor_area_in_m2: float
@@ -84,13 +85,16 @@ class HeatDistributionConfig(cp.ConfigBase):
         cls,
         water_mass_flow_rate_in_kg_per_second: float,
         absolute_conditioned_floor_area_in_m2: float,
+        name: str = "HeatDistributionSystem",
+        building_name: str = "BUI1",
         position_hot_water_storage_in_system: Union[
             PositionHotWaterStorageInSystemSetup, int
         ] = PositionHotWaterStorageInSystemSetup.PARALLEL,
     ) -> Any:
         """Get a default heat distribution system config."""
         config = HeatDistributionConfig(
-            name="HeatDistributionSystem",
+            building_name=building_name,
+            name=name,
             water_mass_flow_rate_in_kg_per_second=water_mass_flow_rate_in_kg_per_second,
             absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
             position_hot_water_storage_in_system=position_hot_water_storage_in_system,
@@ -150,8 +154,11 @@ class HeatDistribution(cp.Component):
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Construct all the neccessary attributes."""
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=config.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -623,7 +630,7 @@ class HeatDistribution(cp.Component):
 
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.config.name:
+            if output.component_name == self.component_name:
                 if output.field_name == self.ThermalPowerDelivered and output.load_type == lt.LoadTypes.HEATING:
                     # take only output values for heating
                     thermal_output_power_values_in_watt = postprocessing_results.iloc[:, index].loc[
@@ -639,7 +646,7 @@ class HeatDistribution(cp.Component):
                         unit="kWh",
                         value=thermal_output_energy_in_kilowatt_hour,
                         tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
-                        description=self.component_name
+                        description=self.component_name,
                     )
                     list_of_kpi_entries.append(thermal_output_energy_hds_entry)
 
@@ -676,7 +683,7 @@ class HeatDistribution(cp.Component):
             unit="°C",
             value=mean_flow_temperature_in_celsius,
             tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(mean_flow_temperature_hds_entry)
 
@@ -685,7 +692,7 @@ class HeatDistribution(cp.Component):
             unit="°C",
             value=mean_return_temperature_in_celsius,
             tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(mean_return_temperature_hds_entry)
 
@@ -694,7 +701,7 @@ class HeatDistribution(cp.Component):
             unit="°C",
             value=mean_temperature_difference_between_flow_and_return_in_celsius,
             tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(mean_temperature_difference_hds_entry)
 
@@ -703,7 +710,7 @@ class HeatDistribution(cp.Component):
             unit="°C",
             value=max_flow_temperature_in_celsius,
             tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(max_flow_temperature_hds_entry)
 
@@ -712,7 +719,7 @@ class HeatDistribution(cp.Component):
             unit="°C",
             value=max_return_temperature_in_celsius,
             tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(max_return_temperature_hds_entry)
 
@@ -721,7 +728,7 @@ class HeatDistribution(cp.Component):
             unit="°C",
             value=max_temperature_difference_between_flow_and_return_in_celsius,
             tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(max_temperature_difference_hds_entry)
 
@@ -730,7 +737,7 @@ class HeatDistribution(cp.Component):
             unit="°C",
             value=min_flow_temperature_in_celsius,
             tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(min_flow_temperature_hds_entry)
 
@@ -739,7 +746,7 @@ class HeatDistribution(cp.Component):
             unit="°C",
             value=min_return_temperature_in_celsius,
             tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(min_return_temperature_hds_entry)
 
@@ -748,7 +755,7 @@ class HeatDistribution(cp.Component):
             unit="°C",
             value=min_temperature_difference_between_flow_and_return_in_celsius,
             tag=KpiTagEnumClass.HEAT_DISTRIBUTION_SYSTEM,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(min_temperature_difference_hds_entry)
 
@@ -765,6 +772,7 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return HeatDistributionController.get_full_classname()
 
+    building_name: str
     name: str
     heating_system: Union[HeatDistributionSystemType, int]
     set_heating_threshold_outside_temperature_in_celsius: Optional[float]
@@ -781,10 +789,12 @@ class HeatDistributionControllerConfig(cp.ConfigBase):
         set_cooling_temperature_for_building_in_celsius: float,
         heating_reference_temperature_in_celsius: float = -7.0,
         heating_system: Union[HeatDistributionSystemType, int] = HeatDistributionSystemType.FLOORHEATING,
+        building_name: str = "BUI1",
     ) -> "HeatDistributionControllerConfig":
         """Gets a default HeatDistribution Controller."""
 
         return HeatDistributionControllerConfig(
+            building_name=building_name,
             name="HeatDistributionController",
             heating_system=heating_system,
             set_heating_threshold_outside_temperature_in_celsius=16.0,
@@ -826,8 +836,11 @@ class HeatDistributionController(cp.Component):
     ) -> None:
         """Construct all the neccessary attributes."""
         self.hsd_controller_config = config
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            self.hsd_controller_config.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

@@ -25,7 +25,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class FuelCellControllerConfig(ConfigBase):
-
     """Configutation of the Fuel Cell Controller."""
 
     @classmethod
@@ -33,6 +32,7 @@ class FuelCellControllerConfig(ConfigBase):
         """Returns the full class name of the base class."""
         return FuelCellController.get_full_classname()
 
+    building_name: str
     name: str
     nom_output: float
     min_output: float
@@ -46,9 +46,11 @@ class FuelCellControllerConfig(ConfigBase):
     @classmethod
     def get_default_fuel_cell_controller_config(
         cls,
+        building_name: str = "BUI1",
     ) -> Any:
         """Get a default electrolyzer controller config."""
         config = FuelCellControllerConfig(
+            building_name=building_name,
             name="Default fuel cell controller",
             nom_output=100.0,
             min_output=10.0,
@@ -69,12 +71,17 @@ class FuelCellControllerConfig(ConfigBase):
             return data.get("Fuel Cell variants", {}).get(fuel_cell_name, {})
 
     @classmethod
-    def control_fuel_cell(cls, fuel_cell_name):
+    def control_fuel_cell(
+        cls,
+        fuel_cell_name: str,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Initializes the config variables based on the JSON-file."""
 
         config_json = cls.read_config(fuel_cell_name)
 
         config = FuelCellControllerConfig(
+            building_name=building_name,
             name="Fuel Cell Controller",  # config_json.get("name", "")
             nom_output=config_json.get("nom_output", 0.0),
             min_output=config_json.get("min_output", 0.0),
@@ -87,7 +94,6 @@ class FuelCellControllerConfig(ConfigBase):
 
 
 class FuelCellController(Component):
-
     """Fuel Cell Controller class."""
 
     # Inputs
@@ -118,8 +124,11 @@ class FuelCellController(Component):
         self.cold_start_time = config.cold_start_time
         self.curtailed_load_count = 0
 
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=self.controllerconfig.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

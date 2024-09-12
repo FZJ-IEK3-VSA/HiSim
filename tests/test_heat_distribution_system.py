@@ -125,6 +125,7 @@ def simulate_and_calculate_hds_outputs_for_a_given_theoretical_heating_demand_fr
     )
 
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig(
+        building_name="BUI1",
         name=hds_name,
         co2_footprint=0,
         cost=8000,

@@ -101,8 +101,8 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
 
     # Setup new CSV loader object
     my_csv_loader = CSVLoaderConfig(
+        building_name=component_name,
         name="CSV",
-        component_name=component_name,
         csv_filename=csv_filename,
         column=column,  # The column number in the CSV file containing the load profile data
         loadtype=loadtype,  # Replace with the desired load type
@@ -145,7 +145,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     my_ptx_controller = PTXController(
         my_simulation_parameters=my_simulation_parameters,
         config=PTXControllerConfig.control_electrolyzer(
-            electrolyzer_name, operation_mode
+            electrolyzer_name, operation_mode, building_name=component_name
         ),  # "Nominal Load", "Minimum Load", "Standby Load"
     )
     my_electrolyzer_controller = ElectrolyzerController(

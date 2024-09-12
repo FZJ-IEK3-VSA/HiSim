@@ -137,6 +137,7 @@ class GenericCarInformation:
 class CarConfig(cp.ConfigBase):
     """Definition of configuration of Car."""
 
+    building_name: str
     #: name of the car
     name: str
     #: priority of the component in hierachy: the higher the number the lower the priority
@@ -154,8 +155,6 @@ class CarConfig(cp.ConfigBase):
     # maintenance cost as share of investment [0..1]
     maintenance_cost_as_percentage_of_investment: float
     #: consumption of the car in kWh or l
-    consumption_in_kwh: float
-    consumption_in_liter: float
 
     @classmethod
     def get_main_classname(cls):
@@ -163,10 +162,15 @@ class CarConfig(cp.ConfigBase):
         return Car.get_full_classname()
 
     @classmethod
-    def get_default_diesel_config(cls) -> Any:
+    def get_default_diesel_config(
+        cls,
+        name: str = "Car",
+        building_name: str = "BUI1",
+    ) -> Any:
         """Defines default configuration for diesel vehicle."""
         config = CarConfig(
-            name="Car",
+            building_name=building_name,
+            name=name,
             source_weight=1,
             fuel=lt.LoadTypes.DIESEL,
             consumption_per_km=0.06,
@@ -174,15 +178,17 @@ class CarConfig(cp.ConfigBase):
             cost=32035.0,
             lifetime=18,
             maintenance_cost_as_percentage_of_investment=0.02,
-            consumption_in_kwh=0,
-            consumption_in_liter=0,
         )
         return config
 
     @classmethod
-    def get_default_ev_config(cls) -> Any:
+    def get_default_ev_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Defines default configuration for electric vehicle."""
         config = CarConfig(
+            building_name=building_name,
             name="Car",
             source_weight=1,
             fuel=lt.LoadTypes.ELECTRICITY,
@@ -191,8 +197,6 @@ class CarConfig(cp.ConfigBase):
             cost=44498.0,
             maintenance_cost_as_percentage_of_investment=0.02,
             lifetime=18,
-            consumption_in_kwh=0,
-            consumption_in_liter=0,
         )
         return config
 
@@ -227,8 +231,11 @@ class Car(cp.Component):
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(display_in_webtool=True),
     ) -> None:
         """Initializes Car."""
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            name=config.name + "_w" + str(config.source_weight),
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -316,42 +323,43 @@ class Car(cp.Component):
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of energy and maintenance costs."""
         co2_per_simulated_period_in_kg = None
-        energy_costs_in_euro = 0
+        consumption_in_kwh: float
+        consumption_in_liter: float
+        energy_costs_in_euro = 0.0
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.config.name + "_w" + str(self.config.source_weight):
+            if output.component_name == self.component_name:
                 if (
-                    output.field_name == self.FuelConsumption
-                    and output.unit == lt.Units.LITER
-                    and output.load_type == lt.LoadTypes.DIESEL
+                        output.field_name == self.FuelConsumption
+                        and output.unit == lt.Units.LITER
+                        and output.load_type == lt.LoadTypes.DIESEL
                 ):
-                    self.config.consumption_in_liter = round(sum(postprocessing_results.iloc[:, index]), 1)
+                    consumption_in_liter = round(sum(postprocessing_results.iloc[:, index]), 1)
                     # heating value: https://nachhaltigmobil.schule/leistung-energie-verbrauch/#:~:text=Benzin%20hat%20einen%20Heizwert%20von,9%2C8%20kWh%20pro%20Liter.
                     heating_value_of_diesel_in_kwh_per_liter = 9.8
-                    self.config.consumption_in_kwh = (
-                        heating_value_of_diesel_in_kwh_per_liter * self.config.consumption_in_liter
-                    )
+                    consumption_in_kwh = heating_value_of_diesel_in_kwh_per_liter * consumption_in_liter
+
                     emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
                         self.my_simulation_parameters.year
                     )
                     co2_per_unit = emissions_and_cost_factors.diesel_footprint_in_kg_per_l
                     euro_per_unit = emissions_and_cost_factors.diesel_costs_in_euro_per_l
 
-                    energy_costs_in_euro = self.config.consumption_in_liter * euro_per_unit
-                    co2_per_simulated_period_in_kg = self.config.consumption_in_liter * co2_per_unit
+                    energy_costs_in_euro = consumption_in_liter * euro_per_unit
+                    co2_per_simulated_period_in_kg = consumption_in_liter * co2_per_unit
 
                 elif (
                     output.field_name == self.ElectricityOutput
                     and output.unit == lt.Units.WATT
                     and output.load_type == lt.LoadTypes.ELECTRICITY
                 ):
-                    self.config.consumption_in_kwh = round(
+                    consumption_in_kwh = round(
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
                             power_timeseries_in_watt=postprocessing_results.iloc[:, index],
                             timeresolution=self.my_simulation_parameters.seconds_per_timestep,
                         ),
                         1,
                     )
-                    self.config.consumption_in_liter = 0
+                    consumption_in_liter = 0
                     # No electricity costs for components except for Electricity Meter, because part of electricity consumption is feed by PV
                     energy_costs_in_euro = 0
                     co2_per_simulated_period_in_kg = 0.0
@@ -363,7 +371,7 @@ class Car(cp.Component):
             opex_energy_cost_in_euro=energy_costs_in_euro,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
-            consumption_in_kwh=self.config.consumption_in_kwh,
+            consumption_in_kwh=consumption_in_kwh,
             loadtype=self.config.fuel,
             kpi_tag=KpiTagEnumClass.CAR
         )

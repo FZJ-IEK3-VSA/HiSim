@@ -4,6 +4,7 @@ Energy bucket model: extracts energy, adds energy and converts back to temperate
 The hot water storage simulates only storage and demand and needs to be connnected to a heat source. It can act as
 DHW hot water storage or as buffer storage.
 """
+
 import importlib
 from dataclasses import dataclass
 
@@ -44,6 +45,7 @@ __status__ = "development"
 class StorageConfig(cp.ConfigBase):
     """Used in the HotWaterStorageClass defining the basics."""
 
+    building_name: str
     #: name of the hot water storage
     name: str
     #: priority of the component in hierachy: the higher the number the lower the priority
@@ -75,14 +77,19 @@ class StorageConfig(cp.ConfigBase):
         return HotWaterStorage.get_full_classname()
 
     @classmethod
-    def get_default_config_for_boiler(cls) -> "StorageConfig":
+    def get_default_config_for_boiler(
+        cls,
+        name: str = "DHWBoiler",
+        building_name: str = "BUI1",
+    ) -> "StorageConfig":
         """Returns default configuration for boiler."""
 
-        volume = 230
+        volume = 250
         radius = (volume * 1e-3 / (4 * np.pi)) ** (1 / 3)  # l to m^3 so that radius is given in m
         surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
         config = StorageConfig(
-            name="DHWBoiler",
+            building_name=building_name,
+            name=name,
             use=lt.ComponentType.BOILER,
             source_weight=1,
             volume=volume,
@@ -99,7 +106,11 @@ class StorageConfig(cp.ConfigBase):
 
     @classmethod
     def get_scaled_config_for_boiler_to_number_of_apartments(
-        cls, number_of_apartments: float, default_volume_in_liter: float = 230.0
+        cls,
+        number_of_apartments: float,
+        default_volume_in_liter: float = 250.0,
+        name: str = "DHWBoiler",
+        building_name: str = "BUI1",
     ) -> "StorageConfig":
         """Returns default configuration for boiler."""
 
@@ -107,7 +118,8 @@ class StorageConfig(cp.ConfigBase):
         radius = (volume * 1e-3 / (4 * np.pi)) ** (1 / 3)  # l to m^3 so that radius is given in m
         surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
         config = StorageConfig(
-            name="DHWBoiler",
+            building_name=building_name,
+            name=name,
             use=lt.ComponentType.BOILER,
             source_weight=1,
             volume=volume,
@@ -123,14 +135,20 @@ class StorageConfig(cp.ConfigBase):
         return config
 
     @staticmethod
-    def get_default_config_buffer(power: float = 2000, volume: float = 500) -> Any:
+    def get_default_config_buffer(
+        name: str = "Buffer",
+        power: float = 2000,
+        volume: float = 500,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Returns default configuration for buffer (radius:height = 1:4)."""
         # volume = r^2 * pi * h = r^2 * pi * 4r = 4 * r^3 * pi
         radius = (volume * 1e-3 / (4 * np.pi)) ** (1 / 3)  # l to m^3 so that radius is given in m
         # cylinder surface area = floor and ceiling area + lateral surface
         surface = 2 * radius * radius * np.pi + 2 * radius * np.pi * (4 * radius)
         config = StorageConfig(
-            name="Buffer",
+            building_name=building_name,
+            name=name,
             use=lt.ComponentType.BUFFER,
             source_weight=1,
             volume=0,
@@ -263,10 +281,11 @@ class HotWaterStorage(cp.Component):
     ):
         """Initializes instance of HotWaterStorage class."""
 
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            # my_component_inputs=self.my_component_inputs,
-            # my_component_outputs=self.my_component_outputs,
-            name=config.name + "_w" + str(config.source_weight),
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -333,7 +352,7 @@ class HotWaterStorage(cp.Component):
             self.component_name,
             self.PowerFromHotWaterStorage,
             lt.LoadTypes.HEATING,
-            lt.Units.WATT,
+            lt.Units.KILOJOULE,
             postprocessing_flag=[
                 lt.InandOutputType.DISCHARGE,
                 self.use,

@@ -130,6 +130,8 @@ class Units(str, enum.Enum):
     # Energy
     WATT_HOUR = "Wh"
     KWH = "kWh"
+    JOULE = "J"
+    KILOJOULE = "kJ"
 
     # Volume
     LITER = "L"
@@ -187,7 +189,7 @@ class ComponentType(str, enum.Enum):
     WINDTURBINE = "Windturbine"
     SMART_DEVICE = "SmartDevice"
     SURPLUS_CONTROLLER = "SurplusController"
-    SURPLUS_CONTROLLER_DISTRICT = "SurplusControllerOnDistrictLevel"
+    SURPLUS_CONTROLLER_DISTRICT = "SurplusControllerDistrict"
     PREDICTIVE_CONTROLLER = "PredictiveControllerforSmartDevices"
     HEAT_PUMP = "HeatPump"
     GAS_HEATER = "GasHeater"
@@ -204,6 +206,7 @@ class ComponentType(str, enum.Enum):
     BUFFER = "Buffer"
     HEATERS = [HEAT_PUMP, GAS_HEATER]
     RESIDENTS = "Residents"
+    BUILDINGS = "Buildings"
 
     # different heat_pump types
     HEAT_PUMP_BUILDING = "HeatPumpBuilding"  # Heatpump for heating the house
@@ -249,6 +252,8 @@ class InandOutputType(str, enum.Enum):
     DISCHARGE = "Discharge"
     GAS_PRODUCTION = "GasProduction"
     GAS_CONSUMPTION_UNCONTROLLED = "Gas consumption without any control"
+    HEAT_DELIVERED = "HEAT_DELIVERED"
+    HEAT_CONSUMPTION = "HEAT_CONSUMPTION"
 
     # Heating
     HEAT_TO_BUILDING = "HeatToBuilding"
@@ -258,3 +263,15 @@ class InandOutputType(str, enum.Enum):
 
     WATER_HEATING = "WaterHeating"
     HEATING = "Heating"
+
+
+@enum.unique
+class DistrictNames(str, enum.Enum):
+
+    """Names of Districts."""
+
+    QUARTIER = "Quartier"
+    BEZIRK = "Bezirk"
+    DISTRICT = "District"
+    AREA = "Area"
+    NEIGHBORHOOD = "Neighborhood"

@@ -6,6 +6,7 @@ This module contains the following classes:
     3. HeatPumpController
 
 """
+
 # clean
 
 # Generic/Built-in
@@ -41,7 +42,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class GenericHeatPumpConfig(cp.ConfigBase):
-
     """Config for the generic heat pump."""
 
     @classmethod
@@ -49,6 +49,7 @@ class GenericHeatPumpConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return GenericHeatPump.get_full_classname()
 
+    building_name: str
     name: str
     manufacturer: str
     heat_pump_name: str
@@ -56,9 +57,13 @@ class GenericHeatPumpConfig(cp.ConfigBase):
     min_idle_time: float
 
     @classmethod
-    def get_default_generic_heat_pump_config(cls):
+    def get_default_generic_heat_pump_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Gets a default Generic Heat Pump."""
         return GenericHeatPumpConfig(
+            building_name=building_name,
             name="HeatPump",
             heat_pump_name="Vitocal 300-A AWO-AC 301.B07",
             manufacturer="Viessmann Werke GmbH & Co KG",
@@ -70,7 +75,6 @@ class GenericHeatPumpConfig(cp.ConfigBase):
 @dataclass_json
 @dataclass
 class GenericHeatPumpControllerConfig(cp.ConfigBase):
-
     """Controller for the generic heat pump."""
 
     @classmethod
@@ -78,6 +82,7 @@ class GenericHeatPumpControllerConfig(cp.ConfigBase):
         """Returns the full class name of the base class."""
         return GenericHeatPumpController.get_full_classname()
 
+    building_name: str
     name: str
     temperature_air_heating_in_celsius: float
     temperature_air_cooling_in_celsius: float
@@ -85,9 +90,10 @@ class GenericHeatPumpControllerConfig(cp.ConfigBase):
     mode: int
 
     @classmethod
-    def get_default_generic_heat_pump_controller_config(cls):
+    def get_default_generic_heat_pump_controller_config(cls, building_name: str = "BUI1",) -> Any:
         """Gets a default Generic Heat Pump Controller."""
         return GenericHeatPumpControllerConfig(
+            building_name=building_name,
             name="HeatPumpController",
             temperature_air_heating_in_celsius=18.0,
             temperature_air_cooling_in_celsius=26.0,
@@ -97,7 +103,6 @@ class GenericHeatPumpControllerConfig(cp.ConfigBase):
 
 
 class GenericHeatPumpState:
-
     """Heat Pump State class.
 
     It determines the state of the heat pump.
@@ -147,7 +152,6 @@ class GenericHeatPumpState:
 
 
 class GenericHeatPump(cp.Component):
-
     """Heat pump class.
 
     It does support a refrigeration cycle.
@@ -193,8 +197,11 @@ class GenericHeatPump(cp.Component):
     ) -> None:
         """Construct all the necessary attributes."""
         self.heatpump_config = config
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            self.heatpump_config.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,
@@ -256,7 +263,6 @@ class GenericHeatPump(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for {self.ThermalPowerDelivered} will follow.",
-            postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
         )
 
         self.heating_channel: cp.ComponentOutput = self.add_output(
@@ -281,6 +287,7 @@ class GenericHeatPump(cp.Component):
             lt.LoadTypes.ELECTRICITY,
             lt.Units.WATT,
             output_description=f"here a description for Heat Pump {self.ElectricityOutput} will follow.",
+            postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
         )
 
         self.number_of_cycles_channel: cp.ComponentOutput = self.add_output(
@@ -576,7 +583,6 @@ class GenericHeatPump(cp.Component):
 
 
 class GenericHeatPumpController(cp.Component):
-
     """Heat Pump Controller.
 
     It takes data from other
@@ -615,8 +621,11 @@ class GenericHeatPumpController(cp.Component):
     ) -> None:
         """Construct all the neccessary attributes."""
         self.heatpump_controller_config = config
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
         super().__init__(
-            self.heatpump_controller_config.name,
+            name=component_name,
             my_simulation_parameters=my_simulation_parameters,
             my_config=config,
             my_display_config=my_display_config,

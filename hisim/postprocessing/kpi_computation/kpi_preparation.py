@@ -10,7 +10,7 @@ import os
 from typing import List, Tuple, Dict, Optional
 from pathlib import Path
 import pandas as pd
-from hisim.component import ComponentOutput, OpexCostDataClass, CapexCostDataClass
+from hisim.component import ComponentOutput
 from hisim.component_wrapper import ComponentWrapper
 from hisim.loadtypes import ComponentType, InandOutputType, DistrictNames
 from hisim import log

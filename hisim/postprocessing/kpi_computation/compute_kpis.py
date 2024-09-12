@@ -33,7 +33,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             self.create_kpi_collection(building_objects_in_district)
 
         for building_objects_in_district in self.building_objects_in_district_list:
-            if building_objects_in_district in DistrictNames.__members__:
+            if any(word in building_objects_in_district for word in DistrictNames):
                 self.create_overall_district_kpi(district_name=building_objects_in_district)
 
         self.kpi_collection_dict_sorted = self.sort_kpi_collection_according_to_kpi_tags(
@@ -63,7 +63,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             building_objects_in_district=building_objects_in_district,
             kpi_tag=(
                 KpiTagEnumClass.GENERAL
-                if building_objects_in_district not in DistrictNames.__members__
+                if not any(word in building_objects_in_district for word in DistrictNames)
                 else KpiTagEnumClass.ELECTRICITY_GRID
             ),
         )
@@ -76,7 +76,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             building_objects_in_district=building_objects_in_district,
             kpi_tag=(
                 KpiTagEnumClass.GENERAL
-                if building_objects_in_district not in DistrictNames.__members__
+                if not any(word in building_objects_in_district for word in DistrictNames)
                 else KpiTagEnumClass.ELECTRICITY_GRID
             ),
         )
@@ -88,7 +88,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             building_objects_in_district=building_objects_in_district,
             kpi_tag=(
                 KpiTagEnumClass.GENERAL
-                if building_objects_in_district not in DistrictNames.__members__
+                if not any(word in building_objects_in_district for word in DistrictNames)
                 else KpiTagEnumClass.ELECTRICITY_GRID
             ),
         )
@@ -100,7 +100,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             building_objects_in_district=building_objects_in_district,
             kpi_tag=(
                 KpiTagEnumClass.GENERAL
-                if building_objects_in_district not in DistrictNames.__members__
+                if not any(word in building_objects_in_district for word in DistrictNames)
                 else KpiTagEnumClass.ELECTRICITY_GRID
             ),
         )
@@ -112,7 +112,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             building_objects_in_district=building_objects_in_district,
             kpi_tag=(
                 KpiTagEnumClass.GENERAL
-                if building_objects_in_district not in DistrictNames.__members__
+                if not any(word in building_objects_in_district for word in DistrictNames)
                 else KpiTagEnumClass.ELECTRICITY_GRID
             ),
         )
@@ -125,7 +125,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             building_objects_in_district=building_objects_in_district,
             kpi_tag=(
                 KpiTagEnumClass.GENERAL
-                if building_objects_in_district not in DistrictNames.__members__
+                if not any(word in building_objects_in_district for word in DistrictNames)
                 else KpiTagEnumClass.ELECTRICITY_GRID
             ),
         )
@@ -141,7 +141,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             building_objects_in_district=building_objects_in_district,
             kpi_tag=(
                 KpiTagEnumClass.GENERAL
-                if building_objects_in_district not in DistrictNames.__members__
+                if not any(word in building_objects_in_district for word in DistrictNames)
                 else KpiTagEnumClass.ELECTRICITY_GRID
             ),
         )
@@ -152,7 +152,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             building_objects_in_district=building_objects_in_district,
             kpi_tag=(
                 KpiTagEnumClass.GENERAL
-                if building_objects_in_district not in DistrictNames.__members__
+                if not any(word in building_objects_in_district for word in DistrictNames)
                 else KpiTagEnumClass.ELECTRICITY_GRID
             ),
         )
@@ -162,7 +162,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             building_objects_in_district=building_objects_in_district,
             kpi_tag=(
                 KpiTagEnumClass.GENERAL
-                if building_objects_in_district not in DistrictNames.__members__
+                if not any(word in building_objects_in_district for word in DistrictNames)
                 else KpiTagEnumClass.ELECTRICITY_GRID
             ),
         )

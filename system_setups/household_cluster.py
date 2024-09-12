@@ -43,6 +43,7 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim import log
 from hisim.units import Quantity, Celsius, Watt
+from hisim.loadtypes import HeatingSystems
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -51,14 +52,6 @@ __license__ = "MIT"
 __version__ = "1.0"
 __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
-
-
-class HeatingSystemType(Enum):
-
-    """Enum class for heating system types."""
-
-    HEAT_PUMP = "Heat Pump"
-    GAS_HEATER = "Gas Heater"
 
 
 @dataclass_json
@@ -132,24 +125,35 @@ def setup_function(
 
     # household-pv-config
     config_filename = my_sim.my_module_config
+    # try reading energ system and archetype configs
+    from hisim.building_sizer_utils.interface_configs.modular_household_config import read_in_configs
+    my_config = read_in_configs(my_sim.my_module_config)
 
-    my_config: BuildingPVWeatherConfig
-    if isinstance(config_filename, str) and os.path.exists(config_filename.rstrip("\r")):
-        with open(config_filename.rstrip("\r"), encoding="unicode_escape") as system_config_file:
-            my_config = BuildingPVWeatherConfig.from_json(system_config_file.read())  # type: ignore
+    # with open("default_module_config.json", "w", encoding="utf-8") as file:
+    #     import json
+    #     json.dump(my_config.to_dict(), file, indent=4)
+    assert my_config.archetype_config_ is not None
+    assert my_config.energy_system_config_ is not None
+    arche_type_config_ = my_config.archetype_config_
+    energy_system_config_ = my_config.energy_system_config_
 
-        log.information(f"Read system config from {config_filename}")
-        log.information("Config values: " + f"{my_config.to_dict}" + "\n")
-    else:
-        my_config = BuildingPVWeatherConfig.get_default()
-        log.information("No module config path from the simulator was given. Use default config.")
-        my_sim.my_module_config = my_config.to_dict()
+    # my_config: BuildingPVWeatherConfig
+    # if isinstance(config_filename, str) and os.path.exists(config_filename.rstrip("\r")):
+    #     with open(config_filename.rstrip("\r"), encoding="unicode_escape") as system_config_file:
+    #         my_config = BuildingPVWeatherConfig.from_json(system_config_file.read())  # type: ignore
+
+    #     log.information(f"Read system config from {config_filename}")
+    #     log.information("Config values: " + f"{my_config.to_dict}" + "\n")
+    # else:
+    #     my_config = BuildingPVWeatherConfig.get_default()
+    #     log.information("No module config path from the simulator was given. Use default config.")
+    #     my_sim.my_module_config = my_config.to_dict()
 
     # Set Simulation Parameters
     if my_simulation_parameters is None:
         year = 2021
         seconds_per_timestep = 60 * 15
-        my_simulation_parameters = SimulationParameters.full_year(
+        my_simulation_parameters = SimulationParameters.one_day_only(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
         my_simulation_parameters.post_processing_options.append(
@@ -170,8 +174,8 @@ def setup_function(
     # Set System Parameters
 
     # Set heating systems for space heating and domestic hot water
-    space_heating_system = HeatingSystemType.HEAT_PUMP
-    domestic_hot_water_heating_system = HeatingSystemType.HEAT_PUMP
+    space_heating_system = HeatingSystems.HEAT_PUMP
+    domestic_hot_water_heating_system = HeatingSystems.HEAT_PUMP
     # Set Heat Pump Controller
     hp_controller_mode = 2  # mode 1 for heating/off and mode 2 for heating/cooling/off
     heating_reference_temperature_in_celsius = -7.0
@@ -179,24 +183,24 @@ def setup_function(
     use_gas_meter: bool = False
 
     # Set Weather
-    weather_location = my_config.weather_location
+    weather_location = arche_type_config_.weather_location
 
     # Set Photovoltaic System
-    azimuth = my_config.pv_azimuth
-    tilt = my_config.pv_tilt
-    if my_config.pv_rooftop_capacity_in_kilowatt is not None:
-        pv_power_in_watt = my_config.pv_rooftop_capacity_in_kilowatt * 1000
+    azimuth = arche_type_config_.pv_azimuth
+    tilt = arche_type_config_.pv_tilt
+    if arche_type_config_.pv_rooftop_capacity_in_kilowatt is not None:
+        pv_power_in_watt = arche_type_config_.pv_rooftop_capacity_in_kilowatt * 1000
     else:
         pv_power_in_watt = None
-    share_of_maximum_pv_potential = 1  # my_config.share_of_maximum_pv_potential
+    share_of_maximum_pv_potential = my_config.energy_system_config_.share_of_maximum_pv_potential
 
     # Set Building (scale building according to total base area and not absolute floor area)
-    building_code = my_config.building_code
+    building_code = arche_type_config_.building_code
     total_base_area_in_m2 = None
-    absolute_conditioned_floor_area_in_m2 = my_config.conditioned_floor_area_in_m2
-    number_of_apartments = my_config.number_of_dwellings_per_building
-    if my_config.norm_heating_load_in_kilowatt is not None:
-        max_thermal_building_demand_in_watt = my_config.norm_heating_load_in_kilowatt * 1000
+    absolute_conditioned_floor_area_in_m2 = arche_type_config_.conditioned_floor_area_in_m2
+    number_of_apartments = arche_type_config_.number_of_dwellings_per_building
+    if arche_type_config_.norm_heating_load_in_kilowatt is not None:
+        max_thermal_building_demand_in_watt = arche_type_config_.norm_heating_load_in_kilowatt * 1000
     else:
         max_thermal_building_demand_in_watt = None
 
@@ -211,12 +215,12 @@ def setup_function(
 
     # get household attribute jsonreferences from list of strings
     lpg_households: Union[JsonReference, List[JsonReference]]
-    if isinstance(my_config.lpg_households, List):
-        if len(my_config.lpg_households) == 1:
-            lpg_households = getattr(Households, my_config.lpg_households[0])
-        elif len(my_config.lpg_households) > 1:
+    if isinstance(arche_type_config_.lpg_households, List):
+        if len(arche_type_config_.lpg_households) == 1:
+            lpg_households = getattr(Households, arche_type_config_.lpg_households[0])
+        elif len(arche_type_config_.lpg_households) > 1:
             lpg_households = []
-            for household_string in my_config.lpg_households:
+            for household_string in arche_type_config_.lpg_households:
                 if hasattr(Households, household_string):
                     lpg_household = getattr(Households, household_string)
                     lpg_households.append(lpg_household)
@@ -224,7 +228,7 @@ def setup_function(
         else:
             raise ValueError("Config list with lpg household is empty.")
     else:
-        raise TypeError(f"Type {type(my_config.lpg_households)} is incompatible. Should be List[str].")
+        raise TypeError(f"Type {type(arche_type_config_.lpg_households)} is incompatible. Should be List[str].")
 
     # Set Electric Vehicle
     charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
@@ -306,7 +310,7 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
-    if space_heating_system == HeatingSystemType.HEAT_PUMP:
+    if space_heating_system == HeatingSystems.HEAT_PUMP:
         # Set sizing option for Hot water Storage
         sizing_option = simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
 
@@ -336,7 +340,7 @@ def setup_function(
         # Add to simulator
         my_sim.add_component(my_heat_pump, connect_automatically=True)
 
-    elif space_heating_system == HeatingSystemType.GAS_HEATER:
+    elif space_heating_system == HeatingSystems.GAS_HEATING:
         # Set sizing option for Hot water Storage
         sizing_option = simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER
         # Set gas meter
@@ -362,7 +366,7 @@ def setup_function(
     else:
         raise ValueError(f"Space heating system {space_heating_system} not recognized.")
 
-    if domestic_hot_water_heating_system == HeatingSystemType.HEAT_PUMP:
+    if domestic_hot_water_heating_system == HeatingSystems.HEAT_PUMP:
 
         # Build DHW (this is taken from household_3_advanced_hp_diesel-car_pv_battery.py)
         my_dhw_heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
@@ -392,7 +396,7 @@ def setup_function(
         my_sim.add_component(my_domnestic_hot_water_heatpump_controller, connect_automatically=True)
         my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
 
-    elif domestic_hot_water_heating_system == HeatingSystemType.GAS_HEATER:
+    elif domestic_hot_water_heating_system == HeatingSystems.GAS_HEATING:
         # Set gas meter
         use_gas_meter = True
         # Build Gas Heater for DHW
@@ -636,16 +640,17 @@ def setup_function(
         key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME, entry=f"{scenario_hash_string}",
     )
 
-    ResultPathProviderSingleton().set_important_result_path_information(
-        module_directory="/storage_cluster/projects/2024_waage/01_hisim_results",  #my_sim.module_directory,  # 
-        model_name=my_sim.module_filename,
-        further_result_folder_description=os.path.join(
-            *[
-                further_result_folder_description,
+    if my_simulation_parameters.result_directory == "":
+        ResultPathProviderSingleton().set_important_result_path_information(
+            module_directory="/storage_cluster/projects/2024_waage/01_hisim_results",  #my_sim.module_directory,  # 
+            model_name=my_sim.module_filename,
+            further_result_folder_description=os.path.join(
+                *[
+                    further_result_folder_description,
 
-            ]
-        ),
-        variant_name="_",
-        scenario_hash_string=scenario_hash_string,
-        sorting_option=sorting_option,
-    )
+                ]
+            ),
+            variant_name="_",
+            scenario_hash_string=scenario_hash_string,
+            sorting_option=sorting_option,
+        )

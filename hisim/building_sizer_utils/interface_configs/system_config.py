@@ -1,9 +1,15 @@
 from dataclasses import dataclass, field
+
 # from typing import Optional
 
 from dataclasses_json import dataclass_json
+
 # from utspclient.helpers.lpgdata import ChargingStationSets
 # from utspclient.helpers.lpgpythonbindings import JsonReference
+
+from hisim.loadtypes import HeatingSystems
+
+
 @dataclass_json
 @dataclass
 class EnergySystemConfig:
@@ -48,6 +54,6 @@ class EnergySystemConfig:
     # charging_station: JsonReference = field(
     #     default_factory=lambda: ChargingStationSets.Charging_At_Home_with_03_7_kW  # type: ignore
     # )
-    space_heating_system: HeatingSystemType = HeatingSystemType.HEAT_PUMP
-    domestic_hot_water_heating_system: HeatingSystemType = HeatingSystemType.HEAT_PUMP
-    share_of_maximum_pv_power: float = 1.0
+    space_heating_system: HeatingSystems = HeatingSystems.HEAT_PUMP
+    domestic_hot_water_heating_system: HeatingSystems = HeatingSystems.HEAT_PUMP
+    share_of_maximum_pv_potential: float = 1.0

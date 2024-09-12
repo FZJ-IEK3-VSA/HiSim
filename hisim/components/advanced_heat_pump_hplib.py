@@ -625,8 +625,6 @@ class HeatPumpHplib(Component):
         No electricity costs for components except for Electricity Meter,
         because part of electricity consumption is feed by PV
         """
-        consumption_in_kwh: float
-
         for index, output in enumerate(all_outputs):
             if (
                 output.component_name == self.component_name

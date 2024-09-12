@@ -4,7 +4,7 @@
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List
 from enum import IntEnum
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -16,7 +16,7 @@ from hisim.loadtypes import Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import ComponentInput, ComponentConnection, OpexCostDataClass, CapexCostDataClass
 from hisim.components import weather
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
 
 __authors__ = "Jonas Hoppe"
 __copyright__ = ""

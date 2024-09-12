@@ -221,7 +221,7 @@ def capex_calculation(
                     total_device_co2_footprint_building_object += capex_cost_data_class.device_co2_footprint_in_kg
                     total_investment_cost_per_simulated_period_building_object += capex_cost_data_class.capex_investment_cost_for_simulated_period_in_euro
                     total_device_co2_footprint_per_simulated_period_building_object += capex_cost_data_class.device_co2_footprint_for_simulated_period_in_kg
-                    
+
                     if isinstance(
                         component_unwrapped,
                         (HeatPumpHplib, ModularHeatPump, MoreAdvancedHeatPumpHPLib, SimpleHeatSource),
@@ -236,7 +236,6 @@ def capex_calculation(
                         total_device_co2_footprint_per_simulated_period_building_object_without_hp += (
                             capex_cost_data_class.device_co2_footprint_for_simulated_period_in_kg
                         )
-
 
                     capex_table_as_list_of_list.append(
                         [

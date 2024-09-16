@@ -1419,6 +1419,7 @@ class UtspLpgConnector(cp.Component):
         No electricity costs for components except for Electricity Meter,
         because part of electricity consumption is feed by PV
         """
+        consumption_in_kwh: float = 0.0
         for index, output in enumerate(all_outputs):
             if output.component_name == self.config.name and output.load_type == lt.LoadTypes.ELECTRICITY and output.field_name == self.ElectricityOutput:
                 occupancy_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]

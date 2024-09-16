@@ -2262,7 +2262,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
 
     @staticmethod
     def get_cost_capex(
-        config: MoreAdvancedHeatPumpHPLibControllerDHWConfig, simulation_parameters: SimulationParameters
+        config: MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig, simulation_parameters: SimulationParameters
     ) -> CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
         capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()

@@ -2260,6 +2260,23 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
 
         return cooling_mode
 
+    @staticmethod
+    def get_cost_capex(
+        config: MoreAdvancedHeatPumpHPLibControllerDHWConfig, simulation_parameters: SimulationParameters
+    ) -> CapexCostDataClass:  # pylint: disable=unused-argument
+        """Returns investment cost, CO2 emissions and lifetime."""
+        capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
+        return capex_cost_data_class
+
+    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame) -> OpexCostDataClass:  # pylint: disable=unused-argument
+        """Calculate OPEX costs, consisting of maintenance costs for Heat Distribution System."""
+        opex_cost_data_class = OpexCostDataClass.get_default_opex_cost_data_class()
+
+        return opex_cost_data_class
+
+    def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        return []
 
 # implement a HPLib controller l1 for dhw storage (tww)
 @dataclass_json

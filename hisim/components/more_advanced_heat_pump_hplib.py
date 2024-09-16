@@ -2278,6 +2278,7 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         return []
 
+
 # implement a HPLib controller l1 for dhw storage (tww)
 @dataclass_json
 @dataclass

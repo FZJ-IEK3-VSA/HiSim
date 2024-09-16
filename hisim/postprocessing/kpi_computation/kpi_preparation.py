@@ -252,6 +252,12 @@ class KpiPreparation:
             value=battery_discharging_energy_in_kilowatt_hour,
             tag=KpiTagEnumClass.BATTERY,
         )
+        battery_losses_entry = KpiEntry(
+            name="Battery consumption",
+            unit="kWh",
+            value=battery_losses_in_kilowatt_hour,
+            tag=KpiTagEnumClass.BATTERY,
+        )
 
         # update kpi collection dict
         self.kpi_collection_dict_unsorted[building_objects_in_district].update(
@@ -262,6 +268,7 @@ class KpiPreparation:
                 windturbine_production_entry.name: windturbine_production_entry.to_dict(),
                 battery_charging_entry.name: battery_charging_entry.to_dict(),
                 battery_discharging_entry.name: battery_discharging_entry.to_dict(),
+                battery_losses_entry.name: battery_losses_entry.to_dict(),
             }
         )
         if any(word in building_objects_in_district for word in DistrictNames):

@@ -382,7 +382,7 @@ def capex_calculation(
 
     pathname = os.path.join(simulation_parameters.result_directory, "investment_cost_co2_footprint.csv")
     capex_df = pd.DataFrame(capex_table_as_list_of_list, columns=headline)
-    capex_df.to_csv(pathname, index=False, header=True, encoding="utf8")
+    capex_df.to_csv(pathname, index=False, header=True, encoding="utf8", sep=";")
 
     capex_table_as_list_of_list.insert(0, headline)
 

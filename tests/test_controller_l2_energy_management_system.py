@@ -64,7 +64,7 @@ def test_house(
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_CAPEX)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON)
-
+        my_simulation_parameters.logging_level = 4
     # this part is copied from hisim_main
     # Build Simulator
     normalized_path = os.path.normpath(PATH)
@@ -313,7 +313,7 @@ def test_house(
     # Get battery KPI values
     battery_charging_energy_in_kilowatt_hour = jsondata["Battery"]["Battery charging energy"].get("value")
     battery_discharging_energy_in_kilowatt_hour = jsondata["Battery"]["Battery discharging energy"].get("value")
-    battery_losses_in_kilowatt_hour = jsondata["Battery"]["Consumption for Battery_w1"].get("value")
+    battery_losses_in_kilowatt_hour = jsondata["Battery"]["Battery consumption"].get("value")
     print("battery charging energy ", battery_charging_energy_in_kilowatt_hour)
     print("battery discharging energy ", battery_discharging_energy_in_kilowatt_hour)
     print("battery losses ", battery_losses_in_kilowatt_hour)

@@ -506,7 +506,7 @@ class ElectricityMeter(DynamicComponent):
             opex_energy_cost_in_euro=opex_cost_per_simulated_period_in_euro,
             opex_maintenance_cost_in_euro=0,
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
-            consumption_in_kwh=self.config.total_energy_from_grid_in_kwh,
+            consumption_in_kwh=total_energy_from_grid_in_kwh,
             loadtype=lt.LoadTypes.ELECTRICITY,
             kpi_tag=KpiTagEnumClass.ELECTRICITY_METER
         )

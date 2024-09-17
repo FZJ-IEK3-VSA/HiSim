@@ -5,7 +5,6 @@
 from typing import Optional, Any, Union, List
 import re
 import os
-from enum import Enum
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from utspclient.helpers.lpgdata import (
@@ -41,9 +40,9 @@ from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptio
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
-from hisim import log
 from hisim.units import Quantity, Celsius, Watt
 from hisim.loadtypes import HeatingSystems
+from hisim.building_sizer_utils.interface_configs.modular_household_config import read_in_configs
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -126,7 +125,6 @@ def setup_function(
     # household-pv-config
     config_filename = my_sim.my_module_config
     # try reading energ system and archetype configs
-    from hisim.building_sizer_utils.interface_configs.modular_household_config import read_in_configs
     my_config = read_in_configs(my_sim.my_module_config)
 
     # with open("default_module_config.json", "w", encoding="utf-8") as file:
@@ -191,7 +189,7 @@ def setup_function(
         pv_power_in_watt = arche_type_config_.pv_rooftop_capacity_in_kilowatt * 1000
     else:
         pv_power_in_watt = None
-    share_of_maximum_pv_potential = my_config.energy_system_config_.share_of_maximum_pv_potential
+    share_of_maximum_pv_potential = energy_system_config_.share_of_maximum_pv_potential
 
     # Set Building (scale building according to total base area and not absolute floor area)
     building_code = arche_type_config_.building_code
@@ -641,7 +639,7 @@ def setup_function(
 
     if my_simulation_parameters.result_directory == "":
         ResultPathProviderSingleton().set_important_result_path_information(
-            module_directory="/storage_cluster/projects/2024_waage/01_hisim_results",  #my_sim.module_directory,  # 
+            module_directory="/storage_cluster/projects/2024_waage/01_hisim_results",  # my_sim.module_directory,
             model_name=my_sim.module_filename,
             further_result_folder_description=os.path.join(
                 *[

@@ -103,9 +103,8 @@ def run_cluster_house(
 
     my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
 
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_KPIS_TO_JSON)
     my_simulation_parameters.post_processing_options.append(
         PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
     )

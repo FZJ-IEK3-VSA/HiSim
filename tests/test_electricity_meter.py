@@ -54,13 +54,10 @@ def test_house(
             PostProcessingOptions.EXPORT_TO_CSV
         )
         my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_OPEX
+            PostProcessingOptions.COMPUTE_KPIS
         )
         my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT
-        )
-        my_simulation_parameters.post_processing_options.append(
-            PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON
+            PostProcessingOptions.WRITE_KPIS_TO_JSON
         )
 
     # this part is copied from hisim_main

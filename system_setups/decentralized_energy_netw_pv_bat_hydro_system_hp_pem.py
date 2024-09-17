@@ -81,7 +81,7 @@ def setup_function(
     my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_ALL_OUTPUTS_TO_REPORT)
     my_simulation_parameters.post_processing_options.append(PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT)
     my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
-    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_OPEX_TO_REPORT)
     my_simulation_parameters.post_processing_options.append(
         PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
     )

@@ -159,7 +159,8 @@ class PostProcessor:
             if report is not None:
                 self.write_components_to_report(ppdt, report, report_image_entries)
             else:
-                raise ValueError("report is None but should be a ReportGenerator object.")
+                raise ValueError("report is None but should be a ReportGenerator object. "
+                                 "You probably need to set the GENERATE_PDF_REPORT option.")
             end = timer()
             duration = end - start
             log.information("Writing components to report took " + f"{duration:1.2f}s.")
@@ -170,7 +171,8 @@ class PostProcessor:
             if report is not None:
                 self.write_all_outputs_to_report(ppdt, report)
             else:
-                raise ValueError("report is None but should be a ReportGenerator object.")
+                raise ValueError("report is None but should be a ReportGenerator object. "
+                                 "You probably need to set the GENERATE_PDF_REPORT option.")
             end = timer()
             duration = end - start
             log.information("Writing all outputs to report took " + f"{duration:1.2f}s.")
@@ -180,7 +182,8 @@ class PostProcessor:
             if report is not None:
                 self.write_network_charts_to_report(ppdt, report, system_chart_entries=system_chart_entries)
             else:
-                raise ValueError("report is None but should be a ReportGenerator object.")
+                raise ValueError("report is None but should be a ReportGenerator object. "
+                                 "You probably need to set the GENERATE_PDF_REPORT option.")
             end = timer()
             duration = end - start
             log.information("Writing network charts to report took " + f"{duration:1.2f}s.")
@@ -192,7 +195,8 @@ class PostProcessor:
             if report is not None:
                 self.compute_and_write_opex_costs_to_report(ppdt, report, building_objects_in_district_list)
             else:
-                raise ValueError("report is None but should be a ReportGenerator object.")
+                raise ValueError("report is None but should be a ReportGenerator object. "
+                                 "You probably need to set the GENERATE_PDF_REPORT option.")
             end = timer()
             duration = end - start
             log.information(
@@ -207,7 +211,8 @@ class PostProcessor:
             if report is not None:
                 self.compute_and_write_capex_costs_to_report(ppdt, report, building_objects_in_district_list)
             else:
-                raise ValueError("report is None but should be a ReportGenerator object.")
+                raise ValueError("report is None but should be a ReportGenerator object. "
+                                 "You probably need to set the GENERATE_PDF_REPORT option.")
             end = timer()
             duration = end - start
             log.information(

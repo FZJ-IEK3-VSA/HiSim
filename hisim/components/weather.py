@@ -15,9 +15,10 @@ import pvlib
 
 from hisim import loadtypes as lt
 from hisim import log, utils
-from hisim.component import Component, ComponentOutput, ConfigBase, SingleTimeStepValues, DisplayConfig
+from hisim.component import Component, ComponentOutput, ConfigBase, SingleTimeStepValues, DisplayConfig, OpexCostDataClass, CapexCostDataClass
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
 
 __authors__ = "Vitor Hugo Bellotto Zago, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -904,6 +905,29 @@ class Weather(Component):
             self.daily_average_outside_temperature_list_in_celsius.append(daily_average_temperature)
         return self.daily_average_outside_temperature_list_in_celsius
 
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> OpexCostDataClass:
+        """Calculate OPEX costs, consisting of electricity costs and revenues."""
+        opex_cost_data_class = OpexCostDataClass.get_default_opex_cost_data_class()
+        return opex_cost_data_class
+
+    @staticmethod
+    def get_cost_capex(config: WeatherConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:  # pylint: disable=unused-argument
+        """Returns investment cost, CO2 emissions and lifetime."""
+        capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
+        return capex_cost_data_class
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        return []
+
 
 def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Any:
     """Reads a test reference year file and gets the GHI, DHI and DNI from it.
@@ -1057,7 +1081,7 @@ def read_dwd_10min_data(filepath: str, year: int) -> pd.DataFrame:
     """
 
     # get location
-    location = pd.read_csv(
+    location = pd.read_csv(  # type: ignore
         filepath,
         nrows=1,
         skiprows=1,
@@ -1098,7 +1122,7 @@ def read_era5_data(filepath: str, year: int) -> pd.DataFrame:
     """
 
     # get location
-    location = pd.read_csv(
+    location = pd.read_csv(  # type: ignore
         filepath,
         nrows=1,
         skiprows=1,

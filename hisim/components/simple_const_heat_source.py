@@ -4,7 +4,7 @@
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List
 from enum import IntEnum
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -14,9 +14,9 @@ from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim.loadtypes import Units
 from hisim.simulationparameters import SimulationParameters
-from hisim.component import ComponentInput, ComponentConnection, OpexCostDataClass
+from hisim.component import ComponentInput, ComponentConnection, OpexCostDataClass, CapexCostDataClass
 from hisim.components import weather
-
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
 
 __authors__ = "Jonas Hoppe"
 __copyright__ = ""
@@ -303,9 +303,25 @@ class SimpleHeatSource(cp.Component):
     @staticmethod
     def get_cost_capex(
         config: SimpleHeatSourceConfig,
-    ) -> Tuple[float, float, float]:
+        simulation_parameters: SimulationParameters
+    ) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        return config.cost, config.co2_footprint, config.lifetime
+        seconds_per_year = 365 * 24 * 60 * 60
+        capex_per_simulated_period = (config.cost / config.lifetime) * (
+            simulation_parameters.duration.total_seconds() / seconds_per_year
+        )
+        device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
+            simulation_parameters.duration.total_seconds() / seconds_per_year
+        )
+        capex_cost_data_class = CapexCostDataClass(
+            capex_investment_cost_in_euro=config.cost,
+            device_co2_footprint_in_kg=config.co2_footprint,
+            lifetime_in_years=config.lifetime,
+            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
+            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
+            kpi_tag=KpiTagEnumClass.GENERIC_HEAT_SOURCE
+        )
+        return capex_cost_data_class
 
     def get_cost_opex(
         self,
@@ -319,7 +335,8 @@ class SimpleHeatSource(cp.Component):
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=0,
             consumption_in_kwh=0,
-            loadtype=lt.LoadTypes.ANY
+            loadtype=lt.LoadTypes.ANY,
+            kpi_tag=KpiTagEnumClass.GENERIC_HEAT_SOURCE
         )
 
         return opex_cost_data_class

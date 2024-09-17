@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 # clean
 # Generic/Built-in
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -20,7 +20,7 @@ from dataclasses_json import dataclass_json
 import hisim.component as cp
 import hisim.log
 from hisim import loadtypes as lt
-from hisim.component import OpexCostDataClass
+from hisim.component import OpexCostDataClass, CapexCostDataClass
 from hisim.components import (
     controller_l1_building_heating,
     generic_chp,
@@ -28,6 +28,7 @@ from hisim.components import (
 )
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
 from hisim.simulationparameters import SimulationParameters
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
 
 __authors__ = "Johanna Ganglbauer - johanna.ganglbauer@4wardenergy.at"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -549,9 +550,25 @@ class HotWaterStorage(cp.Component):
         raise Exception("Modular storage must be defined either as buffer or as boiler.")
 
     @staticmethod
-    def get_cost_capex(config: StorageConfig) -> Tuple[float, float, float]:
+    def get_cost_capex(config: StorageConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        return config.cost, config.co2_footprint, config.lifetime
+        seconds_per_year = 365 * 24 * 60 * 60
+        capex_per_simulated_period = (config.cost / config.lifetime) * (
+            simulation_parameters.duration.total_seconds() / seconds_per_year
+        )
+        device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
+            simulation_parameters.duration.total_seconds() / seconds_per_year
+        )
+
+        capex_cost_data_class = CapexCostDataClass(
+            capex_investment_cost_in_euro=config.cost,
+            device_co2_footprint_in_kg=config.co2_footprint,
+            lifetime_in_years=config.lifetime,
+            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
+            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
+            kpi_tag=KpiTagEnumClass.STORAGE_DOMESTIC_HOT_WATER
+        )
+        return capex_cost_data_class
 
     def get_cost_opex(
         self,
@@ -565,7 +582,16 @@ class HotWaterStorage(cp.Component):
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=0,
             consumption_in_kwh=0,
-            loadtype=lt.LoadTypes.ANY
+            loadtype=lt.LoadTypes.ANY,
+            kpi_tag=KpiTagEnumClass.STORAGE_DOMESTIC_HOT_WATER
         )
 
         return opex_cost_data_class
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        return []

@@ -156,6 +156,7 @@ def setup_function(
         my_simulation_parameters = SimulationParameters.one_day_only(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
+        my_simulation_parameters.cache_dir_path = "/benchtop/2024-k-rieck-hisim/hisim_inputs_cache/"
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
         )
@@ -206,12 +207,12 @@ def setup_function(
 
     # Set Occupancy
     # try to get profiles from cluster directory
-    cache_dir_path: Optional[str] = "/fast/home/k-rieck/lpg-utsp-data"
-    if cache_dir_path is not None and os.path.exists(cache_dir_path):
+    cache_dir_path_utsp: Optional[str] = "/benchtop/2024-k-rieck-hisim/lpg-utsp-cache"
+    if cache_dir_path_utsp is not None and os.path.exists(cache_dir_path_utsp):
         pass
     # else use default specific cache_dir_path
     else:
-        cache_dir_path = None
+        cache_dir_path_utsp = None
 
     # get household attribute jsonreferences from list of strings
     lpg_households: Union[JsonReference, List[JsonReference]]
@@ -255,7 +256,7 @@ def setup_function(
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
     my_occupancy_config.data_acquisition_mode = loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_UTSP
     my_occupancy_config.household = lpg_households
-    my_occupancy_config.cache_dir_path = cache_dir_path
+    my_occupancy_config.cache_dir_path = cache_dir_path_utsp
 
     my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
         config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters

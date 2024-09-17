@@ -1556,6 +1556,21 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
 
         return list_of_kpi_entries
 
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> cp.OpexCostDataClass:
+        """Calculate OPEX costs, consisting of electricity costs and revenues."""
+        opex_cost_data_class = cp.OpexCostDataClass.get_default_opex_cost_data_class()
+        return opex_cost_data_class
+
+    @staticmethod
+    def get_cost_capex(config: EMSDistrictConfig, simulation_parameters: SimulationParameters) -> cp.CapexCostDataClass:  # pylint: disable=unused-argument
+        """Returns investment cost, CO2 emissions and lifetime."""
+        capex_cost_data_class = cp.CapexCostDataClass.get_default_capex_cost_data_class()
+        return capex_cost_data_class
+
 
 """
                 ***IN PROGRESS***

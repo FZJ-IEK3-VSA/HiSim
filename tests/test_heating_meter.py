@@ -234,7 +234,7 @@ def test_house(
 
     jsondata = jsondata["BUI1"]
 
-    heat_consumption_in_kilowatt_hour = jsondata["Heating Meter"]["Total heating energy used in building"].get("value")
+    heat_consumption_in_kilowatt_hour = jsondata["Heating Meter"]["Total heat consumption from grid"].get("value")
 
     heat_consumption_for_space_heating_in_kilowatt_hour = jsondata["Heat Distribution System"][
         "Thermal output energy of heat distribution system"
@@ -243,10 +243,10 @@ def test_house(
     #     "Residents' total thermal dhw consumption"
     # ].get("value")
 
-    opex_costs_for_heat_in_euro = jsondata["Heating Meter"]["Opex costs of heat consumption in building"].get("value")
+    opex_costs_for_heat_in_euro = jsondata["Heating Meter"]["Opex costs of heat consumption from grid"].get("value")
 
     co2_footprint_due_to_heat_use_in_kg = jsondata["Heating Meter"][
-        "CO2 footprint of heat consumption in building"
+        "CO2 footprint of heat consumption from grid"
     ].get("value")
 
     log.information(

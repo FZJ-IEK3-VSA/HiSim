@@ -13,10 +13,11 @@ from dataclasses_json import dataclass_json
 import hisim.component as cp
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim.component import SingleTimeStepValues, ComponentInput, ComponentOutput, OpexCostDataClass, DisplayConfig
+from hisim.component import SingleTimeStepValues, ComponentInput, ComponentOutput, OpexCostDataClass, DisplayConfig, CapexCostDataClass
 from hisim.components.configuration import PhysicsConfig
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.simulationparameters import SimulationParameters
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
 
 __authors__ = "Katharina Rieck, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -913,11 +914,25 @@ class SimpleHotWaterStorage(cp.Component):
         return thermal_energy_difference_in_watt_hour
 
     @staticmethod
-    def get_cost_capex(
-        config: SimpleHotWaterStorageConfig,
-    ) -> Tuple[float, float, float]:
+    def get_cost_capex(config: SimpleHotWaterStorageConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        return config.cost, config.co2_footprint, config.lifetime
+        seconds_per_year = 365 * 24 * 60 * 60
+        capex_per_simulated_period = (config.cost / config.lifetime) * (
+            simulation_parameters.duration.total_seconds() / seconds_per_year
+        )
+        device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
+            simulation_parameters.duration.total_seconds() / seconds_per_year
+        )
+
+        capex_cost_data_class = CapexCostDataClass(
+            capex_investment_cost_in_euro=config.cost,
+            device_co2_footprint_in_kg=config.co2_footprint,
+            lifetime_in_years=config.lifetime,
+            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
+            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
+            kpi_tag=KpiTagEnumClass.STORAGE_HOT_WATER_SPACE_HEATING
+        )
+        return capex_cost_data_class
 
     def get_cost_opex(
         self,
@@ -925,16 +940,25 @@ class SimpleHotWaterStorage(cp.Component):
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         # pylint: disable=unused-argument
-        """Calculate OPEX costs, consisting of maintenance costs for Heat Distribution System."""
+        """Calculate OPEX costs, consisting of maintenance costs for hot water storage."""
         opex_cost_data_class = OpexCostDataClass(
             opex_energy_cost_in_euro=0,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=0,
             consumption_in_kwh=0,
-            loadtype=lt.LoadTypes.ANY
+            loadtype=lt.LoadTypes.ANY,
+            kpi_tag=KpiTagEnumClass.STORAGE_HOT_WATER_SPACE_HEATING
         )
 
         return opex_cost_data_class
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        return []
 
 
 @dataclass_json

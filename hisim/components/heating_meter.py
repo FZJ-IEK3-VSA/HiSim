@@ -356,6 +356,7 @@ class HeatingMeter(DynamicComponent):
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
             consumption_in_kwh=total_used_energy_in_kwh,
             loadtype=lt.LoadTypes.GAS,
+            kpi_tag=KpiTagEnumClass.HEATING_METER
         )
 
         return opex_cost_data_class
@@ -382,7 +383,7 @@ class HeatingMeter(DynamicComponent):
                     break
 
         total_heating_energy_consumption_in_building_in_kwh_entry = KpiEntry(
-            name="Total heating energy used in building",
+            name="Total heat consumption from grid",
             unit="kWh",
             value=total_used_energy_in_kwh,
             tag=KpiTagEnumClass.HEATING_METER,
@@ -392,7 +393,7 @@ class HeatingMeter(DynamicComponent):
         # try to get opex costs
         opex_costs = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)
         opex_costs_in_euro_entry = KpiEntry(
-            name="Opex costs of heat consumption in building",
+            name="Opex costs of heat consumption from grid",
             unit="Euro",
             value=opex_costs.opex_energy_cost_in_euro,
             tag=KpiTagEnumClass.HEATING_METER,
@@ -400,7 +401,7 @@ class HeatingMeter(DynamicComponent):
         )
         list_of_kpi_entries.append(opex_costs_in_euro_entry)
         co2_footprint_in_kg_entry = KpiEntry(
-            name="CO2 footprint of heat consumption in building",
+            name="CO2 footprint of heat consumption from grid",
             unit="kg",
             value=opex_costs.co2_footprint_in_kg,
             tag=KpiTagEnumClass.HEATING_METER,
@@ -409,6 +410,12 @@ class HeatingMeter(DynamicComponent):
         list_of_kpi_entries.append(co2_footprint_in_kg_entry)
 
         return list_of_kpi_entries
+
+    @staticmethod
+    def get_cost_capex(config: HeatingMeterConfig, simulation_parameters: SimulationParameters) -> cp.CapexCostDataClass:  # pylint: disable=unused-argument
+        """Returns investment cost, CO2 emissions and lifetime."""
+        capex_cost_data_class = cp.CapexCostDataClass.get_default_capex_cost_data_class()
+        return capex_cost_data_class
 
 
 @dataclass

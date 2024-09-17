@@ -17,7 +17,7 @@ from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils, log
-from hisim.component import OpexCostDataClass
+from hisim.component import OpexCostDataClass, CapexCostDataClass
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.loadprofilegenerator_utsp_connector import UtspLpgConnector
@@ -373,6 +373,7 @@ class Car(cp.Component):
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
             consumption_in_kwh=consumption_in_kwh,
             loadtype=self.config.fuel,
+            kpi_tag=KpiTagEnumClass.CAR
         )
 
         return opex_cost_data_class
@@ -449,9 +450,25 @@ class Car(cp.Component):
         return list_of_kpi_entries
 
     @staticmethod
-    def get_cost_capex(config: CarConfig) -> Tuple[float, float, float]:
+    def get_cost_capex(config: CarConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        return config.cost, config.co2_footprint, config.lifetime
+        seconds_per_year = 365 * 24 * 60 * 60
+        capex_per_simulated_period = (config.cost / config.lifetime) * (
+            simulation_parameters.duration.total_seconds() / seconds_per_year
+        )
+        device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
+            simulation_parameters.duration.total_seconds() / seconds_per_year
+        )
+
+        capex_cost_data_class = CapexCostDataClass(
+            capex_investment_cost_in_euro=config.cost,
+            device_co2_footprint_in_kg=config.co2_footprint,
+            lifetime_in_years=config.lifetime,
+            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
+            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
+            kpi_tag=KpiTagEnumClass.CAR,
+        )
+        return capex_cost_data_class
 
     def build(self, config: CarConfig, car_information_dict: Dict) -> None:
         """Loads necesary data and saves config to class."""

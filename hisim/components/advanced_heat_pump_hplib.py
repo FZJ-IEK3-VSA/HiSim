@@ -8,7 +8,7 @@ import hashlib
 # clean
 import importlib
 from dataclasses import dataclass
-from typing import Any, List, Optional, Tuple, Dict
+from typing import Any, List, Optional, Dict
 
 import pandas as pd
 from dataclass_wizard import JSONWizard
@@ -24,6 +24,7 @@ from hisim.component import (
     ConfigBase,
     ComponentConnection,
     OpexCostDataClass,
+    CapexCostDataClass,
     DisplayConfig,
 )
 from hisim.components import weather, simple_hot_water_storage, heat_distribution_system
@@ -280,9 +281,7 @@ class HeatPumpHplib(Component):
             load_type=LoadTypes.HEATING,
             unit=Units.WATT,
             output_description="Thermal output power in Watt",
-            postprocessing_flag=[
-                OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
-            ],
+            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
 
         self.q_th: ComponentOutput = self.add_output(
@@ -309,9 +308,7 @@ class HeatPumpHplib(Component):
             field_name=self.ElectricalInputPowerForHeating,
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
-            postprocessing_flag=[
-                OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
-            ],
+            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
             output_description="Electricity input power for heating in Watt",
         )
         self.p_el_cooling: ComponentOutput = self.add_output(
@@ -319,9 +316,7 @@ class HeatPumpHplib(Component):
             field_name=self.ElectricalInputPowerForCooling,
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
-            postprocessing_flag=[
-                OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
-            ],
+            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
             output_description="Electricity input power for cooling in Watt",
         )
 
@@ -330,9 +325,7 @@ class HeatPumpHplib(Component):
             field_name=self.ElectricalInputEnergy,
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT_HOUR,
-            postprocessing_flag=[
-                OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
-            ],
+            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
             output_description="Electricity input energy in Watthours",
         )
 
@@ -342,9 +335,7 @@ class HeatPumpHplib(Component):
             load_type=LoadTypes.ANY,
             unit=Units.ANY,
             output_description="COP",
-            postprocessing_flag=[
-                OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
-            ],
+            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
         self.eer: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -352,9 +343,7 @@ class HeatPumpHplib(Component):
             load_type=LoadTypes.ANY,
             unit=Units.ANY,
             output_description="EER",
-            postprocessing_flag=[
-                OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
-            ],
+            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
         self.t_out: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -362,9 +351,7 @@ class HeatPumpHplib(Component):
             load_type=LoadTypes.HEATING,
             unit=Units.CELSIUS,
             output_description="Temperature Output in °C",
-            postprocessing_flag=[
-                OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
-            ],
+            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
         self.t_in_warm_water: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -391,9 +378,7 @@ class HeatPumpHplib(Component):
             load_type=LoadTypes.TIME,
             unit=Units.SECONDS,
             output_description="Time turned on for heating",
-            postprocessing_flag=[
-                OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
-            ],
+            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
         self.time_on_cooling: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -401,9 +386,7 @@ class HeatPumpHplib(Component):
             load_type=LoadTypes.TIME,
             unit=Units.SECONDS,
             output_description="Time turned on for cooling",
-            postprocessing_flag=[
-                OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
-            ],
+            postprocessing_flag=[OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
 
         self.time_off: ComponentOutput = self.add_output(
@@ -418,34 +401,24 @@ class HeatPumpHplib(Component):
         self.add_default_connections(self.get_default_connections_from_weather())
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
 
-    def get_default_connections_from_heat_pump_controller(
-        self,
-    ):
+    def get_default_connections_from_heat_pump_controller(self,):
         """Get default connections."""
 
         connections = []
         hpc_classname = HeatPumpHplibController.get_classname()
         connections.append(
-            ComponentConnection(
-                HeatPumpHplib.OnOffSwitch,
-                hpc_classname,
-                HeatPumpHplibController.State,
-            )
+            ComponentConnection(HeatPumpHplib.OnOffSwitch, hpc_classname, HeatPumpHplibController.State,)
         )
         return connections
 
-    def get_default_connections_from_weather(
-        self,
-    ):
+    def get_default_connections_from_weather(self,):
         """Get default connections."""
 
         connections = []
         weather_classname = weather.Weather.get_classname()
         connections.append(
             ComponentConnection(
-                HeatPumpHplib.TemperatureAmbient,
-                weather_classname,
-                weather.Weather.DailyAverageOutsideTemperatures,
+                HeatPumpHplib.TemperatureAmbient, weather_classname, weather.Weather.DailyAverageOutsideTemperatures,
             )
         )
 
@@ -458,9 +431,7 @@ class HeatPumpHplib(Component):
         )
         return connections
 
-    def get_default_connections_from_simple_hot_water_storage(
-        self,
-    ):
+    def get_default_connections_from_simple_hot_water_storage(self,):
         """Get simple hot water storage default connections."""
         # use importlib for importing the other component in order to avoid circular-import errors
         component_module_name = "hisim.components.simple_hot_water_storage"
@@ -470,9 +441,7 @@ class HeatPumpHplib(Component):
         hws_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
-                HeatPumpHplib.TemperatureInputSecondary,
-                hws_classname,
-                component_class.WaterTemperatureToHeatGenerator,
+                HeatPumpHplib.TemperatureInputSecondary, hws_classname, component_class.WaterTemperatureToHeatGenerator,
             )
         )
         return connections
@@ -631,26 +600,38 @@ class HeatPumpHplib(Component):
         self.state.on_off_previous = on_off
 
     @staticmethod
-    def get_cost_capex(config: HeatPumpHplibConfig) -> Tuple[float, float, float]:
+    def get_cost_capex(config: HeatPumpHplibConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        return config.cost.value, config.co2_footprint.value, config.lifetime.value
+        seconds_per_year = 365 * 24 * 60 * 60
+        capex_per_simulated_period = (config.cost.value / config.lifetime.value) * (
+            simulation_parameters.duration.total_seconds() / seconds_per_year
+        )
+        device_co2_footprint_per_simulated_period = (config.co2_footprint.value / config.lifetime.value) * (
+            simulation_parameters.duration.total_seconds() / seconds_per_year
+        )
+        capex_cost_data_class = CapexCostDataClass(
+            capex_investment_cost_in_euro=config.cost.value,
+            device_co2_footprint_in_kg=config.co2_footprint.value,
+            lifetime_in_years=config.lifetime.value,
+            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
+            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
+            kpi_tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING
+        )
+        return capex_cost_data_class
 
-    def get_cost_opex(
-        self,
-        all_outputs: List,
-        postprocessing_results: pd.DataFrame,
-    ) -> OpexCostDataClass:
+    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of maintenance costs.
 
         No electricity costs for components except for Electricity Meter,
         because part of electricity consumption is feed by PV
         """
-        consumption_in_kwh: float
-
         for index, output in enumerate(all_outputs):
-            if (output.component_name == self.component_name and output.load_type == LoadTypes.ELECTRICITY and
-                    output.field_name == self.ElectricalInputPower):
-                consumption_in_kwh = round(
+            if (
+                output.component_name == self.component_name
+                and output.load_type == LoadTypes.ELECTRICITY
+                and output.field_name == self.ElectricalInputPower
+            ):  # Todo: check component name from system_setups: find another way of using only heatpump-outputs
+                self.config.consumption_in_kwh = round(
                     sum(postprocessing_results.iloc[:, index])
                     * self.my_simulation_parameters.seconds_per_timestep
                     / 3.6e6,
@@ -660,19 +641,15 @@ class HeatPumpHplib(Component):
             opex_energy_cost_in_euro=0,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=0,
-            consumption_in_kwh=consumption_in_kwh,
-            loadtype=LoadTypes.ELECTRICITY
+            consumption_in_kwh=self.config.consumption_in_kwh,
+            loadtype=LoadTypes.ELECTRICITY,
+            kpi_tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING
         )
 
         return opex_cost_data_class
 
     def get_cached_results_or_run_hplib_simulation(
-        self,
-        t_in_primary: float,
-        t_in_secondary: float,
-        parameters: pd.DataFrame,
-        t_amb: float,
-        mode: int,
+        self, t_in_primary: float, t_in_secondary: float, parameters: pd.DataFrame, t_amb: float, mode: int,
     ) -> Any:
         """Use caching of results of hplib simulation."""
 
@@ -682,10 +659,7 @@ class HeatPumpHplib(Component):
         t_amb = round(t_amb, 1)
 
         my_data_class = CalculationRequest(
-            t_in_primary=t_in_primary,
-            t_in_secondary=t_in_secondary,
-            t_amb=t_amb,
-            mode=mode,
+            t_in_primary=t_in_primary, t_in_secondary=t_in_secondary, t_amb=t_amb, mode=mode,
         )
         my_json_key = my_data_class.get_key()
         my_hash_key = hashlib.sha256(my_json_key.encode("utf-8")).hexdigest()
@@ -700,11 +674,7 @@ class HeatPumpHplib(Component):
 
         return results
 
-    def get_component_kpi_entries(
-        self,
-        all_outputs: List,
-        postprocessing_results: pd.DataFrame,
-    ) -> List[KpiEntry]:
+    def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
 
         output_heating_energy_in_kilowatt_hour: float = 0.0
@@ -749,20 +719,16 @@ class HeatPumpHplib(Component):
 
                 elif output.field_name == self.ElectricalInputPowerForHeating:
                     # get electrical energie values for heating
-                    electrical_energy_for_heating_in_kilowatt_hour = (
-                        KpiHelperClass.compute_total_energy_from_power_timeseries(
-                            power_timeseries_in_watt=postprocessing_results.iloc[:, index],
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
-                        )
+                    electrical_energy_for_heating_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=postprocessing_results.iloc[:, index],
+                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
                     )
 
                 elif output.field_name == self.ElectricalInputPowerForCooling:
                     # get electrical energie values for cooling
-                    electrical_energy_for_cooling_in_kilowatt_hour = (
-                        KpiHelperClass.compute_total_energy_from_power_timeseries(
-                            power_timeseries_in_watt=postprocessing_results.iloc[:, index],
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
-                        )
+                    electrical_energy_for_cooling_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=postprocessing_results.iloc[:, index],
+                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
                     )
 
                 elif output.field_name == self.TimeOnHeating:
@@ -840,7 +806,7 @@ class HeatPumpHplib(Component):
             unit="kWh",
             value=electrical_energy_for_heating_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(electrical_input_energy_for_heating_entry)
 
@@ -849,7 +815,7 @@ class HeatPumpHplib(Component):
             unit="kWh",
             value=electrical_energy_for_cooling_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(electrical_input_energy_for_cooling_entry)
 
@@ -858,7 +824,7 @@ class HeatPumpHplib(Component):
             unit="kWh",
             value=total_electrical_energy_input_in_kilowatt_hour,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(electrical_input_energy_total_entry)
 
@@ -867,7 +833,7 @@ class HeatPumpHplib(Component):
             unit="h",
             value=heating_time_in_hours,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(heating_hours_entry)
 
@@ -876,7 +842,7 @@ class HeatPumpHplib(Component):
             unit="h",
             value=cooling_time_in_hours,
             tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING,
-            description=self.component_name
+            description=self.component_name,
         )
         list_of_kpi_entries.append(cooling_hours_entry)
 
@@ -907,9 +873,7 @@ class HeatPumpState:
     time_on_cooling: int = 0
     on_off_previous: float = 0
 
-    def self_copy(
-        self,
-    ):
+    def self_copy(self,):
         """Copy the Heat Pump State."""
         return HeatPumpState(self.time_on_heating, self.time_off, self.time_on_cooling, self.on_off_previous)
 
@@ -991,9 +955,7 @@ class HeatPumpHplibController(Component):
         )
 
         self.heat_distribution_system_type = self.heatpump_controller_config.heat_distribution_system_type
-        self.build(
-            mode=self.heatpump_controller_config.mode,
-        )
+        self.build(mode=self.heatpump_controller_config.mode,)
 
         self.water_temperature_input_channel: ComponentInput = self.add_input(
             self.component_name,
@@ -1011,11 +973,7 @@ class HeatPumpHplibController(Component):
             True,
         )
         self.daily_avg_outside_temperature_input_channel: ComponentInput = self.add_input(
-            self.component_name,
-            self.DailyAverageOutsideTemperature,
-            LoadTypes.TEMPERATURE,
-            Units.CELSIUS,
-            True,
+            self.component_name, self.DailyAverageOutsideTemperature, LoadTypes.TEMPERATURE, Units.CELSIUS, True,
         )
 
         self.simple_hot_water_storage_temperature_modifier_channel: ComponentInput = self.add_input(
@@ -1042,9 +1000,7 @@ class HeatPumpHplibController(Component):
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
         self.add_default_connections(self.get_default_connections_from_energy_management_system())
 
-    def get_default_connections_from_heat_distribution_controller(
-        self,
-    ):
+    def get_default_connections_from_heat_distribution_controller(self,):
         """Get default connections."""
         connections = []
         hdsc_classname = heat_distribution_system.HeatDistributionController.get_classname()
@@ -1057,9 +1013,7 @@ class HeatPumpHplibController(Component):
         )
         return connections
 
-    def get_default_connections_from_weather(
-        self,
-    ):
+    def get_default_connections_from_weather(self,):
         """Get default connections."""
         connections = []
         weather_classname = weather.Weather.get_classname()
@@ -1072,9 +1026,7 @@ class HeatPumpHplibController(Component):
         )
         return connections
 
-    def get_default_connections_from_simple_hot_water_storage(
-        self,
-    ):
+    def get_default_connections_from_simple_hot_water_storage(self,):
         """Get simple hot water storage default connections."""
         connections = []
         hws_classname = simple_hot_water_storage.SimpleHotWaterStorage.get_classname()
@@ -1087,9 +1039,7 @@ class HeatPumpHplibController(Component):
         )
         return connections
 
-    def get_default_connections_from_energy_management_system(
-        self,
-    ):
+    def get_default_connections_from_energy_management_system(self,):
         """Get energy management system default connections."""
         # use importlib for importing the other component in order to avoid circular-import errors
         component_module_name = "hisim.components.controller_l2_energy_management_system"
@@ -1106,10 +1056,7 @@ class HeatPumpHplibController(Component):
         )
         return connections
 
-    def build(
-        self,
-        mode: float,
-    ) -> None:
+    def build(self, mode: float,) -> None:
         """Build function.
 
         The function sets important constants and parameters for the calculations.
@@ -1342,6 +1289,29 @@ class HeatPumpHplibController(Component):
             )
 
         return cooling_mode
+
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> OpexCostDataClass:
+        """Calculate OPEX costs, consisting of electricity costs and revenues."""
+        opex_cost_data_class = OpexCostDataClass.get_default_opex_cost_data_class()
+        return opex_cost_data_class
+
+    @staticmethod
+    def get_cost_capex(config: HeatPumpHplibControllerL1Config, simulation_parameters: SimulationParameters) -> CapexCostDataClass:  # pylint: disable=unused-argument
+        """Returns investment cost, CO2 emissions and lifetime."""
+        capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
+        return capex_cost_data_class
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        return []
 
 
 @dataclass

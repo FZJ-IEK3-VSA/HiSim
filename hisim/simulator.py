@@ -417,6 +417,7 @@ class Simulator:
                 Units.WATT_PER_SQUARE_METER,
                 Units.KG_PER_SEC,
                 Units.PERCENT,
+                Units.PASCAL
             ):
                 temp_df_monthly = temp_df.resample("M").mean()
                 temp_df_daily = temp_df.resample("D").mean()

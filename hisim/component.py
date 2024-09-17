@@ -9,7 +9,7 @@ import os
 import dataclasses as dc
 import typing
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 import json
 import pandas as pd
 from dataclass_wizard import JSONWizard
@@ -18,7 +18,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.sim_repository import SimRepository
 from hisim.simulationparameters import SimulationParameters
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 # Package
 
 
@@ -405,18 +405,14 @@ class Component:
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         # pylint: disable=unused-argument
-        """Calculates operational cost, operational co2 footprint and consumption in kWh (for DIesel in l) during simulation time frame."""
-        return OpexCostDataClass.get_default_opex_cost_data_class()
+        """Calculates operational cost, operational co2 footprint and consumption in kWh (for Diesel in l) during simulation time frame."""
+        raise NotImplementedError(f"{self.component_name} has no opex costs implemented.")
 
     @staticmethod
-    def get_cost_capex(config: ConfigBase) -> Tuple[float, float, float]:
+    def get_cost_capex(config: ConfigBase, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         # pylint: disable=unused-argument
-        """Calculates lifetime, total capital expenditure cost and total co2 footprint of production of device.
-
-        :return: [capex in euro, co2 footprint in kg, lifetime]
-        :rtype: Tuple[float,float, float]
-        """
-        return 0, 0, 1
+        """Calculates lifetime, total capital expenditure cost and total co2 footprint of production of device."""
+        raise NotImplementedError(f"{config.get_main_classname()} has no capex costs implemented.")
 
     def get_component_kpi_entries(
         self,
@@ -425,12 +421,12 @@ class Component:
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         # if the method is not implemented in the component return an empty list
-        return []
+        raise NotImplementedError(f"{self.component_name} has no kpis implemented.")
 
     def calc_maintenance_cost(self) -> float:
         """Calc maintenance_cost per simulated period as share of capex of component."""
         seconds_per_year = 365 * 24 * 60 * 60
-        investment = self.get_cost_capex(self.config)[0]
+        investment = self.get_cost_capex(config=self.config, simulation_parameters=self.my_simulation_parameters).capex_investment_cost_in_euro
 
         # add maintenance costs per simulated period
         maintenance_cost_per_simulated_period_in_euro: float = (
@@ -471,6 +467,7 @@ class OpexCostDataClass:
     co2_footprint_in_kg: float
     consumption_in_kwh: float
     loadtype: lt.LoadTypes
+    kpi_tag: Optional[KpiTagEnumClass]
 
     @classmethod
     def get_default_opex_cost_data_class(cls) -> OpexCostDataClass:
@@ -480,5 +477,31 @@ class OpexCostDataClass:
             opex_maintenance_cost_in_euro=0,
             co2_footprint_in_kg=0,
             consumption_in_kwh=0,
-            loadtype=lt.LoadTypes.ANY
+            loadtype=lt.LoadTypes.ANY,
+            kpi_tag=None
+        )
+
+
+@dataclass
+class CapexCostDataClass:
+
+    """Return element of type CapexCostDataClass in function get_capex_cost from Component."""
+
+    capex_investment_cost_in_euro: float
+    device_co2_footprint_in_kg: float
+    lifetime_in_years: float
+    capex_investment_cost_for_simulated_period_in_euro: float
+    device_co2_footprint_for_simulated_period_in_kg: float
+    kpi_tag: Optional[KpiTagEnumClass] = None
+
+    @classmethod
+    def get_default_capex_cost_data_class(cls) -> CapexCostDataClass:
+        """Return the Default for all Components without Capex Costs."""
+        return CapexCostDataClass(
+            capex_investment_cost_in_euro=0,
+            device_co2_footprint_in_kg=0,
+            lifetime_in_years=1,
+            capex_investment_cost_for_simulated_period_in_euro=0,
+            device_co2_footprint_for_simulated_period_in_kg=0,
+            kpi_tag=None
         )

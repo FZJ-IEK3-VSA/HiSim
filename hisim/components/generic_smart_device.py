@@ -23,6 +23,7 @@ from hisim import loadtypes as lt
 from hisim import utils
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import OpexCostDataClass
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
 
 __authors__ = "Johanna Ganglbauer"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -370,7 +371,8 @@ class SmartDevice(cp.Component):
             opex_maintenance_cost_in_euro=0,  # TODO: add maintenance costs
             co2_footprint_in_kg=0,
             consumption_in_kwh=self.consumption,
-            loadtype=lt.LoadTypes.ELECTRICITY
+            loadtype=lt.LoadTypes.ELECTRICITY,
+            kpi_tag=KpiTagEnumClass.SMART_DEVICE
         )
 
         return opex_cost_data_class

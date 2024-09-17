@@ -1,0 +1,745 @@
+{
+    "systemName": "my_system",
+    "componentEntries": [
+        {
+            "componentFullClassname": "hisim.components.weather.Weather",
+            "componentName": "Weather",
+            "configuration": {
+                "buildingName": "District",
+                "name": "Weather",
+                "location": "AACHEN",
+                "sourcePath": "/fast/home/k-rieck/repositories/HiSim/hisim/inputs/weather/test-reference-years_1995-2012_1-location/data_processed/aachen_center",
+                "dataSource": 1,
+                "predictiveControl": false
+            },
+            "configFullClassname": "hisim.components.weather.WeatherConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.building.Building",
+            "componentName": "Building",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "Building",
+                "heating_reference_temperature_in_celsius": -7.0,
+                "building_code": "DE.N.SFH.05.Gen.ReEx.001.002",
+                "building_heat_capacity_class": "medium",
+                "initial_internal_temperature_in_celsius": 22.0,
+                "absolute_conditioned_floor_area_in_m2": 121.2,
+                "total_base_area_in_m2": null,
+                "number_of_apartments": 1,
+                "max_thermal_building_demand_in_watt": null,
+                "predictive": false,
+                "set_heating_temperature_in_celsius": 20.0,
+                "set_cooling_temperature_in_celsius": 25.0,
+                "enable_opening_windows": true
+            },
+            "configFullClassname": "hisim.components.building.BuildingConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
+            "componentName": "UTSPConnector",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "UTSPConnector",
+                "data_acquisition_mode": "use_utsp",
+                "household": {
+                    "Name": "CHR01 Couple both at Work",
+                    "Guid": {
+                        "StrVal": "516a33ab-79e1-4221-853b-967fc11cc85a"
+                    }
+                },
+                "energy_intensity": "EnergySaving",
+                "travel_route_set": {
+                    "Name": "Travel Route Set for 10km Commuting Distance",
+                    "Guid": {
+                        "StrVal": "ca46be86-9cc7-47b5-9769-abff78ceca7a"
+                    }
+                },
+                "transportation_device_set": {
+                    "Name": "Bus and one 30 km/h Car",
+                    "Guid": {
+                        "StrVal": "6ac74bd0-bacd-4b39-b84a-dc7ae16702c9"
+                    }
+                },
+                "charging_station_set": {
+                    "Name": "Charging At Home with 11 kW",
+                    "Guid": {
+                        "StrVal": "78dae308-24c4-45cc-8bdf-b001d61f45c2"
+                    }
+                },
+                "profile_with_washing_machine_and_dishwasher": true,
+                "predictive_control": false,
+                "predictive": false,
+                "result_dir_path": "/fast/home/k-rieck/repositories/HiSim/hisim/results",
+                "cache_dir_path": null,
+                "guid": ""
+            },
+            "configFullClassname": "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.generic_pv_system.PVSystem",
+            "componentName": "PVSystem",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "PVSystem",
+                "time": 2019,
+                "location": "AACHEN",
+                "module_name": "Hanwha HSL60P6-PA-4-250T [2013]",
+                "integrate_inverter": true,
+                "inverter_name": "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
+                "module_database": 1,
+                "inverter_database": 2,
+                "power_in_watt": 15354.545454545456,
+                "azimuth": 180,
+                "tilt": 30,
+                "share_of_maximum_pv_potential": 1,
+                "load_module_data": false,
+                "source_weight": 0,
+                "co2_footprint": 5074.830818181818,
+                "cost": 12197.804454545454,
+                "maintenance_cost_as_percentage_of_investment": 0.01,
+                "lifetime": 25,
+                "predictive": false,
+                "predictive_control": false,
+                "prediction_horizon": null
+            },
+            "configFullClassname": "hisim.components.generic_pv_system.PVSystemConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.heat_distribution_system.HeatDistributionController",
+            "componentName": "HeatDistributionController",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "HeatDistributionController",
+                "heating_system": 2,
+                "set_heating_threshold_outside_temperature_in_celsius": 16.0,
+                "heating_reference_temperature_in_celsius": -7.0,
+                "set_heating_temperature_for_building_in_celsius": 20.0,
+                "set_cooling_temperature_for_building_in_celsius": 25.0,
+                "heating_load_of_building_in_watt": 7732.56
+            },
+            "configFullClassname": "hisim.components.heat_distribution_system.HeatDistributionControllerConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.advanced_heat_pump_hplib.HeatPumpHplibController",
+            "componentName": "HeatPumpController",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "HeatPumpController",
+                "mode": 2,
+                "set_heating_threshold_outside_temperature_in_celsius": 16.0,
+                "set_cooling_threshold_outside_temperature_in_celsius": 20.0,
+                "heat_distribution_system_type": 2
+            },
+            "configFullClassname": "hisim.components.advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.advanced_heat_pump_hplib.HeatPumpHplib",
+            "componentName": "AdvancedHeatPumpHPLib",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "AdvancedHeatPumpHPLib",
+                "model": "Generic",
+                "group_id": 1,
+                "heating_reference_temperature_in_celsius": {
+                    "value": -7.0,
+                    "unit": {
+                        "symbol": "\u00b0C"
+                    }
+                },
+                "flow_temperature_in_celsius": {
+                    "value": 52,
+                    "unit": {
+                        "symbol": "\u00b0C"
+                    }
+                },
+                "set_thermal_output_power_in_watt": {
+                    "value": 7732.56,
+                    "unit": {
+                        "symbol": "W"
+                    }
+                },
+                "cycling_mode": true,
+                "minimum_running_time_in_seconds": {
+                    "value": 3600,
+                    "unit": {
+                        "symbol": "s"
+                    }
+                },
+                "minimum_idle_time_in_seconds": {
+                    "value": 3600,
+                    "unit": {
+                        "symbol": "s"
+                    }
+                },
+                "co2_footprint": {
+                    "value": 1282.3677504,
+                    "unit": {
+                        "symbol": "kg"
+                    }
+                },
+                "cost": {
+                    "value": 11705.085374400001,
+                    "unit": {
+                        "symbol": "Euro"
+                    }
+                },
+                "lifetime": {
+                    "value": 10,
+                    "unit": {
+                        "symbol": "years"
+                    }
+                },
+                "maintenance_cost_as_percentage_of_investment": 0.025
+            },
+            "configFullClassname": "hisim.components.advanced_heat_pump_hplib.HeatPumpHplibConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.generic_hot_water_storage_modular.HotWaterStorage",
+            "componentName": "DHWBoiler",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "DHWBoiler",
+                "source_weight": 1,
+                "use": "Boiler",
+                "volume": 450,
+                "surface": 3.4131206407406136,
+                "u_value": 0.36,
+                "energy_full_cycle": 10.214535,
+                "power": 0,
+                "co2_footprint": 0,
+                "cost": 6529.5,
+                "lifetime": 20,
+                "maintenance_cost_as_percentage_of_investment": 0.02
+            },
+            "configFullClassname": "hisim.components.generic_hot_water_storage_modular.StorageConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.controller_l1_heatpump.L1HeatPumpController",
+            "componentName": "DHWHeatpumpController",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "DHWHeatpumpController",
+                "source_weight": 1,
+                "t_min_heating_in_celsius": 40.0,
+                "t_max_heating_in_celsius": 60.0,
+                "cooling_considered": false,
+                "day_of_heating_season_begin": 270,
+                "day_of_heating_season_end": 150,
+                "min_operation_time_in_seconds": 1800,
+                "min_idle_time_in_seconds": 1800
+            },
+            "configFullClassname": "hisim.components.controller_l1_heatpump.L1HeatPumpConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.generic_heat_pump_modular.ModularHeatPump",
+            "componentName": "DHWHeatPump",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "DHWHeatPump",
+                "source_weight": 1,
+                "manufacturer": "Viessmann Werke GmbH & Co KG",
+                "device_name": "Vitocal 300-A AWO-AC 301.B07",
+                "power_th": 6000,
+                "water_vs_heating": "WaterHeating",
+                "device_category": "HeatPump",
+                "co2_footprint": 995.04,
+                "cost": 9082.44,
+                "lifetime": 10,
+                "maintenance_cost_as_percentage_of_investment": 0.025
+            },
+            "configFullClassname": "hisim.components.generic_heat_pump_modular.HeatPumpConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.simple_hot_water_storage.SimpleHotWaterStorage",
+            "componentName": "SimpleHotWaterStorage",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "SimpleHotWaterStorage",
+                "volume_heating_water_storage_in_liter": 949.8292593047537,
+                "heat_transfer_coefficient_in_watt_per_m2_per_kelvin": 2.0,
+                "heat_exchanger_is_present": true,
+                "position_hot_water_storage_in_system": 1,
+                "co2_footprint": 100,
+                "cost": 13782.022552511977,
+                "lifetime": 100,
+                "maintenance_cost_as_percentage_of_investment": 0.0
+            },
+            "configFullClassname": "hisim.components.simple_hot_water_storage.SimpleHotWaterStorageConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.heat_distribution_system.HeatDistribution",
+            "componentName": "HeatDistributionSystem",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "HeatDistributionSystem",
+                "water_mass_flow_rate_in_kg_per_second": 0.2642706766917293,
+                "absolute_conditioned_floor_area_in_m2": 121.2,
+                "position_hot_water_storage_in_system": 1,
+                "co2_footprint": 0,
+                "cost": 8000,
+                "lifetime": 50,
+                "maintenance_cost_as_percentage_of_investment": 0.01
+            },
+            "configFullClassname": "hisim.components.heat_distribution_system.HeatDistributionConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.electricity_meter.ElectricityMeter",
+            "componentName": "ElectricityMeter",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "ElectricityMeter"
+            },
+            "configFullClassname": "hisim.components.electricity_meter.ElectricityMeterConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.advanced_battery_bslib.Battery",
+            "componentName": "Battery",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "Battery",
+                "source_weight": 1,
+                "system_id": "SG1",
+                "custom_pv_inverter_power_generic_in_watt": 7677.272727272728,
+                "custom_battery_capacity_generic_in_kilowatt_hour": 15.354545454545455,
+                "charge_in_kwh": 0.0,
+                "discharge_in_kwh": -0.0,
+                "co2_footprint": 2006.8390909090908,
+                "cost": 8227.118999999999,
+                "lifetime": 10,
+                "lifetime_in_cycles": 5000.0,
+                "maintenance_cost_as_percentage_of_investment": 0.02
+            },
+            "configFullClassname": "hisim.components.advanced_battery_bslib.BatteryConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem",
+            "componentName": "L2EMSElectricityController",
+            "configuration": {
+                "building_name": "BUI1",
+                "name": "L2EMSElectricityController",
+                "strategy": "optimize_own_consumption",
+                "limit_to_shave": 0,
+                "building_indoor_temperature_offset_value": 2,
+                "domestic_hot_water_storage_temperature_offset_value": 10,
+                "space_heating_water_storage_temperature_offset_value": 10
+            },
+            "configFullClassname": "hisim.components.controller_l2_energy_management_system.EMSConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.building.Building",
+            "componentName": "Building",
+            "configuration": {
+                "building_name": "BUI2",
+                "name": "Building",
+                "heating_reference_temperature_in_celsius": -7.0,
+                "building_code": "DE.N.SFH.05.Gen.ReEx.001.002",
+                "building_heat_capacity_class": "medium",
+                "initial_internal_temperature_in_celsius": 22.0,
+                "absolute_conditioned_floor_area_in_m2": 121.2,
+                "total_base_area_in_m2": null,
+                "number_of_apartments": 1,
+                "max_thermal_building_demand_in_watt": null,
+                "predictive": false,
+                "set_heating_temperature_in_celsius": 20.0,
+                "set_cooling_temperature_in_celsius": 25.0,
+                "enable_opening_windows": true
+            },
+            "configFullClassname": "hisim.components.building.BuildingConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnector",
+            "componentName": "UTSPConnector",
+            "configuration": {
+                "building_name": "BUI2",
+                "name": "UTSPConnector",
+                "data_acquisition_mode": "use_utsp",
+                "household": {
+                    "Name": "CHR01 Couple both at Work",
+                    "Guid": {
+                        "StrVal": "516a33ab-79e1-4221-853b-967fc11cc85a"
+                    }
+                },
+                "energy_intensity": "EnergySaving",
+                "travel_route_set": {
+                    "Name": "Travel Route Set for 10km Commuting Distance",
+                    "Guid": {
+                        "StrVal": "ca46be86-9cc7-47b5-9769-abff78ceca7a"
+                    }
+                },
+                "transportation_device_set": {
+                    "Name": "Bus and one 30 km/h Car",
+                    "Guid": {
+                        "StrVal": "6ac74bd0-bacd-4b39-b84a-dc7ae16702c9"
+                    }
+                },
+                "charging_station_set": {
+                    "Name": "Charging At Home with 11 kW",
+                    "Guid": {
+                        "StrVal": "78dae308-24c4-45cc-8bdf-b001d61f45c2"
+                    }
+                },
+                "profile_with_washing_machine_and_dishwasher": true,
+                "predictive_control": false,
+                "predictive": false,
+                "result_dir_path": "/fast/home/k-rieck/repositories/HiSim/hisim/results",
+                "cache_dir_path": null,
+                "guid": ""
+            },
+            "configFullClassname": "hisim.components.loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.generic_pv_system.PVSystem",
+            "componentName": "PVSystem",
+            "configuration": {
+                "building_name": "BUI2",
+                "name": "PVSystem",
+                "time": 2019,
+                "location": "AACHEN",
+                "module_name": "Hanwha HSL60P6-PA-4-250T [2013]",
+                "integrate_inverter": true,
+                "inverter_name": "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
+                "module_database": 1,
+                "inverter_database": 2,
+                "power_in_watt": 15354.545454545456,
+                "azimuth": 180,
+                "tilt": 30,
+                "share_of_maximum_pv_potential": 1,
+                "load_module_data": false,
+                "source_weight": 0,
+                "co2_footprint": 5074.830818181818,
+                "cost": 12197.804454545454,
+                "maintenance_cost_as_percentage_of_investment": 0.01,
+                "lifetime": 25,
+                "predictive": false,
+                "predictive_control": false,
+                "prediction_horizon": null
+            },
+            "configFullClassname": "hisim.components.generic_pv_system.PVSystemConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.heat_distribution_system.HeatDistributionController",
+            "componentName": "HeatDistributionController",
+            "configuration": {
+                "building_name": "BUI2",
+                "name": "HeatDistributionController",
+                "heating_system": 2,
+                "set_heating_threshold_outside_temperature_in_celsius": 16.0,
+                "heating_reference_temperature_in_celsius": -7.0,
+                "set_heating_temperature_for_building_in_celsius": 20.0,
+                "set_cooling_temperature_for_building_in_celsius": 25.0,
+                "heating_load_of_building_in_watt": 7732.56
+            },
+            "configFullClassname": "hisim.components.heat_distribution_system.HeatDistributionControllerConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.advanced_heat_pump_hplib.HeatPumpHplibController",
+            "componentName": "HeatPumpController",
+            "configuration": {
+                "building_name": "BUI2",
+                "name": "HeatPumpController",
+                "mode": 2,
+                "set_heating_threshold_outside_temperature_in_celsius": 16.0,
+                "set_cooling_threshold_outside_temperature_in_celsius": 20.0,
+                "heat_distribution_system_type": 2
+            },
+            "configFullClassname": "hisim.components.advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.advanced_heat_pump_hplib.HeatPumpHplib",
+            "componentName": "AdvancedHeatPumpHPLib",
+            "configuration": {
+                "building_name": "BUI2",
+                "name": "AdvancedHeatPumpHPLib",
+                "model": "Generic",
+                "group_id": 1,
+                "heating_reference_temperature_in_celsius": {
+                    "value": -7.0,
+                    "unit": {
+                        "symbol": "\u00b0C"
+                    }
+                },
+                "flow_temperature_in_celsius": {
+                    "value": 52,
+                    "unit": {
+                        "symbol": "\u00b0C"
+                    }
+                },
+                "set_thermal_output_power_in_watt": {
+                    "value": 7732.56,
+                    "unit": {
+                        "symbol": "W"
+                    }
+                },
+                "cycling_mode": true,
+                "minimum_running_time_in_seconds": {
+                    "value": 3600,
+                    "unit": {
+                        "symbol": "s"
+                    }
+                },
+                "minimum_idle_time_in_seconds": {
+                    "value": 3600,
+                    "unit": {
+                        "symbol": "s"
+                    }
+                },
+                "co2_footprint": {
+                    "value": 1282.3677504,
+                    "unit": {
+                        "symbol": "kg"
+                    }
+                },
+                "cost": {
+                    "value": 11705.085374400001,
+                    "unit": {
+                        "symbol": "Euro"
+                    }
+                },
+                "lifetime": {
+                    "value": 10,
+                    "unit": {
+                        "symbol": "years"
+                    }
+                },
+                "maintenance_cost_as_percentage_of_investment": 0.025
+            },
+            "configFullClassname": "hisim.components.advanced_heat_pump_hplib.HeatPumpHplibConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.generic_hot_water_storage_modular.HotWaterStorage",
+            "componentName": "DHWBoiler",
+            "configuration": {
+                "building_name": "BUI2",
+                "name": "DHWBoiler",
+                "source_weight": 1,
+                "use": "Boiler",
+                "volume": 450,
+                "surface": 3.4131206407406136,
+                "u_value": 0.36,
+                "energy_full_cycle": 10.214535,
+                "power": 0,
+                "co2_footprint": 0,
+                "cost": 6529.5,
+                "lifetime": 20,
+                "maintenance_cost_as_percentage_of_investment": 0.02
+            },
+            "configFullClassname": "hisim.components.generic_hot_water_storage_modular.StorageConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.controller_l1_heatpump.L1HeatPumpController",
+            "componentName": "DHWHeatpumpController",
+            "configuration": {
+                "building_name": "BUI2",
+                "name": "DHWHeatpumpController",
+                "source_weight": 1,
+                "t_min_heating_in_celsius": 40.0,
+                "t_max_heating_in_celsius": 60.0,
+                "cooling_considered": false,
+                "day_of_heating_season_begin": 270,
+                "day_of_heating_season_end": 150,
+                "min_operation_time_in_seconds": 1800,
+                "min_idle_time_in_seconds": 1800
+            },
+            "configFullClassname": "hisim.components.controller_l1_heatpump.L1HeatPumpConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.generic_heat_pump_modular.ModularHeatPump",
+            "componentName": "DHWHeatPump",
+            "configuration": {
+                "building_name": "BUI2",
+                "name": "DHWHeatPump",
+                "source_weight": 1,
+                "manufacturer": "Viessmann Werke GmbH & Co KG",
+                "device_name": "Vitocal 300-A AWO-AC 301.B07",
+                "power_th": 6000,
+                "water_vs_heating": "WaterHeating",
+                "device_category": "HeatPump",
+                "co2_footprint": 995.04,
+                "cost": 9082.44,
+                "lifetime": 10,
+                "maintenance_cost_as_percentage_of_investment": 0.025
+            },
+            "configFullClassname": "hisim.components.generic_heat_pump_modular.HeatPumpConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.simple_hot_water_storage.SimpleHotWaterStorage",
+            "componentName": "SimpleHotWaterStorage",
+            "configuration": {
+                "building_name": "BUI2",
+                "name": "SimpleHotWaterStorage",
+                "volume_heating_water_storage_in_liter": 949.8292593047537,
+                "heat_transfer_coefficient_in_watt_per_m2_per_kelvin": 2.0,
+                "heat_exchanger_is_present": true,
+                "position_hot_water_storage_in_system": 1,
+                "co2_footprint": 100,
+                "cost": 13782.022552511977,
+                "lifetime": 100,
+                "maintenance_cost_as_percentage_of_investment": 0.0
+            },
+            "configFullClassname": "hisim.components.simple_hot_water_storage.SimpleHotWaterStorageConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.heat_distribution_system.HeatDistribution",
+            "componentName": "HeatDistributionSystem",
+            "configuration": {
+                "building_name": "BUI2",
+                "name": "HeatDistributionSystem",
+                "water_mass_flow_rate_in_kg_per_second": 0.2642706766917293,
+                "absolute_conditioned_floor_area_in_m2": 121.2,
+                "position_hot_water_storage_in_system": 1,
+                "co2_footprint": 0,
+                "cost": 8000,
+                "lifetime": 50,
+                "maintenance_cost_as_percentage_of_investment": 0.01
+            },
+            "configFullClassname": "hisim.components.heat_distribution_system.HeatDistributionConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.electricity_meter.ElectricityMeter",
+            "componentName": "ElectricityMeter",
+            "configuration": {
+                "building_name": "BUI2",
+                "name": "ElectricityMeter"
+            },
+            "configFullClassname": "hisim.components.electricity_meter.ElectricityMeterConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.advanced_battery_bslib.Battery",
+            "componentName": "Battery",
+            "configuration": {
+                "building_name": "BUI2",
+                "name": "Battery",
+                "source_weight": 1,
+                "system_id": "SG1",
+                "custom_pv_inverter_power_generic_in_watt": 7677.272727272728,
+                "custom_battery_capacity_generic_in_kilowatt_hour": 15.354545454545455,
+                "charge_in_kwh": 0.0,
+                "discharge_in_kwh": -0.0,
+                "co2_footprint": 2006.8390909090908,
+                "cost": 8227.118999999999,
+                "lifetime": 10,
+                "lifetime_in_cycles": 5000.0,
+                "maintenance_cost_as_percentage_of_investment": 0.02
+            },
+            "configFullClassname": "hisim.components.advanced_battery_bslib.BatteryConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.controller_l2_energy_management_system.L2GenericEnergyManagementSystem",
+            "componentName": "L2EMSElectricityController",
+            "configuration": {
+                "building_name": "BUI2",
+                "name": "L2EMSElectricityController",
+                "strategy": "optimize_own_consumption",
+                "limit_to_shave": 0,
+                "building_indoor_temperature_offset_value": 2,
+                "domestic_hot_water_storage_temperature_offset_value": 10,
+                "space_heating_water_storage_temperature_offset_value": 10
+            },
+            "configFullClassname": "hisim.components.controller_l2_energy_management_system.EMSConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.generic_pv_system.PVSystem",
+            "componentName": "PV_Park",
+            "configuration": {
+                "building_name": "District",
+                "name": "PV_Park",
+                "time": 2023,
+                "location": "AACHEN",
+                "module_name": "Hanwha HSL60P6-PA-4-250T [2013]",
+                "integrate_inverter": true,
+                "inverter_name": "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
+                "module_database": 1,
+                "inverter_database": 2,
+                "power_in_watt": 0,
+                "azimuth": 180,
+                "tilt": 30,
+                "share_of_maximum_pv_potential": 1.0,
+                "load_module_data": false,
+                "source_weight": 999,
+                "co2_footprint": 4957.65,
+                "cost": 11916.15,
+                "maintenance_cost_as_percentage_of_investment": 0.01,
+                "lifetime": 25,
+                "predictive": false,
+                "predictive_control": false,
+                "prediction_horizon": null
+            },
+            "configFullClassname": "hisim.components.generic_pv_system.PVSystemConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        },
+        {
+            "componentFullClassname": "hisim.components.electricity_meter.ElectricityMeter",
+            "componentName": "ElectricityMeter",
+            "configuration": {
+                "building_name": "District",
+                "name": "ElectricityMeter"
+            },
+            "configFullClassname": "hisim.components.electricity_meter.ElectricityMeterConfig",
+            "defaultConnections": [],
+            "manualConnections": []
+        }
+    ],
+    "mySimulationParameters": null,
+    "myModuleConfig": null,
+    "scenarioDataInformation": null
+}

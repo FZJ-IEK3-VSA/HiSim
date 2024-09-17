@@ -1,12 +1,7 @@
-from dataclasses import dataclass, field
+"""Energy system config module for building sizer (without UTSP but with cluster)."""
 
-# from typing import Optional
-
+from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-
-# from utspclient.helpers.lpgdata import ChargingStationSets
-# from utspclient.helpers.lpgpythonbindings import JsonReference
-
 from hisim.loadtypes import HeatingSystems
 
 

@@ -5,10 +5,6 @@ from dataclasses import dataclass, field
 from typing import Optional, List
 
 from dataclasses_json import dataclass_json
-from utspclient.helpers.lpgdata import TravelRouteSets
-from utspclient.helpers.lpgpythonbindings import JsonReference
-
-from hisim.loadtypes import HeatingSystems
 
 
 @dataclass_json

@@ -70,14 +70,15 @@ class PostProcessor:
             # Charts etc. are not needed when executing HiSim in a container. Allow only csv files and KPI.
             allowed_options_for_docker = {
                 PostProcessingOptions.EXPORT_TO_CSV,
-                PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT,
+                PostProcessingOptions.COMPUTE_KPIS,
                 PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE,
                 PostProcessingOptions.COMPUTE_OPEX,
                 PostProcessingOptions.COMPUTE_CAPEX,
                 PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL,
                 PostProcessingOptions.MAKE_OPERATION_RESULTS_FOR_WEBTOOL,
                 PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON,
-                PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON,
+                PostProcessingOptions.WRITE_KPIS_TO_JSON,
+                PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER,
             }
             # Of all specified options, select those that are allowed
             valid_options = list(set(ppdt.post_processing_options) & allowed_options_for_docker)
@@ -86,7 +87,6 @@ class PostProcessor:
                 ppdt.post_processing_options = valid_options
                 log.warning("Hisim is running in a docker container. Disabled invalid postprocessing options.")
 
-        report = reportgenerator.ReportGenerator(dirpath=ppdt.simulation_parameters.result_directory)
         days = {"month": 0, "day": 0}
         system_chart_entries: List[SystemChartEntry] = []
         building_objects_in_district_list = self.get_building_object_in_district(ppdt)
@@ -145,6 +145,7 @@ class PostProcessor:
         if PostProcessingOptions.GENERATE_PDF_REPORT in ppdt.post_processing_options:
             log.information("Making PDF report and writing simulation parameters to report.")
             start = timer()
+            report = reportgenerator.ReportGenerator(dirpath=ppdt.simulation_parameters.result_directory)
             self.write_simulation_parameters_to_report(ppdt, report)
             end = timer()
             duration = end - start
@@ -198,8 +199,8 @@ class PostProcessor:
                 "Computing and writing investment costs and C02 emissions from production of devices to report took "
                 + f"{duration:1.2f}s."
             )
-        if PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT in ppdt.post_processing_options:
-            log.information("Computing and writing KPIs to report.")
+        if PostProcessingOptions.COMPUTE_KPIS in ppdt.post_processing_options:
+            log.information("Computing KPIs and writing to report if option is chosen.")
             start = timer()
             ppdt = self.compute_kpis_and_write_to_report_and_to_ppdt(ppdt, report, building_objects_in_district_list)
             end = timer()
@@ -284,9 +285,9 @@ class PostProcessor:
             log.information("Writing KPIs to JSON file for building sizer.")
             self.write_kpis_to_json_for_building_sizer(ppdt, building_objects_in_district_list)
 
-        if PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON in ppdt.post_processing_options:
+        if PostProcessingOptions.WRITE_KPIS_TO_JSON in ppdt.post_processing_options:
             log.information("Write all KPIs to json file.")
-            self.write_all_kpis_to_json_file(ppdt)
+            self.write_kpis_to_json_file(ppdt)
 
         log.information("Finished main post processing function.")
 
@@ -584,14 +585,15 @@ class PostProcessor:
         # initialize kpi data class and compute all kpi values
         kpi_data_class = KpiGenerator(post_processing_data_transfer=ppdt,
                                       building_objects_in_district_list=building_objects_in_district_list)
-        # write kpi table to report
-        kpi_table = kpi_data_class.return_table_for_report()
-        self.write_new_chapter_with_table_to_report(
-            report=report,
-            table_as_list_of_list=kpi_table,
-            headline=". KPIs",
-            comment=["Here a comment on calculation of numbers will follow"],
-        )
+        # write kpi table to report if option is chosen
+        if PostProcessingOptions.GENERATE_PDF_REPORT in ppdt.post_processing_options:
+            kpi_table = kpi_data_class.return_table_for_report()
+            self.write_new_chapter_with_table_to_report(
+                report=report,
+                table_as_list_of_list=kpi_table,
+                headline=". KPIs",
+                comment=["Here a comment on calculation of numbers will follow"],
+            )
         # write kpi dict collection into ppdt
         ppdt.kpi_collection_dict = kpi_data_class.kpi_collection_dict_sorted
         return ppdt
@@ -960,7 +962,7 @@ class PostProcessor:
         if all(
             option in ppdt.post_processing_options
             for option in [
-                PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT,
+                PostProcessingOptions.COMPUTE_KPIS,
                 PostProcessingOptions.COMPUTE_CAPEX,
                 PostProcessingOptions.COMPUTE_OPEX,
             ]
@@ -1004,15 +1006,15 @@ class PostProcessor:
         else:
             raise ValueError(
                 "Some PostProcessingOptions are not set. Please check if "
-                f"{PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT}, {PostProcessingOptions.COMPUTE_CAPEX} and "
+                f"{PostProcessingOptions.COMPUTE_KPIS}, {PostProcessingOptions.COMPUTE_CAPEX} and "
                 f"{PostProcessingOptions.COMPUTE_OPEX} are set in your system setup."
             )
 
-    def write_all_kpis_to_json_file(self, ppdt: PostProcessingDataTransfer) -> None:
+    def write_kpis_to_json_file(self, ppdt: PostProcessingDataTransfer) -> None:
         """Write all KPIs o json file."""
 
         # Check if important options were set
-        if PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT in ppdt.post_processing_options:
+        if PostProcessingOptions.COMPUTE_KPIS in ppdt.post_processing_options:
             # Get KPIs from ppdt
             kpi_collection_dict = ppdt.kpi_collection_dict
 
@@ -1023,7 +1025,7 @@ class PostProcessor:
         else:
             raise ValueError(
                 "Some PostProcessingOptions are not set. Please check if "
-                f"{PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT} is set in your system setup."
+                f"{PostProcessingOptions.COMPUTE_KPIS} is set in your system setup."
             )
 
     def write_kpis_to_json_for_building_sizer(
@@ -1032,7 +1034,7 @@ class PostProcessor:
         """Write KPIs to json file for building sizer."""
 
         # Check if important options were set
-        if PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT in ppdt.post_processing_options:
+        if PostProcessingOptions.COMPUTE_KPIS in ppdt.post_processing_options:
             for building_object in building_objects_in_district_list:
                 # Get KPIs from ppdt
                 kpi_collection_dict_general_values = ppdt.kpi_collection_dict[building_object]["General"]
@@ -1064,7 +1066,7 @@ class PostProcessor:
         else:
             raise ValueError(
                 "Some PostProcessingOptions are not set. Please check if "
-                f"{PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT} is set in your system setup."
+                f"{PostProcessingOptions.COMPUTE_KPIS} is set in your system setup."
             )
 
     def get_dict_from_opex_capex_lists(self, value_list: List[str]) -> Dict[str, Any]:

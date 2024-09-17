@@ -313,7 +313,7 @@ def test_house(
     # Get battery KPI values
     battery_charging_energy_in_kilowatt_hour = jsondata["Battery"]["Battery charging energy"].get("value")
     battery_discharging_energy_in_kilowatt_hour = jsondata["Battery"]["Battery discharging energy"].get("value")
-    battery_losses_in_kilowatt_hour = jsondata["Battery"]["Battery consumption"].get("value")
+    battery_losses_in_kilowatt_hour = jsondata["Battery"]["Battery lossesn"].get("value")
     print("battery charging energy ", battery_charging_energy_in_kilowatt_hour)
     print("battery discharging energy ", battery_discharging_energy_in_kilowatt_hour)
     print("battery losses ", battery_losses_in_kilowatt_hour)

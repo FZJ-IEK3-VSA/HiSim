@@ -253,7 +253,7 @@ class KpiPreparation:
             tag=KpiTagEnumClass.BATTERY,
         )
         battery_losses_entry = KpiEntry(
-            name="Battery consumption",
+            name="Battery losses",
             unit="kWh",
             value=battery_losses_in_kilowatt_hour,
             tag=KpiTagEnumClass.BATTERY,

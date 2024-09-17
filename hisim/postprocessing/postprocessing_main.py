@@ -593,7 +593,7 @@ class PostProcessor:
     def compute_kpis_and_write_to_report_and_to_ppdt(
         self,
         ppdt: PostProcessingDataTransfer,
-        report: reportgenerator.ReportGenerator,
+        report: Optional[reportgenerator.ReportGenerator],
         building_objects_in_district_list: list,
     ) -> PostProcessingDataTransfer:
         """Computes KPI's and writes them to report and to ppdt kpi collection."""

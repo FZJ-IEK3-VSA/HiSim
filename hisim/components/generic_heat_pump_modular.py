@@ -4,7 +4,7 @@
 
 # Generic/Built-in
 from dataclasses import dataclass
-from typing import List, Tuple, Optional
+from typing import List, Optional
 
 import pandas as pd
 import numpy as np
@@ -12,7 +12,7 @@ from dataclasses_json import dataclass_json
 
 import hisim.loadtypes as lt
 from hisim import component as cp
-from hisim.component import OpexCostDataClass
+from hisim.component import OpexCostDataClass, CapexCostDataClass
 
 # Owned
 from hisim import utils
@@ -404,9 +404,25 @@ class ModularHeatPump(cp.Component):
         stsv.set_output_value(self.electricity_output_channel, electric_power * power_modifier)
 
     @staticmethod
-    def get_cost_capex(config: HeatPumpConfig) -> Tuple[float, float, float]:
+    def get_cost_capex(config: HeatPumpConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        return config.cost, config.co2_footprint, config.lifetime
+        seconds_per_year = 365 * 24 * 60 * 60
+        capex_per_simulated_period = (config.cost / config.lifetime) * (
+            simulation_parameters.duration.total_seconds() / seconds_per_year
+        )
+        device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
+            simulation_parameters.duration.total_seconds() / seconds_per_year
+        )
+
+        capex_cost_data_class = CapexCostDataClass(
+            capex_investment_cost_in_euro=config.cost,
+            device_co2_footprint_in_kg=config.co2_footprint,
+            lifetime_in_years=config.lifetime,
+            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
+            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
+            kpi_tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER
+        )
+        return capex_cost_data_class
 
     def get_cost_opex(
         self,
@@ -432,12 +448,14 @@ class ModularHeatPump(cp.Component):
                     / 3.6e6,
                     1,
                 )
+
         opex_cost_data_class = OpexCostDataClass(
             opex_energy_cost_in_euro=0,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=0,
             consumption_in_kwh=consumption_in_kwh,
-            loadtype=lt.LoadTypes.ELECTRICITY
+            loadtype=lt.LoadTypes.ELECTRICITY,
+            kpi_tag=KpiTagEnumClass.HEATPUMP_DOMESTIC_HOT_WATER
         )
 
         return opex_cost_data_class

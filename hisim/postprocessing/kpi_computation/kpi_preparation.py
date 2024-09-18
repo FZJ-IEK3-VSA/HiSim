@@ -253,7 +253,10 @@ class KpiPreparation:
             tag=KpiTagEnumClass.BATTERY,
         )
         battery_losses_entry = KpiEntry(
-            name="Battery losses", unit="kWh", value=battery_losses_in_kilowatt_hour, tag=KpiTagEnumClass.BATTERY
+            name="Battery losses",
+            unit="kWh",
+            value=battery_losses_in_kilowatt_hour,
+            tag=KpiTagEnumClass.BATTERY,
         )
 
         # update kpi collection dict
@@ -1595,13 +1598,11 @@ class KpiPreparation:
         for wrapped_component in wrapped_components:
             my_component = wrapped_component.my_component
             # get KPIs of respective component
-
             my_component_kpi_entry_list = my_component.get_component_kpi_entries(
                 all_outputs=self.all_outputs, postprocessing_results=self.results
             )
 
             if my_component_kpi_entry_list != []:
-                log.debug("KPI generation for " + my_component.component_name + " was successful.")
                 # add all KPI entries to kpi dict
                 for kpi_entry in my_component_kpi_entry_list:
 

@@ -19,9 +19,12 @@ from hisim.component import (
     ConfigBase,
     OpexCostDataClass,
     DisplayConfig,
+    CapexCostDataClass
 )
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
 from hisim.simulationparameters import SimulationParameters
+from hisim import log
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
 
 __authors__ = "Tjarko Tjaden, Hauke Hoops, Kai Rösken"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -274,10 +277,48 @@ class Battery(Component):
         return self.battery_config.get_string_dict()
 
     @staticmethod
-    def get_cost_capex(config: BatteryConfig) -> Tuple[float, float, float]:
+    def get_battery_aging_information(
+        config: BatteryConfig
+    ) -> Tuple[float, float]:
+        """Calculate battery aging.
+
+        This is used to calculate investment costs for battery per simulated period.
+        Battery aging is ROUGHLY approximated by costs for each virtual charging cycle used in simulated period
+        (costs_per_cycle = investment / lifetime_in_cycles).
+        """
+        # Todo: Think about better approximation for costs of battery aging
+
+        virtual_number_of_full_charge_cycles = (
+            config.charge_in_kwh / config.custom_battery_capacity_generic_in_kilowatt_hour
+        )
+        # virtual_number_of_full_discharge_cycles = self.battery_config.discharge_in_kwh / self.battery_config.custom_battery_capacity_generic_in_kilowatt_hour
+
+        return virtual_number_of_full_charge_cycles, config.lifetime_in_cycles
+
+    @staticmethod
+    def get_cost_capex(config: BatteryConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
         # Todo: think about livetime in cycles not in years
-        return config.cost, config.co2_footprint, config.lifetime
+        (virtual_number_of_full_charge_cycles, lifetime_in_cycles) = Battery.get_battery_aging_information(config=config)
+        if lifetime_in_cycles > 0:
+            capex_per_simulated_period = (config.cost / lifetime_in_cycles) * (virtual_number_of_full_charge_cycles)
+            device_co2_footprint_per_simulated_period = (config.co2_footprint / lifetime_in_cycles) * (
+                virtual_number_of_full_charge_cycles
+            )
+        else:
+            log.warning(
+                "Capex calculation not valid. Check lifetime_in_cycles in Configuration of Battery."
+            )
+
+        capex_cost_data_class = CapexCostDataClass(
+            capex_investment_cost_in_euro=config.cost,
+            device_co2_footprint_in_kg=config.co2_footprint,
+            lifetime_in_years=config.lifetime,
+            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
+            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
+            kpi_tag=KpiTagEnumClass.BATTERY
+        )
+        return capex_cost_data_class
 
     def get_cost_opex(
         self,
@@ -311,28 +352,19 @@ class Battery(Component):
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=0,
             consumption_in_kwh=battery_losses_in_kwh,
-            loadtype=LoadTypes.ELECTRICITY
+            loadtype=LoadTypes.ELECTRICITY,
+            kpi_tag=KpiTagEnumClass.BATTERY
         )
 
         return opex_cost_data_class
 
-    def get_battery_aging_information(
+    def get_component_kpi_entries(
         self,
-    ) -> Tuple[float, float]:
-        """Calculate battery aging.
-
-        This is used to calculate investment costs for battery per simulated period.
-        Battery aging is ROUGHLY approximated by costs for each virtual charging cycle used in simulated period
-        (costs_per_cycle = investment / lifetime_in_cycles).
-        """
-        # Todo: Think about better approximation for costs of battery aging
-
-        virtual_number_of_full_charge_cycles = (
-            self.battery_config.charge_in_kwh / self.battery_config.custom_battery_capacity_generic_in_kilowatt_hour
-        )
-        # virtual_number_of_full_discharge_cycles = self.battery_config.discharge_in_kwh / self.battery_config.custom_battery_capacity_generic_in_kilowatt_hour
-
-        return virtual_number_of_full_charge_cycles, self.battery_config.lifetime_in_cycles
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        return []
 
 
 @dataclass

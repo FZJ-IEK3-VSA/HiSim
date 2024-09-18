@@ -4,7 +4,7 @@
 # Owned
 import importlib
 from dataclasses import dataclass
-from typing import List, Any, Tuple, Optional
+from typing import List, Any, Optional
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -19,6 +19,7 @@ from hisim.component import (
     ConfigBase,
     OpexCostDataClass,
     DisplayConfig,
+    CapexCostDataClass
 )
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
@@ -317,9 +318,25 @@ class GasHeater(Component):
         stsv.set_output_value(self.gas_demand_channel, gas_demand_in_watt_hour)  # gas consumption
 
     @staticmethod
-    def get_cost_capex(config: GenericGasHeaterConfig) -> Tuple[float, float, float]:
+    def get_cost_capex(config: GenericGasHeaterConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        return config.cost, config.co2_footprint, config.lifetime
+        seconds_per_year = 365 * 24 * 60 * 60
+        capex_per_simulated_period = (config.cost / config.lifetime) * (
+            simulation_parameters.duration.total_seconds() / seconds_per_year
+        )
+        device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
+            simulation_parameters.duration.total_seconds() / seconds_per_year
+        )
+
+        capex_cost_data_class = CapexCostDataClass(
+            capex_investment_cost_in_euro=config.cost,
+            device_co2_footprint_in_kg=config.co2_footprint,
+            lifetime_in_years=config.lifetime,
+            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
+            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
+            kpi_tag=KpiTagEnumClass.GAS_HEATER_SPACE_HEATING
+        )
+        return capex_cost_data_class
 
     def get_cost_opex(
         self,
@@ -343,7 +360,8 @@ class GasHeater(Component):
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
             consumption_in_kwh=self.config.consumption_in_kilowatt_hour,
-            loadtype=lt.LoadTypes.GAS
+            loadtype=lt.LoadTypes.GAS,
+            kpi_tag=KpiTagEnumClass.GAS_HEATER_SPACE_HEATING
         )
 
         return opex_cost_data_class

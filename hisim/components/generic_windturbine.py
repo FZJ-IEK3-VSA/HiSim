@@ -5,7 +5,7 @@ import hashlib
 # clean
 
 from dataclasses import dataclass
-from typing import Any, List, Tuple, Optional, Dict
+from typing import Any, List, Optional, Dict
 
 
 import numpy as np
@@ -17,10 +17,10 @@ from windpowerlib import ModelChain, WindTurbine
 from hisim import component as cp
 from hisim import loadtypes as lt
 from hisim import utils
-from hisim.component import ConfigBase, OpexCostDataClass
+from hisim.component import ConfigBase, OpexCostDataClass, CapexCostDataClass
 from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
-
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
 
 __authors__ = "Jonas Hoppe"
 __copyright__ = ""
@@ -365,9 +365,25 @@ class Windturbine(cp.Component):
         self.state.cumulative_production_in_watt_hour = cumulative_production_in_watt_hour
 
     @staticmethod
-    def get_cost_capex(config: WindturbineConfig) -> Tuple[float, float, float]:
+    def get_cost_capex(config: WindturbineConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
-        return config.cost, config.co2_footprint, config.lifetime
+        seconds_per_year = 365 * 24 * 60 * 60
+        capex_per_simulated_period = (config.cost / config.lifetime) * (
+            simulation_parameters.duration.total_seconds() / seconds_per_year
+        )
+        device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
+            simulation_parameters.duration.total_seconds() / seconds_per_year
+        )
+
+        capex_cost_data_class = CapexCostDataClass(
+            capex_investment_cost_in_euro=config.cost,
+            device_co2_footprint_in_kg=config.co2_footprint,
+            lifetime_in_years=config.lifetime,
+            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
+            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
+            kpi_tag=KpiTagEnumClass.WINDTURBINE
+        )
+        return capex_cost_data_class
 
     def get_cost_opex(
         self,
@@ -381,7 +397,8 @@ class Windturbine(cp.Component):
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=0,
             consumption_in_kwh=0,
-            loadtype=lt.LoadTypes.ELECTRICITY
+            loadtype=lt.LoadTypes.ELECTRICITY,
+            kpi_tag=KpiTagEnumClass.WINDTURBINE
         )
         return opex_cost_data_class
 

@@ -10,7 +10,7 @@ from dataclasses_json import dataclass_json
 from hisim import component as cp
 from hisim import dynamic_component
 from hisim import loadtypes as lt
-from hisim.component import ComponentInput, OpexCostDataClass
+from hisim.component import ComponentInput, OpexCostDataClass, CapexCostDataClass
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.dynamic_component import (
     DynamicComponent,
@@ -316,8 +316,9 @@ class GasMeter(DynamicComponent):
             opex_energy_cost_in_euro=opex_cost_per_simulated_period_in_euro,
             opex_maintenance_cost_in_euro=0,
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
-            consumption_in_kwh=total_energy_from_grid_in_kwh,
-            loadtype=lt.LoadTypes.GAS
+            consumption_in_kwh=self.config.total_energy_from_grid_in_kwh,
+            loadtype=lt.LoadTypes.GAS,
+            kpi_tag=KpiTagEnumClass.GAS_METER
         )
 
         return opex_cost_data_class
@@ -364,6 +365,12 @@ class GasMeter(DynamicComponent):
         list_of_kpi_entries.append(co2_footprint_in_kg_entry)
 
         return list_of_kpi_entries
+
+    @staticmethod
+    def get_cost_capex(config: GasMeterConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:  # pylint: disable=unused-argument
+        """Returns investment cost, CO2 emissions and lifetime."""
+        capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
+        return capex_cost_data_class
 
 
 @dataclass

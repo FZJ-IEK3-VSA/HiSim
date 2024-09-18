@@ -64,7 +64,7 @@ def test_house(
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_CAPEX)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON)
-
+        my_simulation_parameters.logging_level = 4
     # this part is copied from hisim_main
     # Build Simulator
     normalized_path = os.path.normpath(PATH)

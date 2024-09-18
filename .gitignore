@@ -138,6 +138,7 @@ inputs/cache
 hisim/inputs/cache
 system_setups/mypath
 system_setups/results
+system_setups/district_system_setup/results
 system_setups/scenario_comparison/
 system_setups/results_for_scenario_comparison/
 hisim/postprocessing/scenario_evaluation/*.json

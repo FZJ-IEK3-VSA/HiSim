@@ -20,6 +20,7 @@ class KpiTagEnumClass(Enum):
     HEAT_DISTRIBUTION_SYSTEM = "Heat Distribution System"
     HEATPUMP_SPACE_HEATING = "Heat Pump For Space Heating"
     HEATPUMP_DOMESTIC_HOT_WATER = "Heat Pump For Domestic Hot Water"
+    HEATPUMP_SPACE_HEATING_AND_DOMESTIC_HOT_WATER = "Heat Pump For SH and DHW"
     RESIDENTS = "Residents"
     GAS_HEATER_SPACE_HEATING = "Gas Heater For Space Heating"
     GAS_HEATER_DOMESTIC_HOT_WATER = "Gas Heater For Domestic Hot Water"
@@ -27,12 +28,19 @@ class KpiTagEnumClass(Enum):
     HEATING_METER = "Heating Meter"
     ELECTRICITY_METER = "Electricity Meter"
     CAR = "Car"
+    CAR_BATTERY = "Car Battery"
+    ROOFTOP_PV = "Rooftop PV"
+    STORAGE_DOMESTIC_HOT_WATER = "Storage For Domestic Hot Water"
+    STORAGE_HOT_WATER_SPACE_HEATING = "Storage For Space Heating Hot Water"
+    WINDTURBINE = "Wind Turbine"
+    SMART_DEVICE = "Smart Device"
     EMS = "Energy Management System"
     ELECTRICITY_GRID = "Electricity Grid"
     THERMAL_GRID = "Thermal Grid"
     COSTS_DISTRICT_GRID = "Costs Of District Grid"
     EMISSIONS_DISTRICT_GRID = "Emissions Of District Grid"
     CONTRACTING = "Contracting"
+    GENERIC_HEAT_SOURCE = "Generic Heat Source"
 
 
 @dataclass

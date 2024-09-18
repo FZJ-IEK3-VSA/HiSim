@@ -17,7 +17,7 @@ from hisim import utils
 from hisim.component import ComponentOutput
 from hisim.components import building, loadprofilegenerator_utsp_connector
 from hisim.json_generator import JsonConfigurationGenerator
-from hisim.modular_household.interface_configs.kpi_config import KPIConfig
+from hisim.building_sizer_utils.interface_configs.kpi_config import KPIConfig
 from hisim.postprocessing import charts
 from hisim.postprocessing import reportgenerator
 from hisim.postprocessing.chart_singleday import ChartSingleDay

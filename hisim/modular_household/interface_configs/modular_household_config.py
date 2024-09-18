@@ -27,13 +27,13 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
     # configuration of the technological equipment of the household
     system_config_: Optional[system_config.SystemConfig] = None
     # configuration of the framework of the household (climate, house type, mobility behaviour, heating system, etc. )
-    archetype_config_: Optional[archetype_config.ArcheTypeConfig] = None
+    archetype_config_: Optional[archetype_config.ArcheTypeConfigModular] = None
 
     @classmethod
     def get_default(cls):
         """Get default ModularHouseholdConfig."""
         system_config_ = system_config.SystemConfig()
-        archetype_config_ = archetype_config.ArcheTypeConfig()
+        archetype_config_ = archetype_config.ArcheTypeConfigModular()
         household_config = ModularHouseholdConfig(system_config_=system_config_, archetype_config_=archetype_config_)
         return household_config
 
@@ -63,6 +63,6 @@ def read_in_configs(pathname: str) -> ModularHouseholdConfig:
     if household_config.system_config_ is None:
         household_config.system_config_ = system_config.SystemConfig()
     if household_config.archetype_config_ is None:
-        household_config.archetype_config_ = archetype_config.ArcheTypeConfig()
+        household_config.archetype_config_ = archetype_config.ArcheTypeConfigModular()
 
     return household_config

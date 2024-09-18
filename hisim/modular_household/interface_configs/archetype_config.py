@@ -13,7 +13,7 @@ from hisim.loadtypes import HeatingSystems
 
 @dataclass_json
 @dataclass
-class ArcheTypeConfig:
+class ArcheTypeConfigModular:
 
     """Archetype config class.
 

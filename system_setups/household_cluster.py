@@ -638,16 +638,31 @@ def setup_function(
     )
 
     if my_simulation_parameters.result_directory == "":
-        ResultPathProviderSingleton().set_important_result_path_information(
-            module_directory="/storage_cluster/projects/2024_waage/01_hisim_results",  # my_sim.module_directory,
-            model_name=my_sim.module_filename,
-            further_result_folder_description=os.path.join(
-                *[
-                    further_result_folder_description,
+        try:
+            ResultPathProviderSingleton().set_important_result_path_information(
+                module_directory="/storage_cluster/projects/2024_waage/01_hisim_results",
+                model_name=my_sim.module_filename,
+                further_result_folder_description=os.path.join(
+                    *[
+                        further_result_folder_description,
 
-                ]
-            ),
-            variant_name="_",
-            scenario_hash_string=scenario_hash_string,
-            sorting_option=sorting_option,
-        )
+                    ]
+                ),
+                variant_name="_",
+                scenario_hash_string=scenario_hash_string,
+                sorting_option=sorting_option,
+            )
+        except PermissionError:
+            ResultPathProviderSingleton().set_important_result_path_information(
+                module_directory=my_sim.module_directory,
+                model_name=my_sim.module_filename,
+                further_result_folder_description=os.path.join(
+                    *[
+                        further_result_folder_description,
+
+                    ]
+                ),
+                variant_name="_",
+                scenario_hash_string=scenario_hash_string,
+                sorting_option=sorting_option,
+            )

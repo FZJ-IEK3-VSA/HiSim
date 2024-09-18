@@ -16,7 +16,7 @@ MY_SIMULATION_PARAMETERS = {
     "start_date": "2021-01-01T00:00:00",
     "end_date": "2021-01-02T00:00:00",
     "seconds_per_timestep": 900,
-    "post_processing_options": [18, 19, 20, 22],
+    "post_processing_options": [9, 18, 19, 20, 22],
 }
 MY_RESULT_DIRECTORY = "test_system_setups/results/test_household_gas_heater_with_system_setup_starter"
 

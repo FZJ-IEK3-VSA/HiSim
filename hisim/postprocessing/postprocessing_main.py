@@ -72,8 +72,8 @@ class PostProcessor:
                 PostProcessingOptions.EXPORT_TO_CSV,
                 PostProcessingOptions.COMPUTE_KPIS,
                 PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE,
-                PostProcessingOptions.WRITE_OPEX_TO_REPORT,
-                PostProcessingOptions.WRITE_CAPEX_TO_REPORT,
+                PostProcessingOptions.COMPUTE_OPEX,
+                PostProcessingOptions.COMPUTE_CAPEX,
                 PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL,
                 PostProcessingOptions.MAKE_OPERATION_RESULTS_FOR_WEBTOOL,
                 PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON,
@@ -187,32 +187,24 @@ class PostProcessor:
             end = timer()
             duration = end - start
             log.information("Writing network charts to report took " + f"{duration:1.2f}s.")
-        if PostProcessingOptions.WRITE_OPEX_TO_REPORT in ppdt.post_processing_options:
+        if PostProcessingOptions.COMPUTE_OPEX in ppdt.post_processing_options:
             log.information(
                 "Computing and writing operational costs and C02 emissions produced in operation to report."
             )
             start = timer()
-            if report is not None:
-                self.compute_and_write_opex_costs_to_report(ppdt, report, building_objects_in_district_list)
-            else:
-                raise ValueError("report is None but should be a ReportGenerator object. "
-                                 "You probably need to set the GENERATE_PDF_REPORT option.")
+            self.compute_and_write_opex_costs_to_report(ppdt, report, building_objects_in_district_list)
             end = timer()
             duration = end - start
             log.information(
                 "Computing and writing operational costs and C02 emissions produced in operation to report took "
                 + f"{duration:1.2f}s."
             )
-        if PostProcessingOptions.WRITE_CAPEX_TO_REPORT in ppdt.post_processing_options:
+        if PostProcessingOptions.COMPUTE_CAPEX in ppdt.post_processing_options:
             log.information(
                 "Computing and writing investment costs and C02 emissions from production of devices to report."
             )
             start = timer()
-            if report is not None:
-                self.compute_and_write_capex_costs_to_report(ppdt, report, building_objects_in_district_list)
-            else:
-                raise ValueError("report is None but should be a ReportGenerator object. "
-                                 "You probably need to set the GENERATE_PDF_REPORT option.")
+            self.compute_and_write_capex_costs_to_report(ppdt, report, building_objects_in_district_list)
             end = timer()
             duration = end - start
             log.information(
@@ -625,7 +617,7 @@ class PostProcessor:
     def compute_and_write_opex_costs_to_report(
         self,
         ppdt: PostProcessingDataTransfer,
-        report: reportgenerator.ReportGenerator,
+        report: Optional[reportgenerator.ReportGenerator],
         building_objects_in_district_list: list,
     ) -> None:
         """Computes OPEX costs and operational CO2-emissions and writes them to report and csv."""
@@ -636,23 +628,28 @@ class PostProcessor:
             simulation_parameters=ppdt.simulation_parameters,
             building_objects_in_district_list=building_objects_in_district_list,
         )
-        self.write_new_chapter_with_table_to_report(
-            report=report,
-            table_as_list_of_list=opex_compute_return,
-            headline=". Operational Costs and Emissions for simulated period",
-            comment=[
-                "\n",
-                "Comments:",
-                "Operational Costs are the sum of fuel costs and maintenance costs for the devices, calculated for the simulated period.",
-                "Emissions are fuel emissions emitted during simulad period.",
-                "Consumption for Diesel_Car in l, for EV in kWh.",
-            ],
-        )
+        # write capex to report if option is chosen
+        if PostProcessingOptions.GENERATE_PDF_REPORT in ppdt.post_processing_options:
+            if report is not None:
+                self.write_new_chapter_with_table_to_report(
+                    report=report,
+                    table_as_list_of_list=opex_compute_return,
+                    headline=". Operational Costs and Emissions for simulated period",
+                    comment=[
+                        "\n",
+                        "Comments:",
+                        "Operational Costs are the sum of fuel costs and maintenance costs for the devices, calculated for the simulated period.",
+                        "Emissions are fuel emissions emitted during simulad period.",
+                        "Consumption for Diesel_Car in l, for EV in kWh.",
+                    ],
+                )
+            else:
+                raise ValueError("report is None but should be a ReportGenerator object.")
 
     def compute_and_write_capex_costs_to_report(
         self,
         ppdt: PostProcessingDataTransfer,
-        report: reportgenerator.ReportGenerator,
+        report: Optional[reportgenerator.ReportGenerator],
         building_objects_in_district_list: list,
     ) -> None:
         """Computes CAPEX costs and CO2-emissions for production of devices and writes them to report and csv."""
@@ -661,12 +658,17 @@ class PostProcessor:
             simulation_parameters=ppdt.simulation_parameters,
             building_objects_in_district_list=building_objects_in_district_list,
         )
-        self.write_new_chapter_with_table_to_report(
-            report=report,
-            table_as_list_of_list=capex_compute_return,
-            headline=". Investment Cost and CO2-Emissions of devices for simulated period",
-            comment=["Values for Battery are calculated with lifetime in cycles instead of lifetime in years"],
-        )
+        # write capex to report if option is chosen
+        if PostProcessingOptions.GENERATE_PDF_REPORT in ppdt.post_processing_options:
+            if report is not None:
+                self.write_new_chapter_with_table_to_report(
+                    report=report,
+                    table_as_list_of_list=capex_compute_return,
+                    headline=". Investment Cost and CO2-Emissions of devices for simulated period",
+                    comment=["Values for Battery are calculated with lifetime in cycles instead of lifetime in years"],
+                )
+            else:
+                raise ValueError("report is None but should be a ReportGenerator object.")
 
     def write_new_chapter_with_text_content_to_report(
         self, report: reportgenerator.ReportGenerator, lines: List, headline: str
@@ -987,8 +989,8 @@ class PostProcessor:
             option in ppdt.post_processing_options
             for option in [
                 PostProcessingOptions.COMPUTE_KPIS,
-                PostProcessingOptions.WRITE_CAPEX_TO_REPORT,
-                PostProcessingOptions.WRITE_OPEX_TO_REPORT,
+                PostProcessingOptions.COMPUTE_CAPEX,
+                PostProcessingOptions.COMPUTE_OPEX,
             ]
         ):
             # Get KPIs from ppdt
@@ -1030,8 +1032,8 @@ class PostProcessor:
         else:
             raise ValueError(
                 "Some PostProcessingOptions are not set. Please check if "
-                f"{PostProcessingOptions.COMPUTE_KPIS}, {PostProcessingOptions.WRITE_CAPEX_TO_REPORT} and "
-                f"{PostProcessingOptions.WRITE_OPEX_TO_REPORT} are set in your system setup."
+                f"{PostProcessingOptions.COMPUTE_KPIS}, {PostProcessingOptions.COMPUTE_CAPEX} and "
+                f"{PostProcessingOptions.COMPUTE_OPEX} are set in your system setup."
             )
 
     def write_kpis_to_json_file(self, ppdt: PostProcessingDataTransfer) -> None:

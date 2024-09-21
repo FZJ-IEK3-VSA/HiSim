@@ -642,7 +642,7 @@ def setup_function(
     if my_simulation_parameters.result_directory == "":
 
         ResultPathProviderSingleton().set_important_result_path_information(
-            module_directory=my_sim.module_directory, # "/storage_cluster/projects/2024_waage/01_hisim_results",
+            module_directory=my_sim.module_directory,  # "/storage_cluster/projects/2024_waage/01_hisim_results",
             model_name=my_sim.module_filename,
             further_result_folder_description=os.path.join(
                 *[

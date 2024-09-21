@@ -7,16 +7,9 @@ import json
 from dataclasses import dataclass
 
 from hisim.modular_household.interface_configs import archetype_config, system_config
+from hisim.building_sizer_utils.interface_configs.modular_household_config import ModularHouseholdOptions
 from hisim import log
 from hisim.system_setup_configuration import SystemSetupConfigBase
-
-
-@dataclass
-class ModularHouseholdOptions:
-
-    """Set options for the system setup."""
-
-    pass
 
 
 @dataclass

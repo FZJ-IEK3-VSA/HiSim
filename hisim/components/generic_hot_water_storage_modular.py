@@ -225,12 +225,12 @@ class StorageState:
         # filter for boiling water
         # no filtering -> this hides major problems - Noah
         if self.temperature_in_kelvin > 95 + 273.15:
-            raise ValueError(
+            raise ValueError(StorageConfig.building_name+
                 "Water was boiling. This points towards a major problem in your model. Increasing the storage volume may solve the issue"
             )
         # filter for freezing water
         if self.temperature_in_kelvin < 2 + 273.15:
-            raise ValueError(
+            raise ValueError(StorageConfig.building_name+
                 "Water in your storage tank was freezing. This points towards a major problem in your model."
             )
 

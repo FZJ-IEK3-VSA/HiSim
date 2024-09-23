@@ -22,7 +22,7 @@ from hisim.components import (
     advanced_heat_pump_hplib,
     advanced_battery_bslib,
     controller_l2_energy_management_system,
-    simple_hot_water_storage,
+    simple_water_storage,
     heat_distribution_system,
     generic_heat_pump_modular,
     generic_hot_water_storage_modular,
@@ -309,7 +309,7 @@ def setup_function(
 
     if space_heating_system == HeatingSystemType.HEAT_PUMP:
         # Set sizing option for Hot water Storage
-        sizing_option = simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
+        sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
 
         # Build Heat Pump Controller
         my_heat_pump_controller_config = advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(
@@ -339,7 +339,7 @@ def setup_function(
 
     elif space_heating_system == HeatingSystemType.GAS_HEATER:
         # Set sizing option for Hot water Storage
-        sizing_option = simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER
+        sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER
         # Set gas meter
         use_gas_meter = True
 
@@ -431,12 +431,12 @@ def setup_function(
         raise ValueError(f"Heating system for domestic hot water {domestic_hot_water_heating_system} not recognized.")
 
     # Build Heat Water Storage
-    my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
+    my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
         sizing_option=sizing_option,
     )
-    my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
+    my_simple_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config, my_simulation_parameters=my_simulation_parameters,
     )
     # Add to simulator

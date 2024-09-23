@@ -3,7 +3,7 @@
 import pytest
 import numpy as np
 from hisim import component as cp
-from hisim.components import simple_hot_water_storage
+from hisim.components import simple_water_storage
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from tests import functions_for_testing as fft
@@ -43,19 +43,19 @@ def simulate_simple_water_storage(
 
     # ===================================================================================================================
     # Build Heat Water Storage
-    my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig(
+    my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig(
         building_name="BUI1",
         name=hws_name,
         volume_heating_water_storage_in_liter=volume_heating_water_storage_in_liter,
         heat_transfer_coefficient_in_watt_per_m2_per_kelvin=2.0,
         heat_exchanger_is_present=False,
-        position_hot_water_storage_in_system=simple_hot_water_storage.PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP,
+        position_hot_water_storage_in_system=simple_water_storage.PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP,
         co2_footprint=100,
         cost=volume_heating_water_storage_in_liter * 14.51,
         lifetime=100,
         maintenance_cost_as_percentage_of_investment=0.0,
     )
-    my_simple_heat_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
+    my_simple_heat_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
     )

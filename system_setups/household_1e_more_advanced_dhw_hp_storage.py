@@ -19,7 +19,6 @@ from hisim.components import heat_distribution_system
 from hisim.components import building
 from hisim.components import simple_water_storage
 from hisim.components import generic_car
-from hisim.components import simple_water_storage
 from hisim.components import electricity_meter
 from hisim.system_setup_configuration import SystemSetupConfigBase
 from hisim import utils

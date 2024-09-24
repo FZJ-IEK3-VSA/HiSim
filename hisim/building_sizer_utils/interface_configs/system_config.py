@@ -49,6 +49,5 @@ class EnergySystemConfig:
     # charging_station: JsonReference = field(
     #     default_factory=lambda: ChargingStationSets.Charging_At_Home_with_03_7_kW  # type: ignore
     # )
-    space_heating_system: HeatingSystems = HeatingSystems.HEAT_PUMP
-    domestic_hot_water_heating_system: HeatingSystems = HeatingSystems.HEAT_PUMP
+    heating_system: HeatingSystems = HeatingSystems.HEAT_PUMP
     share_of_maximum_pv_potential: float = 1.0

@@ -173,8 +173,7 @@ def setup_function(
     # Set System Parameters
 
     # Set heating systems for space heating and domestic hot water
-    space_heating_system = HeatingSystems.HEAT_PUMP
-    domestic_hot_water_heating_system = HeatingSystems.HEAT_PUMP
+    heating_system = energy_system_config_.heating_system
     # Set Heat Pump Controller
     hp_controller_mode = 2  # mode 1 for heating/off and mode 2 for heating/cooling/off
     heating_reference_temperature_in_celsius = -7.0
@@ -309,7 +308,7 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
-    if space_heating_system == HeatingSystems.HEAT_PUMP:
+    if heating_system == HeatingSystems.HEAT_PUMP:
         # Set sizing option for Hot water Storage
         sizing_option = simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
 
@@ -339,34 +338,6 @@ def setup_function(
         # Add to simulator
         my_sim.add_component(my_heat_pump, connect_automatically=True)
 
-    elif space_heating_system == HeatingSystems.GAS_HEATING:
-        # Set sizing option for Hot water Storage
-        sizing_option = simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER
-        # Set gas meter
-        use_gas_meter = True
-
-        # Build Gas Heater Controller
-        my_gas_heater_controller_config = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config.get_scaled_generic_gas_heater_controller_config(
-            heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
-        )
-        my_gas_heater_controller = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1(
-            my_simulation_parameters=my_simulation_parameters, config=my_gas_heater_controller_config,
-        )
-        my_sim.add_component(my_gas_heater_controller, connect_automatically=True)
-
-        # Build Gas heater For Space Heating
-        my_gas_heater_config = generic_gas_heater.GenericGasHeaterConfig.get_scaled_gasheater_config(
-            heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
-        )
-        my_gas_heater = generic_gas_heater.GasHeater(
-            config=my_gas_heater_config, my_simulation_parameters=my_simulation_parameters,
-        )
-        my_sim.add_component(my_gas_heater, connect_automatically=True)
-    else:
-        raise ValueError(f"Space heating system {space_heating_system} not recognized.")
-
-    if domestic_hot_water_heating_system == HeatingSystems.HEAT_PUMP:
-
         # Build DHW (this is taken from household_3_advanced_hp_diesel-car_pv_battery.py)
         my_dhw_heatpump_config = generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
             number_of_apartments=my_building_information.number_of_apartments, default_power_in_watt=6000,
@@ -395,9 +366,30 @@ def setup_function(
         my_sim.add_component(my_domnestic_hot_water_heatpump_controller, connect_automatically=True)
         my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
 
-    elif domestic_hot_water_heating_system == HeatingSystems.GAS_HEATING:
+    elif heating_system == HeatingSystems.GAS_HEATING:
+        # Set sizing option for Hot water Storage
+        sizing_option = simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER
         # Set gas meter
         use_gas_meter = True
+
+        # Build Gas Heater Controller
+        my_gas_heater_controller_config = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config.get_scaled_generic_gas_heater_controller_config(
+            heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+        )
+        my_gas_heater_controller = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1(
+            my_simulation_parameters=my_simulation_parameters, config=my_gas_heater_controller_config,
+        )
+        my_sim.add_component(my_gas_heater_controller, connect_automatically=True)
+
+        # Build Gas heater For Space Heating
+        my_gas_heater_config = generic_gas_heater.GenericGasHeaterConfig.get_scaled_gasheater_config(
+            heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+        )
+        my_gas_heater = generic_gas_heater.GasHeater(
+            config=my_gas_heater_config, my_simulation_parameters=my_simulation_parameters,
+        )
+        my_sim.add_component(my_gas_heater, connect_automatically=True)
+
         # Build Gas Heater for DHW
         my_gas_heater_for_dhw_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating_with_gas(
             max_warm_water_demand_in_liter=my_occupancy.max_hot_water_demand,
@@ -430,7 +422,7 @@ def setup_function(
         my_sim.add_component(my_boiler_for_dhw, connect_automatically=True)
         my_sim.add_component(my_heater_controller_l1_for_dhw, connect_automatically=True)
     else:
-        raise ValueError(f"Heating system for domestic hot water {domestic_hot_water_heating_system} not recognized.")
+        raise ValueError(f"Heating system {heating_system} not recognized.")
 
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(

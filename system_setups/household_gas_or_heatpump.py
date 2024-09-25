@@ -5,8 +5,6 @@
 from typing import Optional, Any, Union, List
 import re
 import os
-from dataclasses import dataclass
-from dataclasses_json import dataclass_json
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,
     Households,
@@ -35,7 +33,7 @@ from hisim.components import (
     generic_heat_source,
     gas_meter,
 )
-from hisim.component import ConfigBase
+
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
@@ -51,47 +49,6 @@ __license__ = "MIT"
 __version__ = "1.0"
 __maintainer__ = "Noah Pflugradt"
 __status__ = "development"
-
-
-@dataclass_json
-@dataclass
-class BuildingPVWeatherConfig(ConfigBase):
-
-    """Configuration for BuildingPv."""
-
-    building_name: str
-    name: str
-    building_id: str
-    pv_azimuth: float
-    pv_tilt: float
-    pv_rooftop_capacity_in_kilowatt: Optional[float]
-    share_of_maximum_pv_potential: float
-    building_code: str
-    conditioned_floor_area_in_m2: float
-    number_of_dwellings_per_building: int
-    norm_heating_load_in_kilowatt: Optional[float]
-    lpg_households: List[str]
-    weather_location: str
-
-    @classmethod
-    def get_default(cls):
-        """Get default BuildingPVConfig."""
-
-        return BuildingPVWeatherConfig(
-            building_name="BUI1",
-            name="BuildingPVConfig",
-            building_id="default_building",
-            pv_azimuth=180,
-            pv_tilt=30,
-            pv_rooftop_capacity_in_kilowatt=None,
-            share_of_maximum_pv_potential=1,
-            building_code="DE.N.SFH.05.Gen.ReEx.001.002",
-            conditioned_floor_area_in_m2=121.2,
-            number_of_dwellings_per_building=1,
-            norm_heating_load_in_kilowatt=None,
-            lpg_households=["CHR01_Couple_both_at_Work"],
-            weather_location="AACHEN",
-        )
 
 
 def setup_function(
@@ -127,25 +84,10 @@ def setup_function(
     # try reading energ system and archetype configs
     my_config = read_in_configs(my_sim.my_module_config)
 
-    # with open("default_module_config.json", "w", encoding="utf-8") as file:
-    #     import json
-    #     json.dump(my_config.to_dict(), file, indent=4)
     assert my_config.archetype_config_ is not None
     assert my_config.energy_system_config_ is not None
     arche_type_config_ = my_config.archetype_config_
     energy_system_config_ = my_config.energy_system_config_
-
-    # my_config: BuildingPVWeatherConfig
-    # if isinstance(config_filename, str) and os.path.exists(config_filename.rstrip("\r")):
-    #     with open(config_filename.rstrip("\r"), encoding="unicode_escape") as system_config_file:
-    #         my_config = BuildingPVWeatherConfig.from_json(system_config_file.read())  # type: ignore
-
-    #     log.information(f"Read system config from {config_filename}")
-    #     log.information("Config values: " + f"{my_config.to_dict}" + "\n")
-    # else:
-    #     my_config = BuildingPVWeatherConfig.get_default()
-    #     log.information("No module config path from the simulator was given. Use default config.")
-    #     my_sim.my_module_config = my_config.to_dict()
 
     # Set Simulation Parameters
     if my_simulation_parameters is None:
@@ -154,7 +96,9 @@ def setup_function(
         my_simulation_parameters = SimulationParameters.one_day_only(
             year=year, seconds_per_timestep=seconds_per_timestep
         )
-        my_simulation_parameters.cache_dir_path = "/benchtop/2024-k-rieck-hisim/hisim_inputs_cache/"
+        cache_dir_path_simuparams = "/benchtop/2024-k-rieck-hisim/hisim_inputs_cache/"
+        if os.path.exists(cache_dir_path_simuparams):
+            my_simulation_parameters.cache_dir_path = cache_dir_path_simuparams
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
         )

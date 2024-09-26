@@ -6,7 +6,7 @@ from dataclasses_json import dataclass_json
 
 
 @enum.unique
-class KpiForOptimization(str, enum.Enum):
+class KPIForRatingInOptimization(str, enum.Enum):
 
     """Choose KPI that will be optimized with building sizer."""
 
@@ -28,16 +28,16 @@ class KPIConfig:
     #: annual C02 emmissions due to the construction and operation of the considered technology, given in kg
     total_co2_emissions_in_kg: float
 
-    def get_kpi(self, chosen_kpi: KpiForOptimization) -> float:
+    def get_kpi_for_rating(self, chosen_kpi: KPIForRatingInOptimization) -> float:
         """Weights all kpis to get one value evaluating the performance of one building configuration.
 
         Also referred to as "rating" or "fitness" in the evolutionary algorithm of the building sizer.
         """
 
-        if chosen_kpi == KpiForOptimization.SELFSUFFICIENCY:
+        if chosen_kpi == KPIForRatingInOptimization.SELFSUFFICIENCY:
             return self.self_sufficiency_rate_in_percent
-        if chosen_kpi == KpiForOptimization.TOTAL_COSTS:
+        if chosen_kpi == KPIForRatingInOptimization.TOTAL_COSTS:
             return self.total_costs_in_euro
-        if chosen_kpi == KpiForOptimization.TOTAL_CO2_EMISSION:
+        if chosen_kpi == KPIForRatingInOptimization.TOTAL_CO2_EMISSION:
             return self.total_co2_emissions_in_kg
         raise ValueError(f"Chosen KPI {self.chosen_kpi} not recognized.")

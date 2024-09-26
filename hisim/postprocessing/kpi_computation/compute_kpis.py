@@ -1,6 +1,6 @@
 # clean
 
-"""Postprocessing option computes overall consumption, production,self-consumption and injection as well as selfconsumption rate and autarky rate.
+"""Postprocessing option computes overall consumption, production,self-consumption and injection as well as selfconsumption rate and self-sufficiency rate.
 
 KPis for PV-battery systems in houses:
 https://solar.htw-berlin.de/wp-content/uploads/WENIGER-2017-Vergleich-verschiedener-Kennzahlen-zur-Bewertung-von-PV-Batteriesystemen.pdf.
@@ -210,7 +210,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
         self.compute_ratio_between_two_values_and_set_as_kpi(
             denominator_value=overall_self_consumption_district_in_kilowatt_hour,
             numerator_value=overall_consumption_district_in_kilowatt_hour,
-            kpi_name="Overall autarky rate of electricity in district",
+            kpi_name="Overall self-sufficiency rate of electricity in district",
             building_objects_in_district=district_name,
             kpi_tag=KpiTagEnumClass.GENERAL,
         )
@@ -223,11 +223,11 @@ class KpiGenerator(JSONWizard, KpiPreparation):
             name="Overall self-consumption rate according to solar htw berlin in district",
         )
 
-        self.compute_autarky_according_to_solar_htw_berlin(
+        self.compute_self_sufficiency_according_to_solar_htw_berlin(
             relative_electricty_demand_in_percent=relative_electricity_demand_from_grid_in_percent,
             building_objects_in_district=district_name,
             kpi_tag=KpiTagEnumClass.GENERAL,
-            name="Overall autarky rate according to solar htw berlin in district",
+            name="Overall self-sufficiency according to solar htw berlin in district",
         )
 
     def return_table_for_report(self):

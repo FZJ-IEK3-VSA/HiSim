@@ -419,7 +419,6 @@ class KpiPreparation:
             if (
                 isinstance(kpi_entry["description"], str)
                 and ElectricityMeter.get_classname() in kpi_entry["description"]
-                # and building_objects_in_district == kpi_entry["description"].split("_")[0]
             ):
                 if kpi_entry["name"] == "Total energy from grid" and kpi_entry["unit"] == "kWh":
                     total_energy_from_grid_in_kwh = kpi_entry["value"]

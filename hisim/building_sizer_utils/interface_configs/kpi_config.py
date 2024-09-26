@@ -1,8 +1,8 @@
 """KPI config module."""
 
 from dataclasses import dataclass
-from dataclasses_json import dataclass_json
 import enum
+from dataclasses_json import dataclass_json
 
 
 @enum.unique
@@ -33,11 +33,11 @@ class KPIConfig:
 
         Also referred to as "rating" or "fitness" in the evolutionary algorithm of the building sizer.
         """
-        self.chosen_kpi = chosen_kpi
-        if self.chosen_kpi == KpiForOptimization.SELFSUFFICIENCY:
-            return self.self_sufficiency_rate_in_percent
-        elif self.chosen_kpi == KpiForOptimization.TOTAL_COSTS:
-            return self.total_costs_in_euro
-        elif self.chosen_kpi == KpiForOptimization.TOTAL_CO2_EMISSION:
-            return self.total_co2_emissions_in_kg
 
+        if chosen_kpi == KpiForOptimization.SELFSUFFICIENCY:
+            return self.self_sufficiency_rate_in_percent
+        if chosen_kpi == KpiForOptimization.TOTAL_COSTS:
+            return self.total_costs_in_euro
+        if chosen_kpi == KpiForOptimization.TOTAL_CO2_EMISSION:
+            return self.total_co2_emissions_in_kg
+        raise ValueError(f"Chosen KPI {self.chosen_kpi} not recognized.")

@@ -145,6 +145,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
                 else KpiTagEnumClass.ELECTRICITY_GRID
             ),
         )
+
         # get self-consumption rate according to solar htw berlin
         self.compute_self_consumption_rate_according_to_solar_htw_berlin(
             total_electricity_production_in_kilowatt_hour=total_electricity_production_in_kilowatt_hour,
@@ -156,7 +157,7 @@ class KpiGenerator(JSONWizard, KpiPreparation):
                 else KpiTagEnumClass.ELECTRICITY_GRID
             ),
         )
-        # get autarky rate according to solar htw berlin
+        # get self-sufficiency rate according to solar htw berlin
         self.compute_self_sufficiency_according_to_solar_htw_berlin(
             relative_electricty_demand_in_percent=relative_electricity_demand_from_grid_in_percent,
             building_objects_in_district=building_objects_in_district,

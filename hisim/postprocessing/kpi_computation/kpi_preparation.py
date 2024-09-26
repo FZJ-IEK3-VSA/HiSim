@@ -419,7 +419,7 @@ class KpiPreparation:
             if (
                 isinstance(kpi_entry["description"], str)
                 and ElectricityMeter.get_classname() in kpi_entry["description"]
-                and building_objects_in_district == kpi_entry["description"].split("_")[0]
+                # and building_objects_in_district == kpi_entry["description"].split("_")[0]
             ):
                 if kpi_entry["name"] == "Total energy from grid" and kpi_entry["unit"] == "kWh":
                     total_energy_from_grid_in_kwh = kpi_entry["value"]
@@ -439,6 +439,7 @@ class KpiPreparation:
         name: str = "Relative electricity demand from grid",
     ) -> Optional[float]:
         """Return the relative electricity demand."""
+
         if electricity_from_grid_in_kilowatt_hour is None:
             relative_electricity_demand_from_grid_in_percent = None
         else:
@@ -463,6 +464,7 @@ class KpiPreparation:
         self.kpi_collection_dict_unsorted[building_objects_in_district].update(
             {relative_electricity_demand_entry.name: relative_electricity_demand_entry.to_dict()}
         )
+
         return relative_electricity_demand_from_grid_in_percent
 
     def compute_self_sufficiency_according_to_solar_htw_berlin(

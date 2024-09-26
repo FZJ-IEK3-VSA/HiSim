@@ -21,12 +21,18 @@ class ArcheTypeConfig:
     pv_azimuth: float = 180
     pv_tilt: float = 30
     pv_rooftop_capacity_in_kilowatt: Optional[float] = None
+    pv_rooftop_generation_in_kilowatthour: Optional[float] = None
     building_code: str = "DE.N.SFH.05.Gen.ReEx.001.002"
     conditioned_floor_area_in_m2: float = 121.2
     number_of_dwellings_per_building: int = 1
     norm_heating_load_in_kilowatt: Optional[float] = None
     weather_location: str = "AACHEN"
+    weather_try_region: int = 6
+    building_postal_code: str = "52062"
+    building_location: str = "Aachen"
     lpg_households: List[str] = field(default_factory=lambda: ["CHR01_Couple_both_at_Work"])
+    commodity: str = "electric"
+    supply_level: str = "central_heating"
 
     # #: considered mobility options, passed as inputs to the LoadProfileGenerator and considered to model cars
     # mobility_set: Optional[JsonReference] = None

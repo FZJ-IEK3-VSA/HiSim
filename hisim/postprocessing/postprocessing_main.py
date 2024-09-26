@@ -1067,19 +1067,15 @@ class PostProcessor:
                 kpi_collection_dict_cost_values = ppdt.kpi_collection_dict[building_object]["Costs"]
                 kpi_collection_dict_emission_values = ppdt.kpi_collection_dict[building_object]["Emissions"]
 
-                self_consumption_rate = kpi_collection_dict_general_values["Self-consumption rate of electricity"]["value"]
-                autarky_rate = kpi_collection_dict_general_values["Autarky rate of electricity"]["value"]
-                grid_injection_in_kilowatt_hour = kpi_collection_dict_general_values["Grid injection of electricity"]["value"]
-                economic_cost = kpi_collection_dict_cost_values["Total costs for simulated period"]["value"]
-                co2_cost = kpi_collection_dict_emission_values["Total CO2 emissions for simulated period"]["value"]
+                self_sufficiency_rate_in_percent = kpi_collection_dict_general_values["Self-sufficiency rate according to solar htw berlin"]["value"]
+                total_costs_in_euro = kpi_collection_dict_cost_values["Total costs for simulated period"]["value"]
+                total_co2_emissions_in_kg = kpi_collection_dict_emission_values["Total CO2 emissions for simulated period"]["value"]
 
                 # initialize json interface to pass kpi's to building_sizer
                 kpi_config = KPIConfig(
-                    self_consumption_rate=self_consumption_rate,
-                    autarky_rate=autarky_rate,
-                    injection=grid_injection_in_kilowatt_hour,
-                    economic_cost=economic_cost,
-                    co2_cost=co2_cost,
+                    self_sufficiency_rate_in_percent=self_sufficiency_rate_in_percent,
+                    total_costs_in_euro=total_costs_in_euro,
+                    total_co2_emissions_in_kg=total_co2_emissions_in_kg,
                 )
 
                 pathname = os.path.join(

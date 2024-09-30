@@ -568,7 +568,6 @@ def setup_function(
         except Exception:
             further_result_folder_description = "-"
 
-
     # if config_filename is not given, make result path with index enumeration
     else:
         scenario_hash_string = "default_scenario"

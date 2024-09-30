@@ -56,4 +56,3 @@ class KPIConfig:
         if chosen_kpi == KPIForRatingInOptimization.TOTAL_CO2_EMISSION:
             return self.total_co2_emissions_in_kg
         raise ValueError(f"Chosen KPI {self.chosen_kpi} not recognized.")
-

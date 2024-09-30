@@ -175,10 +175,13 @@ class Simulator:
 
     def prepare_simulation_directory(self):
         """Prepares the simulation directory. Determines the filename if nothing is set."""
+
         if (
             self._simulation_parameters.result_directory is None
             or len(self._simulation_parameters.result_directory) == 0
+            or self._simulation_parameters.result_directory == ""
         ):
+
             # check if result path is already set somewhere manually
             if ResultPathProviderSingleton().get_result_directory_name() is not None:
                 self._simulation_parameters.result_directory = ResultPathProviderSingleton().get_result_directory_name()

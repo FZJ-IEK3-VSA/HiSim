@@ -55,10 +55,8 @@ def test_house(
         )
 
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_CAPEX)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_KPIS_TO_JSON)
         my_simulation_parameters.logging_level = 3
 
     # this part is copied from hisim_main

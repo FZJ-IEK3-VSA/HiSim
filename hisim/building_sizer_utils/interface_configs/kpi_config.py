@@ -6,7 +6,7 @@ from dataclasses_json import dataclass_json
 
 @dataclass_json
 @dataclass
-class KPIConfigModular:
+class KPIConfig:
 
     """KPI config class."""
 

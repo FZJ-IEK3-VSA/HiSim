@@ -110,7 +110,7 @@ def setup_function(
         my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS)
         # my_simulation_parameters.post_processing_options.append(
         #     PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE
         # )

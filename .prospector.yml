@@ -26,6 +26,7 @@ pylint:
       - too-many-public-methods
       - too-many-branches
       - broad-exception-raised
+      - too-many-positional-arguments
 #    disable:
 #      - too-many-locals
 #      - arguments-differ

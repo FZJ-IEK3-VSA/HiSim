@@ -1069,6 +1069,9 @@ class PostProcessor:
 
                 self_sufficiency_rate_in_percent = kpi_collection_dict_general_values["Self-sufficiency rate according to solar htw berlin"]["value"]
                 total_costs_in_euro = kpi_collection_dict_cost_values["Total costs for simulated period"]["value"]
+                energy_costs_in_euro = kpi_collection_dict_cost_values["Energy grid costs for simulated period"]["value"]
+                maintenance_costs_in_euro = kpi_collection_dict_cost_values["Maintenance costs for simulated period"]["value"]
+                investment_costs_in_euro = kpi_collection_dict_cost_values["Investment costs for equipment per simulated period"]["value"]
                 total_co2_emissions_in_kg = kpi_collection_dict_emission_values["Total CO2 emissions for simulated period"]["value"]
 
                 # initialize json interface to pass kpi's to building_sizer
@@ -1076,6 +1079,9 @@ class PostProcessor:
                     self_sufficiency_rate_in_percent=self_sufficiency_rate_in_percent,
                     total_costs_in_euro=total_costs_in_euro,
                     total_co2_emissions_in_kg=total_co2_emissions_in_kg,
+                    energy_grid_costs_in_euro=energy_costs_in_euro,
+                    maintenance_costs_in_euro=maintenance_costs_in_euro,
+                    investment_costs_in_euro=investment_costs_in_euro
                 )
 
                 pathname = os.path.join(

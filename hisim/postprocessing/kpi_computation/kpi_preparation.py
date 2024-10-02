@@ -772,6 +772,20 @@ class KpiPreparation:
                 else KpiTagEnumClass.COSTS_DISTRICT_GRID
             ),
         )
+
+        total_energy_cost_entry = KpiEntry(
+            name="Energy grid costs for simulated period",
+            unit="EUR",
+            value=gas_costs_in_euro
+            + electricity_costs_in_euro
+            + heating_costs_in_euro,
+            tag=(
+                KpiTagEnumClass.COSTS
+                if not any(word in building_object for word in DistrictNames)
+                else KpiTagEnumClass.COSTS_DISTRICT_GRID
+            ),
+        )
+
         total_cost_entry = KpiEntry(
             name="Total costs for simulated period",
             unit="EUR",
@@ -922,6 +936,7 @@ class KpiPreparation:
                 total_heat_co2_emissions_entry.name: total_heat_co2_emissions_entry.to_dict(),
                 total_investment_cost_per_simulated_period_entry.name: total_investment_cost_per_simulated_period_entry.to_dict(),
                 total_device_co2_footprint_per_simulated_period_entry.name: total_device_co2_footprint_per_simulated_period_entry.to_dict(),
+                total_energy_cost_entry.name: total_energy_cost_entry.to_dict(),
                 total_maintenance_cost_entry.name: total_maintenance_cost_entry.to_dict(),
                 total_cost_entry.name: total_cost_entry.to_dict(),
                 total_emissions_entry.name: total_emissions_entry.to_dict(),

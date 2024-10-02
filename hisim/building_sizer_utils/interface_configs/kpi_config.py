@@ -11,6 +11,9 @@ class KPIForRatingInOptimization(str, enum.Enum):
     """Choose KPI that will be optimized with building sizer."""
 
     TOTAL_COSTS = "Total Costs [€]"
+    ENERGY_GRID_COSTS = "Energy Grid Costs [€]"
+    MAINTENANCE_COSTS = "Maintenance Costs [€]"
+    INVESTMENT_COSTS = "Investment Costs [€]"
     TOTAL_CO2_EMISSION = "Total CO2 Emission [kg]"
     SELFSUFFICIENCY = "Self-sufficiency rate [%]"
 
@@ -25,6 +28,12 @@ class KPIConfig:
     self_sufficiency_rate_in_percent: float
     #: annual cost for investment and operation in the considered technology, given in euros
     total_costs_in_euro: float
+    #: annual cost for energy from grid (electricty, gas, heat) given in euros
+    energy_grid_costs_in_euro: float
+    #: annual cost for maintenance given in euros
+    maintenance_costs_in_euro: float
+    #: annual cost for investment given in euros
+    investment_costs_in_euro: float
     #: annual C02 emmissions due to the construction and operation of the considered technology, given in kg
     total_co2_emissions_in_kg: float
 
@@ -38,6 +47,12 @@ class KPIConfig:
             return self.self_sufficiency_rate_in_percent
         if chosen_kpi == KPIForRatingInOptimization.TOTAL_COSTS:
             return self.total_costs_in_euro
+        if chosen_kpi == KPIForRatingInOptimization.ENERGY_GRID_COSTS:
+            return self.energy_grid_costs_in_euro
+        if chosen_kpi == KPIForRatingInOptimization.MAINTENANCE_COSTS:
+            return self.maintenance_costs_in_euro
+        if chosen_kpi == KPIForRatingInOptimization.INVESTMENT_COSTS:
+            return self.investment_costs_in_euro
         if chosen_kpi == KPIForRatingInOptimization.TOTAL_CO2_EMISSION:
             return self.total_co2_emissions_in_kg
         raise ValueError(f"Chosen KPI {self.chosen_kpi} not recognized.")

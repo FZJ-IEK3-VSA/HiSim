@@ -350,7 +350,7 @@ def setup_function(
     if smart_devices_included and controllable and utsp_connected:
         component_connections.configure_smart_controller_for_smart_devices(
             my_electricity_controller=my_electricity_controller,
-            my_smart_devices=my_smart_devices,
+            my_smart_devices=my_smart_devices,  # type: ignore
         )
 
     # """WATERHEATING"""
@@ -453,7 +453,7 @@ def setup_function(
         count = component_connections.configure_chp_with_buffer(
             my_sim=my_sim,
             my_simulation_parameters=my_simulation_parameters,
-            my_buffer=my_buffer,
+            my_buffer=my_buffer,  # type: ignore
             my_boiler=my_boiler,
             my_electricity_controller=my_electricity_controller,
             chp_power=chp_power,

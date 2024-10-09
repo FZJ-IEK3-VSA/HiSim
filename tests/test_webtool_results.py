@@ -20,7 +20,8 @@ def test_webtool_results():
     my_simulation_parameters.post_processing_options = [
         PostProcessingOptions.COMPUTE_CAPEX,
         PostProcessingOptions.COMPUTE_OPEX,
-        PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT,
+        PostProcessingOptions.COMPUTE_KPIS,
+        PostProcessingOptions.WRITE_KPIS_TO_JSON,
         PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL,
         PostProcessingOptions.MAKE_OPERATION_RESULTS_FOR_WEBTOOL,
     ]

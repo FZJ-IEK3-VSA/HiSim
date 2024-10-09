@@ -1,6 +1,6 @@
 # clean
 
-"""Postprocessing option computes overall consumption, production,self-consumption and injection as well as selfconsumption rate and autarky rate.
+"""Postprocessing option computes overall consumption, production,self-consumption and injection as well as selfconsumption rate and self-sufficiency rate.
 
 KPis for PV-battery systems in houses:
 https://solar.htw-berlin.de/wp-content/uploads/WENIGER-2017-Vergleich-verschiedener-Kennzahlen-zur-Bewertung-von-PV-Batteriesystemen.pdf.
@@ -287,7 +287,7 @@ class KpiPreparation:
             building_production_in_kilowatt_hour,
         )
 
-    def compute_self_consumption_injection_autarky(
+    def compute_self_consumption_injection_self_sufficiency(
         self,
         result_dataframe: pd.DataFrame,
         electricity_production_in_kilowatt_hour: float,
@@ -295,7 +295,7 @@ class KpiPreparation:
         building_objects_in_district: str,
         kpi_tag: KpiTagEnumClass,
     ) -> pd.DataFrame:
-        """Computes the self consumption, grid injection, autarky and battery losses if electricty production is bigger than zero."""
+        """Computes the self consumption, grid injection, self-sufficiency and battery losses if electricty production is bigger than zero."""
 
         if electricity_production_in_kilowatt_hour > 0:
             # account for battery
@@ -336,12 +336,12 @@ class KpiPreparation:
             self_consumption_rate_in_percent = 100 * (
                 self_consumption_in_kilowatt_hour / electricity_production_in_kilowatt_hour
             )
-            autarky_rate_in_percent = 100 * (
+            self_sufficiency_rate_in_percent = 100 * (
                 self_consumption_in_kilowatt_hour / electricity_consumption_in_kilowatt_hour
             )
-            if autarky_rate_in_percent > 100:
+            if self_sufficiency_rate_in_percent > 100:
                 raise ValueError(
-                    "The autarky rate should not be over 100 %. Something is wrong here. Please check your code."
+                    "The self-sufficiency rate should not be over 100 %. Something is wrong here. Please check your code."
                 )
 
         else:
@@ -350,7 +350,7 @@ class KpiPreparation:
             self_consumption_in_kilowatt_hour = 0
             grid_injection_in_kilowatt_hour = 0
             self_consumption_rate_in_percent = 0
-            autarky_rate_in_percent = 0
+            self_sufficiency_rate_in_percent = 0
 
         # add injection and self-consumption timeseries to result dataframe
         result_dataframe["self_consumption_in_watt"] = self_consumption_series_in_watt
@@ -366,8 +366,8 @@ class KpiPreparation:
         self_consumption_rate_entry = KpiEntry(
             name="Self-consumption rate of electricity", unit="%", value=self_consumption_rate_in_percent, tag=kpi_tag
         )
-        autarkie_rate_entry = KpiEntry(
-            name="Autarky rate of electricity", unit="%", value=autarky_rate_in_percent, tag=kpi_tag
+        self_sufficiency_rate_entry = KpiEntry(
+            name="Self-sufficiency rate of electricity", unit="%", value=self_sufficiency_rate_in_percent, tag=kpi_tag
         )
 
         # update kpi collection dict
@@ -376,7 +376,7 @@ class KpiPreparation:
                 grid_injection_entry.name: grid_injection_entry.to_dict(),
                 self_consumption_entry.name: self_consumption_entry.to_dict(),
                 self_consumption_rate_entry.name: self_consumption_rate_entry.to_dict(),
-                autarkie_rate_entry.name: autarkie_rate_entry.to_dict(),
+                self_sufficiency_rate_entry.name: self_sufficiency_rate_entry.to_dict(),
             }
         )
         return result_dataframe
@@ -419,7 +419,6 @@ class KpiPreparation:
             if (
                 isinstance(kpi_entry["description"], str)
                 and ElectricityMeter.get_classname() in kpi_entry["description"]
-                and building_objects_in_district == kpi_entry["description"].split("_")[0]
             ):
                 if kpi_entry["name"] == "Total energy from grid" and kpi_entry["unit"] == "kWh":
                     total_energy_from_grid_in_kwh = kpi_entry["value"]
@@ -439,6 +438,7 @@ class KpiPreparation:
         name: str = "Relative electricity demand from grid",
     ) -> Optional[float]:
         """Return the relative electricity demand."""
+
         if electricity_from_grid_in_kilowatt_hour is None:
             relative_electricity_demand_from_grid_in_percent = None
         else:
@@ -463,35 +463,36 @@ class KpiPreparation:
         self.kpi_collection_dict_unsorted[building_objects_in_district].update(
             {relative_electricity_demand_entry.name: relative_electricity_demand_entry.to_dict()}
         )
+
         return relative_electricity_demand_from_grid_in_percent
 
-    def compute_autarky_according_to_solar_htw_berlin(
+    def compute_self_sufficiency_according_to_solar_htw_berlin(
         self,
         relative_electricty_demand_in_percent: Optional[float],
         building_objects_in_district: str,
         kpi_tag: KpiTagEnumClass,
-        name: str = "Autarky rate according to solar htw berlin",
+        name: str = "Self-sufficiency rate according to solar htw berlin",
     ) -> None:
-        """Return the autarky rate according to solar htw berlin.
+        """Return the self-sufficiency rate according to solar htw berlin.
 
         https://solar.htw-berlin.de/wp-content/uploads/WENIGER-2017-Vergleich-verschiedener-Kennzahlen-zur-Bewertung-von-PV-Batteriesystemen.pdf.
         """
         if relative_electricty_demand_in_percent is None:
-            autraky_rate_in_percent = None
+            self_sufficiency_rate_in_percent = None
         else:
-            autraky_rate_in_percent = 100 - relative_electricty_demand_in_percent
-            if autraky_rate_in_percent > 100:
+            self_sufficiency_rate_in_percent = 100 - relative_electricty_demand_in_percent
+            if self_sufficiency_rate_in_percent > 100:
                 raise ValueError(
-                    "The autarky rate should not be over 100 %. Something is wrong here. Please check your code. "
+                    "The self-sufficiency rate should not be over 100 %. Something is wrong here. Please check your code. "
                     f"The realtive electricity demand is {relative_electricty_demand_in_percent} %. "
                 )
 
         # make kpi entry
-        autarky_rate_entry = KpiEntry(name=name, unit="%", value=autraky_rate_in_percent, tag=kpi_tag)
+        self_sufficiency_rate_entry = KpiEntry(name=name, unit="%", value=self_sufficiency_rate_in_percent, tag=kpi_tag)
 
         # update kpi collection dict
         self.kpi_collection_dict_unsorted[building_objects_in_district].update(
-            {autarky_rate_entry.name: autarky_rate_entry.to_dict()}
+            {self_sufficiency_rate_entry.name: self_sufficiency_rate_entry.to_dict()}
         )
 
     def compute_self_consumption_rate_according_to_solar_htw_berlin(
@@ -771,6 +772,20 @@ class KpiPreparation:
                 else KpiTagEnumClass.COSTS_DISTRICT_GRID
             ),
         )
+
+        total_energy_cost_entry = KpiEntry(
+            name="Energy grid costs for simulated period",
+            unit="EUR",
+            value=gas_costs_in_euro
+            + electricity_costs_in_euro
+            + heating_costs_in_euro,
+            tag=(
+                KpiTagEnumClass.COSTS
+                if not any(word in building_object for word in DistrictNames)
+                else KpiTagEnumClass.COSTS_DISTRICT_GRID
+            ),
+        )
+
         total_cost_entry = KpiEntry(
             name="Total costs for simulated period",
             unit="EUR",
@@ -921,6 +936,7 @@ class KpiPreparation:
                 total_heat_co2_emissions_entry.name: total_heat_co2_emissions_entry.to_dict(),
                 total_investment_cost_per_simulated_period_entry.name: total_investment_cost_per_simulated_period_entry.to_dict(),
                 total_device_co2_footprint_per_simulated_period_entry.name: total_device_co2_footprint_per_simulated_period_entry.to_dict(),
+                total_energy_cost_entry.name: total_energy_cost_entry.to_dict(),
                 total_maintenance_cost_entry.name: total_maintenance_cost_entry.to_dict(),
                 total_cost_entry.name: total_cost_entry.to_dict(),
                 total_emissions_entry.name: total_emissions_entry.to_dict(),

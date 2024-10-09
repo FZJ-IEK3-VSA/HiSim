@@ -17,7 +17,7 @@ from hisim import utils
 from hisim.component import ComponentOutput
 from hisim.components import building, loadprofilegenerator_utsp_connector
 from hisim.json_generator import JsonConfigurationGenerator
-from hisim.modular_household.interface_configs.kpi_config import KPIConfig
+from hisim.building_sizer_utils.interface_configs.kpi_config import KPIConfig
 from hisim.postprocessing import charts
 from hisim.postprocessing import reportgenerator
 from hisim.postprocessing.chart_singleday import ChartSingleDay
@@ -70,14 +70,15 @@ class PostProcessor:
             # Charts etc. are not needed when executing HiSim in a container. Allow only csv files and KPI.
             allowed_options_for_docker = {
                 PostProcessingOptions.EXPORT_TO_CSV,
-                PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT,
+                PostProcessingOptions.COMPUTE_KPIS,
                 PostProcessingOptions.GENERATE_CSV_FOR_HOUSING_DATA_BASE,
                 PostProcessingOptions.COMPUTE_OPEX,
                 PostProcessingOptions.COMPUTE_CAPEX,
                 PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL,
                 PostProcessingOptions.MAKE_OPERATION_RESULTS_FOR_WEBTOOL,
                 PostProcessingOptions.WRITE_COMPONENT_CONFIGS_TO_JSON,
-                PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON,
+                PostProcessingOptions.WRITE_KPIS_TO_JSON,
+                PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER,
             }
             # Of all specified options, select those that are allowed
             valid_options = list(set(ppdt.post_processing_options) & allowed_options_for_docker)
@@ -85,8 +86,7 @@ class PostProcessor:
                 # At least one invalid option was set
                 ppdt.post_processing_options = valid_options
                 log.warning("Hisim is running in a docker container. Disabled invalid postprocessing options.")
-
-        report = reportgenerator.ReportGenerator(dirpath=ppdt.simulation_parameters.result_directory)
+        report: Optional[reportgenerator.ReportGenerator] = None
         days = {"month": 0, "day": 0}
         system_chart_entries: List[SystemChartEntry] = []
         building_objects_in_district_list = self.get_building_object_in_district(ppdt)
@@ -145,6 +145,7 @@ class PostProcessor:
         if PostProcessingOptions.GENERATE_PDF_REPORT in ppdt.post_processing_options:
             log.information("Making PDF report and writing simulation parameters to report.")
             start = timer()
+            report = reportgenerator.ReportGenerator(dirpath=ppdt.simulation_parameters.result_directory)
             self.write_simulation_parameters_to_report(ppdt, report)
             end = timer()
             duration = end - start
@@ -155,7 +156,11 @@ class PostProcessor:
         if PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT in ppdt.post_processing_options:
             log.information("Writing components to report.")
             start = timer()
-            self.write_components_to_report(ppdt, report, report_image_entries)
+            if report is not None:
+                self.write_components_to_report(ppdt, report, report_image_entries)
+            else:
+                raise ValueError("report is None but should be a ReportGenerator object. "
+                                 "You probably need to set the GENERATE_PDF_REPORT option.")
             end = timer()
             duration = end - start
             log.information("Writing components to report took " + f"{duration:1.2f}s.")
@@ -163,17 +168,25 @@ class PostProcessor:
         if PostProcessingOptions.WRITE_ALL_OUTPUTS_TO_REPORT in ppdt.post_processing_options:
             log.information("Writing all outputs to report.")
             start = timer()
-            self.write_all_outputs_to_report(ppdt, report)
+            if report is not None:
+                self.write_all_outputs_to_report(ppdt, report)
+            else:
+                raise ValueError("report is None but should be a ReportGenerator object. "
+                                 "You probably need to set the GENERATE_PDF_REPORT option.")
             end = timer()
             duration = end - start
             log.information("Writing all outputs to report took " + f"{duration:1.2f}s.")
         if PostProcessingOptions.WRITE_NETWORK_CHARTS_TO_REPORT in ppdt.post_processing_options:
             log.information("Writing network charts to report.")
             start = timer()
-            self.write_network_charts_to_report(ppdt, report, system_chart_entries=system_chart_entries)
+            if report is not None:
+                self.write_network_charts_to_report(ppdt, report, system_chart_entries=system_chart_entries)
+            else:
+                raise ValueError("report is None but should be a ReportGenerator object. "
+                                 "You probably need to set the GENERATE_PDF_REPORT option.")
             end = timer()
             duration = end - start
-            log.information("Writing network charts toreport took " + f"{duration:1.2f}s.")
+            log.information("Writing network charts to report took " + f"{duration:1.2f}s.")
         if PostProcessingOptions.COMPUTE_OPEX in ppdt.post_processing_options:
             log.information(
                 "Computing and writing operational costs and C02 emissions produced in operation to report."
@@ -198,8 +211,8 @@ class PostProcessor:
                 "Computing and writing investment costs and C02 emissions from production of devices to report took "
                 + f"{duration:1.2f}s."
             )
-        if PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT in ppdt.post_processing_options:
-            log.information("Computing and writing KPIs to report.")
+        if PostProcessingOptions.COMPUTE_KPIS in ppdt.post_processing_options:
+            log.information("Computing KPIs and writing to report if option is chosen.")
             start = timer()
             ppdt = self.compute_kpis_and_write_to_report_and_to_ppdt(ppdt, report, building_objects_in_district_list)
             end = timer()
@@ -284,9 +297,9 @@ class PostProcessor:
             log.information("Writing KPIs to JSON file for building sizer.")
             self.write_kpis_to_json_for_building_sizer(ppdt, building_objects_in_district_list)
 
-        if PostProcessingOptions.WRITE_ALL_KPIS_TO_JSON in ppdt.post_processing_options:
+        if PostProcessingOptions.WRITE_KPIS_TO_JSON in ppdt.post_processing_options:
             log.information("Write all KPIs to json file.")
-            self.write_all_kpis_to_json_file(ppdt)
+            self.write_kpis_to_json_file(ppdt)
 
         log.information("Finished main post processing function.")
 
@@ -577,21 +590,26 @@ class PostProcessor:
     def compute_kpis_and_write_to_report_and_to_ppdt(
         self,
         ppdt: PostProcessingDataTransfer,
-        report: reportgenerator.ReportGenerator,
+        report: Optional[reportgenerator.ReportGenerator],
         building_objects_in_district_list: list,
     ) -> PostProcessingDataTransfer:
         """Computes KPI's and writes them to report and to ppdt kpi collection."""
         # initialize kpi data class and compute all kpi values
         kpi_data_class = KpiGenerator(post_processing_data_transfer=ppdt,
                                       building_objects_in_district_list=building_objects_in_district_list)
-        # write kpi table to report
-        kpi_table = kpi_data_class.return_table_for_report()
-        self.write_new_chapter_with_table_to_report(
-            report=report,
-            table_as_list_of_list=kpi_table,
-            headline=". KPIs",
-            comment=["Here a comment on calculation of numbers will follow"],
-        )
+        # write kpi table to report if option is chosen
+        if PostProcessingOptions.GENERATE_PDF_REPORT in ppdt.post_processing_options:
+            kpi_table = kpi_data_class.return_table_for_report()
+            if report is not None:
+                self.write_new_chapter_with_table_to_report(
+                    report=report,
+                    table_as_list_of_list=kpi_table,
+                    headline=". KPIs",
+                    comment=["Here a comment on calculation of numbers will follow"],
+                )
+            else:
+                raise ValueError("report is None but should be a ReportGenerator object.")
+
         # write kpi dict collection into ppdt
         ppdt.kpi_collection_dict = kpi_data_class.kpi_collection_dict_sorted
         return ppdt
@@ -599,7 +617,7 @@ class PostProcessor:
     def compute_and_write_opex_costs_to_report(
         self,
         ppdt: PostProcessingDataTransfer,
-        report: reportgenerator.ReportGenerator,
+        report: Optional[reportgenerator.ReportGenerator],
         building_objects_in_district_list: list,
     ) -> None:
         """Computes OPEX costs and operational CO2-emissions and writes them to report and csv."""
@@ -610,23 +628,28 @@ class PostProcessor:
             simulation_parameters=ppdt.simulation_parameters,
             building_objects_in_district_list=building_objects_in_district_list,
         )
-        self.write_new_chapter_with_table_to_report(
-            report=report,
-            table_as_list_of_list=opex_compute_return,
-            headline=". Operational Costs and Emissions for simulated period",
-            comment=[
-                "\n",
-                "Comments:",
-                "Operational Costs are the sum of fuel costs and maintenance costs for the devices, calculated for the simulated period.",
-                "Emissions are fuel emissions emitted during simulad period.",
-                "Consumption for Diesel_Car in l, for EV in kWh.",
-            ],
-        )
+        # write capex to report if option is chosen
+        if PostProcessingOptions.GENERATE_PDF_REPORT in ppdt.post_processing_options:
+            if report is not None:
+                self.write_new_chapter_with_table_to_report(
+                    report=report,
+                    table_as_list_of_list=opex_compute_return,
+                    headline=". Operational Costs and Emissions for simulated period",
+                    comment=[
+                        "\n",
+                        "Comments:",
+                        "Operational Costs are the sum of fuel costs and maintenance costs for the devices, calculated for the simulated period.",
+                        "Emissions are fuel emissions emitted during simulad period.",
+                        "Consumption for Diesel_Car in l, for EV in kWh.",
+                    ],
+                )
+            else:
+                raise ValueError("report is None but should be a ReportGenerator object.")
 
     def compute_and_write_capex_costs_to_report(
         self,
         ppdt: PostProcessingDataTransfer,
-        report: reportgenerator.ReportGenerator,
+        report: Optional[reportgenerator.ReportGenerator],
         building_objects_in_district_list: list,
     ) -> None:
         """Computes CAPEX costs and CO2-emissions for production of devices and writes them to report and csv."""
@@ -635,12 +658,17 @@ class PostProcessor:
             simulation_parameters=ppdt.simulation_parameters,
             building_objects_in_district_list=building_objects_in_district_list,
         )
-        self.write_new_chapter_with_table_to_report(
-            report=report,
-            table_as_list_of_list=capex_compute_return,
-            headline=". Investment Cost and CO2-Emissions of devices for simulated period",
-            comment=["Values for Battery are calculated with lifetime in cycles instead of lifetime in years"],
-        )
+        # write capex to report if option is chosen
+        if PostProcessingOptions.GENERATE_PDF_REPORT in ppdt.post_processing_options:
+            if report is not None:
+                self.write_new_chapter_with_table_to_report(
+                    report=report,
+                    table_as_list_of_list=capex_compute_return,
+                    headline=". Investment Cost and CO2-Emissions of devices for simulated period",
+                    comment=["Values for Battery are calculated with lifetime in cycles instead of lifetime in years"],
+                )
+            else:
+                raise ValueError("report is None but should be a ReportGenerator object.")
 
     def write_new_chapter_with_text_content_to_report(
         self, report: reportgenerator.ReportGenerator, lines: List, headline: str
@@ -960,7 +988,7 @@ class PostProcessor:
         if all(
             option in ppdt.post_processing_options
             for option in [
-                PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT,
+                PostProcessingOptions.COMPUTE_KPIS,
                 PostProcessingOptions.COMPUTE_CAPEX,
                 PostProcessingOptions.COMPUTE_OPEX,
             ]
@@ -1004,15 +1032,15 @@ class PostProcessor:
         else:
             raise ValueError(
                 "Some PostProcessingOptions are not set. Please check if "
-                f"{PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT}, {PostProcessingOptions.COMPUTE_CAPEX} and "
+                f"{PostProcessingOptions.COMPUTE_KPIS}, {PostProcessingOptions.COMPUTE_CAPEX} and "
                 f"{PostProcessingOptions.COMPUTE_OPEX} are set in your system setup."
             )
 
-    def write_all_kpis_to_json_file(self, ppdt: PostProcessingDataTransfer) -> None:
+    def write_kpis_to_json_file(self, ppdt: PostProcessingDataTransfer) -> None:
         """Write all KPIs o json file."""
 
         # Check if important options were set
-        if PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT in ppdt.post_processing_options:
+        if PostProcessingOptions.COMPUTE_KPIS in ppdt.post_processing_options:
             # Get KPIs from ppdt
             kpi_collection_dict = ppdt.kpi_collection_dict
 
@@ -1023,7 +1051,7 @@ class PostProcessor:
         else:
             raise ValueError(
                 "Some PostProcessingOptions are not set. Please check if "
-                f"{PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT} is set in your system setup."
+                f"{PostProcessingOptions.COMPUTE_KPIS} is set in your system setup."
             )
 
     def write_kpis_to_json_for_building_sizer(
@@ -1032,26 +1060,28 @@ class PostProcessor:
         """Write KPIs to json file for building sizer."""
 
         # Check if important options were set
-        if PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT in ppdt.post_processing_options:
+        if PostProcessingOptions.COMPUTE_KPIS in ppdt.post_processing_options:
             for building_object in building_objects_in_district_list:
                 # Get KPIs from ppdt
                 kpi_collection_dict_general_values = ppdt.kpi_collection_dict[building_object]["General"]
                 kpi_collection_dict_cost_values = ppdt.kpi_collection_dict[building_object]["Costs"]
                 kpi_collection_dict_emission_values = ppdt.kpi_collection_dict[building_object]["Emissions"]
 
-                self_consumption_rate = kpi_collection_dict_general_values["Self-consumption rate of electricity"]["value"]
-                autarky_rate = kpi_collection_dict_general_values["Autarky rate of electricity"]["value"]
-                grid_injection_in_kilowatt_hour = kpi_collection_dict_general_values["Grid injection of electricity"]["value"]
-                economic_cost = kpi_collection_dict_cost_values["Total costs for simulated period"]["value"]
-                co2_cost = kpi_collection_dict_emission_values["Total CO2 emissions for simulated period"]["value"]
+                self_sufficiency_rate_in_percent = kpi_collection_dict_general_values["Self-sufficiency rate according to solar htw berlin"]["value"]
+                total_costs_in_euro = kpi_collection_dict_cost_values["Total costs for simulated period"]["value"]
+                energy_costs_in_euro = kpi_collection_dict_cost_values["Energy grid costs for simulated period"]["value"]
+                maintenance_costs_in_euro = kpi_collection_dict_cost_values["Maintenance costs for simulated period"]["value"]
+                investment_costs_in_euro = kpi_collection_dict_cost_values["Investment costs for equipment per simulated period"]["value"]
+                total_co2_emissions_in_kg = kpi_collection_dict_emission_values["Total CO2 emissions for simulated period"]["value"]
 
                 # initialize json interface to pass kpi's to building_sizer
                 kpi_config = KPIConfig(
-                    self_consumption_rate=self_consumption_rate,
-                    autarky_rate=autarky_rate,
-                    injection=grid_injection_in_kilowatt_hour,
-                    economic_cost=economic_cost,
-                    co2_cost=co2_cost,
+                    self_sufficiency_rate_in_percent=self_sufficiency_rate_in_percent,
+                    total_costs_in_euro=total_costs_in_euro,
+                    total_co2_emissions_in_kg=total_co2_emissions_in_kg,
+                    energy_grid_costs_in_euro=energy_costs_in_euro,
+                    maintenance_costs_in_euro=maintenance_costs_in_euro,
+                    investment_costs_in_euro=investment_costs_in_euro
                 )
 
                 pathname = os.path.join(
@@ -1064,7 +1094,7 @@ class PostProcessor:
         else:
             raise ValueError(
                 "Some PostProcessingOptions are not set. Please check if "
-                f"{PostProcessingOptions.COMPUTE_KPIS_AND_WRITE_TO_REPORT} is set in your system setup."
+                f"{PostProcessingOptions.COMPUTE_KPIS} is set in your system setup."
             )
 
     def get_dict_from_opex_capex_lists(self, value_list: List[str]) -> Dict[str, Any]:

@@ -10,7 +10,7 @@ import pandas as pd
 
 from hisim.component import ComponentOutput
 from hisim.loadtypes import ComponentType, InandOutputType, LoadTypes
-from hisim.modular_household.interface_configs.kpi_config import KPIConfig
+from hisim.modular_household.interface_configs.kpi_config import KPIConfigModular
 from hisim.simulationparameters import SimulationParameters
 from hisim.utils import HISIMPATH
 from hisim.component_wrapper import ComponentWrapper

@@ -625,7 +625,7 @@ class WeatherDataImport:
                         self.latitude,
                         self.longitude,
                     ],
-                    "format": "netcdf",
+                    "data_format": "netcdf",
                 },
                 # 'download.nc'
             )

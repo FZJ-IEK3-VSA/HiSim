@@ -1,4 +1,4 @@
-"""Simple Hot Water Storage Module."""
+"""Simple Water Storage Module for dhw storage and hot water storage for heating."""
 
 # clean
 # Owned
@@ -27,7 +27,7 @@ from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDict
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry, KpiHelperClass
 
-__authors__ = ""
+__authors__ = "Jonas Hoppe"
 __copyright__ = ""
 __credits__ = [""]
 __license__ = ""

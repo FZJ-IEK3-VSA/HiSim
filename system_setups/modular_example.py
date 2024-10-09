@@ -21,6 +21,7 @@ from hisim.components import (
     controller_l2_energy_management_system,
     loadprofilegenerator_utsp_connector,
     weather,
+    generic_smart_device,
 )
 from hisim.modular_household import component_connections
 from hisim.modular_household.interface_configs.modular_household_config import (
@@ -290,6 +291,7 @@ def setup_function(
                 consumption.append(car)
 
     # """SMART DEVICES"""
+    my_smart_devices: list[generic_smart_device.SmartDevice] = []
     if smart_devices_included:
         my_smart_devices, count = component_connections.configure_smart_devices(
             my_sim=my_sim,
@@ -350,7 +352,7 @@ def setup_function(
     if smart_devices_included and controllable and utsp_connected:
         component_connections.configure_smart_controller_for_smart_devices(
             my_electricity_controller=my_electricity_controller,
-            my_smart_devices=my_smart_devices,  # pylint: disable=used-before-assignment
+            my_smart_devices=my_smart_devices,
         )
 
     # """WATERHEATING"""
@@ -411,6 +413,7 @@ def setup_function(
             )
 
     else:
+        my_buffer = None
         if heating_system_installed in [
             lt.HeatingSystems.HEAT_PUMP,
             lt.HeatingSystems.ELECTRIC_HEATING,
@@ -453,7 +456,7 @@ def setup_function(
         count = component_connections.configure_chp_with_buffer(
             my_sim=my_sim,
             my_simulation_parameters=my_simulation_parameters,
-            my_buffer=my_buffer,  # pylint: disable=used-before-assignment
+            my_buffer=my_buffer,
             my_boiler=my_boiler,
             my_electricity_controller=my_electricity_controller,
             chp_power=chp_power,

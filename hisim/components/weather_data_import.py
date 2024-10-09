@@ -2,6 +2,7 @@
 
 import os
 import urllib.request as url
+import io
 import datetime
 import pandas as pd
 from wetterdienst import Settings
@@ -631,12 +632,14 @@ class WeatherDataImport:
             )
 
             with url.urlopen(data.location) as data_set:
-                weather_data_set = xr.open_dataset(data_set.read())
+                data_bytes = data_set.read()
+                weather_data_set = xr.open_dataset(io.BytesIO(data_bytes))
+
             values = weather_data_set.to_dataframe()
 
             values = values.dropna()
 
-            time_value = values.index.get_level_values("time")
+            time_value = values.index.get_level_values("valid_time")
             df_time = pd.DataFrame(index=time_value, columns=["data_column"])
             df_year = pd.DataFrame({"year": df_time.index.year})
             df_month = pd.DataFrame({"month": df_time.index.month})

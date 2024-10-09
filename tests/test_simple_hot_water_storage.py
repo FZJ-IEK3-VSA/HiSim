@@ -15,6 +15,7 @@ def test_simple_storage():
 
     # calculate mixing factors and run simulation for different seconds per timestep
     seconds_per_timesteps_to_test = [60, 60 * 15, 60 * 30, 60 * 60, 60 * 120]
+    factor_for_water_storage_portion = 0.0
     for sec_per_timestep in seconds_per_timesteps_to_test:
         if sec_per_timestep <= 3600:
             factor_for_water_storage_portion = sec_per_timestep / 3600

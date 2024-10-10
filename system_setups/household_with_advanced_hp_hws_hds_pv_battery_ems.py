@@ -13,7 +13,7 @@ from hisim.components import (
     advanced_battery_bslib,
     controller_l2_energy_management_system,
 )
-from hisim.components import simple_hot_water_storage
+from hisim.components import simple_water_storage
 from hisim.components import heat_distribution_system
 from hisim import loadtypes as lt
 from hisim.units import Quantity, Celsius, Watt
@@ -155,12 +155,12 @@ def setup_function(
     )
 
     # Build Heat Water Storage
-    my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
+    my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_heat_pump_config.set_thermal_output_power_in_watt.value,
-        sizing_option=simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
+        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
     )
-    my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
+    my_simple_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
     )

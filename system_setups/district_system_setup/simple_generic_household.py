@@ -15,7 +15,7 @@ from hisim.components import (
     advanced_heat_pump_hplib,
     advanced_battery_bslib,
     controller_l2_energy_management_system,
-    simple_hot_water_storage,
+    simple_water_storage,
     heat_distribution_system,
     generic_heat_pump_modular,
     generic_hot_water_storage_modular,
@@ -222,7 +222,7 @@ class GenericBuilding(cp.Component):
         my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
         # Set sizing option for Hot water Storage
-        sizing_option = simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
+        sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
 
         # Build Heat Pump Controller
         my_heat_pump_controller_config = (
@@ -297,13 +297,13 @@ class GenericBuilding(cp.Component):
         my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
 
         # Build Heat Water Storage
-        my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
+        my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
             max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
             temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
             sizing_option=sizing_option,
             building_name=building_name,
         )
-        my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
+        my_simple_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(
             config=my_simple_heat_water_storage_config,
             my_simulation_parameters=my_simulation_parameters,
         )

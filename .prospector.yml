@@ -27,6 +27,9 @@ pylint:
       - too-many-branches
       - broad-exception-raised
       - too-many-positional-arguments
+      - possibly-used-before-assignment
+      - consider-using-min-builtin
+      - consider-using-max-builtin
 #    disable:
 #      - too-many-locals
 #      - arguments-differ

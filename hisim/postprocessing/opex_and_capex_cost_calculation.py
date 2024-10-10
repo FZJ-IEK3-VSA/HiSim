@@ -14,7 +14,7 @@ from hisim.components.heating_meter import HeatingMeter
 from hisim.components.more_advanced_heat_pump_hplib import MoreAdvancedHeatPumpHPLib
 from hisim.components.advanced_heat_pump_hplib import HeatPumpHplib
 from hisim.components.generic_heat_pump_modular import ModularHeatPump
-from hisim.components.simple_const_heat_source import SimpleHeatSource
+from hisim.components.simple_heat_source import SimpleHeatSource
 
 
 def opex_calculation(

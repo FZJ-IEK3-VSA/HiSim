@@ -36,7 +36,7 @@ from hisim.component import (
     DisplayConfig,
     CapexCostDataClass,
 )
-from hisim.components import weather, simple_hot_water_storage, heat_distribution_system
+from hisim.components import weather, simple_water_storage, heat_distribution_system
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, OutputPostprocessingRules
 from hisim.units import (
@@ -854,7 +854,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
     def get_default_connections_from_simple_hot_water_storage(self,):
         """Get simple hot water storage default connections."""
         # use importlib for importing the other component in order to avoid circular-import errors
-        component_module_name = "hisim.components.simple_hot_water_storage"
+        component_module_name = "hisim.components.simple_water_storage"
         component_module = importlib.import_module(name=component_module_name)
         component_class = getattr(component_module, "SimpleHotWaterStorage")
         connections = []
@@ -863,7 +863,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             ComponentConnection(
                 MoreAdvancedHeatPumpHPLib.TemperatureInputSecondary_SH,
                 hws_classname,
-                simple_hot_water_storage.SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
+                simple_water_storage.SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
             )
         )
         return connections
@@ -1975,12 +1975,12 @@ class MoreAdvancedHeatPumpHPLibControllerSpaceHeating(Component):
     def get_default_connections_from_simple_hot_water_storage(self,):
         """Get simple hot water storage default connections."""
         connections = []
-        hws_classname = simple_hot_water_storage.SimpleHotWaterStorage.get_classname()
+        hws_classname = simple_water_storage.SimpleHotWaterStorage.get_classname()
         connections.append(
             ComponentConnection(
                 MoreAdvancedHeatPumpHPLibControllerSpaceHeating.WaterTemperatureInput,
                 hws_classname,
-                simple_hot_water_storage.SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
+                simple_water_storage.SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
             )
         )
         return connections

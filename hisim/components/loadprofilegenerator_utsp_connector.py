@@ -69,6 +69,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     predictive: bool
     result_dir_path: str
     cache_dir_path: Optional[str] = None
+    name_of_predefined_loadprofile: Optional[str] = "CHR01 Couple both at Work"
     guid: str = ""
 
     @classmethod
@@ -87,6 +88,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
             building_name=building_name,
             name="UTSPConnector",
             data_acquisition_mode=LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE,
+            name_of_predefined_loadprofile="CHR01 Couple both at Work",
             household=Households.CHR01_Couple_both_at_Work,
             result_dir_path=utils.HISIMPATH["utsp_results"],
             energy_intensity=EnergyIntensityType.EnergySaving,
@@ -151,6 +153,7 @@ class UtspLpgConnector(cp.Component):
             my_config=config,
             my_display_config=my_display_config,
         )
+        self.name_of_predefined_loadprofile = config.name_of_predefined_loadprofile
         self.build()
         # dummy value as long as there is no way to consider multiple households in one house
         self.scaling_factor_according_to_number_of_apartments: float = 1.0
@@ -398,7 +401,7 @@ class UtspLpgConnector(cp.Component):
         self,
     ) -> Tuple[str, str, str, str, str]:
         """Get the loadprofiles for a specific predefined profile from hisim/inputs/loadprofiles."""
-        predefined_profile_filepaths = utils.HISIMPATH["occupancy"]["CHR01 Couple both at Work"]
+        predefined_profile_filepaths = utils.HISIMPATH["occupancy"][self.name_of_predefined_loadprofile]
         # get first bodily activity files
         bodily_activity_filepaths = predefined_profile_filepaths["number_of_residents"]
 
@@ -735,7 +738,7 @@ class UtspLpgConnector(cp.Component):
                 elif self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE:
                     log.information(
                         f"LPG data acquisition mode: {self.utsp_config.data_acquisition_mode}. "
-                        "This means the predefined_lpg_household_chr01 from hisim/inputs/loadprofiles/ is taken."
+                        f"This means the {self.name_of_predefined_loadprofile} from hisim/inputs/loadprofiles/ is taken."
                     )
 
                     (

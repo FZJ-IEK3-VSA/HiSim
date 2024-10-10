@@ -22,7 +22,7 @@ from hisim.component import (
 )
 from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
-from hisim.components.simple_hot_water_storage import SimpleHotWaterStorage
+from hisim.components.simple_water_storage import SimpleHotWaterStorage
 from hisim.components.weather import Weather
 from hisim.components.heat_distribution_system import HeatDistributionController
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
@@ -186,7 +186,7 @@ class GenericGasHeaterControllerL1(Component):
     def get_default_connections_from_simple_hot_water_storage(
         self,
     ):
-        """Get simple_hot_water_storage default connections."""
+        """Get simple_water_storage default connections."""
 
         connections = []
         storage_classname = SimpleHotWaterStorage.get_classname()
@@ -202,7 +202,7 @@ class GenericGasHeaterControllerL1(Component):
     def get_default_connections_from_weather(
         self,
     ):
-        """Get simple_hot_water_storage default connections."""
+        """Get simple_water_storage default connections."""
 
         connections = []
         weather_classname = Weather.get_classname()

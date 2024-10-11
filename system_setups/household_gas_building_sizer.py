@@ -20,7 +20,6 @@ from hisim.components import (
     controller_l2_energy_management_system,
     simple_water_storage,
     heat_distribution_system,
-    generic_heat_pump_modular,
     generic_hot_water_storage_modular,
     controller_l1_heatpump,
     electricity_meter,
@@ -37,7 +36,6 @@ from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptio
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
-from hisim.units import Celsius, Watt
 from hisim.loadtypes import HeatingSystems
 from hisim.building_sizer_utils.interface_configs.modular_household_config import read_in_configs
 

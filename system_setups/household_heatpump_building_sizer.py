@@ -251,7 +251,7 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
     # Set sizing option for Hot water Storage
-    sizing_option = simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
+    sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP
 
     # Build Heat Pump Controller
     my_heat_pump_controller_config = advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(
@@ -313,11 +313,11 @@ def setup_function(
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
         sizing_option=sizing_option,
     )
-    my_simple_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(
+    my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config, my_simulation_parameters=my_simulation_parameters,
     )
     # Add to simulator
-    my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)
+    my_sim.add_component(my_simple_water_storage, connect_automatically=True)
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(

@@ -10,7 +10,7 @@ from hisim.components import weather
 from hisim.components import advanced_heat_pump_hplib
 from hisim.components import heat_distribution_system
 from hisim.components import building
-from hisim.components import simple_hot_water_storage
+from hisim.components import simple_water_storage
 from hisim.components import generic_car
 from hisim.components import generic_heat_pump_modular
 from hisim.components import controller_l1_heatpump
@@ -144,7 +144,7 @@ def setup_function(
     )
 
     # Build Heat Water Storage
-    my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
+    my_simple_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_config.simple_hot_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
     )

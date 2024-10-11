@@ -20,7 +20,7 @@ from hisim.components import generic_gas_heater
 from hisim.components import controller_l1_generic_gas_heater
 from hisim.components import heat_distribution_system
 from hisim.components import building
-from hisim.components import simple_hot_water_storage
+from hisim.components import simple_water_storage
 from hisim.components import generic_car
 from hisim.components import generic_heat_pump_modular
 from hisim.components import controller_l1_heatpump
@@ -53,7 +53,7 @@ class ReferenceHouseholdConfig(SystemSetupConfigBase):
     hds_config: heat_distribution_system.HeatDistributionConfig
     gasheater_controller_config: controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config
     gasheater_config: generic_gas_heater.GenericGasHeaterConfig
-    simple_hot_water_storage_config: simple_hot_water_storage.SimpleHotWaterStorageConfig
+    simple_hot_water_storage_config: simple_water_storage.SimpleHotWaterStorageConfig
     dhw_heatpump_config: generic_heat_pump_modular.HeatPumpConfig
     dhw_heatpump_controller_config: controller_l1_heatpump.L1HeatPumpConfig
     dhw_storage_config: generic_hot_water_storage_modular.StorageConfig
@@ -116,9 +116,9 @@ class ReferenceHouseholdConfig(SystemSetupConfigBase):
                 heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
             ),
             simple_hot_water_storage_config=(
-                simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
+                simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
                     max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
-                    sizing_option=simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM,
+                    sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM,
                 )
             ),
             dhw_heatpump_config=(
@@ -242,7 +242,7 @@ def setup_function(
     )
 
     # Build Heat Water Storage
-    my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
+    my_simple_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_config.simple_hot_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
     )

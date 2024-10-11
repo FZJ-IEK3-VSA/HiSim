@@ -16,7 +16,7 @@ from hisim.loadtypes import Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import ComponentInput, ComponentConnection, OpexCostDataClass, CapexCostDataClass
 from hisim.components import weather
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
 
 __authors__ = "Jonas Hoppe"
 __copyright__ = ""
@@ -340,3 +340,11 @@ class SimpleHeatSource(cp.Component):
         )
 
         return opex_cost_data_class
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        return []

@@ -21,6 +21,7 @@ from hisim.components import (
     controller_l2_energy_management_system,
     loadprofilegenerator_utsp_connector,
     weather,
+    generic_smart_device,
 )
 from hisim.modular_household import component_connections
 from hisim.modular_household.interface_configs.modular_household_config import (
@@ -290,6 +291,7 @@ def setup_function(
                 consumption.append(car)
 
     # """SMART DEVICES"""
+    my_smart_devices: list[generic_smart_device.SmartDevice] = []
     if smart_devices_included:
         my_smart_devices, count = component_connections.configure_smart_devices(
             my_sim=my_sim,
@@ -411,6 +413,7 @@ def setup_function(
             )
 
     else:
+        my_buffer = None
         if heating_system_installed in [
             lt.HeatingSystems.HEAT_PUMP,
             lt.HeatingSystems.ELECTRIC_HEATING,

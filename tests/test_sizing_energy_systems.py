@@ -13,7 +13,7 @@ from hisim.components import (
     generic_pv_system,
     advanced_heat_pump_hplib,
     advanced_battery_bslib,
-    simple_hot_water_storage,
+    simple_water_storage,
     generic_heat_pump_modular,
     generic_hot_water_storage_modular,
 )
@@ -195,9 +195,9 @@ def simulation_for_one_timestep(
     )
 
     # Set Hot Water Storage
-    my_simple_hot_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
+    my_simple_hot_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_hplib_config.set_thermal_output_power_in_watt.value,
-        sizing_option=simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
+        sizing_option=simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_HEAT_PUMP,
     )
 
     # Set Battery

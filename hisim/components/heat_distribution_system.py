@@ -319,7 +319,7 @@ class HeatDistribution(cp.Component):
     ):
         """Get simple hot water storage default connections."""
         # use importlib for importing the other component in order to avoid circular-import errors
-        component_module_name = "hisim.components.simple_hot_water_storage"
+        component_module_name = "hisim.components.simple_water_storage"
         component_module = importlib.import_module(name=component_module_name)
         component_class = getattr(component_module, "SimpleHotWaterStorage")
         connections = []

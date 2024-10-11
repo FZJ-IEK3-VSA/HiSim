@@ -18,7 +18,7 @@ from hisim.components import building
 from hisim.components import (
     advanced_battery_bslib,
     controller_l2_energy_management_system,
-    simple_hot_water_storage,
+    simple_water_storage,
     heat_distribution_system,
     generic_heat_pump_modular,
     generic_hot_water_storage_modular,
@@ -252,11 +252,8 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
-    # elif heating_system == HeatingSystems.GAS_HEATING:
     # Set sizing option for Hot water Storage
-    sizing_option = simple_hot_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER
-    # # Set gas meter
-    # use_gas_meter = True
+    sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER
 
     # Build Gas Heater Controller
     my_gas_heater_controller_config = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config.get_scaled_generic_gas_heater_controller_config(
@@ -309,16 +306,16 @@ def setup_function(
     my_sim.add_component(my_heater_controller_l1_for_dhw, connect_automatically=True)
 
     # Build Heat Water Storage
-    my_simple_heat_water_storage_config = simple_hot_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
+    my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
         sizing_option=sizing_option,
     )
-    my_simple_hot_water_storage = simple_hot_water_storage.SimpleHotWaterStorage(
+    my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config, my_simulation_parameters=my_simulation_parameters,
     )
     # Add to simulator
-    my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)
+    my_sim.add_component(my_simple_water_storage, connect_automatically=True)
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(

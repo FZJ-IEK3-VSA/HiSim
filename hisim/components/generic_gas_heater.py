@@ -228,10 +228,7 @@ class GasHeater(Component):
         self,
     ):
         """Get Controller L1 Gas Heater default connections."""
-        # use importlib for importing the other component in order to avoid circular-import errors
-        component_module_name = "hisim.components.controller_l1_generic_gas_heater"
-        component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "GenericGasHeaterControllerL1")
+        component_class = GenericGasHeaterControllerL1
         connections = []
         l1_controller_classname = component_class.get_classname()
         connections.append(

@@ -386,7 +386,7 @@ def setup_function(
     )
 
     my_heat_distribution.connect_input(
-        my_heat_distribution.WaterMassFlow,
+        my_heat_distribution.WaterMassFlowInput,
         my_heat_pump.component_name,
         my_heat_pump.MassFlowOutputSH,
     )

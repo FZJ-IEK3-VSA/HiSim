@@ -79,7 +79,8 @@ def setup_function(
     if my_config is None:
         my_config = ModularHouseholdConfig().get_default_config_for_household_district_heating()
         log.warning(f"Could not read the modular household config from path '{config_filename}'. Using the district heating household default config instead.")
-
+    assert my_config.archetype_config_ is not None
+    assert my_config.energy_system_config_ is not None
     arche_type_config_ = my_config.archetype_config_
     energy_system_config_ = my_config.energy_system_config_
 

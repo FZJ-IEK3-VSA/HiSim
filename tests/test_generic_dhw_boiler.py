@@ -28,8 +28,11 @@ def test_simple_bucket_boiler_state():
         generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler()
     )
     boiler_config.volume = 200
-    heater_config = (
-        generic_heat_source.HeatSourceConfig.get_default_config_waterheating_with_district_heating()
+    heater_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating(
+        heating_system=lt.HeatingSystems.DISTRICT_HEATING,
+        max_warm_water_demand_in_liter=200,
+        scaling_factor_according_to_number_of_apartments=1,
+        seconds_per_timestep=seconds_per_timestep,
     )
 
     # definition of outputs

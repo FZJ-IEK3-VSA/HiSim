@@ -81,25 +81,6 @@ class HeatSourceConfig(cp.ConfigBase):
         )
         return config
 
-    @classmethod
-    def get_default_config_waterheating_with_district_heating(
-        cls,
-        building_name: str = "BUI1",
-    ) -> "HeatSourceConfig":
-        """Returns default configuration of a Heat Source used for water heating (DHW)."""
-        config = HeatSourceConfig(
-            building_name=building_name,
-            name="DHWHeatSource",
-            source_weight=1,
-            fuel=lt.LoadTypes.DISTRICTHEATING,
-            power_th=3000.0,
-            water_vs_heating=lt.InandOutputType.WATER_HEATING,
-            efficiency=1.0,
-            co2_footprint=0,
-            cost=0,
-            lifetime=1
-        )
-        return config
 
     @classmethod
     def get_default_config_waterheating(

@@ -64,7 +64,7 @@ class HeatSourceConfig(cp.ConfigBase):
     def get_default_config_heating(
         cls,
         building_name: str = "BUI1",
-        thermal_power_in_watt = 6200.0,
+        thermal_power_in_watt: float = 6200.0,
     ) -> "HeatSourceConfig":
         """Returns default configuration of a Heat Source used for heating."""
         config = HeatSourceConfig(
@@ -336,7 +336,6 @@ class HeatSource(cp.Component):
             )
         else:
             capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
-            
         return capex_cost_data_class
 
     def get_cost_opex(

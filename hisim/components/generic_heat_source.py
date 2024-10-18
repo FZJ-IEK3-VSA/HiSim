@@ -133,7 +133,7 @@ class HeatSourceConfig(cp.ConfigBase):
             water_vs_heating=lt.InandOutputType.WATER_HEATING,
         )
         if heating_system == lt.HeatingSystems.GAS_HEATING:
-            fuel = lt.Loadtypes.GAS
+            fuel = lt.LoadTypes.GAS
         elif heating_system == lt.HeatingSystems.OIL:
             fuel = lt.LoadTypes.OIL
         elif heating_system == lt.HeatingSystems.DISTRICT_HEATING:

@@ -275,13 +275,7 @@ def setup_function(
 
     # Build district heating for DHW
     my_district_heating_for_dhw_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating(
-        heating_system=lt.LoadTypes.DISTRICTHEATING,
-        max_warm_water_demand_in_liter=my_occupancy.max_hot_water_demand,
-        scaling_factor_according_to_number_of_apartments=my_occupancy.scaling_factor_according_to_number_of_apartments,
-        seconds_per_timestep=my_simulation_parameters.seconds_per_timestep,
-    )
-    generic_heat_source.HeatSourceConfig.get_default_config_waterheating(
-        heating_system=lt.LoadTypes.GAS,
+        heating_system=lt.HeatingSystems.DISTRICT_HEATING,
         max_warm_water_demand_in_liter=my_occupancy.max_hot_water_demand,
         scaling_factor_according_to_number_of_apartments=my_occupancy.scaling_factor_according_to_number_of_apartments,
         seconds_per_timestep=my_simulation_parameters.seconds_per_timestep,

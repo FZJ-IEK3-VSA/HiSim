@@ -35,6 +35,7 @@ def test_household_gas():
     hisim_main.main(path, my_simulation_parameters)
     log.information(os.getcwd())
 
+
 @pytest.mark.system_setups
 @utils.measure_execution_time
 def test_household_heatpump():
@@ -56,6 +57,7 @@ def test_household_heatpump():
 
     hisim_main.main(path, my_simulation_parameters)
     log.information(os.getcwd())
+
 
 @pytest.mark.system_setups
 @utils.measure_execution_time

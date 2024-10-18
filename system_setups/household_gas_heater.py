@@ -156,8 +156,8 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
                 )
             ),
             gas_heater_controller_config=(
-                controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config.get_scaled_generic_gas_heater_controller_config(
-                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+                generic_gas_heater.GenericGasHeaterControllerL1Config.get_default_generic_gas_heater_controller_config(
+                    maximal_thermal_power_in_watt=my_building_information.max_thermal_building_demand_in_watt
                 )
             ),
             gas_heater_config=generic_gas_heater.GenericGasHeaterConfig.get_scaled_gasheater_config(

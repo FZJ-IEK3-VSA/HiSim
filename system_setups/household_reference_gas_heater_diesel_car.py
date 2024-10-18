@@ -107,9 +107,9 @@ class ReferenceHouseholdConfig(SystemSetupConfigBase):
                     absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
                 )
             ),
-            gasheater_controller_config=(
-                controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config.get_scaled_generic_gas_heater_controller_config(
-                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+            gas_heater_controller_config=(
+                generic_gas_heater.GenericGasHeaterControllerL1Config.get_default_generic_gas_heater_controller_config(
+                    maximal_thermal_power_in_watt=my_building_information.max_thermal_building_demand_in_watt
                 )
             ),
             gasheater_config=generic_gas_heater.GenericGasHeaterConfig.get_scaled_gasheater_config(

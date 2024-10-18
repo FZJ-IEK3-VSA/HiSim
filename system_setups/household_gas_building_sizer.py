@@ -260,15 +260,6 @@ def setup_function(
     # Set sizing option for Hot water Storage
     sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER
 
-    # Build Gas Heater Controller
-    my_gas_heater_controller_config = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config.get_scaled_generic_gas_heater_controller_config(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
-    )
-    my_gas_heater_controller = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1(
-        my_simulation_parameters=my_simulation_parameters, config=my_gas_heater_controller_config,
-    )
-    my_sim.add_component(my_gas_heater_controller, connect_automatically=True)
-
     # Build Gas heater For Space Heating
     my_gas_heater_config = generic_gas_heater.GenericGasHeaterConfig.get_scaled_gasheater_config(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
@@ -277,6 +268,15 @@ def setup_function(
         config=my_gas_heater_config, my_simulation_parameters=my_simulation_parameters,
     )
     my_sim.add_component(my_gas_heater, connect_automatically=True)
+
+    # Build Gas Heater Controller
+    my_gas_heater_controller_config = generic_gas_heater.GenericGasHeaterControllerL1Config.get_default_generic_gas_heater_controller_config(
+        minimal_thermal_power_in_watt=my_gas_heater_config.minimal_thermal_power_in_watt, maximal_thermal_power_in_watt=my_gas_heater_config.maximal_thermal_power_in_watt
+    )
+    my_gas_heater_controller = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1(
+        my_simulation_parameters=my_simulation_parameters, config=my_gas_heater_controller_config,
+    )
+    my_sim.add_component(my_gas_heater_controller, connect_automatically=True)
 
     # Build Gas Heater for DHW
     my_gas_heater_for_dhw_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating_with_gas(

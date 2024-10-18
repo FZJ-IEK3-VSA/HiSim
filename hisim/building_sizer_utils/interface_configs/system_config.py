@@ -53,17 +53,19 @@ class EnergySystemConfig:
     share_of_maximum_pv_potential: float = 1.0
 
     @classmethod
-    def get_default_config_for_energy_system_gas(cls) -> EnergySystemConfig:
+    def get_default_config_for_energy_system_gas(cls):
         """Get default energy system config."""
-        energy_system_config = EnergySystemConfig(heating_system = HeatingSystems.GAS_HEATING, share_of_maximum_pv_potential=1.0)
+        energy_system_config = EnergySystemConfig(heating_system=HeatingSystems.GAS_HEATING, share_of_maximum_pv_potential=1.0)
         return energy_system_config
+
     @classmethod
-    def get_default_config_for_energy_system_heatpump(cls) -> EnergySystemConfig:
+    def get_default_config_for_energy_system_heatpump(cls):
         """Get default energy system config."""
-        energy_system_config = EnergySystemConfig(heating_system = HeatingSystems.HEAT_PUMP, share_of_maximum_pv_potential=1.0)
+        energy_system_config = EnergySystemConfig(heating_system=HeatingSystems.HEAT_PUMP, share_of_maximum_pv_potential=1.0)
         return energy_system_config
+
     @classmethod
-    def get_default_config_for_energy_system_district_heating(cls) -> EnergySystemConfig:
+    def get_default_config_for_energy_system_district_heating(cls):
         """Get default energy system config."""
-        energy_system_config = EnergySystemConfig(heating_system = HeatingSystems.DISTRICT_HEATING, share_of_maximum_pv_potential=1.0)
+        energy_system_config = EnergySystemConfig(heating_system=HeatingSystems.DISTRICT_HEATING, share_of_maximum_pv_potential=1.0)
         return energy_system_config

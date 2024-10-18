@@ -31,7 +31,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
     archetype_config_: Optional[archetype_config.ArcheTypeConfig] = None
 
     @classmethod
-    def get_default_config_for_household_gas(cls) -> ModularHouseholdConfig:
+    def get_default_config_for_household_gas(cls):
         """Get default ModularHouseholdConfig."""
         energy_system_config_ = system_config.EnergySystemConfig.get_default_config_for_energy_system_gas()
         archetype_config_ = archetype_config.ArcheTypeConfig()
@@ -41,7 +41,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         return household_config
 
     @classmethod
-    def get_default_config_for_household_heatpump(cls) -> ModularHouseholdConfig:
+    def get_default_config_for_household_heatpump(cls):
         """Get default ModularHouseholdConfig."""
         energy_system_config_ = system_config.EnergySystemConfig.get_default_config_for_energy_system_heatpump()
         archetype_config_ = archetype_config.ArcheTypeConfig()
@@ -51,7 +51,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         return household_config
 
     @classmethod
-    def get_default_config_for_household_district_heating(cls) -> ModularHouseholdConfig:
+    def get_default_config_for_household_district_heating(cls):
         """Get default ModularHouseholdConfig."""
         energy_system_config_ = system_config.EnergySystemConfig.get_default_config_for_energy_system_district_heating()
         archetype_config_ = archetype_config.ArcheTypeConfig()
@@ -86,6 +86,7 @@ def read_in_configs(pathname: str) -> Optional[ModularHouseholdConfig]:
             household_config = ModularHouseholdConfig.from_dict(household_config_dict)
 
         log.information(f"Read modular household config from {pathname}")
+        assert household_config is not None
         if (household_config.energy_system_config_ is None) and (household_config.archetype_config_ is None):
             raise ValueError("Energy system and archetype configs are None.")
 

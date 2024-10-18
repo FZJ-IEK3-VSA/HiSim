@@ -28,7 +28,7 @@ from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 
-__authors__ = "Frank Burkrad, Maximilian Hillen"
+__authors__ = "Frank Burkrad, Maximilian Hillen, Markus Blasberg"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
 __license__ = ""
@@ -420,7 +420,6 @@ class GenericGasHeaterControllerL1Config(ConfigBase):
         building_name: str = "BUI1",
     ) -> "GenericGasHeaterControllerL1Config":
         """Gets a default Generic Heat Pump Controller."""
-        maximal_thermal_power_in_watt = heating_load_of_building_in_watt
         return GenericGasHeaterControllerL1Config(
             building_name=building_name,
             name="GenericGasHeaterController",
@@ -486,31 +485,31 @@ class GenericGasHeaterControllerL1(Component):
         self.water_temperature_input_channel: ComponentInput = self.add_input(
             self.component_name,
             self.WaterTemperatureInputFromHeatWaterStorage,
-            LoadTypes.TEMPERATURE,
-            Units.CELSIUS,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
             True,
         )
 
         self.heating_flow_temperature_from_heat_distribution_system_channel: ComponentInput = self.add_input(
             self.component_name,
             self.HeatingFlowTemperatureFromHeatDistributionSystem,
-            LoadTypes.TEMPERATURE,
-            Units.CELSIUS,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
             True,
         )
         self.daily_avg_outside_temperature_input_channel: ComponentInput = self.add_input(
             self.component_name,
             self.DailyAverageOutsideTemperature,
-            LoadTypes.TEMPERATURE,
-            Units.CELSIUS,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
             True,
         )
 
         self.control_signal_to_gasheater_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.ControlSignalToGasHeater,
-            LoadTypes.ANY,
-            Units.PERCENT,
+            lt.LoadTypes.ANY,
+            lt.Units.PERCENT,
             output_description=f"here a description for {self.ControlSignalToGasHeater} will follow.",
         )
 

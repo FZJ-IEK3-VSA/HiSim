@@ -17,7 +17,6 @@ from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import generic_gas_heater
-from hisim.components import controller_l1_generic_gas_heater
 from hisim.components import heat_distribution_system
 from hisim.components import building
 from hisim.components import simple_water_storage

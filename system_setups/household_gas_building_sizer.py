@@ -26,7 +26,6 @@ from hisim.components import (
     advanced_ev_battery_bslib,
     controller_l1_generic_ev_charge,
     generic_car,
-    controller_l1_generic_gas_heater,
     generic_gas_heater,
     generic_heat_source,
     gas_meter,

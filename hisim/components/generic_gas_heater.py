@@ -419,7 +419,7 @@ class GenericGasHeaterControllerL1Config(ConfigBase):
         minimal_thermal_power_in_watt: float = 1000,
         building_name: str = "BUI1",
     ) -> "GenericGasHeaterControllerL1Config":
-        """Gets a default Generic Heat Pump Controller."""
+        """Gets a default Generic Gas Heater Controller."""
         return GenericGasHeaterControllerL1Config(
             building_name=building_name,
             name="GenericGasHeaterController",
@@ -432,7 +432,7 @@ class GenericGasHeaterControllerL1Config(ConfigBase):
 
 
 class GenericGasHeaterControllerL1(Component):
-    """Gas Heater Controller based on HeatPumpHplibControllerL1 (in advanced_heat_oump_hplib).
+    """Gas Heater Controller.
 
     It takes data from other
     components and sends signal to the generic_gas_heater for
@@ -441,10 +441,6 @@ class GenericGasHeaterControllerL1(Component):
 
     Parameters
     ----------
-    mode : int
-        Mode index for operation type for this heat pump--> should be 1 only for gas_heater
-
-
     Components to connect to:
     (1) generic_gas_heater (control_signal)
 

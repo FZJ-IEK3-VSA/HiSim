@@ -102,8 +102,9 @@ class HeatSourceConfig(cp.ConfigBase):
         return config
 
     @classmethod
-    def get_default_config_waterheating_with_gas(
+    def get_default_config_waterheating(
         cls,
+        heating_system: lt.HeatingSystems,
         max_warm_water_demand_in_liter: float,
         scaling_factor_according_to_number_of_apartments: float,
         seconds_per_timestep: int,
@@ -128,20 +129,30 @@ class HeatSourceConfig(cp.ConfigBase):
             * scaling_factor_according_to_number_of_apartments
         )
         efficiency = get_heating_system_efficiency(
-            heating_system_installed=lt.HeatingSystems.GAS_HEATING,
-            water_vs_heating=lt.InandOutputType.HEATING,
+            heating_system_installed=heating_system,
+            water_vs_heating=lt.InandOutputType.WATER_HEATING,
         )
+        if heating_system == lt.HeatingSystems.GAS_HEATING:
+            fuel = lt.Loadtypes.GAS
+        elif heating_system == lt.HeatingSystems.OIL:
+            fuel = lt.LoadTypes.OIL
+        elif heating_system == lt.HeatingSystems.DISTRICT_HEATING:
+            fuel = lt.LoadTypes.DISTRICTHEATING
+        else:
+            raise ValueError(f"Heating sytem {heating_system} not acceptable for generic heat source component. Muste be ags, oil or district heating.")
+
         config = HeatSourceConfig(
             building_name=building_name,
             name="DHWHeatSource",
             source_weight=1,
-            fuel=lt.LoadTypes.GAS,
+            fuel=fuel,
             power_th=thermal_power_in_watt,
             water_vs_heating=lt.InandOutputType.WATER_HEATING,
             efficiency=efficiency,
-            co2_footprint=thermal_power_in_watt * 1e-3 * 49.47,  # value from emission_factros_and_costs_devices.csv
-            cost=7416,  # value from emission_factros_and_costs_devices.csv
-            lifetime=20,  # value from emission_factros_and_costs_devices.csv
+            # costs, footprint and lifetime will be determined later in opex and capex ost calculation
+            co2_footprint=0,
+            cost=0,
+            lifetime=1,
         )
         return config
 

@@ -274,8 +274,17 @@ def setup_function(
     my_sim.add_component(my_district_heating, connect_automatically=True)
 
     # Build district heating for DHW
-    my_district_heating_for_dhw_config = (
-        generic_heat_source.HeatSourceConfig.get_default_config_waterheating_with_district_heating()
+    my_district_heating_for_dhw_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating(
+        heating_system=lt.LoadTypes.DISTRICTHEATING,
+        max_warm_water_demand_in_liter=my_occupancy.max_hot_water_demand,
+        scaling_factor_according_to_number_of_apartments=my_occupancy.scaling_factor_according_to_number_of_apartments,
+        seconds_per_timestep=my_simulation_parameters.seconds_per_timestep,
+    )
+    generic_heat_source.HeatSourceConfig.get_default_config_waterheating(
+        heating_system=lt.LoadTypes.GAS,
+        max_warm_water_demand_in_liter=my_occupancy.max_hot_water_demand,
+        scaling_factor_according_to_number_of_apartments=my_occupancy.scaling_factor_according_to_number_of_apartments,
+        seconds_per_timestep=my_simulation_parameters.seconds_per_timestep,
     )
     my_district_heating_controller_dhw_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
         "DHW" + lt.HeatingSystems.DISTRICT_HEATING.value

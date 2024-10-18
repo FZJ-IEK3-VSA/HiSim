@@ -101,7 +101,9 @@ def setup_function(
 
     my_fuel_cell_controller_l2 = XTPController(
         my_simulation_parameters=my_simulation_parameters,
-        config=XTPControllerConfig.control_fuel_cell(fuel_cell_name=fuel_cell_name, operation_mode=operation_mode, building_name="BUI1",),
+        config=XTPControllerConfig.control_fuel_cell(
+            fuel_cell_name=fuel_cell_name, operation_mode=operation_mode, building_name="BUI1",
+        ),
     )
     my_fuel_cell_controller = FuelCellController(
         my_simulation_parameters=my_simulation_parameters,
@@ -115,9 +117,7 @@ def setup_function(
     my_electrolyzer_controller_l2 = PTXController(
         my_simulation_parameters=my_simulation_parameters,
         config=PTXControllerConfig.control_electrolyzer(
-            building_name="BUI1",
-            electrolyzer_name=electrolyzer_name,
-            operation_mode=operation_mode,
+            building_name="BUI1", electrolyzer_name=electrolyzer_name, operation_mode=operation_mode,
         ),
     )
     # buffer bat test end
@@ -153,8 +153,7 @@ def setup_function(
     my_photovoltaic_system_config.cost = pv_cost
 
     my_photovoltaic_system = generic_pv_system.PVSystem(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_photovoltaic_system_config,
+        my_simulation_parameters=my_simulation_parameters, config=my_photovoltaic_system_config,
     )
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)
     # hp test start
@@ -180,7 +179,7 @@ def setup_function(
             set_heating_temperature_in_celsius=19.0,
             set_cooling_temperature_in_celsius=24.0,
             enable_opening_windows=False,
-            max_thermal_building_demand_in_watt=None
+            max_thermal_building_demand_in_watt=None,
         ),
         my_simulation_parameters=my_simulation_parameters,
     )
@@ -232,10 +231,7 @@ def setup_function(
         source_component_output=my_heat_pump.ElectricityOutput,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        source_tags=[
-            lt.ComponentType.HEAT_PUMP,
-            lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
-        ],
+        source_tags=[lt.ComponentType.HEAT_PUMP, lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,],
         source_weight=999,
     )
 
@@ -243,16 +239,12 @@ def setup_function(
     my_building.connect_only_predefined_connections(my_occupancy)
 
     my_building.connect_input(
-        my_building.ThermalPowerDelivered,
-        my_heat_pump.component_name,
-        my_heat_pump.ThermalPowerDelivered,
+        my_building.ThermalPowerDelivered, my_heat_pump.component_name, my_heat_pump.ThermalPowerDelivered,
     )
 
     my_heat_pump_controller.connect_only_predefined_connections(my_building)
     my_heat_pump_controller.connect_input(
-        my_heat_pump_controller.ElectricityInput,
-        my_cl2.component_name,
-        my_cl2.TotalElectricityToOrFromGrid,
+        my_heat_pump_controller.ElectricityInput, my_cl2.component_name, my_cl2.TotalElectricityToOrFromGrid,
     )
     my_heat_pump.connect_only_predefined_connections(my_weather, my_heat_pump_controller)
     my_heat_pump.get_default_connections_heatpump_controller()
@@ -272,10 +264,7 @@ def setup_function(
         source_component_output=my_electrolyzer.CurrentLoad,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        source_tags=[
-            lt.ComponentType.ELECTROLYZER,
-            lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
-        ],
+        source_tags=[lt.ComponentType.ELECTROLYZER, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,],
         source_weight=1,
     )
 
@@ -289,18 +278,14 @@ def setup_function(
     )
     electricity_to_electrolyzer_target = my_cl2.add_component_output(
         source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-        source_tags=[
-            lt.ComponentType.ELECTROLYZER,
-            lt.InandOutputType.ELECTRICITY_TARGET,
-        ],
+        source_tags=[lt.ComponentType.ELECTROLYZER, lt.InandOutputType.ELECTRICITY_TARGET,],
         source_weight=1,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         output_description="Target electricity to electrolyzer. ",
     )
     my_fuel_cell_controller_l2.connect_dynamic_input(
-        input_fieldname=my_fuel_cell_controller_l2.DemandLoad,
-        src_object=electricity_from_fuel_cell_target_1,
+        input_fieldname=my_fuel_cell_controller_l2.DemandLoad, src_object=electricity_from_fuel_cell_target_1,
     )
     my_fuel_cell_controller.connect_input(
         input_fieldname=my_fuel_cell_controller.DemandProfile,
@@ -309,8 +294,7 @@ def setup_function(
     )
     # buffer bat test start
     my_electrolyzer_controller_l2.connect_dynamic_input(
-        input_fieldname=my_electrolyzer_controller_l2.RESLoad,
-        src_object=electricity_to_electrolyzer_target,
+        input_fieldname=my_electrolyzer_controller_l2.RESLoad, src_object=electricity_to_electrolyzer_target,
     )
     my_electrolyzer_controller.connect_input(
         input_fieldname=my_electrolyzer_controller.ProvidedLoad,
@@ -321,14 +305,10 @@ def setup_function(
     # buffer bat test end
 
     my_fuel_cell.connect_input(
-        my_fuel_cell.DemandProfile,
-        my_fuel_cell_controller.component_name,
-        my_fuel_cell_controller.PowerTarger,
+        my_fuel_cell.DemandProfile, my_fuel_cell_controller.component_name, my_fuel_cell_controller.PowerTarger,
     )
     my_fuel_cell.connect_input(
-        my_fuel_cell.ControlSignal,
-        my_fuel_cell_controller.component_name,
-        my_fuel_cell_controller.CurrentMode,
+        my_fuel_cell.ControlSignal, my_fuel_cell_controller.component_name, my_fuel_cell_controller.CurrentMode,
     )
 
     my_electrolyzer.connect_input(
@@ -338,9 +318,7 @@ def setup_function(
     )
 
     my_electrolyzer.connect_input(
-        my_electrolyzer.InputState,
-        my_electrolyzer_controller.component_name,
-        my_electrolyzer_controller.CurrentMode,
+        my_electrolyzer.InputState, my_electrolyzer_controller.component_name, my_electrolyzer_controller.CurrentMode,
     )
     """
     my_cl2.add_component_input_and_connect(

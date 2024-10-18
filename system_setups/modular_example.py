@@ -24,9 +24,7 @@ from hisim.components import (
     generic_smart_device,
 )
 from hisim.modular_household import component_connections
-from hisim.modular_household.interface_configs.modular_household_config import (
-    read_in_configs,
-)
+from hisim.modular_household.interface_configs.modular_household_config import read_in_configs
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
 
@@ -54,9 +52,7 @@ def cleanup_old_lpg_requests():
             os.remove(full_file_path)
 
 
-def get_heating_reference_temperature_and_season_from_location(
-    location: str,
-) -> Tuple[float, List[int]]:
+def get_heating_reference_temperature_and_season_from_location(location: str,) -> Tuple[float, List[int]]:
     """Reads in temperature of coldest day for sizing of heating system and heating season for control of the heating system.
 
     Both relies on the location.
@@ -183,10 +179,9 @@ def setup_function(
     my_sim.add_component(my_weather)
 
     # Build building
-    (
-        reference_temperature,
-        heating_season,
-    ) = get_heating_reference_temperature_and_season_from_location(location=location)
+    (reference_temperature, heating_season,) = get_heating_reference_temperature_and_season_from_location(
+        location=location
+    )
 
     my_building_config = building.BuildingConfig(
         name="Building_1",
@@ -202,7 +197,7 @@ def setup_function(
         set_heating_temperature_in_celsius=19.0,
         set_cooling_temperature_in_celsius=24.0,
         enable_opening_windows=False,
-        max_thermal_building_demand_in_watt=None
+        max_thermal_building_demand_in_watt=None,
     )
     my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters)
@@ -233,12 +228,11 @@ def setup_function(
             profile_with_washing_machine_and_dishwasher=not smart_devices_included,
             predictive_control=False,
             predictive=False,
-            building_name="BUI1"
+            building_name="BUI1",
         )
 
         my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
-            config=my_occupancy_config,
-            my_simulation_parameters=my_simulation_parameters,
+            config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters,
         )
 
     else:
@@ -248,8 +242,7 @@ def setup_function(
         )
 
         my_occupancy = loadprofilegenerator_utsp_connector.UtspLpgConnector(
-            config=my_occupancy_config,
-            my_simulation_parameters=my_simulation_parameters,
+            config=my_occupancy_config, my_simulation_parameters=my_simulation_parameters,
         )
 
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
@@ -312,8 +305,7 @@ def setup_function(
     ):
         my_electricity_controller_config = controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
         my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_electricity_controller_config,
+            my_simulation_parameters=my_simulation_parameters, config=my_electricity_controller_config,
         )
 
         my_electricity_controller.add_component_inputs_and_connect(
@@ -351,8 +343,7 @@ def setup_function(
     # use clever controller if smart devices are included and do not use it if it is false
     if smart_devices_included and controllable and utsp_connected:
         component_connections.configure_smart_controller_for_smart_devices(
-            my_electricity_controller=my_electricity_controller,
-            my_smart_devices=my_smart_devices,
+            my_electricity_controller=my_electricity_controller, my_smart_devices=my_smart_devices,
         )
 
     # """WATERHEATING"""
@@ -538,9 +529,6 @@ def needs_ems(  # pylint: disable=R0911
     if heating_system_installed in [
         lt.HeatingSystems.HEAT_PUMP,
         lt.HeatingSystems.ELECTRIC_HEATING,
-    ] or water_heating_system_installed in [
-        lt.HeatingSystems.HEAT_PUMP,
-        lt.HeatingSystems.ELECTRIC_HEATING,
-    ]:
+    ] or water_heating_system_installed in [lt.HeatingSystems.HEAT_PUMP, lt.HeatingSystems.ELECTRIC_HEATING,]:
         return True
     return False

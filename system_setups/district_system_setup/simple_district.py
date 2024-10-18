@@ -214,12 +214,14 @@ def setup_function(
             else:
                 pass
 
-        district_list.append(simple_generic_household.GenericBuilding(
-            my_sim=my_sim,
-            my_simulation_parameters=my_simulation_parameters,
-            config=bui_config,
-            location=my_config.location_district,
-        ))
+        district_list.append(
+            simple_generic_household.GenericBuilding(
+                my_sim=my_sim,
+                my_simulation_parameters=my_simulation_parameters,
+                config=bui_config,
+                location=my_config.location_district,
+            )
+        )
 
     # =================================================================================================================================
     # Build districts PV
@@ -249,8 +251,7 @@ def setup_function(
     )
 
     my_photovoltaic_system_district = generic_pv_system.PVSystem(
-        config=my_photovoltaic_system_district_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_photovoltaic_system_district_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     my_sim.add_component(my_photovoltaic_system_district, connect_automatically=True)
@@ -258,8 +259,7 @@ def setup_function(
     # Build electricity grid of district
 
     my_electricity_meter_district_config = electricity_meter.ElectricityMeterConfig(
-        building_name=my_config.district_name,
-        name="ElectricityMeter",
+        building_name=my_config.district_name, name="ElectricityMeter",
     )
 
     my_electricity_meter_district = electricity_meter.ElectricityMeter(
@@ -287,8 +287,7 @@ def setup_function(
         )
 
         my_ems_district = controller_l2_district_energy_management_system.L2GenericDistrictEnergyManagementSystem(
-            config=my_ems_district_config,
-            my_simulation_parameters=my_simulation_parameters,
+            config=my_ems_district_config, my_simulation_parameters=my_simulation_parameters,
         )
 
         my_ems_district.add_component_input_and_connect(
@@ -347,9 +346,6 @@ def setup_function(
                 source_component_output=my_photovoltaic_system_district.ElectricityOutput,
                 source_load_type=loadtypes.LoadTypes.ELECTRICITY,
                 source_unit=loadtypes.Units.WATT,
-                source_tags=[
-                    loadtypes.ComponentType.PV,
-                    loadtypes.InandOutputType.ELECTRICITY_PRODUCTION,
-                ],
+                source_tags=[loadtypes.ComponentType.PV, loadtypes.InandOutputType.ELECTRICITY_PRODUCTION,],
                 source_weight=999,
             )

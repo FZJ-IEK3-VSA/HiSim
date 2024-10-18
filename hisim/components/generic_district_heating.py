@@ -316,7 +316,7 @@ class GenericDistrictHeatingControllerConfig(ConfigBase):
         """Gets a default Generic District Heating Controller."""
         return GenericDistrictHeatingControllerConfig(
             building_name=building_name,
-            name="GenericDistrictHeatingController",
+            name="DistrictHeatingController",
             set_heating_threshold_outside_temperature_in_celsius=16.0,
             minimal_thermal_power_in_watt=1000,  # [W]
             maximal_thermal_power_in_watt=6200,  # [W]
@@ -331,7 +331,7 @@ class GenericDistrictHeatingControllerConfig(ConfigBase):
         maximal_thermal_power_in_watt = heating_load_of_building_in_watt
         return GenericDistrictHeatingControllerConfig(
             building_name=building_name,
-            name="GenericGasHeaterController",
+            name="DistrictHeatingController",
             set_heating_threshold_outside_temperature_in_celsius=16.0,
             minimal_thermal_power_in_watt=1_000,  # [W]
             maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,  # [W]

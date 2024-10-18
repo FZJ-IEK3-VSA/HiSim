@@ -152,8 +152,7 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
                 predictive=False,
             ),
             pv_config=generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-                rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2,
-                location=weather_location
+                rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2, location=weather_location
             )
             if options.photovoltaic
             else None,
@@ -163,7 +162,7 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
             hds_config=(
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
                     water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
-                    absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2
+                    absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
                 )
             ),
             hp_controller_config=advanced_heat_pump_hplib.HeatPumpHplibControllerL1Config.get_default_generic_heat_pump_controller_config(

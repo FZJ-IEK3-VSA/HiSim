@@ -36,7 +36,10 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim.units import Quantity, Celsius, Watt
 from hisim.loadtypes import HeatingSystems
-from hisim.building_sizer_utils.interface_configs.modular_household_config import read_in_configs, ModularHouseholdConfig
+from hisim.building_sizer_utils.interface_configs.modular_household_config import (
+    read_in_configs,
+    ModularHouseholdConfig,
+)
 from hisim import log
 
 
@@ -83,7 +86,9 @@ def setup_function(
     my_config = read_in_configs(my_sim.my_module_config)
     if my_config is None:
         my_config = ModularHouseholdConfig().get_default_config_for_household_heatpump()
-        log.warning(f"Could not read the modular household config from path '{config_filename}'. Using the heatpump household default config instead.")
+        log.warning(
+            f"Could not read the modular household config from path '{config_filename}'. Using the heatpump household default config instead."
+        )
     assert my_config.archetype_config_ is not None
     assert my_config.energy_system_config_ is not None
     arche_type_config_ = my_config.archetype_config_
@@ -93,9 +98,7 @@ def setup_function(
     if my_simulation_parameters is None:
         year = 2021
         seconds_per_timestep = 60 * 15
-        my_simulation_parameters = SimulationParameters.full_year(
-            year=year, seconds_per_timestep=seconds_per_timestep
-        )
+        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
         cache_dir_path_simuparams = "/benchtop/2024-k-rieck-hisim/hisim_inputs_cache/"
         if os.path.exists(cache_dir_path_simuparams):
             my_simulation_parameters.cache_dir_path = cache_dir_path_simuparams
@@ -106,7 +109,9 @@ def setup_function(
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_CAPEX)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_KPIS_TO_JSON)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER)
+        my_simulation_parameters.post_processing_options.append(
+            PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER
+        )
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
@@ -271,9 +276,7 @@ def setup_function(
 
     # Build Heat Pump
     my_heat_pump_config = advanced_heat_pump_hplib.HeatPumpHplibConfig.get_scaled_advanced_hp_lib(
-        heating_load_of_building_in_watt=Quantity(
-            my_building_information.max_thermal_building_demand_in_watt, Watt
-        ),
+        heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt, Watt),
         heating_reference_temperature_in_celsius=Quantity(heating_reference_temperature_in_celsius, Celsius),
     )
 
@@ -517,12 +520,7 @@ def setup_function(
         ResultPathProviderSingleton().set_important_result_path_information(
             module_directory=my_sim.module_directory,  # "/storage_cluster/projects/2024_waage/01_hisim_results",
             model_name=my_sim.module_filename,
-            further_result_folder_description=os.path.join(
-                *[
-                    further_result_folder_description,
-
-                ]
-            ),
+            further_result_folder_description=os.path.join(*[further_result_folder_description,]),
             variant_name="_",
             scenario_hash_string=scenario_hash_string,
             sorting_option=sorting_option,

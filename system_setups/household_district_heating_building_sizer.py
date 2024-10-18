@@ -34,7 +34,10 @@ from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDict
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim.loadtypes import HeatingSystems
-from hisim.building_sizer_utils.interface_configs.modular_household_config import read_in_configs, ModularHouseholdConfig
+from hisim.building_sizer_utils.interface_configs.modular_household_config import (
+    read_in_configs,
+    ModularHouseholdConfig,
+)
 from hisim import log
 
 __authors__ = "Katharina Rieck"
@@ -78,7 +81,9 @@ def setup_function(
 
     if my_config is None:
         my_config = ModularHouseholdConfig().get_default_config_for_household_district_heating()
-        log.warning(f"Could not read the modular household config from path '{config_filename}'. Using the district heating household default config instead.")
+        log.warning(
+            f"Could not read the modular household config from path '{config_filename}'. Using the district heating household default config instead."
+        )
     assert my_config.archetype_config_ is not None
     assert my_config.energy_system_config_ is not None
     arche_type_config_ = my_config.archetype_config_
@@ -116,7 +121,9 @@ def setup_function(
     # Set heating systems for space heating and domestic hot water
     heating_system = energy_system_config_.heating_system
     if heating_system != HeatingSystems.DISTRICT_HEATING:
-        raise ValueError(f"Heating system was set as {heating_system} but needs to be {HeatingSystems.DISTRICT_HEATING.value} for this system setup.")
+        raise ValueError(
+            f"Heating system was set as {heating_system} but needs to be {HeatingSystems.DISTRICT_HEATING.value} for this system setup."
+        )
 
     heating_reference_temperature_in_celsius = -7.0
 
@@ -249,7 +256,9 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
     # Build district heating controller
-    my_district_heating_controller_sh_config = generic_district_heating.GenericDistrictHeatingControllerConfig.get_scaled_district_heating_controller_config(heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt)
+    my_district_heating_controller_sh_config = generic_district_heating.GenericDistrictHeatingControllerConfig.get_scaled_district_heating_controller_config(
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+    )
     my_district_heating_controller = generic_district_heating.DistrictHeatingController(
         my_simulation_parameters=my_simulation_parameters, config=my_district_heating_controller_sh_config
     )
@@ -298,7 +307,7 @@ def setup_function(
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
         water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
         absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
-        position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.NO_STORAGE
+        position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.NO_STORAGE,
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config, my_simulation_parameters=my_simulation_parameters,

@@ -174,7 +174,9 @@ class HouseholdMoreAdvancedHPDHWHPNoStorageConfig(SystemSetupConfigBase):
             900, Seconds  # default value leads to switching on-off very often
         )
         household_config.hp_config.with_domestic_hot_water_preparation = False
-        household_config.hp_config.position_hot_water_storage_in_system = more_advanced_heat_pump_hplib.PositionHotWaterStorageInSystemSetup.NO_STORAGE
+        household_config.hp_config.position_hot_water_storage_in_system = (
+            more_advanced_heat_pump_hplib.PositionHotWaterStorageInSystemSetup.NO_STORAGE
+        )
         household_config.hp_config.cycling_mode = False
 
         # set same heating threshold
@@ -192,8 +194,7 @@ class HouseholdMoreAdvancedHPDHWHPNoStorageConfig(SystemSetupConfigBase):
 
 
 def setup_function(
-    my_sim: Any,
-    my_simulation_parameters: Optional[SimulationParameters] = None,
+    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
     """System setup with advanced hp and diesel car.
 
@@ -245,8 +246,7 @@ def setup_function(
 
     # Build heat Distribution System Controller
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        config=my_config.hds_controller_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.hds_controller_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Occupancy
@@ -263,8 +263,7 @@ def setup_function(
 
     # Build Building
     my_building = building.Building(
-        config=my_config.building_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.building_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Distribution System
@@ -277,8 +276,7 @@ def setup_function(
     my_heat_pump_controller_config.name = "HeatPumpHplibController"
 
     my_heat_pump_controller = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
-        config=my_heat_pump_controller_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_pump_controller_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Pump
@@ -286,8 +284,7 @@ def setup_function(
     my_heat_pump_config.name = "HeatPumpHPLib"
 
     my_heat_pump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
-        config=my_heat_pump_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_pump_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build DHW
@@ -314,8 +311,7 @@ def setup_function(
     )
 
     my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_dhw_heatpump_controller_config,
+        my_simulation_parameters=my_simulation_parameters, config=my_dhw_heatpump_controller_config,
     )
 
     my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
@@ -343,8 +339,7 @@ def setup_function(
 
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_config.electricity_meter_config,
+        my_simulation_parameters=my_simulation_parameters, config=my_config.electricity_meter_config,
     )
 
     my_heat_pump.connect_only_predefined_connections(my_heat_pump_controller, my_weather)
@@ -352,9 +347,7 @@ def setup_function(
     # Verknüpfung mit Luft als Umgebungswärmequelle
     if my_heat_pump.parameters["Group"].iloc[0] == 1.0 or my_heat_pump.parameters["Group"].iloc[0] == 4.0:
         my_heat_pump.connect_input(
-            my_heat_pump.TemperatureInputPrimary,
-            my_weather.component_name,
-            my_weather.DailyAverageOutsideTemperatures,
+            my_heat_pump.TemperatureInputPrimary, my_weather.component_name, my_weather.DailyAverageOutsideTemperatures,
         )
     else:
         raise KeyError("Water/Water HP or Brine/Water HP will follow.")
@@ -380,15 +373,11 @@ def setup_function(
     )
 
     my_heat_distribution.connect_input(
-        my_heat_distribution.WaterTemperatureInput,
-        my_heat_pump.component_name,
-        my_heat_pump.TemperatureOutputSH,
+        my_heat_distribution.WaterTemperatureInput, my_heat_pump.component_name, my_heat_pump.TemperatureOutputSH,
     )
 
     my_heat_distribution.connect_input(
-        my_heat_distribution.WaterMassFlowInput,
-        my_heat_pump.component_name,
-        my_heat_pump.MassFlowOutputSH,
+        my_heat_distribution.WaterMassFlowInput, my_heat_pump.component_name, my_heat_pump.MassFlowOutputSH,
     )
 
     my_electricity_meter.add_component_input_and_connect(
@@ -396,9 +385,7 @@ def setup_function(
         source_component_output=my_heat_pump.ElectricalInputPowerTotal,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        source_tags=[
-            lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
-        ],
+        source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,],
         source_weight=999,
     )
     # =================================================================================================================================

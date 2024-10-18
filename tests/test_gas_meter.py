@@ -16,7 +16,6 @@ from hisim.components import (
     electricity_meter,
     gas_meter,
     generic_gas_heater,
-    controller_l1_generic_gas_heater,
     generic_heat_source,
     controller_l1_heatpump,
     generic_hot_water_storage_modular,
@@ -141,10 +140,10 @@ def test_house(
     )
 
     # Build Gas Heater Controller
-    my_gas_heater_controller_config = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config.get_scaled_generic_gas_heater_controller_config(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+    my_gas_heater_controller_config = generic_gas_heater.GenericGasHeaterControllerL1Config.get_default_generic_gas_heater_controller_config(
+        maximal_thermal_power_in_watt=my_building_information.max_thermal_building_demand_in_watt
     )
-    my_gas_heater_controller = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1(
+    my_gas_heater_controller = generic_gas_heater.GenericGasHeaterControllerL1(
         my_simulation_parameters=my_simulation_parameters,
         config=my_gas_heater_controller_config,
     )

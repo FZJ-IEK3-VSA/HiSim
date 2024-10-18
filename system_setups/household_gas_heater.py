@@ -64,7 +64,7 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
     occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig
     hds_controller_config: heat_distribution_system.HeatDistributionControllerConfig
     hds_config: heat_distribution_system.HeatDistributionConfig
-    gas_heater_controller_config: controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config
+    gas_heater_controller_config: generic_gas_heater.GenericGasHeaterControllerL1Config
     gas_heater_config: generic_gas_heater.GenericGasHeaterConfig
     simple_hot_water_storage_config: simple_water_storage.SimpleHotWaterStorageConfig
     dhw_heatpump_config: generic_heat_pump_modular.HeatPumpConfig
@@ -250,7 +250,7 @@ def setup_function(
     )
 
     # Gas Heater Controller
-    my_gas_heater_controller = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1(
+    my_gas_heater_controller = generic_gas_heater.GenericGasHeaterControllerL1(
         my_simulation_parameters=my_simulation_parameters, config=my_config.gas_heater_controller_config,
     )
 

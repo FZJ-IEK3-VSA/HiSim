@@ -272,7 +272,7 @@ def setup_function(
     my_gas_heater_controller_config = generic_gas_heater.GenericGasHeaterControllerL1Config.get_default_generic_gas_heater_controller_config(
         minimal_thermal_power_in_watt=my_gas_heater_config.minimal_thermal_power_in_watt, maximal_thermal_power_in_watt=my_gas_heater_config.maximal_thermal_power_in_watt
     )
-    my_gas_heater_controller = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1(
+    my_gas_heater_controller = generic_gas_heater.GenericGasHeaterControllerL1(
         my_simulation_parameters=my_simulation_parameters, config=my_gas_heater_controller_config,
     )
     my_sim.add_component(my_gas_heater_controller, connect_automatically=True)

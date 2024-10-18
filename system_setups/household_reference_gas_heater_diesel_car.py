@@ -50,7 +50,7 @@ class ReferenceHouseholdConfig(SystemSetupConfigBase):
     building_config: building.BuildingConfig
     hds_controller_config: heat_distribution_system.HeatDistributionControllerConfig
     hds_config: heat_distribution_system.HeatDistributionConfig
-    gasheater_controller_config: controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config
+    gasheater_controller_config: generic_gas_heater.GenericGasHeaterControllerL1Config
     gasheater_config: generic_gas_heater.GenericGasHeaterConfig
     simple_hot_water_storage_config: simple_water_storage.SimpleHotWaterStorageConfig
     dhw_heatpump_config: generic_heat_pump_modular.HeatPumpConfig
@@ -222,7 +222,7 @@ def setup_function(
     )
 
     # Build Gas Heater Controller
-    my_gasheater_controller = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1(
+    my_gasheater_controller = generic_gas_heater.GenericGasHeaterControllerL1(
         my_simulation_parameters=my_simulation_parameters, config=my_config.gasheater_controller_config,
     )
 

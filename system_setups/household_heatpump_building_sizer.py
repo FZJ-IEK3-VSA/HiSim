@@ -36,7 +36,9 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
 from hisim.units import Quantity, Celsius, Watt
 from hisim.loadtypes import HeatingSystems
-from hisim.building_sizer_utils.interface_configs.modular_household_config import read_in_configs
+from hisim.building_sizer_utils.interface_configs.modular_household_config import read_in_configs, ModularHouseholdConfig
+from hisim import log
+
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
@@ -79,9 +81,10 @@ def setup_function(
     config_filename = my_sim.my_module_config
     # try reading energ system and archetype configs
     my_config = read_in_configs(my_sim.my_module_config)
+    if my_config is None:
+        my_config = ModularHouseholdConfig().get_default_config_for_household_heatpump()
+        log.warning(f"Could not read the modular household config from path '{config_filename}'. Using the heatpump household default config instead.")
 
-    assert my_config.archetype_config_ is not None
-    assert my_config.energy_system_config_ is not None
     arche_type_config_ = my_config.archetype_config_
     energy_system_config_ = my_config.energy_system_config_
 

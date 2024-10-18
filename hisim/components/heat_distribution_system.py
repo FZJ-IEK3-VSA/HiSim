@@ -135,7 +135,7 @@ class HeatDistribution(cp.Component):
     WaterTemperatureInput = "WaterTemperatureInput"
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
     ResidenceTemperatureIndoorAir = "ResidenceTemperatureIndoorAir"
-    WaterMassFlow = "WaterMassFlow"
+    WaterMassFlowInput = "WaterMassFlowInput"
 
     # Outputs
     WaterTemperatureInlet = "WaterTemperatureInlet"
@@ -226,7 +226,7 @@ class HeatDistribution(cp.Component):
             # just important for heating system without parallel bufferstorage
             self.water_mass_flow_rate_hp_in_kg_per_second_channel: cp.ComponentInput = self.add_input(
                 self.component_name,
-                self.WaterMassFlow,
+                self.WaterMassFlowInput,
                 lt.LoadTypes.WATER,
                 lt.Units.KG_PER_SEC,
                 True,
@@ -271,6 +271,7 @@ class HeatDistribution(cp.Component):
 
         self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
         self.add_default_connections(self.get_default_connections_from_building())
+        self.add_default_connections(self.get_default_connections_from_district_heating())
         if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
             self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
 
@@ -332,6 +333,33 @@ class HeatDistribution(cp.Component):
             )
         )
         return connections
+
+    def get_default_connections_from_district_heating(
+            self,
+        ):
+            """Get distrct heating default connections."""
+            # use importlib for importing the other component in order to avoid circular-import errors
+            # for district heating as heating source no 
+            component_module_name = "hisim.components.generic_district_heating"
+            component_module = importlib.import_module(name=component_module_name)
+            component_class = getattr(component_module, "DistrictHeating")
+            connections = []
+            classname = component_class.get_classname()
+            connections.append(
+                cp.ComponentConnection(
+                    HeatDistribution.WaterTemperatureInput,
+                    classname,
+                    component_class.WaterOutputTemperature,
+                )
+            )
+            connections.append(
+                cp.ComponentConnection(
+                    HeatDistribution.WaterMassFlowInput,
+                    classname,
+                    component_class.WaterMassflowOutput,
+                )
+            )
+            return connections
 
     def build(
         self,

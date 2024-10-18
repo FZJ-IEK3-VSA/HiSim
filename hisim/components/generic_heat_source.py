@@ -64,6 +64,7 @@ class HeatSourceConfig(cp.ConfigBase):
     def get_default_config_heating(
         cls,
         building_name: str = "BUI1",
+        thermal_power_in_watt = 6200.0,
     ) -> "HeatSourceConfig":
         """Returns default configuration of a Heat Source used for heating."""
         config = HeatSourceConfig(
@@ -71,7 +72,7 @@ class HeatSourceConfig(cp.ConfigBase):
             name="HeatingHeatSource",
             source_weight=1,
             fuel=lt.LoadTypes.DISTRICTHEATING,
-            power_th=6200.0,
+            power_th=thermal_power_in_watt,
             water_vs_heating=lt.InandOutputType.HEATING,
             efficiency=1.0,
             co2_footprint=0,
@@ -333,8 +334,10 @@ class HeatSource(cp.Component):
                 device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
                 kpi_tag=KpiTagEnumClass.GAS_HEATER_DOMESTIC_HOT_WATER
             )
-            return capex_cost_data_class
-        return NotImplemented
+        else:
+            capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
+            
+        return capex_cost_data_class
 
     def get_cost_opex(
         self,

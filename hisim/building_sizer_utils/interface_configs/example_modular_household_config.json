@@ -1,6 +1,6 @@
 {
     "energy_system_config_": {
-        "heating_system": "HeatPump",
+        "heating_system": "GasHeating",
         "share_of_maximum_pv_potential": 1.0
     },
     "archetype_config_": {

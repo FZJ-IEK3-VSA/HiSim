@@ -283,9 +283,10 @@ def setup_function(
         max_warm_water_demand_in_liter=my_occupancy.max_hot_water_demand,
         scaling_factor_according_to_number_of_apartments=my_occupancy.scaling_factor_according_to_number_of_apartments,
         seconds_per_timestep=my_simulation_parameters.seconds_per_timestep,
+        name="DHW" + lt.HeatingSystems.GAS_HEATING.value
     )
     my_gas_heater_controller_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-        "DHW" + lt.HeatingSystems.GAS_HEATING.value
+        "DHW" + lt.HeatingSystems.GAS_HEATING.value + "Controller"
     )
     my_boiler_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
         number_of_apartments=my_building_information.number_of_apartments

@@ -39,7 +39,7 @@ __status__ = ""
 
 @dataclass_json
 @dataclass
-class GenericDistrictHeatingConfig(ConfigBase):
+class DistrictHeatingConfig(ConfigBase):
     """Configuration of the District Heating class."""
 
     @classmethod
@@ -74,9 +74,9 @@ class GenericDistrictHeatingConfig(ConfigBase):
     def get_default_district_heating_config(cls, building_name: str = "BUI1",) -> Any:
         """Get a default building_name."""
         maximal_power_in_watt: float = 12_000  # W
-        config = GenericDistrictHeatingConfig(
+        config = DistrictHeatingConfig(
             building_name=building_name,
-            name="GenericDistrictHeating",
+            name="DistrictHeating",
             temperature_delta_in_celsius=10,
             maximal_power_in_watt=maximal_power_in_watt,
             is_modulating=True,
@@ -102,9 +102,9 @@ class GenericDistrictHeatingConfig(ConfigBase):
     ) -> Any:
         """Get a default building_name."""
         maximal_power_in_watt: float = heating_load_of_building_in_watt  # W
-        config = GenericDistrictHeatingConfig(
+        config = DistrictHeatingConfig(
             building_name=building_name,
-            name="GenericDistrictHeating",
+            name="DistrictHeating",
             temperature_delta_in_celsius=10,
             maximal_power_in_watt=maximal_power_in_watt,
             is_modulating=True,
@@ -144,7 +144,7 @@ class DistrictHeating(Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: GenericDistrictHeatingConfig,
+        config: DistrictHeatingConfig,
         my_display_config: DisplayConfig = DisplayConfig(display_in_webtool=True),
     ) -> None:
         """Construct all the neccessary attributes."""
@@ -281,7 +281,7 @@ class DistrictHeating(Component):
 
     @staticmethod
     def get_cost_capex(
-        config: GenericDistrictHeatingConfig, simulation_parameters: SimulationParameters
+        config: DistrictHeatingConfig, simulation_parameters: SimulationParameters
     ) -> CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
         capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
@@ -294,7 +294,7 @@ class DistrictHeating(Component):
 
 @dataclass_json
 @dataclass
-class GenericDistrictHeatingControllerConfig(ConfigBase):
+class DistrictHeatingControllerConfig(ConfigBase):
     """District Heating Controller Config Class."""
 
     @classmethod
@@ -312,9 +312,9 @@ class GenericDistrictHeatingControllerConfig(ConfigBase):
     @classmethod
     def get_default_district_heating_controller_config(
         cls, building_name: str = "BUI1",
-    ) -> "GenericDistrictHeatingControllerConfig":
+    ) -> "DistrictHeatingControllerConfig":
         """Gets a default Generic District Heating Controller."""
-        return GenericDistrictHeatingControllerConfig(
+        return DistrictHeatingControllerConfig(
             building_name=building_name,
             name="DistrictHeatingController",
             set_heating_threshold_outside_temperature_in_celsius=16.0,
@@ -326,10 +326,10 @@ class GenericDistrictHeatingControllerConfig(ConfigBase):
     @classmethod
     def get_scaled_district_heating_controller_config(
         cls, heating_load_of_building_in_watt: float, building_name: str = "BUI1",
-    ) -> "GenericDistrictHeatingControllerConfig":
+    ) -> "DistrictHeatingControllerConfig":
         """Gets a default Generic Heat Pump Controller."""
         maximal_thermal_power_in_watt = heating_load_of_building_in_watt
-        return GenericDistrictHeatingControllerConfig(
+        return DistrictHeatingControllerConfig(
             building_name=building_name,
             name="DistrictHeatingController",
             set_heating_threshold_outside_temperature_in_celsius=16.0,
@@ -367,7 +367,7 @@ class DistrictHeatingController(Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: GenericDistrictHeatingControllerConfig,
+        config: DistrictHeatingControllerConfig,
         my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Construct all the neccessary attributes."""
@@ -633,7 +633,7 @@ class DistrictHeatingController(Component):
 
     @staticmethod
     def get_cost_capex(
-        config: GenericDistrictHeatingControllerConfig, simulation_parameters: SimulationParameters
+        config: DistrictHeatingControllerConfig, simulation_parameters: SimulationParameters
     ) -> CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
         capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()

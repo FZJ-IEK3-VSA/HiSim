@@ -62,12 +62,12 @@ class HeatSourceConfig(cp.ConfigBase):
 
     @classmethod
     def get_default_config_heating(
-        cls, building_name: str = "BUI1", thermal_power_in_watt: float = 6200.0,
+        cls, building_name: str = "BUI1", thermal_power_in_watt: float = 6200.0, name: str = "HeatingHeatSource" 
     ) -> "HeatSourceConfig":
         """Returns default configuration of a Heat Source used for heating."""
         config = HeatSourceConfig(
             building_name=building_name,
-            name="HeatingHeatSource",
+            name=name,
             source_weight=1,
             fuel=lt.LoadTypes.DISTRICTHEATING,
             power_th=thermal_power_in_watt,
@@ -87,6 +87,7 @@ class HeatSourceConfig(cp.ConfigBase):
         scaling_factor_according_to_number_of_apartments: float,
         seconds_per_timestep: int,
         building_name: str = "BUI1",
+        name: str = "DHWHeatSource"
     ) -> "HeatSourceConfig":
         """Returns default configuration of a Heat Source used for water heating (DHW)."""
         # use importlib for importing the other component in order to avoid circular-import errors
@@ -123,7 +124,7 @@ class HeatSourceConfig(cp.ConfigBase):
 
         config = HeatSourceConfig(
             building_name=building_name,
-            name="DHWHeatSource",
+            name=name,
             source_weight=1,
             fuel=fuel,
             power_th=thermal_power_in_watt,
@@ -396,18 +397,26 @@ class HeatSource(cp.Component):
 
     def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
-        gas_consumption_in_kilowatt_hour: Optional[float] = None
+        # gas_consumption_in_kilowatt_hour: Optional[float] = None
         list_of_kpi_entries: List[KpiEntry] = []
-        for index, output in enumerate(all_outputs):
-            if output.component_name == self.component_name:
-                if output.field_name == self.FuelDelivered and output.load_type == lt.LoadTypes.GAS:
-                    gas_consumption_in_kilowatt_hour = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 1)
-                    break
+        # for index, output in enumerate(all_outputs):
+        #     if output.component_name == self.component_name:
+        #         if output.field_name == self.FuelDelivered and output.load_type == lt.LoadTypes.GAS:
+        #             gas_consumption_in_kilowatt_hour = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 1)
+        #             break
+        # my_kpi_entry = KpiEntry(
+        #     name="Gas consumption for domestic hot water",
+        #     unit="kWh",
+        #     value=gas_consumption_in_kilowatt_hour,
+        #     tag=KpiTagEnumClass.GAS_HEATER_DOMESTIC_HOT_WATER,
+        #     description=self.component_name,
+        # )
+        opex_dataclass = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)
         my_kpi_entry = KpiEntry(
-            name="Gas consumption for domestic hot water",
+            name=f"{opex_dataclass.loadtype.value} consumption for {self.config.water_vs_heating.value}",
             unit="kWh",
-            value=gas_consumption_in_kilowatt_hour,
-            tag=KpiTagEnumClass.GAS_HEATER_DOMESTIC_HOT_WATER,
+            value=opex_dataclass.consumption_in_kwh,
+            tag=opex_dataclass.kpi_tag,
             description=self.component_name,
         )
 

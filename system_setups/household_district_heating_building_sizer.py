@@ -256,7 +256,7 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
     # Build district heating controller
-    my_district_heating_controller_sh_config = generic_district_heating.GenericDistrictHeatingControllerConfig.get_scaled_district_heating_controller_config(
+    my_district_heating_controller_sh_config = generic_district_heating.DistrictHeatingControllerConfig.get_scaled_district_heating_controller_config(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
     )
     my_district_heating_controller = generic_district_heating.DistrictHeatingController(
@@ -265,7 +265,7 @@ def setup_function(
     my_sim.add_component(my_district_heating_controller, connect_automatically=True)
 
     # Build district heating For Space Heating
-    my_district_heating_sh_config = generic_district_heating.GenericDistrictHeatingConfig.get_scaled_district_heating_config(
+    my_district_heating_sh_config = generic_district_heating.DistrictHeatingConfig.get_scaled_district_heating_config(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
     )
     my_district_heating = generic_district_heating.DistrictHeating(
@@ -279,9 +279,10 @@ def setup_function(
         max_warm_water_demand_in_liter=my_occupancy.max_hot_water_demand,
         scaling_factor_according_to_number_of_apartments=my_occupancy.scaling_factor_according_to_number_of_apartments,
         seconds_per_timestep=my_simulation_parameters.seconds_per_timestep,
+        name="DHW" + lt.HeatingSystems.DISTRICT_HEATING.value
     )
     my_district_heating_controller_dhw_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-        "DHW" + lt.HeatingSystems.DISTRICT_HEATING.value
+        "DHW" + lt.HeatingSystems.DISTRICT_HEATING.value + "Controller"
     )
     my_boiler_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
         number_of_apartments=my_building_information.number_of_apartments

@@ -27,8 +27,7 @@ from hisim.components import (
     controller_l1_generic_ev_charge,
     generic_car,
     generic_oil_heater,
-    generic_heat_source,
-    gas_meter,
+    generic_heat_source
 )
 
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
@@ -339,13 +338,6 @@ def setup_function(
         my_simulation_parameters=my_simulation_parameters,
         config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
     )
-
-    # # Build Gas Meter
-    # my_gas_meter = gas_meter.GasMeter(
-    #     my_simulation_parameters=my_simulation_parameters,
-    #     config=gas_meter.GasMeterConfig.get_gas_meter_default_config(),
-    # )
-    # my_sim.add_component(my_gas_meter, connect_automatically=True)
 
     # Build Electric Vehicle Configs and Car Battery Configs
     my_car_config = generic_car.CarConfig.get_default_ev_config()

@@ -243,7 +243,7 @@ def test_house(
         "Gas consumption for space heating"
     ].get("value")
     gas_consumption_for_domestic_hot_water_in_kilowatt_hour = jsondata["Gas Heater For Domestic Hot Water"][
-        "Gas consumption for domestic hot water"
+        "Gas consumption for WaterHeating"
     ].get("value")
 
     opex_costs_for_gas_in_euro = jsondata["Gas Meter"]["Opex costs of gas consumption from grid"].get("value")

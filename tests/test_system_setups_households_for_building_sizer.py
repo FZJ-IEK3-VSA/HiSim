@@ -39,6 +39,30 @@ def test_household_gas():
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
+def test_household_oil():
+    """Single day."""
+    path = "../system_setups/household_oil_building_sizer.py"
+
+    my_simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60)
+
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
+
+    my_simulation_parameters.post_processing_options.append(
+        PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
+    )
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_CAPEX)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.WRITE_KPIS_TO_JSON)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
+    my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+
+    hisim_main.main(path, my_simulation_parameters)
+    log.information(os.getcwd())
+
+
+@pytest.mark.system_setups
+@utils.measure_execution_time
 def test_household_heatpump():
     """Single day."""
     path = "../system_setups/household_heatpump_building_sizer.py"

@@ -92,8 +92,8 @@ class GenericOilHeaterConfig(ConfigBase):
             maximal_mass_flow_in_kilogram_per_second=maximal_power_in_watt
             / (4180 * 25),  # kg/s ## -> ~0.07 P_th_max / (4180 * delta_T)
             maximal_temperature_in_celsius=80,  # [°C])
-            co2_footprint=maximal_power_in_watt * 1e-3 * 49.47,  # value from emission_factros_and_costs_devices.csv
-            cost=7416,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=maximal_power_in_watt * 1e-3 * 19.4,  # value from emission_factros_and_costs_devices.csv
+            cost=5562,  # value from emission_factros_and_costs_devices.csv
             lifetime=20,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
             consumption_in_kilowatt_hour=0,
@@ -122,8 +122,8 @@ class GenericOilHeaterConfig(ConfigBase):
             maximal_mass_flow_in_kilogram_per_second=maximal_power_in_watt
             / (4180 * 25),  # kg/s ## -> ~0.07 P_th_max / (4180 * delta_T)
             maximal_temperature_in_celsius=80,  # [°C])
-            co2_footprint=maximal_power_in_watt * 1e-3 * 49.47,  # value from emission_factros_and_costs_devices.csv
-            cost=7416,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=maximal_power_in_watt * 1e-3 * 19.4,  # value from emission_factros_and_costs_devices.csv
+            cost=5562,  # value from emission_factros_and_costs_devices.csv
             lifetime=20,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
             consumption_in_kilowatt_hour=0,
@@ -197,7 +197,7 @@ class OilHeater(Component):
             self.component_name,
             OilHeater.OilDemand,
             lt.LoadTypes.OIL,
-            lt.Units.WATT_HOUR,
+            lt.Units.LITER,
             output_description=f"here a description for {self.OilDemand} will follow.",
             postprocessing_flag=[
                 lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
@@ -307,6 +307,9 @@ class OilHeater(Component):
         #     c_w * mass_flow_out_in_kg_per_s * (mass_flow_out_temperature_in_celsius - stsv.get_input_value(self.mass_flow_input_tempertaure_channel))
         # )
         oil_demand_in_watt_hour = oil_power_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
+        # conver Wh to liters
+        # https://www.energieheld.de/heizung/ratgeber/durchschnittliche-heizkosten#:~:text=Zur%20Veranschaulichung%3A%20Heiz%C3%B6l%20wird%20meistens,etwa%209%2C8%20Kilowattstunden%20Heizenergie.
+        oil_demand_in_liters = oil_demand_in_watt_hour / 10000
 
         stsv.set_output_value(self.thermal_output_power_channel, oil_power_in_watt)  # efficiency
         stsv.set_output_value(
@@ -314,7 +317,7 @@ class OilHeater(Component):
             mass_flow_out_temperature_in_celsius,
         )  # efficiency
         stsv.set_output_value(self.mass_flow_output_channel, mass_flow_out_in_kg_per_s)  # efficiency
-        stsv.set_output_value(self.oil_demand_channel, oil_demand_in_watt_hour)  # oil consumption
+        stsv.set_output_value(self.oil_demand_channel, oil_demand_in_liters)  # oil consumption
 
     @staticmethod
     def get_cost_capex(config: GenericOilHeaterConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
@@ -344,22 +347,28 @@ class OilHeater(Component):
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of energy and maintenance costs."""
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.component_name and output.load_type == lt.LoadTypes.OIL:
-                self.config.consumption_in_kilowatt_hour = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
+            if output.component_name == self.component_name and output.field_name == self.OilDemand:
+                total_oil_demand_in_liters = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
+                # https://www.energieheld.de/heizung/ratgeber/durchschnittliche-heizkosten#:~:text=Zur%20Veranschaulichung%3A%20Heiz%C3%B6l%20wird%20meistens,etwa%209%2C8%20Kilowattstunden%20Heizenergie.
+                # 1l oil = 10 kWh
+                self.config.consumption_in_kilowatt_hour = total_oil_demand_in_liters * 10
 
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year
         )
-        co2_per_unit = emissions_and_cost_factors.oil_footprint_in_kg_per_kwh
-        co2_per_simulated_period_in_kg = self.config.consumption_in_kilowatt_hour * co2_per_unit
+        co2_per_unit = emissions_and_cost_factors.oil_footprint_in_kg_per_l
+        co2_per_simulated_period_in_kg = total_oil_demand_in_liters * co2_per_unit
+
+        euro_per_unit = emissions_and_cost_factors.oil_costs_in_euro_per_l
+        opex_energy_cost_per_simulated_period_in_euro = total_oil_demand_in_liters * euro_per_unit
 
         # energy costs and co2 and everything will be considered in oil meter
         opex_cost_data_class = OpexCostDataClass(
-            opex_energy_cost_in_euro=0,
+            opex_energy_cost_in_euro=opex_energy_cost_per_simulated_period_in_euro,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
             consumption_in_kwh=self.config.consumption_in_kilowatt_hour,
-            loadtype=lt.LoadType.OIL,
+            loadtype=lt.LoadTypes.OIL,
             kpi_tag=KpiTagEnumClass.OIL_HEATER_SPACE_HEATING
         )
 
@@ -379,7 +388,10 @@ class OilHeater(Component):
                 and output.field_name == self.OilDemand
                 and output.load_type == lt.LoadTypes.OIL
             ):
-                total_oil_consumption_in_kilowatt_hour = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 1)
+                total_oil_demand_in_liters = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
+                # https://www.energieheld.de/heizung/ratgeber/durchschnittliche-heizkosten#:~:text=Zur%20Veranschaulichung%3A%20Heiz%C3%B6l%20wird%20meistens,etwa%209%2C8%20Kilowattstunden%20Heizenergie.
+                # 1l oil = 10 kWh
+                total_oil_consumption_in_kilowatt_hour = total_oil_demand_in_liters * 10
                 break
         my_kpi_entry = KpiEntry(
             name="Oil consumption for space heating",

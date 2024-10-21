@@ -44,7 +44,7 @@ class KpiTagEnumClass(Enum):
     OIL_HEATER_DOMESTIC_HOT_WATER = "Oil Heater For Domestic Hot Water"
     DISTRICT_HEATING_SPACE_HEATING = "District Heating For Space Heating"
     DISTRICT_HEATING_DOMESTIC_HOT_WATER = "District Heating For Domestic Hot Water"
-    GENERIC_HEAT_SOURCE = "Generic Heat Source"  # used in simple_heat_source.py  
+    GENERIC_HEAT_SOURCE = "Generic Heat Source"  # used in simple_heat_source.py
 
 
 @dataclass

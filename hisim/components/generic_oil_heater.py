@@ -303,9 +303,6 @@ class OilHeater(Component):
             self.mass_flow_input_tempertaure_channel
         )
         mass_flow_out_in_kg_per_s = oil_power_in_watt / (c_w * self.temperature_delta_in_celsius)
-        # p_th = (
-        #     c_w * mass_flow_out_in_kg_per_s * (mass_flow_out_temperature_in_celsius - stsv.get_input_value(self.mass_flow_input_tempertaure_channel))
-        # )
         oil_demand_in_watt_hour = oil_power_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
         # conver Wh to liters
         # https://www.energieheld.de/heizung/ratgeber/durchschnittliche-heizkosten#:~:text=Zur%20Veranschaulichung%3A%20Heiz%C3%B6l%20wird%20meistens,etwa%209%2C8%20Kilowattstunden%20Heizenergie.
@@ -348,7 +345,7 @@ class OilHeater(Component):
         """Calculate OPEX costs, consisting of energy and maintenance costs."""
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name and output.field_name == self.OilDemand:
-                total_oil_demand_in_liters = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
+                total_oil_demand_in_liters = round(sum(postprocessing_results.iloc[:, index]), 1)
                 # https://www.energieheld.de/heizung/ratgeber/durchschnittliche-heizkosten#:~:text=Zur%20Veranschaulichung%3A%20Heiz%C3%B6l%20wird%20meistens,etwa%209%2C8%20Kilowattstunden%20Heizenergie.
                 # 1l oil = 10 kWh
                 self.config.consumption_in_kilowatt_hour = total_oil_demand_in_liters * 10
@@ -388,7 +385,7 @@ class OilHeater(Component):
                 and output.field_name == self.OilDemand
                 and output.load_type == lt.LoadTypes.OIL
             ):
-                total_oil_demand_in_liters = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
+                total_oil_demand_in_liters = round(sum(postprocessing_results.iloc[:, index]), 1)
                 # https://www.energieheld.de/heizung/ratgeber/durchschnittliche-heizkosten#:~:text=Zur%20Veranschaulichung%3A%20Heiz%C3%B6l%20wird%20meistens,etwa%209%2C8%20Kilowattstunden%20Heizenergie.
                 # 1l oil = 10 kWh
                 total_oil_consumption_in_kilowatt_hour = total_oil_demand_in_liters * 10

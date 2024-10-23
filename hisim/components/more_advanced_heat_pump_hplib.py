@@ -379,7 +379,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         self.heatpump.delta_t = 5
 
         self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = (
-            PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+            PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.WATER).specific_heat_capacity_in_joule_per_kg_per_kelvin
         )
 
         # protect erros for Water/Water Heatpumps

@@ -60,6 +60,7 @@ class GenericBoilerConfig(ConfigBase):
     building_name: str
     name: str
     energy_carrier: lt.LoadTypes
+    
     minimal_thermal_power_in_watt: float
     maximal_thermal_power_in_watt: float
     eff_th_min: float

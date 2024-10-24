@@ -8,7 +8,6 @@ from typing import List, Any, Optional
 
 import pandas as pd
 from dataclasses_json import dataclass_json
-from enum import Enum
 
 from hisim import loadtypes as lt
 from hisim.component import (
@@ -38,12 +37,6 @@ __maintainer__ = "Maximilian Hillen"
 __email__ = "maximilian.hillen@rwth-aachen.de"
 __status__ = ""
 
-
-class GasType(Enum):
-    """Set Gas Types."""
-
-    NATURAL_GAS = 1
-    HYDROGEN_GAS = 2
 
 @dataclass_json
 @dataclass

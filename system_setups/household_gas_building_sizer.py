@@ -26,7 +26,7 @@ from hisim.components import (
     advanced_ev_battery_bslib,
     controller_l1_generic_ev_charge,
     generic_car,
-    generic_gas_heater,
+    generic_boiler,
     generic_heat_source,
     gas_meter,
 )
@@ -260,19 +260,19 @@ def setup_function(
     sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER
 
     # Build Gas heater For Space Heating
-    my_gas_heater_config = generic_gas_heater.GenericGasHeaterConfig.get_scaled_gasheater_config(
+    my_gas_heater_config = generic_boiler.GenericBoilerConfig.get_scaled_condensing_gas_boiler_config(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
     )
-    my_gas_heater = generic_gas_heater.GasHeater(
+    my_gas_heater = generic_boiler.GenericBoiler(
         config=my_gas_heater_config, my_simulation_parameters=my_simulation_parameters,
     )
     my_sim.add_component(my_gas_heater, connect_automatically=True)
 
     # Build Gas Heater Controller
-    my_gas_heater_controller_config = generic_gas_heater.GenericGasHeaterControllerL1Config.get_default_generic_gas_heater_controller_config(
+    my_gas_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
         minimal_thermal_power_in_watt=my_gas_heater_config.minimal_thermal_power_in_watt, maximal_thermal_power_in_watt=my_gas_heater_config.maximal_thermal_power_in_watt
     )
-    my_gas_heater_controller = generic_gas_heater.GenericGasHeaterControllerL1(
+    my_gas_heater_controller = generic_boiler.GenericBoilerController(
         my_simulation_parameters=my_simulation_parameters, config=my_gas_heater_controller_config,
     )
     my_sim.add_component(my_gas_heater_controller, connect_automatically=True)

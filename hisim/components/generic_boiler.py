@@ -92,7 +92,7 @@ class GenericBoilerConfig(ConfigBase):
         cls,
         building_name: str = "BUI1",
     ) -> Any:
-        """Get a default generic gas boiler."""
+        """Get a default condensing gas boiler."""
         maximal_thermal_power_in_watt = 12000
         config = GenericBoilerConfig(
             building_name=building_name,
@@ -138,6 +138,59 @@ class GenericBoilerConfig(ConfigBase):
             * 1e-3
             * 49.47,  # value from emission_factros_and_costs_devices.csv
             cost=7416,  # value from emission_factros_and_costs_devices.csv
+            lifetime=20,  # value from emission_factros_and_costs_devices.csv
+            maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
+            consumption_in_kilowatt_hour=0,
+        )
+        return config
+
+    @classmethod
+    def get_default_conventional_oil_boiler_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
+        """Get a default conventional oil boiler."""
+        maximal_thermal_power_in_watt = 12000
+        config = GenericBoilerConfig(
+            building_name=building_name,
+            name="ConventionalOilBoiler",
+            boiler_type=BoilerType.CONVENTIONAL,
+            energy_carrier=lt.LoadTypes.OIL,
+            temperature_delta_in_celsius=20,
+            minimal_thermal_power_in_watt=1000,
+            maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
+            eff_th_min=0.60,
+            eff_th_max=0.90,
+            maximal_temperature_in_celsius=80,
+            co2_footprint=maximal_thermal_power_in_watt * 1e-3 * 19.4,  # value from emission_factros_and_costs_devices.csv
+            cost=5562,  # value from emission_factros_and_costs_devices.csv
+            lifetime=20,  # value from emission_factros_and_costs_devices.csv
+            maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
+            consumption_in_kilowatt_hour=0,
+        )
+        return config
+
+    @classmethod
+    def get_scaled_conventional_oil_boiler_config(
+        cls,
+        heating_load_of_building_in_watt: float,
+        building_name: str = "BUI1",
+    ) -> Any:
+        """Get a default conventional oil boiler scaled to heating load."""
+        maximal_thermal_power_in_watt = heating_load_of_building_in_watt
+        config = GenericBoilerConfig(
+            building_name=building_name,
+            name="ConventionalOilBoiler",
+            boiler_type=BoilerType.CONVENTIONAL,
+            energy_carrier=lt.LoadTypes.OIL,
+            temperature_delta_in_celsius=20,
+            minimal_thermal_power_in_watt=1 / 12 * maximal_thermal_power_in_watt,
+            maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
+            eff_th_min=0.60,
+            eff_th_max=0.90,
+            maximal_temperature_in_celsius=80,
+            co2_footprint=maximal_thermal_power_in_watt * 1e-3 * 19.4,  # value from emission_factros_and_costs_devices.csv
+            cost=5562,  # value from emission_factros_and_costs_devices.csv
             lifetime=20,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
             consumption_in_kilowatt_hour=0,

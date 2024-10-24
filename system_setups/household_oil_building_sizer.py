@@ -26,7 +26,7 @@ from hisim.components import (
     advanced_ev_battery_bslib,
     controller_l1_generic_ev_charge,
     generic_car,
-    generic_oil_heater,
+    generic_boiler,
     generic_heat_source
 )
 
@@ -259,19 +259,19 @@ def setup_function(
     sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM
 
     # Build Oil heater For Space Heating
-    my_oil_heater_config = generic_oil_heater.GenericOilHeaterConfig.get_scaled_oilheater_config(
+    my_oil_heater_config = generic_boiler.GenericBoilerConfig.get_scaled_conventional_oil_boiler_config(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
     )
-    my_oil_heater = generic_oil_heater.OilHeater(
+    my_oil_heater = generic_boiler.GenericBoiler(
         config=my_oil_heater_config, my_simulation_parameters=my_simulation_parameters,
     )
     my_sim.add_component(my_oil_heater, connect_automatically=True)
 
     # Build Oil Heater Controller
-    my_oil_heater_controller_config = generic_oil_heater.GenericOilHeaterControllerL1Config.get_default_generic_oil_heater_controller_config(
+    my_oil_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
         minimal_thermal_power_in_watt=my_oil_heater_config.minimal_thermal_power_in_watt, maximal_thermal_power_in_watt=my_oil_heater_config.maximal_thermal_power_in_watt
     )
-    my_oil_heater_controller = generic_oil_heater.GenericOilHeaterControllerL1(
+    my_oil_heater_controller = generic_boiler.GenericBoilerController(
         my_simulation_parameters=my_simulation_parameters, config=my_oil_heater_controller_config,
     )
     my_sim.add_component(my_oil_heater_controller, connect_automatically=True)

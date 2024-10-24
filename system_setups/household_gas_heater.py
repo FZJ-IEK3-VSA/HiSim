@@ -156,7 +156,7 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
             ),
             gas_heater_controller_config=(
                 generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
-                    minimal_thermal_power_in_watt=my_building_information.max_thermal_building_demand_in_watt /12,
+                    minimal_thermal_power_in_watt=my_building_information.max_thermal_building_demand_in_watt / 12,
                     maximal_thermal_power_in_watt=my_building_information.max_thermal_building_demand_in_watt
                 )
             ),

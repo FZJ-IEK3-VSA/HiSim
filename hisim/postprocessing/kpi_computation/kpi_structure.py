@@ -40,7 +40,11 @@ class KpiTagEnumClass(Enum):
     COSTS_DISTRICT_GRID = "Costs Of District Grid"
     EMISSIONS_DISTRICT_GRID = "Emissions Of District Grid"
     CONTRACTING = "Contracting"
-    GENERIC_HEAT_SOURCE = "Generic Heat Source"
+    OIL_HEATER_SPACE_HEATING = "Oil Heater For Space Heating"
+    OIL_HEATER_DOMESTIC_HOT_WATER = "Oil Heater For Domestic Hot Water"
+    DISTRICT_HEATING_SPACE_HEATING = "District Heating For Space Heating"
+    DISTRICT_HEATING_DOMESTIC_HOT_WATER = "District Heating For Domestic Hot Water"
+    GENERIC_HEAT_SOURCE = "Generic Heat Source"  # used in simple_heat_source.py
 
 
 @dataclass

@@ -31,9 +31,29 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
     archetype_config_: Optional[archetype_config.ArcheTypeConfig] = None
 
     @classmethod
-    def get_default(cls):
+    def get_default_config_for_household_gas(cls):
         """Get default ModularHouseholdConfig."""
-        energy_system_config_ = system_config.EnergySystemConfig()
+        energy_system_config_ = system_config.EnergySystemConfig.get_default_config_for_energy_system_gas()
+        archetype_config_ = archetype_config.ArcheTypeConfig()
+        household_config = ModularHouseholdConfig(
+            energy_system_config_=energy_system_config_, archetype_config_=archetype_config_
+        )
+        return household_config
+
+    @classmethod
+    def get_default_config_for_household_heatpump(cls):
+        """Get default ModularHouseholdConfig."""
+        energy_system_config_ = system_config.EnergySystemConfig.get_default_config_for_energy_system_heatpump()
+        archetype_config_ = archetype_config.ArcheTypeConfig()
+        household_config = ModularHouseholdConfig(
+            energy_system_config_=energy_system_config_, archetype_config_=archetype_config_
+        )
+        return household_config
+
+    @classmethod
+    def get_default_config_for_household_district_heating(cls):
+        """Get default ModularHouseholdConfig."""
+        energy_system_config_ = system_config.EnergySystemConfig.get_default_config_for_energy_system_district_heating()
         archetype_config_ = archetype_config.ArcheTypeConfig()
         household_config = ModularHouseholdConfig(
             energy_system_config_=energy_system_config_, archetype_config_=archetype_config_
@@ -56,24 +76,22 @@ def write_config(config: ModularHouseholdConfig) -> None:
         file.write(config.to_json())  # type: ignore
 
 
-def read_in_configs(pathname: str) -> ModularHouseholdConfig:
+def read_in_configs(pathname: str) -> Optional[ModularHouseholdConfig]:
     """Reads in ModularHouseholdConfig file and loads default if file cannot be found."""
+    # try to read modular household config from path
+    household_config: Optional[ModularHouseholdConfig]
     try:
         with open(pathname, encoding="utf8") as config_file:
             household_config_dict = json.load(config_file)  # type: ignore
-            household_config: ModularHouseholdConfig = ModularHouseholdConfig.from_dict(household_config_dict)
+            household_config = ModularHouseholdConfig.from_dict(household_config_dict)
 
         log.information(f"Read modular household config from {pathname}")
+        assert household_config is not None
         if (household_config.energy_system_config_ is None) and (household_config.archetype_config_ is None):
-            raise ValueError()
-    except Exception:
-        household_config = ModularHouseholdConfig()
-        log.warning(f"Could not read the modular household config from '{pathname}'. Using a default config instead.")
+            raise ValueError("Energy system and archetype configs are None.")
 
-    # set default configs
-    if household_config.energy_system_config_ is None:
-        household_config.energy_system_config_ = system_config.EnergySystemConfig()
-    if household_config.archetype_config_ is None:
-        household_config.archetype_config_ = archetype_config.ArcheTypeConfig()
+    # get default modular household config
+    except Exception:
+        household_config = None
 
     return household_config

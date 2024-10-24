@@ -17,7 +17,6 @@ from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import generic_gas_heater
-from hisim.components import controller_l1_generic_gas_heater
 from hisim.components import heat_distribution_system
 from hisim.components import building
 from hisim.components import simple_water_storage
@@ -51,7 +50,7 @@ class ReferenceHouseholdConfig(SystemSetupConfigBase):
     building_config: building.BuildingConfig
     hds_controller_config: heat_distribution_system.HeatDistributionControllerConfig
     hds_config: heat_distribution_system.HeatDistributionConfig
-    gasheater_controller_config: controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config
+    gasheater_controller_config: generic_gas_heater.GenericGasHeaterControllerL1Config
     gasheater_config: generic_gas_heater.GenericGasHeaterConfig
     simple_hot_water_storage_config: simple_water_storage.SimpleHotWaterStorageConfig
     dhw_heatpump_config: generic_heat_pump_modular.HeatPumpConfig
@@ -104,12 +103,12 @@ class ReferenceHouseholdConfig(SystemSetupConfigBase):
             hds_config=(
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
                     water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
-                    absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2
+                    absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
                 )
             ),
             gasheater_controller_config=(
-                controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config.get_scaled_generic_gas_heater_controller_config(
-                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+                generic_gas_heater.GenericGasHeaterControllerL1Config.get_default_generic_gas_heater_controller_config(
+                    maximal_thermal_power_in_watt=my_building_information.max_thermal_building_demand_in_watt
                 )
             ),
             gasheater_config=generic_gas_heater.GenericGasHeaterConfig.get_scaled_gasheater_config(
@@ -202,8 +201,7 @@ def setup_function(
 
     # Build heat Distribution System Controller
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        config=my_config.hds_controller_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.hds_controller_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Occupancy
@@ -220,20 +218,17 @@ def setup_function(
 
     # Build Building
     my_building = building.Building(
-        config=my_config.building_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.building_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Gas Heater Controller
-    my_gasheater_controller = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_config.gasheater_controller_config,
+    my_gasheater_controller = generic_gas_heater.GenericGasHeaterControllerL1(
+        my_simulation_parameters=my_simulation_parameters, config=my_config.gasheater_controller_config,
     )
 
     # Build Gasheater
     my_gasheater = generic_gas_heater.GasHeater(
-        config=my_config.gasheater_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.gasheater_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Distribution System
@@ -243,8 +238,7 @@ def setup_function(
 
     # Build Heat Water Storage
     my_simple_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(
-        config=my_config.simple_hot_water_storage_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.simple_hot_water_storage_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build DHW
@@ -263,8 +257,7 @@ def setup_function(
     )
 
     my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_dhw_heatpump_controller_config,
+        my_simulation_parameters=my_simulation_parameters, config=my_dhw_heatpump_controller_config,
     )
 
     my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
@@ -292,8 +285,7 @@ def setup_function(
 
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_config.electricity_meter_config,
+        my_simulation_parameters=my_simulation_parameters, config=my_config.electricity_meter_config,
     )
 
     # =================================================================================================================================

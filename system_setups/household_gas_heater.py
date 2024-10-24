@@ -18,7 +18,6 @@ from hisim.component import DisplayConfig
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import generic_gas_heater
-from hisim.components import controller_l1_generic_gas_heater
 from hisim.components import heat_distribution_system
 from hisim.components import building
 from hisim.components import simple_water_storage
@@ -65,7 +64,7 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
     occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig
     hds_controller_config: heat_distribution_system.HeatDistributionControllerConfig
     hds_config: heat_distribution_system.HeatDistributionConfig
-    gas_heater_controller_config: controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config
+    gas_heater_controller_config: generic_gas_heater.GenericGasHeaterControllerL1Config
     gas_heater_config: generic_gas_heater.GenericGasHeaterConfig
     simple_hot_water_storage_config: simple_water_storage.SimpleHotWaterStorageConfig
     dhw_heatpump_config: generic_heat_pump_modular.HeatPumpConfig
@@ -142,8 +141,7 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
                 predictive=False,
             ),
             pv_config=generic_pv_system.PVSystemConfig.get_scaled_pv_system(
-                rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2,
-                location=weather_location
+                rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2, location=weather_location
             )
             if options.photovoltaic
             else None,
@@ -153,12 +151,12 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
             hds_config=(
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
                     water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
-                    absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2
+                    absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
                 )
             ),
             gas_heater_controller_config=(
-                controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config.get_scaled_generic_gas_heater_controller_config(
-                    heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+                generic_gas_heater.GenericGasHeaterControllerL1Config.get_default_generic_gas_heater_controller_config(
+                    maximal_thermal_power_in_watt=my_building_information.max_thermal_building_demand_in_watt
                 )
             ),
             gas_heater_config=generic_gas_heater.GenericGasHeaterConfig.get_scaled_gasheater_config(
@@ -252,7 +250,7 @@ def setup_function(
     )
 
     # Gas Heater Controller
-    my_gas_heater_controller = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1(
+    my_gas_heater_controller = generic_gas_heater.GenericGasHeaterControllerL1(
         my_simulation_parameters=my_simulation_parameters, config=my_config.gas_heater_controller_config,
     )
 

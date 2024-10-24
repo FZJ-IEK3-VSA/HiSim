@@ -82,15 +82,17 @@ class HouseholdMoreAdvancedHPDieselCarDHWStorageConfig(SystemSetupConfigBase):
         household_config.hp_config.set_thermal_output_power_in_watt = Quantity(
             6000, Watt  # default value leads to switching on-off very often
         )
-        household_config.dhw_storage_config.volume_heating_water_storage_in_liter = 100  # default(volume = 230) leads to an error
+        household_config.dhw_storage_config.volume_heating_water_storage_in_liter = (
+            100  # default(volume = 230) leads to an error
+        )
 
         return household_config
 
     @classmethod
     def get_scaled_default(
-            cls,
-            building_config: building.BuildingConfig,
-            options: HouseholdMoreAdvancedHPDieselCarDHWStorageOptions = HouseholdMoreAdvancedHPDieselCarDHWStorageOptions()
+        cls,
+        building_config: building.BuildingConfig,
+        options: HouseholdMoreAdvancedHPDieselCarDHWStorageOptions = HouseholdMoreAdvancedHPDieselCarDHWStorageOptions(),
     ) -> "HouseholdMoreAdvancedHPDieselCarDHWStorageConfig":
         """Get scaled default HouseholdMoreAdvancedHPDieselCarConfig."""
 
@@ -129,18 +131,19 @@ class HouseholdMoreAdvancedHPDieselCarDHWStorageConfig(SystemSetupConfigBase):
             hds_config=(
                 heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
                     water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
-                    absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2
+                    absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
                 )
             ),
             sh_controller_config=more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
                 heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
             ),
             hp_config=more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibConfig.get_scaled_advanced_hp_lib(
-                heating_load_of_building_in_watt=Quantity(my_building_information.max_thermal_building_demand_in_watt,
-                                                          Watt),
+                heating_load_of_building_in_watt=Quantity(
+                    my_building_information.max_thermal_building_demand_in_watt, Watt
+                ),
                 heating_reference_temperature_in_celsius=Quantity(
-                    my_building_information.heating_reference_temperature_in_celsius, Celsius),
-
+                    my_building_information.heating_reference_temperature_in_celsius, Celsius
+                ),
             ),
             simple_hot_water_storage_config=simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
                 max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
@@ -155,9 +158,7 @@ class HouseholdMoreAdvancedHPDieselCarDHWStorageConfig(SystemSetupConfigBase):
 
         # adjust HeatPump
         household_config.hp_config.group_id = 1  # use modulating heatpump as default
-        household_config.sh_controller_config.mode = (
-            2  # use heating and cooling as default
-        )
+        household_config.sh_controller_config.mode = 2  # use heating and cooling as default
         household_config.hp_config.minimum_idle_time_in_seconds = Quantity(
             900, Seconds  # default value leads to switching on-off very often
         )
@@ -180,8 +181,7 @@ class HouseholdMoreAdvancedHPDieselCarDHWStorageConfig(SystemSetupConfigBase):
 
 
 def setup_function(
-    my_sim: Any,
-    my_simulation_parameters: Optional[SimulationParameters] = None,
+    my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None,
 ) -> None:  # noqa: too-many-statements
     """System setup with more advanced hp and diesel car.
 
@@ -232,8 +232,7 @@ def setup_function(
 
     # Build heat Distribution System Controller
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        config=my_config.hds_controller_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.hds_controller_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Occupancy
@@ -250,8 +249,7 @@ def setup_function(
 
     # Build Building
     my_building = building.Building(
-        config=my_config.building_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.building_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Distribution System
@@ -263,16 +261,14 @@ def setup_function(
     my_heatpump_controller_sh_config.name = "HeatPumpControllerSH"
 
     my_heatpump_controller_space_heating = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
-        config=my_heatpump_controller_sh_config,
-        my_simulation_parameters=my_simulation_parameters
+        config=my_heatpump_controller_sh_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # Build Heat Pump Controller for dhw
     my_heatpump_controller_dhw_config = my_config.dhw_heatpump_controller_config
 
     my_heatpump_controller_dhw = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerDHW(
-        config=my_heatpump_controller_dhw_config,
-        my_simulation_parameters=my_simulation_parameters
+        config=my_heatpump_controller_dhw_config, my_simulation_parameters=my_simulation_parameters
     )
 
     # Build Heat Pump
@@ -280,14 +276,12 @@ def setup_function(
     my_heatpump_config.name = "HeatPumpHPLib"
 
     my_heatpump = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLib(
-        config=my_heatpump_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_heatpump_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Heat Water Storage
     my_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(
-        config=my_config.simple_hot_water_storage_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.simple_hot_water_storage_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     my_dhw_storage_config = my_config.dhw_storage_config
@@ -318,8 +312,7 @@ def setup_function(
 
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_config.electricity_meter_config,
+        my_simulation_parameters=my_simulation_parameters, config=my_config.electricity_meter_config,
     )
 
     # =================================================================================================================================
@@ -335,16 +328,16 @@ def setup_function(
     )
 
     #################################
-    my_heat_distribution_controller.connect_only_predefined_connections(
-        my_weather, my_building
-    )
+    my_heat_distribution_controller.connect_only_predefined_connections(my_weather, my_building)
 
     my_heat_distribution.connect_only_predefined_connections(
-        my_building, my_heat_distribution_controller, my_hot_water_storage)
+        my_building, my_heat_distribution_controller, my_hot_water_storage
+    )
 
     #################################
-    my_heatpump.connect_only_predefined_connections(my_heatpump_controller_space_heating,
-                                                    my_heatpump_controller_dhw, my_weather, my_hot_water_storage,)
+    my_heatpump.connect_only_predefined_connections(
+        my_heatpump_controller_space_heating, my_heatpump_controller_dhw, my_weather, my_hot_water_storage,
+    )
 
     my_heatpump.connect_input(
         my_heatpump.TemperatureInputSecondary_DHW,
@@ -353,21 +346,20 @@ def setup_function(
     )
 
     # Verknüpfung mit Luft als Umgebungswärmequelle
-    if my_heatpump.parameters['Group'].iloc[0] == 1.0 or my_heatpump.parameters['Group'].iloc[0] == 4.0:
+    if my_heatpump.parameters["Group"].iloc[0] == 1.0 or my_heatpump.parameters["Group"].iloc[0] == 4.0:
         my_heatpump.connect_input(
-            my_heatpump.TemperatureInputPrimary,
-            my_weather.component_name,
-            my_weather.DailyAverageOutsideTemperatures,
+            my_heatpump.TemperatureInputPrimary, my_weather.component_name, my_weather.DailyAverageOutsideTemperatures,
         )
     else:
         raise KeyError(
-            "Wasser oder Sole als primäres Wärmeträgermedium muss über extra Wärmenetz-Modell noch bereitgestellt werden")
+            "Wasser oder Sole als primäres Wärmeträgermedium muss über extra Wärmenetz-Modell noch bereitgestellt werden"
+        )
 
         # todo: Water and Brine Connection
 
-    my_heatpump_controller_space_heating.connect_only_predefined_connections(my_heat_distribution_controller,
-                                                                        my_weather,
-                                                                        my_hot_water_storage)
+    my_heatpump_controller_space_heating.connect_only_predefined_connections(
+        my_heat_distribution_controller, my_weather, my_hot_water_storage
+    )
 
     my_heatpump_controller_dhw.connect_input(
         my_heatpump_controller_dhw.WaterTemperatureInputFromDHWStorage,
@@ -414,9 +406,7 @@ def setup_function(
         source_component_output=my_heatpump.ElectricalInputPowerTotal,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
-        source_tags=[
-            lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
-        ],
+        source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,],
         source_weight=999,
     )
 

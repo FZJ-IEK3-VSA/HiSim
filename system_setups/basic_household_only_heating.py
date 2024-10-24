@@ -7,7 +7,7 @@ from hisim.components import weather
 from hisim.components import building
 from hisim.components import controller_l1_heat_old
 from hisim.components import generic_heat_water_storage
-from hisim.components import generic_gas_heater
+from hisim.components import generic_boiler
 
 
 __authors__ = "Maximilian Hillen"
@@ -75,8 +75,8 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
 
     # Build Gas Heater
-    my_gas_heater = generic_gas_heater.GasHeater(
-        config=generic_gas_heater.GenericGasHeaterConfig.get_default_gasheater_config(),
+    my_gas_heater = generic_boiler.GenericBoiler(
+        config=generic_boiler.GenericBoilerConfig.get_default_condensing_gas_boiler_config(),
         my_simulation_parameters=my_simulation_parameters,
     )
 
@@ -151,7 +151,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         my_gas_heater.ControlSignal, my_controller_heat.component_name, my_controller_heat.ControlSignalGasHeater,
     )
     my_gas_heater.connect_input(
-        my_gas_heater.MassflowInputTemperature, my_storage.component_name, my_storage.WaterOutputStorageforHeaters,
+        my_gas_heater.WaterInputTemperature, my_storage.component_name, my_storage.WaterOutputStorageforHeaters,
     )
 
     # =================================================================================================================================

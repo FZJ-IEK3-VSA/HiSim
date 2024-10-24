@@ -50,6 +50,7 @@ class EnergySystemConfig:
     #     default_factory=lambda: ChargingStationSets.Charging_At_Home_with_03_7_kW  # type: ignore
     # )
     heating_system: HeatingSystems = HeatingSystems.DISTRICT_HEATING
+    heating_system: HeatingSystems = HeatingSystems.DISTRICT_HEATING
     share_of_maximum_pv_potential: float = 1.0
 
     @classmethod

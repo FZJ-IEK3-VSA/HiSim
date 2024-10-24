@@ -330,7 +330,40 @@ class HeatSource(cp.Component):
             capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
 
         return capex_cost_data_class
+        seconds_per_year = 365 * 24 * 60 * 60
+        capex_per_simulated_period = (config.cost / config.lifetime) * (
+            simulation_parameters.duration.total_seconds() / seconds_per_year
+        )
+        device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
+            simulation_parameters.duration.total_seconds() / seconds_per_year
+        )
+        capex_cost_data_class = CapexCostDataClass(
+            capex_investment_cost_in_euro=config.cost,
+            device_co2_footprint_in_kg=config.co2_footprint,
+            lifetime_in_years=config.lifetime,
+            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
+            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
+        )
+        if config.fuel == lt.LoadTypes.GAS and config.water_vs_heating == lt.InandOutputType.WATER_HEATING:
+            capex_cost_data_class.kpi_tag = KpiTagEnumClass.GAS_HEATER_DOMESTIC_HOT_WATER
+        elif config.fuel == lt.LoadTypes.GAS and config.water_vs_heating == lt.InandOutputType.HEATING:
+            capex_cost_data_class.kpi_tag = KpiTagEnumClass.GAS_HEATER_SPACE_HEATING
+        elif config.fuel == lt.LoadTypes.OIL and config.water_vs_heating == lt.InandOutputType.WATER_HEATING:
+            capex_cost_data_class.kpi_tag = KpiTagEnumClass.OIL_HEATER_DOMESTIC_HOT_WATER
+        elif config.fuel == lt.LoadTypes.OIL and config.water_vs_heating == lt.InandOutputType.HEATING:
+            capex_cost_data_class.kpi_tag = KpiTagEnumClass.OIL_HEATER_SPACE_HEATING
+        elif (
+            config.fuel == lt.LoadTypes.DISTRICTHEATING and config.water_vs_heating == lt.InandOutputType.WATER_HEATING
+        ):
+            capex_cost_data_class.kpi_tag = KpiTagEnumClass.DISTRICT_HEATING_DOMESTIC_HOT_WATER
+        elif config.fuel == lt.LoadTypes.DISTRICTHEATING and config.water_vs_heating == lt.InandOutputType.HEATING:
+            capex_cost_data_class.kpi_tag = KpiTagEnumClass.DISTRICT_HEATING_SPACE_HEATING
+        else:
+            capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
 
+        return capex_cost_data_class
+
+    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
     def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of energy and maintenance costs."""
         fuel_consumption_in_watt_hour_or_liter: Optional[float] = None
@@ -396,9 +429,24 @@ class HeatSource(cp.Component):
         return opex_cost_data_class
 
     def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> List[KpiEntry]:
+    def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         # gas_consumption_in_kilowatt_hour: Optional[float] = None
+        # gas_consumption_in_kilowatt_hour: Optional[float] = None
         list_of_kpi_entries: List[KpiEntry] = []
+        # for index, output in enumerate(all_outputs):
+        #     if output.component_name == self.component_name:
+        #         if output.field_name == self.FuelDelivered and output.load_type == lt.LoadTypes.GAS:
+        #             gas_consumption_in_kilowatt_hour = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 1)
+        #             break
+        # my_kpi_entry = KpiEntry(
+        #     name="Gas consumption for domestic hot water",
+        #     unit="kWh",
+        #     value=gas_consumption_in_kilowatt_hour,
+        #     tag=KpiTagEnumClass.GAS_HEATER_DOMESTIC_HOT_WATER,
+        #     description=self.component_name,
+        # )
+        opex_dataclass = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)
         # for index, output in enumerate(all_outputs):
         #     if output.component_name == self.component_name:
         #         if output.field_name == self.FuelDelivered and output.load_type == lt.LoadTypes.GAS:

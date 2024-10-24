@@ -675,8 +675,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         self.add_default_connections(self.get_default_connections_from_heat_distribution_system())
         self.add_default_connections(self.get_default_connections_from_advanced_heat_pump())
         self.add_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
-        self.add_default_connections(self.get_default_connections_from_gasheater())
-        self.add_default_connections(self.get_default_connections_from_oilheater())
+        self.add_default_connections(self.get_default_connections_from_generic_boiler())
 
     def get_default_connections_from_heat_distribution_system(
         self,
@@ -759,52 +758,27 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         )
         return connections
 
-    def get_default_connections_from_gasheater(self) -> List[cp.ComponentConnection]:
+    def get_default_connections_from_generic_boiler(self) -> List[cp.ComponentConnection]:
         """Get gasheater default connections."""
 
         # use importlib for importing the other component in order to avoid circular-import errors
-        component_module_name = "hisim.components.generic_gas_heater"
+        component_module_name = "hisim.components.generic_boiler"
         component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "GasHeater")
+        component_class = getattr(component_module, "GenericBoiler")
         connections = []
         gasheater_classname = component_class.get_classname()
         connections.append(
             cp.ComponentConnection(
                 SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator,
                 gasheater_classname,
-                component_class.MassflowOutputTemperature,
+                component_class.WaterOutputTemperature,
             )
         )
         connections.append(
             cp.ComponentConnection(
                 SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator,
                 gasheater_classname,
-                component_class.MassflowOutput,
-            )
-        )
-        return connections
-
-    def get_default_connections_from_oilheater(self) -> List[cp.ComponentConnection]:
-        """Get gasheater default connections."""
-
-        # use importlib for importing the other component in order to avoid circular-import errors
-        component_module_name = "hisim.components.generic_oil_heater"
-        component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "OilHeater")
-        connections = []
-        gasheater_classname = component_class.get_classname()
-        connections.append(
-            cp.ComponentConnection(
-                SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator,
-                gasheater_classname,
-                component_class.MassflowOutputTemperature,
-            )
-        )
-        connections.append(
-            cp.ComponentConnection(
-                SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator,
-                gasheater_classname,
-                component_class.MassflowOutput,
+                component_class.WaterOutputMassFlow,
             )
         )
         return connections

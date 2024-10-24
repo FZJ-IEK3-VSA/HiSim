@@ -223,9 +223,8 @@ class GenericBoiler(Component):
         my_display_config: DisplayConfig = DisplayConfig(display_in_webtool=True),
     ) -> None:
         """Construct all the neccessary attributes."""
-        self.generic_boiler_config = config
-        self.my_simulation_parameters = my_simulation_parameters
         self.config = config
+        self.my_simulation_parameters = my_simulation_parameters
         component_name = self.get_component_name()
         super().__init__(
             name=component_name,
@@ -344,13 +343,13 @@ class GenericBoiler(Component):
         The function sets important constants and parameters for the calculations.
         """
         # Get values from config
-        self.energy_carrier = self.generic_boiler_config.energy_carrier
-        self.minimal_thermal_power_in_watt = self.generic_boiler_config.minimal_thermal_power_in_watt
-        self.maximal_thermal_power_in_watt = self.generic_boiler_config.maximal_thermal_power_in_watt
-        self.min_combustion_efficiency = self.generic_boiler_config.eff_th_min
-        self.max_combustion_efficiency = self.generic_boiler_config.eff_th_max
-        self.maximal_temperature_in_celsius = self.generic_boiler_config.maximal_temperature_in_celsius
-        self.temperature_delta_in_celsius = self.generic_boiler_config.temperature_delta_in_celsius
+        self.energy_carrier = self.config.energy_carrier
+        self.minimal_thermal_power_in_watt = self.config.minimal_thermal_power_in_watt
+        self.maximal_thermal_power_in_watt = self.config.maximal_thermal_power_in_watt
+        self.min_combustion_efficiency = self.config.eff_th_min
+        self.max_combustion_efficiency = self.config.eff_th_max
+        self.maximal_temperature_in_celsius = self.config.maximal_temperature_in_celsius
+        self.temperature_delta_in_celsius = self.config.temperature_delta_in_celsius
         # Get physical properties of water and fuel used for the combustion
         self.specific_heat_capacity_water_in_joule_per_kilogram_per_celsius = (
             PhysicsConfig.get_properties_for_energy_carrier(
@@ -359,16 +358,16 @@ class GenericBoiler(Component):
         )
 
         # Here use higher heating value for condesing boiler and lower heating value for conventional boiler
-        if self.generic_boiler_config.boiler_type == BoilerType.CONDENSING:
+        if self.config.boiler_type == BoilerType.CONDENSING:
             self.heating_value_of_fuel_in_joule_per_m3 = PhysicsConfig.get_properties_for_energy_carrier(
                 energy_carrier=self.energy_carrier
             ).higher_heating_value_in_joule_per_m3
-        elif self.generic_boiler_config.boiler_type == BoilerType.CONVENTIONAL:
+        elif self.config.boiler_type == BoilerType.CONVENTIONAL:
             self.heating_value_of_fuel_in_joule_per_m3 = PhysicsConfig.get_properties_for_energy_carrier(
                 energy_carrier=self.energy_carrier
             ).lower_heating_value_in_joule_per_m3
         else:
-            raise ValueError(f"Boiler type {self.generic_boiler_config.boiler_type} is not implemented.")
+            raise ValueError(f"Boiler type {self.config.boiler_type} is not implemented.")
 
         # J = Wh/3600 and m3 = 1000 l
         self.heating_value_of_fuel_in_watthour_per_liter = self.heating_value_of_fuel_in_joule_per_m3 * 3.6e-6
@@ -379,7 +378,7 @@ class GenericBoiler(Component):
 
     def write_to_report(self) -> List[str]:
         """Write a report."""
-        return self.generic_boiler_config.get_string_dict()
+        return self.config.get_string_dict()
 
     def i_save_state(self) -> None:
         """Save the current state."""
@@ -650,7 +649,7 @@ class GenericBoilerController(Component):
         my_display_config: DisplayConfig = DisplayConfig(),
     ) -> None:
         """Construct all the neccessary attributes."""
-        self.generic_boiler_controller_config = config
+        self.config = config
         self.my_simulation_parameters = my_simulation_parameters
         component_name = self.get_component_name()
         super().__init__(
@@ -780,7 +779,7 @@ class GenericBoilerController(Component):
         self,
     ) -> List[str]:
         """Write important variables to report."""
-        return self.generic_boiler_controller_config.get_string_dict()
+        return self.config.get_string_dict()
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the Generic Boiler comtroller."""
@@ -805,7 +804,7 @@ class GenericBoilerController(Component):
             # turning Generic boiler off when the average daily outside temperature is above a certain threshold (if threshold is set in the config)
             summer_heating_mode = self.summer_heating_condition(
                 daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
-                set_heating_threshold_temperature_in_celsius=self.generic_boiler_controller_config.set_heating_threshold_outside_temperature_in_celsius,
+                set_heating_threshold_temperature_in_celsius=self.config.set_heating_threshold_outside_temperature_in_celsius,
             )
 
             # on/off controller comparing set flow temperature and water input temperature
@@ -817,7 +816,7 @@ class GenericBoilerController(Component):
 
             if self.controller_generic_boilermode == "heating":
                 # get a modulated control signal between 0 and 1
-                if self.generic_boiler_controller_config.is_modulating is True:
+                if self.config.is_modulating is True:
                     control_signal = self.modulate_power(
                         water_temperature_input_in_celsius=water_temperature_input_from_heat_water_storage_in_celsius,
                         set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
@@ -842,23 +841,23 @@ class GenericBoilerController(Component):
         """
 
         minimal_percentage = (
-            self.generic_boiler_controller_config.minimal_thermal_power_in_watt
-            / self.generic_boiler_controller_config.maximal_thermal_power_in_watt
+            self.config.minimal_thermal_power_in_watt
+            / self.config.maximal_thermal_power_in_watt
         )
         if (
             water_temperature_input_in_celsius
             < set_heating_flow_temperature_in_celsius
-            - self.generic_boiler_controller_config.set_temperature_difference_for_full_power
+            - self.config.set_temperature_difference_for_full_power
         ):
             percentage = 1.0
             return percentage
         if water_temperature_input_in_celsius < set_heating_flow_temperature_in_celsius:
             linear_fit = 1 - (
                 (
-                    self.generic_boiler_controller_config.set_temperature_difference_for_full_power
+                    self.config.set_temperature_difference_for_full_power
                     - (set_heating_flow_temperature_in_celsius - water_temperature_input_in_celsius)
                 )
-                / self.generic_boiler_controller_config.set_temperature_difference_for_full_power
+                / self.config.set_temperature_difference_for_full_power
             )
             percentage = max(minimal_percentage, linear_fit)
             return percentage

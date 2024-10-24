@@ -331,9 +331,9 @@ class HeatDistribution(cp.Component):
         The function sets important constants and parameters for the calculations.
         """
         self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = (
-            PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+            PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.WATER).specific_heat_capacity_in_joule_per_kg_per_kelvin
         )
-        self.density_of_water = PhysicsConfig.water_density
+        self.density_of_water_in_kg_per_m3 = PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.WATER).density_in_kg_per_m3
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -464,7 +464,7 @@ class HeatDistribution(cp.Component):
 
         outer_surface_of_hds_pipe = np.pi * outer_pipe_diameter * length_of_hds_pipe  # in m^2
 
-        mass_of_water_in_hds = inner_volume_of_hds * self.density_of_water
+        mass_of_water_in_hds = inner_volume_of_hds * self.density_of_water_in_kg_per_m3
 
         time_constant_hds = (
             mass_of_water_in_hds * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius
@@ -1276,7 +1276,7 @@ class HeatDistributionControllerInformation:
     def calc_heating_distribution_system_water_mass_flow_rate(self, max_thermal_building_demand_in_watt: float,) -> Any:
         """Calculate water mass flow between heating distribution system and hot water storage."""
         specific_heat_capacity_of_water_in_joule_per_kg_per_celsius = (
-            PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+            PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.WATER).specific_heat_capacity_in_joule_per_kg_per_kelvin
         )
 
         heating_distribution_system_water_mass_flow_in_kg_per_second = max_thermal_building_demand_in_watt / (

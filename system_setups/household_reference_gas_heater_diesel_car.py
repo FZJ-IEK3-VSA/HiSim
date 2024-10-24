@@ -142,7 +142,7 @@ class ReferenceHouseholdConfig(SystemSetupConfigBase):
         household_config.hds_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
             set_heating_threshold_outside_temperature_in_celsius
         )
-        household_config.gasheater_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
+        household_config.gas_heater_controller_config.set_heating_threshold_outside_temperature_in_celsius = (
             set_heating_threshold_outside_temperature_in_celsius
         )
 

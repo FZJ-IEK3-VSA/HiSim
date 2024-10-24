@@ -333,24 +333,24 @@ class HeatSource(cp.Component):
 
     def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of energy and maintenance costs."""
-        fuel_consumption_in_kilowatt_hour_or_liter: Optional[float] = None
+        fuel_consumption_in_watt_hour_or_liter: Optional[float] = None
         fuel_consumption_in_kilowatt_hour: Optional[float] = None
         output: Optional[cp.ComponentOutput] = None
         kpi_tag = None
         for index, output_ in enumerate(all_outputs):
             if output_.component_name == self.component_name and output_.field_name == self.FuelDelivered:
-                fuel_consumption_in_kilowatt_hour_or_liter = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
+                fuel_consumption_in_watt_hour_or_liter = round(sum(postprocessing_results.iloc[:, index]), 1)
                 output = output_
                 break
 
-        if fuel_consumption_in_kilowatt_hour_or_liter is not None and output is not None:
+        if fuel_consumption_in_watt_hour_or_liter is not None and output is not None:
             emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
                 self.my_simulation_parameters.year
             )
             if output.load_type == lt.LoadTypes.GAS:
                 co2_per_unit = emissions_and_cost_factors.gas_footprint_in_kg_per_kwh
                 euro_per_unit = emissions_and_cost_factors.gas_costs_in_euro_per_kwh
-                fuel_consumption_in_kilowatt_hour = fuel_consumption_in_kilowatt_hour_or_liter
+                fuel_consumption_in_kilowatt_hour = fuel_consumption_in_watt_hour_or_liter * 1e-3
                 if self.config.water_vs_heating == lt.InandOutputType.WATER_HEATING:
                     kpi_tag = KpiTagEnumClass.GAS_HEATER_DOMESTIC_HOT_WATER
                 elif self.config.water_vs_heating == lt.InandOutputType.HEATING:
@@ -362,7 +362,7 @@ class HeatSource(cp.Component):
                 # calculate fuel consumption from liter to kWh for oil
                 # https://www.energieheld.de/heizung/ratgeber/durchschnittliche-heizkosten#:~:text=Zur%20Veranschaulichung%3A%20Heiz%C3%B6l%20wird%20meistens,etwa%209%2C8%20Kilowattstunden%20Heizenergie.
                 # 1l oil = 10 kWh
-                fuel_consumption_in_kilowatt_hour = fuel_consumption_in_kilowatt_hour_or_liter * 10
+                fuel_consumption_in_kilowatt_hour = fuel_consumption_in_watt_hour_or_liter * 10
                 if self.config.water_vs_heating == lt.InandOutputType.WATER_HEATING:
                     kpi_tag = KpiTagEnumClass.OIL_HEATER_DOMESTIC_HOT_WATER
                 elif self.config.water_vs_heating == lt.InandOutputType.HEATING:
@@ -371,7 +371,7 @@ class HeatSource(cp.Component):
             elif output.load_type == lt.LoadTypes.DISTRICTHEATING:
                 co2_per_unit = emissions_and_cost_factors.contracting_heating_footprint_in_kg_per_kwh
                 euro_per_unit = emissions_and_cost_factors.contracting_heating_costs_in_euro_per_kwh
-                fuel_consumption_in_kilowatt_hour = fuel_consumption_in_kilowatt_hour_or_liter
+                fuel_consumption_in_kilowatt_hour = fuel_consumption_in_watt_hour_or_liter * 1e-3
                 if self.config.water_vs_heating == lt.InandOutputType.WATER_HEATING:
                     kpi_tag = KpiTagEnumClass.DISTRICT_HEATING_DOMESTIC_HOT_WATER
                 elif self.config.water_vs_heating == lt.InandOutputType.HEATING:
@@ -380,8 +380,8 @@ class HeatSource(cp.Component):
                 raise ValueError("This loadtype is not implemented for the generic heat source.")
 
             # energy costs and co2 and everything will be considered in gas meter
-            co2_per_simulated_period_in_kg = fuel_consumption_in_kilowatt_hour_or_liter * co2_per_unit
-            opex_energy_cost_per_simulated_period_in_euro = fuel_consumption_in_kilowatt_hour_or_liter * euro_per_unit
+            co2_per_simulated_period_in_kg = fuel_consumption_in_watt_hour_or_liter * co2_per_unit
+            opex_energy_cost_per_simulated_period_in_euro = fuel_consumption_in_watt_hour_or_liter * euro_per_unit
             opex_cost_data_class = OpexCostDataClass(
                 opex_energy_cost_in_euro=opex_energy_cost_per_simulated_period_in_euro,
                 opex_maintenance_cost_in_euro=0,  # TODO: needs o be implemented still
@@ -397,20 +397,9 @@ class HeatSource(cp.Component):
 
     def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
-        # gas_consumption_in_kilowatt_hour: Optional[float] = None
+
         list_of_kpi_entries: List[KpiEntry] = []
-        # for index, output in enumerate(all_outputs):
-        #     if output.component_name == self.component_name:
-        #         if output.field_name == self.FuelDelivered and output.load_type == lt.LoadTypes.GAS:
-        #             gas_consumption_in_kilowatt_hour = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 1)
-        #             break
-        # my_kpi_entry = KpiEntry(
-        #     name="Gas consumption for domestic hot water",
-        #     unit="kWh",
-        #     value=gas_consumption_in_kilowatt_hour,
-        #     tag=KpiTagEnumClass.GAS_HEATER_DOMESTIC_HOT_WATER,
-        #     description=self.component_name,
-        # )
+
         opex_dataclass = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)
         my_kpi_entry = KpiEntry(
             name=f"{opex_dataclass.loadtype.value} consumption for {self.config.water_vs_heating.value}",

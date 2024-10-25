@@ -321,7 +321,7 @@ class HeatDistribution(cp.Component):
             )
         )
         connections.append(
-            cp.ComponentConnection(HeatDistribution.WaterMassFlowInput, classname, component_class.WaterMassflowOutput,)
+            cp.ComponentConnection(HeatDistribution.WaterMassFlowInput, classname, component_class.WaterOutputMassFlowRate,)
         )
         return connections
 

@@ -243,6 +243,11 @@ class DistrictHeating(Component):
         delta_temperature_needed_in_celsius = stsv.get_input_value(self.delta_temperature_channel)
         water_input_mass_flow_rate_in_kg_per_s = stsv.get_input_value(self.water_input_mass_flow_rate_channel)
         water_input_temperature_in_celsius = stsv.get_input_value(self.water_input_temperature_channel)
+        # check values
+        if delta_temperature_needed_in_celsius < 0:
+            raise ValueError(f"Delta temperature is {delta_temperature_needed_in_celsius} °C"
+                             "but it should not be negative because district heating cannot provide cooling. "
+                             "Please check your district heating controller.")
 
         # calculate output temperature
         water_output_temperature_in_celsius = water_input_temperature_in_celsius + delta_temperature_needed_in_celsius
@@ -500,9 +505,11 @@ class DistrictHeatingController(Component):
             )
 
             if self.controller_mode == "heating":
-                delta_temperature_in_celsius = (
+                # delta temperature should not be negative because district heating cannot provide cooling
+                delta_temperature_in_celsius = max(
                     heating_flow_temperature_from_heat_distribution_in_celsius
-                    - water_temperature_input_from_heat_distibution_in_celsius
+                    - water_temperature_input_from_heat_distibution_in_celsius,
+                    0
                 )
             elif self.controller_mode == "off":
                 delta_temperature_in_celsius = 0

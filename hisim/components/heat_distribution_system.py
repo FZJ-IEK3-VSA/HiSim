@@ -53,7 +53,8 @@ class PositionHotWaterStorageInSystemSetup(IntEnum):
 
     PARALLEL = 1
     SERIE = 2
-    NO_STORAGE = 3
+    NO_STORAGE_MASS_FLOW_FROM_HEAT_GENERATOR = 3
+    NO_STORAGE_MASS_FLOW_FIX = 4
 
 
 @dataclass_json
@@ -209,7 +210,7 @@ class HeatDistribution(cp.Component):
 
         if self.position_hot_water_storage_in_system in [
             PositionHotWaterStorageInSystemSetup.SERIE,
-            PositionHotWaterStorageInSystemSetup.NO_STORAGE,
+            PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FROM_HEAT_GENERATOR,
         ]:
             # just important for heating system without parallel bufferstorage
             self.water_mass_flow_rate_hp_in_kg_per_second_channel: cp.ComponentInput = self.add_input(
@@ -320,9 +321,6 @@ class HeatDistribution(cp.Component):
                 HeatDistribution.WaterTemperatureInput, classname, component_class.WaterOutputTemperature,
             )
         )
-        connections.append(
-            cp.ComponentConnection(HeatDistribution.WaterMassFlowInput, classname, component_class.WaterOutputMassFlowRate,)
-        )
         return connections
 
     def build(self,) -> None:
@@ -367,7 +365,7 @@ class HeatDistribution(cp.Component):
         )
         residence_temperature_input_in_celsius = stsv.get_input_value(self.residence_temperature_input_channel)
 
-        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
+        if self.position_hot_water_storage_in_system in (PositionHotWaterStorageInSystemSetup.PARALLEL, PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FIX):
             water_mass_flow_rate_in_kg_per_second = (
                 self.heating_distribution_system_water_mass_flow_rate_in_kg_per_second
             )

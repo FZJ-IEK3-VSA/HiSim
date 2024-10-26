@@ -307,7 +307,7 @@ def setup_function(
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
         water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
         absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
-        position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.NO_STORAGE,
+        position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FIX,
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config, my_simulation_parameters=my_simulation_parameters,

@@ -90,18 +90,19 @@ def read_in_configs(pathname: str) -> Optional[ModularHouseholdConfig]:
     """Reads in ModularHouseholdConfig file and loads default if file cannot be found."""
     # try to read modular household config from path
     household_config: Optional[ModularHouseholdConfig]
-    try:
-        with open(pathname, encoding="utf8") as config_file:
-            household_config_dict = json.load(config_file)  # type: ignore
-            household_config = ModularHouseholdConfig.from_dict(household_config_dict)
+    # try:
+    # use strip() in order to remove \r or \n signs from path 
+    with open(pathname.strip(), encoding="utf8") as config_file:
+        household_config_dict = json.load(config_file)  # type: ignore
+        household_config = ModularHouseholdConfig.from_dict(household_config_dict)
 
-        log.information(f"Read modular household config from {pathname}")
-        assert household_config is not None
-        if (household_config.energy_system_config_ is None) and (household_config.archetype_config_ is None):
-            raise ValueError("Energy system and archetype configs are None.")
+    log.information(f"Read modular household config from {pathname}")
+    assert household_config is not None
+    if (household_config.energy_system_config_ is None) and (household_config.archetype_config_ is None):
+        raise ValueError("Energy system and archetype configs are None.")
 
     # get default modular household config
-    except Exception:
-        household_config = None
+    # except Exception:
+    #     household_config = None
 
     return household_config

@@ -197,6 +197,41 @@ class GenericBoilerConfig(ConfigBase):
         )
         return config
 
+    @classmethod
+    def get_scaled_conventional_pellet_boiler_config(
+        cls,
+        heating_load_of_building_in_watt: float,
+        building_name: str = "BUI1",
+    ) -> Any:
+        """Get a default conventional pellet boiler scaled to heating load.
+        So far we only have the lower heating value of pellets (see PhysicsConfig),
+        so only conventional pellet boilers are used.
+        """
+        maximal_thermal_power_in_watt = heating_load_of_building_in_watt
+        config = GenericBoilerConfig(
+            building_name=building_name,
+            name="ConventionalPelletBoiler",
+            boiler_type=BoilerType.CONVENTIONAL,
+            energy_carrier=lt.LoadTypes.PELLETS,
+            temperature_delta_in_celsius=20,
+            minimal_thermal_power_in_watt=1 / 12 * maximal_thermal_power_in_watt,
+            maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
+            eff_th_min=0.60,
+            eff_th_max=0.90,
+            maximal_temperature_in_celsius=80,
+            # gas value from emission_factros_and_costs_devices.csv,
+            # factor pellet/gas from https://depv.de/p/Bessere-CO2-Bilanz-mit-Holzpellets-pWuQQ4VvuNQoYjUzRf778Z
+            co2_footprint=0.63 * 49.47,
+            # gas value from emission_factros_and_costs_devices.csv,
+            # factor pellet/gas from https://www.dein-heizungsbauer.de/ratgeber/bauen-sanieren/pelletheizung-kosten/
+            cost=3.33 * 7416,
+            lifetime=20,  # use same value as for others
+            # from https://www.dein-heizungsbauer.de/ratgeber/bauen-sanieren/pelletheizung-kosten/
+            maintenance_cost_as_percentage_of_investment=0.01,
+            consumption_in_kilowatt_hour=0,
+        )
+        return config
+
 
 class GenericBoiler(Component):
     """GenericBoiler class.

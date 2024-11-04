@@ -28,7 +28,6 @@ from hisim.components import (
     generic_car,
     generic_boiler,
     generic_heat_source,
-    gas_meter,
 )
 
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
@@ -64,8 +63,8 @@ def setup_function(
         - Weather
         - Photovoltaic System
         - Building
-        - Gas Heater
-        - Gas Heater Controller
+        - Pellets Heater
+        - Pellets Heater Controller
         - Heat Distribution System
         - Heat Distribution Controller
         - Heat Water Storage
@@ -83,9 +82,9 @@ def setup_function(
     # try reading energ system and archetype configs
     my_config = read_in_configs(my_sim.my_module_config)
     if my_config is None:
-        my_config = ModularHouseholdConfig().get_default_config_for_household_gas()
+        my_config = ModularHouseholdConfig().get_default_config_for_household_pellet()
         log.warning(
-            f"Could not read the modular household config from path '{config_filename}'. Using the gas household default config instead."
+            f"Could not read the modular household config from path '{config_filename}'. Using the pellets household default config instead."
         )
     assert my_config.archetype_config_ is not None
     assert my_config.energy_system_config_ is not None
@@ -123,8 +122,8 @@ def setup_function(
 
     # Set heating systems for space heating and domestic hot water
     heating_system = energy_system_config_.heating_system
-    if heating_system != HeatingSystems.GAS_HEATING:
-        raise ValueError("Heating system needs to be gas heater for this system setup.")
+    if heating_system != HeatingSystems.PELLET_HEATING:
+        raise ValueError("Heating system needs to be pellet heater for this system setup.")
 
     heating_reference_temperature_in_celsius = -7.0
 
@@ -257,44 +256,46 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
     # Set sizing option for Hot water Storage
-    sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER
+    sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM
 
-    # Build Gas heater For Space Heating
-    my_gas_heater_config = generic_boiler.GenericBoilerConfig.get_scaled_condensing_gas_boiler_config(
+    # Build Pellets heater For Space Heating
+    my_pellet_heater_config = generic_boiler.GenericBoilerConfig.get_scaled_conventional_pellet_boiler_config(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
     )
-    my_gas_heater = generic_boiler.GenericBoiler(
-        config=my_gas_heater_config, my_simulation_parameters=my_simulation_parameters,
+    my_pellet_heater = generic_boiler.GenericBoiler(
+        config=my_pellet_heater_config, my_simulation_parameters=my_simulation_parameters,
     )
-    my_sim.add_component(my_gas_heater, connect_automatically=True)
+    my_sim.add_component(my_pellet_heater, connect_automatically=True)
 
-    # Build Gas Heater Controller
-    my_gas_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
-        minimal_thermal_power_in_watt=my_gas_heater_config.minimal_thermal_power_in_watt, maximal_thermal_power_in_watt=my_gas_heater_config.maximal_thermal_power_in_watt
+    # Build Pellet Heater Controller
+    # Pellet boiler cannot modulate! So use here on off controller
+    my_pellet_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.get_default_on_off_generic_boiler_controller_config(
+        minimal_thermal_power_in_watt=my_pellet_heater_config.minimal_thermal_power_in_watt,
+        maximal_thermal_power_in_watt=my_pellet_heater_config.maximal_thermal_power_in_watt,
     )
-    my_gas_heater_controller = generic_boiler.GenericBoilerController(
-        my_simulation_parameters=my_simulation_parameters, config=my_gas_heater_controller_config,
+    my_pellet_heater_controller = generic_boiler.GenericBoilerController(
+        my_simulation_parameters=my_simulation_parameters, config=my_pellet_heater_controller_config,
     )
-    my_sim.add_component(my_gas_heater_controller, connect_automatically=True)
+    my_sim.add_component(my_pellet_heater_controller, connect_automatically=True)
 
-    # Build Gas Heater for DHW
-    my_gas_heater_for_dhw_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating(
-        heating_system=lt.HeatingSystems.GAS_HEATING,
-        boiler_type=my_gas_heater_config.boiler_type,
+    # Build Pellet Heater for DHW
+    my_pellet_heater_for_dhw_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating(
+        heating_system=lt.HeatingSystems.PELLET_HEATING,
+        boiler_type=my_pellet_heater_config.boiler_type,
         max_warm_water_demand_in_liter=my_occupancy.max_hot_water_demand,
         scaling_factor_according_to_number_of_apartments=my_occupancy.scaling_factor_according_to_number_of_apartments,
         seconds_per_timestep=my_simulation_parameters.seconds_per_timestep,
-        name="DHW" + lt.HeatingSystems.GAS_HEATING.value
+        name="DHW" + lt.HeatingSystems.PELLET_HEATING.value,
     )
-    my_gas_heater_controller_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-        "DHW" + lt.HeatingSystems.GAS_HEATING.value + "Controller"
+    my_pellet_heater_controller_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
+        "DHW" + lt.HeatingSystems.PELLET_HEATING.value + "Controller"
     )
     my_boiler_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
         number_of_apartments=my_building_information.number_of_apartments
     )
     my_boiler_config.compute_default_cycle(
-        temperature_difference_in_kelvin=my_gas_heater_controller_l1_config.t_max_heating_in_celsius
-        - my_gas_heater_controller_l1_config.t_min_heating_in_celsius
+        temperature_difference_in_kelvin=my_pellet_heater_controller_l1_config.t_max_heating_in_celsius
+        - my_pellet_heater_controller_l1_config.t_min_heating_in_celsius
     )
 
     my_boiler_for_dhw = generic_hot_water_storage_modular.HotWaterStorage(
@@ -302,13 +303,13 @@ def setup_function(
     )
 
     my_heater_controller_l1_for_dhw = controller_l1_heatpump.L1HeatPumpController(
-        my_simulation_parameters=my_simulation_parameters, config=my_gas_heater_controller_l1_config
+        my_simulation_parameters=my_simulation_parameters, config=my_pellet_heater_controller_l1_config
     )
 
-    my_gas_heater_for_dhw = generic_heat_source.HeatSource(
-        config=my_gas_heater_for_dhw_config, my_simulation_parameters=my_simulation_parameters
+    my_pellet_heater_for_dhw = generic_heat_source.HeatSource(
+        config=my_pellet_heater_for_dhw_config, my_simulation_parameters=my_simulation_parameters
     )
-    my_sim.add_component(my_gas_heater_for_dhw, connect_automatically=True)
+    my_sim.add_component(my_pellet_heater_for_dhw, connect_automatically=True)
     my_sim.add_component(my_boiler_for_dhw, connect_automatically=True)
     my_sim.add_component(my_heater_controller_l1_for_dhw, connect_automatically=True)
 
@@ -340,13 +341,6 @@ def setup_function(
         my_simulation_parameters=my_simulation_parameters,
         config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
     )
-
-    # Build Gas Meter
-    my_gas_meter = gas_meter.GasMeter(
-        my_simulation_parameters=my_simulation_parameters,
-        config=gas_meter.GasMeterConfig.get_gas_meter_default_config(),
-    )
-    my_sim.add_component(my_gas_meter, connect_automatically=True)
 
     # Build Electric Vehicle Configs and Car Battery Configs
     my_car_config = generic_car.CarConfig.get_default_ev_config()
@@ -525,7 +519,7 @@ def setup_function(
         ResultPathProviderSingleton().set_important_result_path_information(
             module_directory=my_sim.module_directory,  # "/storage_cluster/projects/2024_waage/01_hisim_results",
             model_name=my_sim.module_filename,
-            further_result_folder_description=os.path.join(*[further_result_folder_description,]),
+            further_result_folder_description=os.path.join(*[further_result_folder_description]),
             variant_name="_",
             scenario_hash_string=scenario_hash_string,
             sorting_option=sorting_option,

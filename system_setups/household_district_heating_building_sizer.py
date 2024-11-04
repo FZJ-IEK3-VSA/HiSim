@@ -256,7 +256,9 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
     # Build district heating controller
-    my_district_heating_controller_sh_config = generic_district_heating.DistrictHeatingControllerConfig.get_default_district_heating_controller_config()
+    my_district_heating_controller_sh_config = (
+        generic_district_heating.DistrictHeatingControllerConfig.get_default_district_heating_controller_config()
+    )
     my_district_heating_controller = generic_district_heating.DistrictHeatingController(
         my_simulation_parameters=my_simulation_parameters, config=my_district_heating_controller_sh_config
     )
@@ -275,7 +277,7 @@ def setup_function(
         max_warm_water_demand_in_liter=my_occupancy.max_hot_water_demand,
         scaling_factor_according_to_number_of_apartments=my_occupancy.scaling_factor_according_to_number_of_apartments,
         seconds_per_timestep=my_simulation_parameters.seconds_per_timestep,
-        name="DHW" + lt.HeatingSystems.DISTRICT_HEATING.value
+        name="DHW" + lt.HeatingSystems.DISTRICT_HEATING.value,
     )
     my_district_heating_controller_dhw_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
         "DHW" + lt.HeatingSystems.DISTRICT_HEATING.value + "Controller"
@@ -496,7 +498,8 @@ def setup_function(
     if my_simulation_parameters.result_directory == "":
 
         ResultPathProviderSingleton().set_important_result_path_information(
-            module_directory="/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/analysis_for_gianmarco_11_10_2024/analysis_for_Essen/results_for_Essen", #my_sim.module_directory,  # "/storage_cluster/projects/2024_waage/01_hisim_results",
+            module_directory="/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/analysis_for_gianmarco_11_10_2024/analysis_for_Essen/results_for_Essen",
+            # my_sim.module_directory,
             model_name=my_sim.module_filename,
             further_result_folder_description=os.path.join(*[further_result_folder_description]),
             variant_name="_",

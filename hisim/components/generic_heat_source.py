@@ -383,7 +383,7 @@ class HeatSource(cp.Component):
         """Calculate OPEX costs, consisting of energy and maintenance costs."""
         kpi_tag = None
         for index, output_ in enumerate(all_outputs):
-            if output_.component_name == self.component_name and output_.field_name == self.FuelDelivered:
+            if output_.component_name == self.component_name and output_.field_name == self.FuelDelivered and output_.unit == lt.Units.WATT_HOUR:
                 self.config.consumption_in_kilowatt_hour = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
                 break
         # calculate fuel consumption in liter if possible
@@ -478,7 +478,7 @@ class HeatSource(cp.Component):
 
         # fuel demand in liter
         my_kpi_entry_two = KpiEntry(
-            name=f"{opex_dataclass.loadtype.value} fuel consumption for {self.config.water_vs_heating.value}",
+            name=f"{opex_dataclass.loadtype.value} fuel consumption (l) for {self.config.water_vs_heating.value}",
             unit="l",
             value=self.fuel_consumption_in_liter,
             tag=opex_dataclass.kpi_tag,
@@ -488,7 +488,7 @@ class HeatSource(cp.Component):
 
         # fuel demand in kg
         my_kpi_entry_three = KpiEntry(
-            name=f"{opex_dataclass.loadtype.value} fuel consumption for {self.config.water_vs_heating.value}",
+            name=f"{opex_dataclass.loadtype.value} fuel consumption (kg) for {self.config.water_vs_heating.value}",
             unit="kg",
             value=self.fuel_consumption_in_kg,
             tag=opex_dataclass.kpi_tag,

@@ -1384,7 +1384,7 @@ class UtspLpgConnector(cp.Component):
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
-                if output.field_name == self.ElectricityOutput:
+                if output.field_name == self.ElectricityOutput and output.unit == lt.Units.WATT:
                     occupancy_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]
                     occupancy_total_electricity_consumption_in_kilowatt_hour = (
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
@@ -1424,7 +1424,7 @@ class UtspLpgConnector(cp.Component):
         """
         consumption_in_kwh: float = 0.0
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.config.name and output.load_type == lt.LoadTypes.ELECTRICITY and output.field_name == self.ElectricityOutput:
+            if output.component_name == self.config.name and output.load_type == lt.LoadTypes.ELECTRICITY and output.field_name == self.ElectricityOutput and output.unit == lt.Units.WATT:
                 occupancy_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]
                 consumption_in_kwh = (
                 KpiHelperClass.compute_total_energy_from_power_timeseries(

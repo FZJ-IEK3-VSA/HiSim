@@ -471,7 +471,7 @@ class GenericBoiler(Component):
     def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of energy and maintenance costs."""
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.component_name and output.field_name == self.EnergyDemand:
+            if output.component_name == self.component_name and output.field_name == self.EnergyDemand and output.unit == lt.Units.WATT_HOUR:
                 self.config.consumption_in_kilowatt_hour = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
                 break
 
@@ -538,7 +538,7 @@ class GenericBoiler(Component):
 
         # fuel demand in liter
         my_kpi_entry_two = KpiEntry(
-            name=f"{opex_dataclass.loadtype.value} fuel consumption for space heating",
+            name=f"{opex_dataclass.loadtype.value} fuel consumption (l) for space heating",
             unit="l",
             value=self.fuel_consumption_in_liter,
             tag=opex_dataclass.kpi_tag,
@@ -555,7 +555,7 @@ class GenericBoiler(Component):
             ).density_in_kg_per_m3
         )
         my_kpi_entry_three = KpiEntry(
-            name=f"{opex_dataclass.loadtype.value} fuel consumption for space heating",
+            name=f"{opex_dataclass.loadtype.value} fuel consumption (kg) for space heating",
             unit="kg",
             value=self.fuel_consumption_in_kg,
             tag=opex_dataclass.kpi_tag,

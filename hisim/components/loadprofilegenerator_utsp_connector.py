@@ -78,10 +78,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
         return UtspLpgConnector.get_full_classname()
 
     @classmethod
-    def get_default_utsp_connector_config(
-        cls,
-        building_name: str = "BUI1",
-    ) -> Any:
+    def get_default_utsp_connector_config(cls, building_name: str = "BUI1",) -> Any:
         """Creates a default configuration. Chooses default values for the LPG parameters."""
 
         config = UtspLpgConnectorConfig(
@@ -160,18 +157,10 @@ class UtspLpgConnector(cp.Component):
 
         # Inputs - Not Mandatory
         self.ww_mass_input_channel: cp.ComponentInput = self.add_input(
-            self.component_name,
-            self.WW_MassInput,
-            lt.LoadTypes.WARM_WATER,
-            lt.Units.KG_PER_SEC,
-            False,
+            self.component_name, self.WW_MassInput, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC, False,
         )
         self.ww_temperature_input_channel: cp.ComponentInput = self.add_input(
-            self.component_name,
-            self.WW_TemperatureInput,
-            lt.LoadTypes.WARM_WATER,
-            lt.Units.CELSIUS,
-            False,
+            self.component_name, self.WW_TemperatureInput, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, False,
         )
 
         self.number_of_residents_channel: cp.ComponentOutput = self.add_output(
@@ -275,7 +264,9 @@ class UtspLpgConnector(cp.Component):
                 energy_discharged = ww_energy_demand + energy_losses
                 ww_temperature_output: float = freshwater_temperature + temperature_difference_cold
                 ww_mass_input = energy_discharged / (
-                    PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.WATER).specific_heat_capacity_in_joule_per_kg_per_kelvin
+                    PhysicsConfig.get_properties_for_energy_carrier(
+                        energy_carrier=lt.LoadTypes.WATER
+                    ).specific_heat_capacity_in_joule_per_kg_per_kelvin
                     * (ww_temperature_input - ww_temperature_output)
                 )
             else:
@@ -310,7 +301,9 @@ class UtspLpgConnector(cp.Component):
         resolution = datetime.timedelta(seconds=seconds)
         return str(resolution)
 
-    def get_profiles_from_utsp(self, lpg_households: Union[JsonReference, List[JsonReference]], guid: str) -> Tuple[
+    def get_profiles_from_utsp(
+        self, lpg_households: Union[JsonReference, List[JsonReference]], guid: str
+    ) -> Tuple[
         Union[str, List],
         Union[str, List],
         Union[str, List],
@@ -335,9 +328,7 @@ class UtspLpgConnector(cp.Component):
         # choose if one lpg request should be made or several in parallel
         if isinstance(lpg_households, JsonReference):
             simulation_config = self.prepare_lpg_simulation_config_for_utsp_request(
-                start_date=start_date,
-                end_date=end_date,
-                household=lpg_households,
+                start_date=start_date, end_date=end_date, household=lpg_households,
             )
 
             (
@@ -350,10 +341,7 @@ class UtspLpgConnector(cp.Component):
                 car_states_file,
                 car_locations_file,
                 driving_distances_file,
-            ) = self.calculate_one_lpg_request(
-                simulation_config=simulation_config,
-                guid=guid,
-            )
+            ) = self.calculate_one_lpg_request(simulation_config=simulation_config, guid=guid,)
 
         elif isinstance(lpg_households, List):
             simulation_configs = []
@@ -374,10 +362,7 @@ class UtspLpgConnector(cp.Component):
                 car_locations_file,
                 driving_distances_file,
             ) = self.calculate_multiple_lpg_requests(  # type: ignore
-                url=self.utsp_url,
-                api_key=self.utsp_api_key,
-                lpg_configs=simulation_configs,
-                guid=guid,
+                url=self.utsp_url, api_key=self.utsp_api_key, lpg_configs=simulation_configs, guid=guid,
             )
 
         else:
@@ -397,9 +382,7 @@ class UtspLpgConnector(cp.Component):
             driving_distances_file,
         )
 
-    def get_profiles_from_predefined_profile(
-        self,
-    ) -> Tuple[str, str, str, str, str]:
+    def get_profiles_from_predefined_profile(self,) -> Tuple[str, str, str, str, str]:
         """Get the loadprofiles for a specific predefined profile from hisim/inputs/loadprofiles."""
         predefined_profile_filepaths = utils.HISIMPATH["occupancy"][self.name_of_predefined_loadprofile]
         # get first bodily activity files
@@ -594,8 +577,7 @@ class UtspLpgConnector(cp.Component):
                         car_locations_file,
                         driving_distances_file,
                     ) = self.get_profiles_from_utsp(
-                        lpg_households=new_unique_config.household,
-                        guid=new_unique_config.guid,
+                        lpg_households=new_unique_config.household, guid=new_unique_config.guid,
                     )
 
                     # only one result obtained
@@ -770,8 +752,7 @@ class UtspLpgConnector(cp.Component):
 
                     if self.utsp_config.predictive:
                         SingletonSimRepository().set_entry(
-                            key=SingletonDictKeyEnum.HEATINGBYRESIDENTSYEARLYFORECAST,
-                            entry=self.heating_by_residents,
+                            key=SingletonDictKeyEnum.HEATINGBYRESIDENTSYEARLYFORECAST, entry=self.heating_by_residents,
                         )
 
     def get_result_lists_by_summing_over_value_dict(
@@ -957,23 +938,13 @@ class UtspLpgConnector(cp.Component):
 
         # Create all request objects
         all_requests: List[TimeSeriesRequest] = [
-            TimeSeriesRequest(
-                config.to_json(),
-                "LPG",
-                required_result_files=result_files,
-                guid=guid,
-            )
+            TimeSeriesRequest(config.to_json(), "LPG", required_result_files=result_files, guid=guid,)
             for config in lpg_configs
         ]
 
         log.information("Requesting LPG profiles from the UTSP for multiple household.")
 
-        results = calculate_multiple_requests(
-            url,
-            all_requests,
-            api_key,
-            raise_exceptions,
-        )
+        results = calculate_multiple_requests(url, all_requests, api_key, raise_exceptions,)
 
         # append all results in lists
         electricity_file: List = []
@@ -1071,8 +1042,7 @@ class UtspLpgConnector(cp.Component):
 
         # Define required result files
         electricity = result_file_filters.LPGFilters.sum_hh1(
-            LoadTypes.Electricity,
-            no_flex=not self.utsp_config.profile_with_washing_machine_and_dishwasher,
+            LoadTypes.Electricity, no_flex=not self.utsp_config.profile_with_washing_machine_and_dishwasher,
         )
         warm_water = result_file_filters.LPGFilters.sum_hh1(LoadTypes.Warm_Water, no_flex=False)
         inner_device_heat_gains = result_file_filters.LPGFilters.sum_hh1(
@@ -1166,31 +1136,22 @@ class UtspLpgConnector(cp.Component):
         if data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
             # load electricity consumption, water consumption and inner device heat gains
             electricity_data = io.StringIO(electricity)
-            pre_electricity_consumption = pd.read_csv(
-                electricity_data,
-                sep=";",
-                decimal=".",
-                encoding="cp1252",
-            ).loc[: (steps_desired_in_minutes - 1)]
+            pre_electricity_consumption = pd.read_csv(electricity_data, sep=";", decimal=".", encoding="cp1252",).loc[
+                : (steps_desired_in_minutes - 1)
+            ]
             electricity_consumption_list = pd.to_numeric(
                 pre_electricity_consumption["Sum [kWh]"] * 1000 * 60
             ).tolist()  # 1 kWh/min == 60W / min
 
             water_data = io.StringIO(warm_water)
-            pre_water_consumption = pd.read_csv(
-                water_data,
-                sep=";",
-                decimal=".",
-                encoding="cp1252",
-            ).loc[: (steps_desired_in_minutes - 1)]
+            pre_water_consumption = pd.read_csv(water_data, sep=";", decimal=".", encoding="cp1252",).loc[
+                : (steps_desired_in_minutes - 1)
+            ]
             water_consumption_list = pd.to_numeric(pre_water_consumption["Sum [L]"]).tolist()
 
             inner_device_heat_gain_data = io.StringIO(inner_device_heat_gains)
             pre_inner_device_heat_gains = pd.read_csv(
-                inner_device_heat_gain_data,
-                sep=";",
-                decimal=".",
-                encoding="cp1252",
+                inner_device_heat_gain_data, sep=";", decimal=".", encoding="cp1252",
             ).loc[: (steps_desired_in_minutes - 1)]
             inner_device_heat_gains_list = pd.to_numeric(
                 pre_inner_device_heat_gains["Sum [kWh]"] * 1000 * 60
@@ -1199,31 +1160,19 @@ class UtspLpgConnector(cp.Component):
         elif data_acquisition_mode == LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE:
             # load electricity consumption, water consumption and inner device heat gains
             pre_electricity_consumption = pd.read_csv(
-                electricity,
-                sep=";",
-                decimal=".",
-                encoding="utf-8",
-                usecols=["Sum [kWh]"],
+                electricity, sep=";", decimal=".", encoding="utf-8", usecols=["Sum [kWh]"],
             ).loc[: (steps_desired_in_minutes - 1)]
             electricity_consumption_list = pd.to_numeric(
                 pre_electricity_consumption.loc[:, "Sum [kWh]"] * 1000 * 60
             ).tolist()  # 1 kWh/min == 60 000 W / min
 
             pre_water_consumption = pd.read_csv(
-                warm_water,
-                sep=";",
-                decimal=".",
-                encoding="utf-8",
-                usecols=["Sum [L]"],
+                warm_water, sep=";", decimal=".", encoding="utf-8", usecols=["Sum [L]"],
             ).loc[: (steps_desired_in_minutes - 1)]
             water_consumption_list = pd.to_numeric(pre_water_consumption.loc[:, "Sum [L]"]).tolist()
 
             pre_inner_device_heat_gains = pd.read_csv(
-                inner_device_heat_gains,
-                sep=";",
-                decimal=".",
-                encoding="utf-8",
-                usecols=["Time", "Sum [kWh]"],
+                inner_device_heat_gains, sep=";", decimal=".", encoding="utf-8", usecols=["Time", "Sum [kWh]"],
             ).loc[: (steps_desired_in_minutes - 1)]
             inner_device_heat_gains_list = pd.to_numeric(
                 pre_inner_device_heat_gains.loc[:, "Sum [kWh]"] * 1000 * 60
@@ -1374,11 +1323,7 @@ class UtspLpgConnector(cp.Component):
             transformed_data[key] = transformed_value
         return transformed_data
 
-    def get_component_kpi_entries(
-        self,
-        all_outputs: List,
-        postprocessing_results: pd.DataFrame,
-    ) -> List[KpiEntry]:
+    def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         occupancy_total_electricity_consumption_in_kilowatt_hour: Optional[float] = None
         list_of_kpi_entries: List[KpiEntry] = []
@@ -1386,11 +1331,9 @@ class UtspLpgConnector(cp.Component):
             if output.component_name == self.component_name:
                 if output.field_name == self.ElectricityOutput and output.unit == lt.Units.WATT:
                     occupancy_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]
-                    occupancy_total_electricity_consumption_in_kilowatt_hour = (
-                        KpiHelperClass.compute_total_energy_from_power_timeseries(
-                            power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
-                        )
+                    occupancy_total_electricity_consumption_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
+                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
                     )
                     break
 
@@ -1400,23 +1343,21 @@ class UtspLpgConnector(cp.Component):
             unit="kWh",
             value=occupancy_total_electricity_consumption_in_kilowatt_hour,
             tag=KpiTagEnumClass.RESIDENTS,
-            description=self.component_name
+            description=self.component_name,
         )
 
         list_of_kpi_entries = [occupancy_total_electricity_consumption_entry]
         return list_of_kpi_entries
 
     @staticmethod
-    def get_cost_capex(config: UtspLpgConnectorConfig, simulation_parameters: SimulationParameters) -> cp.CapexCostDataClass:  # pylint: disable=unused-argument
+    def get_cost_capex(
+        config: UtspLpgConnectorConfig, simulation_parameters: SimulationParameters
+    ) -> cp.CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
         capex_cost_data_class = cp.CapexCostDataClass.get_default_capex_cost_data_class()
         return capex_cost_data_class
 
-    def get_cost_opex(
-        self,
-        all_outputs: List,
-        postprocessing_results: pd.DataFrame,
-    ) -> OpexCostDataClass:
+    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
         """Calculate OPEX costs, snd write total energy consumption to component-config.
 
         No electricity costs for components except for Electricity Meter,
@@ -1424,12 +1365,16 @@ class UtspLpgConnector(cp.Component):
         """
         consumption_in_kwh: float = 0.0
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.config.name and output.load_type == lt.LoadTypes.ELECTRICITY and output.field_name == self.ElectricityOutput and output.unit == lt.Units.WATT:
+            if (
+                output.component_name == self.config.name
+                and output.load_type == lt.LoadTypes.ELECTRICITY
+                and output.field_name == self.ElectricityOutput
+                and output.unit == lt.Units.WATT
+            ):
                 occupancy_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]
-                consumption_in_kwh = (
-                KpiHelperClass.compute_total_energy_from_power_timeseries(
+                consumption_in_kwh = KpiHelperClass.compute_total_energy_from_power_timeseries(
                     power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
-                    timeresolution=self.my_simulation_parameters.seconds_per_timestep)
+                    timeresolution=self.my_simulation_parameters.seconds_per_timestep,
                 )
 
         opex_cost_data_class = OpexCostDataClass(
@@ -1438,7 +1383,7 @@ class UtspLpgConnector(cp.Component):
             co2_footprint_in_kg=0,
             consumption_in_kwh=consumption_in_kwh,
             loadtype=lt.LoadTypes.ELECTRICITY,
-            kpi_tag=KpiTagEnumClass.RESIDENTS
+            kpi_tag=KpiTagEnumClass.RESIDENTS,
         )
 
         return opex_cost_data_class

@@ -20,7 +20,7 @@ def test_household_gas():
     path = "../system_setups/household_gas_building_sizer.py"
 
     # Set simu parameters for tests
-    my_simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60*15)
+    my_simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60 * 15)
     my_simulation_parameters.post_processing_options.append(
         PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
     )
@@ -42,7 +42,7 @@ def test_household_oil():
     path = "../system_setups/household_oil_building_sizer.py"
 
     # Set simu parameters for tests
-    my_simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60*15)
+    my_simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60 * 15)
     my_simulation_parameters.post_processing_options.append(
         PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
     )
@@ -64,7 +64,7 @@ def test_household_heatpump():
     path = "../system_setups/household_heatpump_building_sizer.py"
 
     # Set simu parameters for tests
-    my_simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60*15)
+    my_simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60 * 15)
     my_simulation_parameters.post_processing_options.append(
         PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
     )
@@ -86,7 +86,7 @@ def test_household_pellet_heating():
     path = "../system_setups/household_pellets_building_sizer.py"
 
     # Set simu parameters for tests
-    my_simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60*15)
+    my_simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60 * 15)
     my_simulation_parameters.post_processing_options.append(
         PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
     )
@@ -108,7 +108,7 @@ def test_household_district_heating():
     path = "../system_setups/household_district_heating_building_sizer.py"
 
     # Set simu parameters for tests
-    my_simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60*15)
+    my_simulation_parameters = SimulationParameters.one_day_only(year=2021, seconds_per_timestep=60 * 15)
     my_simulation_parameters.post_processing_options.append(
         PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION
     )

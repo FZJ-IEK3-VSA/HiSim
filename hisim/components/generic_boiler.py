@@ -475,15 +475,15 @@ class GenericBoiler(Component):
                 self.config.consumption_in_kilowatt_hour = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
                 break
 
-        self.fuel_consumption_in_liter = (
-            self.config.consumption_in_kilowatt_hour / self.heating_value_of_fuel_in_kwh_per_liter
+        self.fuel_consumption_in_liter = round(
+            self.config.consumption_in_kilowatt_hour / self.heating_value_of_fuel_in_kwh_per_liter, 1
         )
-        self.fuel_consumption_in_kg = (
+        self.fuel_consumption_in_kg = round(
             self.fuel_consumption_in_liter
             * 1e-3
             * PhysicsConfig.get_properties_for_energy_carrier(
                 energy_carrier=self.config.energy_carrier
-            ).density_in_kg_per_m3
+            ).density_in_kg_per_m3, 1
         )
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year

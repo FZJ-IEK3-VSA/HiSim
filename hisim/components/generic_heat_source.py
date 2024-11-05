@@ -476,24 +476,25 @@ class HeatSource(cp.Component):
 
         list_of_kpi_entries.append(my_kpi_entry)
 
-        # fuel demand in liter
-        my_kpi_entry_two = KpiEntry(
-            name=f"{opex_dataclass.loadtype.value} fuel consumption (l) for {self.config.water_vs_heating.value}",
-            unit="l",
-            value=self.fuel_consumption_in_liter,
-            tag=opex_dataclass.kpi_tag,
-            description=self.component_name,
-        )
-        list_of_kpi_entries.append(my_kpi_entry_two)
+        if self.config.fuel in (lt.LoadTypes.PELLETS, lt.LoadTypes.OIL, lt.LoadTypes.GAS):
+            # fuel demand in liter
+            my_kpi_entry_two = KpiEntry(
+                name=f"{opex_dataclass.loadtype.value} fuel consumption for {self.config.water_vs_heating.value} (l)",
+                unit="l",
+                value=self.fuel_consumption_in_liter,
+                tag=opex_dataclass.kpi_tag,
+                description=self.component_name,
+            )
+            list_of_kpi_entries.append(my_kpi_entry_two)
 
-        # fuel demand in kg
-        my_kpi_entry_three = KpiEntry(
-            name=f"{opex_dataclass.loadtype.value} fuel consumption (kg) for {self.config.water_vs_heating.value}",
-            unit="kg",
-            value=self.fuel_consumption_in_kg,
-            tag=opex_dataclass.kpi_tag,
-            description=self.component_name,
-        )
-        list_of_kpi_entries.append(my_kpi_entry_three)
+            # fuel demand in kg
+            my_kpi_entry_three = KpiEntry(
+                name=f"{opex_dataclass.loadtype.value} fuel consumption for {self.config.water_vs_heating.value} (kg)",
+                unit="kg",
+                value=self.fuel_consumption_in_kg,
+                tag=opex_dataclass.kpi_tag,
+                description=self.component_name,
+            )
+            list_of_kpi_entries.append(my_kpi_entry_three)
 
         return list_of_kpi_entries

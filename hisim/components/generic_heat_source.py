@@ -391,6 +391,12 @@ class HeatSource(cp.Component):
             self.fuel_consumption_in_liter = (
                 self.config.consumption_in_kilowatt_hour / self.heating_value_of_fuel_in_kwh_per_liter
             )
+            self.fuel_consumption_in_kg = (
+            self.fuel_consumption_in_liter
+            * 1e-3
+            * PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=self.config.fuel).density_in_kg_per_m3
+        )
+
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year
         )
@@ -481,11 +487,6 @@ class HeatSource(cp.Component):
         list_of_kpi_entries.append(my_kpi_entry_two)
 
         # fuel demand in kg
-        self.fuel_consumption_in_kg = (
-            self.fuel_consumption_in_liter
-            * 1e-3
-            * PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=self.config.fuel).density_in_kg_per_m3
-        )
         my_kpi_entry_three = KpiEntry(
             name=f"{opex_dataclass.loadtype.value} fuel consumption for {self.config.water_vs_heating.value}",
             unit="kg",

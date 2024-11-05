@@ -473,9 +473,8 @@ class GenericBoiler(Component):
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name and output.field_name == self.EnergyDemand:
                 self.config.consumption_in_kilowatt_hour = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
-                # elif output.component_name == self.component_name and output.field_name == self.FuelDemand:
-                #     self.fuel_consumption_in_liter = round(sum(postprocessing_results.iloc[:, index]), 1)
                 break
+
         self.fuel_consumption_in_liter = (
             self.config.consumption_in_kilowatt_hour / self.heating_value_of_fuel_in_kwh_per_liter
         )

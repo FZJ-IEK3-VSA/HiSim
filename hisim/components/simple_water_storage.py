@@ -1412,6 +1412,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
         )
 
         self.add_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
+        self.add_default_connections(self.get_default_connections_from_generic_dhw_boiler())
         self.add_default_connections(self.get_default_connections_from_utsp())
 
     def get_default_connections_from_more_advanced_heat_pump(
@@ -1457,6 +1458,33 @@ class SimpleDHWStorage(SimpleWaterStorage):
                 SimpleDHWStorage.WaterConsumption,
                 utsp_classname,
                 component_class.WaterConsumption,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_generic_dhw_boiler(
+        self,
+    ) -> List[cp.ComponentConnection]:
+        """Get generic dhw boiler default connections."""
+
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.generic_boiler"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "GenericBoilerForDHW")
+        connections = []
+        dhw_boiler_classname = component_class.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                SimpleDHWStorage.WaterTemperatureFromHeatGenerator,
+                dhw_boiler_classname,
+                component_class.WaterOutputTemperature,
+            )
+        )
+        connections.append(
+            cp.ComponentConnection(
+                SimpleDHWStorage.WaterMassFlowRateFromHeatGenerator,
+                dhw_boiler_classname,
+                component_class.WaterOutputMassFlow,
             )
         )
         return connections

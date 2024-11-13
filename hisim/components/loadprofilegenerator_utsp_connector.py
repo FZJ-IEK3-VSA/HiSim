@@ -1020,7 +1020,6 @@ class UtspLpgConnector(cp.Component):
             external_resolution=self.get_resolution(),
             energy_intensity=self.utsp_config.energy_intensity,
             travel_route_set=self.utsp_config.travel_route_set,
-            energy_intensity=self.utsp_config.energy_intensity,
             transportation_device_set=self.utsp_config.transportation_device_set,
             charging_station_set=self.utsp_config.charging_station_set,
             calc_options=[

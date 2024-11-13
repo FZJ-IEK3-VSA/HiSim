@@ -20,14 +20,11 @@ from hisim.components import (
     controller_l2_energy_management_system,
     simple_water_storage,
     heat_distribution_system,
-    generic_hot_water_storage_modular,
-    controller_l1_heatpump,
     electricity_meter,
     advanced_ev_battery_bslib,
     controller_l1_generic_ev_charge,
     generic_car,
     generic_boiler,
-    generic_heat_source
 )
 
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
@@ -109,10 +106,10 @@ def setup_function(
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER
         )
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
         # my_simulation_parameters.logging_level = 4
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
@@ -269,61 +266,32 @@ def setup_function(
 
     # Build Oil Heater Controller
     my_oil_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
-        minimal_thermal_power_in_watt=my_oil_heater_config.minimal_thermal_power_in_watt, maximal_thermal_power_in_watt=my_oil_heater_config.maximal_thermal_power_in_watt
+        minimal_thermal_power_in_watt=my_oil_heater_config.minimal_thermal_power_in_watt,
+        maximal_thermal_power_in_watt=my_oil_heater_config.maximal_thermal_power_in_watt,
     )
     my_oil_heater_controller = generic_boiler.GenericBoilerController(
         my_simulation_parameters=my_simulation_parameters, config=my_oil_heater_controller_config,
     )
     my_sim.add_component(my_oil_heater_controller, connect_automatically=True)
 
-    # # Build Oil Heater for DHW
-    # my_oil_heater_for_dhw_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating(
-    #     heating_system=lt.HeatingSystems.OIL_HEATING,
-    #     boiler_type=my_oil_heater_config.boiler_type,
-    #     max_warm_water_demand_in_liter=my_occupancy.max_hot_water_demand,
-    #     scaling_factor_according_to_number_of_apartments=my_occupancy.scaling_factor_according_to_number_of_apartments,
-    #     seconds_per_timestep=my_simulation_parameters.seconds_per_timestep,
-    #     name="DHW" + lt.HeatingSystems.OIL_HEATING.value
-    # )
-    # my_oil_heater_controller_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-    #     "DHW" + lt.HeatingSystems.OIL_HEATING.value + "Controller"
-    # )
-    # my_boiler_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
-    #     number_of_apartments=my_building_information.number_of_apartments
-    # )
-    # my_boiler_config.compute_default_cycle(
-    #     temperature_difference_in_kelvin=my_oil_heater_controller_l1_config.t_max_heating_in_celsius
-    #     - my_oil_heater_controller_l1_config.t_min_heating_in_celsius
-    # )
-
-    # my_boiler_for_dhw = generic_hot_water_storage_modular.HotWaterStorage(
-    #     my_simulation_parameters=my_simulation_parameters, config=my_boiler_config
-    # )
-
-    # my_heater_controller_l1_for_dhw = controller_l1_heatpump.L1HeatPumpController(
-    #     my_simulation_parameters=my_simulation_parameters, config=my_oil_heater_controller_l1_config
-    # )
-
-    # my_oil_heater_for_dhw = generic_heat_source.HeatSource(
-    #     config=my_oil_heater_for_dhw_config, my_simulation_parameters=my_simulation_parameters
-    # )
-    # my_sim.add_component(my_oil_heater_for_dhw, connect_automatically=True)
-    # my_sim.add_component(my_boiler_for_dhw, connect_automatically=True)
-    # my_sim.add_component(my_heater_controller_l1_for_dhw, connect_automatically=True)
-
+    # Build Oil Heater for DHW
     # DHW oil heater and storage configs
-    my_oil_heater_for_dhw_config = generic_boiler.GenericBoilerConfig.get_scaled_conventional_oil_boiler_config(heating_load_of_building_in_watt=2500 * number_of_apartments)
-    my_oil_heater_for_dhw_config.name = my_oil_heater_for_dhw_config.name + "ForDHW"
-    my_oil_heater_for_dhw_config.temperature_delta_in_celsius = 10
-    my_oil_heater_controller_dhw_config = generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
-        minimal_thermal_power_in_watt=my_oil_heater_for_dhw_config.minimal_thermal_power_in_watt,
-        maximal_thermal_power_in_watt=my_oil_heater_for_dhw_config.maximal_thermal_power_in_watt
+    my_oil_heater_for_dhw_config = generic_boiler.GenericBoilerConfigForDHW.get_scaled_conventional_oil_dhw_boiler_config(
+        number_of_apartments_in_building=number_of_apartments
     )
-    my_oil_heater_controller_dhw_config.name = my_oil_heater_controller_dhw_config.name + "ForDHW"
 
-    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(number_of_apartments=number_of_apartments)
+    my_oil_heater_controller_dhw_config = generic_boiler.GenericBoilerControllerConfigForDHW.get_default_modulating_dhw_boiler_controller_config(
+        minimal_thermal_power_in_watt=my_oil_heater_for_dhw_config.minimal_thermal_power_in_watt,
+        maximal_thermal_power_in_watt=my_oil_heater_for_dhw_config.maximal_thermal_power_in_watt,
+    )
 
-    my_dhw_storage = simple_water_storage.SimpleDHWStorage(my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config)
+    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
+        number_of_apartments=number_of_apartments
+    )
+
+    my_dhw_storage = simple_water_storage.SimpleDHWStorage(
+        my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
+    )
 
     my_oil_heater_controller_for_dhw = generic_boiler.GenericBoilerControllerForDHW(
         my_simulation_parameters=my_simulation_parameters, config=my_oil_heater_controller_dhw_config

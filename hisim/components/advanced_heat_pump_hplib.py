@@ -630,6 +630,7 @@ class HeatPumpHplib(Component):
                 output.component_name == self.component_name
                 and output.load_type == LoadTypes.ELECTRICITY
                 and output.field_name == self.ElectricalInputPower
+                and output.unit == Units.WATT
             ):  # Todo: check component name from system_setups: find another way of using only heatpump-outputs
                 self.config.consumption_in_kwh = round(
                     sum(postprocessing_results.iloc[:, index])
@@ -694,7 +695,7 @@ class HeatPumpHplib(Component):
                 number_of_heat_pump_cycles = self.get_heatpump_cycles(
                     output=output, index=index, postprocessing_results=postprocessing_results
                 )
-                if output.field_name == self.ThermalOutputPower and output.load_type == LoadTypes.HEATING:
+                if output.field_name == self.ThermalOutputPower and output.load_type == LoadTypes.HEATING and output.unit == Units.WATT:
                     # take only output values for heating
                     heating_output_power_values_in_watt = postprocessing_results.iloc[:, index].loc[
                         postprocessing_results.iloc[:, index] > 0.0

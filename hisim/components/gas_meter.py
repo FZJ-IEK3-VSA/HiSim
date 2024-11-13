@@ -332,7 +332,7 @@ class GasMeter(DynamicComponent):
         total_energy_from_grid_in_kwh: Optional[float] = None
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.component_name and output.load_type == lt.LoadTypes.GAS:
+            if output.component_name == self.component_name and output.load_type == lt.LoadTypes.GAS and output.unit == lt.Units.WATT_HOUR:
                 if output.field_name == self.GasFromGrid:
                     total_energy_from_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 1)
                     break

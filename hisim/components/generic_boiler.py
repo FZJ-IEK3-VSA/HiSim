@@ -88,10 +88,7 @@ class GenericBoilerConfig(ConfigBase):
     consumption_in_kilowatt_hour: float
 
     @classmethod
-    def get_default_condensing_gas_boiler_config(
-        cls,
-        building_name: str = "BUI1",
-    ) -> Any:
+    def get_default_condensing_gas_boiler_config(cls, building_name: str = "BUI1",) -> Any:
         """Get a default condensing gas boiler."""
         maximal_thermal_power_in_watt = 12000
         config = GenericBoilerConfig(
@@ -117,9 +114,7 @@ class GenericBoilerConfig(ConfigBase):
 
     @classmethod
     def get_scaled_condensing_gas_boiler_config(
-        cls,
-        heating_load_of_building_in_watt: float,
-        building_name: str = "BUI1",
+        cls, heating_load_of_building_in_watt: float, building_name: str = "BUI1",
     ) -> Any:
         """Get a default condensing gas boiler scaled to heating load."""
         maximal_thermal_power_in_watt = heating_load_of_building_in_watt
@@ -145,10 +140,7 @@ class GenericBoilerConfig(ConfigBase):
         return config
 
     @classmethod
-    def get_default_conventional_oil_boiler_config(
-        cls,
-        building_name: str = "BUI1",
-    ) -> Any:
+    def get_default_conventional_oil_boiler_config(cls, building_name: str = "BUI1",) -> Any:
         """Get a default conventional oil boiler."""
         maximal_thermal_power_in_watt = 12000
         config = GenericBoilerConfig(
@@ -162,7 +154,9 @@ class GenericBoilerConfig(ConfigBase):
             eff_th_min=0.60,
             eff_th_max=0.90,
             maximal_temperature_in_celsius=80,
-            co2_footprint=maximal_thermal_power_in_watt * 1e-3 * 19.4,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=maximal_thermal_power_in_watt
+            * 1e-3
+            * 19.4,  # value from emission_factros_and_costs_devices.csv
             cost=5562,  # value from emission_factros_and_costs_devices.csv
             lifetime=20,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
@@ -172,9 +166,7 @@ class GenericBoilerConfig(ConfigBase):
 
     @classmethod
     def get_scaled_conventional_oil_boiler_config(
-        cls,
-        heating_load_of_building_in_watt: float,
-        building_name: str = "BUI1",
+        cls, heating_load_of_building_in_watt: float, building_name: str = "BUI1",
     ) -> Any:
         """Get a default conventional oil boiler scaled to heating load."""
         maximal_thermal_power_in_watt = heating_load_of_building_in_watt
@@ -189,10 +181,46 @@ class GenericBoilerConfig(ConfigBase):
             eff_th_min=0.60,
             eff_th_max=0.90,
             maximal_temperature_in_celsius=80,
-            co2_footprint=maximal_thermal_power_in_watt * 1e-3 * 19.4,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=maximal_thermal_power_in_watt
+            * 1e-3
+            * 19.4,  # value from emission_factros_and_costs_devices.csv
             cost=5562,  # value from emission_factros_and_costs_devices.csv
             lifetime=20,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
+            consumption_in_kilowatt_hour=0,
+        )
+        return config
+
+    @classmethod
+    def get_scaled_conventional_pellet_boiler_config(
+        cls, heating_load_of_building_in_watt: float, building_name: str = "BUI1",
+    ) -> Any:
+        """Get a default conventional pellet boiler scaled to heating load.
+
+        So far we only have the lower heating value of pellets (see PhysicsConfig),
+        so only conventional pellet boilers are used.
+        """
+        maximal_thermal_power_in_watt = heating_load_of_building_in_watt
+        config = GenericBoilerConfig(
+            building_name=building_name,
+            name="ConventionalPelletBoiler",
+            boiler_type=BoilerType.CONVENTIONAL,
+            energy_carrier=lt.LoadTypes.PELLETS,
+            temperature_delta_in_celsius=20,
+            minimal_thermal_power_in_watt=1 / 12 * maximal_thermal_power_in_watt,
+            maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
+            eff_th_min=0.60,
+            eff_th_max=0.90,
+            maximal_temperature_in_celsius=80,
+            # gas value from emission_factros_and_costs_devices.csv,
+            # factor pellet/gas from https://depv.de/p/Bessere-CO2-Bilanz-mit-Holzpellets-pWuQQ4VvuNQoYjUzRf778Z
+            co2_footprint=0.63 * 49.47,
+            # gas value from emission_factros_and_costs_devices.csv,
+            # factor pellet/gas from https://www.dein-heizungsbauer.de/ratgeber/bauen-sanieren/pelletheizung-kosten/
+            cost=3.33 * 7416,
+            lifetime=20,  # use same value as for others
+            # from https://www.dein-heizungsbauer.de/ratgeber/bauen-sanieren/pelletheizung-kosten/
+            maintenance_cost_as_percentage_of_investment=0.01,
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -212,7 +240,6 @@ class GenericBoiler(Component):
     WaterOutputMassFlow = "WaterOutputMassFlow"
     WaterOutputTemperature = "WaterOutputTemperature"
     EnergyDemand = "EnergyDemand"
-    FuelDemand = "FuelDemand"
     ThermalOutputPower = "ThermalOutputPower"
     ThermalOutputEnergy = "ThermalOutputEnergy"
 
@@ -233,18 +260,10 @@ class GenericBoiler(Component):
             my_display_config=my_display_config,
         )
         self.control_signal_channel: ComponentInput = self.add_input(
-            self.component_name,
-            GenericBoiler.ControlSignal,
-            lt.LoadTypes.ANY,
-            lt.Units.PERCENT,
-            True,
+            self.component_name, GenericBoiler.ControlSignal, lt.LoadTypes.ANY, lt.Units.PERCENT, True,
         )
         self.water_input_temperature_channel: ComponentInput = self.add_input(
-            self.component_name,
-            GenericBoiler.WaterInputTemperature,
-            lt.LoadTypes.WATER,
-            lt.Units.CELSIUS,
-            True,
+            self.component_name, GenericBoiler.WaterInputTemperature, lt.LoadTypes.WATER, lt.Units.CELSIUS, True,
         )
 
         self.water_output_mass_flow_channel: ComponentOutput = self.add_output(
@@ -269,14 +288,6 @@ class GenericBoiler(Component):
             output_description=f"here a description for {self.EnergyDemand} will follow.",
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
-        self.fuel_demand_channel: ComponentOutput = self.add_output(
-            self.component_name,
-            GenericBoiler.FuelDemand,
-            lt.LoadTypes.ANY,
-            lt.Units.LITER,
-            output_description=f"here a description for {self.FuelDemand} will follow.",
-            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
-        )
         self.thermal_output_power_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ThermalOutputPower,
@@ -296,29 +307,24 @@ class GenericBoiler(Component):
         # Set important parameters
         self.build()
         self.fuel_consumption_in_liter: float = 0
+        self.fuel_consumption_in_kg: float = 0
 
         self.add_default_connections(self.get_default_connections_from_controller_generic_boiler())
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
 
-    def get_default_connections_from_controller_generic_boiler(
-        self,
-    ):
+    def get_default_connections_from_controller_generic_boiler(self,):
         """Get Controller Generic Boiler default connections."""
         component_class = GenericBoilerController
         connections = []
         l1_controller_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
-                GenericBoiler.ControlSignal,
-                l1_controller_classname,
-                component_class.ControlSignalToGenericBoiler,
+                GenericBoiler.ControlSignal, l1_controller_classname, component_class.ControlSignalToGenericBoiler,
             )
         )
         return connections
 
-    def get_default_connections_from_simple_hot_water_storage(
-        self,
-    ):
+    def get_default_connections_from_simple_hot_water_storage(self,):
         """Get Simple hot water storage default connections."""
         # use importlib for importing the other component in order to avoid circular-import errors
         component_module_name = "hisim.components.simple_water_storage"
@@ -328,16 +334,12 @@ class GenericBoiler(Component):
         hws_classname = component_class.get_classname()
         connections.append(
             ComponentConnection(
-                GenericBoiler.WaterInputTemperature,
-                hws_classname,
-                component_class.WaterTemperatureToHeatGenerator,
+                GenericBoiler.WaterInputTemperature, hws_classname, component_class.WaterTemperatureToHeatGenerator,
             )
         )
         return connections
 
-    def build(
-        self,
-    ) -> None:
+    def build(self,) -> None:
         """Build function.
 
         The function sets important constants and parameters for the calculations.
@@ -351,11 +353,9 @@ class GenericBoiler(Component):
         self.maximal_temperature_in_celsius = self.config.maximal_temperature_in_celsius
         self.temperature_delta_in_celsius = self.config.temperature_delta_in_celsius
         # Get physical properties of water and fuel used for the combustion
-        self.specific_heat_capacity_water_in_joule_per_kilogram_per_celsius = (
-            PhysicsConfig.get_properties_for_energy_carrier(
-                energy_carrier=lt.LoadTypes.WATER
-            ).specific_heat_capacity_in_joule_per_kg_per_kelvin
-        )
+        self.specific_heat_capacity_water_in_joule_per_kilogram_per_celsius = PhysicsConfig.get_properties_for_energy_carrier(
+            energy_carrier=lt.LoadTypes.WATER
+        ).specific_heat_capacity_in_joule_per_kg_per_kelvin
 
         # Here use higher heating value for condesing boiler and lower heating value for conventional boiler
         if self.config.boiler_type == BoilerType.CONDENSING:
@@ -369,8 +369,8 @@ class GenericBoiler(Component):
         else:
             raise ValueError(f"Boiler type {self.config.boiler_type} is not implemented.")
 
-        # J = Wh/3600 and m3 = 1000 l
-        self.heating_value_of_fuel_in_watthour_per_liter = self.heating_value_of_fuel_in_joule_per_m3 * 3.6e-6
+        # J = kWh/(3.6 * 1e6) and m3 = 1e3 l
+        self.heating_value_of_fuel_in_kwh_per_liter = self.heating_value_of_fuel_in_joule_per_m3 / (3.6 * 1e9)
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
@@ -414,9 +414,6 @@ class GenericBoiler(Component):
         fuel_energy_consumption_in_watt_hour = (
             maximum_power_used_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
         )
-        fuel_consumption_in_liter = (
-            fuel_energy_consumption_in_watt_hour / self.heating_value_of_fuel_in_watthour_per_liter
-        )
 
         # thermal power delivered from combustion
         thermal_power_delivered_in_watt = maximum_power_used_in_watt * real_combustion_efficiency * control_signal
@@ -435,10 +432,8 @@ class GenericBoiler(Component):
         stsv.set_output_value(self.thermal_output_power_channel, thermal_power_delivered_in_watt)
         stsv.set_output_value(self.thermal_output_energy_channel, thermal_energy_delivered_in_watt_hour)
         stsv.set_output_value(self.energy_demand_channel, fuel_energy_consumption_in_watt_hour)
-        stsv.set_output_value(self.fuel_demand_channel, fuel_consumption_in_liter)
         stsv.set_output_value(
-            self.water_output_temperature_channel,
-            water_output_temperature_in_celsius,
+            self.water_output_temperature_channel, water_output_temperature_in_celsius,
         )
         stsv.set_output_value(self.water_output_mass_flow_channel, mass_flow_out_in_kg_per_second)
 
@@ -473,18 +468,23 @@ class GenericBoiler(Component):
 
         return capex_cost_data_class
 
-    def get_cost_opex(
-        self,
-        all_outputs: List,
-        postprocessing_results: pd.DataFrame,
-    ) -> OpexCostDataClass:
+    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of energy and maintenance costs."""
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.component_name and output.field_name == self.EnergyDemand:
+            if output.component_name == self.component_name and output.field_name == self.EnergyDemand and output.unit == lt.Units.WATT_HOUR:
                 self.config.consumption_in_kilowatt_hour = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
-            elif output.component_name == self.component_name and output.field_name == self.FuelDemand:
-                self.fuel_consumption_in_liter = round(sum(postprocessing_results.iloc[:, index]), 1)
+                break
 
+        self.fuel_consumption_in_liter = round(
+            self.config.consumption_in_kilowatt_hour / self.heating_value_of_fuel_in_kwh_per_liter, 1
+        )
+        self.fuel_consumption_in_kg = round(
+            self.fuel_consumption_in_liter
+            * 1e-3
+            * PhysicsConfig.get_properties_for_energy_carrier(
+                energy_carrier=self.config.energy_carrier
+            ).density_in_kg_per_m3, 1
+        )
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year
         )
@@ -530,11 +530,7 @@ class GenericBoiler(Component):
 
         return opex_cost_data_class
 
-    def get_component_kpi_entries(
-        self,
-        all_outputs: List,
-        postprocessing_results: pd.DataFrame,
-    ) -> List[KpiEntry]:
+    def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         list_of_kpi_entries: List[KpiEntry] = []
         opex_dataclass = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)
@@ -549,13 +545,24 @@ class GenericBoiler(Component):
 
         # fuel demand in liter
         my_kpi_entry_two = KpiEntry(
-            name=f"{opex_dataclass.loadtype.value} fuel consumption for space heating",
+            name=f"{opex_dataclass.loadtype.value} fuel consumption for space heating (l)",
             unit="l",
             value=self.fuel_consumption_in_liter,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
         )
         list_of_kpi_entries.append(my_kpi_entry_two)
+
+        # fuel demand in kg
+        my_kpi_entry_three = KpiEntry(
+            name=f"{opex_dataclass.loadtype.value} fuel consumption for space heating (kg)",
+            unit="kg",
+            value=self.fuel_consumption_in_kg,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(my_kpi_entry_three)
+
         return list_of_kpi_entries
 
 
@@ -579,10 +586,7 @@ class GenericBoilerControllerConfig(ConfigBase):
 
     @classmethod
     def get_default_modulating_generic_boiler_controller_config(
-        cls,
-        maximal_thermal_power_in_watt: float,
-        minimal_thermal_power_in_watt: float,
-        building_name: str = "BUI1",
+        cls, maximal_thermal_power_in_watt: float, minimal_thermal_power_in_watt: float, building_name: str = "BUI1",
     ) -> Any:
         """Gets a default Generic Boiler Controller."""
         return GenericBoilerControllerConfig(
@@ -598,10 +602,7 @@ class GenericBoilerControllerConfig(ConfigBase):
 
     @classmethod
     def get_default_on_off_generic_boiler_controller_config(
-        cls,
-        maximal_thermal_power_in_watt: float,
-        minimal_thermal_power_in_watt: float,
-        building_name: str = "BUI1",
+        cls, maximal_thermal_power_in_watt: float, minimal_thermal_power_in_watt: float, building_name: str = "BUI1",
     ) -> Any:
         """Gets a default Generic Boiler Controller."""
         return GenericBoilerControllerConfig(
@@ -678,11 +679,7 @@ class GenericBoilerController(Component):
             True,
         )
         self.daily_avg_outside_temperature_input_channel: ComponentInput = self.add_input(
-            self.component_name,
-            self.DailyAverageOutsideTemperature,
-            lt.LoadTypes.TEMPERATURE,
-            lt.Units.CELSIUS,
-            True,
+            self.component_name, self.DailyAverageOutsideTemperature, lt.LoadTypes.TEMPERATURE, lt.Units.CELSIUS, True,
         )
 
         self.control_signal_to_generic_boiler_channel: ComponentOutput = self.add_output(
@@ -700,9 +697,7 @@ class GenericBoilerController(Component):
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
         self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
 
-    def get_default_connections_from_simple_hot_water_storage(
-        self,
-    ):
+    def get_default_connections_from_simple_hot_water_storage(self,):
         """Get simple_water_storage default connections."""
 
         connections = []
@@ -716,9 +711,7 @@ class GenericBoilerController(Component):
         )
         return connections
 
-    def get_default_connections_from_weather(
-        self,
-    ):
+    def get_default_connections_from_weather(self,):
         """Get simple_water_storage default connections."""
 
         connections = []
@@ -732,9 +725,7 @@ class GenericBoilerController(Component):
         )
         return connections
 
-    def get_default_connections_from_heat_distribution_controller(
-        self,
-    ):
+    def get_default_connections_from_heat_distribution_controller(self,):
         """Get heat distribution controller default connections."""
 
         connections = []
@@ -748,9 +739,7 @@ class GenericBoilerController(Component):
         )
         return connections
 
-    def build(
-        self,
-    ) -> None:
+    def build(self,) -> None:
         """Build function.
 
         The function sets important constants and parameters for the calculations.
@@ -775,9 +764,7 @@ class GenericBoilerController(Component):
         """Doublecheck."""
         pass
 
-    def write_to_report(
-        self,
-    ) -> List[str]:
+    def write_to_report(self,) -> List[str]:
         """Write important variables to report."""
         return self.config.get_string_dict()
 
@@ -831,23 +818,17 @@ class GenericBoilerController(Component):
             stsv.set_output_value(self.control_signal_to_generic_boiler_channel, control_signal)
 
     def modulate_power(
-        self,
-        water_temperature_input_in_celsius: float,
-        set_heating_flow_temperature_in_celsius: float,
+        self, water_temperature_input_in_celsius: float, set_heating_flow_temperature_in_celsius: float,
     ) -> float:
         """Modulate linear between minimial_thermal_power and max_thermal_power of Generic Boiler.
 
         only used if generic_boilermode is "heating".
         """
 
-        minimal_percentage = (
-            self.config.minimal_thermal_power_in_watt
-            / self.config.maximal_thermal_power_in_watt
-        )
+        minimal_percentage = self.config.minimal_thermal_power_in_watt / self.config.maximal_thermal_power_in_watt
         if (
             water_temperature_input_in_celsius
-            < set_heating_flow_temperature_in_celsius
-            - self.config.set_temperature_difference_for_full_power
+            < set_heating_flow_temperature_in_celsius - self.config.set_temperature_difference_for_full_power
         ):
             percentage = 1.0
             return percentage
@@ -925,11 +906,7 @@ class GenericBoilerController(Component):
             )
         return heating_mode
 
-    def get_cost_opex(
-        self,
-        all_outputs: List,
-        postprocessing_results: pd.DataFrame,
-    ) -> OpexCostDataClass:
+    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
         opex_cost_data_class = OpexCostDataClass.get_default_opex_cost_data_class()
         return opex_cost_data_class
@@ -942,10 +919,6 @@ class GenericBoilerController(Component):
         capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
         return capex_cost_data_class
 
-    def get_component_kpi_entries(
-        self,
-        all_outputs: List,
-        postprocessing_results: pd.DataFrame,
-    ) -> List[KpiEntry]:
+    def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         return []

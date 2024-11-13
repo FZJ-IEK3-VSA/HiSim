@@ -102,12 +102,12 @@ def test_chp_system():
     )
     assert (
         stsv.values[my_chp_system.gas_demand_target_channel.global_index]
-        == 9.99470663620661e-05
+        == 9.994428193341691e-05
     )
     assert stsv.values[my_chp_system.el_power_channel.global_index] == 400.0
     assert stsv.values[my_chp_system.number_of_cycles_channel.global_index] == 1
     assert stsv.values[my_chp_system.th_power_channel.global_index] == 1500.0
     assert (
         stsv.values[my_chp_system.gas_demand_real_used_channel.global_index]
-        == 9.99470663620661e-05
+        == 9.994428193341691e-05
     )

@@ -135,7 +135,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
                 max_thermal_power_in_watt_of_heating_system
                 * 1e-3
                 / (
-                    PhysicsConfig.water_specific_heat_capacity_in_watthour_per_kilogramm_per_kelvin
+                    PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.WATER).specific_heat_capacity_in_watthour_per_kg_per_kelvin
                     * temperature_difference_between_flow_and_return_in_celsius
                 )
             ) * 1000  # 1m3 = 1000l
@@ -390,7 +390,7 @@ class SimpleWaterStorage(cp.Component):
 
         # basis here: Q = m * cw * delta temperature, temperature loss is another term for delta temperature here
         temperature_loss_of_water_in_celsius_per_hour = heat_loss_in_watt / (
-            PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin * mass_in_storage_in_kg
+            PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.WATER).specific_heat_capacity_in_joule_per_kg_per_kelvin * mass_in_storage_in_kg
         )
 
         # transform from °C/h to °C/timestep
@@ -449,7 +449,7 @@ class SimpleWaterStorage(cp.Component):
         # Q = c * m * (Tout - Tin)
 
         thermal_energy_in_storage_in_joule = (
-            PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+            PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.WATER).specific_heat_capacity_in_joule_per_kg_per_kelvin
             * mass_in_storage_in_kg
             * (mean_water_temperature_in_storage_in_celsius)
         )  # T_mean - 0°C
@@ -465,7 +465,7 @@ class SimpleWaterStorage(cp.Component):
         # Q = c * m * (Tout - Tin)
         thermal_energy_of_input_water_flow_in_watt_hour = (
             (1 / 3600)
-            * PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+            * PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.WATER).specific_heat_capacity_in_joule_per_kg_per_kelvin
             * water_mass_in_kg
             * water_temperature_difference_in_kelvin
         )
@@ -493,7 +493,7 @@ class SimpleWaterStorage(cp.Component):
         """Calculate thermal energy of the water flow with respect to 0°C temperature."""
 
         thermal_power_of_input_water_flow_in_watt = (
-            PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+            PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.WATER).specific_heat_capacity_in_joule_per_kg_per_kelvin
             * water_mass_flow_in_kg_per_s
             * (water_temperature_hot_in_celsius - water_temperature_cold_in_celsius)
         )
@@ -675,8 +675,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         self.add_default_connections(self.get_default_connections_from_heat_distribution_system())
         self.add_default_connections(self.get_default_connections_from_advanced_heat_pump())
         self.add_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
-        self.add_default_connections(self.get_default_connections_from_gasheater())
-        self.add_default_connections(self.get_default_connections_from_oilheater())
+        self.add_default_connections(self.get_default_connections_from_generic_boiler())
 
     def get_default_connections_from_heat_distribution_system(
         self,
@@ -759,52 +758,27 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         )
         return connections
 
-    def get_default_connections_from_gasheater(self) -> List[cp.ComponentConnection]:
+    def get_default_connections_from_generic_boiler(self) -> List[cp.ComponentConnection]:
         """Get gasheater default connections."""
 
         # use importlib for importing the other component in order to avoid circular-import errors
-        component_module_name = "hisim.components.generic_gas_heater"
+        component_module_name = "hisim.components.generic_boiler"
         component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "GasHeater")
+        component_class = getattr(component_module, "GenericBoiler")
         connections = []
         gasheater_classname = component_class.get_classname()
         connections.append(
             cp.ComponentConnection(
                 SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator,
                 gasheater_classname,
-                component_class.MassflowOutputTemperature,
+                component_class.WaterOutputTemperature,
             )
         )
         connections.append(
             cp.ComponentConnection(
                 SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator,
                 gasheater_classname,
-                component_class.MassflowOutput,
-            )
-        )
-        return connections
-
-    def get_default_connections_from_oilheater(self) -> List[cp.ComponentConnection]:
-        """Get gasheater default connections."""
-
-        # use importlib for importing the other component in order to avoid circular-import errors
-        component_module_name = "hisim.components.generic_oil_heater"
-        component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "OilHeater")
-        connections = []
-        gasheater_classname = component_class.get_classname()
-        connections.append(
-            cp.ComponentConnection(
-                SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator,
-                gasheater_classname,
-                component_class.MassflowOutputTemperature,
-            )
-        )
-        connections.append(
-            cp.ComponentConnection(
-                SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator,
-                gasheater_classname,
-                component_class.MassflowOutput,
+                component_class.WaterOutputMassFlow,
             )
         )
         return connections
@@ -1030,10 +1004,10 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         The function sets important constants an parameters for the calculations.
         """
         self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = (
-            PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+            PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.WATER).specific_heat_capacity_in_joule_per_kg_per_kelvin
         )
         self.specific_heat_capacity_of_water_in_watthour_per_kilogram_per_celsius = (
-            PhysicsConfig.water_specific_heat_capacity_in_watthour_per_kilogramm_per_kelvin
+            PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.WATER).specific_heat_capacity_in_watthour_per_kg_per_kelvin
         )
         # https://www.internetchemie.info/chemie-lexikon/daten/w/wasser-dichtetabelle.php
         self.density_water_at_40_degree_celsius_in_kg_per_liter = 0.992
@@ -1502,10 +1476,10 @@ class SimpleDHWStorage(SimpleWaterStorage):
         )
 
         self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = (
-            PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+            PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.WATER).specific_heat_capacity_in_joule_per_kg_per_kelvin
         )
         self.specific_heat_capacity_of_water_in_watthour_per_kilogram_per_celsius = (
-            PhysicsConfig.water_specific_heat_capacity_in_watthour_per_kilogramm_per_kelvin
+            PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.WATER).specific_heat_capacity_in_watthour_per_kg_per_kelvin
         )
         # https://www.internetchemie.info/chemie-lexikon/daten/w/wasser-dichtetabelle.php
         self.density_water_at_40_degree_celsius_in_kg_per_liter = 0.992

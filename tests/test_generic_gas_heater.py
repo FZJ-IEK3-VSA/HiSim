@@ -5,7 +5,7 @@ from hisim import component as cp
 
 # import components as cps
 # import components
-from hisim.components import generic_gas_heater
+from hisim.components import generic_boiler
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
@@ -25,13 +25,11 @@ def test_gas_heater():
     maximal_power_in_watt = 12_000
     # ===================================================================================================================
     # Set Gas Heater
-    my_gas_heater_config = (
-        generic_gas_heater.GenericGasHeaterConfig.get_default_gasheater_config()
-    )
+    my_gas_heater_config = generic_boiler.GenericBoilerConfig.get_default_condensing_gas_boiler_config()
     my_gas_heater_config.temperature_delta_in_celsius = temperature_delta_in_celsius
     my_gas_heater_config.maximal_power_in_watt = maximal_power_in_watt
 
-    my_gas_heater = generic_gas_heater.GasHeater(
+    my_gas_heater = generic_boiler.GenericBoiler(
         config=my_gas_heater_config, my_simulation_parameters=my_simulation_parameters
     )
 
@@ -54,7 +52,7 @@ def test_gas_heater():
 
     # Link inputs and outputs
     my_gas_heater.control_signal_channel.source_output = control_signal_channel
-    my_gas_heater.mass_flow_input_tempertaure_channel.source_output = (
+    my_gas_heater.water_input_temperature_channel.source_output = (
         mass_flow_input_temperature_channel
     )
 
@@ -73,12 +71,12 @@ def test_gas_heater():
 
     # Mass-Flow out of Gas-Heater to heat up Storages or House
     assert (
-        stsv.values[my_gas_heater.mass_flow_output_channel.global_index]
-        == 0.2582496413199426
+        stsv.values[my_gas_heater.water_output_mass_flow_channel.global_index]
+        == 0.2583732057416268
     )
     # Temperature of Water out of GasHeater
     assert (
-        stsv.values[my_gas_heater.mass_flow_output_temperature_channel.global_index]
+        stsv.values[my_gas_heater.water_output_temperature_channel.global_index]
         == temperature_delta_in_celsius
         + stsv.values[mass_flow_input_temperature_channel.global_index]
     )

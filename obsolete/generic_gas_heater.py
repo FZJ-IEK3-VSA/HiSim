@@ -28,7 +28,7 @@ from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 
-__authors__ = "Frank Burkrad, Maximilian Hillen, Markus Blasberg"
+__authors__ = "Frank Burkrad, Maximilian Hillen, Markus Blasberg, Katharina Rieck"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
 __license__ = ""

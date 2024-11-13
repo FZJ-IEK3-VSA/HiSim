@@ -17,7 +17,7 @@ from hisim.simulator import SimulationParameters
 from hisim.component import DisplayConfig
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
-from hisim.components import generic_gas_heater
+from hisim.components import generic_boiler
 from hisim.components import heat_distribution_system
 from hisim.components import building
 from hisim.components import simple_water_storage
@@ -64,8 +64,8 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
     occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig
     hds_controller_config: heat_distribution_system.HeatDistributionControllerConfig
     hds_config: heat_distribution_system.HeatDistributionConfig
-    gas_heater_controller_config: generic_gas_heater.GenericGasHeaterControllerL1Config
-    gas_heater_config: generic_gas_heater.GenericGasHeaterConfig
+    gas_heater_controller_config: generic_boiler.GenericBoilerControllerConfig
+    gas_heater_config: generic_boiler.GenericBoilerConfig
     simple_hot_water_storage_config: simple_water_storage.SimpleHotWaterStorageConfig
     dhw_heatpump_config: generic_heat_pump_modular.HeatPumpConfig
     dhw_heatpump_controller_config: controller_l1_heatpump.L1HeatPumpConfig
@@ -155,11 +155,12 @@ class HouseholdGasHeaterConfig(SystemSetupConfigBase):
                 )
             ),
             gas_heater_controller_config=(
-                generic_gas_heater.GenericGasHeaterControllerL1Config.get_default_generic_gas_heater_controller_config(
+                generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
+                    minimal_thermal_power_in_watt=my_building_information.max_thermal_building_demand_in_watt / 12,
                     maximal_thermal_power_in_watt=my_building_information.max_thermal_building_demand_in_watt
                 )
             ),
-            gas_heater_config=generic_gas_heater.GenericGasHeaterConfig.get_scaled_gasheater_config(
+            gas_heater_config=generic_boiler.GenericBoilerConfig.get_scaled_condensing_gas_boiler_config(
                 heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
             ),
             simple_hot_water_storage_config=(
@@ -250,12 +251,12 @@ def setup_function(
     )
 
     # Gas Heater Controller
-    my_gas_heater_controller = generic_gas_heater.GenericGasHeaterControllerL1(
+    my_gas_heater_controller = generic_boiler.GenericBoilerController(
         my_simulation_parameters=my_simulation_parameters, config=my_config.gas_heater_controller_config,
     )
 
     # Gas heater
-    my_gas_heater = generic_gas_heater.GasHeater(
+    my_gas_heater = generic_boiler.GenericBoiler(
         config=my_config.gas_heater_config,
         my_simulation_parameters=my_simulation_parameters,
         my_display_config=DisplayConfig.show("Gastherme"),

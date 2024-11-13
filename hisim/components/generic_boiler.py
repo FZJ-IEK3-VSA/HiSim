@@ -396,9 +396,9 @@ class GenericBoiler(Component):
         """Simulate the Generic Boiler."""
         control_signal = stsv.get_input_value(self.control_signal_channel)
         if control_signal > 1:
-            raise Exception("Expected a control signal between 0 and 1")
+            raise Exception(f"Expected a control signal between 0 and 1, not {control_signal}")
         if control_signal < 0:
-            raise Exception("Expected a control signal between 0 and 1")
+            raise Exception(f"Expected a control signal between 0 and 1, not {control_signal}")
 
         # Calculate combustion efficiency
         delta_efficiency = self.max_combustion_efficiency - self.min_combustion_efficiency
@@ -421,13 +421,6 @@ class GenericBoiler(Component):
             thermal_power_delivered_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
         )
 
-        # water output temperature and mass flow
-        # if thermal_power_delivered_in_watt == 0:
-        #     water_output_temperature_in_celsius = stsv.get_input_value(
-        #     self.water_input_temperature_channel
-        #     )
-        #     mass_flow_out_in_kg_per_second = 0.0
-        # else:
         water_output_temperature_in_celsius = self.temperature_delta_in_celsius + stsv.get_input_value(
             self.water_input_temperature_channel
         )
@@ -595,6 +588,7 @@ class GenericBoilerForDHW(GenericBoiler):
         self.add_default_connections(self.get_default_connections_from_controller_generic_boiler())
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
 
+
     def get_default_connections_from_controller_generic_boiler(self,):
         """Get Controller Generic Boiler default connections."""
         component_class = GenericBoilerControllerForDHW
@@ -606,6 +600,7 @@ class GenericBoilerForDHW(GenericBoiler):
             )
         )
         return connections
+
 
     def get_default_connections_from_simple_hot_water_storage(self,):
         """Get Simple hot water storage default connections."""
@@ -1107,6 +1102,45 @@ class GenericBoilerController(Component):
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         return []
 
+class DHWBoilerControllerState:
+    """Data class that saves the state of the controller."""
+
+    def __init__(
+        self,
+        on_off: int,
+        activation_time_step: int,
+        deactivation_time_step: int,
+        percentage: float,
+    ) -> None:
+        """Initializes the heat pump controller state."""
+        self.on_off: int = on_off
+        self.activation_time_step: int = activation_time_step
+        self.deactivation_time_step: int = deactivation_time_step
+        self.percentage: float = percentage
+
+    def clone(self) -> "L1HeatPumpControllerState":
+        """Copies the current instance."""
+        return DHWBoilerControllerState(
+            on_off=self.on_off,
+            activation_time_step=self.activation_time_step,
+            deactivation_time_step=self.deactivation_time_step,
+            percentage=self.percentage,
+        )
+
+    def i_prepare_simulation(self) -> None:
+        """Prepares the simulation."""
+        pass
+
+    def activate(self, timestep: int) -> None:
+        """Activates the heat pump and remembers the time step."""
+        self.on_off = 1
+        self.activation_time_step = timestep
+
+    def deactivate(self, timestep: int) -> None:
+        """Deactivates the heat pump and remembers the time step."""
+        self.on_off = 0
+        self.deactivation_time_step = timestep
+
 
 class GenericBoilerControllerForDHW(GenericBoilerController):
     """Generic Boiler Controller for domestic hot water.
@@ -1137,8 +1171,19 @@ class GenericBoilerControllerForDHW(GenericBoilerController):
             config=config,
             my_display_config=my_display_config,
         )
-        self.min_water_temperature_for_heating_in_celsius: float = 40
-        self.max_water_temperature_for_heating_in_celsius: float = 60
+        # warm water should aim for 55°C, should be 60°C when leaving heat generator, see source below
+        # https://www.umweltbundesamt.de/umwelttipps-fuer-den-alltag/heizen-bauen/warmwasser#undefined
+        self.warm_water_temperature_aim_in_celsius: float = 55.0
+
+        self.minimum_runtime_in_timesteps = int(
+            1800 / self.my_simulation_parameters.seconds_per_timestep
+        )
+        self.minimum_resting_time_in_timesteps = int(
+            1800 / self.my_simulation_parameters.seconds_per_timestep
+        )
+        self.state: DHWBoilerControllerState = DHWBoilerControllerState(0, 0, 0, 0)
+        self.previous_state: DHWBoilerControllerState = self.state.clone()
+        self.processed_state: DHWBoilerControllerState = self.state.clone()
 
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
 
@@ -1156,15 +1201,38 @@ class GenericBoilerControllerForDHW(GenericBoilerController):
         )
         return connections
 
+    def i_save_state(self) -> None:
+        """Saves the state."""
+        self.previous_state = self.state.clone()
+
+    def i_restore_state(self) -> None:
+        """Restores previous state."""
+        self.state = self.previous_state.clone()
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulate the Generic Boiler comtroller."""
+        # if force_convergence:
+        #     # states are saved after each timestep, outputs after each iteration
+        #     # outputs have to be in line with states, so if convergence is forced outputs are aligned to last known state.
+        #     self.state = self.processed_state.clone()
+        # else:
+
+        # Retrieves inputs
+
+        # water_temperature_input_from_heat_water_storage_in_celsius = stsv.get_input_value(
+        #     self.water_temperature_input_channel
+        # )
+
+        #     self.calculate_state(timestep, stsv, water_temperature_input_from_heat_water_storage_in_celsius)
+        #     self.processed_state = self.state.clone()
+        # modulating_signal = self.state.percentage * self.state.on_off
+        # stsv.set_output_value(self.control_signal_to_generic_boiler_channel, modulating_signal)
 
         if force_convergence:
+            self.state = self.processed_state.clone()
             pass
         else:
             # Retrieves inputs
-
             water_temperature_input_from_heat_water_storage_in_celsius = stsv.get_input_value(
                 self.water_temperature_input_channel
             )
@@ -1172,9 +1240,11 @@ class GenericBoilerControllerForDHW(GenericBoilerController):
             # on/off controller comparing set flow temperature and water input temperature
             self.conditions_on_off(
                 water_temperature_input_in_celsius=water_temperature_input_from_heat_water_storage_in_celsius,
+                timestep=timestep
             )
 
-            if self.controller_generic_boilermode == "heating":
+            # if self.controller_generic_boilermode == "heating":
+            if self.state.on_off == 1:
                 # get a modulated control signal between 0 and 1
                 if self.config.is_modulating is True:
                     control_signal = self.modulate_power(
@@ -1182,13 +1252,62 @@ class GenericBoilerControllerForDHW(GenericBoilerController):
                     )
                 else:
                     control_signal = 1
-            elif self.controller_generic_boilermode == "off":
+            # elif self.controller_generic_boilermode == "off":
+            elif self.state.on_off == 0:
                 control_signal = 0
             else:
                 raise ValueError("Generic Boiler Controller control_signal unknown.")
 
             stsv.set_output_value(self.control_signal_to_generic_boiler_channel, control_signal)
 
+            self.state.percentage = control_signal
+            self.processed_state = self.state.clone()
+
+    def calc_percentage(self, t_storage: float) -> None:
+        """Calculate the heat pump target percentage."""
+        if t_storage < self.warm_water_temperature_aim_in_celsius - 25:
+            # full power when temperature is below lower threshold
+            self.state.percentage = 1
+            return
+        if t_storage < self.warm_water_temperature_aim_in_celsius - 10:
+            # 75 % power when temperature is within threshold
+            self.state.percentage = 0.75
+            return
+        if t_storage >= self.warm_water_temperature_aim_in_celsius - 5:
+            # 50 % power when temperature is already in tolerance of surplus
+            self.state.percentage = 0.5
+            return
+
+    def calculate_state(self, timestep: int, stsv: SingleTimeStepValues, water_temperature_input_in_celsius: float) -> None:
+        """Calculate the heat pump state and activate / deactives."""
+
+        # return device on if minimum operation time is not fulfilled and device was on in previous state
+        if self.state.on_off == 1 and self.state.activation_time_step + self.minimum_runtime_in_timesteps >= timestep:
+            # mandatory on, minimum runtime not reached
+            self.calc_percentage(water_temperature_input_in_celsius)
+            # self.state.percentage = self.modulate_power(water_temperature_input_from_heat_water_storage_in_celsius)
+            return
+        if (
+            self.state.on_off == 0
+            and self.state.deactivation_time_step + self.minimum_resting_time_in_timesteps >= timestep
+        ):
+            # mandatory off, minimum resting time not reached
+            self.calc_percentage(water_temperature_input_in_celsius)
+            # self.state.percentage = self.modulate_power(water_temperature_input_from_heat_water_storage_in_celsius)
+            return
+
+        if water_temperature_input_in_celsius < self.warm_water_temperature_aim_in_celsius - 25: # < 40:
+            # activate heating when storage temperature is too low
+            self.state.activate(timestep)
+            self.calc_percentage(water_temperature_input_in_celsius)
+            # self.state.percentage = self.modulate_power(water_temperature_input_from_heat_water_storage_in_celsius)
+            return
+        if water_temperature_input_in_celsius > self.warm_water_temperature_aim_in_celsius -5:  # 60:
+            # deactivate heating when storage temperature is too high
+            self.state.deactivate(timestep)
+            self.calc_percentage(water_temperature_input_in_celsius)
+            # self.state.percentage = self.modulate_power(water_temperature_input_from_heat_water_storage_in_celsius)
+            return
 
     def modulate_power(
         self, water_temperature_input_in_celsius: float,
@@ -1199,52 +1318,64 @@ class GenericBoilerControllerForDHW(GenericBoilerController):
         """
 
         minimal_percentage = self.config.minimal_thermal_power_in_watt / self.config.maximal_thermal_power_in_watt
+        
         if (
             water_temperature_input_in_celsius
-            < self.min_water_temperature_for_heating_in_celsius - self.config.set_temperature_difference_for_full_power
-        ):
+            < self.warm_water_temperature_aim_in_celsius - 25): #self.config.set_temperature_difference_for_full_power
+        # ):
             percentage = 1.0
             return percentage
-        if water_temperature_input_in_celsius < self.min_water_temperature_for_heating_in_celsius:
-            linear_fit = 1 - (
-                (
-                    self.config.set_temperature_difference_for_full_power
-                    - (self.min_water_temperature_for_heating_in_celsius - water_temperature_input_in_celsius)
-                )
-                / self.config.set_temperature_difference_for_full_power
-            )
+        if water_temperature_input_in_celsius < self.warm_water_temperature_aim_in_celsius:
+            temperature_diff = (self.warm_water_temperature_aim_in_celsius - water_temperature_input_in_celsius)
+            linear_fit = 1 - ((25 - temperature_diff)/ 25)
+            # linear_fit = 1 - (
+            #     (
+            #         10 # self.config.set_temperature_difference_for_full_power
+            #         - temperature_diff
+            #     )
+            #     / 10 # self.config.set_temperature_difference_for_full_power
+            # )
             percentage = max(minimal_percentage, linear_fit)
+
             return percentage
         if (
-            water_temperature_input_in_celsius <= self.min_water_temperature_for_heating_in_celsius
+            water_temperature_input_in_celsius <= self.warm_water_temperature_aim_in_celsius
         ):  # use same hysteresis like in conditions_on_off()
             percentage = minimal_percentage
             return percentage
 
-        # if something went wrong
-        raise ValueError("Modulation of Generic Boiler needs some adjustments")
-
+        percentage = 0.0
+        return percentage
 
     def conditions_on_off(
         self,
         water_temperature_input_in_celsius: float,
+        timestep: int
     ) -> None:
         """Set conditions for the Generic Boiler controller mode."""
 
-        if self.controller_generic_boilermode == "heating":
+        # if self.controller_generic_boilermode == "heating":
+        if self.state.on_off == 1:
             # boiler needs to heat dhw storage sometimes up to 60°C in order to kill bacteria
             if (
-                water_temperature_input_in_celsius > self.max_water_temperature_for_heating_in_celsius
+                water_temperature_input_in_celsius > (self.warm_water_temperature_aim_in_celsius + 5)
             ):
-                self.controller_generic_boilermode = "off"
+                # self.controller_generic_boilermode = "off"
+                self.state.on_off = 0
+                # self.state.deactivate(timestep)
+                #print("state is deactivated", timestep)
                 return
 
-        elif self.controller_generic_boilermode == "off":
+        # elif self.controller_generic_boilermode == "off":
+        elif self.state.on_off == 0:
             # Generic Boiler is only turned on if the water temperature is below 40
             if (
-                water_temperature_input_in_celsius < self.min_water_temperature_for_heating_in_celsius
+                water_temperature_input_in_celsius < (self.warm_water_temperature_aim_in_celsius - 25)
             ):
-                self.controller_generic_boilermode = "heating"
+                # self.controller_generic_boilermode = "heating"
+                self.state.on_off = 1
+                # self.state.activate(timestep)
+                #print("state is activated", timestep)
                 return
 
         else:

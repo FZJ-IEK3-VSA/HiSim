@@ -1234,8 +1234,6 @@ class SimpleDHWStorage(SimpleWaterStorage):
     WaterConsumption = "WaterConsumption"
 
     # Output
-    # WaterTemperatureInputDHW = "WaterTemperatureInputDHW"
-    # WaterTemperatureOutputDHW = "WaterTemperatureOutputDHW"
     WaterTemperatureToHeatGenerator = "WaterTemperatureToHeatGenerator"
     WaterTemperatureFromHeatGeneratorOutput = "WaterTemperatureFromHeatGenerator"
     WaterMeanTemperatureInStorage = "WaterMeanTemperatureInStorage"
@@ -1270,7 +1268,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
         self.waterstorageconfig = config
 
-        self.mean_water_temperature_in_water_storage_in_celsius: float = 60
+        self.mean_water_temperature_in_water_storage_in_celsius: float = 55
 
         self.build()
 
@@ -1307,21 +1305,6 @@ class SimpleDHWStorage(SimpleWaterStorage):
         )
 
         # Output channels
-        # self.water_temperature_dhw_input_channel: ComponentOutput = self.add_output(
-        #     self.component_name,
-        #     self.WaterTemperatureInputDHW,
-        #     lt.LoadTypes.WATER,
-        #     lt.Units.CELSIUS,
-        #     output_description=f"here a description for {self.WaterTemperatureInputDHW} will follow.",
-        # )
-        #
-        # self.water_temperature_dhw_output_channel: ComponentOutput = self.add_output(
-        #     self.component_name,
-        #     self.WaterTemperatureOutputDHW,
-        #     lt.LoadTypes.WATER,
-        #     lt.Units.CELSIUS,
-        #     output_description=f"here a description for {self.WaterTemperatureOutputDHW} will follow.",
-        # )
 
         self.water_temperature_to_heat_generator_channel: ComponentOutput = self.add_output(
             self.component_name,

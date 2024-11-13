@@ -109,10 +109,10 @@ def setup_function(
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER
         )
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
         # my_simulation_parameters.logging_level = 4
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
@@ -312,8 +312,9 @@ def setup_function(
     # my_sim.add_component(my_heater_controller_l1_for_dhw, connect_automatically=True)
 
     # DHW oil heater and storage configs
-    my_oil_heater_for_dhw_config = generic_boiler.GenericBoilerConfig.get_scaled_conventional_oil_boiler_config(heating_load_of_building_in_watt=6000 * number_of_apartments)
+    my_oil_heater_for_dhw_config = generic_boiler.GenericBoilerConfig.get_scaled_conventional_oil_boiler_config(heating_load_of_building_in_watt=2500 * number_of_apartments)
     my_oil_heater_for_dhw_config.name = my_oil_heater_for_dhw_config.name + "ForDHW"
+    my_oil_heater_for_dhw_config.temperature_delta_in_celsius = 10
     my_oil_heater_controller_dhw_config = generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
         minimal_thermal_power_in_watt=my_oil_heater_for_dhw_config.minimal_thermal_power_in_watt,
         maximal_thermal_power_in_watt=my_oil_heater_for_dhw_config.maximal_thermal_power_in_watt

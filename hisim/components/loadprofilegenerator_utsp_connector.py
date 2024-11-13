@@ -472,7 +472,6 @@ class UtspLpgConnector(cp.Component):
             file_exists = list_item[0]
             cache_filepath = list_item[1]
             log.information("Lpg cache filepath " + cache_filepath)
-            log.information("Lpg cache filepath " + cache_filepath)
 
             # a cache file exists
             if file_exists:

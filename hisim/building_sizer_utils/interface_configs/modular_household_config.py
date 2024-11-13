@@ -91,7 +91,8 @@ def read_in_configs(pathname: str) -> Optional[ModularHouseholdConfig]:
     # try to read modular household config from path
     household_config: Optional[ModularHouseholdConfig]
     try:
-        with open(pathname, encoding="utf8") as config_file:
+        # use strip() in order to remove \r or \n signs from path
+        with open(pathname.strip(), encoding="utf8") as config_file:
             household_config_dict = json.load(config_file)  # type: ignore
             household_config = ModularHouseholdConfig.from_dict(household_config_dict)
 

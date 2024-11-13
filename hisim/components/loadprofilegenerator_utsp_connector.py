@@ -471,7 +471,7 @@ class UtspLpgConnector(cp.Component):
         for list_index, list_item in enumerate(self.list_of_file_exists_and_cache_files):
             file_exists = list_item[0]
             cache_filepath = list_item[1]
-            print("lpg cache file", cache_filepath)
+            log.information("Lpg cache filepath " + cache_filepath)
 
             # a cache file exists
             if file_exists:
@@ -1013,11 +1013,12 @@ class UtspLpgConnector(cp.Component):
         """Prepare lpg simulation config for the utsp request."""
 
         simulation_config = lpg_helper.create_basic_lpg_config(
-            household,
-            HouseTypes.HT23_No_Infrastructure_at_all,
-            start_date,
-            end_date,
-            self.get_resolution(),
+            householdref=household,
+            housetype=HouseTypes.HT23_No_Infrastructure_at_all,
+            startdate=start_date,
+            enddate=end_date,
+            external_resolution=self.get_resolution(),
+            energy_intensity=self.utsp_config.energy_intensity,
             travel_route_set=self.utsp_config.travel_route_set,
             transportation_device_set=self.utsp_config.transportation_device_set,
             charging_station_set=self.utsp_config.charging_station_set,

@@ -26,7 +26,7 @@ from hisim.components.weather import Weather
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.components.configuration import PhysicsConfig
 from hisim.simulationparameters import SimulationParameters
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry  # , KpiTagEnumClass
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -271,7 +271,30 @@ class DistrictHeating(Component):
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
-        opex_cost_data_class = OpexCostDataClass.get_default_opex_cost_data_class()
+        for index, output in enumerate(all_outputs):
+            if (
+                output.component_name == self.component_name
+                and output.load_type == LoadTypes.HEATING
+                and output.field_name == self.ThermalOutputPower
+                and output.unit == Units.WATT
+            ):
+                self.config.consumption_in_kwh = round(
+                    sum(postprocessing_results.iloc[:, index])
+                    * self.my_simulation_parameters.seconds_per_timestep
+                    / 3.6e6,
+                    1,
+                )
+
+        # TODO: most opex values need to be implemented still
+        opex_cost_data_class = OpexCostDataClass(
+            opex_energy_cost_in_euro=0,
+            opex_maintenance_cost_in_euro=0,
+            co2_footprint_in_kg=0,
+            consumption_in_kwh=self.config.consumption_in_kwh,
+            loadtype=LoadTypes.DISTRICTHEATING,
+            kpi_tag=KpiTagEnumClass.DISTRICT_HEATING_SPACE_HEATING,
+        )
+
         return opex_cost_data_class
 
     @staticmethod
@@ -279,6 +302,7 @@ class DistrictHeating(Component):
         config: DistrictHeatingConfig, simulation_parameters: SimulationParameters
     ) -> CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
+        # TODO: capex values need to be implemented still
         capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
         return capex_cost_data_class
 
@@ -288,7 +312,18 @@ class DistrictHeating(Component):
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
-        return []
+        list_of_kpi_entries: List[KpiEntry] = []
+        opex_dataclass = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)
+        my_kpi_entry = KpiEntry(
+            name=f"{opex_dataclass.loadtype.value} consumption for space heating",
+            unit="kWh",
+            value=opex_dataclass.consumption_in_kwh,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(my_kpi_entry)
+
+        return list_of_kpi_entries
 
 
 @dataclass_json

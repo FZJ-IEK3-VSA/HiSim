@@ -279,6 +279,7 @@ def setup_function(
     # Build Oil Heater for DHW
     my_oil_heater_for_dhw_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating(
         heating_system=lt.HeatingSystems.OIL_HEATING,
+        boiler_type=my_oil_heater_config.boiler_type,
         max_warm_water_demand_in_liter=my_occupancy.max_hot_water_demand,
         scaling_factor_according_to_number_of_apartments=my_occupancy.scaling_factor_according_to_number_of_apartments,
         seconds_per_timestep=my_simulation_parameters.seconds_per_timestep,

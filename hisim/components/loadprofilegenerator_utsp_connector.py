@@ -264,7 +264,9 @@ class UtspLpgConnector(cp.Component):
                 energy_discharged = ww_energy_demand + energy_losses
                 ww_temperature_output: float = freshwater_temperature + temperature_difference_cold
                 ww_mass_input = energy_discharged / (
-                    PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.WATER).specific_heat_capacity_in_joule_per_kg_per_kelvin
+                    PhysicsConfig.get_properties_for_energy_carrier(
+                        energy_carrier=lt.LoadTypes.WATER
+                    ).specific_heat_capacity_in_joule_per_kg_per_kelvin
                     * (ww_temperature_input - ww_temperature_output)
                 )
             else:

@@ -369,8 +369,9 @@ class HeatSource(cp.Component):
                     kpi_tag = KpiTagEnumClass.OIL_HEATER_SPACE_HEATING
 
             elif output.load_type == lt.LoadTypes.DISTRICTHEATING:
-                co2_per_unit = emissions_and_cost_factors.contracting_heating_footprint_in_kg_per_kwh
-                euro_per_unit = emissions_and_cost_factors.contracting_heating_costs_in_euro_per_kwh
+                # TODO: implement district heating costs
+                co2_per_unit = 0
+                euro_per_unit = 0
                 fuel_consumption_in_kilowatt_hour = fuel_consumption_in_watt_hour_or_liter * 1e-3
                 if self.config.water_vs_heating == lt.InandOutputType.WATER_HEATING:
                     kpi_tag = KpiTagEnumClass.DISTRICT_HEATING_DOMESTIC_HOT_WATER

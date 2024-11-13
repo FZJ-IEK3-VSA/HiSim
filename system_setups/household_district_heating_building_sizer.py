@@ -256,18 +256,14 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
     # Build district heating controller
-    my_district_heating_controller_sh_config = generic_district_heating.DistrictHeatingControllerConfig.get_scaled_district_heating_controller_config(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
-    )
+    my_district_heating_controller_sh_config = generic_district_heating.DistrictHeatingControllerConfig.get_default_district_heating_controller_config()
     my_district_heating_controller = generic_district_heating.DistrictHeatingController(
         my_simulation_parameters=my_simulation_parameters, config=my_district_heating_controller_sh_config
     )
     my_sim.add_component(my_district_heating_controller, connect_automatically=True)
 
     # Build district heating For Space Heating
-    my_district_heating_sh_config = generic_district_heating.DistrictHeatingConfig.get_scaled_district_heating_config(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
-    )
+    my_district_heating_sh_config = generic_district_heating.DistrictHeatingConfig.get_default_district_heating_config()
     my_district_heating = generic_district_heating.DistrictHeating(
         config=my_district_heating_sh_config, my_simulation_parameters=my_simulation_parameters
     )
@@ -311,7 +307,7 @@ def setup_function(
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
         water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
         absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
-        position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.NO_STORAGE,
+        position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FIX,
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config, my_simulation_parameters=my_simulation_parameters,

@@ -1338,7 +1338,7 @@ class UtspLpgConnector(cp.Component):
                         timeresolution=self.my_simulation_parameters.seconds_per_timestep,
                     )
                 if output.field_name == self.WaterConsumption and output.unit == lt.Units.LITER:
-                    occupancy_total_water_consumption_in_liter = round(sum(postprocessing_results.iloc[:, index]),1)
+                    occupancy_total_water_consumption_in_liter = round(sum(postprocessing_results.iloc[:, index]), 1)
 
         # make kpi entry
         occupancy_total_electricity_consumption_entry = KpiEntry(

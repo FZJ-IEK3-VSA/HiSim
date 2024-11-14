@@ -845,8 +845,8 @@ class GenericBoilerController(Component):
             percentage = minimal_percentage
             return percentage
 
-        # if something went wrong
-        raise ValueError("Modulation of Generic Boiler needs some adjustments")
+        percentage = 0.0
+        return percentage
 
     def conditions_on_off(
         self,
@@ -1015,7 +1015,7 @@ class GenericBoilerConfigForDHW(ConfigBase):
         maximal_thermal_power_in_watt = 2500 * number_of_apartments_in_building
         config = GenericBoilerConfig(
             building_name=building_name,
-            name="ConventionalPelletBoiler",
+            name="ConventionalPelletBoilerForDHW",
             boiler_type=BoilerType.CONVENTIONAL,
             energy_carrier=lt.LoadTypes.PELLETS,
             temperature_delta_in_celsius=10,

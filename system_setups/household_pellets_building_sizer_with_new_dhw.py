@@ -20,14 +20,11 @@ from hisim.components import (
     controller_l2_energy_management_system,
     simple_water_storage,
     heat_distribution_system,
-    generic_hot_water_storage_modular,
-    controller_l1_heatpump,
     electricity_meter,
     advanced_ev_battery_bslib,
     controller_l1_generic_ev_charge,
     generic_car,
     generic_boiler,
-    generic_heat_source,
 )
 
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
@@ -279,40 +276,6 @@ def setup_function(
     my_sim.add_component(my_pellet_heater_controller, connect_automatically=True)
 
     # Build Pellet Heater for DHW
-    # my_pellet_heater_for_dhw_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating(
-    #     heating_system=lt.HeatingSystems.PELLET_HEATING,
-    #     boiler_type=my_pellet_heater_config.boiler_type,
-    #     max_warm_water_demand_in_liter=my_occupancy.max_hot_water_demand,
-    #     scaling_factor_according_to_number_of_apartments=my_occupancy.scaling_factor_according_to_number_of_apartments,
-    #     seconds_per_timestep=my_simulation_parameters.seconds_per_timestep,
-    #     name="DHW" + lt.HeatingSystems.PELLET_HEATING.value,
-    # )
-    # my_pellet_heater_controller_l1_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-    #     "DHW" + lt.HeatingSystems.PELLET_HEATING.value + "Controller"
-    # )
-    # my_boiler_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
-    #     number_of_apartments=my_building_information.number_of_apartments
-    # )
-    # my_boiler_config.compute_default_cycle(
-    #     temperature_difference_in_kelvin=my_pellet_heater_controller_l1_config.t_max_heating_in_celsius
-    #     - my_pellet_heater_controller_l1_config.t_min_heating_in_celsius
-    # )
-
-    # my_boiler_for_dhw = generic_hot_water_storage_modular.HotWaterStorage(
-    #     my_simulation_parameters=my_simulation_parameters, config=my_boiler_config
-    # )
-
-    # my_heater_controller_l1_for_dhw = controller_l1_heatpump.L1HeatPumpController(
-    #     my_simulation_parameters=my_simulation_parameters, config=my_pellet_heater_controller_l1_config
-    # )
-
-    # my_pellet_heater_for_dhw = generic_heat_source.HeatSource(
-    #     config=my_pellet_heater_for_dhw_config, my_simulation_parameters=my_simulation_parameters
-    # )
-    # my_sim.add_component(my_pellet_heater_for_dhw, connect_automatically=True)
-    # my_sim.add_component(my_boiler_for_dhw, connect_automatically=True)
-    # my_sim.add_component(my_heater_controller_l1_for_dhw, connect_automatically=True)
-
     # DHW Pellet heater and storage configs
     my_pellet_heater_for_dhw_config = generic_boiler.GenericBoilerConfig.get_scaled_conventional_pellet_boiler_config(heating_load_of_building_in_watt=6000 * number_of_apartments)
     my_pellet_heater_for_dhw_config.name = my_pellet_heater_for_dhw_config.name + "ForDHW"
@@ -333,17 +296,6 @@ def setup_function(
     my_pellet_heater_for_dhw = generic_boiler.GenericBoilerForDHW(
         config=my_pellet_heater_for_dhw_config, my_simulation_parameters=my_simulation_parameters
     )
-    # my_dhw_storage.connect_input(
-    #     my_dhw_storage.WaterTemperatureFromHeatGenerator,
-    #     my_pellet_heater_for_dhw.component_name,
-    #     my_pellet_heater_for_dhw.WaterOutputTemperature,
-    # )
-
-    # my_dhw_storage.connect_input(
-    #     my_dhw_storage.WaterMassFlowRateFromHeatGenerator,
-    #     my_pellet_heater_for_dhw.component_name,
-    #     my_pellet_heater_for_dhw.WaterOutputMassFlow,
-    # )
     my_sim.add_component(my_pellet_heater_for_dhw, connect_automatically=True)
     my_sim.add_component(my_dhw_storage, connect_automatically=True)
     my_sim.add_component(my_pellet_heater_controller_for_dhw, connect_automatically=True)

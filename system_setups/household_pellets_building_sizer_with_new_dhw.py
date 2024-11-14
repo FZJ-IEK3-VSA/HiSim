@@ -277,17 +277,23 @@ def setup_function(
 
     # Build Pellet Heater for DHW
     # DHW Pellet heater and storage configs
-    my_pellet_heater_for_dhw_config = generic_boiler.GenericBoilerConfig.get_scaled_conventional_pellet_boiler_config(heating_load_of_building_in_watt=6000 * number_of_apartments)
+    my_pellet_heater_for_dhw_config = generic_boiler.GenericBoilerConfig.get_scaled_conventional_pellet_boiler_config(
+        heating_load_of_building_in_watt=6000 * number_of_apartments
+    )
     my_pellet_heater_for_dhw_config.name = my_pellet_heater_for_dhw_config.name + "ForDHW"
     my_pellet_heater_controller_dhw_config = generic_boiler.GenericBoilerControllerConfig.get_default_on_off_generic_boiler_controller_config(
         minimal_thermal_power_in_watt=my_pellet_heater_for_dhw_config.minimal_thermal_power_in_watt,
-        maximal_thermal_power_in_watt=my_pellet_heater_for_dhw_config.maximal_thermal_power_in_watt
+        maximal_thermal_power_in_watt=my_pellet_heater_for_dhw_config.maximal_thermal_power_in_watt,
     )
     my_pellet_heater_controller_dhw_config.name = my_pellet_heater_controller_dhw_config.name + "ForDHW"
 
-    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(number_of_apartments=number_of_apartments)
+    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
+        number_of_apartments=number_of_apartments
+    )
 
-    my_dhw_storage = simple_water_storage.SimpleDHWStorage(my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config)
+    my_dhw_storage = simple_water_storage.SimpleDHWStorage(
+        my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
+    )
 
     my_pellet_heater_controller_for_dhw = generic_boiler.GenericBoilerControllerForDHW(
         my_simulation_parameters=my_simulation_parameters, config=my_pellet_heater_controller_dhw_config

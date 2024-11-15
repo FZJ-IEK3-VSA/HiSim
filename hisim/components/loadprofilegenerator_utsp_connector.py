@@ -1340,17 +1340,25 @@ class UtspLpgConnector(cp.Component):
                     )
                 if output.field_name == self.WaterConsumption and output.unit == lt.Units.LITER:
                     occupancy_total_water_consumption_in_liter = round(sum(postprocessing_results.iloc[:, index]), 1)
-                    # https://www.internetchemie.info/chemie-lexikon/daten/w/wasser-dichtetabelle.php
-                    density_water_at_40_degree_celsius_in_kg_per_liter = 0.992
-                    drain_water_temperature = HouseholdWarmWaterDemandConfig.freshwater_temperature
-                    warm_water_temperature = (
-                        HouseholdWarmWaterDemandConfig.ww_temperature_demand
-                        - HouseholdWarmWaterDemandConfig.temperature_difference_hot
-                    )
-                    specific_heat_capacity_of_water_in_watthour_per_kilogram_per_celsius = (
-                        PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.WATER).specific_heat_capacity_in_watthour_per_kg_per_kelvin
-                    )
-                    occupancy_total_water_consumption_in_kwh = 1e-3 * specific_heat_capacity_of_water_in_watthour_per_kilogram_per_celsius * occupancy_total_water_consumption_in_liter * density_water_at_40_degree_celsius_in_kg_per_liter * (warm_water_temperature - drain_water_temperature)
+                    # calculate warm water energy consumption
+                    if occupancy_total_water_consumption_in_liter is not None:
+                        # https://www.internetchemie.info/chemie-lexikon/daten/w/wasser-dichtetabelle.php
+                        density_water_at_40_degree_celsius_in_kg_per_liter = 0.992
+                        drain_water_temperature = HouseholdWarmWaterDemandConfig.freshwater_temperature
+                        warm_water_temperature = (
+                            HouseholdWarmWaterDemandConfig.ww_temperature_demand
+                            - HouseholdWarmWaterDemandConfig.temperature_difference_hot
+                        )
+                        specific_heat_capacity_of_water_in_watthour_per_kilogram_per_celsius = PhysicsConfig.get_properties_for_energy_carrier(
+                            energy_carrier=lt.LoadTypes.WATER
+                        ).specific_heat_capacity_in_watthour_per_kg_per_kelvin
+                        occupancy_total_water_consumption_in_kwh = (
+                            1e-3
+                            * specific_heat_capacity_of_water_in_watthour_per_kilogram_per_celsius
+                            * occupancy_total_water_consumption_in_liter
+                            * density_water_at_40_degree_celsius_in_kg_per_liter
+                            * (warm_water_temperature - drain_water_temperature)
+                        )
 
         # make kpi entry
         occupancy_total_electricity_consumption_entry = KpiEntry(
@@ -1367,7 +1375,7 @@ class UtspLpgConnector(cp.Component):
             tag=KpiTagEnumClass.RESIDENTS,
             description=self.component_name,
         )
-        occupancy_total_water_consumption_entry = KpiEntry(
+        occupancy_total_water_consumption_energy_entry = KpiEntry(
             name="Residents' total warm water energy consumption",
             unit="kWh",
             value=occupancy_total_water_consumption_in_kwh,
@@ -1375,7 +1383,7 @@ class UtspLpgConnector(cp.Component):
             description=self.component_name,
         )
 
-        list_of_kpi_entries = [occupancy_total_electricity_consumption_entry, occupancy_total_water_consumption_entry]
+        list_of_kpi_entries = [occupancy_total_electricity_consumption_entry, occupancy_total_water_consumption_entry, occupancy_total_water_consumption_energy_entry]
         return list_of_kpi_entries
 
     @staticmethod

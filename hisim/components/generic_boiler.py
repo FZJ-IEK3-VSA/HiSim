@@ -630,7 +630,7 @@ class GenericBoilerController(Component):
     """
 
     # Inputs
-    WaterTemperatureInputFromHeatWaterStorage = "WaterTemperatureInputFromHeatWaterStorage"
+    WaterTemperatureInputFromWaterStorage = "WaterTemperatureInputFromWaterStorage"
 
     # set heating  flow temperature
     HeatingFlowTemperatureFromHeatDistributionSystem = "HeatingFlowTemperatureFromHeatDistributionSystem"
@@ -662,7 +662,7 @@ class GenericBoilerController(Component):
         # input channel
         self.water_temperature_input_channel: ComponentInput = self.add_input(
             self.component_name,
-            self.WaterTemperatureInputFromHeatWaterStorage,
+            self.WaterTemperatureInputFromWaterStorage,
             lt.LoadTypes.TEMPERATURE,
             lt.Units.CELSIUS,
             True,
@@ -701,7 +701,7 @@ class GenericBoilerController(Component):
         storage_classname = SimpleHotWaterStorage.get_classname()
         connections.append(
             ComponentConnection(
-                GenericBoilerController.WaterTemperatureInputFromHeatWaterStorage,
+                GenericBoilerController.WaterTemperatureInputFromWaterStorage,
                 storage_classname,
                 SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
             )
@@ -1367,7 +1367,7 @@ class GenericBoilerControllerForDHW(GenericBoilerController):
         storage_classname = SimpleDHWStorage.get_classname()
         connections.append(
             ComponentConnection(
-                GenericBoilerControllerForDHW.WaterTemperatureInputFromHeatWaterStorage,
+                GenericBoilerControllerForDHW.WaterTemperatureInputFromWaterStorage,
                 storage_classname,
                 SimpleDHWStorage.WaterTemperatureToHeatGenerator,
             )
@@ -1444,36 +1444,3 @@ class GenericBoilerControllerForDHW(GenericBoilerController):
                 set_heating_flow_temperature_in_celsius=self.warm_water_temperature_aim_in_celsius,
             )
             return
-
-    # def modulate_power(self, water_temperature_input_in_celsius: float,) -> float:
-    #     """Modulate linear between minimial_thermal_power and max_thermal_power of Generic Boiler.
-
-    #     only used if generic_boilermode is "heating".
-    #     """
-
-    #     minimal_percentage = self.config.minimal_thermal_power_in_watt / self.config.maximal_thermal_power_in_watt
-
-    #     if (
-    #         water_temperature_input_in_celsius
-    #         < self.warm_water_temperature_aim_in_celsius - self.set_temperature_difference_for_full_power
-    #     ):
-    #         percentage = 1.0
-    #         return percentage
-    #     if water_temperature_input_in_celsius < self.warm_water_temperature_aim_in_celsius:
-    #         temperature_difference_in_celsius = (
-    #             self.warm_water_temperature_aim_in_celsius - water_temperature_input_in_celsius
-    #         )
-    #         linear_fit = 1 - (
-    #             (self.set_temperature_difference_for_full_power - temperature_difference_in_celsius)
-    #             / self.set_temperature_difference_for_full_power
-    #         )
-
-    #         percentage = max(minimal_percentage, linear_fit)
-
-    #         return percentage
-    #     if water_temperature_input_in_celsius <= self.warm_water_temperature_aim_in_celsius:
-    #         percentage = minimal_percentage
-    #         return percentage
-
-    #     percentage = 0.0
-    #     return percentage

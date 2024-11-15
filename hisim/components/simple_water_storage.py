@@ -1245,6 +1245,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
     ThermalPowerConsumptionDHW = "ThermalPowerConsumptionDHW"
     ThermalPowerFromHeatGenerator = "ThermalPowerFromHeatGenerator"
     StandbyHeatLoss = "StandbyHeatLoss"
+    WaterMassFlowRateOfDHW = "WaterMassFlowRateOfDHW"
 
     @utils.measure_execution_time
     def __init__(
@@ -1393,9 +1394,17 @@ class SimpleDHWStorage(SimpleWaterStorage):
             lt.Units.WATT,
             output_description=f"here a description for {self.ThermalPowerFromHeatGenerator} will follow.",
         )
+        self.water_mass_flow_rate_dhw_output_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.WaterMassFlowRateOfDHW,
+            lt.LoadTypes.WARM_WATER,
+            lt.Units.KG_PER_SEC,
+            output_description=f"here a description for {self.WaterMassFlowRateOfDHW} will follow."
+        )
 
         self.add_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
         self.add_default_connections(self.get_default_connections_from_generic_dhw_boiler())
+        self.add_default_connections(self.get_default_connections_from_dhw_district_heating())
         self.add_default_connections(self.get_default_connections_from_utsp())
 
     def get_default_connections_from_more_advanced_heat_pump(
@@ -1468,6 +1477,33 @@ class SimpleDHWStorage(SimpleWaterStorage):
                 SimpleDHWStorage.WaterMassFlowRateFromHeatGenerator,
                 dhw_boiler_classname,
                 component_class.WaterOutputMassFlow,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_dhw_district_heating(
+        self,
+    ) -> List[cp.ComponentConnection]:
+        """Get dhw district heating default connections."""
+
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.generic_district_heating"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "DistrictHeatingForDHW")
+        connections = []
+        dhw_boiler_classname = component_class.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                SimpleDHWStorage.WaterTemperatureFromHeatGenerator,
+                dhw_boiler_classname,
+                component_class.WaterOutputTemperature,
+            )
+        )
+        connections.append(
+            cp.ComponentConnection(
+                SimpleDHWStorage.WaterMassFlowRateFromHeatGenerator,
+                dhw_boiler_classname,
+                component_class.WaterOutputMassFlowRate,
             )
         )
         return connections
@@ -1689,6 +1725,10 @@ class SimpleDHWStorage(SimpleWaterStorage):
         stsv.set_output_value(
             self.thermal_power_from_heat_generator_channel,
             thermal_power_from_heat_generator_in_watt,
+        )
+        stsv.set_output_value(
+            self.water_mass_flow_rate_dhw_output_channel,
+            water_mass_flow_rate_of_dhw_in_kg_per_second,
         )
         # Set state -------------------------------------------------------------------------------------------------------
 

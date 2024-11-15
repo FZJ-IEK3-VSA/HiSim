@@ -560,6 +560,24 @@ class GenericBoiler(Component):
         )
         list_of_kpi_entries.append(my_kpi_entry_three)
 
+        # get thermal energy delivered
+        thermal_energy_delivered_in_kilowatt_hour: float
+        for index, output in enumerate(all_outputs):
+            if output.component_name == self.component_name:
+                if output.field_name == self.ThermalOutputEnergy and output.unit == lt.Units.WATT_HOUR:
+                    thermal_energy_delivered_in_kilowatt_hour = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
+                    print("thermal energy delivered", thermal_energy_delivered_in_kilowatt_hour)
+                    break
+        # make kpi entry
+        thermal_energy_delivered_entry = KpiEntry(
+            name="Thermal energy delivered",
+            unit="kWh",
+            value=thermal_energy_delivered_in_kilowatt_hour,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+
+        list_of_kpi_entries.append(thermal_energy_delivered_entry)
         return list_of_kpi_entries
 
 
@@ -1220,6 +1238,25 @@ class GenericBoilerForDHW(GenericBoiler):
             description=self.component_name,
         )
         list_of_kpi_entries.append(my_kpi_entry_three)
+
+        # get thermal energy delivered
+        thermal_energy_delivered_in_kilowatt_hour: float
+        for index, output in enumerate(all_outputs):
+            if output.component_name == self.component_name:
+                if output.field_name == self.ThermalOutputEnergy and output.unit == lt.Units.WATT_HOUR:
+                    thermal_energy_delivered_in_kilowatt_hour = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
+                    break
+
+        # make kpi entry
+        thermal_energy_delivered_entry = KpiEntry(
+            name="Thermal energy delivered",
+            unit="kWh",
+            value=thermal_energy_delivered_in_kilowatt_hour,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+
+        list_of_kpi_entries.append(thermal_energy_delivered_entry)
 
         return list_of_kpi_entries
 

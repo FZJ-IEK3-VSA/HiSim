@@ -213,8 +213,10 @@ class ResultDataCollection:
                         except Exception as exc:
                             content = data_info_file.read()
                             if content.strip() == "":
-                                raise ValueError("The json file is empty. Maybe run the simulation again. "
-                                      f"The concerned folder is {folder}") from exc
+                                raise ValueError(
+                                    "The json file is empty. Maybe run the simulation again. "
+                                    f"The concerned folder is {folder}"
+                                ) from exc
                         component_entries = kpi_data["componentEntries"]
                         for component in component_entries:
                             if "Building" in component["componentName"]:
@@ -568,7 +570,9 @@ class ResultDataCollection:
         if os.path.exists(path_for_file) is False:
             os.makedirs(path_for_file)
 
-        filename = os.path.join(path_for_file, f"result_df_{kind_of_data_set}_{scenario_analysis_config_name}.{data_format_type}",)
+        filename = os.path.join(
+            path_for_file, f"result_df_{kind_of_data_set}_{scenario_analysis_config_name}.{data_format_type}",
+        )
         return filename
 
     def get_default_config(self, path_to_default_config: Optional[str]) -> Any:

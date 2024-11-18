@@ -566,11 +566,10 @@ class GenericBoiler(Component):
             if output.component_name == self.component_name:
                 if output.field_name == self.ThermalOutputEnergy and output.unit == lt.Units.WATT_HOUR:
                     thermal_energy_delivered_in_kilowatt_hour = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
-                    print("thermal energy delivered", thermal_energy_delivered_in_kilowatt_hour)
                     break
         # make kpi entry
         thermal_energy_delivered_entry = KpiEntry(
-            name="Thermal energy delivered",
+            name="Thermal energy delivered for space heating",
             unit="kWh",
             value=thermal_energy_delivered_in_kilowatt_hour,
             tag=opex_dataclass.kpi_tag,
@@ -1249,7 +1248,7 @@ class GenericBoilerForDHW(GenericBoiler):
 
         # make kpi entry
         thermal_energy_delivered_entry = KpiEntry(
-            name="Thermal energy delivered",
+            name="Thermal energy delivered for DHW",
             unit="kWh",
             value=thermal_energy_delivered_in_kilowatt_hour,
             tag=opex_dataclass.kpi_tag,

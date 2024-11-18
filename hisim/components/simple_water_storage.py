@@ -506,6 +506,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
 
     # Input
     # A hot water storage can be used also with more than one heat generator. In this case you need to add a new input and output.
+    WaterTemperatureToHeatDistribution = "WaterTemperatureToHeatDistribution"
     WaterTemperatureFromHeatDistribution = "WaterTemperatureFromHeatDistribution"
     WaterTemperatureFromHeatGenerator = "WaterTemperatureFromHeatGenerator"
     WaterMassFlowRateFromHeatGenerator = "WaterMassFlowRateFromHeatGenerator"
@@ -514,9 +515,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
 
     # Output
 
-    WaterTemperatureToHeatDistribution = "WaterTemperatureToHeatDistribution"
     WaterTemperatureToHeatGenerator = "WaterTemperatureToHeatGenerator"
-
     WaterMeanTemperatureInStorage = "WaterMeanTemperatureInStorage"
 
     # make some more outputs for testing simple storage
@@ -524,7 +523,6 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
     ThermalEnergyInStorage = "ThermalEnergyInStorage"
     ThermalEnergyFromHeatGenerator = "ThermalEnergyFromHeatGenerator"
     ThermalEnergyFromHeatDistribution = "ThermalEnergyFromHeatDistribution"
-    ThermalEnergyToHeatDistribution = "ThermalEnergyToHeatDistribution"
     ThermalEnergyIncreaseInStorage = "ThermalEnergyIncreaseInStorage"
 
     StandbyHeatLoss = "StandbyHeatLoss"
@@ -655,14 +653,6 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             lt.LoadTypes.HEATING,
             lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.ThermalEnergyFromHeatDistribution} will follow.",
-            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
-        )
-        self.thermal_energy_output_heat_distribution_system_channel: ComponentOutput = self.add_output(
-            self.component_name,
-            self.ThermalEnergyToHeatDistribution,
-            lt.LoadTypes.HEATING,
-            lt.Units.WATT_HOUR,
-            output_description=f"here a description for {self.ThermalEnergyToHeatDistribution} will follow.",
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
 
@@ -886,14 +876,14 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             )
         )
 
-        # thermal_energy_input_from_heat_generator_in_watt_hour = self.calculate_thermal_energy_of_water_flow(
-        #     water_mass_in_kg=water_mass_from_heat_generator_in_kg,
-        #     water_temperature_difference_in_kelvin=water_temperature_from_heat_generator_in_celsius - 0,
-        # )
-        # thermal_energy_input_from_heat_distribution_system_in_watt_hour = self.calculate_thermal_energy_of_water_flow(
-        #     water_mass_in_kg=water_mass_from_heat_distribution_system_in_kg,
-        #     water_temperature_difference_in_kelvin=water_temperature_from_heat_distribution_system_in_celsius - 0,
-        # )
+        thermal_energy_input_from_heat_generator_in_watt_hour = self.calculate_thermal_energy_of_water_flow(
+            water_mass_in_kg=water_mass_from_heat_generator_in_kg,
+            water_temperature_difference_in_kelvin=water_temperature_from_heat_generator_in_celsius - 0,
+        )
+        thermal_energy_input_from_heat_distribution_system_in_watt_hour = self.calculate_thermal_energy_of_water_flow(
+            water_mass_in_kg=water_mass_from_heat_distribution_system_in_kg,
+            water_temperature_difference_in_kelvin=water_temperature_from_heat_distribution_system_in_celsius - 0,
+        )
 
         # calc water temperatures
         # ------------------------------
@@ -948,26 +938,10 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
 
         # Set outputs -------------------------------------------------------------------------------------------------------
         if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP:
-            # calculate the energy leaving the hot water storage to the heat distribution system
-            thermal_output_energy_for_heat_distribution_system_in_watt_hour = self.calculate_thermal_energy_of_water_flow(
-            water_mass_in_kg=water_mass_from_heat_distribution_system_in_kg,
-            water_temperature_difference_in_kelvin=water_temperature_to_heat_distribution_system_in_celsius - water_temperature_from_heat_distribution_system_in_celsius,
-            )
-            thermal_energy_input_from_heat_generator_in_watt_hour = self.calculate_thermal_energy_of_water_flow(
-            water_mass_in_kg=water_mass_from_heat_generator_in_kg,
-            water_temperature_difference_in_kelvin=water_temperature_from_heat_generator_in_celsius - water_temperature_to_heat_generator_in_celsius,
-            )
+
             stsv.set_output_value(
                 self.water_temperature_heat_distribution_system_output_channel,
                 water_temperature_to_heat_distribution_system_in_celsius,
-            )
-            stsv.set_output_value(
-                self.thermal_energy_output_heat_distribution_system_channel,
-                thermal_output_energy_for_heat_distribution_system_in_watt_hour,
-            )
-            stsv.set_output_value(
-            self.thermal_energy_from_heat_generator_channel,
-            thermal_energy_input_from_heat_generator_in_watt_hour,
             )
 
         stsv.set_output_value(
@@ -985,14 +959,14 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             current_thermal_energy_in_storage_in_watt_hour,
         )
 
-        # stsv.set_output_value(
-        #     self.thermal_energy_from_heat_generator_channel,
-        #     thermal_energy_input_from_heat_generator_in_watt_hour,
-        # )
-        # stsv.set_output_value(
-        #     self.thermal_energy_input_heat_distribution_system_channel,
-        #     thermal_energy_input_from_heat_distribution_system_in_watt_hour,
-        # )
+        stsv.set_output_value(
+            self.thermal_energy_from_heat_generator_channel,
+            thermal_energy_input_from_heat_generator_in_watt_hour,
+        )
+        stsv.set_output_value(
+            self.thermal_energy_input_heat_distribution_system_channel,
+            thermal_energy_input_from_heat_distribution_system_in_watt_hour,
+        )
 
         stsv.set_output_value(
             self.thermal_energy_increase_in_storage_channel,
@@ -1115,43 +1089,27 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
-        thermal_energy_from_heat_generator_in_kilowatt_hour: float
-        thermal_energy_to_heat_distribution_in_kilowatt_hour: float
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
-                if output.field_name == self.ThermalEnergyFromHeatGenerator:
-                    thermal_energy_from_heat_generator_in_kilowatt_hour = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
-
-            if output.component_name == self.component_name:
-                if output.field_name == self.ThermalEnergyToHeatDistribution:
-                    thermal_energy_to_heat_distribution_in_kilowatt_hour = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
-
-        # make kpi entry
-        hot_water_received_from_heat_generator_entry = KpiEntry(
-            name="Hot water energy received from heat generator",
-            unit="kWh",
-            value=thermal_energy_from_heat_generator_in_kilowatt_hour,
-            tag=KpiTagEnumClass.STORAGE_HOT_WATER_SPACE_HEATING,
-            description=self.component_name,
-        )
-        hot_water_delivered_to_heat_distribution_entry = KpiEntry(
-            name="Hot water energy delivered to heat distribution system",
-            unit="kWh",
-            value=thermal_energy_to_heat_distribution_in_kilowatt_hour,
-            tag=KpiTagEnumClass.STORAGE_HOT_WATER_SPACE_HEATING,
-            description=self.component_name,
-        )
-        hot_water_energy_savings_entry = KpiEntry(
-            name="Thermal energy saved with the help of hot water storage",
-            unit="kWh",
-            # the rest is coming from warm water storage thus representing the energy savings for dhw
-            value=thermal_energy_to_heat_distribution_in_kilowatt_hour - thermal_energy_from_heat_generator_in_kilowatt_hour,
-            tag=KpiTagEnumClass.STORAGE_HOT_WATER_SPACE_HEATING,
-            description=self.component_name,
-        )
-
-        list_of_kpi_entries = [hot_water_received_from_heat_generator_entry, hot_water_delivered_to_heat_distribution_entry, hot_water_energy_savings_entry]
+                if output.field_name == self.StandbyHeatLoss and output.unit == lt.Units.WATT:
+                    # calc heat loss
+                    heat_loss_in_watt = postprocessing_results.iloc[:, index].loc[
+                        postprocessing_results.iloc[:, index] > 0.0
+                    ]
+                    # get energy from power
+                    heat_loss_in_kilowatt_hour = round(KpiHelperClass.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=heat_loss_in_watt,
+                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    ), 1)
+                    heat_loss_entry = KpiEntry(
+                        name="Standby heat loss of Hot water storage",
+                        unit="kWh",
+                        value=heat_loss_in_kilowatt_hour,
+                        tag=KpiTagEnumClass.STORAGE_HOT_WATER_SPACE_HEATING,
+                        description=self.component_name,
+                    )
+                    list_of_kpi_entries.append(heat_loss_entry)
         return list_of_kpi_entries
 
 
@@ -1851,52 +1809,25 @@ class SimpleDHWStorage(SimpleWaterStorage):
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
-        thermal_energy_dhw_consumption_in_kilowatt_hour: float
-        thermal_energy_from_heat_generator_in_kilowatt_hour: float
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
-                if output.field_name == self.ThermalPowerConsumptionDHW:
-                    thermal_power_dhw_consumption_in_watt_series = postprocessing_results.iloc[:, index]
-                    thermal_energy_dhw_consumption_in_kilowatt_hour = (
-                        KpiHelperClass.compute_total_energy_from_power_timeseries(
-                            power_timeseries_in_watt=thermal_power_dhw_consumption_in_watt_series,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
-                        )
+                if output.field_name == self.StandbyHeatLoss and output.unit == lt.Units.WATT:
+                    # calc heat loss
+                    heat_loss_in_watt = postprocessing_results.iloc[:, index].loc[
+                        postprocessing_results.iloc[:, index] > 0.0
+                    ]
+                    # get energy from power
+                    heat_loss_in_kilowatt_hour = round(KpiHelperClass.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=heat_loss_in_watt,
+                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    ), 1)
+                    heat_loss_entry = KpiEntry(
+                        name="Standby heat loss of DHW storage",
+                        unit="kWh",
+                        value=heat_loss_in_kilowatt_hour,
+                        tag=KpiTagEnumClass.STORAGE_DOMESTIC_HOT_WATER,
+                        description=self.component_name,
                     )
-            if output.component_name == self.component_name:
-                if output.field_name == self.ThermalPowerFromHeatGenerator:
-                    thermal_power_from_heat_generator_in_watt_series = postprocessing_results.iloc[:, index]
-                    thermal_energy_from_heat_generator_in_kilowatt_hour = (
-                        KpiHelperClass.compute_total_energy_from_power_timeseries(
-                            power_timeseries_in_watt=thermal_power_from_heat_generator_in_watt_series,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
-                        )
-                    )
-
-        # make kpi entry
-        occupancy_warm_water_energy_consumption_entry = KpiEntry(
-            name="Residents' total thermal DHW consumption",
-            unit="kWh",
-            value=thermal_energy_dhw_consumption_in_kilowatt_hour,
-            tag=KpiTagEnumClass.STORAGE_DOMESTIC_HOT_WATER,
-            description=self.component_name,
-        )
-        heat_generator_warm_water_energy_delivered_entry = KpiEntry(
-            name="Thermal energy delivered from heat generator for DHW consumption",
-            unit="kWh",
-            value=thermal_energy_from_heat_generator_in_kilowatt_hour,
-            tag=KpiTagEnumClass.STORAGE_DOMESTIC_HOT_WATER,
-            description=self.component_name,
-        )
-        warm_water_energy_savings_entry = KpiEntry(
-            name="Thermal energy saved with the help of DHW storage",
-            unit="kWh",
-            # the rest is coming from warm water storage thus representing the energy savings for dhw
-            value=thermal_energy_dhw_consumption_in_kilowatt_hour - thermal_energy_from_heat_generator_in_kilowatt_hour,
-            tag=KpiTagEnumClass.STORAGE_DOMESTIC_HOT_WATER,
-            description=self.component_name,
-        )
-
-        list_of_kpi_entries = [occupancy_warm_water_energy_consumption_entry, heat_generator_warm_water_energy_delivered_entry, warm_water_energy_savings_entry]
+                    list_of_kpi_entries.append(heat_loss_entry)
         return list_of_kpi_entries

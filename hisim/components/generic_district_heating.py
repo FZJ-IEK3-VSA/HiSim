@@ -26,7 +26,7 @@ from hisim.components.weather import Weather
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.components.configuration import PhysicsConfig
 from hisim.simulationparameters import SimulationParameters
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
 
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -280,6 +280,26 @@ class DistrictHeatingForSH(Component):
             description=self.component_name,
         )
         list_of_kpi_entries.append(my_kpi_entry)
+        for index, output in enumerate(all_outputs):
+            if output.component_name == self.component_name:
+                if output.field_name == self.ThermalOutputPower and output.load_type == LoadTypes.HEATING and output.unit == Units.WATT:
+                    # take only output values for heating
+                    thermal_output_power_values_in_watt = postprocessing_results.iloc[:, index].loc[
+                        postprocessing_results.iloc[:, index] > 0.0
+                    ]
+                    # get energy from power
+                    thermal_output_energy_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=thermal_output_power_values_in_watt,
+                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    )
+                    thermal_output_energy_entry = KpiEntry(
+                        name="Thermal output energy for space heating",
+                        unit="kWh",
+                        value=thermal_output_energy_in_kilowatt_hour,
+                        tag=KpiTagEnumClass.DISTRICT_HEATING_SPACE_HEATING,
+                        description=self.component_name,
+                    )
+                    list_of_kpi_entries.append(thermal_output_energy_entry)
 
         return list_of_kpi_entries
 
@@ -805,13 +825,33 @@ class DistrictHeatingForDHW(Component):
         list_of_kpi_entries: List[KpiEntry] = []
         opex_dataclass = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)
         my_kpi_entry = KpiEntry(
-            name=f"{opex_dataclass.loadtype.value} consumption for domestic hot water",
+            name=f"{opex_dataclass.loadtype.value} consumption for DHW",
             unit="kWh",
             value=opex_dataclass.consumption_in_kwh,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
         )
         list_of_kpi_entries.append(my_kpi_entry)
+        for index, output in enumerate(all_outputs):
+            if output.component_name == self.component_name:
+                if output.field_name == self.ThermalOutputPower and output.load_type == LoadTypes.HEATING and output.unit == Units.WATT:
+                    # take only output values for heating
+                    thermal_output_power_values_in_watt = postprocessing_results.iloc[:, index].loc[
+                        postprocessing_results.iloc[:, index] > 0.0
+                    ]
+                    # get energy from power
+                    thermal_output_energy_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=thermal_output_power_values_in_watt,
+                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    )
+                    thermal_output_energy_entry = KpiEntry(
+                        name="Thermal output energy for DHW",
+                        unit="kWh",
+                        value=thermal_output_energy_in_kilowatt_hour,
+                        tag=KpiTagEnumClass.DISTRICT_HEATING_DOMESTIC_HOT_WATER,
+                        description=self.component_name,
+                    )
+                    list_of_kpi_entries.append(thermal_output_energy_entry)
 
         return list_of_kpi_entries
 

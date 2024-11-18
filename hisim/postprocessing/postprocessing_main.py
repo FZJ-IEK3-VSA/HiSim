@@ -825,8 +825,10 @@ class PostProcessor:
             simple_dict_cumulative_data["unit"].append(unit)
             simple_dict_cumulative_data["year"].append(self.year)
             simple_dict_cumulative_data["value"].append(value)
+
         # add kpis to yearly dict
-        simple_dict_cumulative_data = self.write_kpis_in_dict(ppdt=ppdt, simple_dict_cumulative_data=simple_dict_cumulative_data)
+        if PostProcessingOptions.COMPUTE_KPIS in ppdt.post_processing_options:
+            simple_dict_cumulative_data = self.write_kpis_in_dict(ppdt=ppdt, simple_dict_cumulative_data=simple_dict_cumulative_data)
 
         # create dataframe
         simple_df_yearly_data = pd.DataFrame(simple_dict_cumulative_data)
@@ -882,7 +884,10 @@ class PostProcessor:
     ) -> Dict:
         """Write kpis in dictionary."""
         # get kpis from ppdt
-        kpi_collection_dict = ppdt.kpi_collection_dict["BUI1"]
+        try:
+            kpi_collection_dict = ppdt.kpi_collection_dict["BUI1"]
+        except Exception as exc:
+            raise KeyError(f"Key Error BUI1. Dict is {ppdt.kpi_collection_dict}.") from exc
 
         for kpi_entries in kpi_collection_dict.values():
             for kpi_name, kpi_entry in kpi_entries.items():

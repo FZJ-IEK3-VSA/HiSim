@@ -879,14 +879,13 @@ class PostProcessor:
         self,
         ppdt: PostProcessingDataTransfer,
         simple_dict_cumulative_data: Dict[str, Any],
-    ) -> None:
+    ) -> Dict:
         """Write kpis in dictionary."""
         # get kpis from ppdt
         kpi_collection_dict = ppdt.kpi_collection_dict["BUI1"]
 
         for kpi_entries in kpi_collection_dict.values():
             for kpi_name, kpi_entry in kpi_entries.items():
-                print(kpi_entry)
                 variable_name = kpi_name
                 variable_value = kpi_entry["value"]
                 variable_unit = kpi_entry["unit"]

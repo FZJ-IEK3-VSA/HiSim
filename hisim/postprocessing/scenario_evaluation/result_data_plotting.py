@@ -386,17 +386,17 @@ class ScenarioChartGeneration:
             data_processing_mode=self.data_processing_mode, zip_list_one=list(y_data), zip_list_two=list(bar_labels)
         )
         # if no scenarios chosen, make artificial x ticks
-        if self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA.name:
-            x_data = np.arange(0, len(y_data) * 2, step=2)
-            rotate_x_ticks = False
-            x_axis_label = ""
-            show_x_ticks = False
-        # otherwise choose scenarios as x-ticks
-        else:
-            x_data = bar_labels_sorted
-            rotate_x_ticks = True
-            x_axis_label = ""
-            show_x_ticks = True
+        # if self.data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA.name:
+            # x_data = np.arange(0, len(y_data) * 2, step=2)
+            # rotate_x_ticks = False
+            # x_axis_label = ""
+            # show_x_ticks = False
+        # # otherwise choose scenarios as x-ticks
+        # else:
+        x_data = bar_labels_sorted
+        rotate_x_ticks = True
+        x_axis_label = ""
+        show_x_ticks = True
 
         color, edgecolor = self.set_plot_colors_according_to_data_processing_mode(
             number_of_scenarios=len(bar_labels), data_processing_mode=self.data_processing_mode

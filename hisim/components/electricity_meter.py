@@ -484,11 +484,11 @@ class ElectricityMeter(DynamicComponent):
 
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
-                if output.field_name == self.ElectricityToGrid:
+                if output.field_name == self.ElectricityToGrid and output.unit == lt.Units.WATT_HOUR:
                     # Todo: check component name from system_setups: find another way of using the correct outputs
                     total_energy_to_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 2)
 
-                elif output.field_name == self.ElectricityFromGrid:
+                elif output.field_name == self.ElectricityFromGrid and output.unit == lt.Units.WATT_HOUR:
                     total_energy_from_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 2)
 
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(

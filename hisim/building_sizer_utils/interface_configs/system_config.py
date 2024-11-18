@@ -75,3 +75,9 @@ class EnergySystemConfig:
         """Get default energy system config."""
         energy_system_config = EnergySystemConfig(heating_system=HeatingSystems.DISTRICT_HEATING, share_of_maximum_pv_potential=1.0)
         return energy_system_config
+
+    @classmethod
+    def get_default_config_for_energy_system_pellet_heating(cls):
+        """Get default energy system config."""
+        energy_system_config = EnergySystemConfig(heating_system=HeatingSystems.PELLET_HEATING, share_of_maximum_pv_potential=1.0)
+        return energy_system_config

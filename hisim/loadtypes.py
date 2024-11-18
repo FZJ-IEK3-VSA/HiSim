@@ -221,6 +221,7 @@ class HeatingSystems(str, enum.Enum):
     ELECTRIC_HEATING = "ElectricHeating"
     OIL_HEATING = "OilHeating"
     GAS_HEATING = "GasHeating"
+    PELLET_HEATING = "PelletHeating"
     DISTRICT_HEATING = "DistrictHeating"
     HYDROGEN_HEATING = "HydrogenHeating"
 

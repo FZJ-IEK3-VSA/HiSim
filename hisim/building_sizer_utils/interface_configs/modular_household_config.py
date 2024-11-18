@@ -70,6 +70,16 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         )
         return household_config
 
+    @classmethod
+    def get_default_config_for_household_pellet(cls):
+        """Get default ModularHouseholdConfig."""
+        energy_system_config_ = system_config.EnergySystemConfig.get_default_config_for_energy_system_pellet_heating()
+        archetype_config_ = archetype_config.ArcheTypeConfig()
+        household_config = ModularHouseholdConfig(
+            energy_system_config_=energy_system_config_, archetype_config_=archetype_config_
+        )
+        return household_config
+
     def get_hash(self):
         """Generate a hash for ModularHouseholdConfig."""
         household_config = ModularHouseholdConfig(
@@ -91,7 +101,7 @@ def read_in_configs(pathname: str) -> Optional[ModularHouseholdConfig]:
     # try to read modular household config from path
     household_config: Optional[ModularHouseholdConfig]
     try:
-        # use strip() in order to remove \r or \n signs from path 
+        # use strip() in order to remove \r or \n signs from path
         with open(pathname.strip(), encoding="utf8") as config_file:
             household_config_dict = json.load(config_file)  # type: ignore
             household_config = ModularHouseholdConfig.from_dict(household_config_dict)

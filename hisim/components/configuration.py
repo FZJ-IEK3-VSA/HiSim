@@ -303,8 +303,8 @@ class PhysicsConfig:
             # higher heating value of pellets unknown -> set to lower heating value
             return PhysicsConfig(
                 density_in_kg_per_m3=650,
-                lower_heating_value_in_joule_per_m3=11.7 * 1e3,
-                higher_heating_value_in_joule_per_m3=11.7 * 1e3,
+                lower_heating_value_in_joule_per_m3=11.7 * 1e9,
+                higher_heating_value_in_joule_per_m3=11.7 * 1e9,
                 specific_heat_capacity_in_joule_per_kg_per_kelvin=2500,
             )
         if energy_carrier == LoadTypes.WATER:

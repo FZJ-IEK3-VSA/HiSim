@@ -20,13 +20,11 @@ from hisim.components import (
     controller_l2_energy_management_system,
     heat_distribution_system,
     generic_district_heating,
-    generic_hot_water_storage_modular,
-    controller_l1_heatpump,
     electricity_meter,
+    simple_water_storage,
     advanced_ev_battery_bslib,
     controller_l1_generic_ev_charge,
     generic_car,
-    generic_heat_source,
 )
 from hisim.components.heat_distribution_system import PositionHotWaterStorageInSystemSetup
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
@@ -107,10 +105,10 @@ def setup_function(
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER
         )
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
         # my_simulation_parameters.logging_level = 4
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
@@ -270,38 +268,28 @@ def setup_function(
     my_sim.add_component(my_district_heating, connect_automatically=True)
 
     # Build district heating for DHW
-    my_district_heating_for_dhw_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating(
-        heating_system=lt.HeatingSystems.DISTRICT_HEATING,
-        max_warm_water_demand_in_liter=my_occupancy.max_hot_water_demand,
-        scaling_factor_according_to_number_of_apartments=my_occupancy.scaling_factor_according_to_number_of_apartments,
-        seconds_per_timestep=my_simulation_parameters.seconds_per_timestep,
-        name="DHW" + lt.HeatingSystems.DISTRICT_HEATING.value,
-    )
-    my_district_heating_controller_dhw_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-        "DHW" + lt.HeatingSystems.DISTRICT_HEATING.value + "Controller"
-    )
-    my_boiler_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
-        number_of_apartments=my_building_information.number_of_apartments
-    )
-    my_boiler_config.compute_default_cycle(
-        temperature_difference_in_kelvin=my_district_heating_controller_dhw_config.t_max_heating_in_celsius
-        - my_district_heating_controller_dhw_config.t_min_heating_in_celsius
-    )
+    # DHW district heating and storage configs
+    my_district_heating_controller_dhw_config = generic_district_heating.DistrictHeatingControllerForDHWConfig.get_default_district_heating_dhw_controller_config()
 
-    my_boiler_for_dhw = generic_hot_water_storage_modular.HotWaterStorage(
-        my_simulation_parameters=my_simulation_parameters, config=my_boiler_config
-    )
-
-    my_district_heating_controller_for_dhw = controller_l1_heatpump.L1HeatPumpController(
+    my_district_heating_controller_for_dhw = generic_district_heating.DistrictHeatingControllerForDHW(
         my_simulation_parameters=my_simulation_parameters, config=my_district_heating_controller_dhw_config
     )
+    my_sim.add_component(my_district_heating_controller_for_dhw, connect_automatically=True)
 
-    my_district_heating_for_dhw = generic_heat_source.HeatSource(
+    my_district_heating_for_dhw_config = generic_district_heating.DistrictHeatingForDHWConfig.get_default_district_dhw_heating_config()
+
+    my_district_heating_for_dhw = generic_district_heating.DistrictHeatingForDHW(
         config=my_district_heating_for_dhw_config, my_simulation_parameters=my_simulation_parameters
     )
     my_sim.add_component(my_district_heating_for_dhw, connect_automatically=True)
-    my_sim.add_component(my_boiler_for_dhw, connect_automatically=True)
-    my_sim.add_component(my_district_heating_controller_for_dhw, connect_automatically=True)
+
+    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
+        number_of_apartments=number_of_apartments
+    )
+    my_dhw_storage = simple_water_storage.SimpleDHWStorage(
+        my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
+    )
+    my_sim.add_component(my_dhw_storage, connect_automatically=True)
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
@@ -496,8 +484,7 @@ def setup_function(
     if my_simulation_parameters.result_directory == "":
 
         ResultPathProviderSingleton().set_important_result_path_information(
-            module_directory="/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/analysis_for_gianmarco_11_10_2024/analysis_for_Essen/results_for_Essen",
-            # my_sim.module_directory,
+            module_directory=my_sim.module_directory,  # "/storage_cluster/projects/2024_waage/01_hisim_results",
             model_name=my_sim.module_filename,
             further_result_folder_description=os.path.join(*[further_result_folder_description]),
             variant_name="_",

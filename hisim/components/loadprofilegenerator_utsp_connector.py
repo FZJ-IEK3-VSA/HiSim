@@ -471,7 +471,7 @@ class UtspLpgConnector(cp.Component):
         for list_index, list_item in enumerate(self.list_of_file_exists_and_cache_files):
             file_exists = list_item[0]
             cache_filepath = list_item[1]
-            print("lpg cache file", cache_filepath)
+            log.information("Lpg cache filepath " + cache_filepath)
 
             # a cache file exists
             if file_exists:
@@ -1013,11 +1013,12 @@ class UtspLpgConnector(cp.Component):
         """Prepare lpg simulation config for the utsp request."""
 
         simulation_config = lpg_helper.create_basic_lpg_config(
-            household,
-            HouseTypes.HT23_No_Infrastructure_at_all,
-            start_date,
-            end_date,
-            self.get_resolution(),
+            householdref=household,
+            housetype=HouseTypes.HT23_No_Infrastructure_at_all,
+            startdate=start_date,
+            enddate=end_date,
+            external_resolution=self.get_resolution(),
+            energy_intensity=self.utsp_config.energy_intensity,
             travel_route_set=self.utsp_config.travel_route_set,
             transportation_device_set=self.utsp_config.transportation_device_set,
             charging_station_set=self.utsp_config.charging_station_set,
@@ -1326,6 +1327,8 @@ class UtspLpgConnector(cp.Component):
     def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         occupancy_total_electricity_consumption_in_kilowatt_hour: Optional[float] = None
+        occupancy_total_water_consumption_in_liter: Optional[float] = None
+        occupancy_total_water_consumption_in_kwh: Optional[float] = None
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
@@ -1335,7 +1338,27 @@ class UtspLpgConnector(cp.Component):
                         power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
                         timeresolution=self.my_simulation_parameters.seconds_per_timestep,
                     )
-                    break
+                if output.field_name == self.WaterConsumption and output.unit == lt.Units.LITER:
+                    occupancy_total_water_consumption_in_liter = round(sum(postprocessing_results.iloc[:, index]), 1)
+                    # calculate warm water energy consumption
+                    if occupancy_total_water_consumption_in_liter is not None:
+                        # https://www.internetchemie.info/chemie-lexikon/daten/w/wasser-dichtetabelle.php
+                        density_water_at_40_degree_celsius_in_kg_per_liter = 0.992
+                        drain_water_temperature = HouseholdWarmWaterDemandConfig.freshwater_temperature
+                        warm_water_temperature = (
+                            HouseholdWarmWaterDemandConfig.ww_temperature_demand
+                            - HouseholdWarmWaterDemandConfig.temperature_difference_hot
+                        )
+                        specific_heat_capacity_of_water_in_watthour_per_kilogram_per_celsius = PhysicsConfig.get_properties_for_energy_carrier(
+                            energy_carrier=lt.LoadTypes.WATER
+                        ).specific_heat_capacity_in_watthour_per_kg_per_kelvin
+                        occupancy_total_water_consumption_in_kwh = (
+                            1e-3
+                            * specific_heat_capacity_of_water_in_watthour_per_kilogram_per_celsius
+                            * occupancy_total_water_consumption_in_liter
+                            * density_water_at_40_degree_celsius_in_kg_per_liter
+                            * (warm_water_temperature - drain_water_temperature)
+                        )
 
         # make kpi entry
         occupancy_total_electricity_consumption_entry = KpiEntry(
@@ -1345,8 +1368,22 @@ class UtspLpgConnector(cp.Component):
             tag=KpiTagEnumClass.RESIDENTS,
             description=self.component_name,
         )
+        occupancy_total_water_consumption_entry = KpiEntry(
+            name="Residents' total warm water consumption",
+            unit="l",
+            value=occupancy_total_water_consumption_in_liter,
+            tag=KpiTagEnumClass.RESIDENTS,
+            description=self.component_name,
+        )
+        occupancy_total_water_consumption_energy_entry = KpiEntry(
+            name="Residents' total warm water energy consumption",
+            unit="kWh",
+            value=occupancy_total_water_consumption_in_kwh,
+            tag=KpiTagEnumClass.RESIDENTS,
+            description=self.component_name,
+        )
 
-        list_of_kpi_entries = [occupancy_total_electricity_consumption_entry]
+        list_of_kpi_entries = [occupancy_total_electricity_consumption_entry, occupancy_total_water_consumption_entry, occupancy_total_water_consumption_energy_entry]
         return list_of_kpi_entries
 
     @staticmethod

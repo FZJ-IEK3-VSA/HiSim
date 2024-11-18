@@ -825,6 +825,8 @@ class PostProcessor:
             simple_dict_cumulative_data["unit"].append(unit)
             simple_dict_cumulative_data["year"].append(self.year)
             simple_dict_cumulative_data["value"].append(value)
+        # add kpis to yearly dict
+        simple_dict_cumulative_data = self.write_kpis_in_dict(ppdt=ppdt, simple_dict_cumulative_data=simple_dict_cumulative_data)
 
         # create dataframe
         simple_df_yearly_data = pd.DataFrame(simple_dict_cumulative_data)
@@ -849,7 +851,6 @@ class PostProcessor:
         json_generator_config = JsonConfigurationGenerator(name=f"{self.scenario}")
         json_generator_config.set_simulation_parameters(my_simulation_parameters=ppdt.simulation_parameters)
         if ppdt.my_module_config is not None:
-            print(ppdt.my_module_config)
             json_generator_config.set_module_config(my_module_config=ppdt.my_module_config)
         json_generator_config.set_scenario_data_information_dict(scenario_data_information_dict=data_information_dict)
         for component in ppdt.wrapped_components:
@@ -885,7 +886,7 @@ class PostProcessor:
 
         for kpi_entries in kpi_collection_dict.values():
             for kpi_name, kpi_entry in kpi_entries.items():
-
+                print(kpi_entry)
                 variable_name = kpi_name
                 variable_value = kpi_entry["value"]
                 variable_unit = kpi_entry["unit"]
@@ -903,6 +904,7 @@ class PostProcessor:
                         "KPI values should be written only to yearly or cumulative data, not to timeseries data."
                     ) from exc
                 simple_dict_cumulative_data["value"].append(variable_value)
+        return simple_dict_cumulative_data
 
     def get_variable_name_and_unit_from_ppdt_results_column(self, column: str) -> Tuple[str, str]:
         """Get variable name and unit for pyam dictionary."""

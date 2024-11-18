@@ -119,6 +119,10 @@ class ResultDataCollection:
         print(
             "len of list with all paths to containing result data ", len(list_with_all_paths_to_check),
         )
+        if len(list_with_all_paths_to_check) < 20:
+            print(
+                "list with all paths to containing result data ", list_with_all_paths_to_check,
+            )
         # filter out results that had buildings that were too hot or too cold
         list_with_all_paths_to_check_after_filtering = self.filter_results_that_failed_to_heat_or_cool_building_sufficiently(
             list_of_result_path_that_contain_scenario_data=list_with_all_paths_to_check
@@ -197,7 +201,7 @@ class ResultDataCollection:
                 "temp deviation above set cooling [°C*h], folder \n"
             )
             for folder in list_of_result_path_that_contain_scenario_data:
-                scenario_data_information = os.path.join(folder, "data_information_for_scenario_evaluation.json")
+                scenario_data_information = os.path.join(folder, "data_for_scenario_evaluation.json")
                 main_folder = os.path.normpath(folder + os.sep + os.pardir)
                 all_kpis_json_file = os.path.join(main_folder, "all_kpis.json")
 
@@ -227,7 +231,8 @@ class ResultDataCollection:
                 # open the webtool kpis and check if building got too hot or too cold
                 if os.path.exists(all_kpis_json_file):
                     with open(all_kpis_json_file, "r", encoding="utf-8") as kpi_file:
-                        kpi_data = json.load(kpi_file)
+                        kpi_data = json.load(kpi_file)["BUI1"]
+                        print("kpi_data", kpi_data)
                         # check if min and max temperatures are too low or too high
                         min_temperature = float(
                             kpi_data["Building"]["Minimum building indoor air temperature reached"].get("value")

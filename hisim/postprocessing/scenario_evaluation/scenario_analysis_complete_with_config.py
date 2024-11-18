@@ -148,6 +148,7 @@ def main():
             ) as scenario_analysis_config_file:
 
                 my_config = ScenarioAnalysisConfig.from_json(scenario_analysis_config_file.read())  # type: ignore
+                print("my config", my_config)
 
             log.information(f"Read scenario analysis config from {scenario_analysis_config_path}")
             log.information("Config values: " + f"{my_config.to_dict}" + "\n")

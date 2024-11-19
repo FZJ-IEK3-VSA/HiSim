@@ -6,8 +6,8 @@ import win32com.client
 
 
 # Pfad zum Hauptordner, in dem sich die Unterordner mit Excel-Files befinden
-main_folder = 'C://Users//Standard//Desktop//hisim//results//2a20240820//'
-excel_filename = 'C://Users//Standard//Desktop//hisim//results//2a20240820//Gesamtergebnis.xlsx'
+main_folder = 'C://Users//Standard//Desktop//hisim//results//OnlyBattery//'
+excel_filename = 'C://Users//Standard//Desktop//hisim//results//OnlyBattery//Gesamtergebnis.xlsx'
 
 #main_folder = 'C://Users\Standard//Desktop//hisim//C4LResults//Auswertung//'
 #excel_filename = 'C://Users//Standard//Desktop//hisim//C4LResults//Auswertung//Gesamtergebnis.xlsx'
@@ -126,7 +126,7 @@ for foldername in os.listdir(main_folder):
             
             file_path = os.path.join(folder_path, excel_file)
             # Hier prüfen wir, ob die ersten 10 Buchstaben des Dateinamens übereinstimmen
-            if excel_file[2:18] == '_Oek_Assessment_' or excel_file[3:19] == '_Oek_Assessment_' or excel_file[4:20] == '_Oek_Assessment_':
+            if excel_file[2:18] == '_Oek_Assessment_' or excel_file[3:19] == '_Oek_Assessment_' or excel_file[4:20] == '_Oek_Assessment_' or excel_file[5:21] == '_Oek_Assessment_' or excel_file[6:22] == '_Oek_Assessment_':
                 print(foldername)
                 startexcelsavefile(file_path)
                 # Extrahiere den Wert aus dem Excel-File

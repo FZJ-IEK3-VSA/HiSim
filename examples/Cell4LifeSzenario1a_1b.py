@@ -356,7 +356,7 @@ def InputParameter():
     param_df = pd.read_csv("examples/params_to_loop.csv")
     
     PreResultNumber  = param_df["PreResultNumber"][0]
-    FuelCellPowerW = param_df["FuelCellPowerW"][0]
+    FuelCellPowerW = param_df["FuelCellPowerW"][0]/2.1
     BatteryCapkWh = param_df["BatteryCapkWh"][0]
     Inverter_Ratio = param_df["Inverter_Ratio"][0]
 

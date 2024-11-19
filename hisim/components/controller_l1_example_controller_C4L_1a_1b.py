@@ -442,9 +442,11 @@ class SimpleController(Component):
             electricity_to_or_from_grid = total_electricity_production - total_electricity_consumption - BatteryAcBatteryPower
             
             if CHP_ElectricityDelivery > 0 and Electrolyzer_ElectricityConsumption == 0:
-                electricity_from_CHP_to_house,electricity_from_Battery_to_house= electricity_from_CHP_Battery_to_houseFct(CHP_ElectricityDelivery, BatteryAcBatteryPower, electricity_to_or_from_grid, H2Storage_ElectricityConsumption,timestep)
+                #electricity_from_CHP_to_house,electricity_from_Battery_to_house= electricity_from_CHP_Battery_to_houseFct(CHP_ElectricityDelivery, BatteryAcBatteryPower, electricity_to_or_from_grid, H2Storage_ElectricityConsumption,timestep)
+                electricity_from_CHP_to_house, electricity_from_Battery_to_house, electricity_from_CHP_to_battery, electricity_from_CHP_to_grid = electricity_from_CHP_Battery_to_houseFct(CHP_ElectricityDelivery, BatteryAcBatteryPower, electricity_to_or_from_grid, H2Storage_ElectricityConsumption,timestep)
             elif CHP_ElectricityDelivery == 0 and Electrolyzer_ElectricityConsumption > 0:
                 electricity_from_CHP_to_house = 0
+                electricity_from_CHP_to_grid = 0
                 if BatteryAcBatteryPower < 0: #Battery is delivering energy to electrolyzer + h2 storage as well to House
                     electricity_from_Battery_to_house = -BatteryAcBatteryPower - Electrolyzer_ElectricityConsumption - H2Storage_ElectricityConsumption
                     
@@ -464,7 +466,14 @@ class SimpleController(Component):
             stsv.set_output_value(self.total_electricity_consumptionOutput, total_electricity_consumption)
             stsv.set_output_value(self.electricity_from_CHP_to_houseOutput, electricity_from_CHP_to_house)
             stsv.set_output_value(self.electricity_from_Battery_to_houseOutput, electricity_from_Battery_to_house)
-            part_pv_to_grid = 999999999999999999999999.9 # is not calculated in case 1a!!!!
+            if timestep == 4881 or timestep == 4882:
+                print('Zeitschritt: ', timestep)
+
+            if electricity_to_or_from_grid > 0:
+                part_pv_to_grid = electricity_to_or_from_grid - electricity_from_CHP_to_grid #Only PV and CHP can deliver to the grid in case 1a
+            else:
+                part_pv_to_grid = 0 #No electricity is delivered to the grid
+            
             stsv.set_output_value(self.electricity_from_PV_to_gridOutput, part_pv_to_grid)
             stsv.set_output_value(self.electricity_frombattery_to_CHP_inStandby,   0)
 

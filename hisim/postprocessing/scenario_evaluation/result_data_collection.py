@@ -50,7 +50,6 @@ class ResultDataCollection:
 
         list_with_result_data_folders = self.get_only_useful_data(result_path=result_folder)
 
-
         if data_processing_mode == ResultDataProcessingModeEnum.PROCESS_ALL_DATA.name:
             parameter_key = None
 
@@ -121,7 +120,9 @@ class ResultDataCollection:
             "len of list with all paths to containing result data ", len(list_with_all_paths_to_check),
         )
         if len(list_with_all_paths_to_check) == 0:
-            raise ValueError("Result paths for scenario evaluation could not be found. Please check your result folder paths.")
+            raise ValueError(
+                "Result paths for scenario evaluation could not be found. Please check your result folder paths."
+            )
         if len(list_with_all_paths_to_check) < 20:
             print(
                 "list with all paths to containing result data ", list_with_all_paths_to_check,
@@ -206,7 +207,9 @@ class ResultDataCollection:
             for folder in list_of_result_path_that_contain_scenario_data:
 
                 scenario_data_information_new_version = os.path.join(folder, "data_for_scenario_evaluation.json")
-                scenario_data_information_old_version = os.path.join(folder, "data_information_for_scenario_evaluation.json")
+                scenario_data_information_old_version = os.path.join(
+                    folder, "data_information_for_scenario_evaluation.json"
+                )
 
                 main_folder = os.path.normpath(folder + os.sep + os.pardir)
                 all_kpis_json_file = os.path.join(main_folder, "all_kpis.json")
@@ -255,7 +258,9 @@ class ResultDataCollection:
                                 )
                                 break
                 else:
-                    raise FileNotFoundError(f"Neither the file {scenario_data_information_new_version} nor the file {scenario_data_information_old_version} could not be found. ")
+                    raise FileNotFoundError(
+                        f"Neither the file {scenario_data_information_new_version} nor the file {scenario_data_information_old_version} could not be found. "
+                    )
 
                 # open the webtool kpis and check if building got too hot or too cold
                 if os.path.exists(all_kpis_json_file):
@@ -263,7 +268,7 @@ class ResultDataCollection:
                         # try two methods because older and newer data have different formats
                         try:
                             kpi_data = json.load(kpi_file)["BUI1"]
-                        except:
+                        except Exception:
                             # Reset file pointer to the beginning
                             kpi_file.seek(0)
                             contents = kpi_file.read()
@@ -271,8 +276,8 @@ class ResultDataCollection:
                                 print(f"Raw contents:\n{repr(contents)}")
                             try:
                                 kpi_data = json.loads(contents)
-                            except json.JSONDecodeError as e:
-                                print("Invalid JSON syntax:", e)
+                            except json.JSONDecodeError as err:
+                                print("Invalid JSON syntax:", err)
 
                         # check if min and max temperatures are too low or too high
                         min_temperature = float(
@@ -282,10 +287,10 @@ class ResultDataCollection:
                             kpi_data["Building"]["Maximum building indoor air temperature reached"].get("value")
                         )
                         temp_deviation_below_set = kpi_data["Building"][
-                            "Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius"
+                            f"Temperature deviation of building indoor air temperature being below set temperature {set_heating_temperature} Celsius"
                         ].get("value")
                         temp_deviation_above_set = kpi_data["Building"][
-                            "Temperature deviation of building indoor air temperature being above set temperature 25.0 Celsius"
+                            f"Temperature deviation of building indoor air temperature being above set temperature {set_cooling_temperature} Celsius"
                         ].get("value")
                         if (
                             min_temperature <= set_heating_temperature - 5.0

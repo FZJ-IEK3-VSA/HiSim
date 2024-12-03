@@ -20,6 +20,7 @@ from hisim import utils
 from hisim.component import OpexCostDataClass, CapexCostDataClass
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 
+
 __authors__ = "Katharina Rieck, Noah Pflugradt"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
@@ -313,7 +314,8 @@ class HeatDistribution(cp.Component):
         # for district heating as heating source no
         component_module_name = "hisim.components.generic_district_heating"
         component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "DistrictHeating")
+        component_class = getattr(component_module, "DistrictHeatingForSH")
+
         connections = []
         classname = component_class.get_classname()
         connections.append(

@@ -23,31 +23,11 @@ class ScenarioDataProcessing:
     ) -> Tuple[pd.DataFrame, List[str]]:
         """Get csv data and create dataframes with the filtered and procesed scenario data."""
 
-        # if time_resolution_of_data_set == ResultDataTypeEnum.HOURLY.name:
-        #     kind_of_data_set = "hourly"
-        # elif time_resolution_of_data_set == ResultDataTypeEnum.YEARLY.name:
-        #     kind_of_data_set = "yearly"
-        # elif time_resolution_of_data_set == ResultDataTypeEnum.DAILY.name:
-        #     kind_of_data_set = "daily"
-        # elif time_resolution_of_data_set == ResultDataTypeEnum.MONTHLY.name:
-        #     kind_of_data_set = "monthly"
-        # else:
-        #     raise ValueError("This kind of data was not found in the datacollectorenum class.")
         if not os.path.isfile(filepath_of_aggregated_dataframe):
             raise FileExistsError(f"The file {filepath_of_aggregated_dataframe} could not be found.")
         log.information(f"Read aggregated dataframe with all HiSim results from {filepath_of_aggregated_dataframe}.")
 
-        # data_file_path = os.path.join(data_folder_path, f"*{kind_of_data_set}*.{data_format_type.lower()}")
-        # list_of_possible_data_files = glob.glob(data_file_path)
-        # file: str = ""
-        # if not list_of_possible_data_files:
-        #     raise FileExistsError(f"No file could be found in this path {data_file_path}.")
-        # if len(list_of_possible_data_files) > 1:
-        #     raise ValueError(f"The file path {data_file_path} should not contain more than one file.")
-
-        # file = list_of_possible_data_files[0]
         if data_format_type == DataFormatEnum.CSV.name:
-            # file_df = pd.read_csv(filepath_or_buffer=f"{file}.gz", header=[0, 1], compression="gzip")
             file_df = pd.read_csv(filepath_or_buffer=filepath_of_aggregated_dataframe, header=[0, 1])
         elif data_format_type == DataFormatEnum.XLSX.name:
             file_df = pd.read_excel(filepath_of_aggregated_dataframe, header=[0, 1], index_col=0, sheet_name="Sheet1")
@@ -74,7 +54,6 @@ class ScenarioDataProcessing:
         filtered_dataframe = dataframe.loc[dataframe[("Output", "variable")] == variable_to_check]
         if filtered_dataframe.empty:
             print("The dataframe contains the following variables: ", set(list(dataframe[("Output", "variable")])))
-            # raise ValueError(
             print(
                 f"The filtered dataframe is empty. The dataframe did not contain the variable {variable_to_check}. Check the list above."
             )

@@ -119,6 +119,14 @@ class ResultDataCollection:
         print(
             "len of list with all paths to containing result data ", len(list_with_all_paths_to_check),
         )
+        if len(list_with_all_paths_to_check) == 0:
+            raise ValueError(
+                "Result paths for scenario evaluation could not be found. Please check your result folder paths."
+            )
+        if len(list_with_all_paths_to_check) < 20:
+            print(
+                "list with all paths to containing result data ", list_with_all_paths_to_check,
+            )
         # filter out results that had buildings that were too hot or too cold
         list_with_all_paths_to_check_after_filtering = self.filter_results_that_failed_to_heat_or_cool_building_sufficiently(
             list_of_result_path_that_contain_scenario_data=list_with_all_paths_to_check
@@ -197,21 +205,49 @@ class ResultDataCollection:
                 "temp deviation above set cooling [°C*h], folder \n"
             )
             for folder in list_of_result_path_that_contain_scenario_data:
-                scenario_data_information = os.path.join(folder, "data_information_for_scenario_evaluation.json")
+
+                scenario_data_information_new_version = os.path.join(folder, "data_for_scenario_evaluation.json")
+                scenario_data_information_old_version = os.path.join(
+                    folder, "data_information_for_scenario_evaluation.json"
+                )
+
                 main_folder = os.path.normpath(folder + os.sep + os.pardir)
                 all_kpis_json_file = os.path.join(main_folder, "all_kpis.json")
 
                 # get set temperatures used in the simulation
-                if os.path.exists(scenario_data_information):
-                    with open(scenario_data_information, "r", encoding="utf-8") as data_info_file:
+                if os.path.exists(scenario_data_information_new_version):
+                    with open(scenario_data_information_new_version, "r", encoding="utf-8") as data_info_file:
                         try:
-                            kpi_data = json.load(data_info_file)
+                            simulation_configuration_data = json.load(data_info_file)
                         except Exception as exc:
                             content = data_info_file.read()
                             if content.strip() == "":
-                                raise ValueError("The json file is empty. Maybe run the simulation again. "
-                                      f"The concerned folder is {folder}") from exc
-                        component_entries = kpi_data["componentEntries"]
+                                raise ValueError(
+                                    "The json file is empty. Maybe run the simulation again. "
+                                    f"The concerned folder is {folder}"
+                                ) from exc
+                        component_entries = simulation_configuration_data["componentEntries"]
+                        for component in component_entries:
+                            if "Building" in component["componentName"]:
+                                set_heating_temperature = float(
+                                    component["configuration"].get("set_heating_temperature_in_celsius")
+                                )
+                                set_cooling_temperature = float(
+                                    component["configuration"].get("set_cooling_temperature_in_celsius")
+                                )
+                                break
+                elif os.path.exists(scenario_data_information_old_version):
+                    with open(scenario_data_information_old_version, "r", encoding="utf-8") as data_info_file:
+                        try:
+                            simulation_configuration_data = json.load(data_info_file)
+                        except Exception as exc:
+                            content = data_info_file.read()
+                            if content.strip() == "":
+                                raise ValueError(
+                                    "The json file is empty. Maybe run the simulation again. "
+                                    f"The concerned folder is {folder}"
+                                ) from exc
+                        component_entries = simulation_configuration_data["componentEntries"]
                         for component in component_entries:
                             if "Building" in component["componentName"]:
                                 set_heating_temperature = float(
@@ -222,12 +258,27 @@ class ResultDataCollection:
                                 )
                                 break
                 else:
-                    raise FileNotFoundError(f"The file {scenario_data_information} could not be found. ")
+                    raise FileNotFoundError(
+                        f"Neither the file {scenario_data_information_new_version} nor the file {scenario_data_information_old_version} could not be found. "
+                    )
 
                 # open the webtool kpis and check if building got too hot or too cold
                 if os.path.exists(all_kpis_json_file):
                     with open(all_kpis_json_file, "r", encoding="utf-8") as kpi_file:
-                        kpi_data = json.load(kpi_file)
+                        # try two methods because older and newer data have different formats
+                        try:
+                            kpi_data = json.load(kpi_file)["BUI1"]
+                        except Exception:
+                            # Reset file pointer to the beginning
+                            kpi_file.seek(0)
+                            contents = kpi_file.read()
+                            if not contents.strip():
+                                print(f"Raw contents:\n{repr(contents)}")
+                            try:
+                                kpi_data = json.loads(contents)
+                            except json.JSONDecodeError as err:
+                                print("Invalid JSON syntax:", err)
+
                         # check if min and max temperatures are too low or too high
                         min_temperature = float(
                             kpi_data["Building"]["Minimum building indoor air temperature reached"].get("value")
@@ -236,10 +287,10 @@ class ResultDataCollection:
                             kpi_data["Building"]["Maximum building indoor air temperature reached"].get("value")
                         )
                         temp_deviation_below_set = kpi_data["Building"][
-                            "Temperature deviation of building indoor air temperature being below set temperature 20.0 Celsius"
+                            f"Temperature deviation of building indoor air temperature being below set temperature {set_heating_temperature} Celsius"
                         ].get("value")
                         temp_deviation_above_set = kpi_data["Building"][
-                            "Temperature deviation of building indoor air temperature being above set temperature 25.0 Celsius"
+                            f"Temperature deviation of building indoor air temperature being above set temperature {set_cooling_temperature} Celsius"
                         ].get("value")
                         if (
                             min_temperature <= set_heating_temperature - 5.0
@@ -563,7 +614,9 @@ class ResultDataCollection:
         if os.path.exists(path_for_file) is False:
             os.makedirs(path_for_file)
 
-        filename = os.path.join(path_for_file, f"result_df_{kind_of_data_set}_{scenario_analysis_config_name}.{data_format_type}",)
+        filename = os.path.join(
+            path_for_file, f"result_df_{kind_of_data_set}_{scenario_analysis_config_name}.{data_format_type}",
+        )
         return filename
 
     def get_default_config(self, path_to_default_config: Optional[str]) -> Any:

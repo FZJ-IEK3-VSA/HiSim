@@ -152,6 +152,7 @@ class GasMeter(DynamicComponent):
         )
 
         self.add_dynamic_default_connections(self.get_default_connections_from_generic_gas_heater())
+        self.add_dynamic_default_connections(self.get_default_connections_from_generic_dhw_gas_heater())
         self.add_dynamic_default_connections(self.get_default_connections_from_generic_heat_source())
 
     def get_default_connections_from_generic_gas_heater(
@@ -170,6 +171,30 @@ class GasMeter(DynamicComponent):
                 source_component_class=GenericBoiler,
                 source_class_name=gas_heater_class_name,
                 source_component_field_name=GenericBoiler.EnergyDemand,
+                source_load_type=lt.LoadTypes.GAS,
+                source_unit=lt.Units.WATT_HOUR,
+                source_tags=[lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED],
+                source_weight=999,
+            )
+        )
+        return dynamic_connections
+
+    def get_default_connections_from_generic_dhw_gas_heater(
+        self,
+    ):
+        """Get gas heater default connections."""
+
+        from hisim.components.generic_boiler import (  # pylint: disable=import-outside-toplevel
+            GenericBoilerForDHW,
+        )
+
+        dynamic_connections = []
+        gas_heater_class_name = GenericBoilerForDHW.get_classname()
+        dynamic_connections.append(
+            dynamic_component.DynamicComponentConnection(
+                source_component_class=GenericBoilerForDHW,
+                source_class_name=gas_heater_class_name,
+                source_component_field_name=GenericBoilerForDHW.EnergyDemand,
                 source_load_type=lt.LoadTypes.GAS,
                 source_unit=lt.Units.WATT_HOUR,
                 source_tags=[lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED],

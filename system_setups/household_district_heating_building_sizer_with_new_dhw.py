@@ -486,7 +486,7 @@ def setup_function(
     if my_simulation_parameters.result_directory == "":
 
         ResultPathProviderSingleton().set_important_result_path_information(
-            module_directory="/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/analysis_austria_for_kristina_20_11_2024_2",  # my_sim.module_directory,
+            module_directory=my_sim.module_directory,  # "/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/analysis_austria_for_kristina_20_11_2024_2",
             model_name=my_sim.module_filename,
             further_result_folder_description=os.path.join(*[further_result_folder_description]),
             variant_name="_",

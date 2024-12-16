@@ -6,13 +6,12 @@ from typing import Optional, Any, Union, List
 import re
 import os
 from dataclasses import dataclass
-from pathlib import Path
 from dataclasses_json import dataclass_json
 from utspclient.helpers.lpgdata import (
-    ChargingStationSets,
     Households,
 )
 from utspclient.helpers.lpgpythonbindings import JsonReference
+from dataclass_wizard import JSONWizard
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
@@ -28,17 +27,15 @@ from hisim.components import (
     generic_hot_water_storage_modular,
     controller_l1_heatpump,
     electricity_meter,
-    advanced_ev_battery_bslib,
 )
-from hisim.component import ConfigBase
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import loadtypes as lt
-from hisim import utils
 from hisim import log
 from hisim.units import Quantity, Celsius, Watt
-from dataclass_wizard import JSONWizard
+
+
 __authors__ = "Katharina Rieck"
 __copyright__ = "Copyright 2022, FZJ-IEK-3"
 __credits__ = ["Noah Pflugradt"]
@@ -132,9 +129,7 @@ def setup_function(
     seconds_per_timestep = 60 * 15
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.full_year(
-            year=year, seconds_per_timestep=seconds_per_timestep
-        )
+        my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
         cache_dir_path_simuparams = "/benchtop/2024-k-rieck-hisim/hisim_inputs_cache/"
         if os.path.exists(cache_dir_path_simuparams):
             my_simulation_parameters.cache_dir_path = cache_dir_path_simuparams
@@ -309,7 +304,7 @@ def setup_function(
     # Build Heat Distribution System
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
         water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
-        absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2
+        absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config, my_simulation_parameters=my_simulation_parameters,
@@ -424,7 +419,6 @@ def setup_function(
     else:
         my_sim.add_component(my_electricity_meter, connect_automatically=True)
 
-
     # Set Results Path
     # if config_filename is given, get hash number and sampling mode for result path
     if config_filename is not None:
@@ -447,9 +441,9 @@ def setup_function(
     SingletonSimRepository().set_entry(
         key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME, entry=f"{scenario_hash_string}",
     )
-
+    # "/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/paper_1_quantification_self-covered_heat_demand_germany/hisim_results",
     ResultPathProviderSingleton().set_important_result_path_information(
-        module_directory=my_sim.module_directory,  # "/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/paper_1_quantification_self-covered_heat_demand_germany/hisim_results",
+        module_directory=my_sim.module_directory,
         model_name=my_sim.module_filename,
         further_result_folder_description=os.path.join(
             *[

@@ -18,17 +18,15 @@ from hisim.components import building
 from hisim.components import (
     advanced_battery_bslib,
     controller_l2_energy_management_system,
+    simple_water_storage,
     heat_distribution_system,
-    generic_district_heating,
-    generic_hot_water_storage_modular,
-    controller_l1_heatpump,
     electricity_meter,
     advanced_ev_battery_bslib,
     controller_l1_generic_ev_charge,
     generic_car,
-    generic_heat_source,
+    generic_boiler,
 )
-from hisim.components.heat_distribution_system import PositionHotWaterStorageInSystemSetup
+
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessingoptions import PostProcessingOptions
@@ -62,9 +60,11 @@ def setup_function(
         - Weather
         - Photovoltaic System
         - Building
-        - District Heating
+        - Pellets Heater
+        - Pellets Heater Controller
         - Heat Distribution System
         - Heat Distribution Controller
+        - Heat Water Storage
         - Battery
         - Energy Management System
         - Electricity Meter
@@ -78,11 +78,10 @@ def setup_function(
     config_filename = my_sim.my_module_config
     # try reading energ system and archetype configs
     my_config = read_in_configs(my_sim.my_module_config)
-
     if my_config is None:
-        my_config = ModularHouseholdConfig().get_default_config_for_household_district_heating()
+        my_config = ModularHouseholdConfig().get_default_config_for_household_pellet()
         log.warning(
-            f"Could not read the modular household config from path '{config_filename}'. Using the district heating household default config instead."
+            f"Could not read the modular household config from path '{config_filename}'. Using the pellets household default config instead."
         )
     assert my_config.archetype_config_ is not None
     assert my_config.energy_system_config_ is not None
@@ -120,10 +119,8 @@ def setup_function(
 
     # Set heating systems for space heating and domestic hot water
     heating_system = energy_system_config_.heating_system
-    if heating_system != HeatingSystems.DISTRICT_HEATING:
-        raise ValueError(
-            f"Heating system was set as {heating_system} but needs to be {HeatingSystems.DISTRICT_HEATING.value} for this system setup."
-        )
+    if heating_system != HeatingSystems.PELLET_HEATING:
+        raise ValueError("Heating system needs to be pellet heater for this system setup.")
 
     heating_reference_temperature_in_celsius = -7.0
 
@@ -255,59 +252,75 @@ def setup_function(
     # Add to simulator
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
-    # Build district heating controller
-    my_district_heating_controller_sh_config = generic_district_heating.DistrictHeatingControllerForSHConfig.get_default_district_heating_controller_config()
-    my_district_heating_controller = generic_district_heating.DistrictHeatingControllerForSH(
-        my_simulation_parameters=my_simulation_parameters, config=my_district_heating_controller_sh_config
-    )
-    my_sim.add_component(my_district_heating_controller, connect_automatically=True)
+    # Set sizing option for Hot water Storage
+    sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM
 
-    # Build district heating For Space Heating
-    my_district_heating_sh_config = generic_district_heating.DistrictHeatingForSHConfig.get_default_district_heating_config()
-    my_district_heating = generic_district_heating.DistrictHeatingForSH(
-        config=my_district_heating_sh_config, my_simulation_parameters=my_simulation_parameters
+    # Build Pellets heater For Space Heating
+    my_pellet_heater_config = generic_boiler.GenericBoilerConfig.get_scaled_conventional_pellet_boiler_config(
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
     )
-    my_sim.add_component(my_district_heating, connect_automatically=True)
+    my_pellet_heater = generic_boiler.GenericBoiler(
+        config=my_pellet_heater_config, my_simulation_parameters=my_simulation_parameters,
+    )
+    my_sim.add_component(my_pellet_heater, connect_automatically=True)
 
-    # Build district heating for DHW
-    my_district_heating_for_dhw_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating(
-        heating_system=lt.HeatingSystems.DISTRICT_HEATING,
-        max_warm_water_demand_in_liter=my_occupancy.max_hot_water_demand,
-        scaling_factor_according_to_number_of_apartments=my_occupancy.scaling_factor_according_to_number_of_apartments,
-        seconds_per_timestep=my_simulation_parameters.seconds_per_timestep,
-        name="DHW" + lt.HeatingSystems.DISTRICT_HEATING.value
+    # Build Pellet Heater Controller
+    # Pellet boiler cannot modulate! So use here on off controller
+    my_pellet_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.get_default_on_off_generic_boiler_controller_config(
+        minimal_thermal_power_in_watt=my_pellet_heater_config.minimal_thermal_power_in_watt,
+        maximal_thermal_power_in_watt=my_pellet_heater_config.maximal_thermal_power_in_watt,
     )
-    my_district_heating_controller_dhw_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-        "DHW" + lt.HeatingSystems.DISTRICT_HEATING.value + "Controller"
+    my_pellet_heater_controller = generic_boiler.GenericBoilerController(
+        my_simulation_parameters=my_simulation_parameters, config=my_pellet_heater_controller_config,
     )
-    my_boiler_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
-        number_of_apartments=my_building_information.number_of_apartments
-    )
-    my_boiler_config.compute_default_cycle(
-        temperature_difference_in_kelvin=my_district_heating_controller_dhw_config.t_max_heating_in_celsius
-        - my_district_heating_controller_dhw_config.t_min_heating_in_celsius
+    my_sim.add_component(my_pellet_heater_controller, connect_automatically=True)
+
+    # Build Pellet Heater for DHW
+    # DHW Pellet heater and storage configs
+    my_pellet_heater_for_dhw_config = generic_boiler.GenericBoilerConfigForDHW.get_scaled_conventional_pellet_dhw_boiler_config(
+        number_of_apartments_in_building=number_of_apartments
     )
 
-    my_boiler_for_dhw = generic_hot_water_storage_modular.HotWaterStorage(
-        my_simulation_parameters=my_simulation_parameters, config=my_boiler_config
+    my_pellet_heater_controller_dhw_config = generic_boiler.GenericBoilerControllerConfigForDHW.get_default_on_off_dhw_boiler_controller_config(
+        minimal_thermal_power_in_watt=my_pellet_heater_for_dhw_config.minimal_thermal_power_in_watt,
+        maximal_thermal_power_in_watt=my_pellet_heater_for_dhw_config.maximal_thermal_power_in_watt,
     )
 
-    my_district_heating_controller_for_dhw = controller_l1_heatpump.L1HeatPumpController(
-        my_simulation_parameters=my_simulation_parameters, config=my_district_heating_controller_dhw_config
+    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
+        number_of_apartments=number_of_apartments
     )
 
-    my_district_heating_for_dhw = generic_heat_source.HeatSource(
-        config=my_district_heating_for_dhw_config, my_simulation_parameters=my_simulation_parameters
+    my_dhw_storage = simple_water_storage.SimpleDHWStorage(
+        my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
-    my_sim.add_component(my_district_heating_for_dhw, connect_automatically=True)
-    my_sim.add_component(my_boiler_for_dhw, connect_automatically=True)
-    my_sim.add_component(my_district_heating_controller_for_dhw, connect_automatically=True)
+
+    my_pellet_heater_controller_for_dhw = generic_boiler.GenericBoilerControllerForDHW(
+        my_simulation_parameters=my_simulation_parameters, config=my_pellet_heater_controller_dhw_config
+    )
+
+    my_pellet_heater_for_dhw = generic_boiler.GenericBoilerForDHW(
+        config=my_pellet_heater_for_dhw_config, my_simulation_parameters=my_simulation_parameters
+    )
+    my_sim.add_component(my_pellet_heater_for_dhw, connect_automatically=True)
+    my_sim.add_component(my_dhw_storage, connect_automatically=True)
+    my_sim.add_component(my_pellet_heater_controller_for_dhw, connect_automatically=True)
+
+    # Build Heat Water Storage
+    my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
+        max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
+        temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
+        sizing_option=sizing_option,
+    )
+    my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
+        config=my_simple_heat_water_storage_config, my_simulation_parameters=my_simulation_parameters,
+    )
+    # Add to simulator
+    my_sim.add_component(my_simple_water_storage, connect_automatically=True)
 
     # Build Heat Distribution System
     my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
         water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
         absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
-        position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FIX,
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config, my_simulation_parameters=my_simulation_parameters,

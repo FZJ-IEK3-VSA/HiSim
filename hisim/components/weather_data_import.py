@@ -6,7 +6,7 @@ import io
 import datetime
 import pandas as pd
 from wetterdienst import Settings
-from wetterdienst.provider.dwd.observation.api import (
+from wetterdienst.provider.dwd.observation import (
     DwdObservationParameter,
     DwdObservationRequest,
     DwdObservationResolution,

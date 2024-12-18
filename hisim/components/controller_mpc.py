@@ -715,9 +715,9 @@ class MpcController(cp.Component):
         # Numerical values of pv forecast (casadi fromat)
         pv_forecast_24h = np.reshape(np.array(pv_forecast_24h), (1, len(pv_forecast_24h)))
 
-        p_el = np.reshape(np.array(price_purchase_forecast_24h), (1, len(price_purchase_forecast_24h)))
+        p_el: np.ndarray = np.reshape(np.array(price_purchase_forecast_24h), (1, len(price_purchase_forecast_24h)))
 
-        feed_in_tariff = np.reshape(
+        feed_in_tariff: np.ndarray = np.reshape(
             np.array(price_injection_forecast_24h),
             (1, len(price_injection_forecast_24h)),
         )

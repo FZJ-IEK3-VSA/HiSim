@@ -25,6 +25,6 @@ ordered_set
 typing_extensions
 python-dotenv
 windpowerlib  # ==0.2.1
-wetterdienst==0.97.0
+wetterdienst==0.63.0
 cdsapi
 xarray

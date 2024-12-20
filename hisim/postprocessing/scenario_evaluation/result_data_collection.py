@@ -320,6 +320,7 @@ class ResultDataCollection:
                     list_building_temp_deviation_below_set_heating_in_celsius_hour,
                     list_building_temp_deviation_above_set_cooling_in_celsius_hour,
                 )
+        raise ValueError("Lists with temperatures could not be generated. Something went wrong here.")
 
     def get_list_of_all_relevant_folders_or_files(self, result_path: str, folder_or_filename: str) -> List[str]:
         """Get a list of all folders or files which you want to analyze."""
@@ -413,7 +414,7 @@ class ResultDataCollection:
         list_building_temp_deviation_above_set_cooling_in_celsius_hour: List,
     ) -> None:
         """Generate the result dataframe with building temperatures."""
-        dict_with_no_duplicates = dict.fromkeys(dict_with_all_data, {})
+        dict_with_no_duplicates: Dict = dict.fromkeys(dict_with_all_data, {})
 
         # get rows with unique house indices
         list_with_unique_house_indices = []
@@ -788,20 +789,20 @@ class ResultDataCollection:
         list_with_result_data_folders: List[str],
         default_config_dict: Dict[str, Any],
         parameter_key: Optional[str],
-    ) -> tuple[List[Any], List[Any], List[Any]]:
+    ) -> Tuple[List[Any], List[Any], List[Any], List[Any], List[Any], List[Any], List[Any], List[Any], List[Any], List[Any], List[Any]]:
         """Order result files according to different parameters."""
 
         list_with_module_configs: List = []
         list_with_csv_files: List = []
         list_with_parameter_key_values: List = []
-        list_building_set_heating_temperature_in_celsius = []
-        list_building_set_cooling_temperature_in_celsius = []
-        list_building_min_indoor_temperature_in_celsius = []
-        list_building_max_indoor_temperature_in_celsius = []
-        list_building_diff_min_indoor_and_set_heating_temperature_in_celsius = []
-        list_building_diff_max_indoor_and_set_cooling_temperature_in_celsius = []
-        list_building_temp_deviation_below_set_heating_in_celsius_hour = []
-        list_building_temp_deviation_above_set_cooling_in_celsius_hour = []
+        list_building_set_heating_temperature_in_celsius: List = []
+        list_building_set_cooling_temperature_in_celsius: List = []
+        list_building_min_indoor_temperature_in_celsius: List = []
+        list_building_max_indoor_temperature_in_celsius: List = []
+        list_building_diff_min_indoor_and_set_heating_temperature_in_celsius: List = []
+        list_building_diff_max_indoor_and_set_cooling_temperature_in_celsius: List = []
+        list_building_temp_deviation_below_set_heating_in_celsius_hour: List = []
+        list_building_temp_deviation_above_set_cooling_in_celsius_hour: List = []
 
         for folder in list_with_result_data_folders:  # type: ignore
             if parameter_key is None:

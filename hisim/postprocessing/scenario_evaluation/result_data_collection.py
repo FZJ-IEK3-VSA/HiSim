@@ -80,10 +80,10 @@ class ResultDataCollection:
                 list_with_parameter_key_values,
                 list_with_module_config_dicts,
                 list_building_set_heating_temperature_in_celsius,
-                list_building_set_cooling_temperature_in_celsius,
                 list_building_min_indoor_temperature_in_celsius,
-                list_building_max_indoor_temperature_in_celsius,
                 list_building_diff_min_indoor_and_set_heating_temperature_in_celsius,
+                list_building_set_cooling_temperature_in_celsius,
+                list_building_max_indoor_temperature_in_celsius,
                 list_building_diff_max_indoor_and_set_cooling_temperature_in_celsius,
                 list_building_temp_deviation_below_set_heating_in_celsius_hour,
                 list_building_temp_deviation_above_set_cooling_in_celsius_hour,
@@ -443,6 +443,7 @@ class ResultDataCollection:
 
         # Initialize dictionaries to hold data
         dict_with_input_data = {key: dict_with_no_duplicates[key] for key in ["Index", "Input"]}
+        print(dict_with_input_data)
         dict_with_temperature_data: Dict[str, defaultdict] = {
             "Output": defaultdict(list),
         }
@@ -832,10 +833,10 @@ class ResultDataCollection:
                 )
             (
                 list_building_set_heating_temperature_in_celsius,
-                list_building_set_cooling_temperature_in_celsius,
                 list_building_min_indoor_temperature_in_celsius,
-                list_building_max_indoor_temperature_in_celsius,
                 list_building_diff_min_indoor_and_set_heating_temperature_in_celsius,
+                list_building_set_cooling_temperature_in_celsius,
+                list_building_max_indoor_temperature_in_celsius,
                 list_building_diff_max_indoor_and_set_cooling_temperature_in_celsius,
                 list_building_temp_deviation_below_set_heating_in_celsius_hour,
                 list_building_temp_deviation_above_set_cooling_in_celsius_hour,
@@ -856,10 +857,10 @@ class ResultDataCollection:
             list_with_parameter_key_values,
             list_with_module_configs,
             list_building_set_heating_temperature_in_celsius,
-            list_building_set_cooling_temperature_in_celsius,
             list_building_min_indoor_temperature_in_celsius,
-            list_building_max_indoor_temperature_in_celsius,
             list_building_diff_min_indoor_and_set_heating_temperature_in_celsius,
+            list_building_set_cooling_temperature_in_celsius,
+            list_building_max_indoor_temperature_in_celsius,
             list_building_diff_max_indoor_and_set_cooling_temperature_in_celsius,
             list_building_temp_deviation_below_set_heating_in_celsius_hour,
             list_building_temp_deviation_above_set_cooling_in_celsius_hour,

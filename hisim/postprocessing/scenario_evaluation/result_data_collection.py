@@ -451,28 +451,28 @@ class ResultDataCollection:
         for house_index, set_heating_temperature in enumerate(list_building_set_heating_temperature_in_celsius):
 
             # Add outputs to dict
-            dict_with_temperature_data["Output"]["building set heating temperature [°C]"].append(
+            dict_with_temperature_data["Output"]["building_set_heating_temperature_in_celsius"].append(
                 set_heating_temperature
             )
-            dict_with_temperature_data["Output"]["building min indoor temerature [°C]"].append(
+            dict_with_temperature_data["Output"]["building_min_indoor_temperature_in_celsius"].append(
                 list_building_min_indoor_temperature_in_celsius[house_index]
             )
             dict_with_temperature_data["Output"][
-                "difference between set heating and min indoor temperature [°C]"
+                "difference_between_set_heating_and_min_indoor_temperature_in_celsius"
             ].append(list_building_diff_min_indoor_and_set_heating_temperature_in_celsius[house_index])
-            dict_with_temperature_data["Output"]["temperature deviation below set heating temperature [°Ch]"].append(
+            dict_with_temperature_data["Output"]["temperature_deviation_below_set_heating_temperature_in_celsius_hour"].append(
                 list_building_temp_deviation_below_set_heating_in_celsius_hour[house_index]
             )
-            dict_with_temperature_data["Output"]["building set cooling temperature [°C]"].append(
+            dict_with_temperature_data["Output"]["building_set_cooling_temperature_in_celsius"].append(
                 list_building_set_cooling_temperature_in_celsius[house_index]
             )
-            dict_with_temperature_data["Output"]["building max indoor temperature [°C]"].append(
+            dict_with_temperature_data["Output"]["building_max_indoor_temperature_in_celsius"].append(
                 list_building_max_indoor_temperature_in_celsius[house_index]
             )
             dict_with_temperature_data["Output"][
-                "difference between set cooling and max indoor temperature [°C]"
+                "difference_between_set_cooling_and_max_indoor_temperature_in_celsius"
             ].append(list_building_diff_max_indoor_and_set_cooling_temperature_in_celsius[house_index])
-            dict_with_temperature_data["Output"]["temperature deviation above set cooling temperature [°Ch]"].append(
+            dict_with_temperature_data["Output"]["temperature_deviation_above_set_cooling_temperature_in_celsius_hour"].append(
                 list_building_temp_deviation_above_set_cooling_in_celsius_hour[house_index]
             )
 

@@ -173,6 +173,11 @@ class WattPerSquareMeter(AbstractUnit, JSONWizard):
 
     symbol: str = "W per square meter"
 
+@dataclasses.dataclass
+class WattPerMeter(AbstractUnit, JSONWizard):
+    """Watt Per Meter unit."""
+
+    symbol: str = "W per meter"
 
 @dataclasses.dataclass
 class WattHourPerSquareMeter(AbstractUnit, JSONWizard):

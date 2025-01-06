@@ -68,7 +68,7 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
         """Returns default configuration of a Heat Source used for heating."""
         config = SimpleHeatSourceConfig(
             building_name=building_name,
-            name="HeatingHeatSourceConstPower",
+            name="HeatSourceConstPower",
             const_source=SimpleHeatSourceType.CONSTANTTHERMALPOWER,
             power_th_in_watt=5000.0,
             temperature_out_in_celsius=5,
@@ -87,7 +87,7 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
         """Returns default configuration of a Heat Source used for heating."""
         config = SimpleHeatSourceConfig(
             building_name=building_name,
-            name="HeatingHeatSourceConstTemperature",
+            name="HeatSourceConstTemperature",
             const_source=SimpleHeatSourceType.CONSTANTTEMPERATURE,
             power_th_in_watt=0,
             temperature_out_in_celsius=5,
@@ -108,7 +108,7 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
         """Returns default configuration of a Heat Source used for heating."""
         config = SimpleHeatSourceConfig(
             building_name=building_name,
-            name="HeatingHeatSourceVarBrinetemperature",
+            name="HeatSourceVarBrineTemperature",
             const_source=SimpleHeatSourceType.BRINETEMPERATURE,
             power_th_in_watt=0,
             temperature_out_in_celsius=5,
@@ -319,7 +319,7 @@ class SimpleHeatSource(cp.Component):
             lifetime_in_years=config.lifetime,
             capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
             device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
-            kpi_tag=KpiTagEnumClass.GENERIC_HEAT_SOURCE
+            kpi_tag=KpiTagEnumClass.HEAT_SOURCE
         )
         return capex_cost_data_class
 
@@ -336,7 +336,7 @@ class SimpleHeatSource(cp.Component):
             co2_footprint_in_kg=0,
             consumption_in_kwh=0,
             loadtype=lt.LoadTypes.ANY,
-            kpi_tag=KpiTagEnumClass.GENERIC_HEAT_SOURCE
+            kpi_tag=KpiTagEnumClass.HEAT_SOURCE
         )
 
         return opex_cost_data_class

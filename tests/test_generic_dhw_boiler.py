@@ -28,8 +28,11 @@ def test_simple_bucket_boiler_state():
         generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler()
     )
     boiler_config.volume = 200
-    heater_config = (
-        generic_heat_source.HeatSourceConfig.get_default_config_waterheating_with_district_heating()
+    heater_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating(
+        heating_system=lt.HeatingSystems.DISTRICT_HEATING,
+        max_warm_water_demand_in_liter=200,
+        scaling_factor_according_to_number_of_apartments=1,
+        seconds_per_timestep=seconds_per_timestep,
     )
 
     # definition of outputs
@@ -106,7 +109,7 @@ def test_simple_bucket_boiler_state():
     my_boiler.i_simulate(j, stsv, False)
 
     # check if heat loss in boiler corresponds to heatloss originated from 1 l hot water use and u-value heat loss
-    assert stsv.values[2] == my_heater.config.power_th * my_heater.config.efficiency
+    assert stsv.values[2] == my_heater.config.thermal_power_in_watt * my_heater.config.efficiency
 
     # check if heater stops heating when temperature of boiler is too high
     stsv.values[0] = 0

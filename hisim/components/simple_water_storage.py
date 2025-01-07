@@ -135,7 +135,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
                 max_thermal_power_in_watt_of_heating_system
                 * 1e-3
                 / (
-                    PhysicsConfig.water_specific_heat_capacity_in_watthour_per_kilogramm_per_kelvin
+                    PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.WATER).specific_heat_capacity_in_watthour_per_kg_per_kelvin
                     * temperature_difference_between_flow_and_return_in_celsius
                 )
             ) * 1000  # 1m3 = 1000l
@@ -390,7 +390,7 @@ class SimpleWaterStorage(cp.Component):
 
         # basis here: Q = m * cw * delta temperature, temperature loss is another term for delta temperature here
         temperature_loss_of_water_in_celsius_per_hour = heat_loss_in_watt / (
-            PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin * mass_in_storage_in_kg
+            PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.WATER).specific_heat_capacity_in_joule_per_kg_per_kelvin * mass_in_storage_in_kg
         )
 
         # transform from °C/h to °C/timestep
@@ -449,7 +449,7 @@ class SimpleWaterStorage(cp.Component):
         # Q = c * m * (Tout - Tin)
 
         thermal_energy_in_storage_in_joule = (
-            PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+            PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.WATER).specific_heat_capacity_in_joule_per_kg_per_kelvin
             * mass_in_storage_in_kg
             * (mean_water_temperature_in_storage_in_celsius)
         )  # T_mean - 0°C
@@ -465,7 +465,7 @@ class SimpleWaterStorage(cp.Component):
         # Q = c * m * (Tout - Tin)
         thermal_energy_of_input_water_flow_in_watt_hour = (
             (1 / 3600)
-            * PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+            * PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.WATER).specific_heat_capacity_in_joule_per_kg_per_kelvin
             * water_mass_in_kg
             * water_temperature_difference_in_kelvin
         )
@@ -493,7 +493,7 @@ class SimpleWaterStorage(cp.Component):
         """Calculate thermal energy of the water flow with respect to 0°C temperature."""
 
         thermal_power_of_input_water_flow_in_watt = (
-            PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+            PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.WATER).specific_heat_capacity_in_joule_per_kg_per_kelvin
             * water_mass_flow_in_kg_per_s
             * (water_temperature_hot_in_celsius - water_temperature_cold_in_celsius)
         )
@@ -506,6 +506,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
 
     # Input
     # A hot water storage can be used also with more than one heat generator. In this case you need to add a new input and output.
+    WaterTemperatureToHeatDistribution = "WaterTemperatureToHeatDistribution"
     WaterTemperatureFromHeatDistribution = "WaterTemperatureFromHeatDistribution"
     WaterTemperatureFromHeatGenerator = "WaterTemperatureFromHeatGenerator"
     WaterMassFlowRateFromHeatGenerator = "WaterMassFlowRateFromHeatGenerator"
@@ -514,9 +515,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
 
     # Output
 
-    WaterTemperatureToHeatDistribution = "WaterTemperatureToHeatDistribution"
     WaterTemperatureToHeatGenerator = "WaterTemperatureToHeatGenerator"
-
     WaterMeanTemperatureInStorage = "WaterMeanTemperatureInStorage"
 
     # make some more outputs for testing simple storage
@@ -675,7 +674,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         self.add_default_connections(self.get_default_connections_from_heat_distribution_system())
         self.add_default_connections(self.get_default_connections_from_advanced_heat_pump())
         self.add_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
-        self.add_default_connections(self.get_default_connections_from_gasheater())
+        self.add_default_connections(self.get_default_connections_from_generic_boiler())
 
     def get_default_connections_from_heat_distribution_system(
         self,
@@ -758,27 +757,27 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         )
         return connections
 
-    def get_default_connections_from_gasheater(self) -> List[cp.ComponentConnection]:
+    def get_default_connections_from_generic_boiler(self) -> List[cp.ComponentConnection]:
         """Get gasheater default connections."""
 
         # use importlib for importing the other component in order to avoid circular-import errors
-        component_module_name = "hisim.components.generic_gas_heater"
+        component_module_name = "hisim.components.generic_boiler"
         component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "GasHeater")
+        component_class = getattr(component_module, "GenericBoiler")
         connections = []
         gasheater_classname = component_class.get_classname()
         connections.append(
             cp.ComponentConnection(
                 SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator,
                 gasheater_classname,
-                component_class.MassflowOutputTemperature,
+                component_class.WaterOutputTemperature,
             )
         )
         connections.append(
             cp.ComponentConnection(
                 SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator,
                 gasheater_classname,
-                component_class.MassflowOutput,
+                component_class.WaterOutputMassFlow,
             )
         )
         return connections
@@ -939,6 +938,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
 
         # Set outputs -------------------------------------------------------------------------------------------------------
         if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP:
+
             stsv.set_output_value(
                 self.water_temperature_heat_distribution_system_output_channel,
                 water_temperature_to_heat_distribution_system_in_celsius,
@@ -1004,10 +1004,10 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         The function sets important constants an parameters for the calculations.
         """
         self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = (
-            PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+            PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.WATER).specific_heat_capacity_in_joule_per_kg_per_kelvin
         )
         self.specific_heat_capacity_of_water_in_watthour_per_kilogram_per_celsius = (
-            PhysicsConfig.water_specific_heat_capacity_in_watthour_per_kilogramm_per_kelvin
+            PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.WATER).specific_heat_capacity_in_watthour_per_kg_per_kelvin
         )
         # https://www.internetchemie.info/chemie-lexikon/daten/w/wasser-dichtetabelle.php
         self.density_water_at_40_degree_celsius_in_kg_per_liter = 0.992
@@ -1089,7 +1089,28 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
-        return []
+        list_of_kpi_entries: List[KpiEntry] = []
+        for index, output in enumerate(all_outputs):
+            if output.component_name == self.component_name:
+                if output.field_name == self.StandbyHeatLoss and output.unit == lt.Units.WATT:
+                    # calc heat loss
+                    heat_loss_in_watt = postprocessing_results.iloc[:, index].loc[
+                        postprocessing_results.iloc[:, index] > 0.0
+                    ]
+                    # get energy from power
+                    heat_loss_in_kilowatt_hour = round(KpiHelperClass.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=heat_loss_in_watt,
+                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    ), 1)
+                    heat_loss_entry = KpiEntry(
+                        name="Standby heat loss of Hot water storage",
+                        unit="kWh",
+                        value=heat_loss_in_kilowatt_hour,
+                        tag=KpiTagEnumClass.STORAGE_HOT_WATER_SPACE_HEATING,
+                        description=self.component_name,
+                    )
+                    list_of_kpi_entries.append(heat_loss_entry)
+        return list_of_kpi_entries
 
 
 class SimpleHotWaterStorageController(cp.Component):
@@ -1234,8 +1255,6 @@ class SimpleDHWStorage(SimpleWaterStorage):
     WaterConsumption = "WaterConsumption"
 
     # Output
-    # WaterTemperatureInputDHW = "WaterTemperatureInputDHW"
-    # WaterTemperatureOutputDHW = "WaterTemperatureOutputDHW"
     WaterTemperatureToHeatGenerator = "WaterTemperatureToHeatGenerator"
     WaterTemperatureFromHeatGeneratorOutput = "WaterTemperatureFromHeatGenerator"
     WaterMeanTemperatureInStorage = "WaterMeanTemperatureInStorage"
@@ -1247,6 +1266,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
     ThermalPowerConsumptionDHW = "ThermalPowerConsumptionDHW"
     ThermalPowerFromHeatGenerator = "ThermalPowerFromHeatGenerator"
     StandbyHeatLoss = "StandbyHeatLoss"
+    WaterMassFlowRateOfDHW = "WaterMassFlowRateOfDHW"
 
     @utils.measure_execution_time
     def __init__(
@@ -1270,7 +1290,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
         self.waterstorageconfig = config
 
-        self.mean_water_temperature_in_water_storage_in_celsius: float = 60
+        self.mean_water_temperature_in_water_storage_in_celsius: float = 55
 
         self.build()
 
@@ -1307,21 +1327,6 @@ class SimpleDHWStorage(SimpleWaterStorage):
         )
 
         # Output channels
-        # self.water_temperature_dhw_input_channel: ComponentOutput = self.add_output(
-        #     self.component_name,
-        #     self.WaterTemperatureInputDHW,
-        #     lt.LoadTypes.WATER,
-        #     lt.Units.CELSIUS,
-        #     output_description=f"here a description for {self.WaterTemperatureInputDHW} will follow.",
-        # )
-        #
-        # self.water_temperature_dhw_output_channel: ComponentOutput = self.add_output(
-        #     self.component_name,
-        #     self.WaterTemperatureOutputDHW,
-        #     lt.LoadTypes.WATER,
-        #     lt.Units.CELSIUS,
-        #     output_description=f"here a description for {self.WaterTemperatureOutputDHW} will follow.",
-        # )
 
         self.water_temperature_to_heat_generator_channel: ComponentOutput = self.add_output(
             self.component_name,
@@ -1410,8 +1415,17 @@ class SimpleDHWStorage(SimpleWaterStorage):
             lt.Units.WATT,
             output_description=f"here a description for {self.ThermalPowerFromHeatGenerator} will follow.",
         )
+        self.water_mass_flow_rate_dhw_output_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.WaterMassFlowRateOfDHW,
+            lt.LoadTypes.WARM_WATER,
+            lt.Units.KG_PER_SEC,
+            output_description=f"here a description for {self.WaterMassFlowRateOfDHW} will follow."
+        )
 
         self.add_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
+        self.add_default_connections(self.get_default_connections_from_generic_dhw_boiler())
+        self.add_default_connections(self.get_default_connections_from_dhw_district_heating())
         self.add_default_connections(self.get_default_connections_from_utsp())
 
     def get_default_connections_from_more_advanced_heat_pump(
@@ -1461,6 +1475,60 @@ class SimpleDHWStorage(SimpleWaterStorage):
         )
         return connections
 
+    def get_default_connections_from_generic_dhw_boiler(
+        self,
+    ) -> List[cp.ComponentConnection]:
+        """Get generic dhw boiler default connections."""
+
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.generic_boiler"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "GenericBoilerForDHW")
+        connections = []
+        dhw_boiler_classname = component_class.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                SimpleDHWStorage.WaterTemperatureFromHeatGenerator,
+                dhw_boiler_classname,
+                component_class.WaterOutputTemperature,
+            )
+        )
+        connections.append(
+            cp.ComponentConnection(
+                SimpleDHWStorage.WaterMassFlowRateFromHeatGenerator,
+                dhw_boiler_classname,
+                component_class.WaterOutputMassFlow,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_dhw_district_heating(
+        self,
+    ) -> List[cp.ComponentConnection]:
+        """Get dhw district heating default connections."""
+
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.generic_district_heating"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "DistrictHeatingForDHW")
+        connections = []
+        dhw_boiler_classname = component_class.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                SimpleDHWStorage.WaterTemperatureFromHeatGenerator,
+                dhw_boiler_classname,
+                component_class.WaterOutputTemperature,
+            )
+        )
+        connections.append(
+            cp.ComponentConnection(
+                SimpleDHWStorage.WaterMassFlowRateFromHeatGenerator,
+                dhw_boiler_classname,
+                component_class.WaterOutputMassFlowRate,
+            )
+        )
+        return connections
+
     def build(
         self,
     ) -> None:
@@ -1476,10 +1544,10 @@ class SimpleDHWStorage(SimpleWaterStorage):
         )
 
         self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius = (
-            PhysicsConfig.water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin
+            PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.WATER).specific_heat_capacity_in_joule_per_kg_per_kelvin
         )
         self.specific_heat_capacity_of_water_in_watthour_per_kilogram_per_celsius = (
-            PhysicsConfig.water_specific_heat_capacity_in_watthour_per_kilogramm_per_kelvin
+            PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.WATER).specific_heat_capacity_in_watthour_per_kg_per_kelvin
         )
         # https://www.internetchemie.info/chemie-lexikon/daten/w/wasser-dichtetabelle.php
         self.density_water_at_40_degree_celsius_in_kg_per_liter = 0.992
@@ -1679,6 +1747,10 @@ class SimpleDHWStorage(SimpleWaterStorage):
             self.thermal_power_from_heat_generator_channel,
             thermal_power_from_heat_generator_in_watt,
         )
+        stsv.set_output_value(
+            self.water_mass_flow_rate_dhw_output_channel,
+            water_mass_flow_rate_of_dhw_in_kg_per_second,
+        )
         # Set state -------------------------------------------------------------------------------------------------------
 
         # calc heat loss in W and the temperature loss
@@ -1737,28 +1809,25 @@ class SimpleDHWStorage(SimpleWaterStorage):
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
-        thermal_power_dhw_consumption_in_kilowatt_hour: float
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
-                if output.field_name == self.ThermalPowerConsumptionDHW:
-                    thermal_power_dhw_consumption_in_watt_series = postprocessing_results.iloc[:, index]
-                    thermal_power_dhw_consumption_in_kilowatt_hour = (
-                        KpiHelperClass.compute_total_energy_from_power_timeseries(
-                            power_timeseries_in_watt=thermal_power_dhw_consumption_in_watt_series,
-                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
-                        )
+                if output.field_name == self.StandbyHeatLoss and output.unit == lt.Units.WATT:
+                    # calc heat loss
+                    heat_loss_in_watt = postprocessing_results.iloc[:, index].loc[
+                        postprocessing_results.iloc[:, index] > 0.0
+                    ]
+                    # get energy from power
+                    heat_loss_in_kilowatt_hour = round(KpiHelperClass.compute_total_energy_from_power_timeseries(
+                        power_timeseries_in_watt=heat_loss_in_watt,
+                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    ), 1)
+                    heat_loss_entry = KpiEntry(
+                        name="Standby heat loss of DHW storage",
+                        unit="kWh",
+                        value=heat_loss_in_kilowatt_hour,
+                        tag=KpiTagEnumClass.STORAGE_DOMESTIC_HOT_WATER,
+                        description=self.component_name,
                     )
-                    break
-
-        # make kpi entry
-        occupancy_total_electricity_consumption_entry = KpiEntry(
-            name="Residents' total thermal dhw consumption",
-            unit="kWh",
-            value=thermal_power_dhw_consumption_in_kilowatt_hour,
-            tag=KpiTagEnumClass.RESIDENTS,
-            description=self.component_name,
-        )
-
-        list_of_kpi_entries.append(occupancy_total_electricity_consumption_entry)
+                    list_of_kpi_entries.append(heat_loss_entry)
         return list_of_kpi_entries

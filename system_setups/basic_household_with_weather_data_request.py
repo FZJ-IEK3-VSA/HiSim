@@ -111,20 +111,16 @@ def setup_function(
         location=location,
         source_path=weather_data_import.csv_path,
         data_source=weather_data_import.weather_data_source,
-        predictive_control=False, )
-
-    my_weather = weather.Weather(
-        config=my_weather_config, my_simulation_parameters=my_simulation_parameters
+        predictive_control=False,
     )
+
+    my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
 
     # Build PV
-    my_photovoltaic_system_config = (
-        generic_pv_system.PVSystemConfig.get_default_pv_system()
-    )
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_pv_system()
 
     my_photovoltaic_system = generic_pv_system.PVSystem(
-        config=my_photovoltaic_system_config,
-        my_simulation_parameters=my_simulation_parameters,
+        config=my_photovoltaic_system_config, my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Electricity Meter
@@ -163,10 +159,7 @@ def setup_function(
         source_component_output=my_photovoltaic_system.ElectricityOutput,
         source_load_type=loadtypes.LoadTypes.ELECTRICITY,
         source_unit=loadtypes.Units.WATT,
-        source_tags=[
-            loadtypes.ComponentType.PV,
-            loadtypes.InandOutputType.ELECTRICITY_PRODUCTION,
-        ],
+        source_tags=[loadtypes.ComponentType.PV, loadtypes.InandOutputType.ELECTRICITY_PRODUCTION,],
         source_weight=999,
     )
 
@@ -194,9 +187,7 @@ def setup_function(
     my_building.connect_only_predefined_connections(my_weather, my_occupancy)
 
     my_building.connect_input(
-        my_building.ThermalPowerDelivered,
-        my_heat_pump.component_name,
-        my_heat_pump.ThermalPowerDelivered,
+        my_building.ThermalPowerDelivered, my_heat_pump.component_name, my_heat_pump.ThermalPowerDelivered,
     )
 
     my_heat_pump_controller.connect_only_predefined_connections(my_building)
@@ -206,9 +197,7 @@ def setup_function(
         my_electricity_meter.component_name,
         my_electricity_meter.ElectricityAvailable,
     )
-    my_heat_pump.connect_only_predefined_connections(
-        my_weather, my_heat_pump_controller
-    )
+    my_heat_pump.connect_only_predefined_connections(my_weather, my_heat_pump_controller)
     my_heat_pump.get_default_connections_heatpump_controller()
     # =================================================================================================================================
     # Add Components to Simulation Parameters

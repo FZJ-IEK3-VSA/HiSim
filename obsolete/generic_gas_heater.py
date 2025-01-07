@@ -21,11 +21,14 @@ from hisim.component import (
     DisplayConfig,
     CapexCostDataClass
 )
+from hisim.components.simple_water_storage import SimpleHotWaterStorage
+from hisim.components.weather import Weather
+from hisim.components.heat_distribution_system import HeatDistributionController
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 
-__authors__ = "Frank Burkrad, Maximilian Hillen"
+__authors__ = "Frank Burkrad, Maximilian Hillen, Markus Blasberg, Katharina Rieck"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
 __credits__ = ["Noah Pflugradt"]
 __license__ = ""
@@ -144,7 +147,6 @@ class GasHeater(Component):
     GasDemand = "GasDemand"
     ThermalOutputPower = "ThermalOutputPower"
 
-    # @utils.graph_call_path_factory(max_depth=2, memory_flag=True, file_name="call_path")
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
@@ -226,10 +228,7 @@ class GasHeater(Component):
         self,
     ):
         """Get Controller L1 Gas Heater default connections."""
-        # use importlib for importing the other component in order to avoid circular-import errors
-        component_module_name = "hisim.components.controller_l1_generic_gas_heater"
-        component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "GenericGasHeaterControllerL1")
+        component_class = GenericGasHeaterControllerL1
         connections = []
         l1_controller_classname = component_class.get_classname()
         connections.append(
@@ -391,3 +390,369 @@ class GasHeater(Component):
         )
         list_of_kpi_entries.append(my_kpi_entry)
         return list_of_kpi_entries
+
+
+@dataclass_json
+@dataclass
+class GenericGasHeaterControllerL1Config(ConfigBase):
+    """Gas-heater Controller Config Class."""
+
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return GenericGasHeaterControllerL1.get_full_classname()
+
+    building_name: str
+    name: str
+    set_heating_threshold_outside_temperature_in_celsius: Optional[float]
+    minimal_thermal_power_in_watt: float  # [W]
+    maximal_thermal_power_in_watt: float  # [W]
+    set_temperature_difference_for_full_power: float
+
+    @classmethod
+    def get_default_generic_gas_heater_controller_config(
+        cls,
+        maximal_thermal_power_in_watt: float,
+        minimal_thermal_power_in_watt: float = 1000,
+        building_name: str = "BUI1",
+    ) -> "GenericGasHeaterControllerL1Config":
+        """Gets a default Generic Gas Heater Controller."""
+        return GenericGasHeaterControllerL1Config(
+            building_name=building_name,
+            name="GenericGasHeaterController",
+            set_heating_threshold_outside_temperature_in_celsius=16.0,
+            # get min and max thermal power from gas heater config
+            minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,
+            maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
+            set_temperature_difference_for_full_power=5.0,  # [K] # 5.0 leads to acceptable results
+        )
+
+
+class GenericGasHeaterControllerL1(Component):
+    """Gas Heater Controller.
+
+    It takes data from other
+    components and sends signal to the generic_gas_heater for
+    activation or deactivation.
+    Modulating Power with respect to water temperature from storage.
+
+    Parameters
+    ----------
+    Components to connect to:
+    (1) generic_gas_heater (control_signal)
+
+    """
+
+    # Inputs
+    WaterTemperatureInputFromHeatWaterStorage = "WaterTemperatureInputFromHeatWaterStorage"
+
+    # set heating  flow temperature
+    HeatingFlowTemperatureFromHeatDistributionSystem = "HeatingFlowTemperatureFromHeatDistributionSystem"
+
+    DailyAverageOutsideTemperature = "DailyAverageOutsideTemperature"
+
+    # Outputs
+    ControlSignalToGasHeater = "ControlSignalToGasHeater"
+
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: GenericGasHeaterControllerL1Config,
+        my_display_config: DisplayConfig = DisplayConfig(),
+    ) -> None:
+        """Construct all the neccessary attributes."""
+        self.gas_heater_controller_config = config
+        self.my_simulation_parameters = my_simulation_parameters
+        self.config = config
+        component_name = self.get_component_name()
+        super().__init__(
+            name=component_name,
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
+            my_display_config=my_display_config,
+        )
+
+        self.build()
+
+        # input channel
+        self.water_temperature_input_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.WaterTemperatureInputFromHeatWaterStorage,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            True,
+        )
+
+        self.heating_flow_temperature_from_heat_distribution_system_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.HeatingFlowTemperatureFromHeatDistributionSystem,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            True,
+        )
+        self.daily_avg_outside_temperature_input_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.DailyAverageOutsideTemperature,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            True,
+        )
+
+        self.control_signal_to_gasheater_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.ControlSignalToGasHeater,
+            lt.LoadTypes.ANY,
+            lt.Units.PERCENT,
+            output_description=f"here a description for {self.ControlSignalToGasHeater} will follow.",
+        )
+
+        self.controller_gasheatermode: Any
+        self.previous_gasheater_mode: Any
+
+        self.add_default_connections(self.get_default_connections_from_weather())
+        self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
+        self.add_default_connections(self.get_default_connections_from_heat_distribution_controller())
+
+    def get_default_connections_from_simple_hot_water_storage(
+        self,
+    ):
+        """Get simple_water_storage default connections."""
+
+        connections = []
+        storage_classname = SimpleHotWaterStorage.get_classname()
+        connections.append(
+            ComponentConnection(
+                GenericGasHeaterControllerL1.WaterTemperatureInputFromHeatWaterStorage,
+                storage_classname,
+                SimpleHotWaterStorage.WaterTemperatureToHeatGenerator,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_weather(
+        self,
+    ):
+        """Get simple_water_storage default connections."""
+
+        connections = []
+        weather_classname = Weather.get_classname()
+        connections.append(
+            ComponentConnection(
+                GenericGasHeaterControllerL1.DailyAverageOutsideTemperature,
+                weather_classname,
+                Weather.DailyAverageOutsideTemperatures,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_heat_distribution_controller(
+        self,
+    ):
+        """Get heat distribution controller default connections."""
+
+        connections = []
+        hds_controller_classname = HeatDistributionController.get_classname()
+        connections.append(
+            ComponentConnection(
+                GenericGasHeaterControllerL1.HeatingFlowTemperatureFromHeatDistributionSystem,
+                hds_controller_classname,
+                HeatDistributionController.HeatingFlowTemperature,
+            )
+        )
+        return connections
+
+    def build(
+        self,
+    ) -> None:
+        """Build function.
+
+        The function sets important constants and parameters for the calculations.
+        """
+        # Sth
+        self.controller_gasheatermode = "off"
+        self.previous_gasheater_mode = self.controller_gasheatermode
+
+    def i_prepare_simulation(self) -> None:
+        """Prepare the simulation."""
+        pass
+
+    def i_save_state(self) -> None:
+        """Save the current state."""
+        self.previous_gasheater_mode = self.controller_gasheatermode
+
+    def i_restore_state(self) -> None:
+        """Restore the previous state."""
+        self.controller_gasheatermode = self.previous_gasheater_mode
+
+    def i_doublecheck(self, timestep: int, stsv: SingleTimeStepValues) -> None:
+        """Doublecheck."""
+        pass
+
+    def write_to_report(
+        self,
+    ) -> List[str]:
+        """Write important variables to report."""
+        return self.gas_heater_controller_config.get_string_dict()
+
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+        """Simulate the Gas Heater comtroller."""
+
+        if force_convergence:
+            pass
+        else:
+            # Retrieves inputs
+
+            water_temperature_input_from_heat_water_storage_in_celsius = stsv.get_input_value(
+                self.water_temperature_input_channel
+            )
+
+            heating_flow_temperature_from_heat_distribution_system = stsv.get_input_value(
+                self.heating_flow_temperature_from_heat_distribution_system_channel
+            )
+
+            daily_avg_outside_temperature_in_celsius = stsv.get_input_value(
+                self.daily_avg_outside_temperature_input_channel
+            )
+
+            # turning gas_heater off when the average daily outside temperature is above a certain threshold (if threshold is set in the config)
+            summer_heating_mode = self.summer_heating_condition(
+                daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
+                set_heating_threshold_temperature_in_celsius=self.gas_heater_controller_config.set_heating_threshold_outside_temperature_in_celsius,
+            )
+
+            # on/off controller
+            self.conditions_on_off(
+                water_temperature_input_in_celsius=water_temperature_input_from_heat_water_storage_in_celsius,
+                set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+                summer_heating_mode=summer_heating_mode,
+            )
+
+            if self.controller_gasheatermode == "heating":
+                control_signal = self.modulate_power(
+                    water_temperature_input_in_celsius=water_temperature_input_from_heat_water_storage_in_celsius,
+                    set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+                )
+            elif self.controller_gasheatermode == "off":
+                control_signal = 0
+            else:
+                raise ValueError("Gas Heater Controller control_signal unknown.")
+
+            stsv.set_output_value(self.control_signal_to_gasheater_channel, control_signal)
+
+    def modulate_power(
+        self,
+        water_temperature_input_in_celsius: float,
+        set_heating_flow_temperature_in_celsius: float,
+    ) -> float:
+        """Modulate linear between minimial_thermal_power and max_thermal_power of Gas Heater.
+
+        only used if gasheatermode is "heating".
+        """
+
+        minimal_percentage = (
+            self.gas_heater_controller_config.minimal_thermal_power_in_watt
+            / self.gas_heater_controller_config.maximal_thermal_power_in_watt
+        )
+        if (
+            water_temperature_input_in_celsius
+            < set_heating_flow_temperature_in_celsius
+            - self.gas_heater_controller_config.set_temperature_difference_for_full_power
+        ):
+            percentage = 1.0
+            return percentage
+        if water_temperature_input_in_celsius < set_heating_flow_temperature_in_celsius:
+            linear_fit = 1 - (
+                (
+                    self.gas_heater_controller_config.set_temperature_difference_for_full_power
+                    - (set_heating_flow_temperature_in_celsius - water_temperature_input_in_celsius)
+                )
+                / self.gas_heater_controller_config.set_temperature_difference_for_full_power
+            )
+            percentage = max(minimal_percentage, linear_fit)
+            return percentage
+        if (
+            water_temperature_input_in_celsius <= set_heating_flow_temperature_in_celsius + 0.5
+        ):  # use same hysteresis like in conditions_on_off()
+            percentage = minimal_percentage
+            return percentage
+
+        # if something went wrong
+        raise ValueError("modulation of Gas Heater needs some adjustments")
+
+    def conditions_on_off(
+        self,
+        water_temperature_input_in_celsius: float,
+        set_heating_flow_temperature_in_celsius: float,
+        summer_heating_mode: str,
+    ) -> None:
+        """Set conditions for the gas heater controller mode."""
+
+        if self.controller_gasheatermode == "heating":
+            if (
+                water_temperature_input_in_celsius > (set_heating_flow_temperature_in_celsius + 0.5)
+                or summer_heating_mode == "off"
+            ):  # + 1:
+                self.controller_gasheatermode = "off"
+                return
+
+        elif self.controller_gasheatermode == "off":
+            # gas heater is only turned on if the water temperature is below the flow temperature
+            # and if the avg daily outside temperature is cold enough (summer mode on)
+            if (
+                water_temperature_input_in_celsius < (set_heating_flow_temperature_in_celsius - 1.0)
+                and summer_heating_mode == "on"
+            ):  # - 1:
+                self.controller_gasheatermode = "heating"
+                return
+
+        else:
+            raise ValueError("unknown mode")
+
+    def summer_heating_condition(
+        self,
+        daily_average_outside_temperature_in_celsius: float,
+        set_heating_threshold_temperature_in_celsius: Optional[float],
+    ) -> str:
+        """Set conditions for the gas_heater."""
+
+        # if no heating threshold is set, the gas_heater is always on
+        if set_heating_threshold_temperature_in_celsius is None:
+            heating_mode = "on"
+
+        # it is too hot for heating
+        elif daily_average_outside_temperature_in_celsius > set_heating_threshold_temperature_in_celsius:
+            heating_mode = "off"
+
+        # it is cold enough for heating
+        elif daily_average_outside_temperature_in_celsius < set_heating_threshold_temperature_in_celsius:
+            heating_mode = "on"
+
+        else:
+            raise ValueError(
+                f"daily average temperature {daily_average_outside_temperature_in_celsius}°C"
+                f"or heating threshold temperature {set_heating_threshold_temperature_in_celsius}°C is not acceptable."
+            )
+        return heating_mode
+
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> OpexCostDataClass:
+        """Calculate OPEX costs, consisting of electricity costs and revenues."""
+        opex_cost_data_class = OpexCostDataClass.get_default_opex_cost_data_class()
+        return opex_cost_data_class
+
+    @staticmethod
+    def get_cost_capex(config: GenericGasHeaterControllerL1Config, simulation_parameters: SimulationParameters) -> CapexCostDataClass:  # pylint: disable=unused-argument
+        """Returns investment cost, CO2 emissions and lifetime."""
+        capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
+        return capex_cost_data_class
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        return []

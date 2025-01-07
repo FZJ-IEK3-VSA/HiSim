@@ -130,7 +130,7 @@ class WeatherDataImport:
                 ts_interpolation_use_nearby_station_distance=40,
             )
 
-            parameters = [DwdObservationParameter.MINUTE_10.TEMPERATURE_AIR_MEAN_2M,
+            parameters = [DwdObservationParameter.MINUTE_10.TEMPERATURE_AIR_MEAN_200,
                           DwdObservationParameter.MINUTE_10.PRESSURE_AIR_SITE,
                           DwdObservationParameter.MINUTE_10.WIND_DIRECTION,
                           DwdObservationParameter.MINUTE_10.WIND_SPEED,
@@ -240,7 +240,7 @@ class WeatherDataImport:
                     )
             print("Write Weather Data into Dataframe.")
             temperature_dwd_df = (
-                values[values["parameter"] == "temperature_air_mean_2m"]
+                values[values["parameter"] == "temperature_air_mean_200"]
                 .groupby("date")["value"]
                 .apply(lambda x: ", ".join(map(str, x)))
                 .reset_index()

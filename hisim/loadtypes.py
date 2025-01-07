@@ -84,7 +84,7 @@ class LoadTypes(str, enum.Enum):
     TEMPERATURE = "Temperature"
     PRESSURE = "Pressure"
     TIME = "Time"
-
+    PRICE = "Price"
     # Substance
     GAS = "Gas"
     AIR = "Air"
@@ -94,9 +94,8 @@ class LoadTypes(str, enum.Enum):
     WARM_WATER = "WarmWater"
     DIESEL = "Diesel"
     OIL = "Oil"
+    PELLETS = "Pellets"
     DISTRICTHEATING = "DistrictHeating"
-
-    PRICE = "Price"
 
     # Controllers:
     ON_OFF = "OnOff"  # encoding: 0 means off and 1 means on
@@ -223,7 +222,9 @@ class HeatingSystems(str, enum.Enum):
     ELECTRIC_HEATING = "ElectricHeating"
     OIL_HEATING = "OilHeating"
     GAS_HEATING = "GasHeating"
+    PELLET_HEATING = "PelletHeating"
     DISTRICT_HEATING = "DistrictHeating"
+    HYDROGEN_HEATING = "HydrogenHeating"
 
 
 @enum.unique

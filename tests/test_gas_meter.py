@@ -15,8 +15,7 @@ from hisim.components import (
     building,
     electricity_meter,
     gas_meter,
-    generic_gas_heater,
-    controller_l1_generic_gas_heater,
+    generic_boiler,
     generic_heat_source,
     controller_l1_heatpump,
     generic_hot_water_storage_modular,
@@ -141,24 +140,24 @@ def test_house(
     )
 
     # Build Gas Heater Controller
-    my_gas_heater_controller_config = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1Config.get_scaled_generic_gas_heater_controller_config(
+    my_gas_heater_config = generic_boiler.GenericBoilerConfig.get_scaled_condensing_gas_boiler_config(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
     )
-    my_gas_heater_controller = controller_l1_generic_gas_heater.GenericGasHeaterControllerL1(
-        my_simulation_parameters=my_simulation_parameters,
-        config=my_gas_heater_controller_config,
+    my_gas_heater = generic_boiler.GenericBoiler(
+        config=my_gas_heater_config, my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Gas heater For Space Heating
-    my_gas_heater_config = generic_gas_heater.GenericGasHeaterConfig.get_scaled_gasheater_config(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+    # Build Gas Heater Controller
+    my_gas_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
+        minimal_thermal_power_in_watt=my_gas_heater_config.minimal_thermal_power_in_watt, maximal_thermal_power_in_watt=my_gas_heater_config.maximal_thermal_power_in_watt
     )
-    my_gas_heater = generic_gas_heater.GasHeater(
-        config=my_gas_heater_config,
-        my_simulation_parameters=my_simulation_parameters,
+    my_gas_heater_controller = generic_boiler.GenericBoilerController(
+        my_simulation_parameters=my_simulation_parameters, config=my_gas_heater_controller_config,
     )
     # Build Gas Heater for DHW
-    my_gas_heater_for_dhw_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating_with_gas(
+    my_gas_heater_for_dhw_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating(
+        heating_system=loadtypes.HeatingSystems.GAS_HEATING,
+        boiler_type=my_gas_heater_config.boiler_type,
         max_warm_water_demand_in_liter=my_occupancy.max_hot_water_demand,
         scaling_factor_according_to_number_of_apartments=my_occupancy.scaling_factor_according_to_number_of_apartments,
         seconds_per_timestep=seconds_per_timestep,
@@ -243,7 +242,7 @@ def test_house(
         "Gas consumption for space heating"
     ].get("value")
     gas_consumption_for_domestic_hot_water_in_kilowatt_hour = jsondata["Gas Heater For Domestic Hot Water"][
-        "Gas consumption for domestic hot water"
+        "Gas consumption for WaterHeating"
     ].get("value")
 
     opex_costs_for_gas_in_euro = jsondata["Gas Meter"]["Opex costs of gas consumption from grid"].get("value")

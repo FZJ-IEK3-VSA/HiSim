@@ -464,7 +464,12 @@ def configure_water_heating(
         lt.HeatingSystems.OIL_HEATING: lt.LoadTypes.OIL,
         lt.HeatingSystems.DISTRICT_HEATING: lt.LoadTypes.DISTRICTHEATING,
     }
-    heater_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating_with_district_heating()
+    heater_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating(
+        heating_system=water_heating_system_installed,
+        max_warm_water_demand_in_liter=my_occupancy.max_hot_water_demand,
+        scaling_factor_according_to_number_of_apartments=my_occupancy.scaling_factor_according_to_number_of_apartments,
+        seconds_per_timestep=my_simulation_parameters.seconds_per_timestep,
+    )
     heater_config.fuel = fuel_translator[water_heating_system_installed]
     heater_config.efficiency = get_heating_system_efficiency(
         heating_system_installed=water_heating_system_installed, water_vs_heating=lt.InandOutputType.HEATING

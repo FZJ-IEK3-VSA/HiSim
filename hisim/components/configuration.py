@@ -3,8 +3,9 @@
 # clean
 
 from typing import Any
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from dataclasses_json import dataclass_json
+from hisim.loadtypes import LoadTypes
 from hisim.component import ConfigBase
 
 
@@ -23,10 +24,7 @@ class WarmWaterStorageConfig(ConfigBase):
     slice_height_minimum: float  # [m]
 
     @classmethod
-    def get_default_config(
-        cls,
-        building_name: str = "BUI1",
-    ) -> Any:
+    def get_default_config(cls, building_name: str = "BUI1",) -> Any:
         """Gets a default config."""
         return WarmWaterStorageConfig(
             building_name=building_name,
@@ -212,10 +210,7 @@ class ExtendedControllerConfig(ConfigBase):
     maximum_autarky: bool
 
     @classmethod
-    def get_default_config(
-        cls,
-        building_name: str = "BUI1",
-    ) -> Any:
+    def get_default_config(cls, building_name: str = "BUI1",) -> Any:
         """Gets a default ExtendedControllerConfig."""
         return ExtendedControllerConfig(
             building_name=building_name,
@@ -232,28 +227,111 @@ class ExtendedControllerConfig(ConfigBase):
         )
 
 
+@dataclass_json
+@dataclass
 class PhysicsConfig:
-    """Physics config class."""
+    """Physics config class.
 
-    water_density = 1000  # [kg/m^3]
-    water_specific_heat_capacity_in_joule_per_kilogram_per_kelvin = 4180  # J/kgK
-    water_specific_heat_capacity_in_watthour_per_kilogramm_per_kelvin = 1.163  # Wh/kgK
+    Returns physical and chemical properties of different energy carries.
+
+    Sources:
+    Schmidt 2020: Wasserstofftechnik  S.170ff
+    https://gammel.de/de/lexikon/heizwert---brennwert/4838.
+    Values are taken at standard conditions (25°C)
+    https://energyfaculty.com/physical-and-thermal-properties/
+
+    Brennwert: Higher heating value gross caloric value, Heizwert: Lower heating value or net caloric value.
+    """
+
+    # Init
+    density_in_kg_per_m3: float
+    lower_heating_value_in_joule_per_m3: float
+    higher_heating_value_in_joule_per_m3: float
+    specific_heat_capacity_in_joule_per_kg_per_kelvin: float
+
+    # Post-Init
+    specific_volume_in_m3_per_kg: float = field(init=False)
+    lower_heating_value_in_joule_per_kg: float = field(init=False)
+    higher_heating_value_in_joule_per_kg: float = field(init=False)
+    specific_heat_capacity_in_watthour_per_kg_per_kelvin: float = field(init=False)
+
+    def __post_init__(self):
+        """Post init function.
+
+        These variables are calculated automatically based on init values.
+        """
+
+        self.specific_volume_in_m3_per_kg = 1 / self.density_in_kg_per_m3
+        self.lower_heating_value_in_joule_per_kg = (
+            self.lower_heating_value_in_joule_per_m3 / self.density_in_kg_per_m3
+        )
+        self.higher_heating_value_in_joule_per_kg = (
+            self.higher_heating_value_in_joule_per_m3 / self.density_in_kg_per_m3
+        )
+        self.specific_heat_capacity_in_watthour_per_kg_per_kelvin = (
+            self.specific_heat_capacity_in_joule_per_kg_per_kelvin / 3600
+        )
+
+    @classmethod
+    def get_properties_for_energy_carrier(cls, energy_carrier: LoadTypes) -> "PhysicsConfig":
+        """Get physical and chemical properties from specific energy carrier."""
+        if energy_carrier == LoadTypes.GAS:
+            # natural gas (here we use the values of methane because this is what natural gas for residential heating mostly consists of)
+            return PhysicsConfig(
+                density_in_kg_per_m3=0.71750,
+                lower_heating_value_in_joule_per_m3=35.895 * 1e6,
+                higher_heating_value_in_joule_per_m3=39.819 * 1e6,
+                specific_heat_capacity_in_joule_per_kg_per_kelvin=2190,
+            )
+        if energy_carrier == LoadTypes.HYDROGEN:
+            return PhysicsConfig(
+                density_in_kg_per_m3=0.08989,
+                lower_heating_value_in_joule_per_m3=10.783 * 1e6,
+                higher_heating_value_in_joule_per_m3=12.745 * 1e6,
+                specific_heat_capacity_in_joule_per_kg_per_kelvin=14200,
+            )
+        if energy_carrier == LoadTypes.OIL:
+            return PhysicsConfig(
+                density_in_kg_per_m3=0.83 * 1e3,
+                lower_heating_value_in_joule_per_m3=35.358 * 1e9,
+                higher_heating_value_in_joule_per_m3=37.682 * 1e9,
+                specific_heat_capacity_in_joule_per_kg_per_kelvin=1970,
+            )
+        if energy_carrier == LoadTypes.PELLETS:
+            # density here = bulk density (Schüttdichte)
+            # source: https://www.chemie.de/lexikon/Holzpellet.html
+            # higher heating value of pellets unknown -> set to lower heating value
+            return PhysicsConfig(
+                density_in_kg_per_m3=650,
+                lower_heating_value_in_joule_per_m3=11.7 * 1e9,
+                higher_heating_value_in_joule_per_m3=11.7 * 1e9,
+                specific_heat_capacity_in_joule_per_kg_per_kelvin=2500,
+            )
+        if energy_carrier == LoadTypes.WATER:
+            return PhysicsConfig(
+                density_in_kg_per_m3=1000,
+                lower_heating_value_in_joule_per_m3=0,
+                higher_heating_value_in_joule_per_m3=0,
+                specific_heat_capacity_in_joule_per_kg_per_kelvin=4180,
+            )
+
+        raise ValueError(f"Energy carrier {energy_carrier} not implemented in PhysicsConfig yet.")
 
     # Schmidt 2020: Wasserstofftechnik  S.170ff
     # fuel value H2:    10.782 MJ/m³    (S.172)
     # density H2:       0.08989 kg/m³   (S. 23) -> standard conditions
-    hydrogen_density = 0.08989  # [kg/m³]
-    hydrogen_specific_volume = 1 / hydrogen_density  # [m^3/kg]
-    hydrogen_specific_fuel_value_per_m_3 = 10.782 * 10**6  # [J/m³]
-    hydrogen_specific_fuel_value_per_kg = hydrogen_specific_fuel_value_per_m_3 / hydrogen_density  # [J/kg]
+    # hydrogen_density_in_kg_per_m3 = 0.08989  # [kg/m³]
+    # hydrogen_specific_volume_in_m3_per_kg = 1 / hydrogen_density_in_kg_per_m3  # [m^3/kg]
+    # hydrogen_specific_fuel_value_in_joule_per_m3 = 10.782 * 10**6  # [J/m³]
+    # hydrogen_specific_fuel_value_in_joule_per_kg = hydrogen_specific_fuel_value_in_joule_per_m3 / hydrogen_density_in_kg_per_m3  # [J/kg]
 
     # Schmidt 2020: Wasserstofftechnik  S.170ff
     # fuel value Methan:    35.894 MJ/m³    (S.172)
     # density Methan:       0.71750 kg/m³   (S. 23) -> standard conditions
-    natural_gas_density = 0.71750  # [kg/m³]
-    natural_gas_specific_volume = 1 / hydrogen_density  # [m^3/kg]
-    natural_gas_specific_fuel_value_per_m_3 = 35.894 * 10**6  # [J/m³]
-    natural_gas_specific_fuel_value_per_kg = natural_gas_specific_fuel_value_per_m_3 / natural_gas_density  # [J/kg]
+    # natural_gas_density = 0.71750  # [kg/m³]
+    # natural_gas_specific_volume = 1 / hydrogen_density_in_kg_per_m3  # [m^3/kg]
+    # natural_gas_specific_fuel_value_per_m_3 = 35.894 * 10**6  # [J/m³]
+    # natural_gas_specific_fuel_value_per_kg = natural_gas_specific_fuel_value_per_m_3 / natural_gas_density  # [J/kg]
 
 
 @dataclass_json

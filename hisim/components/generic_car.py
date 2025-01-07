@@ -574,7 +574,7 @@ class Car(cp.Component):
         trimmed_meters_driven = meters_driven[: num_timesteps * minutes_per_timestep]
 
         # Reshape and sum the data
-        reshaped_meters = np.reshape(trimmed_meters_driven, (num_timesteps, minutes_per_timestep))
+        reshaped_meters: np.ndarray = np.reshape(trimmed_meters_driven, (num_timesteps, minutes_per_timestep))
         resampled_meters = np.sum(reshaped_meters, axis=1)
         return resampled_meters
 

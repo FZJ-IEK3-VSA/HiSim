@@ -44,6 +44,7 @@ setup(
     license="MIT license",
     long_description=readme,
     long_description_content_type="text/markdown",
+    package_data={"hisim": ["inputs/*"]},
     include_package_data=True,
     keywords="hisim",
     name="hisim",
@@ -52,6 +53,6 @@ setup(
     test_suite="tests",
     tests_require=test_requirements,
     url="https://github.com/FZJ-IEK3-VSA/HiSim",
-    version="1.2.1",
+    version="1.2.2",
     zip_safe=False,
 )

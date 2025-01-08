@@ -36,7 +36,7 @@ from hisim.component import (
     DisplayConfig,
     CapexCostDataClass,
 )
-from hisim.components import weather, simple_water_storage, heat_distribution_system
+from hisim.components import weather, simple_water_storage, heat_distribution_system, building
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, OutputPostprocessingRules
 from hisim.units import (
@@ -104,6 +104,7 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     minimum_running_time_in_seconds: Optional[Quantity[int, Seconds]]
     minimum_idle_time_in_seconds: Optional[Quantity[int, Seconds]]
     massflow_nominal_primary_side_in_kg_per_s: Optional[float]
+    specific_heat_capacity_of_brine: Optional[float]
     position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int]
     with_domestic_hot_water_preparation: bool
     minimum_massflow_secondary_side_in_kg_per_s: Optional[Quantity[float, KilogramPerSecond]]
@@ -149,6 +150,7 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
             minimum_running_time_in_seconds=Quantity(3600, Seconds),
             minimum_idle_time_in_seconds=Quantity(3600, Seconds),
             massflow_nominal_primary_side_in_kg_per_s=None,
+            specific_heat_capacity_of_brine=None,
             position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.PARALLEL,
             with_domestic_hot_water_preparation=False,
             minimum_massflow_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
@@ -192,6 +194,7 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
             minimum_running_time_in_seconds=Quantity(3600, Seconds),
             minimum_idle_time_in_seconds=Quantity(3600, Seconds),
             massflow_nominal_primary_side_in_kg_per_s=None,
+            specific_heat_capacity_of_brine=None,
             position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.PARALLEL,
             with_domestic_hot_water_preparation=False,
             minimum_massflow_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
@@ -227,6 +230,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
     TemperatureInputSecondary_SH = "TemperatureInputSecondarySpaceHeating"  # °C
     TemperatureInputSecondary_DHW = "TemperatureInputSecondaryDWH"  # °C
     TemperatureAmbient = "TemperatureAmbient"  # °C
+    TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
     SetHeatingTemperatureSpaceHeating = "SetHeatingTemperatureSpaceHeating"
 
     # Outputs
@@ -342,6 +346,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         self.heat_source = config.heat_source
 
         self.massflow_nominal_primary_side_in_kg_per_s = config.massflow_nominal_primary_side_in_kg_per_s
+        self.specific_heat_capacity_of_brine = config.specific_heat_capacity_of_brine
 
         self.minimum_running_time_in_seconds = (
             config.minimum_running_time_in_seconds.value
@@ -393,6 +398,8 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 raise KeyError("HP modell does not fit to heat source in config!")
             if self.massflow_nominal_primary_side_in_kg_per_s == None:
                 raise KeyError("HP modell with brine/water as heat source need config parameter massflow_nominal_primary_side_in_kg_per_s!")
+            if self.specific_heat_capacity_of_brine == None:
+                raise KeyError("HP modell with brine/water as heat source need config parameter specific_heat_capacity_of_brine! --> connection with information class of heat source")
         if self.parameters["Group"].iloc[0] == 3.0 or self.parameters["Group"].iloc[0] == 6.0:
             if self.heat_source.lower() != "water":
                 raise KeyError("HP modell does not fit to heat source in config!")
@@ -432,6 +439,15 @@ class MoreAdvancedHeatPumpHPLib(Component):
             unit=Units.CELSIUS,
             mandatory=True,
         )
+
+        self.theoretical_thermal_building_demand: ComponentInput = self.add_input(
+            object_name=self.component_name,
+            field_name=self.TheoreticalThermalBuildingDemand,
+            load_type=LoadTypes.HEATING,
+            unit=Units.WATT,
+            mandatory=True,
+        )
+
 
         if self.with_domestic_hot_water_preparation:
             self.on_off_switch_dhw: ComponentInput = self.add_input(
@@ -803,6 +819,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
         self.add_default_connections(self.get_default_connections_from_heat_pump_controller_space_heating())
         self.add_default_connections(self.get_default_connections_from_weather())
+        self.add_default_connections(self.get_default_connections_from_building())
 
         if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
             self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
@@ -861,6 +878,19 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 MoreAdvancedHeatPumpHPLib.TemperatureAmbient,
                 weather_classname,
                 weather.Weather.DailyAverageOutsideTemperatures,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_building(self,):
+        """Get default connections."""
+        connections = []
+        building_classname = building.Building.get_classname()
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLib.TheoreticalThermalBuildingDemand,
+                building_classname,
+                building.Building.TheoreticalThermalBuildingDemand,
             )
         )
         return connections
@@ -947,6 +977,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         t_in_primary = stsv.get_input_value(self.t_in_primary)
         t_in_secondary_sh = stsv.get_input_value(self.t_in_secondary_sh)
         t_amb = stsv.get_input_value(self.t_amb)
+        theoretical_thermal_building_demand = stsv.get_input_value(self.theoretical_thermal_building_demand)
         time_on_heating = self.state.time_on_heating
         time_on_cooling = self.state.time_on_cooling
         time_off = self.state.time_off
@@ -1011,6 +1042,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     t_in_secondary=t_in_secondary_sh,
                     t_amb=t_amb,
                     mode=1,
+                    p_th_min=theoretical_thermal_building_demand
                 )
 
                 p_th_sh = results["P_th"]
@@ -1042,6 +1074,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     t_in_secondary=t_in_secondary_sh,
                     t_amb=t_amb,
                     mode=1,
+                    p_th_min=theoretical_thermal_building_demand
                 )
 
                 cop = results["COP"]
@@ -1088,6 +1121,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     t_in_secondary=t_in_secondary_dhw,
                     t_amb=t_amb,
                     mode=1,
+                    p_th_min=0
                 )
 
                 p_th_sh = 0.0
@@ -1120,6 +1154,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     t_in_secondary=t_in_secondary_dhw,
                     t_amb=t_amb,
                     mode=1,
+                    p_th_min=0
                 )
 
                 cop = results["COP"]
@@ -1164,6 +1199,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 t_in_secondary=t_in_secondary_sh,
                 t_amb=t_amb,
                 mode=2,
+                p_th_min=theoretical_thermal_building_demand
             )
             p_th_sh = results["P_th"]
             p_th_dhw = 0.0
@@ -1259,7 +1295,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             counter_onoff = self.state.counter_onoff
 
         if self.parameters["Group"].iloc[0] in (2, 3, 5, 6):
-            # todo: variability of massflow. now there is a fix temperaturdiffernz between inlet and outlet which calculate the massflow
+            # todo: variability of massflow. now there is a fix temperature difference between inlet and outlet which calculate the massflow
 
             if on_off == 0:
                 temperature_difference_primary_side = 0
@@ -1267,7 +1303,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             else:
                 m_dot_water_primary = self.massflow_nominal_primary_side_in_kg_per_s
                 temperature_difference_primary_side = (thermal_power_from_environment /
-                                                        (m_dot_water_primary * self.specific_heat_capacity_of_water_in_joule_per_kilogram_per_celsius))
+                                                        (m_dot_water_primary * self.specific_heat_capacity_of_brine))
 
             t_out_primary = t_in_primary - temperature_difference_primary_side
 
@@ -1402,7 +1438,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         return opex_cost_data_class
 
     def get_cached_results_or_run_hplib_simulation(
-        self, force_convergence: bool, t_in_primary: float, t_in_secondary: float, t_amb: float, mode: int,
+        self, force_convergence: bool, t_in_primary: float, t_in_secondary: float, t_amb: float, mode: int, p_th_min: float
     ) -> Any:
         """Use caching of results of HPLib simulation."""
 
@@ -1421,7 +1457,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         if my_hash_key in self.calculation_cache:
             results = self.calculation_cache[my_hash_key]
         else:
-            results = self.heatpump.simulate(t_in_primary, t_in_secondary, t_amb, mode=mode)
+            results = self.heatpump.simulate(t_in_primary=t_in_primary, t_in_secondary=t_in_secondary, t_amb=t_amb, mode=mode, p_th_min=p_th_min)
 
             self.calculation_cache[my_hash_key] = results
 

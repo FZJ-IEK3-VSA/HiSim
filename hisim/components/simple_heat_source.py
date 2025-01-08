@@ -5,7 +5,7 @@
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from dataclasses import dataclass
 from typing import List
-from enum import IntEnum
+from enum import Enum
 import pandas as pd
 from dataclasses_json import dataclass_json
 
@@ -28,13 +28,12 @@ __email__ = ""
 __status__ = ""
 
 
-class SimpleHeatSourceType(IntEnum):
+class SimpleHeatSourceType(Enum):
     """Set Heat Source Types."""
 
-    CONSTANTTHERMALPOWER = 1
-    CONSTANTTEMPERATURE = 2
-    BRINETEMPERATURE = 3
-
+    CONSTANT_THERMAL_POWER = "CONSTANT_THERMAL_POWER"
+    CONSTANT_TEMPERATURE = "CONSTANT_TEMPERATURE"
+    SIMPLE_BRINE_TEMPERATURE = "SIMPLE_BRINE_TEMPERATURE"
 
 @dataclass_json
 @dataclass
@@ -46,6 +45,7 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
     power_th_in_watt: float
     temperature_out_in_celsius: float
     const_source: SimpleHeatSourceType
+    specific_heat_capacity_in_joule_per_kg_per_kelvin_of_fluid: float
     #: CO2 footprint of investment in kg
     co2_footprint: float
     #: cost for investment in Euro
@@ -69,9 +69,10 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
         config = SimpleHeatSourceConfig(
             building_name=building_name,
             name="HeatSourceConstPower",
-            const_source=SimpleHeatSourceType.CONSTANTTHERMALPOWER,
+            const_source=SimpleHeatSourceType.CONSTANT_THERMAL_POWER,
             power_th_in_watt=5000.0,
             temperature_out_in_celsius=5,
+            specific_heat_capacity_in_joule_per_kg_per_kelvin_of_fluid=4180, # water
             co2_footprint=100,  # Todo: check value
             cost=2000,  # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
             lifetime=25,
@@ -88,9 +89,10 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
         config = SimpleHeatSourceConfig(
             building_name=building_name,
             name="HeatSourceConstTemperature",
-            const_source=SimpleHeatSourceType.CONSTANTTEMPERATURE,
+            const_source=SimpleHeatSourceType.CONSTANT_TEMPERATURE,
             power_th_in_watt=0,
             temperature_out_in_celsius=5,
+            specific_heat_capacity_in_joule_per_kg_per_kelvin_of_fluid=4180,  # water
             co2_footprint=100,  # Todo: check value
             cost=2000,
             # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
@@ -109,9 +111,10 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
         config = SimpleHeatSourceConfig(
             building_name=building_name,
             name="HeatSourceVarBrineTemperature",
-            const_source=SimpleHeatSourceType.BRINETEMPERATURE,
+            const_source=SimpleHeatSourceType.SIMPLE_BRINE_TEMPERATURE,
             power_th_in_watt=0,
             temperature_out_in_celsius=5,
+            specific_heat_capacity_in_joule_per_kg_per_kelvin_of_fluid=4180,  # water
             co2_footprint=100,  # Todo: check value
             cost=2000,
             # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
@@ -202,15 +205,14 @@ class SimpleHeatSource(cp.Component):
             unit=lt.Units.WATT,
             output_description="Thermal Power Delivered",
         )
-        if self.config.const_source in [SimpleHeatSourceType.CONSTANTTEMPERATURE,
-                                        SimpleHeatSourceType.BRINETEMPERATURE]:
-            self.temperature_output_channel: cp.ComponentOutput = self.add_output(
-                object_name=self.component_name,
-                field_name=self.TemperatureOutput,
-                load_type=lt.LoadTypes.TEMPERATURE,
-                unit=lt.Units.CELSIUS,
-                output_description="Temperature Output",
-            )
+
+        self.temperature_output_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.TemperatureOutput,
+            load_type=lt.LoadTypes.TEMPERATURE,
+            unit=lt.Units.CELSIUS,
+            output_description="Temperature Output",
+        )
 
         self.add_default_connections(self.get_default_connections_from_weather())
 
@@ -234,11 +236,11 @@ class SimpleHeatSource(cp.Component):
         lines = []
         lines.append(f"Name: {self.config.name })")
         lines.append(f"Source: {self.config.const_source})")
-        if self.config.const_source == SimpleHeatSourceType.CONSTANTTHERMALPOWER:
+        if self.config.const_source == SimpleHeatSourceType.CONSTANT_THERMAL_POWER:
             lines.append(f"Power: {self.config.power_th_in_watt * 1e-3:4.0f} kW")
-        if self.config.const_source == SimpleHeatSourceType.CONSTANTTEMPERATURE:
+        if self.config.const_source == SimpleHeatSourceType.CONSTANT_TEMPERATURE:
             lines.append(f"Temperature : {self.config.temperature_out_in_celsius} °C")
-        if self.config.const_source == SimpleHeatSourceType.BRINETEMPERATURE:
+        if self.config.const_source == SimpleHeatSourceType.SIMPLE_BRINE_TEMPERATURE:
             lines.append("Temperature : .... °C")
         return lines
 
@@ -272,33 +274,38 @@ class SimpleHeatSource(cp.Component):
             self.temperature_input_channel
         )
 
-        if self.config.const_source == SimpleHeatSourceType.CONSTANTTHERMALPOWER:
-            stsv.set_output_value(self.thermal_power_delivered_channel, self.config.power_th_in_watt)
+        if self.config.const_source == SimpleHeatSourceType.CONSTANT_THERMAL_POWER.value:
+            thermal_power_in_watt = self.config.power_th_in_watt
 
-        if self.config.const_source == SimpleHeatSourceType.CONSTANTTEMPERATURE:
-            thermal_power_in_watt = (massflow_in_kg_per_sec * 4180 *
+            temperature_output = thermal_power_in_watt / (massflow_in_kg_per_sec * self.config.specific_heat_capacity_in_joule_per_kg_per_kelvin_of_fluid) + temperature_input_in_celsius
+
+        elif self.config.const_source == SimpleHeatSourceType.CONSTANT_TEMPERATURE.value:
+            thermal_power_in_watt = (massflow_in_kg_per_sec * self.config.specific_heat_capacity_in_joule_per_kg_per_kelvin_of_fluid *
                                      (self.config.temperature_out_in_celsius - temperature_input_in_celsius))
 
-            stsv.set_output_value(self.thermal_power_delivered_channel, thermal_power_in_watt)
-            stsv.set_output_value(self.temperature_output_channel, self.config.temperature_out_in_celsius)
+            temperature_output = self.config.temperature_out_in_celsius
 
-        if self.config.const_source == SimpleHeatSourceType.BRINETEMPERATURE:
+        elif self.config.const_source == SimpleHeatSourceType.SIMPLE_BRINE_TEMPERATURE.value:
             """From hplib: Calculate the soil temperature by the average Temperature of the day.
             Source: „WP Monitor“ Feldmessung von Wärmepumpenanlagen S. 115, Frauenhofer ISE, 2014
             added 9 points at -15°C average day at 3°C soil temperature in order to prevent higher
             temperature of soil below -10°C."""
 
-            t_brine_out = (
+            temperature_output = (
                 -0.0003 * daily_avg_outside_temperature_in_celsius**3
                 + 0.0086 * daily_avg_outside_temperature_in_celsius**2
                 + 0.3047 * daily_avg_outside_temperature_in_celsius
                 + 5.0647
             )
-            thermal_power_in_watt = (massflow_in_kg_per_sec * 4180 *
-                                     (t_brine_out - temperature_input_in_celsius))
 
-            stsv.set_output_value(self.thermal_power_delivered_channel, thermal_power_in_watt)
-            stsv.set_output_value(self.temperature_output_channel, t_brine_out)
+            thermal_power_in_watt = (massflow_in_kg_per_sec * self.config.specific_heat_capacity_in_joule_per_kg_per_kelvin_of_fluid *
+                                     (temperature_output - temperature_input_in_celsius))
+
+        else:
+            raise KeyError("Unknown heat source type")
+
+        stsv.set_output_value(self.thermal_power_delivered_channel, thermal_power_in_watt)
+        stsv.set_output_value(self.temperature_output_channel, temperature_output)
 
     @staticmethod
     def get_cost_capex(
@@ -319,7 +326,7 @@ class SimpleHeatSource(cp.Component):
             lifetime_in_years=config.lifetime,
             capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
             device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
-            kpi_tag=KpiTagEnumClass.HEAT_SOURCE
+            kpi_tag=KpiTagEnumClass.GENERIC_HEAT_SOURCE
         )
         return capex_cost_data_class
 

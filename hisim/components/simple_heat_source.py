@@ -336,7 +336,7 @@ class SimpleHeatSource(cp.Component):
             co2_footprint_in_kg=0,
             consumption_in_kwh=0,
             loadtype=lt.LoadTypes.ANY,
-            kpi_tag=KpiTagEnumClass.HEAT_SOURCE
+            kpi_tag=KpiTagEnumClass.GENERIC_HEAT_SOURCE
         )
 
         return opex_cost_data_class

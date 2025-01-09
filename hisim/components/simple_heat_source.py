@@ -70,7 +70,7 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
         config = SimpleHeatSourceConfig(
             building_name=building_name,
             name="HeatSourceConstPower",
-            const_source=SimpleHeatSourceType.CONSTANT_THERMAL_POWER.value,
+            const_source=SimpleHeatSourceType.CONSTANT_THERMAL_POWER.value,  # type: ignore
             power_th_in_watt=5000.0,
             temperature_out_in_celsius=5,
             specific_heat_capacity_in_joule_per_kg_per_kelvin_of_fluid=4180,  # water
@@ -90,7 +90,7 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
         config = SimpleHeatSourceConfig(
             building_name=building_name,
             name="HeatSourceConstTemperature",
-            const_source=SimpleHeatSourceType.CONSTANT_TEMPERATURE.value,
+            const_source=SimpleHeatSourceType.CONSTANT_TEMPERATURE.value,  # type: ignore
             power_th_in_watt=0,
             temperature_out_in_celsius=5,
             specific_heat_capacity_in_joule_per_kg_per_kelvin_of_fluid=4180,  # water
@@ -112,7 +112,7 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
         config = SimpleHeatSourceConfig(
             building_name=building_name,
             name="HeatSourceVarBrineTemperature",
-            const_source=SimpleHeatSourceType.SIMPLE_BRINE_TEMPERATURE.value,
+            const_source=SimpleHeatSourceType.SIMPLE_BRINE_TEMPERATURE.value,  # type: ignore
             power_th_in_watt=0,
             temperature_out_in_celsius=5,
             specific_heat_capacity_in_joule_per_kg_per_kelvin_of_fluid=4180,  # water

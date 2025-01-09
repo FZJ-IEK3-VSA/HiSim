@@ -1059,20 +1059,37 @@ class PostProcessor:
     ) -> None:
         """Write KPIs to json file for building sizer."""
 
+        def get_kpi_entries_for_building_sizer(data, target_key):
+            for key1, value1 in data.items():
+                if key1 == target_key:
+                    result = value1["value"]
+                if isinstance(value1, dict):
+                    for key2, value2 in value1.items():
+                        if key2 == target_key:
+                            result = value2["value"]
+            return result
+
+        kpi_dict = {}
+
         # Check if important options were set
         if PostProcessingOptions.COMPUTE_KPIS in ppdt.post_processing_options:
             for building_object in building_objects_in_district_list:
                 # Get KPIs from ppdt
-                kpi_collection_dict_general_values = ppdt.kpi_collection_dict[building_object]["General"]
-                kpi_collection_dict_cost_values = ppdt.kpi_collection_dict[building_object]["Costs"]
-                kpi_collection_dict_emission_values = ppdt.kpi_collection_dict[building_object]["Emissions"]
 
-                self_sufficiency_rate_in_percent = kpi_collection_dict_general_values["Self-sufficiency rate according to solar htw berlin"]["value"]
-                total_costs_in_euro = kpi_collection_dict_cost_values["Total costs for simulated period"]["value"]
-                energy_costs_in_euro = kpi_collection_dict_cost_values["Energy grid costs for simulated period"]["value"]
-                maintenance_costs_in_euro = kpi_collection_dict_cost_values["Maintenance costs for simulated period"]["value"]
-                investment_costs_in_euro = kpi_collection_dict_cost_values["Investment costs for equipment per simulated period"]["value"]
-                total_co2_emissions_in_kg = kpi_collection_dict_emission_values["Total CO2 emissions for simulated period"]["value"]
+                kpi_collection_dict = ppdt.kpi_collection_dict[building_object]
+
+                self_sufficiency_rate_in_percent = get_kpi_entries_for_building_sizer(data=kpi_collection_dict,
+                                                                                      target_key="Self-sufficiency rate according to solar htw berlin")
+                total_costs_in_euro = get_kpi_entries_for_building_sizer(data=kpi_collection_dict,
+                                                                         target_key="Total costs for simulated period")
+                energy_costs_in_euro = get_kpi_entries_for_building_sizer(data=kpi_collection_dict,
+                                                                          target_key="Energy grid costs for simulated period")
+                maintenance_costs_in_euro = get_kpi_entries_for_building_sizer(data=kpi_collection_dict,
+                                                                               target_key="Maintenance costs for simulated period")
+                investment_costs_in_euro = get_kpi_entries_for_building_sizer(data=kpi_collection_dict,
+                                                                              target_key="Investment costs for equipment per simulated period")
+                total_co2_emissions_in_kg = get_kpi_entries_for_building_sizer(data=kpi_collection_dict,
+                                                                               target_key="Total CO2 emissions for simulated period")
 
                 # initialize json interface to pass kpi's to building_sizer
                 kpi_config = KPIConfig(
@@ -1084,12 +1101,15 @@ class PostProcessor:
                     investment_costs_in_euro=investment_costs_in_euro
                 )
 
-                pathname = os.path.join(
-                    ppdt.simulation_parameters.result_directory, "kpi_config_for_building_sizer.json"
-                )
-                config_file_written = kpi_config.to_json()  # type: ignore
-                with open(pathname, "w", encoding="utf-8") as outfile:
-                    outfile.write(config_file_written)
+                kpi_dict[building_object] = kpi_config.to_dict()  # type: ignore
+
+            pathname = os.path.join(
+                ppdt.simulation_parameters.result_directory, "kpi_config_for_building_sizer.json"
+            )
+
+            config_file_written = json.dumps(kpi_dict, ensure_ascii=False, indent=4)
+            with open(pathname, "w", encoding="utf-8") as outfile:
+                outfile.write(config_file_written)
 
         else:
             raise ValueError(

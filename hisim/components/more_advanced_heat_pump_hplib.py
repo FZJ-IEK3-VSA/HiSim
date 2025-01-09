@@ -36,7 +36,7 @@ from hisim.component import (
     DisplayConfig,
     CapexCostDataClass,
 )
-from hisim.components import weather, simple_water_storage, heat_distribution_system, building
+from hisim.components import weather, simple_water_storage, heat_distribution_system
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, OutputPostprocessingRules
 from hisim.units import (
@@ -151,8 +151,8 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
             with_domestic_hot_water_preparation=False,
             massflow_nominal_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
             minimum_thermal_output_power_in_watt=minimum_thermal_output_power_in_watt,
-            massflow_nominal_primary_side_in_kg_per_s=None,
-            specific_heat_capacity_of_primary_fluid=None,
+            massflow_nominal_primary_side_in_kg_per_s=0,
+            specific_heat_capacity_of_primary_fluid=0,
             # value from emission_factors_and_costs_devices.csv
             co2_footprint=Quantity(set_thermal_output_power_in_watt.value * 1e-3 * 165.84, Kilogram),
             # value from emission_factors_and_costs_devices.csv
@@ -193,8 +193,8 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
             with_domestic_hot_water_preparation=False,
             massflow_nominal_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
             minimum_thermal_output_power_in_watt=minimum_thermal_output_power_in_watt,
-            massflow_nominal_primary_side_in_kg_per_s=None,
-            specific_heat_capacity_of_primary_fluid=None,
+            massflow_nominal_primary_side_in_kg_per_s=0,
+            specific_heat_capacity_of_primary_fluid=0,
             # value from emission_factros_and_costs_devices.csv
             co2_footprint=Quantity(set_thermal_output_power_in_watt.value * 1e-3 * 165.84, Kilogram),
             # value from emission_factros_and_costs_devices.csv
@@ -389,14 +389,15 @@ class MoreAdvancedHeatPumpHPLib(Component):
         if self.parameters["Group"].iloc[0] == 2.0 or self.parameters["Group"].iloc[0] == 5.0:
             if self.fluid_primary_side.lower() != "brine":
                 raise KeyError("HP modell does not fit to heat source in config!")
-            if self.massflow_nominal_primary_side_in_kg_per_s == None:
+            if self.massflow_nominal_primary_side_in_kg_per_s == 0:
                 raise KeyError("HP modell with brine/water as heat source need config parameter massflow_nominal_primary_side_in_kg_per_s!")
-            if self.specific_heat_capacity_of_primary_fluid == None:
-                raise KeyError("HP modell with brine/water as heat source need config parameter specific_heat_capacity_of_primary_fluid! --> connection with information class of heat source")
+            if self.specific_heat_capacity_of_primary_fluid == 0:
+                raise KeyError("HP modell with brine/water as heat source need config parameter specific_heat_capacity_of_primary_fluid! "
+                               "--> connection with information class of heat source")
         if self.parameters["Group"].iloc[0] == 3.0 or self.parameters["Group"].iloc[0] == 6.0:
             if self.fluid_primary_side.lower() != "water":
                 raise KeyError("HP modell does not fit to heat source in config!")
-            if self.massflow_nominal_primary_side_in_kg_per_s == None:
+            if self.massflow_nominal_primary_side_in_kg_per_s is None:
                 raise KeyError(
                     "HP modell with brine/water as heat source need config parameter massflow_nominal_primary_side_in_kg_per_s!")
 
@@ -1264,15 +1265,20 @@ class MoreAdvancedHeatPumpHPLib(Component):
             counter_onoff = self.state.counter_onoff
 
         if self.parameters["Group"].iloc[0] in (2, 3, 5, 6):
-            # todo: variability of massflow. now there is a fix temperature difference between inlet and outlet which calculate the massflow
+            # todo: variability of massflow
+            if self.massflow_nominal_primary_side_in_kg_per_s is not None:
+                m_dot_water_primary = self.massflow_nominal_primary_side_in_kg_per_s
+            else:
+                raise ValueError("Massflow on primary side has to be a value not none!")
 
             if on_off == 0:
-                temperature_difference_primary_side = 0
-                m_dot_water_primary = 0
+                temperature_difference_primary_side = 0.0
+                m_dot_water_primary = 0.0
             else:
                 m_dot_water_primary = self.massflow_nominal_primary_side_in_kg_per_s
                 temperature_difference_primary_side = (thermal_power_from_environment /
-                                                        (m_dot_water_primary * self.specific_heat_capacity_of_primary_fluid))
+                                                       m_dot_water_primary *
+                                                       self.specific_heat_capacity_of_primary_fluid)
 
             t_out_primary = t_in_primary - temperature_difference_primary_side
 
@@ -1350,7 +1356,6 @@ class MoreAdvancedHeatPumpHPLib(Component):
         self.state.counter_switch_dhw = counter_switch_dhw
         self.state.counter_onoff = counter_onoff
         self.state.delta_t_secondary_side = self.heatpump.delta_t
-
 
     @staticmethod
     def get_cost_capex(

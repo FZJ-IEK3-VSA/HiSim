@@ -35,6 +35,7 @@ class SimpleHeatSourceType(Enum):
     CONSTANT_TEMPERATURE = "CONSTANT_TEMPERATURE"
     SIMPLE_BRINE_TEMPERATURE = "SIMPLE_BRINE_TEMPERATURE"
 
+
 @dataclass_json
 @dataclass
 class SimpleHeatSourceConfig(cp.ConfigBase):
@@ -72,7 +73,7 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
             const_source=SimpleHeatSourceType.CONSTANT_THERMAL_POWER,
             power_th_in_watt=5000.0,
             temperature_out_in_celsius=5,
-            specific_heat_capacity_in_joule_per_kg_per_kelvin_of_fluid=4180, # water
+            specific_heat_capacity_in_joule_per_kg_per_kelvin_of_fluid=4180,  # water
             co2_footprint=100,  # Todo: check value
             cost=2000,  # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
             lifetime=25,
@@ -277,7 +278,9 @@ class SimpleHeatSource(cp.Component):
         if self.config.const_source == SimpleHeatSourceType.CONSTANT_THERMAL_POWER.value:
             thermal_power_in_watt = self.config.power_th_in_watt
 
-            temperature_output = thermal_power_in_watt / (massflow_in_kg_per_sec * self.config.specific_heat_capacity_in_joule_per_kg_per_kelvin_of_fluid) + temperature_input_in_celsius
+            temperature_output = (thermal_power_in_watt / (massflow_in_kg_per_sec *
+                                                           self.config.specific_heat_capacity_in_joule_per_kg_per_kelvin_of_fluid)
+                                  + temperature_input_in_celsius)
 
         elif self.config.const_source == SimpleHeatSourceType.CONSTANT_TEMPERATURE.value:
             thermal_power_in_watt = (massflow_in_kg_per_sec * self.config.specific_heat_capacity_in_joule_per_kg_per_kelvin_of_fluid *

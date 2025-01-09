@@ -6,6 +6,7 @@ from hisim.simulationparameters import SimulationParameters
 from hisim import loadtypes as lt
 from tests import functions_for_testing as fft
 
+
 @pytest.mark.base
 def test_heat_source():
     """Test heat source."""
@@ -20,7 +21,6 @@ def test_heat_source():
     my_heat_source = simple_heat_source.SimpleHeatSource(
         config=my_heat_source_config, my_simulation_parameters=my_simulation_parameters
     )
-
 
     massflow = cp.ComponentOutput("Fake_massflow", "Fake_massflow", lt.LoadTypes.ANY, lt.Units.ANY)
     temperature_input = cp.ComponentOutput("Fake_t_in", "Fake_t_in", lt.LoadTypes.ANY, lt.Units.ANY)

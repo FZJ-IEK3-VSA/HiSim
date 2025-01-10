@@ -1279,7 +1279,6 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 temperature_difference_primary_side = 0.0
                 m_dot_water_primary = 0.0
             else:
-                m_dot_water_primary = m_dot_water_primary
                 temperature_difference_primary_side = (thermal_power_from_environment /
                                                        (m_dot_water_primary *
                                                        specific_heat_capacity_of_primary_fluid))

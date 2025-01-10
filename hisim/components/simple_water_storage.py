@@ -526,6 +526,8 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
     ThermalEnergyIncreaseInStorage = "ThermalEnergyIncreaseInStorage"
 
     StandbyHeatLoss = "StandbyHeatLoss"
+    ThermalPowerConsumptionHeatDistribution = "ThermalPowerConsumptionHeatDistribution"
+    ThermalPowerFromHeatGenerator = "ThermalPowerFromHeatGenerator"
 
     @utils.measure_execution_time
     def __init__(
@@ -655,7 +657,6 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             output_description=f"here a description for {self.ThermalEnergyFromHeatDistribution} will follow.",
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
-
         self.thermal_energy_increase_in_storage_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.ThermalEnergyIncreaseInStorage,
@@ -663,7 +664,6 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.ThermalEnergyIncreaseInStorage} will follow.",
         )
-
         self.stand_by_heat_loss_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.StandbyHeatLoss,
@@ -671,6 +671,22 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             lt.Units.WATT,
             output_description=f"here a description for {self.StandbyHeatLoss} will follow.",
         )
+        self.thermal_power_heat_distribution_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.ThermalPowerConsumptionHeatDistribution,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=f"here a description for {self.ThermalPowerConsumptionHeatDistribution} will follow.",
+        )
+
+        self.thermal_power_from_heat_generator_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.ThermalPowerFromHeatGenerator,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=f"here a description for {self.ThermalPowerFromHeatGenerator} will follow.",
+        )
+
         self.add_default_connections(self.get_default_connections_from_heat_distribution_system())
         self.add_default_connections(self.get_default_connections_from_advanced_heat_pump())
         self.add_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
@@ -936,6 +952,19 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             else:
                 raise ValueError("unknown storage controller state.")
 
+        # calc thermal power
+        # ------------------------------
+        thermal_power_from_heat_generator_in_watt = self.calculate_thermal_power_of_water_flow(
+            water_mass_flow_in_kg_per_s=water_mass_flow_rate_from_heat_generator_in_kg_per_second,
+            water_temperature_cold_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
+            water_temperature_hot_in_celsius=water_temperature_from_heat_generator_in_celsius,
+        )
+        thermal_power_heat_distribution_in_watt = self.calculate_thermal_power_of_water_flow(
+            water_mass_flow_in_kg_per_s=water_mass_flow_rate_from_hds_in_kg_per_second,
+            water_temperature_cold_in_celsius=water_temperature_from_heat_distribution_system_in_celsius,
+            water_temperature_hot_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
+        )
+
         # Set outputs -------------------------------------------------------------------------------------------------------
         if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP:
 
@@ -978,6 +1007,15 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             self.state.heat_loss_in_watt,
         )
 
+        stsv.set_output_value(
+            self.thermal_power_heat_distribution_channel,
+            thermal_power_heat_distribution_in_watt,
+        )
+
+        stsv.set_output_value(
+            self.thermal_power_from_heat_generator_channel,
+            thermal_power_from_heat_generator_in_watt,
+       )
         # Set state -------------------------------------------------------------------------------------------------------
 
         # calc heat loss in W and the temperature loss

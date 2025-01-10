@@ -1277,8 +1277,8 @@ class MoreAdvancedHeatPumpHPLib(Component):
             else:
                 m_dot_water_primary = self.massflow_nominal_primary_side_in_kg_per_s
                 temperature_difference_primary_side = (thermal_power_from_environment /
-                                                       m_dot_water_primary *
-                                                       self.specific_heat_capacity_of_primary_fluid)
+                                                       (m_dot_water_primary *
+                                                       self.specific_heat_capacity_of_primary_fluid))
 
             t_out_primary = t_in_primary - temperature_difference_primary_side
 

@@ -48,8 +48,8 @@ class HotWaterStorageSizingEnum(IntEnum):
 class PositionHotWaterStorageInSystemSetup(IntEnum):
     """Set Simple Hot Water Storage Position options."""
 
-    PARALLEL_TO_HEAT_PUMP = 1
-    SERIE_TO_HEAT_PUMP = 2
+    PARALLEL_TO_HEAT_SOURCE = 1
+    SERIE_TO_HEAT_SOURCE = 2
 
 
 @dataclass_json
@@ -87,7 +87,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         """Get a default simplehotwaterstorage config."""
         volume_heating_water_storage_in_liter: float = 500
         position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int] = (
-            PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP
+            PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE
         )
         config = SimpleHotWaterStorageConfig(
             building_name=building_name,
@@ -152,7 +152,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
             raise ValueError(f"Sizing option for Simple Hot Water Storage {sizing_option} is unvalid.")
 
         position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int] = (
-            PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP
+            PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE
         )
 
         config = SimpleHotWaterStorageConfig(
@@ -587,7 +587,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             False,
         )
 
-        if self.position_hot_water_storage_in_system in [PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP]:
+        if self.position_hot_water_storage_in_system in [PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE]:
             self.water_temperature_heat_generator_input_channel: ComponentInput = self.add_input(
                 self.component_name,
                 self.WaterTemperatureFromHeatGenerator,
@@ -833,7 +833,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             self.water_mass_flow_rate_heat_distribution_system_input_channel
         )
 
-        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP:
+        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE:
             water_temperature_from_heat_generator_in_celsius = stsv.get_input_value(
                 self.water_temperature_heat_generator_input_channel
             )
@@ -966,7 +966,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
         )
 
         # Set outputs -------------------------------------------------------------------------------------------------------
-        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP:
+        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE:
 
             stsv.set_output_value(
                 self.water_temperature_heat_distribution_system_output_channel,

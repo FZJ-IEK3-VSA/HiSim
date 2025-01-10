@@ -9,6 +9,8 @@ from enum import Enum
 import pandas as pd
 from dataclasses_json import dataclass_json
 
+from pygfunction.media import Fluid
+
 # Import modules from HiSim
 from hisim import component as cp
 from hisim import loadtypes as lt
@@ -36,6 +38,16 @@ class SimpleHeatSourceType(Enum):
     SIMPLE_BRINE_TEMPERATURE = "SIMPLE_BRINE_TEMPERATURE"
 
 
+class FluidMediaType(Enum):
+    """ Sort of Media."""
+
+    WATER = "Water"
+    ETHYLEN_GLYCOL = "EthyleneGlycol"
+    PROPYLEN_GLYCOL = "PropyleneGlycol"
+    ETHANOL = "EthylAlcohol"
+    METHANOL = "MethylAlcohol"
+
+
 @dataclass_json
 @dataclass
 class SimpleHeatSourceConfig(cp.ConfigBase):
@@ -46,7 +58,8 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
     power_th_in_watt: float
     temperature_out_in_celsius: float
     const_source: SimpleHeatSourceType
-    specific_heat_capacity_in_joule_per_kg_per_kelvin_of_fluid: float
+    fluid_type: FluidMediaType
+    mass_fraction_of_fluid_mixed_in_water: float
     #: CO2 footprint of investment in kg
     co2_footprint: float
     #: cost for investment in Euro
@@ -73,7 +86,8 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
             const_source=SimpleHeatSourceType.CONSTANT_THERMAL_POWER.value,  # type: ignore
             power_th_in_watt=5000.0,
             temperature_out_in_celsius=5,
-            specific_heat_capacity_in_joule_per_kg_per_kelvin_of_fluid=4180,  # water
+            fluid_type=FluidMediaType.PROPYLEN_GLYCOL,
+            mass_fraction_of_fluid_mixed_in_water=0.20,
             co2_footprint=100,  # Todo: check value
             cost=2000,  # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
             lifetime=25,
@@ -93,7 +107,8 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
             const_source=SimpleHeatSourceType.CONSTANT_TEMPERATURE.value,  # type: ignore
             power_th_in_watt=0,
             temperature_out_in_celsius=5,
-            specific_heat_capacity_in_joule_per_kg_per_kelvin_of_fluid=4180,  # water
+            fluid_type=FluidMediaType.PROPYLEN_GLYCOL,
+            mass_fraction_of_fluid_mixed_in_water=0.20,
             co2_footprint=100,  # Todo: check value
             cost=2000,
             # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
@@ -115,7 +130,8 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
             const_source=SimpleHeatSourceType.SIMPLE_BRINE_TEMPERATURE.value,  # type: ignore
             power_th_in_watt=0,
             temperature_out_in_celsius=5,
-            specific_heat_capacity_in_joule_per_kg_per_kelvin_of_fluid=4180,  # water
+            fluid_type=FluidMediaType.PROPYLEN_GLYCOL,
+            mass_fraction_of_fluid_mixed_in_water=0.20,
             co2_footprint=100,  # Todo: check value
             cost=2000,
             # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
@@ -168,8 +184,11 @@ class SimpleHeatSource(cp.Component):
             my_display_config=my_display_config,
         )
 
-        # introduce parameters of district heating
-        self.config = config
+        self.fluid_type = config.fluid_type
+        self.mass_fraction_of_fluid_mixed_in_water = config.mass_fraction_of_fluid_mixed_in_water
+
+        self.fluid_props()
+
         self.state = SimpleHeatSourceState()
         self.previous_state = SimpleHeatSourceState()
 
@@ -232,6 +251,11 @@ class SimpleHeatSource(cp.Component):
         )
         return connections
 
+    def fluid_props(self):
+        """Calculation of fluid properties."""
+        fluid = Fluid(self.fluid_type.value, self.mass_fraction_of_fluid_mixed_in_water * 100)
+        self.cp_f = fluid.cp  # Fluid specific isobaric heat capacity (J/kg.K)
+
     def write_to_report(self) -> List[str]:
         """Writes relevant data to report."""
         lines = []
@@ -243,6 +267,10 @@ class SimpleHeatSource(cp.Component):
             lines.append(f"Temperature : {self.config.temperature_out_in_celsius} °C")
         if self.config.const_source == SimpleHeatSourceType.SIMPLE_BRINE_TEMPERATURE:
             lines.append("Temperature : .... °C")
+        lines.append("--------------------")
+        lines.append(f"Fluidtype: {self.fluid_type}")
+        lines.append(f"Massfraction: {self.mass_fraction_of_fluid_mixed_in_water}")
+
         return lines
 
     def i_prepare_simulation(self) -> None:
@@ -278,12 +306,10 @@ class SimpleHeatSource(cp.Component):
         if self.config.const_source == SimpleHeatSourceType.CONSTANT_THERMAL_POWER.value:
             thermal_power_in_watt = self.config.power_th_in_watt
 
-            temperature_output = (thermal_power_in_watt / (massflow_in_kg_per_sec *
-                                                           self.config.specific_heat_capacity_in_joule_per_kg_per_kelvin_of_fluid)
-                                  + temperature_input_in_celsius)
+            temperature_output = (thermal_power_in_watt / (massflow_in_kg_per_sec * self.cp_f)) + temperature_input_in_celsius
 
         elif self.config.const_source == SimpleHeatSourceType.CONSTANT_TEMPERATURE.value:
-            thermal_power_in_watt = (massflow_in_kg_per_sec * self.config.specific_heat_capacity_in_joule_per_kg_per_kelvin_of_fluid *
+            thermal_power_in_watt = (massflow_in_kg_per_sec * self.cp_f *
                                      (self.config.temperature_out_in_celsius - temperature_input_in_celsius))
 
             temperature_output = self.config.temperature_out_in_celsius
@@ -301,7 +327,7 @@ class SimpleHeatSource(cp.Component):
                 + 5.0647
             )
 
-            thermal_power_in_watt = (massflow_in_kg_per_sec * self.config.specific_heat_capacity_in_joule_per_kg_per_kelvin_of_fluid *
+            thermal_power_in_watt = (massflow_in_kg_per_sec * self.cp_f *
                                      (temperature_output - temperature_input_in_celsius))
 
         else:

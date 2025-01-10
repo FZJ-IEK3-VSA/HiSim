@@ -1270,15 +1270,19 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 m_dot_water_primary = self.massflow_nominal_primary_side_in_kg_per_s
             else:
                 raise ValueError("Massflow on primary side has to be a value not none!")
+            if self.specific_heat_capacity_of_primary_fluid is not None:
+                specific_heat_capacity_of_primary_fluid = self.specific_heat_capacity_of_primary_fluid
+            else:
+                raise ValueError("specific heat capacity on primary side has to be a value not none!")
 
             if on_off == 0:
                 temperature_difference_primary_side = 0.0
                 m_dot_water_primary = 0.0
             else:
-                m_dot_water_primary = self.massflow_nominal_primary_side_in_kg_per_s
+                m_dot_water_primary = m_dot_water_primary
                 temperature_difference_primary_side = (thermal_power_from_environment /
                                                        (m_dot_water_primary *
-                                                       self.specific_heat_capacity_of_primary_fluid))
+                                                       specific_heat_capacity_of_primary_fluid))
 
             t_out_primary = t_in_primary - temperature_difference_primary_side
 

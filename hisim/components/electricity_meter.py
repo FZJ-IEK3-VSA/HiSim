@@ -67,6 +67,7 @@ class ElectricityMeter(DynamicComponent):
     ElectricityFromGridInWatt = "ElectricityFromGridInWatt"
     ElectricityProductionInWatt = "ElectricityProductionInWatt"
     ElectricityConsumptionInWatt = "ElectricityConsumptionInWatt"
+    ElectricityConsumptionOfBuildingsInWatt = "ElectricityConsumptionOfBuildingsInWatt"
     SurplusUnusedFromBuildingEMSOutput = "SurplusUnusedFromBuildingEMSOutput"
 
     def __init__(
@@ -143,6 +144,23 @@ class ElectricityMeter(DynamicComponent):
                     else []
                 ),
             )
+            self.electricity_consumption_building_uncontrolled_in_watt_channel: cp.ComponentOutput = self.add_output(
+                object_name=self.component_name,
+                field_name=self.ElectricityConsumptionOfBuildingsInWatt,
+                load_type=lt.LoadTypes.ELECTRICITY,
+                unit=lt.Units.WATT,
+                sankey_flow_direction=False,
+                output_description=f"here a description for {self.ElectricityConsumptionInWatt} will follow.",
+                postprocessing_flag=(
+                    [
+                        lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                        lt.ComponentType.BUILDINGS,
+                        lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+                    ]
+                    if any(word in config.building_name for word in lt.DistrictNames)
+                    else []
+                ),
+            )
         self.electricity_consumption_uncontrolled_in_watt_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ElectricityConsumptionInWatt,
@@ -153,7 +171,7 @@ class ElectricityMeter(DynamicComponent):
             postprocessing_flag=(
                 [
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
-                    lt.ComponentType.BUILDINGS,
+                    #lt.ComponentType.BUILDINGS,
                     lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
                 ]
                 if any(word in config.building_name for word in lt.DistrictNames)
@@ -380,6 +398,17 @@ class ElectricityMeter(DynamicComponent):
                 self.surplus_electricity_unused_to_district_ems_from_building_ems_output,
                 building_electricity_surplus_unused,
             )
+
+            consumption_inputs_building = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED, lt.ComponentType.BUILDINGS])
+
+            consumption_of_buildings = (
+                sum([stsv.get_input_value(component_input=elem) for elem in consumption_inputs_building]))
+
+            stsv.set_output_value(
+                self.electricity_consumption_building_uncontrolled_in_watt_channel,
+                consumption_of_buildings,
+            )
+
         # Production of Electricity positve sign
         # Consumption of Electricity negative sign
         difference_between_production_and_consumption_in_watt = production_in_watt - consumption_uncontrolled_in_watt

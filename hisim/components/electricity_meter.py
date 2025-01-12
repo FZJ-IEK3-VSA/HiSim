@@ -171,7 +171,6 @@ class ElectricityMeter(DynamicComponent):
             postprocessing_flag=(
                 [
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
-                    #lt.ComponentType.BUILDINGS,
                     lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
                 ]
                 if any(word in config.building_name for word in lt.DistrictNames)

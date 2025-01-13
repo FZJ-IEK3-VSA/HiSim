@@ -83,7 +83,7 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
         config = SimpleHeatSourceConfig(
             building_name=building_name,
             name="HeatSourceConstPower",
-            const_source=SimpleHeatSourceType.CONSTANT_THERMAL_POWER.value,  # type: ignore
+            const_source=SimpleHeatSourceType.CONSTANT_THERMAL_POWER,  # type: ignore
             power_th_in_watt=5000.0,
             temperature_out_in_celsius=None,
             fluid_type=FluidMediaType.PROPYLEN_GLYCOL,
@@ -104,7 +104,7 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
         config = SimpleHeatSourceConfig(
             building_name=building_name,
             name="HeatSourceConstTemperature",
-            const_source=SimpleHeatSourceType.CONSTANT_TEMPERATURE.value,  # type: ignore
+            const_source=SimpleHeatSourceType.CONSTANT_TEMPERATURE,  # type: ignore
             power_th_in_watt=None,
             temperature_out_in_celsius=5,
             fluid_type=FluidMediaType.PROPYLEN_GLYCOL,
@@ -127,7 +127,7 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
         config = SimpleHeatSourceConfig(
             building_name=building_name,
             name="HeatSourceVarBrineTemperature",
-            const_source=SimpleHeatSourceType.SIMPLE_BRINE_TEMPERATURE.value,  # type: ignore
+            const_source=SimpleHeatSourceType.SIMPLE_BRINE_TEMPERATURE,  # type: ignore
             power_th_in_watt=None,
             temperature_out_in_celsius=None,
             fluid_type=FluidMediaType.PROPYLEN_GLYCOL,
@@ -186,7 +186,7 @@ class SimpleHeatSource(cp.Component):
 
         if self.config.const_source.value is None:  # type: ignore
             raise ValueError("const_source is not set.")
-        elif self.config.const_source.value == SimpleHeatSourceType.CONSTANT_THERMAL_POWER.value:  # type: ignore
+        if self.config.const_source.value == SimpleHeatSourceType.CONSTANT_THERMAL_POWER.value:  # type: ignore
             self.power_th_in_watt = self.config.power_th_in_watt
             if self.power_th_in_watt is None or str(self.power_th_in_watt) == "nan":
                 raise ValueError("Undefined value for constant power")
@@ -198,7 +198,6 @@ class SimpleHeatSource(cp.Component):
             pass
         else:
             raise ValueError("Invalid const_source value.")
-
 
         self.fluid_type = config.fluid_type
         self.mass_fraction_of_fluid_mixed_in_water = config.mass_fraction_of_fluid_mixed_in_water
@@ -329,8 +328,6 @@ class SimpleHeatSource(cp.Component):
 
             thermal_power_in_watt = (massflow_in_kg_per_sec * self.cp_f *
                                      (temperature_output - temperature_input_in_celsius))
-
-
 
         elif self.config.const_source.value == SimpleHeatSourceType.SIMPLE_BRINE_TEMPERATURE.value:
             """From hplib: Calculate the soil temperature by the average Temperature of the day.

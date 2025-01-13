@@ -1093,7 +1093,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
         elif on_off == 2:  # Calculate outputs for dhw mode
             self.heatpump.delta_t = 5
-            minimum_thermal_output_power=0
+            minimum_thermal_output_power = 0
             if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
                 results = self.get_cached_results_or_run_hplib_simulation(
                     force_convergence=force_convergence,

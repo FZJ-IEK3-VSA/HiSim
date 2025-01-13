@@ -313,11 +313,6 @@ class SimpleHeatSource(cp.Component):
             self.temperature_input_channel
         )
 
-        print("_--------------------")
-        print(self.component_name)
-        print(self.config.const_source)
-        print(self.config.temperature_out_in_celsius)
-
         if self.config.const_source == SimpleHeatSourceType.CONSTANT_THERMAL_POWER.value:
             thermal_power_in_watt = self.power_th_in_watt
 

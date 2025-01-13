@@ -4,7 +4,7 @@
 
 # Import packages from standard library or the environment e.g. pandas, numpy etc.
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 from enum import Enum
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -55,9 +55,9 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
 
     building_name: str
     name: str
-    power_th_in_watt: float
-    temperature_out_in_celsius: float
-    const_source: SimpleHeatSourceType
+    power_th_in_watt: Optional[float]
+    temperature_out_in_celsius: Optional[float]
+    const_source: Optional[SimpleHeatSourceType]
     fluid_type: FluidMediaType
     mass_fraction_of_fluid_mixed_in_water: float
     #: CO2 footprint of investment in kg
@@ -85,7 +85,7 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
             name="HeatSourceConstPower",
             const_source=SimpleHeatSourceType.CONSTANT_THERMAL_POWER.value,  # type: ignore
             power_th_in_watt=5000.0,
-            temperature_out_in_celsius=5,
+            temperature_out_in_celsius=None,
             fluid_type=FluidMediaType.PROPYLEN_GLYCOL,
             mass_fraction_of_fluid_mixed_in_water=0.20,
             co2_footprint=100,  # Todo: check value
@@ -105,7 +105,7 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
             building_name=building_name,
             name="HeatSourceConstTemperature",
             const_source=SimpleHeatSourceType.CONSTANT_TEMPERATURE.value,  # type: ignore
-            power_th_in_watt=0,
+            power_th_in_watt=None,
             temperature_out_in_celsius=5,
             fluid_type=FluidMediaType.PROPYLEN_GLYCOL,
             mass_fraction_of_fluid_mixed_in_water=0.20,
@@ -128,8 +128,8 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
             building_name=building_name,
             name="HeatSourceVarBrineTemperature",
             const_source=SimpleHeatSourceType.SIMPLE_BRINE_TEMPERATURE.value,  # type: ignore
-            power_th_in_watt=0,
-            temperature_out_in_celsius=5,
+            power_th_in_watt=None,
+            temperature_out_in_celsius=None,
             fluid_type=FluidMediaType.PROPYLEN_GLYCOL,
             mass_fraction_of_fluid_mixed_in_water=0.20,
             co2_footprint=100,  # Todo: check value
@@ -184,15 +184,21 @@ class SimpleHeatSource(cp.Component):
             my_display_config=my_display_config,
         )
 
-        if self.config.const_source == SimpleHeatSourceType.CONSTANT_THERMAL_POWER.value:
+        if self.config.const_source is None:
+            raise ValueError("const_source is not set.")
+        elif self.config.const_source == SimpleHeatSourceType.CONSTANT_THERMAL_POWER:
             self.power_th_in_watt = self.config.power_th_in_watt
-            if self.power_th_in_watt == None or str(self.power_th_in_watt) == "nan":
+            if self.power_th_in_watt is None or str(self.power_th_in_watt) == "nan":
                 raise ValueError("Undefined value for constant power")
-
-        if self.config.const_source == SimpleHeatSourceType.CONSTANT_TEMPERATURE.value:
+        elif self.config.const_source == SimpleHeatSourceType.CONSTANT_TEMPERATURE:
             self.temperature_out_in_celsius = self.config.temperature_out_in_celsius
-            if self.temperature_out_in_celsius == None or str(self.temperature_out_in_celsius) == "nan":
+            if self.temperature_out_in_celsius is None or str(self.temperature_out_in_celsius) == "nan":
                 raise ValueError("Undefined value for constant temperature")
+        elif self.config.const_source == SimpleHeatSourceType.SIMPLE_BRINE_TEMPERATURE:
+            pass
+        else:
+            raise ValueError("Invalid const_source value.")
+
 
         self.fluid_type = config.fluid_type
         self.mass_fraction_of_fluid_mixed_in_water = config.mass_fraction_of_fluid_mixed_in_water
@@ -345,7 +351,7 @@ class SimpleHeatSource(cp.Component):
         else:
             raise KeyError("Unknown heat source type")
 
-        stsv.set_output_value(self.thermal_power_delivered_channel, thermal_power_in_watt)
+        stsv.set_output_value(self.thermal_power_delivered_channel, thermal_power_in_watt)  # type: ignore
         stsv.set_output_value(self.temperature_output_channel, temperature_output)
 
     @staticmethod

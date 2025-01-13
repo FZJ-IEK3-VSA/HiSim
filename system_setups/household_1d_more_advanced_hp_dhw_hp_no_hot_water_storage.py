@@ -341,7 +341,7 @@ def setup_function(
         my_simulation_parameters=my_simulation_parameters, config=my_config.electricity_meter_config,
     )
 
-    my_heat_pump.connect_only_predefined_connections(my_heat_pump_controller, my_weather)
+    my_heat_pump.connect_only_predefined_connections(my_heat_pump_controller, my_weather, my_building)
 
     # Verknüpfung mit Luft als Umgebungswärmequelle
     if my_heat_pump.parameters["Group"].iloc[0] == 1.0 or my_heat_pump.parameters["Group"].iloc[0] == 4.0:

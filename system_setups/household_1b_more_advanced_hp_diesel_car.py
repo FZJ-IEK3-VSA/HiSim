@@ -343,6 +343,7 @@ def setup_function(
         my_weather,
         my_hot_water_storage,
         my_dhw_storage,
+        my_building
     )
 
     # Verknüpfung mit Luft als Umgebungswärmequelle

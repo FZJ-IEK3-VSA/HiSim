@@ -184,6 +184,16 @@ class SimpleHeatSource(cp.Component):
             my_display_config=my_display_config,
         )
 
+        if self.config.const_source == SimpleHeatSourceType.CONSTANT_THERMAL_POWER.value:
+            self.power_th_in_watt = self.config.power_th_in_watt
+            if self.power_th_in_watt == None or str(self.power_th_in_watt) == "nan":
+                raise ValueError("Undefined value for constant power")
+
+        if self.config.const_source == SimpleHeatSourceType.CONSTANT_TEMPERATURE.value:
+            self.temperature_out_in_celsius = self.config.temperature_out_in_celsius
+            if self.temperature_out_in_celsius == None or str(self.temperature_out_in_celsius) == "nan":
+                raise ValueError("Undefined value for constant temperature")
+
         self.fluid_type = config.fluid_type
         self.mass_fraction_of_fluid_mixed_in_water = config.mass_fraction_of_fluid_mixed_in_water
 
@@ -303,16 +313,23 @@ class SimpleHeatSource(cp.Component):
             self.temperature_input_channel
         )
 
+        print("_--------------------")
+        print(self.component_name)
+        print(self.config.const_source)
+        print(self.config.temperature_out_in_celsius)
+
         if self.config.const_source == SimpleHeatSourceType.CONSTANT_THERMAL_POWER.value:
-            thermal_power_in_watt = self.config.power_th_in_watt
+            thermal_power_in_watt = self.power_th_in_watt
 
             temperature_output = (thermal_power_in_watt / (massflow_in_kg_per_sec * self.cp_f)) + temperature_input_in_celsius
 
         elif self.config.const_source == SimpleHeatSourceType.CONSTANT_TEMPERATURE.value:
-            thermal_power_in_watt = (massflow_in_kg_per_sec * self.cp_f *
-                                     (self.config.temperature_out_in_celsius - temperature_input_in_celsius))
+            temperature_output = self.temperature_out_in_celsius
 
-            temperature_output = self.config.temperature_out_in_celsius
+            thermal_power_in_watt = (massflow_in_kg_per_sec * self.cp_f *
+                                     (temperature_output - temperature_input_in_celsius))
+
+
 
         elif self.config.const_source == SimpleHeatSourceType.SIMPLE_BRINE_TEMPERATURE.value:
             """From hplib: Calculate the soil temperature by the average Temperature of the day.

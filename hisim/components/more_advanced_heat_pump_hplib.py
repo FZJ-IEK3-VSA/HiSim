@@ -36,7 +36,7 @@ from hisim.component import (
     DisplayConfig,
     CapexCostDataClass,
 )
-from hisim.components import weather, simple_water_storage, heat_distribution_system
+from hisim.components import weather, simple_water_storage, heat_distribution_system, building
 from hisim.components.heat_distribution_system import HeatDistributionSystemType
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, OutputPostprocessingRules
 from hisim.units import (
@@ -106,7 +106,6 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
     position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int]
     with_domestic_hot_water_preparation: bool
     massflow_nominal_secondary_side_in_kg_per_s: Quantity[float, KilogramPerSecond]
-    minimum_thermal_output_power_in_watt: Quantity[float, Watt]
     massflow_nominal_primary_side_in_kg_per_s: Optional[float]
     specific_heat_capacity_of_primary_fluid: Optional[float]
     #: CO2 footprint of investment in kg
@@ -128,7 +127,6 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
         massflow_nominal_secondary_side_in_kg_per_s: Quantity[float, KilogramPerSecond] = Quantity(
             0.333, KilogramPerSecond
         ),
-        minimum_thermal_output_power_in_watt: Quantity[float, Watt] = Quantity(3800, Watt),
     ) -> "MoreAdvancedHeatPumpHPLibConfig":
         """Gets a default HPLib Heat Pump.
 
@@ -150,7 +148,6 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
             position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.PARALLEL,
             with_domestic_hot_water_preparation=False,
             massflow_nominal_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
-            minimum_thermal_output_power_in_watt=minimum_thermal_output_power_in_watt,
             massflow_nominal_primary_side_in_kg_per_s=0,
             specific_heat_capacity_of_primary_fluid=0,
             # value from emission_factors_and_costs_devices.csv
@@ -171,7 +168,6 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
         massflow_nominal_secondary_side_in_kg_per_s: Quantity[float, KilogramPerSecond] = Quantity(
             0.333, KilogramPerSecond
         ),
-        minimum_thermal_output_power_in_watt: Quantity[float, Watt] = Quantity(3800, Watt),
     ) -> "MoreAdvancedHeatPumpHPLibConfig":
         """Gets a default heat pump with scaling according to heating load of the building."""
 
@@ -192,7 +188,6 @@ class MoreAdvancedHeatPumpHPLibConfig(ConfigBase):
             position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.PARALLEL,
             with_domestic_hot_water_preparation=False,
             massflow_nominal_secondary_side_in_kg_per_s=massflow_nominal_secondary_side_in_kg_per_s,
-            minimum_thermal_output_power_in_watt=minimum_thermal_output_power_in_watt,
             massflow_nominal_primary_side_in_kg_per_s=0,
             specific_heat_capacity_of_primary_fluid=0,
             # value from emission_factros_and_costs_devices.csv
@@ -225,6 +220,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
     TemperatureInputSecondary_DHW = "TemperatureInputSecondaryDWH"  # °C
     TemperatureAmbient = "TemperatureAmbient"  # °C
     SetHeatingTemperatureSpaceHeating = "SetHeatingTemperatureSpaceHeating"
+    TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
 
     # Outputs
     ThermalOutputPowerSH = "ThermalOutputPowerSpaceHeating"  # W
@@ -310,15 +306,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         #     else config.massflow_nominal_secondary_side_in_kg_per_s
         # )
 
-        # self.minimum_thermal_output_power = (
-        #     config.minimum_thermal_output_power_in_watt.value
-        #     if config.minimum_thermal_output_power_in_watt
-        #     else config.minimum_thermal_output_power_in_watt
-        # )
-
         self.m_dot_ref = config.massflow_nominal_secondary_side_in_kg_per_s.value
-
-        self.minimum_thermal_output_power = config.minimum_thermal_output_power_in_watt.value
 
         if self.position_hot_water_storage_in_system in [
             PositionHotWaterStorageInSystemSetup.SERIE,
@@ -327,8 +315,6 @@ class MoreAdvancedHeatPumpHPLib(Component):
             if (
                 self.m_dot_ref is None
                 or self.m_dot_ref == 0
-                or self.minimum_thermal_output_power is None
-                or self.minimum_thermal_output_power == 0
             ):
                 raise ValueError(
                     """If system setup is without parallel hot water storage, nominal massflow and minimum
@@ -431,6 +417,14 @@ class MoreAdvancedHeatPumpHPLib(Component):
             field_name=self.TemperatureAmbient,
             load_type=LoadTypes.TEMPERATURE,
             unit=Units.CELSIUS,
+            mandatory=True,
+        )
+
+        self.minimum_thermal_output_power: ComponentInput = self.add_input(
+            object_name=self.component_name,
+            field_name=self.TheoreticalThermalBuildingDemand,
+            load_type=LoadTypes.HEATING,
+            unit=Units.WATT,
             mandatory=True,
         )
 
@@ -804,6 +798,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
         self.add_default_connections(self.get_default_connections_from_heat_pump_controller_space_heating())
         self.add_default_connections(self.get_default_connections_from_weather())
+        self.add_default_connections(self.get_default_connections_from_building())
 
         if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
             self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
@@ -862,6 +857,19 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 MoreAdvancedHeatPumpHPLib.TemperatureAmbient,
                 weather_classname,
                 weather.Weather.DailyAverageOutsideTemperatures,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_building(self,):
+        """Get default connections."""
+        connections = []
+        building_classname = building.Building.get_classname()
+        connections.append(
+            ComponentConnection(
+                MoreAdvancedHeatPumpHPLib.TheoreticalThermalBuildingDemand,
+                building_classname,
+                building.Building.TheoreticalThermalBuildingDemand,
             )
         )
         return connections
@@ -951,6 +959,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
         time_on_heating = self.state.time_on_heating
         time_on_cooling = self.state.time_on_cooling
         time_off = self.state.time_off
+        minimum_thermal_output_power = stsv.get_input_value(self.minimum_thermal_output_power)
 
         if self.position_hot_water_storage_in_system in [
             PositionHotWaterStorageInSystemSetup.SERIE,
@@ -1012,7 +1021,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     t_in_secondary=t_in_secondary_sh,
                     t_amb=t_amb,
                     mode=1,
-                    p_th_min=self.minimum_thermal_output_power
+                    p_th_min=minimum_thermal_output_power
                 )
 
                 p_th_sh = results["P_th"]
@@ -1044,7 +1053,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     t_in_secondary=t_in_secondary_sh,
                     t_amb=t_amb,
                     mode=1,
-                    p_th_min=self.minimum_thermal_output_power
+                    p_th_min=minimum_thermal_output_power
                 )
 
                 cop = results["COP"]
@@ -1057,8 +1066,8 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 )
                 p_el_sh_theoretical = p_th_sh_theoretical / cop
 
-                if p_th_sh_theoretical <= self.minimum_thermal_output_power:
-                    p_th_sh = self.minimum_thermal_output_power
+                if p_th_sh_theoretical <= minimum_thermal_output_power:
+                    p_th_sh = minimum_thermal_output_power
                     p_el_sh = p_th_sh / cop
                 else:
                     p_el_sh = p_el_sh_theoretical
@@ -1084,6 +1093,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
 
         elif on_off == 2:  # Calculate outputs for dhw mode
             self.heatpump.delta_t = 5
+            minimum_thermal_output_power=0
             if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
                 results = self.get_cached_results_or_run_hplib_simulation(
                     force_convergence=force_convergence,
@@ -1091,7 +1101,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     t_in_secondary=t_in_secondary_dhw,
                     t_amb=t_amb,
                     mode=1,
-                    p_th_min=0
+                    p_th_min=minimum_thermal_output_power
                 )
 
                 p_th_sh = 0.0
@@ -1124,7 +1134,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     t_in_secondary=t_in_secondary_dhw,
                     t_amb=t_amb,
                     mode=1,
-                    p_th_min=0
+                    p_th_min=minimum_thermal_output_power
                 )
 
                 cop = results["COP"]
@@ -1137,8 +1147,8 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 )
                 p_el_dhw_theoretical = p_th_dhw_theoretical / cop
 
-                if p_th_dhw_theoretical <= self.minimum_thermal_output_power:
-                    p_th_dhw = self.minimum_thermal_output_power
+                if p_th_dhw_theoretical <= minimum_thermal_output_power:
+                    p_th_dhw = minimum_thermal_output_power
                     p_el_dhw = p_th_dhw / cop
                 else:
                     p_el_dhw = p_el_dhw_theoretical
@@ -1169,7 +1179,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 t_in_secondary=t_in_secondary_sh,
                 t_amb=t_amb,
                 mode=2,
-                p_th_min=0
+                p_th_min=minimum_thermal_output_power
             )
             p_th_sh = results["P_th"]
             p_th_dhw = 0.0

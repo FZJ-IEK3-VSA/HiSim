@@ -59,6 +59,7 @@ def test_heat_pump_hplib_new():
         cycling_mode=True,
         minimum_idle_time_in_seconds=Quantity(600, Seconds),
         minimum_running_time_in_seconds=Quantity(600, Seconds),
+        minimum_thermal_output_power_in_watt=Quantity(1500, Watt),
         position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.PARALLEL,
         with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
         massflow_nominal_secondary_side_in_kg_per_s=Quantity(0.333, KilogramPerSecond),

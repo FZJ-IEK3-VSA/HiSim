@@ -555,6 +555,8 @@ class ElectricityMeter(DynamicComponent):
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         total_energy_from_grid_in_kwh: float
         total_energy_to_grid_in_kwh: float
+        total_power_from_grid_in_watt: float
+        total_power_to_grid_in_watt: float
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name and output.load_type == lt.LoadTypes.ELECTRICITY:

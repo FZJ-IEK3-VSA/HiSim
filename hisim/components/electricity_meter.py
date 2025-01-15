@@ -19,7 +19,7 @@ from hisim.dynamic_component import (
     DynamicComponentConnection,
 )
 from hisim.simulationparameters import SimulationParameters
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
 
 
 @dataclass_json
@@ -562,6 +562,20 @@ class ElectricityMeter(DynamicComponent):
                     total_energy_from_grid_in_kwh = postprocessing_results.iloc[:, index].sum() * 1e-3
                 elif output.field_name == self.ElectricityToGrid:
                     total_energy_to_grid_in_kwh = postprocessing_results.iloc[:, index].sum() * 1e-3
+                elif output.field_name == self.ElectricityFromGridInWatt:
+                    total_power_from_grid_in_watt = postprocessing_results.iloc[:, index].sum() * 1e-3
+                elif output.field_name == self.ElectricityToGridInWatt:
+                    total_power_to_grid_in_watt = postprocessing_results.iloc[:, index].sum() * 1e-3
+
+        (mean_total_power_from_grid_in_watt,
+        max_total_power_from_grid_in_watt,
+        min_total_power_from_grid_in_watt,
+         ) = KpiHelperClass.calc_mean_max_min_value(list_or_pandas_series=total_power_from_grid_in_watt)
+
+        (mean_total_power_to_grid_in_watt,
+        max_total_power_to_grid_in_watt,
+        min_total_power_to_grid_in_watt,
+         ) = KpiHelperClass.calc_mean_max_min_value(list_or_pandas_series=total_power_to_grid_in_watt)
 
         total_energy_from_grid_in_kwh_entry = KpiEntry(
             name="Total energy from grid",
@@ -580,6 +594,60 @@ class ElectricityMeter(DynamicComponent):
             description=self.component_name,
         )
         list_of_kpi_entries.append(total_energy_to_grid_in_kwh_entry)
+
+        mean_total_power_from_grid_in_watt_entry = KpiEntry(
+            name="Mean power from grid",
+            unit="kW",
+            value=mean_total_power_from_grid_in_watt,
+            tag=KpiTagEnumClass.ELECTRICITY_METER,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(mean_total_power_from_grid_in_watt_entry)
+
+        max_total_power_from_grid_in_watt_entry = KpiEntry(
+            name="Max power from grid",
+            unit="kW",
+            value=max_total_power_from_grid_in_watt,
+            tag=KpiTagEnumClass.ELECTRICITY_METER,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(max_total_power_from_grid_in_watt_entry)
+
+        min_total_power_from_grid_in_watt_entry = KpiEntry(
+            name="Min power from grid",
+            unit="kW",
+            value=min_total_power_from_grid_in_watt,
+            tag=KpiTagEnumClass.ELECTRICITY_METER,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(min_total_power_from_grid_in_watt_entry)
+
+        mean_total_power_to_grid_in_watt_entry = KpiEntry(
+            name="Mean power to grid",
+            unit="kW",
+            value=mean_total_power_to_grid_in_watt,
+            tag=KpiTagEnumClass.ELECTRICITY_METER,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(mean_total_power_to_grid_in_watt_entry)
+
+        max_total_power_to_grid_in_watt_entry = KpiEntry(
+            name="Max power to grid",
+            unit="kW",
+            value=max_total_power_to_grid_in_watt,
+            tag=KpiTagEnumClass.ELECTRICITY_METER,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(max_total_power_to_grid_in_watt_entry)
+
+        min_total_power_to_grid_in_watt_entry = KpiEntry(
+            name="Min power to grid",
+            unit="kW",
+            value=min_total_power_to_grid_in_watt,
+            tag=KpiTagEnumClass.ELECTRICITY_METER,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(min_total_power_to_grid_in_watt_entry)
 
         # get opex costs
         opex_costs = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)

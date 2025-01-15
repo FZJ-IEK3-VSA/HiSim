@@ -184,17 +184,18 @@ class SimpleHeatSource(cp.Component):
             my_display_config=my_display_config,
         )
 
-        if self.config.const_source.value is None:  # type: ignore
+        if self.config.const_source is None:  # type: ignore
             raise ValueError("const_source is not set.")
-        if self.config.const_source.value == SimpleHeatSourceType.CONSTANT_THERMAL_POWER.value:  # type: ignore
+
+        if self.config.const_source == SimpleHeatSourceType.CONSTANT_THERMAL_POWER:  # type: ignore
             self.power_th_in_watt = self.config.power_th_in_watt
             if self.power_th_in_watt is None or str(self.power_th_in_watt) == "nan":
                 raise ValueError("Undefined value for constant power")
-        elif self.config.const_source.value == SimpleHeatSourceType.CONSTANT_TEMPERATURE.value:  # type: ignore
+        elif self.config.const_source == SimpleHeatSourceType.CONSTANT_TEMPERATURE:  # type: ignore
             self.temperature_out_in_celsius = self.config.temperature_out_in_celsius
             if self.temperature_out_in_celsius is None or str(self.temperature_out_in_celsius) == "nan":
                 raise ValueError("Undefined value for constant temperature")
-        elif self.config.const_source.value == SimpleHeatSourceType.SIMPLE_BRINE_TEMPERATURE.value:  # type: ignore
+        elif self.config.const_source == SimpleHeatSourceType.SIMPLE_BRINE_TEMPERATURE:  # type: ignore
             pass
         else:
             raise ValueError("Invalid const_source value.")
@@ -318,18 +319,18 @@ class SimpleHeatSource(cp.Component):
             self.temperature_input_channel
         )
 
-        if self.config.const_source.value == SimpleHeatSourceType.CONSTANT_THERMAL_POWER.value:
+        if self.config.const_source == SimpleHeatSourceType.CONSTANT_THERMAL_POWER:
             thermal_power_in_watt = self.power_th_in_watt
 
             temperature_output = (thermal_power_in_watt / (massflow_in_kg_per_sec * self.cp_f)) + temperature_input_in_celsius
 
-        elif self.config.const_source.value == SimpleHeatSourceType.CONSTANT_TEMPERATURE.value:
+        elif self.config.const_source == SimpleHeatSourceType.CONSTANT_TEMPERATURE:
             temperature_output = self.temperature_out_in_celsius
 
             thermal_power_in_watt = (massflow_in_kg_per_sec * self.cp_f *
                                      (temperature_output - temperature_input_in_celsius))
 
-        elif self.config.const_source.value == SimpleHeatSourceType.SIMPLE_BRINE_TEMPERATURE.value:
+        elif self.config.const_source == SimpleHeatSourceType.SIMPLE_BRINE_TEMPERATURE:
             """From hplib: Calculate the soil temperature by the average Temperature of the day.
             Source: „WP Monitor“ Feldmessung von Wärmepumpenanlagen S. 115, Frauenhofer ISE, 2014
             added 9 points at -15°C average day at 3°C soil temperature in order to prevent higher

@@ -150,7 +150,7 @@ class ElectricityMeter(DynamicComponent):
                 load_type=lt.LoadTypes.ELECTRICITY,
                 unit=lt.Units.WATT,
                 sankey_flow_direction=False,
-                output_description=f"here a description for {self.ElectricityConsumptionInWatt} will follow.",
+                output_description=f"here a description for {self.ElectricityConsumptionOfBuildingsInWatt} will follow.",
                 postprocessing_flag=(
                     [
                         lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,

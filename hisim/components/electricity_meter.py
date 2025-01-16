@@ -565,9 +565,9 @@ class ElectricityMeter(DynamicComponent):
                 elif output.field_name == self.ElectricityToGrid:
                     total_energy_to_grid_in_kwh = postprocessing_results.iloc[:, index].sum() * 1e-3
                 elif output.field_name == self.ElectricityFromGridInWatt:
-                    total_power_from_grid_in_watt = postprocessing_results.iloc[:, index].sum() * 1e-3
+                    total_power_from_grid_in_watt = postprocessing_results.iloc[:, index]
                 elif output.field_name == self.ElectricityToGridInWatt:
-                    total_power_to_grid_in_watt = postprocessing_results.iloc[:, index].sum() * 1e-3
+                    total_power_to_grid_in_watt = postprocessing_results.iloc[:, index]
 
         (mean_total_power_from_grid_in_watt,
         max_total_power_from_grid_in_watt,

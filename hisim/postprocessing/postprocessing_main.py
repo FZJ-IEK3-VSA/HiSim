@@ -5,6 +5,7 @@ import json
 
 # clean
 import os
+import pickle
 import string
 import sys
 from timeit import default_timer as timer
@@ -134,6 +135,13 @@ class PostProcessor:
             end = timer()
             duration = end - start
             log.information("Making CSV export took " + f"{duration:1.2f}s.")
+        if PostProcessingOptions.EXPORT_TO_PKL in ppdt.post_processing_options:
+            log.information("Making pkl exports.")
+            start = timer()
+            self.make_pkl_export(ppdt)
+            end = timer()
+            duration = end - start
+            log.information("Making PKL export took " + f"{duration:1.2f}s.")
         if PostProcessingOptions.MAKE_NETWORK_CHARTS in ppdt.post_processing_options:
             log.information("Computing network charts.")
             start = timer()
@@ -350,6 +358,11 @@ class PostProcessor:
         log.information("Exporting to csv.")
         self.export_results_to_csv(ppdt)
 
+    def make_pkl_export(self, ppdt: PostProcessingDataTransfer) -> None:
+        """Exports all data to Pickle."""
+        log.information("Exporting to pkl.")
+        self.export_results_to_pickle(ppdt)
+
     def make_monthly_bar_charts(
         self,
         ppdt: PostProcessingDataTransfer,
@@ -442,23 +455,69 @@ class PostProcessor:
     @utils.measure_execution_time
     def export_results_to_csv(self, ppdt: PostProcessingDataTransfer) -> None:
         """Exports the results to a CSV file."""
-
         for column in ppdt.results:
-            ppdt.results[column].to_csv(
-                os.path.join(
-                    ppdt.simulation_parameters.result_directory,
-                    f"{column.split(' ', 3)[0]}_{column.split(' ', 3)[2]}.csv",
-                ),
-                sep=",",
-                decimal=".",
+            csvfilename = os.path.join(
+                ppdt.simulation_parameters.result_directory,
+                f"{column.split(' ', 3)[0]}_{column.split(' ', 3)[2]}.csv",
             )
+            csvfilename = self.shorten_path(csvfilename)
+            ppdt.results[column].to_csv(csvfilename, sep=",", decimal=".")
+
         for column in ppdt.results_monthly:
             csvfilename = os.path.join(
                 ppdt.simulation_parameters.result_directory,
                 f"{column.split(' ', 3)[0]}_{column.split(' ', 3)[2]}_monthly.csv",
             )
             header = [f"{column.split('[', 1)[0]} - monthly [" f"{column.split('[', 1)[1]}"]
+            csvfilename = self.shorten_path(csvfilename)
             ppdt.results_monthly[column].to_csv(csvfilename, sep=",", decimal=".", header=header)
+
+    @utils.measure_execution_time
+    def export_results_to_pickle(self, ppdt: PostProcessingDataTransfer) -> None:
+        """Exports the results to a Pickle file."""
+
+        for column in ppdt.results:
+            pickle_filename = os.path.join(
+                ppdt.simulation_parameters.result_directory,
+                f"{column.split(' ', 3)[0]}_{column.split(' ', 3)[2]}.pkl",
+            )
+
+            pickle_filename = self.shorten_path(pickle_filename)
+
+            with open(pickle_filename, "wb") as f:
+                pickle.dump(ppdt.results[column], f)
+
+        for column in ppdt.results_monthly:
+            pickle_filename_monthly = os.path.join(
+                ppdt.simulation_parameters.result_directory,
+                f"{column.split(' ', 3)[0]}_{column.split(' ', 3)[2]}_monthly.pkl",
+            )
+
+            pickle_filename_monthly = self.shorten_path(pickle_filename_monthly)
+
+            with open(pickle_filename_monthly, "wb") as f:
+                pickle.dump(ppdt.results_monthly[column], f)
+
+    def shorten_path(self, path, max_length=250):
+
+        if len(path) <= max_length:
+            return path
+
+        dir_path, last_part = os.path.split(path)
+
+        remove_length = len(path) - max_length
+
+        remaining_length = len(last_part) - remove_length
+        part_length = remaining_length // 2
+
+        start = last_part[:part_length]
+        end = last_part[-part_length:]
+
+        shortened_last_part = f"{start}...{end}"
+
+        shortend_path = os.path.join(dir_path, shortened_last_part)
+
+        return shortend_path
 
     def write_simulation_parameters_to_report(
         self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator

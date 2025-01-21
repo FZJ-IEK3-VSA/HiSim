@@ -923,7 +923,7 @@ class PostProcessor:
 
     def write_component_configurations_to_json(self, ppdt: PostProcessingDataTransfer) -> None:
         """Collect all component configurations and write into JSON file in result directory."""
-        json_generator_config = JsonConfigurationGenerator(name="my_system")
+        json_generator_config = JsonConfigurationGenerator(name=f"{self.scenario}")
         for component in ppdt.wrapped_components:
             json_generator_config.add_component(config=component.my_component.config)
         json_generator_config.save_to_json(

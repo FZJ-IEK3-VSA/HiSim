@@ -301,6 +301,10 @@ class PostProcessor:
             log.information("Writing component configurations to JSON file.")
             self.write_component_configurations_to_json(ppdt)
 
+        if PostProcessingOptions.WRITE_CONFIGS_FOR_SCENARIO_EVALUATION_TO_JSON in ppdt.post_processing_options:
+            log.information("Writing component configurations for scenario evaluation to JSON file.")
+            self.write_config_data_for_scenario_evaluation(ppdt)
+
         if PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER in ppdt.post_processing_options:
             log.information("Writing KPIs to JSON file for building sizer.")
             self.write_kpis_to_json_for_building_sizer(ppdt, building_objects_in_district_list)
@@ -894,8 +898,37 @@ class PostProcessor:
             simulation_duration=ppdt.simulation_parameters.duration.days,
         )
 
-        # --------------------------------------------------------------------------------------------------------------------------------------------------------------
+        self.write_config_data_for_scenario_evaluation(ppdt)
+
+    def write_config_data_for_scenario_evaluation(self, ppdt: PostProcessingDataTransfer) -> None:
+        """Prepare the results for the scenario evaluation."""
         # create dictionary with all import data information
+        if PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION in ppdt.post_processing_options:
+            result_data_folder_for_scenario_evaluation = os.path.join(
+                ppdt.simulation_parameters.result_directory, "result_data_for_scenario_evaluation"
+            )
+            if os.path.exists(result_data_folder_for_scenario_evaluation) is False:
+                os.makedirs(result_data_folder_for_scenario_evaluation)
+        else:
+            result_data_folder_for_scenario_evaluation = ppdt.simulation_parameters.result_directory
+
+        self.model = "".join(["HiSim_", ppdt.module_filename])
+
+        # set pyam scenario name
+        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME):
+            self.scenario = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
+        else:
+            self.scenario = ""
+
+        # set region
+        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.LOCATION):
+            self.region = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
+        else:
+            self.region = ""
+
+        # set year or timeseries
+        self.year = ppdt.simulation_parameters.year
+
         data_information_dict = {
             "model": self.model,
             "scenario": self.scenario,
@@ -908,7 +941,6 @@ class PostProcessor:
         json_generator_config = JsonConfigurationGenerator(name=f"{self.scenario}")
         json_generator_config.set_simulation_parameters(my_simulation_parameters=ppdt.simulation_parameters)
         if ppdt.my_module_config is not None:
-            print(ppdt.my_module_config)
             json_generator_config.set_module_config(my_module_config=ppdt.my_module_config)
         json_generator_config.set_scenario_data_information_dict(scenario_data_information_dict=data_information_dict)
         for component in ppdt.wrapped_components:
@@ -917,7 +949,7 @@ class PostProcessor:
         # save the json config
         json_generator_config.save_to_json(
             filename=os.path.join(
-                self.result_data_folder_for_scenario_evaluation, "data_for_scenario_evaluation.json"
+                result_data_folder_for_scenario_evaluation, "data_for_scenario_evaluation.json"
             )
         )
 

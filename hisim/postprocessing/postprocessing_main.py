@@ -499,7 +499,7 @@ class PostProcessor:
                 pickle.dump(ppdt.results_monthly[column], f)
 
     def shorten_path(self, path, max_length=250):
-
+        """Shorten path if its longer than 250."""
         if len(path) <= max_length:
             return path
 

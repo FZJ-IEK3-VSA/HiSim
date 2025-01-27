@@ -54,7 +54,9 @@ def test_photovoltaic():
     my_pvs.dni_extra_channel.source_output = my_weather.dni_extra_output
     my_pvs.dhi_channel.source_output = my_weather.dhi_output
     my_pvs.ghi_channel.source_output = my_weather.ghi_output
-    my_pvs.apparent_zenith_channel.source_output = my_weather.apparent_zenith_output
+    my_pvs.apparent_zenith_channel.source_output = (
+        my_weather.apparent_zenith_output
+    )
     my_pvs.wind_speed_channel.source_output = my_weather.wind_speed_output
 
     fft.add_global_index_of_components([my_weather, my_pvs])
@@ -68,16 +70,21 @@ def test_photovoltaic():
     )
     log.information(
         "pv electricity energy output [Wh]: "
-        + str(stsv.values[my_pvs.electricity_energy_output_channel.global_index])
+        + str(
+            stsv.values[my_pvs.electricity_energy_output_channel.global_index]
+        )
     )
 
     # check pv electricity output [W] in timestep 655
     assert (
-        pytest.approx(stsv.values[my_pvs.electricity_output_channel.global_index])
+        pytest.approx(
+            stsv.values[my_pvs.electricity_output_channel.global_index]
+        )
         == 334.8800144821672
     )
 
-    # Check pv energy output channel [Wh] which should be the electricity output in W times the timestep length in hours
+    # Check pv energy output channel [Wh] which should be the
+    # electricity output in W times the timestep length in hours
     assert pytest.approx(
         stsv.values[my_pvs.electricity_energy_output_channel.global_index]
     ) == 334.880014 * (seconds_per_timestep / 3600)
@@ -111,9 +118,9 @@ def test_photovoltaic_cec():
     my_weather.i_prepare_simulation()
     my_pvs_config = generic_pv_system.PVSystemConfig.get_default_pv_system(
         module_name="Trina Solar TSM-410DE09",
-        module_database=generic_pv_system.PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE,
+        module_database=generic_pv_system.PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE,  # noqa: E501
         inverter_name="SunPower: SPR-A400-H-AC [208V]",
-        inverter_database=generic_pv_system.PVLibModuleAndInverterEnum.CEC_INVERTER_DATABASE,
+        inverter_database=generic_pv_system.PVLibModuleAndInverterEnum.CEC_INVERTER_DATABASE,  # noqa: E501
     )
     my_pvs_config.power_in_watt = power_in_watt
     my_pvs = generic_pv_system.PVSystem(
@@ -132,7 +139,9 @@ def test_photovoltaic_cec():
     my_pvs.dni_extra_channel.source_output = my_weather.dni_extra_output
     my_pvs.dhi_channel.source_output = my_weather.dhi_output
     my_pvs.ghi_channel.source_output = my_weather.ghi_output
-    my_pvs.apparent_zenith_channel.source_output = my_weather.apparent_zenith_output
+    my_pvs.apparent_zenith_channel.source_output = (
+        my_weather.apparent_zenith_output
+    )
     my_pvs.wind_speed_channel.source_output = my_weather.wind_speed_output
 
     fft.add_global_index_of_components([my_weather, my_pvs])
@@ -146,16 +155,21 @@ def test_photovoltaic_cec():
     )
     log.information(
         "pv electricity energy output [Wh]: "
-        + str(stsv.values[my_pvs.electricity_energy_output_channel.global_index])
+        + str(
+            stsv.values[my_pvs.electricity_energy_output_channel.global_index]
+        )
     )
 
     # check pv electricity output [W] in timestep 655
     assert (
-        pytest.approx(stsv.values[my_pvs.electricity_output_channel.global_index])
+        pytest.approx(
+            stsv.values[my_pvs.electricity_output_channel.global_index]
+        )
         == 345.86117419666425
     )
 
-    # Check pv energy output channel [Wh] which should be the electricity output in W times the timestep length in hours
+    # Check pv energy output channel [Wh] which should be the electricity
+    # output in W times the timestep length in hours
     assert pytest.approx(
         stsv.values[my_pvs.electricity_energy_output_channel.global_index]
     ) == 345.86117419666425 * (seconds_per_timestep / 3600)

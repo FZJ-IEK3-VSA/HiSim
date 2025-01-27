@@ -8,7 +8,7 @@ import enum
 import math
 import os
 from dataclasses import dataclass
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -26,17 +26,17 @@ from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDict
 from hisim.simulationparameters import SimulationParameters
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass, KpiEntry
 
-__authors__ = "Vitor Hugo Bellotto Zago"
+__authors__ = "Vitor Hugo Bellotto Zago, Kristina Dabrock"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
-__credits__ = ["Noah Pflugradt"]
+__credits__ = ["Noah Pflugradt", "Kristina Dabrock"]
 __license__ = "MIT"
 __version__ = "0.1"
-__maintainer__ = "Vitor Hugo Bellotto Zago"
-__email__ = "vitor.zago@rwth-aachen.de"
+__maintainer__ = "Kristina Dabrock"
+__email__ = "k.dabrock@fz-juelich.de"
 __status__ = "development"
 
 """
-The functions cited in this module are at some degree based on the tsib project:
+The functions cited in this module are to some degree based on the tsib project:
 
 [tsib-kotzur]:
 Kotzur, Leander, Detlef Stolten, and Hermann-Josef Wagner.
@@ -46,6 +46,8 @@ ID: http://hdl.handle.net/2128/21115
 
 The implementation of the tsib project can be found under the following repository:
 https://github.com/FZJ-IEK3-VSA/tsib
+
+The CEC module and inverter database was downloaded from: https://github.com/NREL/SAM/tree/patch/deploy/libraries
 """
 
 
@@ -105,9 +107,14 @@ class PVSystemConfig(ConfigBase):
         cls,
         name: str = "PVSystem",
         power_in_watt: float = 10e3,
+        source_weight: float = 0,
         share_of_maximum_pv_potential: float = 1.0,
         location: str = "Aachen",
         building_name: str = "BUI1",
+        module_name: str = "Hanwha HSL60P6-PA-4-250T [2013]",
+        module_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
+        inverter_name: str = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
+        inverter_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,
     ) -> "PVSystemConfig":
         """Gets a default PV system."""
         power_in_watt = power_in_watt * share_of_maximum_pv_potential
@@ -117,18 +124,18 @@ class PVSystemConfig(ConfigBase):
             power_in_watt=power_in_watt,
             load_module_data=False,
             integrate_inverter=True,
-            module_database=PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
-            inverter_database=PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,
-            module_name="Hanwha HSL60P6-PA-4-250T [2013]",
-            inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
+            module_database=module_database,
+            inverter_database=inverter_database,
+            module_name=module_name,
+            inverter_name=inverter_name,
             name=name,
             azimuth=180,
             tilt=30,
             share_of_maximum_pv_potential=share_of_maximum_pv_potential,
-            source_weight=0,
+            source_weight=source_weight,
             location=location,
-            co2_footprint=power_in_watt * 1e-3 * 330.51,  # value from emission_factros_and_costs_devices.csv
-            cost=power_in_watt * 1e-3 * 794.41,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=power_in_watt * 1e-3 * 330.51,  # value from emission_factors_and_costs_devices.csv
+            cost=power_in_watt * 1e-3 * 794.41,  # value from emission_factors_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
             lifetime=25,  # value from emission_factros_and_costs_devices.csv
             predictive=False,
@@ -144,6 +151,8 @@ class PVSystemConfig(ConfigBase):
         share_of_maximum_pv_potential: float = 1.0,
         module_name: str = "Hanwha HSL60P6-PA-4-250T [2013]",
         module_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
+        inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
+        inverter_database=PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,
         location: str = "Aachen",
         building_name: str = "BUI1",
         load_module_data: bool = False,
@@ -155,30 +164,18 @@ class PVSystemConfig(ConfigBase):
             module_name=module_name,
             module_database=module_database,
         )
-        return PVSystemConfig(
-            building_name=building_name,
-            time=2019,
-            power_in_watt=total_pv_power_in_watt,
-            load_module_data=load_module_data,
-            module_name=module_name,
-            integrate_inverter=True,
-            inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
-            module_database=module_database,
-            inverter_database=PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,
+        config = PVSystemConfig.get_default_pv_system(
             name=name,
-            azimuth=180,
-            tilt=30,
-            share_of_maximum_pv_potential=share_of_maximum_pv_potential,
-            source_weight=0,
             location=location,
-            co2_footprint=total_pv_power_in_watt * 1e-3 * 330.51,  # value from emission_factros_and_costs_devices.csv
-            cost=total_pv_power_in_watt * 1e-3 * 794.41,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
-            lifetime=25,  # value from emission_factros_and_costs_devices.csv
-            predictive=False,
-            predictive_control=False,
-            prediction_horizon=None,
+            building_name=building_name,
+            module_name=module_name,
+            module_database=module_database,
+            inverter_name=inverter_name,
+            inverter_database=inverter_database,
         )
+        config.load_module_data = load_module_data
+        config.power_in_watt = total_pv_power_in_watt
+        return config
 
     @classmethod
     def size_pv_system(
@@ -188,7 +185,7 @@ class PVSystemConfig(ConfigBase):
         module_name: str,
         module_database: PVLibModuleAndInverterEnum,
     ) -> float:
-        """Size the pv system according to the rooftop type and the share of the maximum pv power that should be used."""
+        """Size the pv system according to the rooftop area and the share of the maximum pv power that should be used."""
 
         # get area and power of module
         if (
@@ -292,9 +289,14 @@ class PVSystem(cp.Component):
         self.module: Any
         self.coordinates: Any
         self.data_length: int = self.my_simulation_parameters.timesteps
-        self.temperature_model_parameters = pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["sapm"][
-            "open_rack_glass_glass"
-        ]
+        self.temperature_model_parameters = (
+            pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["pvsyst"]["freestanding"]
+            if self.pvconfig.module_database
+            == PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE
+            else pvlib.temperature.TEMPERATURE_MODEL_PARAMETERS["sapm"][
+                "open_rack_glass_glass"
+            ]
+        )
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
         component_name = self.get_component_name()
@@ -391,41 +393,8 @@ class PVSystem(cp.Component):
         self.add_default_connections(self.get_default_connections_from_weather())
 
     @staticmethod
-    def get_default_config(
-        power_in_watt: float = 10e3,
-        source_weight: int = 1,
-        share_of_maximum_pv_potential: float = 1.0,
-        building_name: str = "BUI1",
-    ) -> Any:
-        """Get default config."""
-        config = PVSystemConfig(
-            building_name=building_name,
-            name="PVSystem",
-            time=2019,
-            location="Aachen",
-            module_name="Hanwha HSL60P6-PA-4-250T [2013]",
-            integrate_inverter=True,
-            inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
-            module_database=PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
-            inverter_database=PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,
-            power_in_watt=power_in_watt,
-            azimuth=180,
-            tilt=30,
-            share_of_maximum_pv_potential=share_of_maximum_pv_potential,
-            load_module_data=False,
-            source_weight=source_weight,
-            co2_footprint=power_in_watt * 1e-3 * 130.7,  # value from emission_factros_and_costs_devices.csv
-            cost=power_in_watt * 1e-3 * 535.81,  # value from emission_factros_and_costs_devices.csv
-            maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
-            lifetime=25,  # value from emission_factros_and_costs_devices.csv
-            prediction_horizon=None,
-            predictive=False,
-            predictive_control=False,
-        )
-        return config
-
-    @staticmethod
-    def get_cost_capex(config: PVSystemConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
+    def get_cost_capex(
+        config: PVSystemConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
         """Returns investment cost, CO2 emissions and lifetime."""
         seconds_per_year = 365 * 24 * 60 * 60
         capex_per_simulated_period = (config.cost / config.lifetime) * (
@@ -547,7 +516,22 @@ class PVSystem(cp.Component):
             wind_speed = stsv.get_input_value(self.wind_speed_channel)
             apparent_zenith = stsv.get_input_value(self.apparent_zenith_channel)
 
-            ac_power_ratio = self.simphotovoltaic_two(
+            if (
+                self.config.module_database
+                == PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE
+            ):
+                simulate_fct = self.simulate_cec
+            elif (
+                self.config.module_database
+                == PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE
+            ):
+                simulate_fct = self.simulate_sandia
+            else:
+                raise KeyError(
+                    f"The module database '{self.config.module_database}' is not available."
+                )
+
+            ac_power_ratio = simulate_fct(
                 dni_extra=dni_extra,
                 dni=dni,
                 dhi=dhi,
@@ -588,7 +572,7 @@ class PVSystem(cp.Component):
 
                 database.to_csv(self.cache_filepath, sep=",", decimal=".", index=False)
 
-        if self.pvconfig.predictive_control and self.pvconfig.prediction_horizon is not None:
+        if (self.pvconfig.predictive_control and self.pvconfig.prediction_horizon is not None):
             last_forecast_timestep = int(
                 timestep + self.pvconfig.prediction_horizon / self.my_simulation_parameters.seconds_per_timestep
             )
@@ -652,11 +636,14 @@ class PVSystem(cp.Component):
 
         if file_exists:
             log.information("Get PV results from cache.")
-            self.ac_power_ratios_for_all_timesteps_output = pd.read_csv(self.cache_filepath, sep=",", decimal=".")[
-                "output_power"
-            ].tolist()
+            self.ac_power_ratios_for_all_timesteps_output = pd.read_csv(
+                self.cache_filepath, sep=",", decimal="."
+            )["output_power"].tolist()
 
-            if len(self.ac_power_ratios_for_all_timesteps_output) != self.my_simulation_parameters.timesteps:
+            if (
+                len(self.ac_power_ratios_for_all_timesteps_output)
+                != self.my_simulation_parameters.timesteps
+            ):
                 raise Exception(
                     "Reading the cached PV values seems to have failed. Expected "
                     + str(self.my_simulation_parameters.timesteps)
@@ -713,7 +700,17 @@ class PVSystem(cp.Component):
                 x_simplephotovoltaic = []
                 for i in range(self.my_simulation_parameters.timesteps):
                     # calculate outputs
-                    ac_power_ratio = self.simphotovoltaic_two(
+                    if (
+                        self.pvconfig.module_database
+                        == PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE
+                    ):
+                        simulate_fct = self.simulate_cec
+                    elif (
+                        self.pvconfig.module_database
+                        == PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE
+                    ):
+                        simulate_fct = self.simulate_sandia
+                    ac_power_ratio = simulate_fct(
                         dni_extra=dni_extra[i],
                         dni=dni[i],
                         dhi=dhi[i],
@@ -790,12 +787,8 @@ class PVSystem(cp.Component):
                     os.path.join(utils.HISIMPATH["photovoltaic"]["sandia_modules_new"]),
                 )
 
-            # note that you can import cec module database but the calculations of the pv system can only be done with sandia!
             elif module_database == PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE:
                 modules = pd.read_csv(os.path.join(utils.HISIMPATH["photovoltaic"]["cec_modules"]))
-                log.warning(
-                    "You can import pv cec modules but the pvlib calculations (simphotovoltaic_two) only work with the sandia modules unfortunately."
-                )
             else:
                 raise KeyError(f"The module database {module_database} is not integrated in the PV component here.")
 
@@ -807,6 +800,11 @@ class PVSystem(cp.Component):
                 module.loc[:, column] = pd.to_numeric(module.loc[:, column], errors="coerce")
 
             # transform module dataframe to dict
+            if len(module) != 1:
+                raise KeyError(
+                    f"No module {module_name} found in database {module_database}."
+                )
+
             module = module.to_dict(orient="records")[0]
 
         return module
@@ -853,9 +851,16 @@ class PVSystem(cp.Component):
 
                 # transform column object types to numeric types
                 for column in inverter.columns:
-                    inverter[column] = pd.to_numeric(inverter[column], errors="coerce")
+                    inverter.loc[:, column] = pd.to_numeric(
+                        inverter.loc[:, column], errors="coerce"
+                    )
 
                 # transform inverter dataframe to dict
+                if len(inverter) != 1:
+                    raise KeyError(
+                        f"No inverter {inverter_name} found in database {inverter_database}."
+                    )
+
                 inverter = inverter.to_dict(orient="records")[0]
 
             else:
@@ -863,7 +868,7 @@ class PVSystem(cp.Component):
 
         return inverter
 
-    def simphotovoltaic_two(
+    def simulate_sandia(
         self,
         dni_extra=None,
         dni=None,
@@ -873,8 +878,8 @@ class PVSystem(cp.Component):
         apparent_zenith=None,
         temperature=None,
         wind_speed=None,
-        surface_tilt=30,
-        surface_azimuth=180,
+        surface_tilt=30.0,
+        surface_azimuth=180.0,
         albedo=0.2,
     ):
         r"""Simulates a defined PV array with the Sandia PV Array Performance Model.
@@ -887,8 +892,6 @@ class PVSystem(cp.Component):
 
         Parameters
         ----------
-        tmy_data: pandas.DataFrame(), required
-            Weatherfile in the format of a tmy file.
         surface_tilt: int or float, optional (default:30)
             Tilt angle of of the array in degree.
         surface_azimuth: int or float, optional (default:180)
@@ -896,18 +899,6 @@ class PVSystem(cp.Component):
             90 degree east and 270 west.
         albedo: float, optional (default: 0.2)
             Reflection coefficient of the surrounding area.
-        losses: float, optional (default: 0.1)
-            Losses due to soiling, mismatch, diode connections, dc wiring etc.
-        load_module_data: Boolean, optional (default: False)
-            If True the module data base is loaded from the Sandia Website.
-            Otherwise it is loaded from this relative path
-                '\\profiles\\PV-Modules\\sandia_modules.csv'.
-        module_name: str, optional (default:'Hanwha_HSL60P6_PA_4_250T__2013_')
-            Module name. The string must be existens in Sandia Module database.
-        integrateInverter: bool, optional (default: True)
-            If an inverter shall be added to the simulation, providing the photovoltaic output after the inverter.
-        inverter_name: str, optional (default: 'ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_')
-            Type of inverter.
         apparent_zenith: Any
             Apparent zenith.
         azimuth: int, float
@@ -932,26 +923,17 @@ class PVSystem(cp.Component):
 
         """
         # automatic pd time series in future pvlib version
-        # calculate airmass
-        airmass = pvlib.atmosphere.get_relative_airmass(apparent_zenith)
-        # use perez model to calculate the plane of array diffuse sky radiation
-        poa_sky_diffuse = pvlib.irradiance.perez(
+        poa_irrad, airmass, aoi = self._calculate_irradiance(
+            dni_extra,
+            dni,
+            dhi,
+            ghi,
+            azimuth,
+            apparent_zenith,
             surface_tilt,
             surface_azimuth,
-            dhi,
-            np.float64(dni),
-            dni_extra,
-            apparent_zenith,
-            azimuth,
-            airmass,
+            albedo,
         )
-        # calculate ground diffuse with specified albedo
-        poa_ground_diffuse = pvlib.irradiance.get_ground_diffuse(surface_tilt, ghi, albedo=albedo)
-        # calculate angle of incidence
-        aoi = pvlib.irradiance.aoi(surface_tilt, surface_azimuth, apparent_zenith, azimuth)
-        # calculate plane of array irradiance
-        poa_irrad = pvlib.irradiance.poa_components(aoi, np.float64(dni), poa_sky_diffuse, poa_ground_diffuse)
-        # calculate pv cell and module temperature
 
         pvtemps = pvlib.temperature.sapm_cell(
             poa_irrad["poa_global"],
@@ -996,3 +978,183 @@ class PVSystem(cp.Component):
             ac_power_ratio = 0.0
 
         return ac_power_ratio
+
+    def simulate_cec(
+        self,
+        dni_extra=None,
+        dni=None,
+        dhi=None,
+        ghi=None,
+        azimuth=None,
+        apparent_zenith=None,
+        temperature=None,
+        wind_speed=None,
+        surface_tilt=30.0,
+        surface_azimuth=180.0,
+        albedo=0.2,
+    ):
+        r"""Simulates a defined PV array using the single-diode model, which works with data from the CEC database.
+
+        The implementation is done in accordance with following tutorial:
+        https://github.com/pvlib/pvlib-python/blob/master/docs/tutorials/tmy_to_power.ipynb
+        https://pvlib-python.readthedocs.io/en/stable/reference/generated/pvlib.pvsystem.sapm.html#pvlib.pvsystem.sapm
+
+
+        Parameters
+        ----------
+        surface_tilt: int or float, optional (default:30)
+            Tilt angle of of the array in degree.
+        surface_azimuth: int or float, optional (default:180)
+            Azimuth angle of of the array in degree. 180 degree means south,
+            90 degree east and 270 west.
+        albedo: float, optional (default: 0.2)
+            Reflection coefficient of the surrounding area.
+        apparent_zenith: Any
+            Apparent zenith.
+        azimuth: int, float
+            Azimuth.
+        dni: Any
+            direct normal irradiance.
+        ghi: Any
+            global horizontal irradiance.
+        dhi: Any
+            direct horizontal irradiance.
+        dni_extra: Any
+            direct normal irradiance extra.
+        temperature: Any
+            tempertaure.
+        wind_speed: Any
+            wind_speed.
+
+        Returns
+        -------
+        ac_power: Any
+            ac power
+
+        """
+        # Calculate irradiance
+        poa_irrad, _, _ = self._calculate_irradiance(
+            dni_extra,
+            dni,
+            dhi,
+            ghi,
+            azimuth,
+            apparent_zenith,
+            surface_tilt,
+            surface_azimuth,
+            albedo,
+        )
+
+        # Calculate cell temperature
+        pvtemps = pvlib.temperature.pvsyst_cell(
+            poa_irrad["poa_global"],
+            temperature,
+            wind_speed,
+            **self.temperature_model_parameters,
+        )
+
+        # Calculate maximum power point
+        d = {
+            k: self.module[k]
+            for k in [
+                "alpha_sc",
+                "a_ref",
+                "I_L_ref",
+                "I_o_ref",
+                "R_sh_ref",
+                "R_s",
+                "Adjust",
+            ]
+        }
+        print("poa_irrad", poa_irrad)
+
+        # If global irradiation is undefined (e.g. when dhi was 0), no power output from PV
+        if math.isnan(poa_irrad["poa_global"]):  # type: ignore
+            return 0.0
+
+        (
+            photocurrent,
+            saturation_current,
+            resistance_series,
+            resistance_shunt,
+            nNsVth,
+        ) = pvlib.pvsystem.calcparams_cec(
+            effective_irradiance=poa_irrad["poa_global"], temp_cell=pvtemps, **d
+        )
+
+        mp = pvlib.pvsystem.max_power_point(
+            photocurrent,
+            saturation_current,
+            resistance_series,
+            resistance_shunt,
+            nNsVth,
+            d2mutau=0,
+            NsVbi=np.inf,
+            method="brentq",
+        )
+
+        # Calculate peak load of single module [W]
+        module_peak_load_in_watt = self.module["I_mp_ref"] * self.module["V_mp_ref"]
+        ac_power_ratio: float
+
+        if self.pvconfig.integrate_inverter:
+            # calculate load after inverter
+            inverter_load_in_watt = pvlib.inverter.sandia(
+                inverter=self.inverter, v_dc=mp["v_mp"], p_dc=mp["p_mp"]
+            )
+            # if inverter load is nan, make it zero otherwise ac_power_ratio will be nan also
+            if math.isnan(inverter_load_in_watt):
+                inverter_load_in_watt = 0
+
+            ac_power_ratio = inverter_load_in_watt / module_peak_load_in_watt
+        else:
+            # load in [kW/kWp]
+            ac_power_ratio = mp["p_mp"] / module_peak_load_in_watt
+
+        if math.isnan(ac_power_ratio):  # type: ignore
+            ac_power_ratio = 0.0
+
+        return ac_power_ratio
+
+    def _calculate_irradiance(
+        self,
+        dni_extra=None,
+        dni=None,
+        dhi=None,
+        ghi=None,
+        azimuth=None,
+        apparent_zenith=None,
+        surface_tilt=30.0,
+        surface_azimuth=180.0,
+        albedo=0.2,
+    ) -> Tuple[Dict[str, Any], float, float]:
+        # calculate airmass
+        airmass = pvlib.atmosphere.get_relative_airmass(apparent_zenith)
+
+        # calculate diffuse irradiance
+        poa_sky_diffuse = pvlib.irradiance.perez(
+            surface_tilt,
+            surface_azimuth,
+            dhi,
+            np.float64(dni),
+            dni_extra,
+            apparent_zenith,
+            azimuth,
+            airmass,
+        )
+
+        # calculate ground diffuse with specified albedo
+        poa_ground_diffuse = pvlib.irradiance.get_ground_diffuse(
+            surface_tilt, ghi, albedo=albedo
+        )
+        # calculate angle of incidence
+        aoi = pvlib.irradiance.aoi(
+            surface_tilt, surface_azimuth, apparent_zenith, azimuth
+        )
+        # calculate plane of array irradiance
+        poa_irrad = pvlib.irradiance.poa_components(
+            aoi, np.float64(dni), poa_sky_diffuse, poa_ground_diffuse
+        )
+        # calculate pv cell and module temperature
+
+        return poa_irrad, airmass, aoi

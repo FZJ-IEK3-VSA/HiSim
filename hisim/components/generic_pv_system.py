@@ -117,7 +117,7 @@ class PVSystemConfig(ConfigBase):
         cls,
         name: str = "PVSystem",
         power_in_watt: float = 10e3,
-        source_weight: float = 0,
+        source_weight: int = 0,
         share_of_maximum_pv_potential: float = 1.0,
         location: str = "Aachen",
         building_name: str = "BUI1",
@@ -165,8 +165,8 @@ class PVSystemConfig(ConfigBase):
         share_of_maximum_pv_potential: float = 1.0,
         module_name: str = "Hanwha HSL60P6-PA-4-250T [2013]",
         module_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,  # noqa: E501
-        inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
-        inverter_database=PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,
+        inverter_name: str ="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
+        inverter_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,
         location: str = "Aachen",
         building_name: str = "BUI1",
         load_module_data: bool = False,
@@ -1318,15 +1318,15 @@ class PVSystem(cp.Component):
 
     def _calculate_irradiance(
         self,
-        dni_extra=None,
-        dni=None,
-        dhi=None,
-        ghi=None,
-        azimuth=None,
-        apparent_zenith=None,
-        surface_tilt=30.0,
-        surface_azimuth=180.0,
-        albedo=0.2,
+        dni_extra: Optional[float] = None,
+        dni: Optional[float] = None,
+        dhi: Optional[float] = None,
+        ghi: Optional[float] = None,
+        azimuth: Optional[float] = None,
+        apparent_zenith: Optional[float] = None,
+        surface_tilt: float = 30.0,
+        surface_azimuth: float = 180.0,
+        albedo: float =0.2,
     ) -> Tuple[Dict[str, Any], float, float]:
         # calculate airmass
         airmass = pvlib.atmosphere.get_relative_airmass(apparent_zenith)

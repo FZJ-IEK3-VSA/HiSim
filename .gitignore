@@ -197,3 +197,6 @@ hisim/inputs/extract_relevant_climate_data.py
 # cluster slurm outputs
 system_setups/*.out
 system_setups/district_system_setup/results
+
+# history extension
+.history/

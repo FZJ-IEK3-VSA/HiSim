@@ -345,8 +345,8 @@ class HeatingMeter(DynamicComponent):
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year
         )
-        co2_per_unit = emissions_and_cost_factors.contracting_heating_footprint_in_kg_per_kwh
-        euro_per_unit = emissions_and_cost_factors.contracting_heating_costs_in_euro_per_kwh
+        co2_per_unit = emissions_and_cost_factors.contracting_heating_footprint_hot_water_in_kg_per_kwh
+        euro_per_unit = emissions_and_cost_factors.contracting_heating_costs_hot_water_in_euro_per_kwh
 
         opex_cost_per_simulated_period_in_euro = total_used_energy_in_kwh * euro_per_unit
         co2_per_simulated_period_in_kg = total_used_energy_in_kwh * co2_per_unit

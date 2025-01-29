@@ -335,12 +335,12 @@ class HeatingMeter(DynamicComponent):
         )
 
         stsv.set_output_value(
-            self.heat_consumption__in_watt_channel,
+            self.heat_consumption_in_watt_channel,
             consumption_uncontrolled_in_watt,
         )
 
         stsv.set_output_value(
-            self.heat_production__in_watt_channel,
+            self.heat_production_in_watt_channel,
             production_in_watt,
         )
 

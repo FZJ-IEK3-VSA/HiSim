@@ -14,7 +14,7 @@ bslib==0.6
 psutil
 pydot
 graphviz
-dataclass_wizard==0.22.3
+dataclass_wizard
 utspclient==0.1.6
 pyam-iamc
 html2image

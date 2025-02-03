@@ -14,17 +14,13 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Set up Python 3.12
+    - name: Set up Python 3.11
       uses: actions/setup-python@v3
       with:
-        python-version: "3.12"
+        python-version: "3.11"
     - name: Install dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y python3-dev libssl-dev
-        sudo apt-get install -y cmake g++ libarrow-dev libssl-dev
         python -m pip install --upgrade pip
-        pip install --only-binary :all: pyarrow aiohttp
         pip install prospector[with_everything]
         pip install prospector[with-everything]
         pip install prospector[with_bandit]

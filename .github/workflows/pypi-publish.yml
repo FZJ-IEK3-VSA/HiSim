@@ -20,11 +20,11 @@ jobs:
       id-token: write  # this permission is mandatory for trusted publishing
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Set up Python 3.10
-      uses: actions/setup-python@v2
+    - uses: actions/checkout@v4
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v3
       with:
-        python-version: "3.10"
+        python-version: "3.12"
     - name: Setup Graphviz
       uses: ts-graphviz/setup-graphviz@v1
     - name: Install dependencies

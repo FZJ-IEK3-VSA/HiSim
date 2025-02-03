@@ -1104,7 +1104,7 @@ class PostProcessor:
             )
 
             # Consolidate results into structured dataclass for webtool
-            webtool_results_dataclass = WebtoolDict(
+            webtool_results_dataclass = WebtoolDict(  # type: ignore
                 kpis=kpi_collection_dict,
                 post_processing_data_transfer=ppdt,
                 computed_opex=opex_compute_return,

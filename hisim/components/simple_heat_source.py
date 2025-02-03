@@ -275,7 +275,7 @@ class SimpleHeatSource(cp.Component):
     def write_to_report(self) -> List[str]:
         """Writes relevant data to report."""
         lines = []
-        lines.append(f"Name: {self.config.name }")
+        lines.append(f"Name: {self.config.name}")
         lines.append(f"Source: {self.config.const_source}")
         if self.config.const_source == SimpleHeatSourceType.CONSTANT_THERMAL_POWER:
             lines.append(f"Power: {self.config.power_th_in_watt * 1e-3:4.0f} kW")

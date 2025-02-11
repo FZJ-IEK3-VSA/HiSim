@@ -1,5 +1,5 @@
-# This notebook documents the selection of a default PV module and inverter
-# From the CEC database
+"""This notebook documents the selection of a default PV module and inverter from the CEC database"""
+
 #%% Import CEC database file
 import pandas as pd
 data = pd.read_csv("data_processed/cec_modules.csv")
@@ -29,12 +29,12 @@ inverter_data = inverter_data.droplevel(level=[1,2], axis=1)
 inverter_data["eff"] = inverter_data["Paco"] / inverter_data["Pdco"]
 
 candidate_inverters = inverter_data[
-    (inverter_data["Pdco"].astype(float) > selected["P_max"]) & 
-    (inverter_data["Paco"].astype(float) > 0.8 * selected["P_max"]) & 
+    (inverter_data["Pdco"].astype(float) > selected["P_max"]) &
+    (inverter_data["Paco"].astype(float) > 0.8 * selected["P_max"]) &
     (inverter_data["Paco"].astype(float) < 1.2 * selected["P_max"]) &
     (inverter_data["Vdco"].astype(float) > 0.95 * selected["V_mp_ref"]) &
     (inverter_data["Vdco"].astype(float) < 1.05 * selected["V_mp_ref"]) &
-    (inverter_data["Idcmax"].astype(float) > selected["I_mp_ref"]) 
+    (inverter_data["Idcmax"].astype(float) > selected["I_mp_ref"])
     ]
 
 selected_inverter = candidate_inverters.sort_values(by='eff').iloc[-1]

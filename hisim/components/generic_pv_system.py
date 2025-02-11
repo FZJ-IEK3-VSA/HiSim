@@ -209,7 +209,7 @@ class PVSystemConfig(ConfigBase):
             == PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE
         ):
             module_area_in_m2 = 1.65
-            module_power_in_watt = 250
+            module_power_in_watt = 250.
             # this is equal to an efficiency of 15,15%
 
         elif (

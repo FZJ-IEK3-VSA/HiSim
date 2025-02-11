@@ -11,7 +11,7 @@ from hisim import log
 
 
 @pytest.mark.base
-def test_photovoltaic():
+def test_photovoltaic_sandia():
     """Test generic pv system."""
     # Sets inputs
     # weather_location = "Aachen"
@@ -36,7 +36,12 @@ def test_photovoltaic():
     )
     my_weather.set_sim_repo(repo)
     my_weather.i_prepare_simulation()
-    my_pvs_config = generic_pv_system.PVSystemConfig.get_default_pv_system()
+    my_pvs_config = generic_pv_system.PVSystemConfig.get_default_pv_system(
+        module_name="Hanwha HSL60P6-PA-4-250T [2013]",
+        module_database=generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,  # noqa: E501
+        inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
+        inverter_database=generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,  # noqa: E501
+    )
     my_pvs_config.power_in_watt = power_in_watt
     my_pvs = generic_pv_system.PVSystem(
         config=my_pvs_config, my_simulation_parameters=mysim
@@ -116,12 +121,7 @@ def test_photovoltaic_cec():
     )
     my_weather.set_sim_repo(repo)
     my_weather.i_prepare_simulation()
-    my_pvs_config = generic_pv_system.PVSystemConfig.get_default_pv_system(
-        module_name="Trina Solar TSM-410DE09",
-        module_database=generic_pv_system.PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE,  # noqa: E501
-        inverter_name="SunPower: SPR-A400-H-AC [208V]",
-        inverter_database=generic_pv_system.PVLibModuleAndInverterEnum.CEC_INVERTER_DATABASE,  # noqa: E501
-    )
+    my_pvs_config = generic_pv_system.PVSystemConfig.get_default_pv_system()
     my_pvs_config.power_in_watt = power_in_watt
     my_pvs = generic_pv_system.PVSystem(
         config=my_pvs_config, my_simulation_parameters=mysim
@@ -164,12 +164,13 @@ def test_photovoltaic_cec():
     assert (
         pytest.approx(
             stsv.values[my_pvs.electricity_output_channel.global_index]
-        )
-        == 345.86117419666425
+        ) == 340.552602382255
     )
 
     # Check pv energy output channel [Wh] which should be the electricity
     # output in W times the timestep length in hours
-    assert pytest.approx(
-        stsv.values[my_pvs.electricity_energy_output_channel.global_index]
-    ) == 345.86117419666425 * (seconds_per_timestep / 3600)
+    assert (
+        pytest.approx(
+            stsv.values[my_pvs.electricity_energy_output_channel.global_index]
+        ) == 340.552602382255 * (seconds_per_timestep / 3600) 
+    )

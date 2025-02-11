@@ -121,10 +121,10 @@ class PVSystemConfig(ConfigBase):
         share_of_maximum_pv_potential: float = 1.0,
         location: str = "Aachen",
         building_name: str = "BUI1",
-        module_name: str = "Hanwha HSL60P6-PA-4-250T [2013]",
-        module_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,  # noqa: E501
-        inverter_name: str = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
-        inverter_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,  # noqa: E501
+        module_name: str = "Trina Solar TSM-435NE09RC.05",
+        module_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE,  # noqa: E501
+        inverter_name: str = "Enphase Energy Inc : IQ8P-3P-72-E-DOM-US [208V]",
+        inverter_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.CEC_INVERTER_DATABASE,  # noqa: E501
     ) -> "PVSystemConfig":
         """Gets a default PV system."""
         power_in_watt = power_in_watt * share_of_maximum_pv_potential
@@ -163,10 +163,10 @@ class PVSystemConfig(ConfigBase):
         rooftop_area_in_m2: float,
         name: str = "PVSystem",
         share_of_maximum_pv_potential: float = 1.0,
-        module_name: str = "Hanwha HSL60P6-PA-4-250T [2013]",
-        module_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,  # noqa: E501
-        inverter_name: str ="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
-        inverter_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,
+        module_name: str = "Trina Solar TSM-435NE09RC.05",
+        module_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE,  # noqa: E501
+        inverter_name: str ="Enphase Energy Inc : IQ8P-3P-72-E-DOM-US [208V]",
+        inverter_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.CEC_INVERTER_DATABASE,
         location: str = "Aachen",
         building_name: str = "BUI1",
         load_module_data: bool = False,
@@ -213,13 +213,13 @@ class PVSystemConfig(ConfigBase):
             # this is equal to an efficiency of 15,15%
 
         elif (
-            module_name == "Trina Solar TSM-410DE09"
+            module_name == "Trina Solar TSM-435NE09RC.05"
             and module_database
             == PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE
         ):
-            module_area_in_m2 = 1.91
-            module_power_in_watt = 410
-            # this is equal to an efficiency of 21,47%
+            module_area_in_m2 = 1.98
+            module_power_in_watt = 435.16
+            # this is equal to an efficiency of 21,98%
 
         # pv module efficiency calculation see:
         # https://www.ess-kempfle.de/ratgeber/ertrag/pv-ertrag/#:~:text=So%20berechnen%20Sie%20den%20Wirkungsgrad,liegt%20bei%201.000%20W%2Fm%C2%B2.
@@ -264,12 +264,12 @@ class PVSystem(cp.Component):
         Access the PV data base (True) or not (False).
         The default is False
     module_name : str, optional
-        The default is "Hanwha_HSL60P6_PA_4_250T__2013_"
+        The default is "Trina Solar TSM-435NE09RC.05"
     integrate_inverter, bool, optional
         Consider inverter efficiency in the calculation (True) or not (False).
         The default is True.
     inverter_name : str, optional
-        The default is "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_".
+        The default is "Enphase Energy Inc : IQ8P-3P-72-E-DOM-US [208V]".
     azimuth : float, optional
         Panel azimuth from north in °. The default is 180°.
     tilt : float, optional
@@ -1260,7 +1260,6 @@ class PVSystem(cp.Component):
                 "Adjust",
             ]
         }
-        print("poa_irrad", poa_irrad)
 
         # If global irradiation is undefined (e.g. when dhi was 0), no power
         # output from PV

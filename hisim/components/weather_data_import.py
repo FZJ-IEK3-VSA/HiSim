@@ -202,7 +202,7 @@ class WeatherDataImport:
                 print("All weather data for a year is available.")
             else:
                 if 60 * 24 * 365 / 10 - len(time_df) + 1 < 50:
-                    print(f"Note: {60 * 24 * 365 /10 - len(time_df)+1} entries for an entire year are missing.")
+                    print(f"Note: {60 * 24 * 365 / 10 - len(time_df) + 1} entries for an entire year are missing.")
 
                     time_index_full = pd.to_datetime(time_df[["year", "month", "day", "hour", "minute"]])
 
@@ -236,7 +236,7 @@ class WeatherDataImport:
 
                 else:
                     raise KeyError(
-                        f"Note: {60 * 24 * 365 /10 - len(time_df)+1} entries for an entire year are missing. Too much!"
+                        f"Note: {60 * 24 * 365 / 10 - len(time_df) + 1} entries for an entire year are missing. Too much!"
                     )
             print("Write Weather Data into Dataframe.")
             temperature_dwd_df = (

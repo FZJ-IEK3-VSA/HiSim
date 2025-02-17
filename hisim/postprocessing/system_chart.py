@@ -108,7 +108,7 @@ class SystemChart:
                             output_cumulative_result = self.ppdt.results_cumulative.at[
                                 0, component_input.source_output.get_pretty_name()
                             ]
-                            this_edge_label += f": {round(output_cumulative_result,3)}"
+                            this_edge_label += f": {round(output_cumulative_result, 3)}"
 
                     this_edge_label = this_edge_label.replace("°C", "&#8451;")
                     if key not in edge_labels:

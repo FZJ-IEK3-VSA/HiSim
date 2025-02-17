@@ -167,6 +167,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
     )
     SurplusUnusedFromDistrictEMSOutput = "SurplusUnusedFromDistrictEMSOutput"
     SurplusUnusedFromBuildingEMSOutput = "SurplusUnusedFromBuildingEMSOutput"
+    ElectricityConsumptionOfBuildingsInWatt = "ElectricityConsumptionOfBuildingsInWatt"
 
     CheckPeakShaving = "CheckPeakShaving"
 
@@ -362,6 +363,23 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
                 postprocessing_flag=(
                     [
                         lt.InandOutputType.ELECTRICITY_PRODUCTION,
+                        lt.ComponentType.BUILDINGS,
+                        lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+                    ]
+                    if any(word in config.building_name for word in lt.DistrictNames)
+                    else []
+                ),
+            )
+            self.electricity_consumption_building_uncontrolled_in_watt_channel: cp.ComponentOutput = self.add_output(
+                object_name=self.component_name,
+                field_name=self.ElectricityConsumptionOfBuildingsInWatt,
+                load_type=lt.LoadTypes.ELECTRICITY,
+                unit=lt.Units.WATT,
+                sankey_flow_direction=False,
+                output_description=f"here a description for {self.ElectricityConsumptionOfBuildingsInWatt} will follow.",
+                postprocessing_flag=(
+                    [
+                        lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
                         lt.ComponentType.BUILDINGS,
                         lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
                     ]
@@ -740,6 +758,16 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
             stsv.set_output_value(
                 self.surplus_electricity_unused_to_district_ems_from_building_ems_output,
                 building_electricity_surplus_unused,
+            )
+
+            consumption_inputs_building = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED, lt.ComponentType.BUILDINGS])
+
+            consumption_of_buildings = (
+                sum([stsv.get_input_value(component_input=elem) for elem in consumption_inputs_building]))
+
+            stsv.set_output_value(
+                self.electricity_consumption_building_uncontrolled_in_watt_channel,
+                consumption_of_buildings,
             )
 
         # Production of Electricity positve sign

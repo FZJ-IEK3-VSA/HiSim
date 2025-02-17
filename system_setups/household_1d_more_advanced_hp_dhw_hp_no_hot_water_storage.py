@@ -149,7 +149,6 @@ class HouseholdMoreAdvancedHPDHWHPNoStorageConfig(SystemSetupConfigBase):
                     my_building_information.heating_reference_temperature_in_celsius, Celsius
                 ),
                 massflow_nominal_secondary_side_in_kg_per_s=Quantity(0.333, KilogramPerSecond),
-                minimum_thermal_output_power_in_watt=Quantity(1700, Watt),
             ),
             dhw_heatpump_config=generic_heat_pump_modular.HeatPumpConfig.get_scaled_waterheating_to_number_of_apartments(
                 number_of_apartments=int(my_building_information.number_of_apartments)

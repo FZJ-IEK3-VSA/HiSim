@@ -59,6 +59,9 @@ class HeatingMeter(DynamicComponent):
     """Heating meter class."""
 
     # Outputs
+    HeatAvailableInWatt = "HeatAvailableInWatt"
+    HeatConsumptionInWatt = "HeatConsumptionInWatt"
+    HeatProductionInWatt = "HeatProductionInWatt"
     HeatAvailable = "HeatAvailable"
     HeatConsumption = "HeatConsumption"
     HeatProduction = "HeatProduction"
@@ -96,12 +99,39 @@ class HeatingMeter(DynamicComponent):
         self.state = HeatingMeterState(cumulative_production_in_watt_hour=0, cumulative_consumption_in_watt_hour=0)
         self.previous_state = self.state.self_copy()
 
-        # Outputs
+        #
+        self.heat_available_in_watt_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.HeatAvailableInWatt,
+            load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.HeatAvailableInWatt} will follow.",
+        )
+
+        self.heat_consumption_in_watt_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.HeatConsumptionInWatt,
+            load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.HeatConsumptionInWatt} will follow.",
+        )
+
+        self.heat_production_in_watt_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.HeatProductionInWatt,
+            load_type=lt.LoadTypes.HEATING,
+            unit=lt.Units.WATT,
+            sankey_flow_direction=False,
+            output_description=f"here a description for {self.HeatProductionInWatt} will follow.",
+        )
+
         self.heat_available_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.HeatAvailable,
             load_type=lt.LoadTypes.HEATING,
-            unit=lt.Units.WATT,
+            unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.HeatAvailable} will follow.",
         )
@@ -271,20 +301,23 @@ class HeatingMeter(DynamicComponent):
             self.consumption_uncontrolled_inputs = self.get_dynamic_inputs(tags=[lt.InandOutputType.HEAT_CONSUMPTION])
 
         # get sum of production and consumption for all inputs for each iteration
-        production_in_watt_hour = (
+        production_in_watt = (
             sum([stsv.get_input_value(component_input=elem) for elem in self.production_inputs])
-            * self.seconds_per_timestep
-            / 3600
         )
 
-        consumption_uncontrolled_in_watt_hour = (
+        consumption_uncontrolled_in_watt = (
             sum([stsv.get_input_value(component_input=elem) for elem in self.consumption_uncontrolled_inputs])
-            * self.seconds_per_timestep
-            / 3600
         )
 
         # Production of Heat positve sign
         # Consumption of Heat negative sign
+        difference_between_production_and_consumption_in_watt = (
+            production_in_watt - consumption_uncontrolled_in_watt
+        )
+
+        # transform watt to watthour
+        production_in_watt_hour = production_in_watt * self.seconds_per_timestep / 3600
+        consumption_uncontrolled_in_watt_hour = consumption_uncontrolled_in_watt * self.seconds_per_timestep / 3600
         difference_between_production_and_consumption_in_watt_hour = (
             production_in_watt_hour - consumption_uncontrolled_in_watt_hour
         )
@@ -296,6 +329,21 @@ class HeatingMeter(DynamicComponent):
         )
 
         # set outputs
+        stsv.set_output_value(
+            self.heat_available_in_watt_channel,
+            difference_between_production_and_consumption_in_watt,
+        )
+
+        stsv.set_output_value(
+            self.heat_consumption_in_watt_channel,
+            consumption_uncontrolled_in_watt,
+        )
+
+        stsv.set_output_value(
+            self.heat_production_in_watt_channel,
+            production_in_watt,
+        )
+
         stsv.set_output_value(
             self.heat_available_channel,
             difference_between_production_and_consumption_in_watt_hour,
@@ -345,8 +393,8 @@ class HeatingMeter(DynamicComponent):
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year
         )
-        co2_per_unit = emissions_and_cost_factors.contracting_heating_footprint_in_kg_per_kwh
-        euro_per_unit = emissions_and_cost_factors.contracting_heating_costs_in_euro_per_kwh
+        co2_per_unit = emissions_and_cost_factors.contracting_heating_footprint_hot_water_in_kg_per_kwh
+        euro_per_unit = emissions_and_cost_factors.contracting_heating_costs_hot_water_in_euro_per_kwh
 
         opex_cost_per_simulated_period_in_euro = total_used_energy_in_kwh * euro_per_unit
         co2_per_simulated_period_in_kg = total_used_energy_in_kwh * co2_per_unit

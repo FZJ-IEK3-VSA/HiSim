@@ -4,6 +4,7 @@ import pytest
 from tests import functions_for_testing as fft
 from hisim import component as cp
 from hisim.components.more_advanced_heat_pump_hplib import (
+    PositionHotWaterStorageInSystemSetup,
     MoreAdvancedHeatPumpHPLib,
     MoreAdvancedHeatPumpHPLibConfig,
     MoreAdvancedHeatPumpHPLibState,
@@ -43,7 +44,7 @@ def test_heat_pump_hplib_new():
         building_name="BUI1",
         name="Heat Pump",
         model=model,
-        heat_source="air",
+        fluid_primary_side="air",
         group_id=group_id,
         heating_reference_temperature_in_celsius=t_in,
         flow_temperature_in_celsius=t_out,
@@ -51,18 +52,18 @@ def test_heat_pump_hplib_new():
         cycling_mode=True,
         minimum_idle_time_in_seconds=Quantity(600, Seconds),
         minimum_running_time_in_seconds=Quantity(600, Seconds),
-        temperature_difference_primary_side=2,
-        position_hot_water_storage_in_system=1,
+        minimum_thermal_output_power_in_watt=Quantity(1500, Watt),
+        position_hot_water_storage_in_system=PositionHotWaterStorageInSystemSetup.PARALLEL,
         with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
-        minimum_massflow_secondary_side_in_kg_per_s=None,
-        maximum_massflow_secondary_side_in_kg_per_s=None,
         massflow_nominal_secondary_side_in_kg_per_s=Quantity(0.333, KilogramPerSecond),
-        minimum_thermal_output_power_in_watt=Quantity(3800, Watt),
+        massflow_nominal_primary_side_in_kg_per_s=0,
+        specific_heat_capacity_of_primary_fluid=0,
         co2_footprint=Quantity(p_th_set.value * 1e-3 * 165.84, Kilogram),
         cost=Quantity(p_th_set.value * 1e-3 * 1513.74, Euro),
         lifetime=Quantity(10, Years),
         maintenance_cost_as_percentage_of_investment=0.025,
     )
+
     heatpump = MoreAdvancedHeatPumpHPLib(config=heatpump_config, my_simulation_parameters=simpars)
     heatpump.state = MoreAdvancedHeatPumpHPLibState(
         time_on_heating=0,
@@ -78,7 +79,8 @@ def test_heat_pump_hplib_new():
         counter_switch_sh=0,
         counter_switch_dhw=0,
         counter_onoff=0,
-        delta_t=5,
+        delta_t_secondary_side=5,
+        delta_t_primary_side=5
     )
 
     number_of_outputs = fft.get_number_of_outputs(

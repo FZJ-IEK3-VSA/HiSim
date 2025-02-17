@@ -19,7 +19,7 @@ from hisim.dynamic_component import (
     DynamicComponentConnection,
 )
 from hisim.simulationparameters import SimulationParameters
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass, KpiHelperClass
 
 
 @dataclass_json
@@ -67,6 +67,7 @@ class ElectricityMeter(DynamicComponent):
     ElectricityFromGridInWatt = "ElectricityFromGridInWatt"
     ElectricityProductionInWatt = "ElectricityProductionInWatt"
     ElectricityConsumptionInWatt = "ElectricityConsumptionInWatt"
+    ElectricityConsumptionOfBuildingsInWatt = "ElectricityConsumptionOfBuildingsInWatt"
     SurplusUnusedFromBuildingEMSOutput = "SurplusUnusedFromBuildingEMSOutput"
 
     def __init__(
@@ -143,6 +144,23 @@ class ElectricityMeter(DynamicComponent):
                     else []
                 ),
             )
+            self.electricity_consumption_building_uncontrolled_in_watt_channel: cp.ComponentOutput = self.add_output(
+                object_name=self.component_name,
+                field_name=self.ElectricityConsumptionOfBuildingsInWatt,
+                load_type=lt.LoadTypes.ELECTRICITY,
+                unit=lt.Units.WATT,
+                sankey_flow_direction=False,
+                output_description=f"here a description for {self.ElectricityConsumptionOfBuildingsInWatt} will follow.",
+                postprocessing_flag=(
+                    [
+                        lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                        lt.ComponentType.BUILDINGS,
+                        lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+                    ]
+                    if any(word in config.building_name for word in lt.DistrictNames)
+                    else []
+                ),
+            )
         self.electricity_consumption_uncontrolled_in_watt_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.ElectricityConsumptionInWatt,
@@ -153,7 +171,6 @@ class ElectricityMeter(DynamicComponent):
             postprocessing_flag=(
                 [
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
-                    lt.ComponentType.BUILDINGS,
                     lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
                 ]
                 if any(word in config.building_name for word in lt.DistrictNames)
@@ -380,6 +397,17 @@ class ElectricityMeter(DynamicComponent):
                 self.surplus_electricity_unused_to_district_ems_from_building_ems_output,
                 building_electricity_surplus_unused,
             )
+
+            consumption_inputs_building = self.get_dynamic_inputs(tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED, lt.ComponentType.BUILDINGS])
+
+            consumption_of_buildings = (
+                sum([stsv.get_input_value(component_input=elem) for elem in consumption_inputs_building]))
+
+            stsv.set_output_value(
+                self.electricity_consumption_building_uncontrolled_in_watt_channel,
+                consumption_of_buildings,
+            )
+
         # Production of Electricity positve sign
         # Consumption of Electricity negative sign
         difference_between_production_and_consumption_in_watt = production_in_watt - consumption_uncontrolled_in_watt
@@ -527,6 +555,8 @@ class ElectricityMeter(DynamicComponent):
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         total_energy_from_grid_in_kwh: float
         total_energy_to_grid_in_kwh: float
+        total_power_from_grid_in_watt: float
+        total_power_to_grid_in_watt: float
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name and output.load_type == lt.LoadTypes.ELECTRICITY:
@@ -534,6 +564,20 @@ class ElectricityMeter(DynamicComponent):
                     total_energy_from_grid_in_kwh = postprocessing_results.iloc[:, index].sum() * 1e-3
                 elif output.field_name == self.ElectricityToGrid:
                     total_energy_to_grid_in_kwh = postprocessing_results.iloc[:, index].sum() * 1e-3
+                elif output.field_name == self.ElectricityFromGridInWatt:
+                    total_power_from_grid_in_watt = postprocessing_results.iloc[:, index] * 1e-3
+                elif output.field_name == self.ElectricityToGridInWatt:
+                    total_power_to_grid_in_watt = postprocessing_results.iloc[:, index] * 1e-3
+
+        (mean_total_power_from_grid_in_watt,
+        max_total_power_from_grid_in_watt,
+        min_total_power_from_grid_in_watt,
+         ) = KpiHelperClass.calc_mean_max_min_value(list_or_pandas_series=total_power_from_grid_in_watt)
+
+        (mean_total_power_to_grid_in_watt,
+        max_total_power_to_grid_in_watt,
+        min_total_power_to_grid_in_watt,
+         ) = KpiHelperClass.calc_mean_max_min_value(list_or_pandas_series=total_power_to_grid_in_watt)
 
         total_energy_from_grid_in_kwh_entry = KpiEntry(
             name="Total energy from grid",
@@ -552,6 +596,60 @@ class ElectricityMeter(DynamicComponent):
             description=self.component_name,
         )
         list_of_kpi_entries.append(total_energy_to_grid_in_kwh_entry)
+
+        mean_total_power_from_grid_in_watt_entry = KpiEntry(
+            name="Mean power from grid",
+            unit="kW",
+            value=mean_total_power_from_grid_in_watt,
+            tag=KpiTagEnumClass.ELECTRICITY_METER,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(mean_total_power_from_grid_in_watt_entry)
+
+        max_total_power_from_grid_in_watt_entry = KpiEntry(
+            name="Max power from grid",
+            unit="kW",
+            value=max_total_power_from_grid_in_watt,
+            tag=KpiTagEnumClass.ELECTRICITY_METER,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(max_total_power_from_grid_in_watt_entry)
+
+        min_total_power_from_grid_in_watt_entry = KpiEntry(
+            name="Min power from grid",
+            unit="kW",
+            value=min_total_power_from_grid_in_watt,
+            tag=KpiTagEnumClass.ELECTRICITY_METER,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(min_total_power_from_grid_in_watt_entry)
+
+        mean_total_power_to_grid_in_watt_entry = KpiEntry(
+            name="Mean power to grid",
+            unit="kW",
+            value=mean_total_power_to_grid_in_watt,
+            tag=KpiTagEnumClass.ELECTRICITY_METER,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(mean_total_power_to_grid_in_watt_entry)
+
+        max_total_power_to_grid_in_watt_entry = KpiEntry(
+            name="Max power to grid",
+            unit="kW",
+            value=max_total_power_to_grid_in_watt,
+            tag=KpiTagEnumClass.ELECTRICITY_METER,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(max_total_power_to_grid_in_watt_entry)
+
+        min_total_power_to_grid_in_watt_entry = KpiEntry(
+            name="Min power to grid",
+            unit="kW",
+            value=min_total_power_to_grid_in_watt,
+            tag=KpiTagEnumClass.ELECTRICITY_METER,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(min_total_power_to_grid_in_watt_entry)
 
         # get opex costs
         opex_costs = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)

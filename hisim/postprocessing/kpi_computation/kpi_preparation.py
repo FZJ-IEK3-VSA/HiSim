@@ -79,15 +79,22 @@ class KpiPreparation:
                         InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED in output.postprocessing_flag
                         or InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED in output.postprocessing_flag
                     ):
-                        total_consumption_ids.append(index)
-                        log.debug(
-                            "Output considered in total electricity consumption "
-                            + output.full_name
-                            + " "
-                            + str(output.unit)
-                        )
+                        if ComponentType.BUILDINGS not in output.postprocessing_flag:
+                            total_consumption_ids.append(index)
+                            log.debug(
+                                "Output considered in total electricity consumption "
+                                + output.full_name
+                                + " "
+                                + str(output.unit)
+                            )
                         if ComponentType.BUILDINGS in output.postprocessing_flag:
                             buildings_consumption_ids.append(index)
+                            log.debug(
+                                "Output considered in BUILDINGS electricity consumption "
+                                + output.full_name
+                                + " "
+                                + str(output.unit)
+                            )
 
                     if InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
                         if ComponentType.BATTERY in output.postprocessing_flag:

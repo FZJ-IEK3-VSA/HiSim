@@ -19,7 +19,7 @@ from hisim.component import (
     ConfigBase,
     OpexCostDataClass,
     DisplayConfig,
-    CapexCostDataClass
+    CapexCostDataClass,
 )
 from hisim.loadtypes import LoadTypes, Units, InandOutputType, ComponentType
 from hisim.simulationparameters import SimulationParameters
@@ -148,6 +148,8 @@ class Battery(Component):
     AcBatteryPowerUsed = "AcBatteryPowerUsed"  # W
     DcBatteryPowerUsed = "DcBatteryPowerUsed"  # W
     StateOfCharge = "StateOfCharge"  # [0..1]
+    ChargingPower = "ChargingPower"
+    DischargingPower = "DischargingPower"
 
     def __init__(
         self,
@@ -204,10 +206,7 @@ class Battery(Component):
             field_name=self.AcBatteryPowerUsed,
             load_type=LoadTypes.ELECTRICITY,
             unit=Units.WATT,
-            postprocessing_flag=[
-                InandOutputType.CHARGE_DISCHARGE,
-                ComponentType.BATTERY,
-            ],
+            postprocessing_flag=[InandOutputType.CHARGE_DISCHARGE, ComponentType.BATTERY],
             output_description=f"here a description for {self.AcBatteryPowerUsed} will follow.",
         )
 
@@ -226,6 +225,21 @@ class Battery(Component):
             unit=Units.ANY,
             postprocessing_flag=[InandOutputType.STORAGE_CONTENT],
             output_description=f"here a description for {self.StateOfCharge} will follow.",
+        )
+        self.charing_power_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ChargingPower,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT,
+            output_description=f"here a description for {self.ChargingPower} will follow.",
+        )
+
+        self.discharging_power_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.DischargingPower,
+            load_type=LoadTypes.ELECTRICITY,
+            unit=Units.WATT,
+            output_description=f"here a description for {self.DischargingPower} will follow.",
         )
 
     def i_save_state(self) -> None:
@@ -255,19 +269,29 @@ class Battery(Component):
 
         # Simulate on timestep
         results = self.ac_coupled_battery_object.simulate(
-            p_load=set_point_for_ac_battery_power_in_watt,
-            soc=state_of_charge,
-            dt=time_increment_in_seconds,
+            p_load=set_point_for_ac_battery_power_in_watt, soc=state_of_charge, dt=time_increment_in_seconds,
         )
         # The bslib simulation returns how much of loading power input was actually used for charging and discharging and the resulting state of charge
         ac_battery_power_used_for_charging_or_discharging_in_watt = results[0]
         dc_battery_power_used_for_charging_or_discharging_in_watt = results[1]
         state_of_charge = results[2]
+        # get charging and discharging power
+        if ac_battery_power_used_for_charging_or_discharging_in_watt > 0:
+            charging_power_in_watt = ac_battery_power_used_for_charging_or_discharging_in_watt
+            discharging_power_in_watt = 0
+        elif ac_battery_power_used_for_charging_or_discharging_in_watt < 0:
+            charging_power_in_watt = 0
+            discharging_power_in_watt = ac_battery_power_used_for_charging_or_discharging_in_watt
+        else:
+            charging_power_in_watt = 0
+            discharging_power_in_watt = 0
 
         # write values for output time series
         stsv.set_output_value(self.ac_battery_power_channel, ac_battery_power_used_for_charging_or_discharging_in_watt)
         stsv.set_output_value(self.dc_battery_power_channel, dc_battery_power_used_for_charging_or_discharging_in_watt)
         stsv.set_output_value(self.state_of_charge_channel, state_of_charge)
+        stsv.set_output_value(self.charing_power_channel, charging_power_in_watt)
+        stsv.set_output_value(self.discharging_power_channel, discharging_power_in_watt)
 
         # write values to state
         self.state.state_of_charge = state_of_charge
@@ -277,9 +301,7 @@ class Battery(Component):
         return self.battery_config.get_string_dict()
 
     @staticmethod
-    def get_battery_aging_information(
-        config: BatteryConfig
-    ) -> Tuple[float, float]:
+    def get_battery_aging_information(config: BatteryConfig) -> Tuple[float, float]:
         """Calculate battery aging.
 
         This is used to calculate investment costs for battery per simulated period.
@@ -296,19 +318,21 @@ class Battery(Component):
         return virtual_number_of_full_charge_cycles, config.lifetime_in_cycles
 
     @staticmethod
-    def get_cost_capex(config: BatteryConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:  # pylint: disable=unused-argument
+    def get_cost_capex(
+        config: BatteryConfig, simulation_parameters: SimulationParameters
+    ) -> CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
         # Todo: think about livetime in cycles not in years
-        (virtual_number_of_full_charge_cycles, lifetime_in_cycles) = Battery.get_battery_aging_information(config=config)
+        (virtual_number_of_full_charge_cycles, lifetime_in_cycles) = Battery.get_battery_aging_information(
+            config=config
+        )
         if lifetime_in_cycles > 0:
             capex_per_simulated_period = (config.cost / lifetime_in_cycles) * (virtual_number_of_full_charge_cycles)
             device_co2_footprint_per_simulated_period = (config.co2_footprint / lifetime_in_cycles) * (
                 virtual_number_of_full_charge_cycles
             )
         else:
-            log.warning(
-                "Capex calculation not valid. Check lifetime_in_cycles in Configuration of Battery."
-            )
+            log.warning("Capex calculation not valid. Check lifetime_in_cycles in Configuration of Battery.")
 
         capex_cost_data_class = CapexCostDataClass(
             capex_investment_cost_in_euro=config.cost,
@@ -316,22 +340,15 @@ class Battery(Component):
             lifetime_in_years=config.lifetime,
             capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
             device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
-            kpi_tag=KpiTagEnumClass.BATTERY
+            kpi_tag=KpiTagEnumClass.BATTERY,
         )
         return capex_cost_data_class
 
-    def get_cost_opex(
-        self,
-        all_outputs: List,
-        postprocessing_results: pd.DataFrame,
-    ) -> OpexCostDataClass:
+    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of maintenance costs."""
         battery_losses_in_kwh: float = 0.0
         for index, output in enumerate(all_outputs):
-            if (
-                output.postprocessing_flag is not None
-                and output.component_name == self.component_name
-            ):
+            if output.postprocessing_flag is not None and output.component_name == self.component_name:
                 if InandOutputType.CHARGE_DISCHARGE in output.postprocessing_flag:
                     self.battery_config.charge_in_kwh = round(
                         postprocessing_results.iloc[:, index].clip(lower=0).sum()
@@ -353,16 +370,12 @@ class Battery(Component):
             co2_footprint_in_kg=0,
             consumption_in_kwh=battery_losses_in_kwh,
             loadtype=LoadTypes.ELECTRICITY,
-            kpi_tag=KpiTagEnumClass.BATTERY
+            kpi_tag=KpiTagEnumClass.BATTERY,
         )
 
         return opex_cost_data_class
 
-    def get_component_kpi_entries(
-        self,
-        all_outputs: List,
-        postprocessing_results: pd.DataFrame,
-    ) -> List[KpiEntry]:
+    def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         return []
 

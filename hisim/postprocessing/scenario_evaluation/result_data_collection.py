@@ -9,6 +9,7 @@ import shutil
 import re
 from collections import defaultdict
 import pandas as pd
+from ordered_set import OrderedSet
 from hisim import log
 from hisim.postprocessing.scenario_evaluation.result_data_processing import (
     ResultDataProcessingModeEnum,
@@ -78,6 +79,14 @@ class ResultDataCollection:
                 list_with_csv_files,
                 list_with_parameter_key_values,
                 list_with_module_config_dicts,
+                list_building_set_heating_temperature_in_celsius,
+                list_building_min_indoor_temperature_in_celsius,
+                list_building_diff_min_indoor_and_set_heating_temperature_in_celsius,
+                list_building_set_cooling_temperature_in_celsius,
+                list_building_max_indoor_temperature_in_celsius,
+                list_building_diff_max_indoor_and_set_cooling_temperature_in_celsius,
+                list_building_temp_deviation_below_set_heating_in_celsius_hour,
+                list_building_temp_deviation_above_set_cooling_in_celsius_hour,
             ) = self.go_through_all_result_data_folders_and_collect_file_paths_according_to_parameters(
                 list_with_result_data_folders=list_with_result_data_folders,
                 default_config_dict=default_config_dict,
@@ -95,13 +104,28 @@ class ResultDataCollection:
             simulation_duration_to_check=simulation_duration_to_check, all_csv_files=all_csv_files,
         )
 
-        self.filepath_of_aggregated_dataframe = self.alternative_read_csv_and_generate_pandas_dataframe(
+        (
+            self.filepath_of_aggregated_dataframe,
+            dict_with_all_data,
+        ) = self.alternative_read_csv_and_generate_pandas_dataframe(
             dict_of_csv_to_read=dict_of_csv_data,
             time_resolution_of_data_set=time_resolution_of_data_set,
             rename_scenario=True,
             parameter_key=parameter_key,
             list_with_parameter_key_values=list_with_parameter_key_values,
             list_with_module_config_dicts=list_with_module_config_dicts,
+        )
+
+        self.generate_pandas_dataframe_with_building_temperatures(
+            dict_with_all_data=dict_with_all_data,
+            list_building_set_heating_temperature_in_celsius=list_building_set_heating_temperature_in_celsius,
+            list_building_set_cooling_temperature_in_celsius=list_building_set_cooling_temperature_in_celsius,
+            list_building_min_indoor_temperature_in_celsius=list_building_min_indoor_temperature_in_celsius,
+            list_building_max_indoor_temperature_in_celsius=list_building_max_indoor_temperature_in_celsius,
+            list_building_diff_min_indoor_and_set_heating_temperature_in_celsius=list_building_diff_min_indoor_and_set_heating_temperature_in_celsius,
+            list_building_diff_max_indoor_and_set_cooling_temperature_in_celsius=list_building_diff_max_indoor_and_set_cooling_temperature_in_celsius,
+            list_building_temp_deviation_below_set_heating_in_celsius_hour=list_building_temp_deviation_below_set_heating_in_celsius_hour,
+            list_building_temp_deviation_above_set_cooling_in_celsius_hour=list_building_temp_deviation_above_set_cooling_in_celsius_hour,
         )
 
         print("\n")
@@ -127,17 +151,12 @@ class ResultDataCollection:
             print(
                 "list with all paths to containing result data ", list_with_all_paths_to_check,
             )
-        # filter out results that had buildings that were too hot or too cold
-        list_with_all_paths_to_check_after_filtering = self.filter_results_that_failed_to_heat_or_cool_building_sufficiently(
-            list_of_result_path_that_contain_scenario_data=list_with_all_paths_to_check
-        )
-        print(
-            "len of list with all paths after filtering ", len(list_with_all_paths_to_check),
-        )
         # check if duplicates are existing and ask for deletion
         list_with_result_data_folders = self.go_through_all_scenario_data_folders_and_check_if_module_configs_are_double_somewhere(
-            list_of_result_folder_paths_to_check=list_with_all_paths_to_check_after_filtering
+            # list_of_result_folder_paths_to_check=list_with_all_paths_to_check_after_filtering
+            list_of_result_folder_paths_to_check=list_with_all_paths_to_check
         )
+
         print(
             "len of list with all paths after double checking for duplicates ", len(list_with_result_data_folders),
         )
@@ -181,186 +200,127 @@ class ResultDataCollection:
             else:
                 print("The answer must be yes or no.")
 
-    def filter_results_that_failed_to_heat_or_cool_building_sufficiently(
-        self, list_of_result_path_that_contain_scenario_data: List[str]
-    ) -> List[str]:
-        """When a result shows too high or too low building temperatures, it will be filtered and removed from further analysis."""
-        list_of_unsuccessful_folders = []
-        with open(
-            os.path.join(
-                self.result_data_folder, "succeeded_simulations_that_showed_too_high_or_too_low_building_temps.txt",
-            ),
-            "a",
-            encoding="utf-8",
-        ) as file:
-            file.write(str(datetime.datetime.now()) + "\n")
-            file.write("Simulations with unsuccessful heating or cooling found in the following folders: \n")
-            file.write(
-                "Building is too...,"
-                "set temperature heating [°C],"
-                "set temperature cooling [°C],"
-                "min building air temperature [°C],"
-                "max building air temperature [°C],"
-                "temp deviation below set heating [°C*h],"
-                "temp deviation above set cooling [°C*h], folder \n"
-            )
-            for folder in list_of_result_path_that_contain_scenario_data:
+    def get_indoor_air_temperatures_of_building(
+        self,
+        folder: str,
+        list_building_set_heating_temperature_in_celsius: List,
+        list_building_min_indoor_temperature_in_celsius: List,
+        list_building_diff_min_indoor_and_set_heating_temperature_in_celsius: List,
+        list_building_set_cooling_temperature_in_celsius: List,
+        list_building_max_indoor_temperature_in_celsius: List,
+        list_building_diff_max_indoor_and_set_cooling_temperature_in_celsius: List,
+        list_building_temp_deviation_below_set_heating_in_celsius_hour: List,
+        list_building_temp_deviation_above_set_cooling_in_celsius_hour: List,
+    ) -> Tuple[List, List, List, List, List, List, List, List]:
+        """Get indoor air temperatures of building."""
+        scenario_data_information_new_version = os.path.join(folder, "data_for_scenario_evaluation.json")
+        scenario_data_information_old_version = os.path.join(folder, "data_information_for_scenario_evaluation.json")
+        main_folder = os.path.normpath(folder + os.sep + os.pardir)
+        all_kpis_json_file = os.path.join(main_folder, "all_kpis.json")
 
-                scenario_data_information_new_version = os.path.join(folder, "data_for_scenario_evaluation.json")
-                scenario_data_information_old_version = os.path.join(
-                    folder, "data_information_for_scenario_evaluation.json"
-                )
-
-                main_folder = os.path.normpath(folder + os.sep + os.pardir)
-                all_kpis_json_file = os.path.join(main_folder, "all_kpis.json")
-
-                # get set temperatures used in the simulation
-                if os.path.exists(scenario_data_information_new_version):
-                    with open(scenario_data_information_new_version, "r", encoding="utf-8") as data_info_file:
-                        try:
-                            simulation_configuration_data = json.load(data_info_file)
-                        except Exception as exc:
-                            content = data_info_file.read()
-                            if content.strip() == "":
-                                raise ValueError(
-                                    "The json file is empty. Maybe run the simulation again. "
-                                    f"The concerned folder is {folder}"
-                                ) from exc
-                        component_entries = simulation_configuration_data["componentEntries"]
-                        for component in component_entries:
-                            if "Building" in component["componentName"]:
-                                set_heating_temperature = float(
-                                    component["configuration"].get("set_heating_temperature_in_celsius")
-                                )
-                                set_cooling_temperature = float(
-                                    component["configuration"].get("set_cooling_temperature_in_celsius")
-                                )
-                                break
-                elif os.path.exists(scenario_data_information_old_version):
-                    with open(scenario_data_information_old_version, "r", encoding="utf-8") as data_info_file:
-                        try:
-                            simulation_configuration_data = json.load(data_info_file)
-                        except Exception as exc:
-                            content = data_info_file.read()
-                            if content.strip() == "":
-                                raise ValueError(
-                                    "The json file is empty. Maybe run the simulation again. "
-                                    f"The concerned folder is {folder}"
-                                ) from exc
-                        component_entries = simulation_configuration_data["componentEntries"]
-                        for component in component_entries:
-                            if "Building" in component["componentName"]:
-                                set_heating_temperature = float(
-                                    component["configuration"].get("set_heating_temperature_in_celsius")
-                                )
-                                set_cooling_temperature = float(
-                                    component["configuration"].get("set_cooling_temperature_in_celsius")
-                                )
-                                break
-                else:
-                    raise FileNotFoundError(
-                        f"Neither the file {scenario_data_information_new_version} nor the file {scenario_data_information_old_version} could not be found. "
-                    )
-
-                # open the webtool kpis and check if building got too hot or too cold
-                if os.path.exists(all_kpis_json_file):
-                    with open(all_kpis_json_file, "r", encoding="utf-8") as kpi_file:
-                        # try two methods because older and newer data have different formats
-                        try:
-                            kpi_data = json.load(kpi_file)["BUI1"]
-                        except Exception:
-                            # Reset file pointer to the beginning
-                            kpi_file.seek(0)
-                            contents = kpi_file.read()
-                            if not contents.strip():
-                                print(f"Raw contents:\n{repr(contents)}")
-                            try:
-                                kpi_data = json.loads(contents)
-                            except json.JSONDecodeError as err:
-                                print("Invalid JSON syntax:", err)
-
-                        # check if min and max temperatures are too low or too high
-                        min_temperature = float(
-                            kpi_data["Building"]["Minimum building indoor air temperature reached"].get("value")
+        # get set temperatures used in the simulation
+        if os.path.exists(scenario_data_information_new_version):
+            with open(scenario_data_information_new_version, "r", encoding="utf-8") as data_info_file:
+                try:
+                    simulation_configuration_data = json.load(data_info_file)
+                except Exception as exc:
+                    content = data_info_file.read()
+                    if content.strip() == "":
+                        raise ValueError(
+                            "The json file is empty. Maybe run the simulation again. "
+                            f"The concerned folder is {folder}"
+                        ) from exc
+                component_entries = simulation_configuration_data["componentEntries"]
+                for component in component_entries:
+                    if "Building" in component["componentName"]:
+                        set_heating_temperature = float(
+                            component["configuration"].get("set_heating_temperature_in_celsius")
                         )
-                        max_temperature = float(
-                            kpi_data["Building"]["Maximum building indoor air temperature reached"].get("value")
+                        set_cooling_temperature = float(
+                            component["configuration"].get("set_cooling_temperature_in_celsius")
                         )
-                        temp_deviation_below_set = kpi_data["Building"][
-                            f"Temperature deviation of building indoor air temperature being below set temperature {set_heating_temperature} Celsius"
-                        ].get("value")
-                        temp_deviation_above_set = kpi_data["Building"][
-                            f"Temperature deviation of building indoor air temperature being above set temperature {set_cooling_temperature} Celsius"
-                        ].get("value")
-                        if (
-                            min_temperature <= set_heating_temperature - 5.0
-                            and max_temperature >= set_cooling_temperature + 5.0
-                        ):
-                            file.write(
-                                "too cold and too warm,"
-                                f"{set_heating_temperature},"
-                                f"{set_cooling_temperature},"
-                                f"{min_temperature},"
-                                f"{max_temperature},"
-                                f"{temp_deviation_below_set},"
-                                f"{temp_deviation_above_set}, {folder}" + "\n"
-                            )
-                            list_of_unsuccessful_folders.append(folder)
-                        elif (
-                            min_temperature <= set_heating_temperature - 5.0
-                            and max_temperature < set_cooling_temperature + 5.0
-                        ):
-                            file.write(
-                                "too cold,"
-                                f"{set_heating_temperature},"
-                                f"{set_cooling_temperature},"
-                                f"{min_temperature},"
-                                f"{max_temperature},"
-                                f"{temp_deviation_below_set},"
-                                f"{temp_deviation_above_set}, {folder}" + "\n"
-                            )
-                            list_of_unsuccessful_folders.append(folder)
-                        elif (
-                            min_temperature > set_heating_temperature - 5.0
-                            and max_temperature >= set_cooling_temperature + 5.0
-                        ):
-                            file.write(
-                                "too warm,"
-                                f"{set_heating_temperature},"
-                                f"{set_cooling_temperature},"
-                                f"{min_temperature},"
-                                f"{max_temperature},"
-                                f"{temp_deviation_below_set},"
-                                f"{temp_deviation_above_set}, {folder}" + "\n"
-                            )
-                            list_of_unsuccessful_folders.append(folder)
-                else:
-                    raise FileNotFoundError(f"The file {all_kpis_json_file} could not be found. ")
-
-            file.write(
-                f"Total number of simulations that have building temperatures way below or above set temperatures: {len(list_of_unsuccessful_folders)}"
-                + "\n"
-                + "\n"
-            )
-
-        print(
-            f"Total number of simulations that have building temperatures way below or above set temperatures: {len(list_of_unsuccessful_folders)}"
-        )
-
-        # ask if these simulation results should be analyzed
-        answer = input("Do you want to take these simulation results into account for further analysis?")
-        if answer.upper() in ["N", "NO"]:
-            for folder in list_of_unsuccessful_folders:
-                list_of_result_path_that_contain_scenario_data.remove(folder)
-            print(
-                "The folders with too low or too high building temperatures will be discarded from the further analysis."
-            )
-        elif answer.upper() in ["Y", "YES"]:
-            print("The folders with too low or too high building temperatures will be kept for the further analysis.")
+                        break
+        elif os.path.exists(scenario_data_information_old_version):
+            with open(scenario_data_information_old_version, "r", encoding="utf-8") as data_info_file:
+                try:
+                    simulation_configuration_data = json.load(data_info_file)
+                except Exception as exc:
+                    content = data_info_file.read()
+                    if content.strip() == "":
+                        raise ValueError(
+                            "The json file is empty. Maybe run the simulation again. "
+                            f"The concerned folder is {folder}"
+                        ) from exc
+                component_entries = simulation_configuration_data["componentEntries"]
+                for component in component_entries:
+                    if "Building" in component["componentName"]:
+                        set_heating_temperature = float(
+                            component["configuration"].get("set_heating_temperature_in_celsius")
+                        )
+                        set_cooling_temperature = float(
+                            component["configuration"].get("set_cooling_temperature_in_celsius")
+                        )
+                        break
         else:
-            print("The answer must be yes or no.")
+            raise FileNotFoundError(
+                f"Neither the file {scenario_data_information_new_version} nor the file {scenario_data_information_old_version} could not be found. "
+            )
 
-        return list_of_result_path_that_contain_scenario_data
+        # open the webtool kpis and check if building got too hot or too cold
+        if os.path.exists(all_kpis_json_file):
+            with open(all_kpis_json_file, "r", encoding="utf-8") as kpi_file:
+                # try two methods because older and newer data have different formats
+                try:
+                    kpi_data = json.load(kpi_file)["BUI1"]
+                except Exception:
+                    # Reset file pointer to the beginning
+                    kpi_file.seek(0)
+                    contents = kpi_file.read()
+                    if not contents.strip():
+                        print(f"Raw contents:\n{repr(contents)}")
+                    try:
+                        kpi_data = json.loads(contents)
+                    except json.JSONDecodeError as err:
+                        print("Invalid JSON syntax:", err)
+
+                # check if min and max temperatures are too low or too high
+                min_temperature = float(
+                    kpi_data["Building"]["Minimum building indoor air temperature reached"].get("value")
+                )
+                max_temperature = float(
+                    kpi_data["Building"]["Maximum building indoor air temperature reached"].get("value")
+                )
+                temp_deviation_below_set = kpi_data["Building"][
+                    f"Temperature deviation of building indoor air temperature being below set temperature {set_heating_temperature} Celsius"
+                ].get("value")
+                temp_deviation_above_set = kpi_data["Building"][
+                    f"Temperature deviation of building indoor air temperature being above set temperature {set_cooling_temperature} Celsius"
+                ].get("value")
+                # append all to lists
+                list_building_set_heating_temperature_in_celsius.append(set_heating_temperature)
+                list_building_min_indoor_temperature_in_celsius.append(min_temperature)
+                list_building_diff_min_indoor_and_set_heating_temperature_in_celsius.append(
+                    set_heating_temperature - min_temperature
+                )
+                list_building_set_cooling_temperature_in_celsius.append(set_cooling_temperature)
+                list_building_max_indoor_temperature_in_celsius.append(max_temperature)
+                list_building_diff_max_indoor_and_set_cooling_temperature_in_celsius.append(
+                    max_temperature - set_cooling_temperature
+                )
+                list_building_temp_deviation_below_set_heating_in_celsius_hour.append(temp_deviation_below_set)
+                list_building_temp_deviation_above_set_cooling_in_celsius_hour.append(temp_deviation_above_set)
+                # list_building_result_path.append(folder)
+                return (
+                    list_building_set_heating_temperature_in_celsius,
+                    list_building_min_indoor_temperature_in_celsius,
+                    list_building_diff_min_indoor_and_set_heating_temperature_in_celsius,
+                    list_building_set_cooling_temperature_in_celsius,
+                    list_building_max_indoor_temperature_in_celsius,
+                    list_building_diff_max_indoor_and_set_cooling_temperature_in_celsius,
+                    list_building_temp_deviation_below_set_heating_in_celsius_hour,
+                    list_building_temp_deviation_above_set_cooling_in_celsius_hour,
+                )
+        raise ValueError("Lists with temperatures could not be generated. Something went wrong here.")
 
     def get_list_of_all_relevant_folders_or_files(self, result_path: str, folder_or_filename: str) -> List[str]:
         """Get a list of all folders or files which you want to analyze."""
@@ -441,6 +401,106 @@ class ResultDataCollection:
 
         return dict_of_csv_data
 
+    def generate_pandas_dataframe_with_building_temperatures(
+        self,
+        dict_with_all_data: Dict,
+        list_building_set_heating_temperature_in_celsius: List,
+        list_building_min_indoor_temperature_in_celsius: List,
+        list_building_diff_min_indoor_and_set_heating_temperature_in_celsius: List,
+        list_building_set_cooling_temperature_in_celsius: List,
+        list_building_max_indoor_temperature_in_celsius: List,
+        list_building_diff_max_indoor_and_set_cooling_temperature_in_celsius: List,
+        list_building_temp_deviation_below_set_heating_in_celsius_hour: List,
+        list_building_temp_deviation_above_set_cooling_in_celsius_hour: List,
+    ) -> None:
+        """Generate the result dataframe with building temperatures."""
+        dict_with_no_duplicates: Dict = dict.fromkeys(dict_with_all_data, {})
+
+        # get rows with unique house indices
+        list_with_unique_house_indices = []
+        for house_index in list(OrderedSet(dict_with_all_data["Index"]["Index"])):
+
+            row_of_this_house_index = dict_with_all_data["Index"]["Index"].index(house_index)
+            list_with_unique_house_indices.append(row_of_this_house_index)
+
+        for key_1, dict_1 in dict_with_all_data.items():
+            new_dict_1 = {}
+            for key_2, value_list_2 in dict_1.items():
+                value_list_with_unique_index = [
+                    value_list_2[unique_index] for unique_index in list_with_unique_house_indices
+                ]
+                new_dict_1.update({key_2: value_list_with_unique_index})
+            # add key, value pairs to dict_with_no_dulicates
+            dict_with_no_duplicates[key_1] = new_dict_1
+
+        if len(dict_with_no_duplicates["Index"]["Index"]) != len(list_building_set_heating_temperature_in_celsius):
+            raise ValueError(
+                "Dict with all data and temperature lists have differernt length: "
+                + str(len(dict_with_no_duplicates["Index"]["Index"]))
+                + "vs"
+                + str(len(list_building_set_heating_temperature_in_celsius))
+            )
+
+        # Initialize dictionaries to hold data
+        dict_with_input_data = {key: dict_with_no_duplicates[key] for key in ["Index", "Input"]}
+        print(dict_with_input_data)
+        dict_with_temperature_data: Dict[str, defaultdict] = {
+            "Output": defaultdict(list),
+        }
+
+        for house_index, set_heating_temperature in enumerate(list_building_set_heating_temperature_in_celsius):
+
+            # Add outputs to dict
+            dict_with_temperature_data["Output"]["building_set_heating_temperature_in_celsius"].append(
+                set_heating_temperature
+            )
+            dict_with_temperature_data["Output"]["building_min_indoor_temperature_in_celsius"].append(
+                list_building_min_indoor_temperature_in_celsius[house_index]
+            )
+            dict_with_temperature_data["Output"][
+                "difference_between_set_heating_and_min_indoor_temperature_in_celsius"
+            ].append(list_building_diff_min_indoor_and_set_heating_temperature_in_celsius[house_index])
+            dict_with_temperature_data["Output"]["temperature_deviation_below_set_heating_temperature_in_celsius_hour"].append(
+                list_building_temp_deviation_below_set_heating_in_celsius_hour[house_index]
+            )
+            dict_with_temperature_data["Output"]["building_set_cooling_temperature_in_celsius"].append(
+                list_building_set_cooling_temperature_in_celsius[house_index]
+            )
+            dict_with_temperature_data["Output"]["building_max_indoor_temperature_in_celsius"].append(
+                list_building_max_indoor_temperature_in_celsius[house_index]
+            )
+            dict_with_temperature_data["Output"][
+                "difference_between_set_cooling_and_max_indoor_temperature_in_celsius"
+            ].append(list_building_diff_max_indoor_and_set_cooling_temperature_in_celsius[house_index])
+            dict_with_temperature_data["Output"]["temperature_deviation_above_set_cooling_temperature_in_celsius_hour"].append(
+                list_building_temp_deviation_above_set_cooling_in_celsius_hour[house_index]
+            )
+
+        # merge the two dictionaries
+        dict_with_input_data.update(dict_with_temperature_data)
+
+        # create multiindex columns
+        multi_index_columns = pd.MultiIndex.from_tuples(
+            [(key1, key2) for key1, v1_dict in dict_with_input_data.items() for key2 in v1_dict.keys()],
+            names=["first", "second"],
+        )
+        # add everything to the dataframe
+        appended_dataframe = pd.DataFrame(
+            {
+                (key1, key2): value_list2
+                for key1, v1_dict in dict_with_input_data.items()
+                for key2, value_list2 in v1_dict.items()
+            },
+            columns=multi_index_columns,
+        )
+
+        appended_dataframe.to_csv(os.path.join(self.result_data_folder, "building_indoor_temperature_analysis.csv",))
+
+        del appended_dataframe
+        del dict_with_all_data
+        del dict_with_input_data
+        del dict_with_temperature_data
+
     def alternative_read_csv_and_generate_pandas_dataframe(
         self,
         dict_of_csv_to_read: Dict[str, list[str]],
@@ -449,7 +509,7 @@ class ResultDataCollection:
         parameter_key: Optional[str] = None,
         list_with_parameter_key_values: Optional[List[Any]] = None,
         list_with_module_config_dicts: Optional[List[Any]] = None,
-    ) -> str:
+    ) -> Tuple[str, Dict]:
         """Read the csv files and generate the result dataframe."""
         log.information(f"Read csv files and generate result dataframes for {time_resolution_of_data_set}.")
 
@@ -514,7 +574,11 @@ class ResultDataCollection:
                 if list_with_module_config_dicts is not None:
                     module_config_dict = list_with_module_config_dicts[house_index]
                     for key, value in module_config_dict.items():
-                        dict_with_all_data["Input"][key].append(value)
+                        if not isinstance(value, Dict):
+                            dict_with_all_data["Input"][key].append(value)
+                        else:
+                            for key_2, value_2 in value.items():
+                                dict_with_all_data["Input"][key_2].append(value_2)
 
                 dict_with_all_data["Index"]["Index"].append(house_index)
 
@@ -580,8 +644,8 @@ class ResultDataCollection:
         log.information(f"Saving result dataframe here: {filename}")
 
         del appended_dataframe
-        del dict_with_all_data
-        return filename
+        # del dict_with_all_data
+        return filename, dict_with_all_data
 
     def store_scenario_data_with_the_right_name_and_in_the_right_path(
         self,
@@ -726,12 +790,20 @@ class ResultDataCollection:
         list_with_result_data_folders: List[str],
         default_config_dict: Dict[str, Any],
         parameter_key: Optional[str],
-    ) -> tuple[List[Any], List[Any], List[Any]]:
+    ) -> Tuple[List[Any], List[Any], List[Any], List[Any], List[Any], List[Any], List[Any], List[Any], List[Any], List[Any], List[Any]]:
         """Order result files according to different parameters."""
 
         list_with_module_configs: List = []
         list_with_csv_files: List = []
         list_with_parameter_key_values: List = []
+        list_building_set_heating_temperature_in_celsius: List = []
+        list_building_set_cooling_temperature_in_celsius: List = []
+        list_building_min_indoor_temperature_in_celsius: List = []
+        list_building_max_indoor_temperature_in_celsius: List = []
+        list_building_diff_min_indoor_and_set_heating_temperature_in_celsius: List = []
+        list_building_diff_max_indoor_and_set_cooling_temperature_in_celsius: List = []
+        list_building_temp_deviation_below_set_heating_in_celsius_hour: List = []
+        list_building_temp_deviation_above_set_cooling_in_celsius_hour: List = []
 
         for folder in list_with_result_data_folders:  # type: ignore
             if parameter_key is None:
@@ -759,11 +831,39 @@ class ResultDataCollection:
                     list_with_module_configs=list_with_module_configs,
                     parameter_key=parameter_key,
                 )
+            (
+                list_building_set_heating_temperature_in_celsius,
+                list_building_min_indoor_temperature_in_celsius,
+                list_building_diff_min_indoor_and_set_heating_temperature_in_celsius,
+                list_building_set_cooling_temperature_in_celsius,
+                list_building_max_indoor_temperature_in_celsius,
+                list_building_diff_max_indoor_and_set_cooling_temperature_in_celsius,
+                list_building_temp_deviation_below_set_heating_in_celsius_hour,
+                list_building_temp_deviation_above_set_cooling_in_celsius_hour,
+            ) = self.get_indoor_air_temperatures_of_building(
+                folder=folder,
+                list_building_set_heating_temperature_in_celsius=list_building_set_heating_temperature_in_celsius,
+                list_building_min_indoor_temperature_in_celsius=list_building_min_indoor_temperature_in_celsius,
+                list_building_diff_min_indoor_and_set_heating_temperature_in_celsius=list_building_diff_min_indoor_and_set_heating_temperature_in_celsius,
+                list_building_set_cooling_temperature_in_celsius=list_building_set_cooling_temperature_in_celsius,
+                list_building_max_indoor_temperature_in_celsius=list_building_max_indoor_temperature_in_celsius,
+                list_building_diff_max_indoor_and_set_cooling_temperature_in_celsius=list_building_diff_max_indoor_and_set_cooling_temperature_in_celsius,
+                list_building_temp_deviation_below_set_heating_in_celsius_hour=list_building_temp_deviation_below_set_heating_in_celsius_hour,
+                list_building_temp_deviation_above_set_cooling_in_celsius_hour=list_building_temp_deviation_above_set_cooling_in_celsius_hour,
+            )
 
         return (
             list_with_csv_files,
             list_with_parameter_key_values,
             list_with_module_configs,
+            list_building_set_heating_temperature_in_celsius,
+            list_building_min_indoor_temperature_in_celsius,
+            list_building_diff_min_indoor_and_set_heating_temperature_in_celsius,
+            list_building_set_cooling_temperature_in_celsius,
+            list_building_max_indoor_temperature_in_celsius,
+            list_building_diff_max_indoor_and_set_cooling_temperature_in_celsius,
+            list_building_temp_deviation_below_set_heating_in_celsius_hour,
+            list_building_temp_deviation_above_set_cooling_in_celsius_hour,
         )
 
     def check_for_duplicates_in_dict(self, dictionary_to_check: Dict[str, Any], key: str) -> List:

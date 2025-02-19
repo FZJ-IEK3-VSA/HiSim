@@ -5,8 +5,11 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import pandas as pd
 
-from hisim.component import Component, ComponentInput, ComponentOutput, SingleTimeStepValues, DisplayConfig
+from hisim.component import Component, ComponentConnection, ComponentInput, ComponentOutput, SingleTimeStepValues, DisplayConfig
 from hisim import loadtypes
+from hisim.components.configuration import PhysicsConfig
+from hisim.components.simple_water_storage import SimpleDHWStorage
+from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import ConfigBase
 from oemof.thermal.solar_thermal_collector import flat_plate_precalc
@@ -42,10 +45,14 @@ class SolarThermalSystemConfig(ConfigBase):
     eta_0: float
     a_1_w_m2_k: float # W/(m2*K)
     a_2_w_m2_k: float # W/(m2*K2)
+    delta_temperature_n_k = 10 # K 
 
     # Whether the system is used to support space heating in addition
     # to water heating
     heating_support: bool
+
+    # Weight of component, defines hierachy in control. The default is 1.
+    source_weight: int
 
     @classmethod
     def get_default_solar_thermal_system(
@@ -57,7 +64,7 @@ class SolarThermalSystemConfig(ConfigBase):
             building_name=building_name,
             coordinates={"latitude": 50.78,
                          "longitude": 6.08},
-            name="SolarThermalSystem default",
+            name="SolarThermalSystem",
             azimuth=180.,
             tilt=30.,
             area_m2=1.5, #m2
@@ -68,7 +75,8 @@ class SolarThermalSystemConfig(ConfigBase):
             eta_0 = 0.78,
             a_1_w_m2_k = 3.2, # W/(m2*K)
             a_2_w_m2_k = 0.015, # W/(m2*K2)
-            heating_support=False
+            heating_support=False,
+            source_weight=1
         )
 
 
@@ -80,17 +88,18 @@ class SolarThermalSystem(Component):
     """
 
     # Inputs
-    TemperatureOutside = "TemperatureOutside"
-    DirectNormalIrradiance = "DirectNormalIrradiance"
-    DirectNormalIrradianceExtra = "DirectNormalIrradianceExtra"
-    DiffuseHorizontalIrradiance = "DiffuseHorizontalIrradiance"
-    GlobalHorizontalIrradiance = "GlobalHorizontalIrradiance"
+    TemperatureOutsideDegC = "TemperatureOutsideDegC"
+    DiffuseHorizontalIrradianceWM2 = "DiffuseHorizontalIrradianceWM2"
+    GlobalHorizontalIrradianceWM2 = "GlobalHorizontalIrradianceWM2"
     Azimuth = "Azimuth"
     ApparentZenith = "ApparentZenith"
-    WindSpeed = "WindSpeed"
+    TemperatureCollectorInletDegC = "TemperatureCollectorInletDegC"
 
     # Outputs
     ThermalPowerOutput = "ThermalPowerOutput"
+    ThermalEnergyOutput = "ThermalEnergyOutput"
+    WaterMassFlowOutput = "WaterMassFlowOutput"
+    WaterTemperatureOutput = "WaterTemperatureOutput"
 
     def __init__(
         self,
@@ -119,7 +128,7 @@ class SolarThermalSystem(Component):
         # Add inputs
         self.t_out_channel: ComponentInput = self.add_input(
             self.component_name,
-            self.TemperatureOutside,
+            self.TemperatureOutsideDegC,
             loadtypes.LoadTypes.TEMPERATURE,
             loadtypes.Units.CELSIUS,
             True,
@@ -127,7 +136,7 @@ class SolarThermalSystem(Component):
 
         self.dhi_channel: ComponentInput = self.add_input(
             self.component_name,
-            self.DiffuseHorizontalIrradiance,
+            self.DiffuseHorizontalIrradianceWM2,
             loadtypes.LoadTypes.IRRADIANCE,
             loadtypes.Units.WATT_PER_SQUARE_METER,
             True,
@@ -135,9 +144,29 @@ class SolarThermalSystem(Component):
 
         self.ghi_channel: ComponentInput = self.add_input(
             self.component_name,
-            self.GlobalHorizontalIrradiance,
+            self.GlobalHorizontalIrradianceWM2,
             loadtypes.LoadTypes.IRRADIANCE,
             loadtypes.Units.WATT_PER_SQUARE_METER,
+            True,
+        )
+
+        self.azimuth_channel: ComponentInput = self.add_input(
+            self.component_name, self.Azimuth, loadtypes.LoadTypes.ANY, loadtypes.Units.DEGREES, True
+        )
+
+        self.apparent_zenith_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.ApparentZenith,
+            loadtypes.LoadTypes.ANY,
+            loadtypes.Units.DEGREES,
+            True,
+        )
+
+        self.water_temperature_input_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.TemperatureCollectorInletDegC,
+            loadtypes.LoadTypes.TEMPERATURE,
+            loadtypes.Units.CELSIUS,
             True,
         )
 
@@ -148,7 +177,31 @@ class SolarThermalSystem(Component):
             load_type=loadtypes.LoadTypes.HEATING,
             unit=loadtypes.Units.WATT,
             postprocessing_flag=[loadtypes.InandOutputType.WATER_HEATING], # TODO is this needed?
-            output_description="Thermal power output",
+            output_description="Thermal power output [W]",
+        )
+
+        self.thermal_energy_wh_output_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ThermalEnergyOutput,
+            load_type=loadtypes.LoadTypes.HEATING,
+            unit=loadtypes.Units.WATT_HOUR,
+            output_description="Thermal energy output [Wh]",
+            postprocessing_flag=[loadtypes.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
+        )
+
+        self.water_mass_flow_kg_s_output_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.WaterMassFlowOutput,
+            load_type=loadtypes.LoadTypes.WATER,
+            unit=loadtypes.Units.KG_PER_SEC,
+            output_description="Mass flow of heat transfer liquid [kg/s]",
+        )
+        self.water_temperature_deg_c_output_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.WaterTemperatureOutput,
+            load_type=loadtypes.LoadTypes.WATER,
+            unit=loadtypes.Units.CELSIUS,
+            output_description="Output temperature of heat transfer liquid [°C]",
         )
 
         # Only if system is used to support heating in addition to warm water preparation
@@ -160,6 +213,53 @@ class SolarThermalSystem(Component):
         #     postprocessing_flag=[loadtypes.InandOutputType.WATER_HEATING], # TODO is this needed?
         #     output_description="Thermal Power Delivered",
         # )
+        self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
+        self.add_default_connections(self.get_default_connections_from_weather())
+
+
+    def get_default_connections_from_simple_hot_water_storage(self,):
+        """Get simple_water_storage default connections."""
+
+        connections = []
+        storage_classname = SimpleDHWStorage.get_classname()
+        connections.append(
+            ComponentConnection(
+                SolarThermalSystem.TemperatureCollectorInletDegC,
+                storage_classname,
+                SimpleDHWStorage.WaterTemperatureToHeatGenerator,
+            )
+        )
+        return connections
+    
+    def get_default_connections_from_weather(self):
+        """Get default connections from weather."""
+
+        connections = []
+        weather_classname = Weather.get_classname()
+        connections.append(
+            ComponentConnection(
+                SolarThermalSystem.TemperatureOutsideDegC,
+                weather_classname,
+                Weather.TemperatureOutside,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                SolarThermalSystem.GlobalHorizontalIrradianceWM2,
+                weather_classname,
+                Weather.GlobalHorizontalIrradiance,
+            )
+        )
+        connections.append(
+            ComponentConnection(
+                SolarThermalSystem.DiffuseHorizontalIrradianceWM2,
+                weather_classname,
+                Weather.DiffuseHorizontalIrradiance,
+            )
+        )
+        connections.append(ComponentConnection(SolarThermalSystem.Azimuth, weather_classname, Weather.Azimuth))
+        connections.append(ComponentConnection(SolarThermalSystem.ApparentZenith, weather_classname, Weather.ApparentZenith))
+        return connections
 
     def i_save_state(self) -> None:
         """Saves the current state."""
@@ -183,11 +283,7 @@ class SolarThermalSystem(Component):
         global_horizontal_irradiance_w_m2 = stsv.get_input_value(self.ghi_channel)
         diffuse_horizontal_irradiance_w_m2 = stsv.get_input_value(self.dhi_channel)
         outside_temperature_deg_c = stsv.get_input_value(self.t_out_channel)
-
-        # Assumptions
-        temperature_collector_inlet_deg_c = 20 # °C # TODO as state?
-        delta_temperature_n_k = 10 # K 
-        # input_2 = self.state.output_with_state
+        temperature_collector_inlet_deg_c = stsv.get_input_value(self.t_out_channel)
 
         # calculate collectors heat
         # Some more info on equation: http://www.estif.org/solarkeymarknew/the-solar-keymark-scheme-rules/21-certification-bodies/certified-products/58-collector-performance-parameters
@@ -202,7 +298,7 @@ class SolarThermalSystem(Component):
             a_1=self.config.a_1_w_m2_k, # thermal loss parameter 1
             a_2=self.config.a_2_w_m2_k, # thermal loss parameter 2
             temp_collector_inlet=temperature_collector_inlet_deg_c, # collectors inlet temperature
-            delta_temp_n=delta_temperature_n_k, # temperature difference between collector inlet and mean temperature 
+            delta_temp_n=self.config.delta_temperature_n_k, # temperature difference between collector inlet and mean temperature 
             irradiance_global=pd.Series(global_horizontal_irradiance_w_m2, index=[time_ind]),
             irradiance_diffuse=pd.Series(diffuse_horizontal_irradiance_w_m2, index=[time_ind]),
             temp_amb=pd.Series(outside_temperature_deg_c, index=[time_ind]),
@@ -211,11 +307,26 @@ class SolarThermalSystem(Component):
         # TODO include transformer (heat losses in pipes, required electricity etc)
 
         # write values for output time series
-        heat_power_output = precalc_data["collectors_heat"].iloc[0] * self.config.area_m2 # W/m2
-        stsv.set_output_value(self.thermal_power_w_output_channel, heat_power_output)
+        thermal_power_output_w = precalc_data["collectors_heat"].iloc[0] * self.config.area_m2
+        thermal_energy_output_wh = (
+            thermal_power_output_w * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
+        )
 
-        # write values to state
-        # self.state.output_with_state = output_1
+        water_temperature_output_deg_c = self.config.delta_temperature_n_k + stsv.get_input_value(
+            self.water_temperature_input_channel
+        )
+        mass_flow_output_kg_s = thermal_power_output_w / (
+            PhysicsConfig.get_properties_for_energy_carrier(
+            energy_carrier=loadtypes.LoadTypes.WATER
+        ).specific_heat_capacity_in_joule_per_kg_per_kelvin * self.config.delta_temperature_n_k
+        )
+
+        stsv.set_output_value(self.thermal_power_w_output_channel, thermal_power_output_w)
+        stsv.set_output_value(self.thermal_energy_wh_output_channel, thermal_energy_output_wh)
+        stsv.set_output_value(
+            self.water_temperature_deg_c_output_channel, water_temperature_output_deg_c,
+        )
+        stsv.set_output_value(self.water_mass_flow_kg_s_output_channel, mass_flow_output_kg_s)
 
 
 @dataclass

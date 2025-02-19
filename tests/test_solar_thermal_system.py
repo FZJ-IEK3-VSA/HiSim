@@ -50,4 +50,4 @@ def test_solar_thermal_system():
     my_sts.i_simulate(timestep, stsv, False)
     log.information("heat power output [W]: " + str(stsv.values[my_sts.thermal_power_w_output_channel.global_index]))
 
-    assert pytest.approx(stsv.values[my_sts.thermal_power_w_output_channel.global_index]) == 1130.37578599814
+    assert pytest.approx(stsv.values[my_sts.thermal_power_w_output_channel.global_index]) == 1108.9757922481404

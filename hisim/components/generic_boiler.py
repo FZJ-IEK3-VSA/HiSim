@@ -1327,7 +1327,7 @@ class GenericBoilerControllerConfigForDHW(ConfigBase):
             # get min and max thermal power from Generic Boiler config
             minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,
             maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
-            set_temperature_difference_for_full_power=25.0,
+            set_temperature_difference_for_full_power=5.0,
             minimum_runtime_in_seconds=1800,
             minimum_resting_time_in_seconds=1800,
         )
@@ -1345,7 +1345,7 @@ class GenericBoilerControllerConfigForDHW(ConfigBase):
             # get min and max thermal power from Generic Boiler config
             minimal_thermal_power_in_watt=minimal_thermal_power_in_watt,
             maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
-            set_temperature_difference_for_full_power=25.0,
+            set_temperature_difference_for_full_power=5.0,
             minimum_runtime_in_seconds=1800,
             minimum_resting_time_in_seconds=1800,
         )
@@ -1378,9 +1378,9 @@ class GenericBoilerControllerForDHW(GenericBoilerController):
         super().__init__(
             my_simulation_parameters=my_simulation_parameters, config=config, my_display_config=my_display_config,
         )
-        # warm water should aim for 55°C, should be 60°C when leaving heat generator, see source below
+        # warm water should always have at least 55°C, should be 60°C when leaving heat generator, see source below
         # https://www.umweltbundesamt.de/umwelttipps-fuer-den-alltag/heizen-bauen/warmwasser#undefined
-        self.warm_water_temperature_aim_in_celsius: float = 55.0
+        self.warm_water_temperature_aim_in_celsius: float = 60.0
 
         self.minimum_runtime_in_timesteps = int(
             self.config.minimum_runtime_in_seconds / self.my_simulation_parameters.seconds_per_timestep
@@ -1462,8 +1462,7 @@ class GenericBoilerControllerForDHW(GenericBoilerController):
             return
 
         if (
-            water_temperature_input_in_celsius
-            < self.warm_water_temperature_aim_in_celsius - self.set_temperature_difference_for_full_power
+            water_temperature_input_in_celsius < self.warm_water_temperature_aim_in_celsius
         ):
             # activate heating when storage temperature is too low
             self.state.activate(timestep)

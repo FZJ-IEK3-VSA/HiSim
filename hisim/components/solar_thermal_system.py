@@ -94,6 +94,7 @@ class SolarThermalSystem(Component):
     Azimuth = "Azimuth"
     ApparentZenith = "ApparentZenith"
     TemperatureCollectorInletDegC = "TemperatureCollectorInletDegC"
+    ControlSignal = "ControlSignal"
 
     # Outputs
     ThermalPowerOutput = "ThermalPowerOutput"
@@ -170,6 +171,14 @@ class SolarThermalSystem(Component):
             True,
         )
 
+        self.control_signal_channel: ComponentInput = self.add_input(
+            self.component_name, 
+            SolarThermalSystem.ControlSignal, 
+            loadtypes.LoadTypes.ANY, 
+            loadtypes.Units.BINARY,
+            True,
+        )
+
         # Add outputs
         self.thermal_power_w_output_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
@@ -215,6 +224,7 @@ class SolarThermalSystem(Component):
         # )
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
         self.add_default_connections(self.get_default_connections_from_weather())
+        self.add_default_connections(self.get_default_connections_from_controller())
 
 
     def get_default_connections_from_simple_hot_water_storage(self,):
@@ -261,6 +271,18 @@ class SolarThermalSystem(Component):
         connections.append(ComponentConnection(SolarThermalSystem.ApparentZenith, weather_classname, Weather.ApparentZenith))
         return connections
 
+    def get_default_connections_from_controller(self,):
+        """Get Controller default connections."""
+        component_class = SolarThermalSystemController
+        connections = []
+        l1_controller_classname = component_class.get_classname()
+        connections.append(
+            ComponentConnection(
+                SolarThermalSystem.ControlSignal, l1_controller_classname, component_class.ControlSignalToSolarThermalSystem,
+            )
+        )
+        return connections
+    
     def i_save_state(self) -> None:
         """Saves the current state."""
         self.previous_state = deepcopy(self.state)
@@ -279,11 +301,11 @@ class SolarThermalSystem(Component):
 
     def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
         """Simulates the component."""
-        # define local variables
+        control_signal = stsv.get_input_value(self.control_signal_channel)
         global_horizontal_irradiance_w_m2 = stsv.get_input_value(self.ghi_channel)
         diffuse_horizontal_irradiance_w_m2 = stsv.get_input_value(self.dhi_channel)
-        outside_temperature_deg_c = stsv.get_input_value(self.t_out_channel)
-        temperature_collector_inlet_deg_c = stsv.get_input_value(self.t_out_channel)
+        ambient_air_temperature_deg_c = stsv.get_input_value(self.t_out_channel)
+        temperature_collector_inlet_deg_c = stsv.get_input_value(self.water_temperature_input_channel)
 
         # calculate collectors heat
         # Some more info on equation: http://www.estif.org/solarkeymarknew/the-solar-keymark-scheme-rules/21-certification-bodies/certified-products/58-collector-performance-parameters
@@ -301,25 +323,36 @@ class SolarThermalSystem(Component):
             delta_temp_n=self.config.delta_temperature_n_k, # temperature difference between collector inlet and mean temperature 
             irradiance_global=pd.Series(global_horizontal_irradiance_w_m2, index=[time_ind]),
             irradiance_diffuse=pd.Series(diffuse_horizontal_irradiance_w_m2, index=[time_ind]),
-            temp_amb=pd.Series(outside_temperature_deg_c, index=[time_ind]),
+            temp_amb=pd.Series(ambient_air_temperature_deg_c, index=[time_ind]),
         )
 
         # TODO include transformer (heat losses in pipes, required electricity etc)
 
-        # write values for output time series
         thermal_power_output_w = precalc_data["collectors_heat"].iloc[0] * self.config.area_m2
         thermal_energy_output_wh = (
             thermal_power_output_w * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
-        )
-
-        water_temperature_output_deg_c = self.config.delta_temperature_n_k + stsv.get_input_value(
-            self.water_temperature_input_channel
         )
         mass_flow_output_kg_s = thermal_power_output_w / (
             PhysicsConfig.get_properties_for_energy_carrier(
             energy_carrier=loadtypes.LoadTypes.WATER
         ).specific_heat_capacity_in_joule_per_kg_per_kelvin * self.config.delta_temperature_n_k
         )
+
+        if thermal_power_output_w > 0:
+            # Given the right mass flow, assume that target temperature rise is achieved
+            water_temperature_output_deg_c = 2*self.config.delta_temperature_n_k + stsv.get_input_value(
+                self.water_temperature_input_channel
+            )
+        else:
+            # Heat losses occur, simplified assumption: collector temperature drops to ambient temperature
+            water_temperature_output_deg_c = ambient_air_temperature_deg_c
+
+        if control_signal == 0:
+            # If the controller signals 'off', the solar pump does not pump the solar fluid from
+            # the collector to the storage
+            mass_flow_output_kg_s = 0
+            thermal_power_output_w = 0
+            thermal_energy_output_wh = 0
 
         stsv.set_output_value(self.thermal_power_w_output_channel, thermal_power_output_w)
         stsv.set_output_value(self.thermal_energy_wh_output_channel, thermal_energy_output_wh)
@@ -328,6 +361,7 @@ class SolarThermalSystem(Component):
         )
         stsv.set_output_value(self.water_mass_flow_kg_s_output_channel, mass_flow_output_kg_s)
 
+# TODO Overheating protection?
 
 @dataclass
 class SolarThermalSystemState:
@@ -342,3 +376,213 @@ class SolarThermalSystemState:
     """
 
     output_with_state: float = 0
+
+@dataclass_json
+@dataclass
+class SolarThermalSystemControllerConfig(ConfigBase):
+    """Config class for controller of solar thermal system."""
+
+    @classmethod
+    def get_main_classname(cls):
+        """Returns the full class name of the base class."""
+        return SolarThermalSystemController.get_full_classname()
+
+    building_name: str
+    name: str
+    set_temperature_difference_for_on: float
+
+    @classmethod
+    def get_solar_thermal_system_controller_config(
+        cls, building_name: str = "BUI1", 
+        name="SolarThermalSystemController", 
+        set_temperature_difference_for_on=6
+    ) -> Any:
+        """Gets a default SolarThermalSystemController for DHW."""
+        return SolarThermalSystemControllerConfig(
+            building_name=building_name,
+            name=name,
+            set_temperature_difference_for_on=set_temperature_difference_for_on
+        )
+
+class SolarThermalSystemController(Component):
+    """Solar Controller.
+
+    It takes data from other components and sends signal to the 
+    solar pump (implicitly integrated in the SolarThermalSystem)
+    for activation or deactivation.
+
+    Parameters
+    ----------
+    Components to connect to:
+    (1) SolarThermalSystem (control_signal)
+
+    """
+    # Inputs
+    MeanWaterTemperatureInStorage = "MeanWaterTemperatureInStorage"
+    CollectorTemperature = "CollectorTemperature"
+
+    # Outputs
+    ControlSignalToSolarThermalSystem = "ControlSignalToSolarThermalSystem"
+
+    def __init__(
+        self,
+        my_simulation_parameters: SimulationParameters,
+        config: SolarThermalSystemControllerConfig,
+        my_display_config: DisplayConfig = DisplayConfig(),
+    ) -> None:
+        """Construct all the neccessary attributes."""
+        self.config = config
+        self.my_simulation_parameters = my_simulation_parameters
+        component_name = self.get_component_name()
+        super().__init__(
+            name=component_name,
+            my_simulation_parameters=my_simulation_parameters,
+            my_config=config,
+            my_display_config=my_display_config,
+        )
+
+        # warm water should aim for 55°C, should be 60°C when leaving heat generator, see source below
+        # https://www.umweltbundesamt.de/umwelttipps-fuer-den-alltag/heizen-bauen/warmwasser#undefined
+        # TODO can this be set in central place (generic_boiler controller also uses it)
+        self.warm_water_temperature_aim_in_celsius: float = 55.0 
+
+        # Configure Input Channels
+        self.mean_water_temperature_storage_input_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.MeanWaterTemperatureInStorage,
+            loadtypes.LoadTypes.TEMPERATURE,
+            loadtypes.Units.CELSIUS,
+            True,
+        )
+
+        self.collector_temperature_input_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.CollectorTemperature,
+            loadtypes.LoadTypes.TEMPERATURE,
+            loadtypes.Units.CELSIUS,
+            True,
+        )
+
+        # Configure Output Channels
+        self.control_signal_to_solar_thermal_system_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.ControlSignalToSolarThermalSystem,
+            loadtypes.LoadTypes.ANY,
+            loadtypes.Units.BINARY,
+            output_description="Control signal to solar pump in SolarThermalSystem",
+        )
+
+        self.state: SolarThermalSystemControllerState = SolarThermalSystemControllerState(0, 0, 0)
+        self.previous_state: SolarThermalSystemControllerState = self.state.clone()
+        self.processed_state: SolarThermalSystemControllerState = self.state.clone()
+
+        self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
+        self.add_default_connections(self.get_default_connections_from_solar_thermal_system())
+
+    def get_default_connections_from_simple_hot_water_storage(self,):
+        """Get simple_water_storage default connections."""
+
+        connections = []
+        storage_classname = SimpleDHWStorage.get_classname()
+        connections.append(
+            ComponentConnection(
+                SolarThermalSystemController.MeanWaterTemperatureInStorage,
+                storage_classname,
+                SimpleDHWStorage.WaterMeanTemperatureInStorage,
+            )
+        )
+        return connections
+    
+    def get_default_connections_from_solar_thermal_system(self,):
+        """Get simple_water_storage default connections."""
+
+        connections = []
+        storage_classname = SolarThermalSystem.get_classname()
+        connections.append(
+            ComponentConnection(
+                SolarThermalSystemController.CollectorTemperature,
+                storage_classname,
+                SolarThermalSystem.WaterTemperatureOutput,
+            )
+        )
+        return connections
+
+    def i_save_state(self) -> None:
+        """Saves the state."""
+        self.previous_state = self.state.clone()
+
+    def i_restore_state(self) -> None:
+        """Restores previous state."""
+        self.state = self.previous_state.clone()
+
+    def i_prepare_simulation(self) -> None:
+        """Prepare the simulation."""
+        pass
+
+    def i_simulate(self, timestep: int, stsv: SingleTimeStepValues, force_convergence: bool) -> None:
+        """Simulate the solar thermal system controller."""
+        if force_convergence:
+            # states are saved after each timestep, outputs after each iteration
+            # outputs have to be in line with states, so if convergence is forced outputs are aligned to last known state.
+            self.state = self.processed_state.clone()
+        else:
+
+            # Retrieves inputs
+            mean_water_temperature_storage_deg_c = stsv.get_input_value(
+                self.mean_water_temperature_storage_input_channel
+            )
+            collector_temperature_deg_c = stsv.get_input_value(
+                self.collector_temperature_input_channel
+            )
+
+            self.get_controller_state(timestep, mean_water_temperature_storage_deg_c, collector_temperature_deg_c)
+            self.processed_state = self.state.clone()
+
+        stsv.set_output_value(self.control_signal_to_solar_thermal_system_channel, self.state.on_off)
+
+    def get_controller_state(
+        self, timestep: int, mean_water_temperature_storage_deg_c: float, collector_temperature_deg_c: float
+    ) -> None:
+        """Calculate the solar pump state and activate / deactives."""
+        if (
+            (collector_temperature_deg_c - mean_water_temperature_storage_deg_c) > self.config.set_temperature_difference_for_on
+        ):
+            # activate heating when difference between collector temperature and storage temperature
+            # is at least 6 K
+            self.state.activate(timestep)
+        
+        if mean_water_temperature_storage_deg_c > self.warm_water_temperature_aim_in_celsius:
+            # deactivate heating when storage temperature is too high
+            # this overrides the activation based on temperature difference
+            self.state.deactivate(timestep)
+        
+class SolarThermalSystemControllerState:
+    """Data class that saves the state of the controller."""
+
+    def __init__(self, on_off: int, activation_time_step: int, deactivation_time_step: int) -> None:
+        """Initializes the solar pump controller state."""
+        self.on_off: int = on_off
+        self.activation_time_step: int = activation_time_step
+        self.deactivation_time_step: int = deactivation_time_step
+
+    def clone(self) -> "SolarThermalSystemControllerState":
+        """Copies the current instance."""
+        return SolarThermalSystemControllerState(
+            on_off=self.on_off,
+            activation_time_step=self.activation_time_step,
+            deactivation_time_step=self.deactivation_time_step,
+        )
+
+    def i_prepare_simulation(self) -> None:
+        """Prepares the simulation."""
+        pass
+
+    def activate(self, timestep: int) -> None:
+        """Activates the solar pump and remembers the time step."""
+        self.on_off = 1
+        self.activation_time_step = timestep
+
+    def deactivate(self, timestep: int) -> None:
+        """Deactivates the solar pump and remembers the time step."""
+        self.on_off = 0
+        self.deactivation_time_step = timestep

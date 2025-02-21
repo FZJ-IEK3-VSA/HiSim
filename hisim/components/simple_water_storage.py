@@ -11,7 +11,7 @@ import pandas as pd
 from dataclasses_json import dataclass_json
 
 import hisim.component as cp
-from hisim import loadtypes as lt
+from hisim import loadtypes as lt, log
 from hisim import utils
 from hisim.component import (
     SingleTimeStepValues,
@@ -1557,33 +1557,6 @@ class SimpleDHWStorage(SimpleWaterStorage):
             )
         )
         return connections
-
-    def get_default_connections_from_dhw_solar_thermal(
-        self,
-    ) -> List[cp.ComponentConnection]:
-        """Get DHW solar thermal default connections."""
-
-        # use importlib for importing the other component in order to avoid circular-import errors
-        component_module_name = "hisim.components.solar_thermal_system"
-        component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "SolarThermalForDHW")
-        connections = []
-        solar_thermal_classname = component_class.get_classname()
-        connections.append(
-            cp.ComponentConnection(
-                SimpleDHWStorage.WaterTemperatureFromHeatGenerator,
-                solar_thermal_classname,
-                component_class.WaterOutputTemperature,
-            )
-        )
-        connections.append(
-            cp.ComponentConnection(
-                SimpleDHWStorage.WaterMassFlowRateFromHeatGenerator,
-                solar_thermal_classname,
-                component_class.WaterOutputMassFlowRate,
-            )
-        )
-        return connections
     
     def build(
         self,
@@ -1671,6 +1644,10 @@ class SimpleDHWStorage(SimpleWaterStorage):
             raise ValueError(
                 f"The water temperature in the water storage is with {self.mean_water_temperature_in_water_storage_in_celsius}°C way too high or too low."
             )
+        
+        if (water_mass_flow_rate_of_dhw_in_kg_per_second > 0) and (self.mean_water_temperature_in_water_storage_in_celsius < self.warm_water_temperature):
+            # if there is water consumption, the temperature must be high enough
+            log.warning(f"The DHW water temperature is only {self.mean_water_temperature_in_water_storage_in_celsius}°C.")
 
         # Calculations ------------------------------------------------------------------------------------------------------
 

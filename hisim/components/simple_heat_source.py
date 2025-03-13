@@ -35,7 +35,7 @@ class SimpleHeatSourceType(Enum):
 
     CONSTANT_THERMAL_POWER = "CONSTANT_THERMAL_POWER"
     CONSTANT_TEMPERATURE = "CONSTANT_TEMPERATURE"
-    SIMPLE_BRINE_TEMPERATURE = "SIMPLE_BRINE_TEMPERATURE"
+    NEAR_SURFACE_BRINE_TEMPERATURE = "NEAR_SURFACE_BRINE_TEMPERATURE"
 
 
 class FluidMediaType(Enum):
@@ -127,7 +127,7 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
         config = SimpleHeatSourceConfig(
             building_name=building_name,
             name="HeatSourceVarBrineTemperature",
-            const_source=SimpleHeatSourceType.SIMPLE_BRINE_TEMPERATURE,  # type: ignore
+            const_source=SimpleHeatSourceType.NEAR_SURFACE_BRINE_TEMPERATURE,  # type: ignore
             power_th_in_watt=None,
             temperature_out_in_celsius=None,
             fluid_type=FluidMediaType.PROPYLEN_GLYCOL,
@@ -195,7 +195,7 @@ class SimpleHeatSource(cp.Component):
             self.temperature_out_in_celsius = self.config.temperature_out_in_celsius
             if self.temperature_out_in_celsius is None or str(self.temperature_out_in_celsius) == "nan":
                 raise ValueError("Undefined value for constant temperature")
-        elif self.config.const_source == SimpleHeatSourceType.SIMPLE_BRINE_TEMPERATURE:  # type: ignore
+        elif self.config.const_source == SimpleHeatSourceType.NEAR_SURFACE_BRINE_TEMPERATURE:  # type: ignore
             pass
         else:
             raise ValueError("Invalid const_source value.")
@@ -281,7 +281,7 @@ class SimpleHeatSource(cp.Component):
             lines.append(f"Power: {self.config.power_th_in_watt * 1e-3:4.0f} kW")
         if self.config.const_source == SimpleHeatSourceType.CONSTANT_TEMPERATURE:
             lines.append(f"Temperature : {self.config.temperature_out_in_celsius} °C")
-        if self.config.const_source == SimpleHeatSourceType.SIMPLE_BRINE_TEMPERATURE:
+        if self.config.const_source == SimpleHeatSourceType.NEAR_SURFACE_BRINE_TEMPERATURE:
             lines.append("Temperature : .... °C")
         lines.append("--------------------")
         lines.append(f"Fluidtype: {self.fluid_type}")
@@ -330,7 +330,7 @@ class SimpleHeatSource(cp.Component):
             thermal_power_in_watt = (massflow_in_kg_per_sec * self.cp_f *
                                      (temperature_output - temperature_input_in_celsius))
 
-        elif self.config.const_source == SimpleHeatSourceType.SIMPLE_BRINE_TEMPERATURE:
+        elif self.config.const_source == SimpleHeatSourceType.NEAR_SURFACE_BRINE_TEMPERATURE:
             """From hplib: Calculate the soil temperature by the average Temperature of the day.
             Source: „WP Monitor“ Feldmessung von Wärmepumpenanlagen S. 115, Frauenhofer ISE, 2014
             added 9 points at -15°C average day at 3°C soil temperature in order to prevent higher

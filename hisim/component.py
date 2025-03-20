@@ -505,3 +505,8 @@ class CapexCostDataClass:
             device_co2_footprint_for_simulated_period_in_kg=0,
             kpi_tag=None
         )
+
+@dataclass
+class Coordinates:
+    latitude: float
+    longitude: float

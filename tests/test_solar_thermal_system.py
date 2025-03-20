@@ -62,7 +62,7 @@ def test_precalc():
     eta_0: float = 0.78
     a_1_w_m2_k: float = 3.2 # W/(m2*K)
     a_2_w_m2_k: float = 0.015 # W/(m2*K2)
-    coordinates = {"latitude": 50.78, "longitude": 6.08}
+    coordinates = component.Coordinates(latitude=50.78, longitude= 6.08)
 
     temperature_collector_inlet_deg_c = 55
     delta_temperature_n_k = 10
@@ -74,8 +74,8 @@ def test_precalc():
     time_ind = datetime.datetime(2021,1,1) + datetime.timedelta(0, 60 * timestep)
 
     precalc_data = flat_plate_precalc(
-        lat=coordinates["latitude"],
-        long=coordinates["longitude"],
+        lat=coordinates.latitude,
+        long=coordinates.longitude,
         collector_tilt=tilt,
         collector_azimuth=azimuth,
         eta_0=eta_0, # optical efficiency of the collector

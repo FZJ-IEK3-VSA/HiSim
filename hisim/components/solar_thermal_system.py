@@ -62,7 +62,7 @@ class SolarThermalSystemConfig(ConfigBase):
         cls,
         building_name: str = "BUI1",
         coordinates: Dict[str, float] = {"latitude": 50.78, "longitude": 6.08},
-        azimuth = 180.,
+        azimuth: float = 180.,
         tilt: float = 30.,
         area_m2: float = 1.5,
         eta_0: float = 0.78,
@@ -423,9 +423,10 @@ class SolarThermalSystemControllerConfig(ConfigBase):
 
     @classmethod
     def get_solar_thermal_system_controller_config(
-        cls, building_name: str = "BUI1", 
-        name="SolarThermalSystemController", 
-        set_temperature_difference_for_on=10
+        cls, 
+        building_name: str = "BUI1", 
+        name: str = "SolarThermalSystemController", 
+        set_temperature_difference_for_on: float = 10
     ) -> Any:
         """Gets a default SolarThermalSystemController for DHW."""
         return SolarThermalSystemControllerConfig(

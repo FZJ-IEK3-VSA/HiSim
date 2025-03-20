@@ -1317,7 +1317,11 @@ class GenericBoilerControllerConfigForDHW(ConfigBase):
 
     @classmethod
     def get_default_modulating_dhw_boiler_controller_config(
-        cls, maximal_thermal_power_in_watt: float, minimal_thermal_power_in_watt: float, building_name: str = "BUI1", secondary_mode=False,
+        cls, 
+        maximal_thermal_power_in_watt: float, 
+        minimal_thermal_power_in_watt: float, 
+        building_name: str = "BUI1", 
+        secondary_mode: bool = False,
     ) -> Any:
         """Gets a default Generic Boiler Controller For DHW."""
         return GenericBoilerControllerConfigForDHW(

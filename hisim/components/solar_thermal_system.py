@@ -59,10 +59,6 @@ class SolarThermalSystemConfig(ConfigBase):
     # Whether on old solar pump or a new one is used
     old_solar_pump: bool
 
-    # Whether the system is used to support space heating in addition
-    # to water heating
-    heating_support: bool
-
     # Weight of component, defines hierachy in control. The default is 1.
     source_weight: int
 
@@ -78,7 +74,6 @@ class SolarThermalSystemConfig(ConfigBase):
         a_1_w_m2_k: float = 3.2,  # W/(m2*K)
         a_2_w_m2_k: float = 0.015,  # W/(m2*K2)
         old_solar_pump: bool = False,
-        heating_support: bool = False,
         source_weight: int = 1,
     ) -> "SolarThermalSystemConfig":
         """Gets a default SolarThermalSystem."""
@@ -97,7 +92,6 @@ class SolarThermalSystemConfig(ConfigBase):
             a_1_w_m2_k=a_1_w_m2_k,  # W/(m2*K)
             a_2_w_m2_k=a_2_w_m2_k,  # W/(m2*K2)
             old_solar_pump=old_solar_pump,
-            heating_support=heating_support,
             source_weight=source_weight,
         )
 

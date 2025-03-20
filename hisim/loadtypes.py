@@ -117,6 +117,7 @@ class Units(str, enum.Enum):
     KWH_PER_TIMESTEP = "kWh per timestep"
 
     # Power per area
+    WATT_PER_METER = "W per meter"
     WATT_PER_SQUARE_METER = "W per square meter"
     WATT_HOUR_PER_SQUARE_METER = "Wh per square meter"
 

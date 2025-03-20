@@ -47,6 +47,9 @@ class SolarThermalSystemConfig(ConfigBase):
     a_2_w_m2_k: float # W/(m2*K2)
     delta_temperature_n_k = 10 # K 
 
+    # Whether on old solar pump or a new one is used
+    old_solar_pump: bool
+
     # Whether the system is used to support space heating in addition
     # to water heating
     heating_support: bool
@@ -112,6 +115,7 @@ class SolarThermalSystem(Component):
     RequiredWaterMassFlowOutput = "RequiredWaterMassFlowOutput"
     WaterMassFlowOutput = "WaterMassFlowOutput"
     WaterTemperatureOutput = "WaterTemperatureOutput"
+    ElectricityConsumptionOutput = "ElectricityConsumptionOutput"
 
     def __init__(
         self,
@@ -231,16 +235,15 @@ class SolarThermalSystem(Component):
             unit=loadtypes.Units.CELSIUS,
             output_description="Output temperature of heat transfer liquid [°C]",
         )
+        self.electricity_consumption_output_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricityConsumptionOutput,
+            load_type=loadtypes.LoadTypes.ELECTRICITY,
+            unit=loadtypes.Units.WATT,
+            output_description="Electricity consumption of the solar pump.",
+            postprocessing_flag=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
+        )
 
-        # Only if system is used to support heating in addition to warm water preparation
-        # self.thermal_power_delicered_channel: ComponentOutput = self.add_output(
-        #     object_name=self.component_name,
-        #     field_name=self.ThermalPowerDelivered,
-        #     load_type=loadtypes.LoadTypes.HEATING,
-        #     unit=loadtypes.Units.WATT,
-        #     postprocessing_flag=[loadtypes.InandOutputType.WATER_HEATING], # TODO is this needed?
-        #     output_description="Thermal Power Delivered",
-        # )
         self.add_default_connections(self.get_default_connections_from_simple_hot_water_storage())
         self.add_default_connections(self.get_default_connections_from_weather())
         self.add_default_connections(self.get_default_connections_from_controller())
@@ -374,6 +377,7 @@ class SolarThermalSystem(Component):
             mass_flow_output_kg_s = 0
             thermal_power_output_w = 0
             thermal_energy_output_wh = 0
+            electric_power_demand_solar_pump_w = 0
         else:
             mass_flow_output_kg_s = required_mass_flow_output_kg_s
             # Calculate electricity consumption of solar pump
@@ -386,6 +390,7 @@ class SolarThermalSystem(Component):
         )
         stsv.set_output_value(self.water_mass_flow_kg_s_output_channel, mass_flow_output_kg_s)
         stsv.set_output_value(self.required_water_mass_flow_kg_s_output_channel, required_mass_flow_output_kg_s)
+        stsv.set_output_value(self.electricity_consumption_output_channel, electric_power_demand_solar_pump_w)
 
 
 @dataclass

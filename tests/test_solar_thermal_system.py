@@ -1,5 +1,7 @@
 """Test for generic pv system."""
 
+import datetime
+import pandas as pd
 import pytest
 from tests import functions_for_testing as fft
 from hisim import sim_repository
@@ -8,6 +10,7 @@ from hisim.components import weather
 from hisim.components import solar_thermal_system
 from hisim import simulator as sim
 from hisim import log
+from oemof.thermal.solar_thermal_collector import flat_plate_precalc
 
 
 @pytest.mark.base
@@ -51,3 +54,38 @@ def test_solar_thermal_system():
     log.information("heat power output [W]: " + str(stsv.values[my_sts.thermal_power_w_output_channel.global_index]))
 
     assert pytest.approx(stsv.values[my_sts.thermal_power_w_output_channel.global_index]) == 1108.9757922481404
+
+@pytest.mark.base
+def test_precalc():
+    azimuth = 180.,
+    tilt: float = 30.
+    eta_0: float = 0.78
+    a_1_w_m2_k: float = 3.2 # W/(m2*K)
+    a_2_w_m2_k: float = 0.015 # W/(m2*K2)
+    coordinates = {"latitude": 50.78, "longitude": 6.08}
+
+    temperature_collector_inlet_deg_c = 55
+    delta_temperature_n_k = 10
+
+    global_horizontal_irradiance_w_m2 = 0
+    diffuse_horizontal_irradiance_w_m2 = 0
+    ambient_air_temperature_deg_c = 0
+    timestep = 0
+    time_ind = datetime.datetime(2021,1,1) + datetime.timedelta(0, 60 * timestep)
+
+    precalc_data = flat_plate_precalc(
+        lat=coordinates["latitude"],
+        long=coordinates["longitude"],
+        collector_tilt=tilt,
+        collector_azimuth=azimuth,
+        eta_0=eta_0, # optical efficiency of the collector
+        a_1=a_1_w_m2_k, # thermal loss parameter 1
+        a_2=a_2_w_m2_k, # thermal loss parameter 2
+        temp_collector_inlet=temperature_collector_inlet_deg_c, # collectors inlet temperature
+        delta_temp_n=delta_temperature_n_k, # temperature difference between collector inlet and mean temperature 
+        irradiance_global=pd.Series(global_horizontal_irradiance_w_m2, index=[time_ind]),
+        irradiance_diffuse=pd.Series(diffuse_horizontal_irradiance_w_m2, index=[time_ind]),
+        temp_amb=pd.Series(ambient_air_temperature_deg_c, index=[time_ind]),
+    )
+
+    assert precalc_data["collectors_heat"].iloc[0] == 0

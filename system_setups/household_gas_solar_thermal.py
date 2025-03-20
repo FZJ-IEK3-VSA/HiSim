@@ -161,6 +161,7 @@ def setup_function(
     my_gas_heater_controller_dhw_config = generic_boiler.GenericBoilerControllerConfigForDHW.get_default_modulating_dhw_boiler_controller_config(
         minimal_thermal_power_in_watt=my_gas_heater_for_dhw_config.minimal_thermal_power_in_watt,
         maximal_thermal_power_in_watt=my_gas_heater_for_dhw_config.maximal_thermal_power_in_watt,
+        secondary_mode=True
     )
     
     my_gas_heater_controller_for_dhw = generic_boiler.GenericBoilerControllerForDHW(
@@ -168,7 +169,7 @@ def setup_function(
     )
 
     # Solar thermal for DHW
-    my_solar_thermal_system_config = solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system()
+    my_solar_thermal_system_config = solar_thermal_system.SolarThermalSystemConfig.get_default_solar_thermal_system(area_m2=4) 
     my_solar_thermal_system = solar_thermal_system.SolarThermalSystem(
         config=my_solar_thermal_system_config, my_simulation_parameters=my_simulation_parameters
     )
@@ -213,8 +214,37 @@ def setup_function(
         source_weight=999,
     )
 
-    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
+    my_dhw_storage.connect_input(
+        my_dhw_storage.WaterConsumption,
+        my_occupancy.component_name,
+        my_occupancy.WaterConsumption,
+    )
 
+    # Connect solarthermal as primary heat generator
+    my_dhw_storage.connect_input(
+        my_dhw_storage.WaterTemperatureFromHeatGenerator,
+        my_solar_thermal_system.component_name,
+        my_solar_thermal_system.WaterTemperatureOutput,
+    )
+    my_dhw_storage.connect_input(
+        my_dhw_storage.WaterMassFlowRateFromHeatGenerator,
+        my_solar_thermal_system.component_name,
+        my_solar_thermal_system.WaterMassFlowOutput,
+    )
+
+    # Connect gas as secondary heat generator
+    my_dhw_storage.connect_input(
+        my_dhw_storage.WaterTemperatureFromSecondaryHeatGenerator,
+        my_gas_heater_for_dhw.component_name,
+        my_gas_heater_for_dhw.WaterOutputTemperature,
+    )
+    my_dhw_storage.connect_input(
+        my_dhw_storage.WaterMassFlowRateFromSecondaryHeatGenerator,
+        my_gas_heater_for_dhw.component_name,
+        my_gas_heater_for_dhw.WaterOutputMassFlow,
+    )
+
+    my_building.connect_only_predefined_connections(my_weather, my_occupancy)
     # =================================================================================================================================
     # Add Components to Simulation Parameters
 
@@ -223,7 +253,7 @@ def setup_function(
     my_sim.add_component(my_weather)
     my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
-    my_sim.add_component(my_dhw_storage, connect_automatically=True)
+    my_sim.add_component(my_dhw_storage, connect_automatically=False)
     my_sim.add_component(my_simple_water_storage, connect_automatically=True)
     my_sim.add_component(my_electricity_meter, connect_automatically=True)
     my_sim.add_component(my_gas_heater, connect_automatically=True)

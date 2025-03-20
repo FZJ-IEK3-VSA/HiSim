@@ -58,27 +58,37 @@ class SolarThermalSystemConfig(ConfigBase):
     def get_default_solar_thermal_system(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+        coordinates: Dict[str, float] = {"latitude": 50.78, "longitude": 6.08},
+        azimuth = 180.,
+        tilt: float = 30.,
+        area_m2: float = 1.5,
+        eta_0: float = 0.78,
+        a_1_w_m2_k: float = 3.2, # W/(m2*K)
+        a_2_w_m2_k: float = 0.015, # W/(m2*K2)
+        old_solar_pump: bool = False,
+        heating_support: bool = False,
+        source_weight: int = 1
+    ) -> "SolarThermalSystemConfig":
         """Gets a default SolarThermalSystem."""
         return SolarThermalSystemConfig(
-            building_name=building_name,
-            coordinates={"latitude": 50.78,
-                         "longitude": 6.08},
-            name="SolarThermalSystem",
-            azimuth=180.,
-            tilt=30.,
-            area_m2=1.5, #m2
+            building_name = building_name,
+            coordinates = coordinates,
+            name = "SolarThermalSystem",
+            azimuth = azimuth,
+            tilt = tilt,
+            area_m2 = area_m2, #m2
             # These values are taken from the Excel sheet that can be downloaded from
             # http://www.estif.org/solarkeymarknew/the-solar-keymark-scheme-rules/21-certification-bodies/certified-products/58-collector-performance-parameters
             # Values were determined by changing eta_0, a_1, and a_2 so that the curve
             # fits with the typical flat plat curve
-            eta_0 = 0.78,
-            a_1_w_m2_k = 3.2, # W/(m2*K)
-            a_2_w_m2_k = 0.015, # W/(m2*K2)
-            heating_support=False,
-            source_weight=1
+            eta_0 = eta_0,
+            a_1_w_m2_k = a_1_w_m2_k, # W/(m2*K)
+            a_2_w_m2_k = a_2_w_m2_k, # W/(m2*K2)
+            old_solar_pump  = old_solar_pump,
+            heating_support = heating_support,
+            source_weight = source_weight
         )
-
+    
 
 class SolarThermalSystem(Component):
     """Solar thermal system.
@@ -99,6 +109,7 @@ class SolarThermalSystem(Component):
     # Outputs
     ThermalPowerOutput = "ThermalPowerOutput"
     ThermalEnergyOutput = "ThermalEnergyOutput"
+    RequiredWaterMassFlowOutput = "RequiredWaterMassFlowOutput"
     WaterMassFlowOutput = "WaterMassFlowOutput"
     WaterTemperatureOutput = "WaterTemperatureOutput"
 
@@ -185,7 +196,7 @@ class SolarThermalSystem(Component):
             field_name=self.ThermalPowerOutput,
             load_type=loadtypes.LoadTypes.HEATING,
             unit=loadtypes.Units.WATT,
-            postprocessing_flag=[loadtypes.InandOutputType.WATER_HEATING], # TODO is this needed?
+            postprocessing_flag=[loadtypes.InandOutputType.WATER_HEATING],
             output_description="Thermal power output [W]",
         )
 
@@ -205,6 +216,14 @@ class SolarThermalSystem(Component):
             unit=loadtypes.Units.KG_PER_SEC,
             output_description="Mass flow of heat transfer liquid [kg/s]",
         )
+        self.required_water_mass_flow_kg_s_output_channel: ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.RequiredWaterMassFlowOutput,
+            load_type=loadtypes.LoadTypes.WATER,
+            unit=loadtypes.Units.KG_PER_SEC,
+            output_description="The required mass flow of heat transfer liquid [kg/s] for achieving target temperature rise",
+        )
+
         self.water_temperature_deg_c_output_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.WaterTemperatureOutput,
@@ -326,13 +345,12 @@ class SolarThermalSystem(Component):
             temp_amb=pd.Series(ambient_air_temperature_deg_c, index=[time_ind]),
         )
 
-        # TODO include transformer (heat losses in pipes, required electricity etc)
-
         thermal_power_output_w = precalc_data["collectors_heat"].iloc[0] * self.config.area_m2
+
         thermal_energy_output_wh = (
             thermal_power_output_w * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
         )
-        mass_flow_output_kg_s = thermal_power_output_w / (
+        required_mass_flow_output_kg_s = thermal_power_output_w / (
             PhysicsConfig.get_properties_for_energy_carrier(
             energy_carrier=loadtypes.LoadTypes.WATER
         ).specific_heat_capacity_in_joule_per_kg_per_kelvin * self.config.delta_temperature_n_k
@@ -340,12 +358,15 @@ class SolarThermalSystem(Component):
 
         if thermal_power_output_w > 0:
             # Given the right mass flow, assume that target temperature rise is achieved
+            # Factor of 2 because delta_temperature_n_k is difference between inlet and mean temperature
             water_temperature_output_deg_c = 2*self.config.delta_temperature_n_k + stsv.get_input_value(
                 self.water_temperature_input_channel
             )
         else:
-            # Heat losses occur, simplified assumption: collector temperature drops to ambient temperature
-            water_temperature_output_deg_c = ambient_air_temperature_deg_c
+            # Simplified assumption, neglecting heat losses: collector temperature equals input temperature
+            water_temperature_output_deg_c = stsv.get_input_value(
+                self.water_temperature_input_channel
+            )
 
         if control_signal == 0:
             # If the controller signals 'off', the solar pump does not pump the solar fluid from
@@ -353,6 +374,10 @@ class SolarThermalSystem(Component):
             mass_flow_output_kg_s = 0
             thermal_power_output_w = 0
             thermal_energy_output_wh = 0
+        else:
+            mass_flow_output_kg_s = required_mass_flow_output_kg_s
+            # Calculate electricity consumption of solar pump
+            electric_power_demand_solar_pump_w = 35 if self.config.old_solar_pump else 10
 
         stsv.set_output_value(self.thermal_power_w_output_channel, thermal_power_output_w)
         stsv.set_output_value(self.thermal_energy_wh_output_channel, thermal_energy_output_wh)
@@ -360,8 +385,8 @@ class SolarThermalSystem(Component):
             self.water_temperature_deg_c_output_channel, water_temperature_output_deg_c,
         )
         stsv.set_output_value(self.water_mass_flow_kg_s_output_channel, mass_flow_output_kg_s)
+        stsv.set_output_value(self.required_water_mass_flow_kg_s_output_channel, required_mass_flow_output_kg_s)
 
-# TODO Overheating protection?
 
 @dataclass
 class SolarThermalSystemState:
@@ -395,7 +420,7 @@ class SolarThermalSystemControllerConfig(ConfigBase):
     def get_solar_thermal_system_controller_config(
         cls, building_name: str = "BUI1", 
         name="SolarThermalSystemController", 
-        set_temperature_difference_for_on=6
+        set_temperature_difference_for_on=10
     ) -> Any:
         """Gets a default SolarThermalSystemController for DHW."""
         return SolarThermalSystemControllerConfig(
@@ -420,6 +445,7 @@ class SolarThermalSystemController(Component):
     # Inputs
     MeanWaterTemperatureInStorage = "MeanWaterTemperatureInStorage"
     CollectorTemperature = "CollectorTemperature"
+    MassFlow = "MassFlow"
 
     # Outputs
     ControlSignalToSolarThermalSystem = "ControlSignalToSolarThermalSystem"
@@ -443,8 +469,7 @@ class SolarThermalSystemController(Component):
 
         # warm water should aim for 55°C, should be 60°C when leaving heat generator, see source below
         # https://www.umweltbundesamt.de/umwelttipps-fuer-den-alltag/heizen-bauen/warmwasser#undefined
-        # TODO can this be set in central place (generic_boiler controller also uses it)
-        self.warm_water_temperature_aim_in_celsius: float = 55.0 
+        self.warm_water_temperature_aim_in_celsius: float = 60.0 
 
         # Configure Input Channels
         self.mean_water_temperature_storage_input_channel: ComponentInput = self.add_input(
@@ -460,6 +485,14 @@ class SolarThermalSystemController(Component):
             self.CollectorTemperature,
             loadtypes.LoadTypes.TEMPERATURE,
             loadtypes.Units.CELSIUS,
+            True,
+        )
+
+        self.required_mass_flow_input_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.MassFlow,
+            loadtypes.LoadTypes.WATER,
+            loadtypes.Units.KG_PER_SEC,
             True,
         )
 
@@ -505,6 +538,13 @@ class SolarThermalSystemController(Component):
                 SolarThermalSystem.WaterTemperatureOutput,
             )
         )
+        connections.append(
+            ComponentConnection(
+                SolarThermalSystemController.MassFlow,
+                storage_classname,
+                SolarThermalSystem.RequiredWaterMassFlowOutput,
+            )
+        )
         return connections
 
     def i_save_state(self) -> None:
@@ -534,14 +574,17 @@ class SolarThermalSystemController(Component):
             collector_temperature_deg_c = stsv.get_input_value(
                 self.collector_temperature_input_channel
             )
+            required_mass_flow_kg_s = stsv.get_input_value(
+                self.required_mass_flow_input_channel
+            )
 
-            self.get_controller_state(timestep, mean_water_temperature_storage_deg_c, collector_temperature_deg_c)
+            self.get_controller_state(timestep, mean_water_temperature_storage_deg_c, collector_temperature_deg_c, required_mass_flow_kg_s)
             self.processed_state = self.state.clone()
 
         stsv.set_output_value(self.control_signal_to_solar_thermal_system_channel, self.state.on_off)
 
     def get_controller_state(
-        self, timestep: int, mean_water_temperature_storage_deg_c: float, collector_temperature_deg_c: float
+        self, timestep: int, mean_water_temperature_storage_deg_c: float, collector_temperature_deg_c: float, mass_flow_kg_s: float
     ) -> None:
         """Calculate the solar pump state and activate / deactives."""
         if (
@@ -554,6 +597,10 @@ class SolarThermalSystemController(Component):
         if mean_water_temperature_storage_deg_c > self.warm_water_temperature_aim_in_celsius:
             # deactivate heating when storage temperature is too high
             # this overrides the activation based on temperature difference
+            self.state.deactivate(timestep)
+
+        if mass_flow_kg_s < 0.01:
+            # deactivate when mass flow is too low
             self.state.deactivate(timestep)
         
 class SolarThermalSystemControllerState:

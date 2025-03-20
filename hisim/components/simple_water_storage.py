@@ -320,16 +320,20 @@ class SimpleWaterStorage(cp.Component):
         mass_of_input_water_flows_of_secondary_side_in_kg: float,
         water_mass_in_storage_in_kg: float,
         previous_mean_water_temperature_in_water_storage_in_celsius: float,
+        water_temperature_from_secondary_heat_generator_in_celsius: float = 0,
+        mass_of_input_water_flows_from_secondary_heat_generator_in_kg: float = 0,
     ) -> float:
         """Calculate the mean temperature of the water in the water boiler."""
 
         mean_water_temperature_in_water_storage_in_celsius = (
             water_mass_in_storage_in_kg * previous_mean_water_temperature_in_water_storage_in_celsius
             + mass_of_input_water_flows_from_heat_generator_in_kg * water_temperature_from_heat_generator_in_celsius
+            + mass_of_input_water_flows_from_secondary_heat_generator_in_kg * water_temperature_from_secondary_heat_generator_in_celsius
             + mass_of_input_water_flows_of_secondary_side_in_kg * water_temperature_input_of_secondary_side_in_celsius
         ) / (
             water_mass_in_storage_in_kg
             + mass_of_input_water_flows_from_heat_generator_in_kg
+            + mass_of_input_water_flows_from_secondary_heat_generator_in_kg
             + mass_of_input_water_flows_of_secondary_side_in_kg
         )
 
@@ -1252,19 +1256,24 @@ class SimpleDHWStorage(SimpleWaterStorage):
     # A hot water storage can be used also with more than one heat generator. In this case you need to add a new input and output.
     WaterTemperatureFromHeatGenerator = "WaterTemperatureFromHeatGenerator"
     WaterMassFlowRateFromHeatGenerator = "WaterMassFlowRateFromHeatGenerator"
+    WaterTemperatureFromSecondaryHeatGenerator = "WaterTemperatureFromSecondaryHeatGenerator"
+    WaterMassFlowRateFromSecondaryHeatGenerator = "WaterMassFlowRateFromSecondaryHeatGenerator"
     WaterConsumption = "WaterConsumption"
 
     # Output
     WaterTemperatureToHeatGenerator = "WaterTemperatureToHeatGenerator"
     WaterTemperatureFromHeatGeneratorOutput = "WaterTemperatureFromHeatGenerator"
+    WaterTemperatureFromSecondaryHeatGeneratorOutput = "WaterTemperatureFromSecondaryHeatGenerator"
     WaterMeanTemperatureInStorage = "WaterMeanTemperatureInStorage"
     StandbyTemperatureLoss = "StandbyTemperatureLoss"
     ThermalEnergyInStorage = "ThermalEnergyInStorage"
     ThermalEnergyFromHeatGenerator = "ThermalEnergyFromHeatGenerator"
+    ThermalEnergyFromSecondaryHeatGenerator = "ThermalEnergyFromSecondaryHeatGenerator"
     ThermalEnergyConsumptionDHW = "ThermalEnergyConsumptionDHW"
     ThermalEnergyIncreaseInStorage = "ThermalEnergyIncreaseInStorage"
     ThermalPowerConsumptionDHW = "ThermalPowerConsumptionDHW"
     ThermalPowerFromHeatGenerator = "ThermalPowerFromHeatGenerator"
+    ThermalPowerFromSecondaryHeatGenerator = "ThermalPowerFromSecondaryHeatGenerator"
     StandbyHeatLoss = "StandbyHeatLoss"
     WaterMassFlowRateOfDHW = "WaterMassFlowRateOfDHW"
 
@@ -1290,7 +1299,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
         self.seconds_per_timestep = my_simulation_parameters.seconds_per_timestep
         self.waterstorageconfig = config
 
-        self.mean_water_temperature_in_water_storage_in_celsius: float = 55
+        self.mean_water_temperature_in_water_storage_in_celsius: float = 60
 
         self.build()
 
@@ -1326,6 +1335,21 @@ class SimpleDHWStorage(SimpleWaterStorage):
             True,
         )
 
+        self.water_temperature_secondary_heat_generator_input_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.WaterTemperatureFromSecondaryHeatGenerator,
+            lt.LoadTypes.TEMPERATURE,
+            lt.Units.CELSIUS,
+            False,
+        )
+        self.water_mass_flow_rate_secondary_heat_generator_input_channel: ComponentInput = self.add_input(
+            self.component_name,
+            self.WaterMassFlowRateFromSecondaryHeatGenerator,
+            lt.LoadTypes.WARM_WATER,
+            lt.Units.KG_PER_SEC,
+            False,
+        )
+
         # Output channels
 
         self.water_temperature_to_heat_generator_channel: ComponentOutput = self.add_output(
@@ -1342,6 +1366,14 @@ class SimpleDHWStorage(SimpleWaterStorage):
             lt.LoadTypes.WATER,
             lt.Units.CELSIUS,
             output_description=f"here a description for {self.WaterTemperatureFromHeatGeneratorOutput} will follow.",
+        )
+
+        self.water_temperature_from_secondary_heat_generator_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.WaterTemperatureFromSecondaryHeatGeneratorOutput,
+            lt.LoadTypes.WATER,
+            lt.Units.CELSIUS,
+            output_description="Water temperature [°C] from secondary DHW heat generator",
         )
 
         self.water_temperature_mean_channel: ComponentOutput = self.add_output(
@@ -1370,6 +1402,14 @@ class SimpleDHWStorage(SimpleWaterStorage):
         self.thermal_energy_from_heat_generator_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.ThermalEnergyFromHeatGenerator,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT_HOUR,
+            output_description=f"here a description for {self.ThermalEnergyFromHeatGenerator} will follow.",
+            postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
+        )
+        self.thermal_energy_from_secondary_heat_generator_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.ThermalEnergyFromSecondaryHeatGenerator,
             lt.LoadTypes.HEATING,
             lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.ThermalEnergyFromHeatGenerator} will follow.",
@@ -1411,6 +1451,13 @@ class SimpleDHWStorage(SimpleWaterStorage):
         self.thermal_power_from_heat_generator_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.ThermalPowerFromHeatGenerator,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=f"here a description for {self.ThermalPowerFromHeatGenerator} will follow.",
+        )
+        self.thermal_power_from_secondary_heat_generator_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.ThermalPowerFromSecondaryHeatGenerator,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for {self.ThermalPowerFromHeatGenerator} will follow.",
@@ -1634,6 +1681,14 @@ class SimpleDHWStorage(SimpleWaterStorage):
         water_mass_flow_rate_from_heat_generator_in_kg_per_second = stsv.get_input_value(
             self.water_mass_flow_rate_heat_generator_input_channel
         )
+        
+        # Optional secondary heat generator
+        water_temperature_from_secondary_heat_generator_in_celsius = stsv.get_input_value(
+            self.water_temperature_secondary_heat_generator_input_channel
+        )
+        water_mass_flow_rate_from_secondary_heat_generator_in_kg_per_second = stsv.get_input_value(
+            self.water_mass_flow_rate_secondary_heat_generator_input_channel
+        )
 
         # Water Temperature Limit Check  --------------------------------------------------------------------------------------------------------
 
@@ -1653,6 +1708,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
 
         # calc water masses
         # ------------------------------
+
         (
             water_mass_from_heat_generator_in_kg,
             water_mass_of_dhw_in_kg,
@@ -1661,6 +1717,17 @@ class SimpleDHWStorage(SimpleWaterStorage):
             water_mass_flow_rate_of_secondary_side_in_kg_per_second=water_mass_flow_rate_of_dhw_in_kg_per_second,
             seconds_per_timestep=self.seconds_per_timestep,
         )
+
+        # Secondary
+        (
+            water_mass_from_secondary_heat_generator_in_kg,
+            _,
+        ) = self.calculate_masses_of_water_flows(
+            water_mass_flow_rate_from_heat_generator_in_kg_per_second=water_mass_flow_rate_from_secondary_heat_generator_in_kg_per_second,
+            water_mass_flow_rate_of_secondary_side_in_kg_per_second=water_mass_flow_rate_of_dhw_in_kg_per_second,
+            seconds_per_timestep=self.seconds_per_timestep,
+        )
+
 
         # calc thermal energies
         # ------------------------------
@@ -1684,6 +1751,14 @@ class SimpleDHWStorage(SimpleWaterStorage):
             water_temperature_difference_in_kelvin=water_temperature_from_heat_generator_in_celsius
             - self.mean_water_temperature_in_water_storage_in_celsius,
         )
+
+        # Secondary heat generator
+        thermal_energy_input_from_secondary_heat_generator_in_watt_hour = self.calculate_thermal_energy_of_water_flow(
+            water_mass_in_kg=water_mass_from_secondary_heat_generator_in_kg,
+            water_temperature_difference_in_kelvin=water_temperature_from_secondary_heat_generator_in_celsius
+            - self.mean_water_temperature_in_water_storage_in_celsius,
+        )
+
         thermal_energy_consumption_of_dhw_in_watt_hour = self.calculate_thermal_energy_of_water_flow(
             water_mass_in_kg=water_mass_of_dhw_in_kg,
             water_temperature_difference_in_kelvin=water_temperature_output_of_dhw_in_celsius
@@ -1717,9 +1792,11 @@ class SimpleDHWStorage(SimpleWaterStorage):
         # mean temperature in storage when all water flows are mixed with previous mean water storage temp
         self.mean_water_temperature_in_water_storage_in_celsius = self.calculate_mean_water_temperature_in_water_storage(
             water_temperature_input_of_secondary_side_in_celsius=water_temperature_input_of_dhw_in_celsius,
-            water_temperature_from_heat_generator_in_celsius=water_temperature_from_heat_generator_in_celsius,
             water_mass_in_storage_in_kg=self.water_mass_in_storage_in_kg,
+            water_temperature_from_heat_generator_in_celsius=water_temperature_from_heat_generator_in_celsius,
             mass_of_input_water_flows_from_heat_generator_in_kg=water_mass_from_heat_generator_in_kg,
+            water_temperature_from_secondary_heat_generator_in_celsius=water_temperature_from_secondary_heat_generator_in_celsius,
+            mass_of_input_water_flows_from_secondary_heat_generator_in_kg=water_mass_from_secondary_heat_generator_in_kg,
             mass_of_input_water_flows_of_secondary_side_in_kg=water_mass_of_dhw_in_kg,
             previous_mean_water_temperature_in_water_storage_in_celsius=self.state.mean_water_temperature_in_celsius,
         )
@@ -1757,6 +1834,11 @@ class SimpleDHWStorage(SimpleWaterStorage):
         )
 
         stsv.set_output_value(
+            self.thermal_energy_from_secondary_heat_generator_channel,
+            thermal_energy_input_from_secondary_heat_generator_in_watt_hour,
+        )
+
+        stsv.set_output_value(
             self.thermal_energy_dhw_channel,
             thermal_energy_consumption_of_dhw_in_watt_hour,
         )
@@ -1780,6 +1862,12 @@ class SimpleDHWStorage(SimpleWaterStorage):
             self.thermal_power_from_heat_generator_channel,
             thermal_power_from_heat_generator_in_watt,
         )
+        
+        stsv.set_output_value(
+            self.thermal_power_from_secondary_heat_generator_channel,
+            thermal_power_from_heat_generator_in_watt,
+        )
+
         stsv.set_output_value(
             self.water_mass_flow_rate_dhw_output_channel,
             water_mass_flow_rate_of_dhw_in_kg_per_second,

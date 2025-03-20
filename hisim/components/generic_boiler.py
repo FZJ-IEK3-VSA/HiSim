@@ -20,7 +20,7 @@ import pandas as pd
 from dataclasses_json import dataclass_json
 
 from hisim import loadtypes as lt
-from hisim.components.configuration import PhysicsConfig
+from hisim.components.configuration import HouseholdWarmWaterDemandConfig, PhysicsConfig
 from hisim.component import (
     Component,
     ComponentConnection,
@@ -1313,10 +1313,11 @@ class GenericBoilerControllerConfigForDHW(ConfigBase):
     set_temperature_difference_for_full_power: float
     minimum_runtime_in_seconds: float
     minimum_resting_time_in_seconds: float
+    secondary_mode: bool # If used as secondary heat generator in hybrid mode
 
     @classmethod
     def get_default_modulating_dhw_boiler_controller_config(
-        cls, maximal_thermal_power_in_watt: float, minimal_thermal_power_in_watt: float, building_name: str = "BUI1",
+        cls, maximal_thermal_power_in_watt: float, minimal_thermal_power_in_watt: float, building_name: str = "BUI1", secondary_mode=False,
     ) -> Any:
         """Gets a default Generic Boiler Controller For DHW."""
         return GenericBoilerControllerConfigForDHW(
@@ -1330,6 +1331,7 @@ class GenericBoilerControllerConfigForDHW(ConfigBase):
             set_temperature_difference_for_full_power=5.0,
             minimum_runtime_in_seconds=1800,
             minimum_resting_time_in_seconds=1800,
+            secondary_mode=secondary_mode,
         )
 
     @classmethod
@@ -1348,6 +1350,7 @@ class GenericBoilerControllerConfigForDHW(ConfigBase):
             set_temperature_difference_for_full_power=5.0,
             minimum_runtime_in_seconds=1800,
             minimum_resting_time_in_seconds=1800,
+            secondary_mode=False,
         )
 
 
@@ -1461,8 +1464,11 @@ class GenericBoilerControllerForDHW(GenericBoilerController):
             )
             return
 
+        target_temperature = self.warm_water_temperature_aim_in_celsius if not self.config.secondary_mode else HouseholdWarmWaterDemandConfig.ww_temperature_demand
+        # if operated in secondary mode, activate only when required warm water temperature is not reached
+        
         if (
-            water_temperature_input_in_celsius < self.warm_water_temperature_aim_in_celsius
+            water_temperature_input_in_celsius < target_temperature
         ):
             # activate heating when storage temperature is too low
             self.state.activate(timestep)
@@ -1473,6 +1479,7 @@ class GenericBoilerControllerForDHW(GenericBoilerController):
             return
         if water_temperature_input_in_celsius > self.warm_water_temperature_aim_in_celsius:
             # deactivate heating when storage temperature is too high
+            # even in secondary mode make sure to heat to full warm water temperature aim for hygiene reasons
             self.state.deactivate(timestep)
             self.state.percentage = self.modulate_power(
                 water_temperature_input_in_celsius=water_temperature_input_in_celsius,

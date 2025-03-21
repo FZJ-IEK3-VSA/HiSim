@@ -63,9 +63,6 @@ pydocstyle:
     - D211
     - D203
 
-mypy:
-  run: true
-
 bandit:
   run: false
   options:

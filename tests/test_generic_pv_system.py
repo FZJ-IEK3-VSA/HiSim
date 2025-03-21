@@ -20,7 +20,7 @@ def test_photovoltaic_sandia():
 
     repo = sim_repository.SimRepository()
 
-    mysim: sim.SimulationParameters = sim.SimulationParameters.full_year(
+    mysim = sim.SimulationParameters.full_year(
         year=2021, seconds_per_timestep=seconds_per_timestep
     )
 

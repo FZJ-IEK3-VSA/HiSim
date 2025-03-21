@@ -296,7 +296,7 @@ class PVSystem(cp.Component):
     ElectricityOutput = "ElectricityOutput"
     # Additional output channels must not contain 'ElectricityOutput' or
     # dynamic components will fail.
-    ElectricitityEnergyOutput = "ElectricitityEnergyOutput"
+    ElectricityEnergyOutput = "ElectricityEnergyOutput"
 
     # Similar components to connect to:
     # 1. Weather
@@ -417,22 +417,52 @@ class PVSystem(cp.Component):
             output_description="Electricity output of the PV system.",
         )
 
-        self.electricity_energy_output_channel: cp.ComponentOutput = (
-            self.add_output(
-                object_name=self.component_name,
-                field_name=self.ElectricitityEnergyOutput,
-                load_type=lt.LoadTypes.ELECTRICITY,
-                unit=lt.Units.WATT_HOUR,
-                postprocessing_flag=[
-                    lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
-                ],
-                output_description="Energy output of the PV system.",
-            )
+        self.electricity_energy_output_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ElectricityEnergyOutput,
+            load_type=lt.LoadTypes.ELECTRICITY,
+            unit=lt.Units.WATT_HOUR,
+            postprocessing_flag=[
+                lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL,
+            ],
+            output_description=f"Here a description for PV {self.ElectricityEnergyOutput} will follow.",
         )
 
-        self.add_default_connections(
-            self.get_default_connections_from_weather()
+        self.add_default_connections(self.get_default_connections_from_weather())
+
+    @staticmethod
+    def get_default_config(
+        power_in_watt: float = 10e3,
+        source_weight: int = 1,
+        share_of_maximum_pv_potential: float = 1.0,
+        building_name: str = "BUI1",
+    ) -> Any:
+        """Get default config."""
+        config = PVSystemConfig(
+            building_name=building_name,
+            name="PVSystem",
+            time=2019,
+            location="Aachen",
+            module_name="Hanwha HSL60P6-PA-4-250T [2013]",
+            integrate_inverter=True,
+            inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
+            module_database=PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
+            inverter_database=PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,
+            power_in_watt=power_in_watt,
+            azimuth=180,
+            tilt=30,
+            share_of_maximum_pv_potential=share_of_maximum_pv_potential,
+            load_module_data=False,
+            source_weight=source_weight,
+            co2_footprint=power_in_watt * 1e-3 * 130.7,  # value from emission_factros_and_costs_devices.csv
+            cost=power_in_watt * 1e-3 * 535.81,  # value from emission_factros_and_costs_devices.csv
+            maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
+            lifetime=25,  # value from emission_factros_and_costs_devices.csv
+            prediction_horizon=None,
+            predictive=False,
+            predictive_control=False,
         )
+        return config
 
     @staticmethod
     def get_cost_capex(

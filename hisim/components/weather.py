@@ -15,7 +15,15 @@ import pvlib
 
 from hisim import loadtypes as lt
 from hisim import log, utils
-from hisim.component import Component, ComponentOutput, ConfigBase, SingleTimeStepValues, DisplayConfig, OpexCostDataClass, CapexCostDataClass
+from hisim.component import (
+    Component,
+    ComponentOutput,
+    ConfigBase,
+    SingleTimeStepValues,
+    DisplayConfig,
+    OpexCostDataClass,
+    CapexCostDataClass,
+)
 from hisim.simulationparameters import SimulationParameters
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry
@@ -46,7 +54,8 @@ class WeatherDataSourceEnum(Enum):
     NSRDB = 2
     NSRDB_15MIN = 3
     DWD_10MIN = 4
-    ERA5 = 5
+    DWD_15MIN = 5
+    ERA5 = 6
 
 
 class LocationEnum(Enum):
@@ -386,12 +395,7 @@ class WeatherConfig(ConfigBase):
         return Weather.get_full_classname()
 
     @classmethod
-    def get_default(
-        cls,
-        location_entry: Any,
-        name: str = "Weather",
-        building_name: str = "BUI1",
-    ) -> Any:
+    def get_default(cls, location_entry: Any, name: str = "Weather", building_name: str = "BUI1",) -> Any:
         """Gets the default configuration for Aachen."""
         if not isinstance(location_entry, LocationEnum):
             if location_entry in LocationEnum._member_names_:  # pylint: disable=W0212
@@ -634,14 +638,16 @@ class Weather(Component):
         seconds_per_timestep = self.my_simulation_parameters.seconds_per_timestep
         log.information("Weather config: " + self.weather_config.to_json())  # type: ignore
         location_dict = get_coordinates(
-            filepath=self.weather_config.source_path,
-            source_enum=self.weather_config.data_source,
+            filepath=self.weather_config.source_path, source_enum=self.weather_config.data_source,
         )
         self.simulation_repository.set_entry("weather_location", location_dict)
         cachefound, cache_filepath = utils.get_cache_file("Weather", self.weather_config, self.my_simulation_parameters)
         if cachefound:
             # read cached files
             my_weather = pd.read_csv(cache_filepath, sep=",", decimal=".", encoding="cp1252")
+            control_weather_data_timestep_length(
+                weather_data=my_weather, simulation_parameters=self.my_simulation_parameters
+            )
             self.temperature_list = my_weather["t_out"].tolist()
             self.daily_average_outside_temperature_list_in_celsius = my_weather["t_out_daily_average"].tolist()
             self.dry_bulb_list = self.temperature_list
@@ -660,8 +666,7 @@ class Weather(Component):
                 self.pressure_list = [0] * len(self.wind_speed_list)
         else:
             tmy_data = read_test_reference_year_data(
-                weatherconfig=self.weather_config,
-                year=self.my_simulation_parameters.year,
+                weatherconfig=self.weather_config, simulationparameters=self.my_simulation_parameters,
             )
             if self.weather_config.data_source == WeatherDataSourceEnum.NSRDB_15MIN:
                 dni = tmy_data["DNI"].resample("1T").asfreq().interpolate(method="linear")
@@ -670,7 +675,7 @@ class Weather(Component):
                 ghi = tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")
                 wind_speed = tmy_data["Wspd"].resample("1T").asfreq().interpolate(method="linear")
                 pressure = tmy_data["Pressure"].resample("1T").asfreq().interpolate(method="linear")
-            elif self.weather_config.data_source == WeatherDataSourceEnum.DWD_10MIN:
+            elif self.weather_config.data_source in (WeatherDataSourceEnum.DWD_10MIN, WeatherDataSourceEnum.DWD_15MIN):
                 dni = tmy_data["DNI"].resample("1T").asfreq().interpolate(method="linear")
                 temperature = tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")
                 dhi = tmy_data["DHI"].resample("1T").asfreq().interpolate(method="linear")
@@ -703,8 +708,7 @@ class Weather(Component):
                 self.temperature_list = temperature.resample(str(seconds_per_timestep) + "S").mean().tolist()
                 self.dry_bulb_list = temperature.resample(str(seconds_per_timestep) + "S").mean().to_list()
                 self.calculate_daily_average_outside_temperature(
-                    temperaturelist=self.temperature_list,
-                    seconds_per_timestep=seconds_per_timestep,
+                    temperaturelist=self.temperature_list, seconds_per_timestep=seconds_per_timestep,
                 )
 
                 self.dhi_list = dhi.resample(str(seconds_per_timestep) + "S").mean().tolist()
@@ -721,8 +725,7 @@ class Weather(Component):
                 self.temperature_list = temperature.tolist()
                 self.dry_bulb_list = temperature.to_list()
                 self.calculate_daily_average_outside_temperature(
-                    temperaturelist=self.temperature_list,
-                    seconds_per_timestep=seconds_per_timestep,
+                    temperaturelist=self.temperature_list, seconds_per_timestep=seconds_per_timestep,
                 )
                 self.dhi_list = dhi.tolist()
                 self.dni_list = dni.tolist()
@@ -771,44 +774,34 @@ class Weather(Component):
         # write one year forecast to simulation repository for PV processing -> if PV forecasts are needed
         if self.weather_config.predictive_control:
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST,
-                entry=self.temperature_list,
+                key=SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST, entry=self.temperature_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERDIFFUSEHORIZONTALIRRADIANCEYEARLYFORECAST,
-                entry=self.dhi_list,
+                key=SingletonDictKeyEnum.WEATHERDIFFUSEHORIZONTALIRRADIANCEYEARLYFORECAST, entry=self.dhi_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEYEARLYFORECAST,
-                entry=self.dni_list,
+                key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEYEARLYFORECAST, entry=self.dni_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST,
-                entry=self.dniextra_list,
+                key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST, entry=self.dniextra_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERGLOBALHORIZONTALIRRADIANCEYEARLYFORECAST,
-                entry=self.ghi_list,
+                key=SingletonDictKeyEnum.WEATHERGLOBALHORIZONTALIRRADIANCEYEARLYFORECAST, entry=self.ghi_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERAZIMUTHYEARLYFORECAST,
-                entry=self.azimuth_list,
+                key=SingletonDictKeyEnum.WEATHERAZIMUTHYEARLYFORECAST, entry=self.azimuth_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERAPPARENTZENITHYEARLYFORECAST,
-                entry=self.apparent_zenith_list,
+                key=SingletonDictKeyEnum.WEATHERAPPARENTZENITHYEARLYFORECAST, entry=self.apparent_zenith_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST,
-                entry=self.wind_speed_list,
+                key=SingletonDictKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST, entry=self.wind_speed_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERPRESSUREYEARLYFORECAST,
-                entry=self.pressure_list,
+                key=SingletonDictKeyEnum.WEATHERPRESSUREYEARLYFORECAST, entry=self.pressure_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERALTITUDEYEARLYFORECAST,
-                entry=self.altitude_list,
+                key=SingletonDictKeyEnum.WEATHERALTITUDEYEARLYFORECAST, entry=self.altitude_list,
             )
 
     def interpolate(self, pd_database: Any, year: int) -> Any:
@@ -905,26 +898,20 @@ class Weather(Component):
             self.daily_average_outside_temperature_list_in_celsius.append(daily_average_temperature)
         return self.daily_average_outside_temperature_list_in_celsius
 
-    def get_cost_opex(
-        self,
-        all_outputs: List,
-        postprocessing_results: pd.DataFrame,
-    ) -> OpexCostDataClass:
+    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
         opex_cost_data_class = OpexCostDataClass.get_default_opex_cost_data_class()
         return opex_cost_data_class
 
     @staticmethod
-    def get_cost_capex(config: WeatherConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:  # pylint: disable=unused-argument
+    def get_cost_capex(
+        config: WeatherConfig, simulation_parameters: SimulationParameters
+    ) -> CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
         capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
         return capex_cost_data_class
 
-    def get_component_kpi_entries(
-        self,
-        all_outputs: List,
-        postprocessing_results: pd.DataFrame,
-    ) -> List[KpiEntry]:
+    def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         return []
 
@@ -948,7 +935,7 @@ def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Any:
                 elif i > 1:
                     break
 
-    elif source_enum == WeatherDataSourceEnum.DWD_10MIN:
+    elif source_enum == WeatherDataSourceEnum.DWD_10MIN or WeatherDataSourceEnum.DWD_15MIN:
         with open(filepath, encoding="utf-8") as csvfile:
             spamreader = csv.reader(csvfile)
             for i, row in enumerate(spamreader):
@@ -981,7 +968,27 @@ def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Any:
     # self.index = pd.date_range(f"{year}-01-01 00:00:00", periods=60 * 24 * 365, freq="T", tz="Europe/Berlin")
 
 
-def read_test_reference_year_data(weatherconfig: WeatherConfig, year: int) -> Any:
+def control_weather_data_timestep_length(simulation_parameters: SimulationParameters, weather_data: pd.DataFrame):
+    """Control weather data length by comparing to number of simulation timesteps."""
+    if len(weather_data) != simulation_parameters.timesteps:
+        # Generate a complete DatetimeIndex from simulation parameters
+        frequency_weather_data = weather_data.index.freq
+        timezone_weather_data = weather_data.index.tz
+        complete_index = pd.date_range(
+            start=simulation_parameters.start_date, end=simulation_parameters.end_date, freq=frequency_weather_data
+        )
+        complete_index = complete_index.tz_localize(timezone_weather_data)
+        # Find missign timestamps
+        missing_timestamps = complete_index.difference(weather_data.index)
+        raise ValueError(
+            f"Weather data and simulation timesteps do not have the same length for year {simulation_parameters.year}. "
+            f"Weather data length is {len(weather_data)}, number of simulation timesteps is {simulation_parameters.timesteps}. "
+            "\n "
+            f"Missing timestamps in weather data are: {missing_timestamps, len(missing_timestamps)}."
+        )
+
+
+def read_test_reference_year_data(weatherconfig: WeatherConfig, simulationparameters: SimulationParameters) -> Any:
     """Reads a test reference year file and gets the GHI, DHI and DNI from it.
 
     Based on the tsib project @[tsib-kotzur] (Check header)
@@ -989,20 +996,23 @@ def read_test_reference_year_data(weatherconfig: WeatherConfig, year: int) -> An
     # get the correct file path
     filepath = os.path.join(weatherconfig.source_path)
     if weatherconfig.data_source == WeatherDataSourceEnum.NSRDB:
-        data = read_nsrdb_data(filepath, year)
+        data = read_nsrdb_data(filepath, simulationparameters)
     elif weatherconfig.data_source == WeatherDataSourceEnum.DWD_TRY:
-        data = read_dwd_try_data(filepath, year)
+        data = read_dwd_try_data(filepath, simulationparameters)
     elif weatherconfig.data_source == WeatherDataSourceEnum.NSRDB_15MIN:
-        data = read_nsrdb_15min_data(filepath, year)
+        data = read_nsrdb_15min_data(filepath, simulationparameters)
     elif weatherconfig.data_source == WeatherDataSourceEnum.DWD_10MIN:
-        data = read_dwd_10min_data(filepath, year)
+        data = read_dwd_10min_data(filepath, simulationparameters)
+    elif weatherconfig.data_source == WeatherDataSourceEnum.DWD_15MIN:
+        data = read_dwd_15min_data(filepath, simulationparameters)
     elif weatherconfig.data_source == WeatherDataSourceEnum.ERA5:
-        data = read_era5_data(filepath, year)
+        data = read_era5_data(filepath, simulationparameters)
 
+    control_weather_data_timestep_length(weather_data=data, simulation_parameters=simulationparameters)
     return data
 
 
-def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:
+def read_dwd_try_data(filepath: str, simulation_parameters: SimulationParameters) -> pd.DataFrame:
     """Reads the DWD Test Reference Year (TRY) data."""
     # get the geoposition
     with open(filepath + ".dat", encoding="utf-8") as file_stream:
@@ -1017,7 +1027,12 @@ def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:
     else:
         # get data
         data = pd.read_csv(filepath + ".dat", sep=r"\s+", skiprows=list(range(0, 31)))
-        data.index = pd.date_range(f"{year}-01-01 00:30:00", periods=8760, freq="H", tz="Europe/Berlin")
+        data.index = pd.date_range(
+            f"{simulation_parameters.year}-01-01 00:30:00",
+            periods=24 * int(simulation_parameters.duration.days),
+            freq="H",
+            tz="Europe/Berlin",
+        )
         data["GHI"] = data["D"] + data["B"]
         data = data.rename(
             columns={
@@ -1037,12 +1052,17 @@ def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:
     return data
 
 
-def read_nsrdb_data(filepath: str, year: int) -> pd.DataFrame:
+def read_nsrdb_data(filepath: str, simulation_parameters: SimulationParameters) -> pd.DataFrame:
     """Reads a set of NSRDB data."""
     # get data
     data = pd.read_csv(filepath + ".dat", sep=",", skiprows=list(range(0, 11)))
     data = data.drop(data.index[8761:8772])
-    data.index = pd.date_range(f"{year}-01-01 00:30:00", periods=8760, freq="H", tz="Europe/Berlin")
+    data.index = pd.date_range(
+        f"{simulation_parameters.year}-01-01 00:30:00",
+        periods=24 * int(simulation_parameters.duration.days),
+        freq="H",
+        tz="Europe/Berlin",
+    )
     data = data.rename(
         columns={
             "DHI": "DHI",
@@ -1060,21 +1080,21 @@ def read_nsrdb_data(filepath: str, year: int) -> pd.DataFrame:
     return data
 
 
-def read_nsrdb_15min_data(filepath: str, year: int) -> pd.DataFrame:
+def read_nsrdb_15min_data(filepath: str, simulation_parameters: SimulationParameters) -> pd.DataFrame:
     """Reads a set of NSRDB data in 15 min resolution."""
     data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
     # get data
-    data.index = pd.date_range(f"{year}-01-01 00:00:00", periods=24 * 4 * 365, freq="900S", tz="UTC")
-    data = data.rename(
-        columns={
-            "Temperature": "T",
-            "Wind Speed": "Wspd",
-        }
+    data.index = pd.date_range(
+        f"{simulation_parameters.year}-01-01 00:00:00",
+        periods=24 * 4 * int(simulation_parameters.duration.days),
+        freq="900S",
+        tz="UTC",
     )
+    data = data.rename(columns={"Temperature": "T", "Wind Speed": "Wspd",})
     return data
 
 
-def read_dwd_10min_data(filepath: str, year: int) -> pd.DataFrame:
+def read_dwd_10min_data(filepath: str, simulation_parameters: SimulationParameters) -> pd.DataFrame:
     """Reads a set of DWD data in 10 min resolution.
 
     https://github.com/earthobservations/wetterdienst/tree/main
@@ -1082,18 +1102,19 @@ def read_dwd_10min_data(filepath: str, year: int) -> pd.DataFrame:
 
     # get location
     location = pd.read_csv(  # type: ignore
-        filepath,
-        nrows=1,
-        skiprows=1,
-        header=None,
-        names=pd.read_csv(filepath, nrows=1).columns,
+        filepath, nrows=1, skiprows=1, header=None, names=pd.read_csv(filepath, nrows=1).columns,
     )
     longitude = location["longitude"][0]
     latitude = location["latitude"][0]
 
     # get data
     data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
-    data.index = pd.date_range(f"{year}-01-01 00:00:00", periods=24 * 6 * 365, freq="600S", tz="UTC")
+    data.index = pd.date_range(
+        f"{simulation_parameters.year}-01-01 00:00:00",
+        periods=24 * 6 * int(simulation_parameters.duration.days),
+        freq="600S",
+        tz="UTC",
+    )
     data = data.rename(
         columns={
             "diffuse_irradiance": "DHI",
@@ -1115,7 +1136,51 @@ def read_dwd_10min_data(filepath: str, year: int) -> pd.DataFrame:
     return data
 
 
-def read_era5_data(filepath: str, year: int) -> pd.DataFrame:
+def read_dwd_15min_data(filepath: str, simulation_parameters: SimulationParameters) -> pd.DataFrame:
+    """Reads a set of DWD data in 15 min resolution.
+
+    https://github.com/earthobservations/wetterdienst/tree/main
+    """
+
+    # get location
+    location = pd.read_csv(  # type: ignore
+        filepath, nrows=1, skiprows=1, header=None, names=pd.read_csv(filepath, nrows=1).columns,
+    )
+    longitude = location["longitude"][0]
+    latitude = location["latitude"][0]
+
+    # get data
+    data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
+
+    data.index = pd.date_range(
+        f"{simulation_parameters.year}-01-01 00:00:00",
+        periods=24 * 4 * int(simulation_parameters.duration.days),
+        freq="900S",
+        tz="UTC",
+    )
+
+    data = data.rename(
+        columns={
+            "diffuse_irradiance": "DHI",
+            "temperature": "T",
+            "wind_speed": "Wspd",
+            "month": "Month",
+            "day": "Day",
+            "hour": "Hour",
+            "minute": "Minutes",
+            "pressure": "Pressure",
+            "wind_direction": "Wdir",
+            "global_irradiance": "GHI",
+        }
+    )
+    # calculate direct normal
+    data["direct_horizontal_irradiance"] = data["GHI"] - data["DHI"]
+    data["DNI"] = calculate_direct_normal_radiation(data["direct_horizontal_irradiance"], longitude, latitude)
+
+    return data
+
+
+def read_era5_data(filepath: str, simulation_parameters: SimulationParameters) -> pd.DataFrame:
     """Reads a set of era5 in 60 min resolution.
 
     https://cds.climate.copernicus.eu/cdsapp#!/dataset/reanalysis-era5-single-levels?tab=overview
@@ -1123,18 +1188,14 @@ def read_era5_data(filepath: str, year: int) -> pd.DataFrame:
 
     # get location
     location = pd.read_csv(  # type: ignore
-        filepath,
-        nrows=1,
-        skiprows=1,
-        header=None,
-        names=pd.read_csv(filepath, nrows=1).columns,
+        filepath, nrows=1, skiprows=1, header=None, names=pd.read_csv(filepath, nrows=1).columns,
     )
     longitude = location["longitude"][0]
     latitude = location["latitude"][0]
 
     # get data
     data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
-    data.index = pd.date_range(f"{year}-01-01 00:00:00", periods=8760, freq="H", tz="UTC")
+    data.index = pd.date_range(f"{simulation_parameters.year}-01-01 00:00:00", periods=8760, freq="H", tz="UTC")
     data = data.rename(
         columns={
             "month": "Month",
@@ -1156,10 +1217,7 @@ def read_era5_data(filepath: str, year: int) -> pd.DataFrame:
 
 
 def calculate_direct_normal_radiation(
-    direct_horizontal_irradation: pd.Series,
-    lon: float,
-    lat: float,
-    zenith_tol: float = 87.0,
+    direct_horizontal_irradation: pd.Series, lon: float, lat: float, zenith_tol: float = 87.0,
 ) -> pd.Series:
     """Calculates the direct NORMAL irradiance from the direct horizontal irradiance with the help of the PV lib.
 

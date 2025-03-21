@@ -49,6 +49,7 @@ class KpiTagEnumClass(Enum):
     HYDROGEN_SPACE_HEATING = "Hydrogen Heating For Space Heating"
     HYDROGEN_HEATING_DOMESTIC_HOT_WATER = "Hydrogen Heating For Domestic Hot Water"
     GENERIC_HEAT_SOURCE = "Generic Heat Source"  # used in simple_heat_source.py
+    GROUND_PROBE = "Ground Probe"
 
 
 @dataclass

@@ -15,7 +15,7 @@ bslib==0.6
 psutil
 pydot
 graphviz
-dataclass_wizard
+dataclass_wizard==0.34.0
 utspclient==0.1.6
 pyam-iamc
 html2image
@@ -29,3 +29,4 @@ windpowerlib  # ==0.2.1
 wetterdienst==0.63.0
 cdsapi
 xarray
+pygfunction

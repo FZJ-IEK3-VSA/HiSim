@@ -5,6 +5,7 @@ import json
 
 # clean
 import os
+import pickle
 import string
 import sys
 from timeit import default_timer as timer
@@ -134,6 +135,13 @@ class PostProcessor:
             end = timer()
             duration = end - start
             log.information("Making CSV export took " + f"{duration:1.2f}s.")
+        if PostProcessingOptions.EXPORT_TO_PKL in ppdt.post_processing_options:
+            log.information("Making pkl exports.")
+            start = timer()
+            self.make_pkl_export(ppdt)
+            end = timer()
+            duration = end - start
+            log.information("Making PKL export took " + f"{duration:1.2f}s.")
         if PostProcessingOptions.MAKE_NETWORK_CHARTS in ppdt.post_processing_options:
             log.information("Computing network charts.")
             start = timer()
@@ -293,6 +301,10 @@ class PostProcessor:
             log.information("Writing component configurations to JSON file.")
             self.write_component_configurations_to_json(ppdt)
 
+        if PostProcessingOptions.WRITE_CONFIGS_FOR_SCENARIO_EVALUATION_TO_JSON in ppdt.post_processing_options:
+            log.information("Writing component configurations for scenario evaluation to JSON file.")
+            self.write_config_data_for_scenario_evaluation(ppdt)
+
         if PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER in ppdt.post_processing_options:
             log.information("Writing KPIs to JSON file for building sizer.")
             self.write_kpis_to_json_for_building_sizer(ppdt, building_objects_in_district_list)
@@ -349,6 +361,11 @@ class PostProcessor:
         """Exports all data to CSV."""
         log.information("Exporting to csv.")
         self.export_results_to_csv(ppdt)
+
+    def make_pkl_export(self, ppdt: PostProcessingDataTransfer) -> None:
+        """Exports all data to Pickle."""
+        log.information("Exporting to pkl.")
+        self.export_results_to_pickle(ppdt)
 
     def make_monthly_bar_charts(
         self,
@@ -442,23 +459,69 @@ class PostProcessor:
     @utils.measure_execution_time
     def export_results_to_csv(self, ppdt: PostProcessingDataTransfer) -> None:
         """Exports the results to a CSV file."""
-
         for column in ppdt.results:
-            ppdt.results[column].to_csv(
-                os.path.join(
-                    ppdt.simulation_parameters.result_directory,
-                    f"{column.split(' ', 3)[0]}_{column.split(' ', 3)[2]}.csv",
-                ),
-                sep=",",
-                decimal=".",
+            csvfilename = os.path.join(
+                ppdt.simulation_parameters.result_directory,
+                f"{column.split(' ', 3)[0]}_{column.split(' ', 3)[2]}.csv",
             )
+            csvfilename = self.shorten_path(csvfilename)
+            ppdt.results[column].to_csv(csvfilename, sep=",", decimal=".")
+
         for column in ppdt.results_monthly:
             csvfilename = os.path.join(
                 ppdt.simulation_parameters.result_directory,
                 f"{column.split(' ', 3)[0]}_{column.split(' ', 3)[2]}_monthly.csv",
             )
             header = [f"{column.split('[', 1)[0]} - monthly [" f"{column.split('[', 1)[1]}"]
+            csvfilename = self.shorten_path(csvfilename)
             ppdt.results_monthly[column].to_csv(csvfilename, sep=",", decimal=".", header=header)
+
+    @utils.measure_execution_time
+    def export_results_to_pickle(self, ppdt: PostProcessingDataTransfer) -> None:
+        """Exports the results to a Pickle file."""
+
+        for column in ppdt.results:
+            pickle_filename = os.path.join(
+                ppdt.simulation_parameters.result_directory,
+                f"{column.split(' ', 3)[0]}_{column.split(' ', 3)[2]}.pkl",
+            )
+
+            pickle_filename = self.shorten_path(pickle_filename)
+
+            with open(pickle_filename, "wb") as f:
+                pickle.dump(ppdt.results[column], f)
+
+        for column in ppdt.results_monthly:
+            pickle_filename_monthly = os.path.join(
+                ppdt.simulation_parameters.result_directory,
+                f"{column.split(' ', 3)[0]}_{column.split(' ', 3)[2]}_monthly.pkl",
+            )
+
+            pickle_filename_monthly = self.shorten_path(pickle_filename_monthly)
+
+            with open(pickle_filename_monthly, "wb") as f:
+                pickle.dump(ppdt.results_monthly[column], f)
+
+    def shorten_path(self, path, max_length=250):
+        """Shorten path if its longer than 250."""
+        if len(path) <= max_length:
+            return path
+
+        dir_path, last_part = os.path.split(path)
+
+        remove_length = len(path) - max_length
+
+        remaining_length = len(last_part) - remove_length
+        part_length = remaining_length // 2
+
+        start = last_part[:part_length]
+        end = last_part[-part_length:]
+
+        shortened_last_part = f"{start}...{end}"
+
+        shortend_path = os.path.join(dir_path, shortened_last_part)
+
+        return shortend_path
 
     def write_simulation_parameters_to_report(
         self, ppdt: PostProcessingDataTransfer, report: reportgenerator.ReportGenerator
@@ -839,8 +902,37 @@ class PostProcessor:
             simulation_duration=ppdt.simulation_parameters.duration.days,
         )
 
-        # --------------------------------------------------------------------------------------------------------------------------------------------------------------
+        self.write_config_data_for_scenario_evaluation(ppdt)
+
+    def write_config_data_for_scenario_evaluation(self, ppdt: PostProcessingDataTransfer) -> None:
+        """Prepare the results for the scenario evaluation."""
         # create dictionary with all import data information
+        if PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION in ppdt.post_processing_options:
+            result_data_folder_for_scenario_evaluation = os.path.join(
+                ppdt.simulation_parameters.result_directory, "result_data_for_scenario_evaluation"
+            )
+            if os.path.exists(result_data_folder_for_scenario_evaluation) is False:
+                os.makedirs(result_data_folder_for_scenario_evaluation)
+        else:
+            result_data_folder_for_scenario_evaluation = ppdt.simulation_parameters.result_directory
+
+        self.model = "".join(["HiSim_", ppdt.module_filename])
+
+        # set pyam scenario name
+        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME):
+            self.scenario = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
+        else:
+            self.scenario = ""
+
+        # set region
+        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.LOCATION):
+            self.region = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
+        else:
+            self.region = ""
+
+        # set year or timeseries
+        self.year = ppdt.simulation_parameters.year
+
         data_information_dict = {
             "model": self.model,
             "scenario": self.scenario,
@@ -861,13 +953,13 @@ class PostProcessor:
         # save the json config
         json_generator_config.save_to_json(
             filename=os.path.join(
-                self.result_data_folder_for_scenario_evaluation, "data_for_scenario_evaluation.json"
+                result_data_folder_for_scenario_evaluation, "data_for_scenario_evaluation.json"
             )
         )
 
     def write_component_configurations_to_json(self, ppdt: PostProcessingDataTransfer) -> None:
         """Collect all component configurations and write into JSON file in result directory."""
-        json_generator_config = JsonConfigurationGenerator(name="my_system")
+        json_generator_config = JsonConfigurationGenerator(name=f"{self.scenario}")
         for component in ppdt.wrapped_components:
             json_generator_config.add_component(config=component.my_component.config)
         json_generator_config.save_to_json(
@@ -1019,7 +1111,7 @@ class PostProcessor:
             )
 
             # Consolidate results into structured dataclass for webtool
-            webtool_results_dataclass = WebtoolDict(
+            webtool_results_dataclass = WebtoolDict(  # type: ignore
                 kpis=kpi_collection_dict,
                 post_processing_data_transfer=ppdt,
                 computed_opex=opex_compute_return,
@@ -1065,20 +1157,37 @@ class PostProcessor:
     ) -> None:
         """Write KPIs to json file for building sizer."""
 
+        def get_kpi_entries_for_building_sizer(data, target_key):
+            for key1, value1 in data.items():
+                if key1 == target_key:
+                    result = value1["value"]
+                if isinstance(value1, dict):
+                    for key2, value2 in value1.items():
+                        if key2 == target_key:
+                            result = value2["value"]
+            return result
+
+        kpi_dict = {}
+
         # Check if important options were set
         if PostProcessingOptions.COMPUTE_KPIS in ppdt.post_processing_options:
             for building_object in building_objects_in_district_list:
                 # Get KPIs from ppdt
-                kpi_collection_dict_general_values = ppdt.kpi_collection_dict[building_object]["General"]
-                kpi_collection_dict_cost_values = ppdt.kpi_collection_dict[building_object]["Costs"]
-                kpi_collection_dict_emission_values = ppdt.kpi_collection_dict[building_object]["Emissions"]
 
-                self_sufficiency_rate_in_percent = kpi_collection_dict_general_values["Self-sufficiency rate according to solar htw berlin"]["value"]
-                total_costs_in_euro = kpi_collection_dict_cost_values["Total costs for simulated period"]["value"]
-                energy_costs_in_euro = kpi_collection_dict_cost_values["Energy grid costs for simulated period"]["value"]
-                maintenance_costs_in_euro = kpi_collection_dict_cost_values["Maintenance costs for simulated period"]["value"]
-                investment_costs_in_euro = kpi_collection_dict_cost_values["Investment costs for equipment per simulated period"]["value"]
-                total_co2_emissions_in_kg = kpi_collection_dict_emission_values["Total CO2 emissions for simulated period"]["value"]
+                kpi_collection_dict = ppdt.kpi_collection_dict[building_object]
+
+                self_sufficiency_rate_in_percent = get_kpi_entries_for_building_sizer(data=kpi_collection_dict,
+                                                                                      target_key="Self-sufficiency rate according to solar htw berlin")
+                total_costs_in_euro = get_kpi_entries_for_building_sizer(data=kpi_collection_dict,
+                                                                         target_key="Total costs for simulated period")
+                energy_costs_in_euro = get_kpi_entries_for_building_sizer(data=kpi_collection_dict,
+                                                                          target_key="Energy grid costs for simulated period")
+                maintenance_costs_in_euro = get_kpi_entries_for_building_sizer(data=kpi_collection_dict,
+                                                                               target_key="Maintenance costs for simulated period")
+                investment_costs_in_euro = get_kpi_entries_for_building_sizer(data=kpi_collection_dict,
+                                                                              target_key="Investment costs for equipment per simulated period")
+                total_co2_emissions_in_kg = get_kpi_entries_for_building_sizer(data=kpi_collection_dict,
+                                                                               target_key="Total CO2 emissions for simulated period")
 
                 # initialize json interface to pass kpi's to building_sizer
                 kpi_config = KPIConfig(
@@ -1090,12 +1199,15 @@ class PostProcessor:
                     investment_costs_in_euro=investment_costs_in_euro
                 )
 
-                pathname = os.path.join(
-                    ppdt.simulation_parameters.result_directory, "kpi_config_for_building_sizer.json"
-                )
-                config_file_written = kpi_config.to_json()  # type: ignore
-                with open(pathname, "w", encoding="utf-8") as outfile:
-                    outfile.write(config_file_written)
+                kpi_dict[building_object] = kpi_config.to_dict()  # type: ignore
+
+            pathname = os.path.join(
+                ppdt.simulation_parameters.result_directory, "kpi_config_for_building_sizer.json"
+            )
+
+            config_file_written = json.dumps(kpi_dict, ensure_ascii=False, indent=4)
+            with open(pathname, "w", encoding="utf-8") as outfile:
+                outfile.write(config_file_written)
 
         else:
             raise ValueError(

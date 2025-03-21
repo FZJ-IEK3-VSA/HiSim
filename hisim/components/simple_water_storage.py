@@ -48,8 +48,8 @@ class HotWaterStorageSizingEnum(IntEnum):
 class PositionHotWaterStorageInSystemSetup(IntEnum):
     """Set Simple Hot Water Storage Position options."""
 
-    PARALLEL_TO_HEAT_PUMP = 1
-    SERIE_TO_HEAT_PUMP = 2
+    PARALLEL_TO_HEAT_SOURCE = 1
+    SERIE_TO_HEAT_SOURCE = 2
 
 
 @dataclass_json
@@ -87,7 +87,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         """Get a default simplehotwaterstorage config."""
         volume_heating_water_storage_in_liter: float = 500
         position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int] = (
-            PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP
+            PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE
         )
         config = SimpleHotWaterStorageConfig(
             building_name=building_name,
@@ -152,7 +152,7 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
             raise ValueError(f"Sizing option for Simple Hot Water Storage {sizing_option} is unvalid.")
 
         position_hot_water_storage_in_system: Union[PositionHotWaterStorageInSystemSetup, int] = (
-            PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP
+            PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE
         )
 
         config = SimpleHotWaterStorageConfig(
@@ -530,6 +530,8 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
     ThermalEnergyIncreaseInStorage = "ThermalEnergyIncreaseInStorage"
 
     StandbyHeatLoss = "StandbyHeatLoss"
+    ThermalPowerConsumptionHeatDistribution = "ThermalPowerConsumptionHeatDistribution"
+    ThermalPowerFromHeatGenerator = "ThermalPowerFromHeatGenerator"
 
     @utils.measure_execution_time
     def __init__(
@@ -589,7 +591,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             False,
         )
 
-        if self.position_hot_water_storage_in_system in [PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP]:
+        if self.position_hot_water_storage_in_system in [PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE]:
             self.water_temperature_heat_generator_input_channel: ComponentInput = self.add_input(
                 self.component_name,
                 self.WaterTemperatureFromHeatGenerator,
@@ -659,7 +661,6 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             output_description=f"here a description for {self.ThermalEnergyFromHeatDistribution} will follow.",
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
         )
-
         self.thermal_energy_increase_in_storage_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.ThermalEnergyIncreaseInStorage,
@@ -667,7 +668,6 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.ThermalEnergyIncreaseInStorage} will follow.",
         )
-
         self.stand_by_heat_loss_channel: ComponentOutput = self.add_output(
             self.component_name,
             self.StandbyHeatLoss,
@@ -675,6 +675,22 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             lt.Units.WATT,
             output_description=f"here a description for {self.StandbyHeatLoss} will follow.",
         )
+        self.thermal_power_heat_distribution_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.ThermalPowerConsumptionHeatDistribution,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=f"here a description for {self.ThermalPowerConsumptionHeatDistribution} will follow.",
+        )
+
+        self.thermal_power_from_heat_generator_channel: ComponentOutput = self.add_output(
+            self.component_name,
+            self.ThermalPowerFromHeatGenerator,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description=f"here a description for {self.ThermalPowerFromHeatGenerator} will follow.",
+        )
+
         self.add_default_connections(self.get_default_connections_from_heat_distribution_system())
         self.add_default_connections(self.get_default_connections_from_advanced_heat_pump())
         self.add_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
@@ -821,7 +837,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             self.water_mass_flow_rate_heat_distribution_system_input_channel
         )
 
-        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP:
+        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE:
             water_temperature_from_heat_generator_in_celsius = stsv.get_input_value(
                 self.water_temperature_heat_generator_input_channel
             )
@@ -940,8 +956,21 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             else:
                 raise ValueError("unknown storage controller state.")
 
+        # calc thermal power
+        # ------------------------------
+        thermal_power_from_heat_generator_in_watt = self.calculate_thermal_power_of_water_flow(
+            water_mass_flow_in_kg_per_s=water_mass_flow_rate_from_heat_generator_in_kg_per_second,
+            water_temperature_cold_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
+            water_temperature_hot_in_celsius=water_temperature_from_heat_generator_in_celsius,
+        )
+        thermal_power_heat_distribution_in_watt = self.calculate_thermal_power_of_water_flow(
+            water_mass_flow_in_kg_per_s=water_mass_flow_rate_from_hds_in_kg_per_second,
+            water_temperature_cold_in_celsius=water_temperature_from_heat_distribution_system_in_celsius,
+            water_temperature_hot_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
+        )
+
         # Set outputs -------------------------------------------------------------------------------------------------------
-        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_PUMP:
+        if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL_TO_HEAT_SOURCE:
 
             stsv.set_output_value(
                 self.water_temperature_heat_distribution_system_output_channel,
@@ -982,6 +1011,15 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             self.state.heat_loss_in_watt,
         )
 
+        stsv.set_output_value(
+            self.thermal_power_heat_distribution_channel,
+            thermal_power_heat_distribution_in_watt,
+        )
+
+        stsv.set_output_value(
+            self.thermal_power_from_heat_generator_channel,
+            thermal_power_from_heat_generator_in_watt,
+       )
         # Set state -------------------------------------------------------------------------------------------------------
 
         # calc heat loss in W and the temperature loss

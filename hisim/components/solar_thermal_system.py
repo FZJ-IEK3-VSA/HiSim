@@ -1,4 +1,4 @@
-"Solar thermal system for DHW"
+"""Solar thermal system for DHW."""
 
 from copy import deepcopy
 import datetime
@@ -32,6 +32,7 @@ __version__ = "0.1"
 __maintainer__ = "Kristina Dabrock"
 __email__ = "k.dabrock@fz-juelich.de"
 __status__ = "development"
+
 
 @dataclass_json
 @dataclass

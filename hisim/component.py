@@ -506,8 +506,10 @@ class CapexCostDataClass:
             kpi_tag=None
         )
 
+
 @dataclass
 class Coordinates:
+    """Coordinates."""
+
     latitude: float
     longitude: float
-    

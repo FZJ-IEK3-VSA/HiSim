@@ -1313,14 +1313,14 @@ class GenericBoilerControllerConfigForDHW(ConfigBase):
     set_temperature_difference_for_full_power: float
     minimum_runtime_in_seconds: float
     minimum_resting_time_in_seconds: float
-    secondary_mode: bool # If used as secondary heat generator in hybrid mode
+    secondary_mode: bool  # If used as secondary heat generator in hybrid mode
 
     @classmethod
     def get_default_modulating_dhw_boiler_controller_config(
-        cls, 
-        maximal_thermal_power_in_watt: float, 
-        minimal_thermal_power_in_watt: float, 
-        building_name: str = "BUI1", 
+        cls,
+        maximal_thermal_power_in_watt: float,
+        minimal_thermal_power_in_watt: float,
+        building_name: str = "BUI1",
         secondary_mode: bool = False,
     ) -> Any:
         """Gets a default Generic Boiler Controller For DHW."""
@@ -1470,7 +1470,7 @@ class GenericBoilerControllerForDHW(GenericBoilerController):
 
         target_temperature = self.warm_water_temperature_aim_in_celsius if not self.config.secondary_mode else HouseholdWarmWaterDemandConfig.ww_temperature_demand
         # if operated in secondary mode, activate only when required warm water temperature is not reached
-        
+
         if (
             water_temperature_input_in_celsius < target_temperature
         ):

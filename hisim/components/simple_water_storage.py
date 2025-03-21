@@ -1514,7 +1514,6 @@ class SimpleDHWStorage(SimpleWaterStorage):
         self.add_default_connections(self.get_default_connections_from_utsp())
         self.add_default_connections(self.get_default_connections_from_solar_thermal_system())
 
-
     def get_default_connections_from_more_advanced_heat_pump(
         self,
     ) -> List[cp.ComponentConnection]:
@@ -1642,7 +1641,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
             )
         )
         return connections
-    
+
     def build(
         self,
     ) -> None:
@@ -1719,7 +1718,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
         water_mass_flow_rate_from_heat_generator_in_kg_per_second = stsv.get_input_value(
             self.water_mass_flow_rate_heat_generator_input_channel
         )
-        
+
         # Optional secondary heat generator
         water_temperature_from_secondary_heat_generator_in_celsius = stsv.get_input_value(
             self.water_temperature_secondary_heat_generator_input_channel
@@ -1737,7 +1736,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
             raise ValueError(
                 f"The water temperature in the water storage is with {self.mean_water_temperature_in_water_storage_in_celsius}°C way too high or too low."
             )
-        
+
         if (water_mass_flow_rate_of_dhw_in_kg_per_second > 0) and (self.mean_water_temperature_in_water_storage_in_celsius < self.warm_water_temperature):
             # if there is water consumption, the temperature must be high enough
             log.warning(f"The DHW water temperature is only {self.mean_water_temperature_in_water_storage_in_celsius}°C.")
@@ -1765,7 +1764,6 @@ class SimpleDHWStorage(SimpleWaterStorage):
             water_mass_flow_rate_of_secondary_side_in_kg_per_second=water_mass_flow_rate_of_dhw_in_kg_per_second,
             seconds_per_timestep=self.seconds_per_timestep,
         )
-
 
         # calc thermal energies
         # ------------------------------
@@ -1900,7 +1898,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
             self.thermal_power_from_heat_generator_channel,
             thermal_power_from_heat_generator_in_watt,
         )
-        
+
         stsv.set_output_value(
             self.thermal_power_from_secondary_heat_generator_channel,
             thermal_power_from_heat_generator_in_watt,

@@ -1065,7 +1065,7 @@ def read_nsrdb_data(filepath: str, simulation_parameters: SimulationParameters) 
     # get data
     data = pd.read_csv(filepath + ".dat", sep=",", skiprows=list(range(0, 11)))
     data = data.drop(data.index[8761:8772])
-    data.index = pd.date_range(f"{simulation_parameters.year}-01-01 00:30:00", periods=24  * int(simulation_parameters.duration.days), freq="H", tz="Europe/Berlin")
+    data.index = pd.date_range(f"{simulation_parameters.year}-01-01 00:30:00", periods=8760, freq="H", tz="Europe/Berlin")
     data = data.rename(
         columns={
             "DHI": "DHI",

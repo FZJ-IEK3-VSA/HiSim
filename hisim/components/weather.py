@@ -951,7 +951,7 @@ def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Any:
                 elif i > 1:
                     break
 
-    elif source_enum == WeatherDataSourceEnum.DWD_10MIN or source_enum == WeatherDataSourceEnum.DWD_15MIN:
+    elif source_enum in (WeatherDataSourceEnum.DWD_10MIN, WeatherDataSourceEnum.DWD_15MIN):
         with open(filepath, encoding="utf-8") as csvfile:
             spamreader = csv.reader(csvfile)
             for i, row in enumerate(spamreader):
@@ -998,7 +998,8 @@ def control_weather_data_timestep_length(simulation_parameters: SimulationParame
                 f"Weather data length is {len(weather_data)}, number of simulation timesteps is {simulation_parameters.timesteps}. " "\n "
                 f"Missing timestamps in weather data are: {missing_timestamps, len(missing_timestamps)}.")
         else:
-            pass
+            raise ValueError(f"Weather data and simulation timesteps do not have the same length for year {simulation_parameters.year}. "
+                f"Weather data length is {len(weather_data)}, number of simulation timesteps is {simulation_parameters.timesteps}. ")
 
 def read_test_reference_year_data(weatherconfig: WeatherConfig, simulationparameters: SimulationParameters) -> Any:
     """Reads a test reference year file and gets the GHI, DHI and DNI from it.

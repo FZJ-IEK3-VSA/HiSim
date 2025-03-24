@@ -56,6 +56,8 @@ class GenericCarInformation:
         """Get important values from occupancy instance."""
         # get names of all available cars
         car_data_dict = my_occupancy_instance.car_data_dict
+        if all(isinstance(value_list, list) and all(not bool(car_info_dict) for car_info_dict in value_list) for value_list in car_data_dict.values()):
+            raise ValueError("The car data from occupancy contains only empty dictionaries in its value lists.")
 
         # get car names and household names
         (

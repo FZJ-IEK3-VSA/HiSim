@@ -28,9 +28,6 @@ from hisim.components import (
     generic_hot_water_storage_modular,
     controller_l1_heatpump,
     electricity_meter,
-    advanced_ev_battery_bslib,
-    controller_l1_generic_ev_charge,
-    generic_car,
 )
 from hisim.units import Quantity, Celsius, Watt
 from hisim import loadtypes as lt
@@ -134,9 +131,6 @@ def run_cluster_house(
     # Set Weather
     weather_location = "AACHEN"
 
-    # Set Electric Vehicle
-    charging_station_set = ChargingStationSets.Charging_At_Home_with_11_kW
-    charging_power = float((charging_station_set.Name or "").split("with ")[1].split(" kW")[0])
     # =================================================================================================================================
     # Build Basic Components
     # Build Building

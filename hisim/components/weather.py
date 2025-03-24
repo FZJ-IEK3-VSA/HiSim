@@ -643,7 +643,6 @@ class Weather(Component):
         if cachefound:
             # read cached files
             my_weather = pd.read_csv(cache_filepath, sep=",", decimal=".", encoding="cp1252")
-            control_weather_data_timestep_length(weather_data=my_weather, simulation_parameters=self.my_simulation_parameters)
             self.temperature_list = my_weather["t_out"].tolist()
             self.daily_average_outside_temperature_list_in_celsius = my_weather["t_out_daily_average"].tolist()
             self.dry_bulb_list = self.temperature_list
@@ -938,7 +937,6 @@ def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Any:
     """
     # get the correct file path
     # filepath = os.path.join(utils.HISIMPATH["weather"][location])
-    print("source enum", source_enum)
 
     if source_enum == WeatherDataSourceEnum.NSRDB_15MIN:
         with open(filepath, encoding="utf-8") as csvfile:
@@ -983,24 +981,6 @@ def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Any:
     return {"name": location_name, "latitude": lat, "longitude": lon}
     # self.index = pd.date_range(f"{year}-01-01 00:00:00", periods=60 * 24 * 365, freq="T", tz="Europe/Berlin")
 
-def control_weather_data_timestep_length(simulation_parameters: SimulationParameters, weather_data: pd.DataFrame):
-    """Control weather data length by comparing to number of simulation timesteps."""
-    if len(weather_data) != simulation_parameters.timesteps:
-        # Generate a complete DatetimeIndex from simulation parameters
-        if isinstance(weather_data.index, pd.DatetimeIndex):
-            frequency_weather_data = weather_data.index.freq
-            timezone_weather_data = weather_data.index.tz
-            complete_index = pd.date_range(start=simulation_parameters.start_date, end=simulation_parameters.end_date, freq=frequency_weather_data)
-            complete_index = complete_index.tz_localize(timezone_weather_data)
-            # Find missign timestamps
-            missing_timestamps = complete_index.difference(weather_data.index)
-            raise ValueError(f"Weather data and simulation timesteps do not have the same length for year {simulation_parameters.year}. "
-                f"Weather data length is {len(weather_data)}, number of simulation timesteps is {simulation_parameters.timesteps}. " "\n "
-                f"Missing timestamps in weather data are: {missing_timestamps, len(missing_timestamps)}.")
-        else:
-            raise ValueError(f"Weather data and simulation timesteps do not have the same length for year {simulation_parameters.year}. "
-                f"Weather data length is {len(weather_data)}, number of simulation timesteps is {simulation_parameters.timesteps}. ")
-
 def read_test_reference_year_data(weatherconfig: WeatherConfig, simulationparameters: SimulationParameters) -> Any:
     """Reads a test reference year file and gets the GHI, DHI and DNI from it.
 
@@ -1021,7 +1001,6 @@ def read_test_reference_year_data(weatherconfig: WeatherConfig, simulationparame
     elif weatherconfig.data_source == WeatherDataSourceEnum.ERA5:
         data = read_era5_data(filepath, simulationparameters)
 
-    control_weather_data_timestep_length(weather_data=data, simulation_parameters=simulationparameters)
     return data
 
 def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:

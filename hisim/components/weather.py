@@ -999,7 +999,7 @@ def read_test_reference_year_data(weatherconfig: WeatherConfig, simulation_param
     elif weatherconfig.data_source == WeatherDataSourceEnum.DWD_10MIN:
         data = read_dwd_10min_data(filepath, simulation_parameters.year)
     elif weatherconfig.data_source == WeatherDataSourceEnum.DWD_15MIN:
-        data = read_dwd_15min_data(filepath, simulation_parameters.year)
+        data = read_dwd_15min_data(filepath, simulation_parameters)
     elif weatherconfig.data_source == WeatherDataSourceEnum.ERA5:
         data = read_era5_data(filepath, simulation_parameters.year)
 

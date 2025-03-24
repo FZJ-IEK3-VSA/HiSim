@@ -122,7 +122,8 @@ def setup_function(
     if heating_system != HeatingSystems.PELLET_HEATING:
         raise ValueError("Heating system needs to be pellet heater for this system setup.")
 
-    heating_reference_temperature_in_celsius = -7.0
+    heating_reference_temperature_in_celsius = - 12.2
+    building_set_heating_temperature_in_celsius = 22.0
 
     # Set Weather
     weather_location = arche_type_config_.weather_location
@@ -182,6 +183,7 @@ def setup_function(
     my_building_config = building.BuildingConfig.get_default_german_single_family_home(
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
         max_thermal_building_demand_in_watt=max_thermal_building_demand_in_watt,
+        set_heating_temperature_in_celsius=building_set_heating_temperature_in_celsius
     )
     my_building_config.building_code = building_code
     my_building_config.total_base_area_in_m2 = total_base_area_in_m2
@@ -241,7 +243,7 @@ def setup_function(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
-    # my_heat_distribution_controller_config.heating_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
+    my_heat_distribution_controller_config.heating_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
         my_simulation_parameters=my_simulation_parameters, config=my_heat_distribution_controller_config,
@@ -509,7 +511,7 @@ def setup_function(
     if my_simulation_parameters.result_directory == "":
 
         ResultPathProviderSingleton().set_important_result_path_information(
-            module_directory=my_sim.module_directory,
+            module_directory=my_sim.module_directory,  # "/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/analysis_austria_for_kristina_20_11_2024_2",
             model_name=my_sim.module_filename,
             further_result_folder_description=os.path.join(*[further_result_folder_description]),
             variant_name="_",

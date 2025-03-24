@@ -105,10 +105,10 @@ def setup_function(
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER
         )
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
-        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
         # my_simulation_parameters.logging_level = 4
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
@@ -123,7 +123,8 @@ def setup_function(
             f"Heating system was set as {heating_system} but needs to be {HeatingSystems.DISTRICT_HEATING.value} for this system setup."
         )
 
-    heating_reference_temperature_in_celsius = -7.0
+    heating_reference_temperature_in_celsius = - 12.2
+    building_set_heating_temperature_in_celsius = 22.0
 
     # Set Weather
     weather_location = arche_type_config_.weather_location
@@ -183,6 +184,7 @@ def setup_function(
     my_building_config = building.BuildingConfig.get_default_german_single_family_home(
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
         max_thermal_building_demand_in_watt=max_thermal_building_demand_in_watt,
+        set_heating_temperature_in_celsius=building_set_heating_temperature_in_celsius
     )
     my_building_config.building_code = building_code
     my_building_config.total_base_area_in_m2 = total_base_area_in_m2
@@ -309,57 +311,57 @@ def setup_function(
         config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
     )
 
-    # # Build Electric Vehicle Configs and Car Battery Configs
-    # my_car_config = generic_car.CarConfig.get_default_ev_config()
-    # my_car_battery_config = advanced_ev_battery_bslib.CarBatteryConfig.get_default_config()
-    # my_car_battery_controller_config = controller_l1_generic_ev_charge.ChargingStationConfig.get_default_config(
-    #     charging_station_set=charging_station_set
-    # )
-    # # set car config name
-    # my_car_config.name = "ElectricCar"
-    # # set charging power from battery and controller to same value, to reduce error in simulation of battery
-    # my_car_battery_config.p_inv_custom = charging_power * 1e3
-    # # lower threshold for soc of car battery in clever case. This enables more surplus charging. Surplus control of car
-    # my_car_battery_controller_config.battery_set = 0.6
-    # # Build Electric Vehicles
-    # my_car_information = generic_car.GenericCarInformation(my_occupancy_instance=my_occupancy)
-    # my_cars: List[generic_car.Car] = []
-    # my_car_batteries: List[advanced_ev_battery_bslib.CarBattery] = []
-    # my_car_battery_controllers: List[controller_l1_generic_ev_charge.L1Controller] = []
-    # # iterate over all cars
-    # car_number = 1
-    # for car_information_dict in my_car_information.data_dict_for_car_component.values():
-    #     # Build Electric Vehicles
-    #     my_car_config.name = f"ElectricCar_{car_number}"
-    #     my_car = generic_car.Car(
-    #         my_simulation_parameters=my_simulation_parameters,
-    #         config=my_car_config,
-    #         data_dict_with_car_information=car_information_dict,
-    #     )
-    #     my_cars.append(my_car)
-    #     # Build Electric Vehicle Batteries
-    #     my_car_battery_config.source_weight = my_car.config.source_weight
-    #     my_car_battery_config.name = f"CarBattery_{car_number}"
-    #     my_car_battery = advanced_ev_battery_bslib.CarBattery(
-    #         my_simulation_parameters=my_simulation_parameters, config=my_car_battery_config,
-    #     )
-    #     my_car_batteries.append(my_car_battery)
-    #     # Build Electric Vehicle Battery Controller
-    #     my_car_battery_controller_config.source_weight = my_car.config.source_weight
-    #     my_car_battery_controller_config.name = f"L1EVChargeControl_{car_number}"
+    # Build Electric Vehicle Configs and Car Battery Configs
+    my_car_config = generic_car.CarConfig.get_default_ev_config()
+    my_car_battery_config = advanced_ev_battery_bslib.CarBatteryConfig.get_default_config()
+    my_car_battery_controller_config = controller_l1_generic_ev_charge.ChargingStationConfig.get_default_config(
+        charging_station_set=charging_station_set
+    )
+    # set car config name
+    my_car_config.name = "ElectricCar"
+    # set charging power from battery and controller to same value, to reduce error in simulation of battery
+    my_car_battery_config.p_inv_custom = charging_power * 1e3
+    # lower threshold for soc of car battery in clever case. This enables more surplus charging. Surplus control of car
+    my_car_battery_controller_config.battery_set = 0.6
+    # Build Electric Vehicles
+    my_car_information = generic_car.GenericCarInformation(my_occupancy_instance=my_occupancy)
+    my_cars: List[generic_car.Car] = []
+    my_car_batteries: List[advanced_ev_battery_bslib.CarBattery] = []
+    my_car_battery_controllers: List[controller_l1_generic_ev_charge.L1Controller] = []
+    # iterate over all cars
+    car_number = 1
+    for car_information_dict in my_car_information.data_dict_for_car_component.values():
+        # Build Electric Vehicles
+        my_car_config.name = f"ElectricCar_{car_number}"
+        my_car = generic_car.Car(
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_car_config,
+            data_dict_with_car_information=car_information_dict,
+        )
+        my_cars.append(my_car)
+        # Build Electric Vehicle Batteries
+        my_car_battery_config.source_weight = my_car.config.source_weight
+        my_car_battery_config.name = f"CarBattery_{car_number}"
+        my_car_battery = advanced_ev_battery_bslib.CarBattery(
+            my_simulation_parameters=my_simulation_parameters, config=my_car_battery_config,
+        )
+        my_car_batteries.append(my_car_battery)
+        # Build Electric Vehicle Battery Controller
+        my_car_battery_controller_config.source_weight = my_car.config.source_weight
+        my_car_battery_controller_config.name = f"L1EVChargeControl_{car_number}"
 
-    #     my_car_battery_controller = controller_l1_generic_ev_charge.L1Controller(
-    #         my_simulation_parameters=my_simulation_parameters, config=my_car_battery_controller_config,
-    #     )
-    #     my_car_battery_controllers.append(my_car_battery_controller)
-    #     car_number += 1
+        my_car_battery_controller = controller_l1_generic_ev_charge.L1Controller(
+            my_simulation_parameters=my_simulation_parameters, config=my_car_battery_controller_config,
+        )
+        my_car_battery_controllers.append(my_car_battery_controller)
+        car_number += 1
 
-    # # Connect Electric Vehicles and Car Batteries
-    # zip_car_battery_controller_lists = list(zip(my_cars, my_car_batteries, my_car_battery_controllers))
-    # for car, car_battery, car_battery_controller in zip_car_battery_controller_lists:
-    #     car_battery_controller.connect_only_predefined_connections(car)
-    #     car_battery_controller.connect_only_predefined_connections(car_battery)
-    #     car_battery.connect_only_predefined_connections(car_battery_controller)
+    # Connect Electric Vehicles and Car Batteries
+    zip_car_battery_controller_lists = list(zip(my_cars, my_car_batteries, my_car_battery_controllers))
+    for car, car_battery, car_battery_controller in zip_car_battery_controller_lists:
+        car_battery_controller.connect_only_predefined_connections(car)
+        car_battery_controller.connect_only_predefined_connections(car_battery)
+        car_battery.connect_only_predefined_connections(car_battery_controller)
 
     # use ems and battery only when PV is used
     if share_of_maximum_pv_potential != 0:
@@ -411,30 +413,30 @@ def setup_function(
         # -----------------------------------------------------------------------------------------------------------------
         # Connect Electric Vehicle and Car Battery with EMS for surplus control
 
-        # for car, car_battery, car_battery_controller in list(zip_car_battery_controller_lists):
+        for car, car_battery, car_battery_controller in list(zip_car_battery_controller_lists):
 
-        #     my_electricity_controller.add_component_input_and_connect(
-        #         source_object_name=car_battery_controller.component_name,
-        #         source_component_output=car_battery_controller.BatteryChargingPowerToEMS,
-        #         source_load_type=lt.LoadTypes.ELECTRICITY,
-        #         source_unit=lt.Units.WATT,
-        #         source_tags=[lt.ComponentType.CAR_BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
-        #         source_weight=5,
-        #     )
+            my_electricity_controller.add_component_input_and_connect(
+                source_object_name=car_battery_controller.component_name,
+                source_component_output=car_battery_controller.BatteryChargingPowerToEMS,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[lt.ComponentType.CAR_BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
+                source_weight=5,
+            )
 
-            # electricity_target = my_electricity_controller.add_component_output(
-            #     source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
-            #     source_tags=[lt.ComponentType.CAR_BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-            #     source_weight=5,
-            #     source_load_type=lt.LoadTypes.ELECTRICITY,
-            #     source_unit=lt.Units.WATT,
-            #     output_description="Target Electricity for EV Battery Controller. ",
-            # )
+            electricity_target = my_electricity_controller.add_component_output(
+                source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
+                source_tags=[lt.ComponentType.CAR_BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
+                source_weight=5,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                output_description="Target Electricity for EV Battery Controller. ",
+            )
 
-            # car_battery_controller.connect_dynamic_input(
-            #     input_fieldname=controller_l1_generic_ev_charge.L1Controller.ElectricityTarget,
-            #     src_object=electricity_target,
-            # )
+            car_battery_controller.connect_dynamic_input(
+                input_fieldname=controller_l1_generic_ev_charge.L1Controller.ElectricityTarget,
+                src_object=electricity_target,
+            )
 
         # =================================================================================================================================
         # Add Remaining Components to Simulation Parameters
@@ -447,13 +449,13 @@ def setup_function(
     else:
         my_sim.add_component(my_electricity_meter, connect_automatically=True)
 
-    # # Connect Electric Vehicles and Car Batteries
-    # for car in my_cars:
-    #     my_sim.add_component(car)
-    # for car_battery in my_car_batteries:
-    #     my_sim.add_component(car_battery)
-    # for car_battery_controller in my_car_battery_controllers:
-    #     my_sim.add_component(car_battery_controller)
+    # Connect Electric Vehicles and Car Batteries
+    for car in my_cars:
+        my_sim.add_component(car)
+    for car_battery in my_car_batteries:
+        my_sim.add_component(car_battery)
+    for car_battery_controller in my_car_battery_controllers:
+        my_sim.add_component(car_battery_controller)
 
     # Set Results Path
     # if config_filename is given, get hash number and sampling mode for result path
@@ -484,8 +486,7 @@ def setup_function(
     if my_simulation_parameters.result_directory == "":
 
         ResultPathProviderSingleton().set_important_result_path_information(
-            module_directory="/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/analysis_for_gianmarco_11_10_2024/analysis_for_Essen/results_for_Essen/gasoline_car/",
-            # my_sim.module_directory,
+            module_directory=my_sim.module_directory,  # "/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/analysis_austria_for_kristina_20_11_2024_2",
             model_name=my_sim.module_filename,
             further_result_folder_description=os.path.join(*[further_result_folder_description]),
             variant_name="_",

@@ -90,8 +90,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
             result_dir_path=utils.HISIMPATH["utsp_results"],
             energy_intensity=EnergyIntensityType.EnergySaving,
             travel_route_set=TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance,
-            # transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
-            transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Gasoline_Car,
+            transportation_device_set=TransportationDeviceSets.Bus_and_one_30_km_h_Car,
             charging_station_set=ChargingStationSets.Charging_At_Home_with_11_kW,
             profile_with_washing_machine_and_dishwasher=True,
             predictive_control=False,
@@ -894,18 +893,12 @@ class UtspLpgConnector(cp.Component):
         for car_state in car_states.keys():
             if car_state in result.data:
                 car_states_file = result.data[car_state].decode()
-            else:
-                car_states_file = ""
         for car_location in car_locations.keys():
             if car_location in result.data:
                 car_locations_file = result.data[car_location].decode()
-            else:
-                car_locations_file = ""
         for driving_distance in driving_distances.keys():
             if driving_distance in result.data:
                 driving_distances_file = result.data[driving_distance].decode()
-            else:
-                driving_distances_file = ""
 
         return (
             electricity_file,

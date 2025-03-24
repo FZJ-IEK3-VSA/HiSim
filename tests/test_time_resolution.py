@@ -9,7 +9,6 @@ import os
 from typing import Dict, List, Tuple
 import pandas as pd
 import pytest
-from utspclient.helpers.lpgdata import ChargingStationSets
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
 from hisim import utils

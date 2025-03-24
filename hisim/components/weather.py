@@ -1024,8 +1024,7 @@ def read_test_reference_year_data(weatherconfig: WeatherConfig, simulationparame
     control_weather_data_timestep_length(weather_data=data, simulation_parameters=simulationparameters)
     return data
 
-
-def read_dwd_try_data(filepath: str, simulation_parameters: SimulationParameters) -> pd.DataFrame:
+def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:
     """Reads the DWD Test Reference Year (TRY) data."""
     # get the geoposition
     with open(filepath + ".dat", encoding="utf-8") as file_stream:
@@ -1040,7 +1039,7 @@ def read_dwd_try_data(filepath: str, simulation_parameters: SimulationParameters
     else:
         # get data
         data = pd.read_csv(filepath + ".dat", sep=r"\s+", skiprows=list(range(0, 31)))
-        data.index = pd.date_range(f"{simulation_parameters.year}-01-01 00:30:00", periods=8760, freq="H", tz="Europe/Berlin")
+        data.index = pd.date_range(f"{year}-01-01 00:30:00", periods=8760, freq="H", tz="Europe/Berlin")
         data["GHI"] = data["D"] + data["B"]
         data = data.rename(
             columns={

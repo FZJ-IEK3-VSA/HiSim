@@ -46,8 +46,8 @@ class WeatherDataSourceEnum(Enum):
     NSRDB = 2
     NSRDB_15MIN = 3
     DWD_10MIN = 4
-    DWD_15MIN = 5
-    ERA5 = 6
+    ERA5 = 5
+    DWD_15MIN = 6
 
 
 class LocationEnum(Enum):
@@ -662,8 +662,9 @@ class Weather(Component):
         else:
             tmy_data = read_test_reference_year_data(
                 weatherconfig=self.weather_config,
-                simulationparameters=self.my_simulation_parameters,
+                simulation_parameters=self.my_simulation_parameters,
             )
+
             if self.weather_config.data_source == WeatherDataSourceEnum.NSRDB_15MIN:
                 dni = tmy_data["DNI"].resample("1T").asfreq().interpolate(method="linear")
                 temperature = tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")
@@ -671,7 +672,7 @@ class Weather(Component):
                 ghi = tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")
                 wind_speed = tmy_data["Wspd"].resample("1T").asfreq().interpolate(method="linear")
                 pressure = tmy_data["Pressure"].resample("1T").asfreq().interpolate(method="linear")
-            elif self.weather_config.data_source  in (WeatherDataSourceEnum.DWD_10MIN, WeatherDataSourceEnum.DWD_15MIN):
+            elif self.weather_config.data_source == WeatherDataSourceEnum.DWD_10MIN:
                 dni = tmy_data["DNI"].resample("1T").asfreq().interpolate(method="linear")
                 temperature = tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")
                 dhi = tmy_data["DHI"].resample("1T").asfreq().interpolate(method="linear")
@@ -949,7 +950,7 @@ def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Any:
                 elif i > 1:
                     break
 
-    elif source_enum in (WeatherDataSourceEnum.DWD_10MIN, WeatherDataSourceEnum.DWD_15MIN):
+    elif source_enum == WeatherDataSourceEnum.DWD_10MIN:
         with open(filepath, encoding="utf-8") as csvfile:
             spamreader = csv.reader(csvfile)
             for i, row in enumerate(spamreader):
@@ -981,7 +982,8 @@ def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Any:
     return {"name": location_name, "latitude": lat, "longitude": lon}
     # self.index = pd.date_range(f"{year}-01-01 00:00:00", periods=60 * 24 * 365, freq="T", tz="Europe/Berlin")
 
-def read_test_reference_year_data(weatherconfig: WeatherConfig, simulationparameters: SimulationParameters) -> Any:
+
+def read_test_reference_year_data(weatherconfig: WeatherConfig, simulation_parameters: SimulationParameters) -> Any:
     """Reads a test reference year file and gets the GHI, DHI and DNI from it.
 
     Based on the tsib project @[tsib-kotzur] (Check header)
@@ -989,19 +991,20 @@ def read_test_reference_year_data(weatherconfig: WeatherConfig, simulationparame
     # get the correct file path
     filepath = os.path.join(weatherconfig.source_path)
     if weatherconfig.data_source == WeatherDataSourceEnum.NSRDB:
-        data = read_nsrdb_data(filepath, simulationparameters)
+        data = read_nsrdb_data(filepath, simulation_parameters.year)
     elif weatherconfig.data_source == WeatherDataSourceEnum.DWD_TRY:
-        data = read_dwd_try_data(filepath, simulationparameters)
+        data = read_dwd_try_data(filepath, simulation_parameters.year)
     elif weatherconfig.data_source == WeatherDataSourceEnum.NSRDB_15MIN:
-        data = read_nsrdb_15min_data(filepath, simulationparameters)
+        data = read_nsrdb_15min_data(filepath, simulation_parameters.year)
     elif weatherconfig.data_source == WeatherDataSourceEnum.DWD_10MIN:
-        data = read_dwd_10min_data(filepath, simulationparameters)
+        data = read_dwd_10min_data(filepath, simulation_parameters.year)
     elif weatherconfig.data_source == WeatherDataSourceEnum.DWD_15MIN:
-        data = read_dwd_15min_data(filepath, simulationparameters)
+        data = read_dwd_15min_data(filepath, simulation_parameters.year)
     elif weatherconfig.data_source == WeatherDataSourceEnum.ERA5:
-        data = read_era5_data(filepath, simulationparameters)
+        data = read_era5_data(filepath, simulation_parameters.year)
 
     return data
+
 
 def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:
     """Reads the DWD Test Reference Year (TRY) data."""
@@ -1038,12 +1041,12 @@ def read_dwd_try_data(filepath: str, year: int) -> pd.DataFrame:
     return data
 
 
-def read_nsrdb_data(filepath: str, simulation_parameters: SimulationParameters) -> pd.DataFrame:
+def read_nsrdb_data(filepath: str, year: int) -> pd.DataFrame:
     """Reads a set of NSRDB data."""
     # get data
     data = pd.read_csv(filepath + ".dat", sep=",", skiprows=list(range(0, 11)))
     data = data.drop(data.index[8761:8772])
-    data.index = pd.date_range(f"{simulation_parameters.year}-01-01 00:30:00", periods=8760, freq="H", tz="Europe/Berlin")
+    data.index = pd.date_range(f"{year}-01-01 00:30:00", periods=8760, freq="H", tz="Europe/Berlin")
     data = data.rename(
         columns={
             "DHI": "DHI",
@@ -1061,11 +1064,11 @@ def read_nsrdb_data(filepath: str, simulation_parameters: SimulationParameters) 
     return data
 
 
-def read_nsrdb_15min_data(filepath: str, simulation_parameters: SimulationParameters) -> pd.DataFrame:
+def read_nsrdb_15min_data(filepath: str, year: int) -> pd.DataFrame:
     """Reads a set of NSRDB data in 15 min resolution."""
     data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
     # get data
-    data.index = pd.date_range(f"{simulation_parameters.year}-01-01 00:00:00", periods=24 * 4 * int(simulation_parameters.duration.days), freq="900S", tz="UTC")
+    data.index = pd.date_range(f"{year}-01-01 00:00:00", periods=24 * 4 * 365, freq="900S", tz="UTC")
     data = data.rename(
         columns={
             "Temperature": "T",
@@ -1075,7 +1078,7 @@ def read_nsrdb_15min_data(filepath: str, simulation_parameters: SimulationParame
     return data
 
 
-def read_dwd_10min_data(filepath: str, simulation_parameters: SimulationParameters) -> pd.DataFrame:
+def read_dwd_10min_data(filepath: str, year: int) -> pd.DataFrame:
     """Reads a set of DWD data in 10 min resolution.
 
     https://github.com/earthobservations/wetterdienst/tree/main
@@ -1094,7 +1097,7 @@ def read_dwd_10min_data(filepath: str, simulation_parameters: SimulationParamete
 
     # get data
     data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
-    data.index = pd.date_range(f"{simulation_parameters.year}-01-01 00:00:00", periods=24 * 6 * int(simulation_parameters.duration.days), freq="600S", tz="UTC")
+    data.index = pd.date_range(f"{year}-01-01 00:00:00", periods=24 * 6 * 365, freq="600S", tz="UTC")
     data = data.rename(
         columns={
             "diffuse_irradiance": "DHI",
@@ -1114,6 +1117,7 @@ def read_dwd_10min_data(filepath: str, simulation_parameters: SimulationParamete
     data["DNI"] = calculate_direct_normal_radiation(data["direct_horizontal_irradiance"], longitude, latitude)
 
     return data
+
 
 def read_dwd_15min_data(filepath: str, simulation_parameters: SimulationParameters) -> pd.DataFrame:
     """Reads a set of DWD data in 15 min resolution.
@@ -1157,7 +1161,8 @@ def read_dwd_15min_data(filepath: str, simulation_parameters: SimulationParamete
 
     return data
 
-def read_era5_data(filepath: str, simulation_parameters: SimulationParameters) -> pd.DataFrame:
+
+def read_era5_data(filepath: str, year: int) -> pd.DataFrame:
     """Reads a set of era5 in 60 min resolution.
 
     https://cds.climate.copernicus.eu/cdsapp#!/dataset/reanalysis-era5-single-levels?tab=overview
@@ -1176,7 +1181,7 @@ def read_era5_data(filepath: str, simulation_parameters: SimulationParameters) -
 
     # get data
     data = pd.read_csv(filepath, encoding="utf-8", skiprows=[0, 1])
-    data.index = pd.date_range(f"{simulation_parameters.year}-01-01 00:00:00", periods=8760, freq="H", tz="UTC")
+    data.index = pd.date_range(f"{year}-01-01 00:00:00", periods=8760, freq="H", tz="UTC")
     data = data.rename(
         columns={
             "month": "Month",

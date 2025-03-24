@@ -1040,7 +1040,7 @@ def read_dwd_try_data(filepath: str, simulation_parameters: SimulationParameters
     else:
         # get data
         data = pd.read_csv(filepath + ".dat", sep=r"\s+", skiprows=list(range(0, 31)))
-        data.index = pd.date_range(f"{simulation_parameters.year}-01-01 00:30:00", periods=24 * int(simulation_parameters.duration.days), freq="H", tz="Europe/Berlin")
+        data.index = pd.date_range(f"{simulation_parameters.year}-01-01 00:30:00", periods=8760, freq="H", tz="Europe/Berlin")
         data["GHI"] = data["D"] + data["B"]
         data = data.rename(
             columns={

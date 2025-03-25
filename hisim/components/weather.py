@@ -672,7 +672,7 @@ class Weather(Component):
                 ghi = tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")
                 wind_speed = tmy_data["Wspd"].resample("1T").asfreq().interpolate(method="linear")
                 pressure = tmy_data["Pressure"].resample("1T").asfreq().interpolate(method="linear")
-            elif self.weather_config.data_source == WeatherDataSourceEnum.DWD_10MIN:
+            elif self.weather_config.data_source in (WeatherDataSourceEnum.DWD_10MIN, WeatherDataSourceEnum.DWD_15MIN):
                 dni = tmy_data["DNI"].resample("1T").asfreq().interpolate(method="linear")
                 temperature = tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")
                 dhi = tmy_data["DHI"].resample("1T").asfreq().interpolate(method="linear")
@@ -950,7 +950,7 @@ def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Any:
                 elif i > 1:
                     break
 
-    elif source_enum == WeatherDataSourceEnum.DWD_10MIN:
+    elif source_enum in (WeatherDataSourceEnum.DWD_10MIN, WeatherDataSourceEnum.DWD_15MIN):
         with open(filepath, encoding="utf-8") as csvfile:
             spamreader = csv.reader(csvfile)
             for i, row in enumerate(spamreader):

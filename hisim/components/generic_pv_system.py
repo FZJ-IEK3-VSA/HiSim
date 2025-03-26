@@ -181,6 +181,7 @@ class PVSystemConfig(ConfigBase):
         config = PVSystemConfig.get_default_pv_system(
             name=name,
             location=location,
+            power_in_watt=total_pv_power_in_watt,
             building_name=building_name,
             module_name=module_name,
             module_database=module_database,
@@ -188,7 +189,6 @@ class PVSystemConfig(ConfigBase):
             inverter_database=inverter_database,
         )
         config.load_module_data = load_module_data
-        config.power_in_watt = total_pv_power_in_watt
         return config
 
     @classmethod

@@ -61,7 +61,9 @@ https://github.com/NREL/SAM/tree/patch/deploy/libraries
 
 
 class PVLibModuleAndInverterEnum(enum.Enum):
-    """Class to determine what pvlib database for phtotovoltaic modules
+    """Module and inverter database options.
+
+    Class to determine what pvlib database for phtotovoltaic modules
     and inverters should be used.
 
     https://pvlib-python.readthedocs.io/en/v0.9.0/generated/pvlib.pvsystem.retrieve_sam.html.
@@ -199,8 +201,11 @@ class PVSystemConfig(ConfigBase):
         module_name: str,
         module_database: PVLibModuleAndInverterEnum,
     ) -> float:
-        """Size the pv system according to the rooftop area and the share of
-        the maximum pv power that should be used."""
+        """Size PV system.
+
+        Size the pv system according to the rooftop area and the share of
+        the maximum pv power that should be used.
+        """
 
         # get area and power of module
         if (
@@ -516,8 +521,11 @@ class PVSystem(cp.Component):
         all_outputs: List,
         postprocessing_results: pd.DataFrame,
     ) -> List[KpiEntry]:
-        """Calculates KPIs for the respective component and return
-        all KPI entries as list."""
+        """PV System KPIs.
+
+        Calculates KPIs for the respective component and return
+        all KPI entries as list.
+        """
         return []
 
     def get_default_connections_from_weather(self):
@@ -1107,8 +1115,7 @@ class PVSystem(cp.Component):
         surface_azimuth=180.0,
         albedo=0.2,
     ):
-        r"""Simulates a defined PV array with the Sandia PV Array Performance
-        Model.
+        """Simulates with the Sandia PV Array Performance Model.
 
         The implementation is done in accordance with following tutorial:
         https://github.com/pvlib/pvlib-python/blob/master/docs/tutorials/tmy_to_power.ipynb
@@ -1222,9 +1229,9 @@ class PVSystem(cp.Component):
         surface_azimuth=180.0,
         albedo=0.2,
     ):
-        r"""Simulates a defined PV array using the single-diode model, which
-        works with data from the CEC database.
+        """Simulates a defined PV array using the single-diode model.
 
+        This simulation works with data from the CEC database.
         The implementation is done in accordance with following tutorial:
         https://github.com/pvlib/pvlib-python/blob/master/docs/tutorials/tmy_to_power.ipynb
         https://pvlib-python.readthedocs.io/en/stable/reference/generated/pvlib.pvsystem.sapm.html#pvlib.pvsystem.sapm

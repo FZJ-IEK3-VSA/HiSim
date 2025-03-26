@@ -165,7 +165,7 @@ class PVSystemConfig(ConfigBase):
         share_of_maximum_pv_potential: float = 1.0,
         module_name: str = "Trina Solar TSM-435NE09RC.05",
         module_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.CEC_MODULE_DATABASE,  # noqa: E501
-        inverter_name: str ="Enphase Energy Inc : IQ8P-3P-72-E-DOM-US [208V]",
+        inverter_name: str = "Enphase Energy Inc : IQ8P-3P-72-E-DOM-US [208V]",
         inverter_database: PVLibModuleAndInverterEnum = PVLibModuleAndInverterEnum.CEC_INVERTER_DATABASE,
         location: str = "Aachen",
         building_name: str = "BUI1",
@@ -428,7 +428,9 @@ class PVSystem(cp.Component):
             output_description=f"Here a description for PV {self.ElectricityEnergyOutput} will follow.",
         )
 
-        self.add_default_connections(self.get_default_connections_from_weather())
+        self.add_default_connections(
+            self.get_default_connections_from_weather()
+        )
 
     @staticmethod
     def get_default_config(
@@ -454,8 +456,12 @@ class PVSystem(cp.Component):
             share_of_maximum_pv_potential=share_of_maximum_pv_potential,
             load_module_data=False,
             source_weight=source_weight,
-            co2_footprint=power_in_watt * 1e-3 * 130.7,  # value from emission_factros_and_costs_devices.csv
-            cost=power_in_watt * 1e-3 * 535.81,  # value from emission_factros_and_costs_devices.csv
+            co2_footprint=power_in_watt
+            * 1e-3
+            * 130.7,  # value from emission_factros_and_costs_devices.csv
+            cost=power_in_watt
+            * 1e-3
+            * 535.81,  # value from emission_factros_and_costs_devices.csv
             maintenance_cost_as_percentage_of_investment=0.01,  # source: https://solarenergie.de/stromspeicher/preise
             lifetime=25,  # value from emission_factros_and_costs_devices.csv
             prediction_horizon=None,
@@ -1355,7 +1361,7 @@ class PVSystem(cp.Component):
         apparent_zenith: Optional[float] = None,
         surface_tilt: float = 30.0,
         surface_azimuth: float = 180.0,
-        albedo: float =0.2,
+        albedo: float = 0.2,
     ) -> Tuple[Dict[str, Any], float, float]:
         # calculate airmass
         airmass = pvlib.atmosphere.get_relative_airmass(apparent_zenith)

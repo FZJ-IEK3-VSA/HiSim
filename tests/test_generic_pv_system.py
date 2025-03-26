@@ -172,5 +172,5 @@ def test_photovoltaic_cec():
     assert (
         pytest.approx(
             stsv.values[my_pvs.electricity_energy_output_channel.global_index]
-        ) == 340.552602382255 * (seconds_per_timestep / 3600) 
+        ) == 340.552602382255 * (seconds_per_timestep / 3600)
     )

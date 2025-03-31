@@ -425,8 +425,7 @@ class HeatDistribution(cp.Component):
         )
         stsv.set_output_value(
             self.thermal_power_delivered_channel,
-            self.state.thermal_power_delivered_in_watt,
-            #  thermal_power_delivered_in_watt,
+            thermal_power_delivered_in_watt,
         )
         stsv.set_output_value(
             self.water_mass_flow_channel, water_mass_flow_rate_in_kg_per_second,

@@ -416,7 +416,7 @@ class HeatDistribution(cp.Component):
         stsv.set_output_value(
             self.water_temperature_outlet_channel,
             self.state.water_output_temperature_in_celsius,
-            #  water_temperature_output_in_celsius,
+            # water_temperature_output_in_celsius,
         )
         stsv.set_output_value(
             self.water_temperature_difference_channel,
@@ -425,7 +425,8 @@ class HeatDistribution(cp.Component):
         )
         stsv.set_output_value(
             self.thermal_power_delivered_channel,
-            thermal_power_delivered_in_watt,
+            self.state.thermal_power_delivered_in_watt,
+            # thermal_power_delivered_in_watt,
         )
         stsv.set_output_value(
             self.water_mass_flow_channel, water_mass_flow_rate_in_kg_per_second,

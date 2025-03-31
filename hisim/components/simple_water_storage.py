@@ -373,7 +373,6 @@ class SimpleWaterStorage(cp.Component):
     def calculate_heat_loss_and_temperature_loss(
         self,
         storage_surface_in_m2: float,
-        seconds_per_timestep: float,
         mean_water_temperature_in_water_storage_in_celsius: float,
         heat_transfer_coefficient_in_watt_per_m2_per_kelvin: float,
         ambient_temperature_in_celsius: float,
@@ -1020,7 +1019,6 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             self.state.temperature_loss_in_celsius_per_timestep,
         ) = self.calculate_heat_loss_and_temperature_loss(
             storage_surface_in_m2=self.storage_surface_in_m2,
-            seconds_per_timestep=self.seconds_per_timestep,
             mean_water_temperature_in_water_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=self.heat_transfer_coefficient_in_watt_per_m2_per_kelvin,
             mass_in_storage_in_kg=self.water_mass_in_storage_in_kg,
@@ -1784,7 +1782,6 @@ class SimpleDHWStorage(SimpleWaterStorage):
             self.state.temperature_loss_in_celsius_per_timestep,
         ) = self.calculate_heat_loss_and_temperature_loss(
             storage_surface_in_m2=self.storage_surface_in_m2,
-            seconds_per_timestep=self.seconds_per_timestep,
             mean_water_temperature_in_water_storage_in_celsius=self.mean_water_temperature_in_water_storage_in_celsius,
             heat_transfer_coefficient_in_watt_per_m2_per_kelvin=self.heat_transfer_coefficient_in_watt_per_m2_per_kelvin,
             mass_in_storage_in_kg=self.water_mass_in_storage_in_kg,

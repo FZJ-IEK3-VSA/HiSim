@@ -2,27 +2,30 @@
 
 from copy import deepcopy
 import datetime
-from typing import Any
+from typing import Any, List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import pandas as pd
 from oemof.thermal.solar_thermal_collector import flat_plate_precalc
 
 from hisim.component import (
+    CapexCostDataClass,
     Component,
     ComponentConnection,
     ComponentInput,
     ComponentOutput,
     Coordinates,
+    OpexCostDataClass,
     SingleTimeStepValues,
     DisplayConfig,
 )
 from hisim import loadtypes
-from hisim.components.configuration import PhysicsConfig
+from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig, PhysicsConfig
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.components.weather import Weather
 from hisim.simulationparameters import SimulationParameters
 from hisim.component import ConfigBase
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 
 __authors__ = "Kristina Dabrock"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
@@ -60,6 +63,12 @@ class SolarThermalSystemConfig(ConfigBase):
     # Whether on old solar pump or a new one is used
     old_solar_pump: bool
 
+    # techno-economic parameters
+    co2_footprint_kg_co2eq: float
+    investment_cost_eur: float
+    lifetime_y: float
+    maintenance_cost_eur_per_y: float
+
     # Weight of component, defines hierachy in control. The default is 1.
     source_weight: int
 
@@ -93,10 +102,20 @@ class SolarThermalSystemConfig(ConfigBase):
             a_1_w_m2_k=a_1_w_m2_k,  # W/(m2*K)
             a_2_w_m2_k=a_2_w_m2_k,  # W/(m2*K2)
             old_solar_pump=old_solar_pump,
+            co2_footprint_kg_co2eq=(
+                area_m2 * (240.1/2.03) # material solar collector
+                + area_m2 * (34.74/2.03) + 108.28 # material external support
+                + area_m2 * (8.64/2.03) # manufacturing solar collector
+                + area_m2 * (2.53/2.03) # manufacturing external support
+                + area_m2 * (4.39*0.56/2.03)),  # 56% (share of mass of solar collector+support/total, i.e., including storage) 
+                                                # of transport phase 1 https://www.tandfonline.com/doi/full/10.1080/19397030903362869#d1e1255
+            investment_cost_eur= area_m2 * 797, # Flachkollektoren 
+                                                # https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
+            maintenance_cost_eur_per_y=100, # https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
+            lifetime_y=20, #https://www.tandfonline.com/doi/full/10.1080/19397030903362869#d1e1712
             source_weight=source_weight,
         )
-
-
+    
 class SolarThermalSystem(Component):
     """Solar thermal system.
 
@@ -270,6 +289,79 @@ class SolarThermalSystem(Component):
             self.get_default_connections_from_controller()
         )
 
+    @staticmethod
+    def get_cost_capex(config: SolarThermalSystemConfig, simulation_parameters: SimulationParameters) -> CapexCostDataClass:
+        """Returns investment cost, CO2 emissions and lifetime."""
+        seconds_per_year = 365 * 24 * 60 * 60
+        capex_per_simulated_period = (config.investment_cost_eur / config.lifetime_y) * (
+            simulation_parameters.duration.total_seconds() / seconds_per_year
+        )
+        device_co2_footprint_per_simulated_period = (config.co2_footprint_kg_co2eq / config.lifetime_y) * (
+            simulation_parameters.duration.total_seconds() / seconds_per_year
+        )
+
+        capex_cost_data_class = CapexCostDataClass(
+            capex_investment_cost_in_euro=config.investment_cost_eur,
+            device_co2_footprint_in_kg=config.co2_footprint_kg_co2eq,
+            lifetime_in_years=config.lifetime_y,
+            capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
+            device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
+            kpi_tag=KpiTagEnumClass.SOLAR_THERMAL
+        )
+        return capex_cost_data_class
+
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> OpexCostDataClass:
+        # pylint: disable=unused-argument
+        """Calculate OPEX."""
+        for index, output in enumerate(all_outputs):
+            if (
+                output.component_name == self.component_name
+                and output.field_name == self.ElectricityConsumptionOutput
+                and output.unit == loadtypes.Units.WATT_HOUR
+            ):
+                consumption_in_kilowatt_hour = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
+                break
+
+        emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
+            self.my_simulation_parameters.year
+        )
+
+        opex_cost_data_class = OpexCostDataClass(
+            opex_energy_cost_in_euro=consumption_in_kilowatt_hour * emissions_and_cost_factors.electricity_costs_in_euro_per_kwh,
+            opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
+            co2_footprint_in_kg=consumption_in_kilowatt_hour * emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh,
+            consumption_in_kwh=consumption_in_kilowatt_hour,
+            loadtype=loadtypes.LoadTypes.WARM_WATER,
+            kpi_tag=KpiTagEnumClass.SOLAR_THERMAL
+        )
+
+        return opex_cost_data_class
+    
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        return []
+
+
+    def calc_maintenance_cost(self) -> float:
+        """Calc maintenance_cost per simulated period as share of capex of component."""
+        seconds_per_year = 365 * 24 * 60 * 60
+
+        # add maintenance costs per simulated period
+        maintenance_cost_per_simulated_period_in_euro: float = (
+            self.config.maintenance_cost_eur_per_y
+            * (self.my_simulation_parameters.duration.total_seconds() / seconds_per_year)
+        )
+        return maintenance_cost_per_simulated_period_in_euro
+    
     def get_default_connections_from_simple_hot_water_storage(
         self,
     ):

@@ -409,7 +409,7 @@ class GenericBoiler(Component):
         )
 
         # thermal power delivered from combustion
-        thermal_power_delivered_in_watt = maximum_power_used_in_watt * real_combustion_efficiency * control_signal
+        thermal_power_delivered_in_watt = maximum_power_used_in_watt * real_combustion_efficiency
         thermal_energy_delivered_in_watt_hour = (
             thermal_power_delivered_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
         )

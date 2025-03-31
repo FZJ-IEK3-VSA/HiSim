@@ -103,19 +103,20 @@ class SolarThermalSystemConfig(ConfigBase):
             a_2_w_m2_k=a_2_w_m2_k,  # W/(m2*K2)
             old_solar_pump=old_solar_pump,
             co2_footprint_kg_co2eq=(
-                area_m2 * (240.1/2.03) # material solar collector
-                + area_m2 * (34.74/2.03) + 108.28 # material external support
-                + area_m2 * (8.64/2.03) # manufacturing solar collector
-                + area_m2 * (2.53/2.03) # manufacturing external support
-                + area_m2 * (4.39*0.56/2.03)),  # 56% (share of mass of solar collector+support/total, i.e., including storage) 
-                                                # of transport phase 1 https://www.tandfonline.com/doi/full/10.1080/19397030903362869#d1e1255
-            investment_cost_eur= area_m2 * 797, # Flachkollektoren 
+                area_m2 * (240.1 / 2.03)  # material solar collector
+                + area_m2 * (34.74 / 2.03) + 108.28  # material external support
+                + area_m2 * (8.64 / 2.03)  # manufacturing solar collector
+                + area_m2 * (2.53 / 2.03)  # manufacturing external support
+                + area_m2 * (4.39 * 0.56 / 2.03)),  # 56% (share of mass of solar collector+support/total, i.e., including storage)
+                                                    # of transport phase 1 https://www.tandfonline.com/doi/full/10.1080/19397030903362869#d1e1255
+            investment_cost_eur=area_m2 * 797,  # Flachkollektoren
                                                 # https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
-            maintenance_cost_eur_per_y=100, # https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
-            lifetime_y=20, #https://www.tandfonline.com/doi/full/10.1080/19397030903362869#d1e1712
+            maintenance_cost_eur_per_y=100,  # https://www.co2online.de/modernisieren-und-bauen/solarthermie/solarthermie-preise-kosten-amortisation/
+            lifetime_y=20,  # https://www.tandfonline.com/doi/full/10.1080/19397030903362869#d1e1712
             source_weight=source_weight,
         )
-    
+
+
 class SolarThermalSystem(Component):
     """Solar thermal system.
 
@@ -340,7 +341,6 @@ class SolarThermalSystem(Component):
         )
 
         return opex_cost_data_class
-    
 
     def get_component_kpi_entries(
         self,
@@ -349,7 +349,6 @@ class SolarThermalSystem(Component):
     ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         return []
-
 
     def calc_maintenance_cost(self) -> float:
         """Calc maintenance_cost per simulated period as share of capex of component."""
@@ -361,7 +360,7 @@ class SolarThermalSystem(Component):
             * (self.my_simulation_parameters.duration.total_seconds() / seconds_per_year)
         )
         return maintenance_cost_per_simulated_period_in_euro
-    
+
     def get_default_connections_from_simple_hot_water_storage(
         self,
     ):

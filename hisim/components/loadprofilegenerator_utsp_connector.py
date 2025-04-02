@@ -811,7 +811,7 @@ class UtspLpgConnector(cp.Component):
 
                 # check if cache for utsp config exists and get or make cache filepath
                 file_exists, cache_filepath = utils.get_cache_file(
-                    component_key=self.component_name,
+                    component_key=self.config.name,
                     parameter_class=new_config_object,
                     my_simulation_parameters=self.my_simulation_parameters,
                     cache_dir_path=cache_dir_path,
@@ -822,7 +822,7 @@ class UtspLpgConnector(cp.Component):
         # config household is one jsonreference
         else:
             file_exists, cache_filepath = utils.get_cache_file(
-                component_key=self.component_name,
+                component_key=self.config.name,
                 parameter_class=self.utsp_config,
                 my_simulation_parameters=self.my_simulation_parameters,
                 cache_dir_path=cache_dir_path,

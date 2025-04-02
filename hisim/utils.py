@@ -272,6 +272,8 @@ def get_cache_file(
     It works by turning the class into a json string, hashing the string and then using that as filename.
     The idea is to have a unique file path for every possible configuration.
     """
+    if hasattr(parameter_class, "building_name"):
+        setattr(parameter_class, "building_name", None)
     json_str = parameter_class.to_json()
     if cache_dir_path is None:
         cache_dir_path = my_simulation_parameters.cache_dir_path

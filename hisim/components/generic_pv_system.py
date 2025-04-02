@@ -647,7 +647,7 @@ class PVSystem(cp.Component):
     def i_prepare_simulation(self) -> None:
         """Prepares the component for the simulation."""
         file_exists, self.cache_filepath = utils.get_cache_file(
-            "PVSystem", self.pvconfig, self.my_simulation_parameters
+            self.config.name, self.pvconfig, self.my_simulation_parameters
         )
 
         if file_exists:

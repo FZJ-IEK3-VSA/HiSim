@@ -30,6 +30,7 @@ class KpiTagEnumClass(Enum):
     CAR = "Car"
     CAR_BATTERY = "Car Battery"
     ROOFTOP_PV = "Rooftop PV"
+    SOLAR_THERMAL = "Solar Thermal"
     STORAGE_DOMESTIC_HOT_WATER = "Storage For Domestic Hot Water"
     STORAGE_HOT_WATER_SPACE_HEATING = "Storage For Space Heating Hot Water"
     WINDTURBINE = "Wind Turbine"

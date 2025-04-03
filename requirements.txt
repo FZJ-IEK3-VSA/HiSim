@@ -4,6 +4,7 @@ matplotlib
 seaborn
 reportlab
 pvlib # ==0.10.2
+oemof.thermal
 openpyxl
 pytest
 sphinx

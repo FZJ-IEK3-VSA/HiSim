@@ -20,7 +20,7 @@ MY_SIMULATION_PARAMETERS = {
     "seconds_per_timestep": 900,
     "post_processing_options": [9, 18, 19, 20, 22],
 }
-MY_RESULT_DIRECTORY = "test_system_setups/results/test_household_heat_pump_with_system_setup_starter"
+MY_RESULT_DIRECTORY = "results/test_household_heat_pump_with_system_setup_starter"
 
 
 def create_results_directory(result_directory):

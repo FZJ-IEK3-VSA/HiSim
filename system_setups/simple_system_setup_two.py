@@ -30,7 +30,7 @@ def setup_function(my_sim: Simulator, my_simulation_parameters: Optional[Simulat
     The result is a series (my_sum) with random values between 150 and 300.
     """
     log.information("Starting second system setup")
-
+    
     # Set the simulation parameters for the simulation
     if my_simulation_parameters is None:
         my_simulation_parameters = SimulationParameters.full_year(

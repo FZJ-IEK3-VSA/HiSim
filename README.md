@@ -214,7 +214,7 @@ Initiative ["Energy System 2050   A Contribution of the Research Field Energy"](
 
 <a href="https://www.helmholtz.de/en/"><img src="https://www.helmholtz.de/fileadmin/user_upload/05_aktuelles/Marke_Design/logos/HG_LOGO_S_ENG_RGB.jpg" alt="Helmholtz Logo" width="200px" style="float:right"></a>
 
-For this work weather data is based on data from ["German Weather Service (Deutscher Wetterdienst-DWD)"](https://www.dwd.de/DE/Home/home_node.html/) and ["NREL National Solar Radiation Database"](https://nsrdb.nrel.gov/data-viewer/download/intro/) (License: Creative Commons Attribution 3.0 United States License); individual values are averaged.
+For this work weather data is based on data from ["German Weather Service (Deutscher Wetterdienst-DWD)"](https://www.dwd.de/DE/Home/home_node.html/, https://www.dwd.de/DE/service/rechtliche_hinweise/rechtliche_hinweise_node.html) and ["NREL National Solar Radiation Database"](https://nsrdb.nrel.gov/data-viewer/download/intro/) (License: Creative Commons Attribution 3.0 United States License, Creative Commons BY 4.0); individual values are averaged.
 
 <a href="https://www.dwd.de/"><img src="https://www.dwd.de/SharedDocs/bilder/DE/logos/dwd/dwd_logo_258x69.png?__blob=normal&v=1" alt="DWD Logo" width="200px" style="float:right"></a>
 

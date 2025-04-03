@@ -1,6 +1,6 @@
 """Test for json executor."""
 import pytest
-from tests.test_json_generator import ExampleConfig
+from tests.base.test_json_generator import ExampleConfig
 from hisim.json_executor import JsonExecutor
 from hisim import utils
 

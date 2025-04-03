@@ -6,7 +6,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.components import generic_electrolyzer_h2
 from hisim.simulationparameters import SimulationParameters
-from tests import functions_for_testing as fft
+from tests.base import functions_for_testing as fft
 
 
 @pytest.mark.base

@@ -1,7 +1,7 @@
 """Test for controller l1 generic electrolyzer."""
 
 import pytest
-from tests import functions_for_testing as fft
+from tests.base import functions_for_testing as fft
 from hisim import component as cp
 from hisim.components import controller_l1_electrolyzer_h2
 from hisim import loadtypes as lt

@@ -1,6 +1,6 @@
 """Test for generic windturbine."""
 import pytest
-from tests import functions_for_testing as fft
+from tests.base import functions_for_testing as fft
 from hisim import sim_repository
 from hisim import component
 from hisim.components import weather

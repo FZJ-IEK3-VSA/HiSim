@@ -6,7 +6,7 @@ from hisim import component as cp
 from hisim.components import simple_water_storage
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from tests import functions_for_testing as fft
+from tests.base import functions_for_testing as fft
 
 
 @pytest.mark.base

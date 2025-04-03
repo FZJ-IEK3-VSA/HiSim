@@ -12,7 +12,7 @@ from utspclient.helpers.lpgdata import (
 )
 from utspclient.helpers.lpgpythonbindings import JsonReference
 from dotenv import load_dotenv
-from tests import functions_for_testing as fft
+from tests.base import functions_for_testing as fft
 from hisim import component
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.simulationparameters import SimulationParameters

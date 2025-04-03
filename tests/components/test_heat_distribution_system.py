@@ -7,7 +7,7 @@ from hisim.components import heat_distribution_system, building
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
-from tests import functions_for_testing as fft
+from tests.base import functions_for_testing as fft
 
 
 @pytest.mark.base

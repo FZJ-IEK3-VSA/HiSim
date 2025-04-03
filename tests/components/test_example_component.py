@@ -8,7 +8,7 @@ from hisim import loadtypes as lt
 from hisim import log
 from hisim.components import example_component
 from hisim.simulationparameters import SimulationParameters
-from tests import functions_for_testing as fft
+from tests.base import functions_for_testing as fft
 
 
 @pytest.mark.system_setups

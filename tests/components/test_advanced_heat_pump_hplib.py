@@ -1,7 +1,7 @@
 """Test for advanced heat pump hplib."""
 
 import pytest
-from tests import functions_for_testing as fft
+from tests.base import functions_for_testing as fft
 from hisim import component as cp
 from hisim.components.advanced_heat_pump_hplib import (
     HeatPumpHplib,

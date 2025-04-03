@@ -14,7 +14,7 @@ from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim import utils
-from tests import functions_for_testing as fft
+from tests.base import functions_for_testing as fft
 
 
 @pytest.mark.base

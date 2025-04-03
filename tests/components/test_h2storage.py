@@ -5,7 +5,7 @@ Created on Thu Jul 21 10:08:01 2022.
 """
 # -*- coding: utf-8 -*-
 import pytest
-from tests import functions_for_testing as fft
+from tests.base import functions_for_testing as fft
 from hisim import component as cp
 
 from hisim import loadtypes as lt

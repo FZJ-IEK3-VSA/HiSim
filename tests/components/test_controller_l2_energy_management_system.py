@@ -105,9 +105,14 @@ def test_house(
     my_sim.add_component(my_weather)
 
     # Build PV
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(building_name=building_name,
+    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
+        building_name=building_name,
         rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2,
-        share_of_maximum_pv_potential=1.0,)
+        share_of_maximum_pv_potential=1.0,
+        module_name="Hanwha HSL60P6-PA-4-250T [2013]",
+        module_database=generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
+        inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
+        inverter_database=generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE)
     my_photovoltaic_system = generic_pv_system.PVSystem(
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,)

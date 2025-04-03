@@ -9,7 +9,7 @@ from hisim.components import generic_pv_system
 from hisim.simulationparameters import SimulationParameters
 from hisim.json_generator import JsonConfigurationGenerator
 from hisim.postprocessingoptions import PostProcessingOptions
-
+from pathlib import Path
 
 @pytest.mark.base
 def test_execute_json_generator():
@@ -60,4 +60,8 @@ class ExampleConfig:
         jcg.add_default_connection(from_entry=occ_entry, to_entry=building_entry)
         jcg.add_default_connection(from_entry=weather_entry, to_entry=pv_entry)
         # jcg.add_manual_connection(from_entry=weather_entry, output_name=)
-        jcg.save_to_json("cfg.json")
+        path = Path(__file__).parent / "json_generator_results"
+        path.mkdir(parents=True, exist_ok=True)
+        path = path / "cfg.json"
+        print("Save json generator results here: ", path)
+        jcg.save_to_json(str(path))

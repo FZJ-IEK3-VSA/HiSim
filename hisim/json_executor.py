@@ -72,7 +72,7 @@ class JsonExecutor:
         my_simulation_parameters: SimulationParameters = self.my_simulation_parameters
 
         simulator: Simulator = Simulator(
-            module_directory="json",
+            module_directory=PathlibPath.cwd() / "base" / "json_executor_results",
             setup_function="json_func",
             my_simulation_parameters=my_simulation_parameters,
             module_filename="json.py",

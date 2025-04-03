@@ -36,7 +36,7 @@ def test_system_setup_starter():
         },
     }
 
-    result_directory = "test_system_setup_starter_results"
+    result_directory = str(Path(__file__).parent / "results" / "test_system_setup_starter_results")
     if Path(result_directory).is_dir():
         shutil.rmtree(result_directory)
     Path(result_directory).mkdir(parents=True)
@@ -114,7 +114,7 @@ def test_system_setup_starter_scaling():
         },
     }
 
-    result_directory = "test_system_setup_starter_scaling_results"
+    result_directory = str(Path(__file__).parent / "test_system_setup_starter_scaling_results")
     if Path(result_directory).is_dir():
         shutil.rmtree(result_directory)
     Path(result_directory).mkdir(parents=True)

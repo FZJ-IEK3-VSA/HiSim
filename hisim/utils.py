@@ -13,6 +13,7 @@ from functools import reduce as freduce
 from functools import wraps
 from timeit import default_timer as timer
 from typing import Any, Dict, List, Optional, Tuple
+import copy
 
 import pandas as pd
 import psutil
@@ -272,7 +273,10 @@ def get_cache_file(
     It works by turning the class into a json string, hashing the string and then using that as filename.
     The idea is to have a unique file path for every possible configuration.
     """
-    json_str = parameter_class.to_json()
+    parameter_class_copy = copy.deepcopy(parameter_class)
+    if hasattr(parameter_class_copy, "building_name"):
+        setattr(parameter_class_copy, "building_name", None)
+    json_str = parameter_class_copy.to_json()
     if cache_dir_path is None:
         cache_dir_path = my_simulation_parameters.cache_dir_path
     if my_simulation_parameters is None:

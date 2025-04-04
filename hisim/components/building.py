@@ -250,7 +250,7 @@ class Building(cp.Component):
             self.is_in_cache,
             self.cache_file_path,
         ) = utils.get_cache_file(
-            self.component_name,
+            self.config.name,
             self.buildingconfig,
             self.my_simulation_parameters,
         )

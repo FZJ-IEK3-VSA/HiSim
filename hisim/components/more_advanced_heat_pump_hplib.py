@@ -997,11 +997,11 @@ class MoreAdvancedHeatPumpHPLib(Component):
             if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
                 self.heatpump.delta_t = 5
                 results = self.get_cached_results_or_run_hplib_simulation(
-                    force_convergence=force_convergence,
                     t_in_primary=t_in_primary,
                     t_in_secondary=t_in_secondary_sh,
                     t_amb=t_amb,
                     mode=1,
+                    operation_mode="heating_building",
                     p_th_min=self.minimum_thermal_output_power
                 )
 
@@ -1029,11 +1029,11 @@ class MoreAdvancedHeatPumpHPLib(Component):
                     self.heatpump.delta_t = 0.00000001
 
                 results = self.get_cached_results_or_run_hplib_simulation(
-                    force_convergence=force_convergence,
                     t_in_primary=t_in_primary,
                     t_in_secondary=t_in_secondary_sh,
                     t_amb=t_amb,
                     mode=1,
+                    operation_mode="heating_building",
                     p_th_min=self.minimum_thermal_output_power
                 )
 
@@ -1077,11 +1077,11 @@ class MoreAdvancedHeatPumpHPLib(Component):
             self.minimum_thermal_output_power = 0.0
             if self.position_hot_water_storage_in_system == PositionHotWaterStorageInSystemSetup.PARALLEL:
                 results = self.get_cached_results_or_run_hplib_simulation(
-                    force_convergence=force_convergence,
                     t_in_primary=t_in_primary,
                     t_in_secondary=t_in_secondary_dhw,
                     t_amb=t_amb,
                     mode=1,
+                    operation_mode="heating_dhw",
                     p_th_min=self.minimum_thermal_output_power
                 )
 
@@ -1110,11 +1110,11 @@ class MoreAdvancedHeatPumpHPLib(Component):
                 m_dot_dhw = self.m_dot_ref
 
                 results = self.get_cached_results_or_run_hplib_simulation(
-                    force_convergence=force_convergence,
                     t_in_primary=t_in_primary,
                     t_in_secondary=t_in_secondary_dhw,
                     t_amb=t_amb,
                     mode=1,
+                    operation_mode="heating_dhw",
                     p_th_min=self.minimum_thermal_output_power
                 )
 
@@ -1155,11 +1155,11 @@ class MoreAdvancedHeatPumpHPLib(Component):
             # Calulate outputs for cooling mode
             self.heatpump.delta_t = 5
             results = self.get_cached_results_or_run_hplib_simulation(
-                force_convergence=force_convergence,
                 t_in_primary=t_in_primary,
                 t_in_secondary=t_in_secondary_sh,
                 t_amb=t_amb,
                 mode=2,
+                operation_mode="cooling_building",
                 p_th_min=self.minimum_thermal_output_power
             )
             p_th_sh = results["P_th"]
@@ -1406,18 +1406,17 @@ class MoreAdvancedHeatPumpHPLib(Component):
         return opex_cost_data_class
 
     def get_cached_results_or_run_hplib_simulation(
-        self, force_convergence: bool, t_in_primary: float, t_in_secondary: float, t_amb: float, mode: int, p_th_min: float
+        self, t_in_primary: float, t_in_secondary: float, t_amb: float, mode: int, operation_mode: str, p_th_min: float
     ) -> Any:
         """Use caching of results of HPLib simulation."""
 
         # rounding of variable values
-        if not force_convergence:
-            t_in_primary = round(t_in_primary, 1)
-            t_in_secondary = round(t_in_secondary, 1)
-            t_amb = round(t_amb, 1)
+        t_in_primary = round(t_in_primary, 1)
+        t_in_secondary = round(t_in_secondary, 1)
+        t_amb = round(t_amb, 1)
 
         my_data_class = CalculationRequest(
-            t_in_primary=t_in_primary, t_in_secondary=t_in_secondary, t_amb=t_amb, mode=mode,
+            t_in_primary=t_in_primary, t_in_secondary=t_in_secondary, t_amb=t_amb, mode=mode, operation_mode=operation_mode
         )
         my_json_key = my_data_class.get_key()
         my_hash_key = hashlib.sha256(my_json_key.encode("utf-8")).hexdigest()
@@ -1831,11 +1830,12 @@ class CalculationRequest(JSONWizard):
     t_in_secondary: float
     t_amb: float
     mode: int
+    operation_mode: str
 
     def get_key(self):
         """Get key of class with important parameters."""
 
-        return str(self.t_in_primary) + " " + str(self.t_in_secondary) + " " + str(self.t_amb) + " " + str(self.mode)
+        return str(self.t_in_primary) + " " + str(self.t_in_secondary) + " " + str(self.t_amb) + " " + str(self.mode) + " " + str(self.operation_mode)
 
 
 @dataclass_json

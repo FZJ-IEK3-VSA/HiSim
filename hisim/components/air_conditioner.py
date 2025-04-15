@@ -20,7 +20,7 @@ from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDict
 
 __authors__ = "Marwa Alfouly, Kristina Dabrock"
 __copyright__ = "Copyright 2021, the House Infrastructure Project"
-__credits__ = ["Noah Pflugradt"]
+__credits__ = ["Noah Pflugradt, Marwa Alfouly, Kristina Dabrock"]
 __license__ = "MIT"
 __version__ = "0.1"
 __maintainer__ = "Kristina Dabrock"
@@ -63,43 +63,6 @@ class AirConditionerConfig(ConfigBase):
         )
         return config
 
-class AirConditionerState:
-    """Data class that saves the state of the air conditioner."""
-
-    def __init__(self, operating_mode: str, activation_time_step: int, deactivation_time_step: int, modulating_percentage: float) -> None:
-        """Initializes the air conditioner state."""
-        self.operating_mode: str = operating_mode
-        self.activation_time_step: int = activation_time_step
-        self.deactivation_time_step: int = deactivation_time_step
-        self.modulating_percentage: float = modulating_percentage
-
-    def clone(self) -> "AirConditionerState":
-        """Copies the current instance."""
-        return AirConditionerState(
-            operating_mode=self.operating_mode,
-            activation_time_step=self.activation_time_step,
-            deactivation_time_step=self.deactivation_time_step,
-            modulating_percentage=self.modulating_percentage,
-        )
-
-    def i_prepare_simulation(self) -> None:
-        """Prepares the simulation."""
-        pass
-
-    def activate_heating(self, timestep: int) -> None:
-        """Activates heating and remembers the time step."""
-        self.operating_mode = "heating"
-        self.activation_time_step = timestep
-
-    def activate_cooling(self, timestep: int) -> None:
-        """Activates cooling and remembers the time step."""
-        self.operating_mode = "cooling"
-        self.activation_time_step = timestep
-
-    def deactivate(self, timestep: int) -> None:
-        """Deactivates the heat pump and remembers the time step."""
-        self.operating_mode = "off"
-        self.deactivation_time_step = timestep   
 
 class AirConditioner(cp.Component):
     """Class for air-conditioner."""
@@ -108,7 +71,6 @@ class AirConditioner(cp.Component):
     OperatingState = "State"
     ModulatingPowerSignal = "ModulatingPowerSignal"
     OutdoorAirTemperature = "TemperatureOutside"
-    # IndoorAirTemperature = "IndoorAirTemperature"
     GridImport = "GridImport"
     PV2load = "PV2load"
     Battery2Load = "Battery2Load"
@@ -132,8 +94,6 @@ class AirConditioner(cp.Component):
 
         self.my_simulation_parameters = my_simulation_parameters
         self.config = config
-        self.state = AirConditionerState("off", 0, 0, 0)
-        self.previous_state = self.state
         component_name = self.get_component_name()
         super().__init__(
             name=component_name,
@@ -392,7 +352,6 @@ class AirConditioner(cp.Component):
             pass
         outside_air_temperature_deg_c = stsv.get_input_value(self.t_out_channel)
         modulating_signal = stsv.get_input_value(self.modulating_power_signal_channel)
-        self.state.modulating_percentage = modulating_signal
 
         test_factor = 0.2
 
@@ -400,16 +359,11 @@ class AirConditioner(cp.Component):
         if modulating_signal > 0: # heating
             efficiency = self.calculate_coefficient_of_performance(outside_air_temperature_deg_c)
             heating_capacity = self.calculate_heating_capacity(outside_air_temperature_deg_c)
-            # print("heating capacity: " + str(heating_capacity))
             thermal_energy_delivered = heating_capacity * test_factor * modulating_signal
         elif modulating_signal < 0: # cooling
-            if self.previous_state.operating_mode != "cooling":
-                self.state.activate_cooling(timestep)
             efficiency = self.calculate_energy_efficiency_ratio(outside_air_temperature_deg_c)
             thermal_energy_delivered = self.calculate_cooling_capacity(outside_air_temperature_deg_c) * test_factor * modulating_signal
         else: # off
-            if self.previous_state.operating_mode != "off":
-                self.state.deactivate(timestep)
             thermal_energy_delivered = 0
 
         electricity_consumption = self.calculate_electricity_consumption(thermal_energy_delivered, efficiency)
@@ -417,7 +371,6 @@ class AirConditioner(cp.Component):
         stsv.set_output_value(self.efficiency, efficiency)
         stsv.set_output_value(self.electricity_consumption, electricity_consumption)
         stsv.set_output_value(self.thermal_energy_generation_channel, thermal_energy_delivered)
-        # print("thermal energy delivered: " + str(thermal_energy_delivered))
 
 
     def calculate_electricity_consumption(self, themal_energy: float, efficiency: float) -> float:
@@ -456,8 +409,8 @@ class AirConditionerControllerConfig(ConfigBase):
             cooling_set_temperature_deg_c=26.0,
             minimum_runtime_s=60 * 60,
             minimum_idle_time_s=15 * 60,
-            offset=5,
-            temperature_difference_full_power_deg_c=5,
+            offset=2,
+            temperature_difference_full_power_deg_c=3,
         )
 
         return config
@@ -606,14 +559,12 @@ class AirConditionerController(cp.Component):
         """Logs the most important config stuff to the report."""
         lines = []
         lines.append("Air Conditioner Controller")
-        lines.append("Control algorith of the Air conditioner is: on-off control\n")
         lines.append(f"Controller heating set temperature is {format(self.config.heating_set_temperature_deg_c)} Deg C \n")
         lines.append(f"Controller cooling set temperature is {format(self.config.cooling_set_temperature_deg_c)} Deg C \n")
         return self.config.get_string_dict() + lines
 
     def i_simulate(self, timestep: int, stsv: cp.SingleTimeStepValues, force_convergence: bool) -> None:
         """Core simulation."""
-        # print("#i_simulate controller")
         if force_convergence:
             self.state = self.processed_state.clone()
             new_operating_mode = self.state.mode
@@ -637,46 +588,51 @@ class AirConditionerController(cp.Component):
 
     def determine_operating_mode(self, current_temperature_deg_c: float, timestep: int) -> str:
         """Controller takes action to maintain defined comfort range."""
-        print("current temperature: " + str(current_temperature_deg_c))
-        print("previous state: " + self.state.mode)
-        print("active till: " + str(self.state.activation_time_step + self.minimum_runtime_in_timesteps))
-        print("inactive till: " + str(self.state.deactivation_time_step + self.minimum_resting_time_in_timesteps))
 
-        # Keep state as is because minimum operation and idle time not reached
-        if (self.state.mode == "heating") and (self.state.activation_time_step + self.minimum_runtime_in_timesteps > timestep):
-            # minimum runtime for heating not reached
-            return "heating"
-        if (self.state.mode == "cooling") and (self.state.activation_time_step + self.minimum_runtime_in_timesteps > timestep):
-            # minimum runtime for cooling not reached
-            return "cooling"
-        if (self.state.mode == "off") and (self.state.deactivation_time_step + self.minimum_resting_time_in_timesteps > timestep):
-            # minimum idle time not reached
-            return "off"
-        
-        # Keep state in deadband
-        if (self.processed_state.mode == "heating" or self.state.mode == "heating") and current_temperature_deg_c < self.config.heating_set_temperature_deg_c + self.config.offset:
-            if self.state.mode != 'heating':
+        # Enforce minimum operation time
+        if self.state.mode in {"heating", "cooling"}:
+            if self.state.activation_time_step + self.minimum_runtime_in_timesteps > timestep:
+                return self.state.mode
+
+        # Enforce minimum idle time
+        if self.state.mode == "off":
+            if self.state.deactivation_time_step + self.minimum_resting_time_in_timesteps > timestep:
+                return "off"
+
+        heating_setpoint = self.config.heating_set_temperature_deg_c
+        cooling_setpoint = self.config.cooling_set_temperature_deg_c
+        offset = self.config.offset
+
+        # Stay in heating if within heating deadband
+        if (self.state.mode == "heating" or self.processed_state.mode == "heating") and current_temperature_deg_c < heating_setpoint + offset:
+            if self.state.mode != "heating":
                 self.state.activate_heating(timestep)
             return "heating"
-        if (self.state.mode == "cooling") and current_temperature_deg_c > self.config.cooling_set_temperature_deg_c - self.config.offset:
+
+        # Stay in cooling if within cooling deadband
+        if self.state.mode == "cooling" and current_temperature_deg_c > cooling_setpoint - offset:
             return "cooling"
-        
-        # Change state based on temperature
-        if current_temperature_deg_c > self.config.cooling_set_temperature_deg_c + self.config.offset:
-            if self.state.mode != 'cooling':
+
+        # Switch to cooling if temperature exceeds upper cooling threshold
+        if current_temperature_deg_c > cooling_setpoint + offset:
+            if self.state.mode != "cooling":
                 self.state.activate_cooling(timestep)
             return "cooling"
-        if current_temperature_deg_c < self.config.heating_set_temperature_deg_c - self.config.offset:
-            if self.state.mode != 'heating':
+
+        # Switch to heating if temperature drops below lower heating threshold
+        if current_temperature_deg_c < heating_setpoint - offset:
+            if self.state.mode != "heating":
                 self.state.activate_heating(timestep)
             return "heating"
 
-        if self.config.heating_set_temperature_deg_c - self.config.offset < current_temperature_deg_c < self.config.cooling_set_temperature_deg_c + self.config.offset: 
-            if self.state.mode != 'off':
+        # In deadband range: switch off
+        if heating_setpoint - offset < current_temperature_deg_c < cooling_setpoint + offset:
+            if self.state.mode != "off":
                 self.state.deactivate(timestep)
             return "off"
-        
-        raise ValueError("Not handled")
+
+        raise ValueError("Unhandled temperature case: {:.2f}".format(current_temperature_deg_c))
+
         
     def modulate_power(self, current_temperature_deg_c: float, operating_mode: str) -> float:
         """

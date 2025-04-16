@@ -11,7 +11,7 @@ import contextlib
 from ast import literal_eval
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, Set
 import copy
 import enum
 import pandas as pd
@@ -408,7 +408,7 @@ class UtspLpgConnector(cp.Component):
 
     def get_profiles_from_local_lpg(
         self,
-        lpg_households: JsonReference,
+        lpg_households: Union[JsonReference, List[JsonReference]]
     ) -> Tuple[
         Union[str, List],
         Union[str, List],
@@ -451,7 +451,7 @@ class UtspLpgConnector(cp.Component):
                 car_states_file,
                 car_locations_file,
                 driving_distances_file,
-            ) = self.calculate_multiple_lpg_request(
+            ) = self.calculate_multiple_lpg_request(  # type: ignore
                 households=lpg_households,
             )
 
@@ -979,9 +979,10 @@ class UtspLpgConnector(cp.Component):
 
         return guid_list
 
-    def execute_local_lpg_single_household(self, calculation_index, household: JsonReference) -> str:
+    def execute_local_lpg_single_household(self, calculation_index, household: JsonReference,
+                                           random_seed = None) -> str:
 
-        mobility_set = set()
+        mobility_set: Set[Optional[str]] = set()
         for elem in [
             self.utsp_config.charging_station_set,
             self.utsp_config.transportation_device_set,
@@ -1023,7 +1024,6 @@ class UtspLpgConnector(cp.Component):
                 energy_intensity = self.utsp_config.energy_intensity
 
                 resolution = self.get_resolution()
-                random_seed = None
 
                 calc_options = [
                     CalcOption.JsonHouseholdSumFiles,
@@ -1080,7 +1080,7 @@ class UtspLpgConnector(cp.Component):
 
                 path_to_result_folder = os.path.join(lpe.calculation_directory, request.CalcSpec.OutputDirectory)
 
-        return path_to_result_folder
+        return str(path_to_result_folder)
 
     def calculate_one_lpg_request(self, household: JsonReference) -> Tuple[str, str, str, str, str, str, str, str, str]:
         """Calculate one lpg request."""
@@ -1101,7 +1101,9 @@ class UtspLpgConnector(cp.Component):
 
         log.information("Requesting LPG profiles from local lpg for one household.")
 
-        result_folder = self.execute_local_lpg_single_household(calculation_index=1, household=household)
+        result_folder = self.execute_local_lpg_single_household(calculation_index=1,
+                                                                household=household,
+                                                                random_seed=None)
 
         # decode required result files
         electricity_file = os.path.join(result_folder, electricity)
@@ -1164,7 +1166,9 @@ class UtspLpgConnector(cp.Component):
         result_folder_list = []
         calculation_index = 1
         for household in households:
-            result_folder = self.execute_local_lpg_single_household(calculation_index, household)
+            result_folder = self.execute_local_lpg_single_household(calculation_index=calculation_index,
+                                                                    household=household,
+                                                                    random_seed=None)
             calculation_index = calculation_index + 1
             result_folder_list.append(result_folder)
 
@@ -1502,9 +1506,8 @@ class UtspLpgConnector(cp.Component):
             if data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
                 json_filex = json.loads(filecontent)
             # this is used for files from predefined profile
-            elif (
-                data_acquisition_mode == LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
-                or data_acquisition_mode == LpgDataAcquisitionMode.USE_LOCAL_LPG
+            elif (data_acquisition_mode in
+                  (LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE, LpgDataAcquisitionMode.USE_LOCAL_LPG)
             ):
                 with open(filecontent, encoding="utf-8") as json_file:
                     json_filex = json.load(json_file)
@@ -1564,10 +1567,8 @@ class UtspLpgConnector(cp.Component):
             inner_device_heat_gains_list = pd.to_numeric(
                 pre_inner_device_heat_gains["Sum [kWh]"] * 1000 * 60
             ).tolist()  # 1 kWh/min == 60W / min
-        elif (
-            data_acquisition_mode == LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
-            or data_acquisition_mode == LpgDataAcquisitionMode.USE_LOCAL_LPG
-        ):
+        elif (data_acquisition_mode in
+              (LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE, LpgDataAcquisitionMode.USE_LOCAL_LPG)):
             # load electricity consumption, water consumption and inner device heat gains
             pre_electricity_consumption = pd.read_csv(
                 electricity,

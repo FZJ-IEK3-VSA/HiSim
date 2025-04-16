@@ -41,8 +41,9 @@ def test_occupancy_scaling_with_utsp():
         data_acquisition_mode_after_initialization
         == loadprofilegenerator_utsp_connector.LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
     ):
-        raise ValueError(
-            "This test makes only sense if the local LPG can be used for data acquisition. Here the use of the Local LPG was not possible. Therefore this test will be ignored."
+        log.error(
+            "This test makes only sense if the local LPG can be used for data acquisition. "
+            "Here the use of the Local LPG was not possible. Therefore this test will be ignored."
         )
 
     else:

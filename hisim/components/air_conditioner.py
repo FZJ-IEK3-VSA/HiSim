@@ -45,14 +45,73 @@ class AirConditionerConfig(ConfigBase):
     name: str
     manufacturer: str
     model_name: str
+    t_out_cooling_ref: float
+    t_out_heating_ref: float
+    eer_ref: float
+    cop_ref: float 
+    cooling_capacity_ref: float
+    heating_capacity_ref: float
     cost: float
     lifetime: int
     co2_emissions_kg_co2_eq: float
+    maintenance_cost_as_percentage_of_investment: float
 
     @classmethod
     def get_main_classname(cls):
         """Return the full class name of the main component class."""
         return AirConditioner.get_full_classname()
+    
+    def __init__(self, building_name: str, name: str, manufacturer="Panasonic", model_name="CS-RE18JKE/CU-RE18JKE"):
+        self.building_name = building_name
+        self.name=name
+        self.manufacturer="Panasonic"
+        self.model_name="CS-RE18JKE/CU-RE18JKE"
+
+        air_conditioners = utils.load_smart_appliance("Air Conditioner")
+        air_conditioner = next(
+            (
+                ac
+                for ac in air_conditioners
+                if ac["Manufacturer"] == manufacturer
+                and ac["Model"] == model_name
+            ),
+            None,
+        )
+
+        if air_conditioner is None:
+            raise Exception(
+                "Air conditioner model not registered in the database"
+            )
+
+        # Prepare reference data for interpolation
+        self.t_out_cooling_ref = air_conditioner[
+            "Outdoor temperature range - cooling"
+        ]
+        self.t_out_heating_ref = air_conditioner[
+            "Outdoor temperature range - heating"
+        ]
+        self.eer_ref = air_conditioner["EER W/W"]
+        self.cop_ref = air_conditioner["COP W/W"]
+        self.cooling_capacity_ref = air_conditioner["Cooling capacity W"]
+        self.heating_capacity_ref = air_conditioner["Heating capacity W"]
+        # Based on https://www.obi.de/magazin/bauen/haustechnik/klimaanlage/klima-splitgeraet#Kosten
+        ac_type = air_conditioner["Type"].replace("-", " ").lower()
+        if "single split" in ac_type:
+            installation_cost = 1400
+        elif "duo" in ac_type:
+            installation_cost = 2350
+        elif "ducted" in ac_type or "triple" in ac_type:
+            installation_cost = 3300
+        else:
+            raise ValueError(f"No installation cost information for type {air_conditioner['Type']}")
+        self.cost = 3000 + installation_cost # TODO air_conditioner["Price"]
+        self.maintenance_cost_as_percentage_of_investment = 0.05
+        # Lifetime estimation:
+        # 10 years https://www.deutschlandfunk.de/belastung-fuer-die-atmosphaere-der-vormarsch-der-100.html, 
+        # 10-15 years https://klivago.de/faq-was-man-ueber-eine-klimaanlage-wissen-sollte
+        # 15 years https://volted.ch/blogs/guides-fokus-und-bericht/wie-lange-halten-tragbare-klimaanlagen?srsltid=AfmBOoojFnnbhbCYtAGCZLzdawl4C8zeNvRtc9GFeCICEwaWB6ZdKhSt
+        self.lifetime = 12
+        self.co2_emissions_kg_co2_eq = 165.84 # In first step same as for heat pump
 
     @classmethod
     def get_default_air_conditioner_config(
@@ -60,14 +119,12 @@ class AirConditionerConfig(ConfigBase):
         building_name: str = "BUI1",
     ) -> Any:
         """Return default air-conditioner configuration."""
+        
         return cls(
             building_name=building_name,
             name="AirConditioner",
             manufacturer="Panasonic",
-            model_name="CS-RE18JKE/CU-RE18JKE",
-            cost=0,
-            lifetime=0,
-            co2_emissions_kg_co2_eq=0,
+            model_name="CS-RE18JKE/CU-RE18JKE"
         )
 
 
@@ -238,42 +295,15 @@ class AirConditioner(cp.Component):
 
     def build(self, manufacturer: str, model_name: str):
         """Initialize internal variables using values from air conditioner database."""
-        air_conditioners = utils.load_smart_appliance("Air Conditioner")
-        air_conditioner = next(
-            (
-                ac
-                for ac in air_conditioners
-                if ac["Manufacturer"] == manufacturer
-                and ac["Model"] == model_name
-            ),
-            None,
-        )
-
-        if air_conditioner is None:
-            raise Exception(
-                "Air conditioner model not registered in the database"
-            )
-
-        # Prepare reference data for interpolation
-        self.t_out_cooling_ref = air_conditioner[
-            "Outdoor temperature range - cooling"
-        ]
-        self.t_out_heating_ref = air_conditioner[
-            "Outdoor temperature range - heating"
-        ]
-        self.eer_ref = air_conditioner["EER W/W"]
-        self.cop_ref = air_conditioner["COP W/W"]
-        self.cooling_capacity_ref = air_conditioner["Cooling capacity W"]
-        self.heating_capacity_ref = air_conditioner["Heating capacity W"]
 
         # Fit polynomials to simulate continuous values based on temperature
-        self.eer_coef = np.polyfit(self.t_out_cooling_ref, self.eer_ref, 1)
+        self.eer_coef = np.polyfit(self.config.t_out_cooling_ref, self.config.eer_ref, 1)
         self.cooling_capacity_coef = np.polyfit(
-            self.t_out_cooling_ref, self.cooling_capacity_ref, 1
+            self.config.t_out_cooling_ref, self.config.cooling_capacity_ref, 1
         )
-        self.cop_coef = np.polyfit(self.t_out_heating_ref, self.cop_ref, 1)
+        self.cop_coef = np.polyfit(self.config.t_out_heating_ref, self.config.cop_ref, 1)
         self.heating_capacity_coef = np.polyfit(
-            self.t_out_heating_ref, self.heating_capacity_ref, 1
+            self.config.t_out_heating_ref, self.config.heating_capacity_ref, 1
         )
 
         # Save coefficients for use by other components
@@ -549,6 +579,22 @@ class AirConditionerController(cp.Component):
             f"Heating set temperature: {self.config.heating_set_temperature_deg_c} °C",
             f"Cooling set temperature: {self.config.cooling_set_temperature_deg_c} °C",
         ]
+    
+    @staticmethod
+    def get_cost_capex(
+        config: AirConditionerControllerConfig, simulation_parameters: SimulationParameters
+    ) -> CapexCostDataClass:  # pylint: disable=unused-argument
+        """Returns investment cost, CO2 emissions and lifetime."""
+        # Returns default class, as controller itself has no opex cost
+        capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
+        return capex_cost_data_class
+    
+    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame) -> OpexCostDataClass:
+        """Returns opex costs of component."""
+
+        # Returns default class, as controller itself has no opex cost
+        opex_cost_data_class = OpexCostDataClass.get_default_opex_cost_data_class()
+        return opex_cost_data_class
 
     def i_simulate(
         self,

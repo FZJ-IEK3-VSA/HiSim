@@ -214,9 +214,6 @@ def setup_function(
         name="AirConditioner",
         model_name=ac_model,
         manufacturer=ac_manufacturer,
-        cost=0,
-        lifetime=0,
-        co2_emissions_kg_co2_eq=0
     )
     my_air_conditioner = air_conditioner.AirConditioner(
         config=my_air_conditioner_config,

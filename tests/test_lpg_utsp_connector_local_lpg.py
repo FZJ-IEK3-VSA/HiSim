@@ -95,7 +95,7 @@ def initialize_lpg_utsp_connector_and_return_results(
 
     # Set Occupancy
     result_path = "lpg_utsp_scaling_test"
-    travel_route_set = TravelRouteSets.Travel_Route_Set_for_10km_Commuting_Distance
+    travel_route_set = TravelRouteSets.Travel_Route_Set_for_30km_Commuting_Distance
     transportation_device_set = TransportationDeviceSets.Bus_and_one_30_km_h_Car
     charging_station_set = ChargingStationSets.Charging_At_Home_with_03_7_kW
     energy_intensity = EnergyIntensityType.EnergySaving

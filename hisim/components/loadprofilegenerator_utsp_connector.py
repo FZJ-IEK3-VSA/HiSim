@@ -668,10 +668,8 @@ class UtspLpgConnector(cp.Component):
                         )
                         self.utsp_config.data_acquisition_mode = LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
 
-                if (
-                    self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP
-                    or self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_LOCAL_LPG
-                ):
+                if (self.utsp_config.data_acquisition_mode in
+                        (LpgDataAcquisitionMode.USE_UTSP, LpgDataAcquisitionMode.USE_LOCAL_LPG)):
                     try:
                         log.information(f"LPG data acquisition mode: {self.utsp_config.data_acquisition_mode}")
                         new_unique_config = list_of_unique_household_configs[list_index]
@@ -705,7 +703,7 @@ class UtspLpgConnector(cp.Component):
 
                         # only one result obtained
                         if isinstance(electricity_file, str):
-                            log.information("One result obtained from lpg utsp connector.")
+                            log.information(f"One result obtained from {self.utsp_config.data_acquisition_mode}.")
                             (
                                 electricity_consumption,
                                 heating_by_devices,
@@ -762,7 +760,7 @@ class UtspLpgConnector(cp.Component):
 
                         # multiple results obtained (when multiple households in utsp_config given and the guid in the config is not "" but has a specific value)
                         elif isinstance(electricity_file, List):
-                            log.information("Multiple results obtained from lpg utsp connector.")
+                            log.information(f"Multiple results obtained from {self.utsp_config.data_acquisition_mode}.")
 
                             for index, electricity in enumerate(electricity_file):
                                 warm_water = warm_water_file[index]
@@ -979,8 +977,12 @@ class UtspLpgConnector(cp.Component):
 
         return guid_list
 
-    def execute_local_lpg_single_household(self, calculation_index, household: JsonReference,
-                                           random_seed = None) -> str:
+    def execute_local_lpg_single_household(self,
+                                           calculation_index,
+                                           household: JsonReference,
+                                           random_seed: Optional[int] = None
+                                           ) -> str:
+        """Using local (offline) LPG to calculate the profiles for one household."""
 
         mobility_set: Set[Optional[str]] = set()
         for elem in [
@@ -1073,8 +1075,8 @@ class UtspLpgConnector(cp.Component):
 
                 request.CalcSpec.ExternalTimeResolution = resolution
                 calcspecfilename = Path(lpe.calculation_directory, "calcspec.json")
-                with open(calcspecfilename, "w") as calcspecfile:
-                    jsonrequest = request.to_json(indent=4)  # type: ignore
+                with open(calcspecfilename, "w", encoding="utf-8") as calcspecfile:
+                    jsonrequest = request.to_json(indent=4)
                     calcspecfile.write(jsonrequest)
                 lpe.execute_lpg_binaries()
 
@@ -1087,7 +1089,7 @@ class UtspLpgConnector(cp.Component):
 
         # define required results files
         (
-            result_files,
+            _,
             electricity,
             warm_water,
             inner_device_heat_gains,
@@ -1150,7 +1152,7 @@ class UtspLpgConnector(cp.Component):
         """Calculate one lpg request."""
         # define required results files
         (
-            result_files,
+            _,
             electricity,
             warm_water,
             inner_device_heat_gains,
@@ -1507,8 +1509,7 @@ class UtspLpgConnector(cp.Component):
                 json_filex = json.loads(filecontent)
             # this is used for files from predefined profile
             elif (data_acquisition_mode in
-                  (LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE, LpgDataAcquisitionMode.USE_LOCAL_LPG)
-            ):
+                  (LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE, LpgDataAcquisitionMode.USE_LOCAL_LPG)):
                 with open(filecontent, encoding="utf-8") as json_file:
                     json_filex = json.load(json_file)
             else:

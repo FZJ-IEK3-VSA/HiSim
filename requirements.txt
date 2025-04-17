@@ -30,4 +30,4 @@ wetterdienst==0.63.0
 cdsapi
 xarray
 pygfunction
-pylpg
+pyloadprofilegenerator

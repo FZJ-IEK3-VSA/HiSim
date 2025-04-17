@@ -74,7 +74,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     result_dir_path: str
     cache_dir_path: Optional[str] = None
     name_of_predefined_loadprofile: Optional[str] = "CHR01 Couple both at Work"
-    #  predefined_loadprofile_filepaths: Optional[str] = utils.HISIMPATH["occupancy"]
+    predefined_loadprofile_filepaths: Optional[str] = None
     guid: str = ""
 
     @classmethod
@@ -94,7 +94,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
             name="UTSPConnector",
             data_acquisition_mode=LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE,
             name_of_predefined_loadprofile="CHR01 Couple both at Work",
-            #  predefined_loadprofile_filepaths=utils.HISIMPATH["occupancy"],
+            predefined_loadprofile_filepaths=None,
             household=Households.CHR01_Couple_both_at_Work,
             result_dir_path=utils.HISIMPATH["utsp_results"],
             energy_intensity=EnergyIntensityType.EnergySaving,
@@ -160,7 +160,8 @@ class UtspLpgConnector(cp.Component):
             my_display_config=my_display_config,
         )
         self.name_of_predefined_loadprofile = config.name_of_predefined_loadprofile
-        #     self.predefined_loadprofile_filepaths = config.predefined_loadprofile_filepaths
+        self.predefined_loadprofile_filepaths = config.predefined_loadprofile_filepaths
+
         self.build()
         # dummy value as long as there is no way to consider multiple households in one house
         self.scaling_factor_according_to_number_of_apartments: float = 1.0
@@ -476,23 +477,60 @@ class UtspLpgConnector(cp.Component):
         self,
     ) -> Tuple[str, str, str, str, str]:
         """Get the loadprofiles for a specific predefined profile from hisim/inputs/loadprofiles."""
-        predefined_profile_filepaths = utils.HISIMPATH["occupancy"][self.name_of_predefined_loadprofile]
-        # predefined_profile_filepaths = self.predefined_loadprofile_filepaths[self.name_of_predefined_loadprofile]
-        # get first bodily activity files
-        bodily_activity_filepaths = predefined_profile_filepaths["number_of_residents"]
+        if self.name_of_predefined_loadprofile is None:
+            raise ValueError(f"You choose {self.utsp_config.data_acquisition_mode}, "
+                             f"but did not specify a predefined loadprofile.")
 
-        high_activity_file = bodily_activity_filepaths[0]
-        low_activity_file = bodily_activity_filepaths[1]
-        # get other files
-        if self.utsp_config.profile_with_washing_machine_and_dishwasher:
-            electricity_file = predefined_profile_filepaths["electricity_consumption"]
+        if self.predefined_loadprofile_filepaths is None:
+            log.information("Filepath of predefined loadprofile defined in hisim.utils.py is used")
+            predefined_profile_filepaths = utils.HISIMPATH["occupancy"][self.name_of_predefined_loadprofile]
+            # get first bodily activity files
+            bodily_activity_filepaths = predefined_profile_filepaths["number_of_residents"]
+
+            high_activity_file = bodily_activity_filepaths[0]
+            low_activity_file = bodily_activity_filepaths[1]
+            # get other files
+            if self.utsp_config.profile_with_washing_machine_and_dishwasher:
+                electricity_file = predefined_profile_filepaths["electricity_consumption"]
+            else:
+                electricity_file = predefined_profile_filepaths[
+                    "electricity_consumption_without_washing_machine_and_dishwasher"
+                ]
+
+            warm_water_file = predefined_profile_filepaths["water_consumption"]
+            inner_device_heat_gains_file = predefined_profile_filepaths["heating_by_devices"]
+
         else:
-            electricity_file = predefined_profile_filepaths[
-                "electricity_consumption_without_washing_machine_and_dishwasher"
-            ]
+            clean_basename = os.path.basename(self.predefined_loadprofile_filepaths).replace("_", " ").lower().strip()
+            clean_target = self.name_of_predefined_loadprofile.replace("_", " ").lower().strip()
 
-        warm_water_file = predefined_profile_filepaths["water_consumption"]
-        inner_device_heat_gains_file = predefined_profile_filepaths["heating_by_devices"]
+            if clean_target in clean_basename:
+                predefined_profile_filepaths = self.predefined_loadprofile_filepaths
+            else:
+                predefined_profile_filepaths = os.path.join(self.predefined_loadprofile_filepaths,
+                                                            self.name_of_predefined_loadprofile)
+
+            if os.path.isdir(predefined_profile_filepaths):
+                files_in_dir = os.listdir(predefined_profile_filepaths)
+                if not files_in_dir:
+                    raise ValueError("Something in name or path of external predefinded loadprofile is wrong!")
+                log.information(f"{len(files_in_dir)} files of loadprofles found.")
+            else:
+                raise ValueError(f"External path of loadprofle {predefined_profile_filepaths} doesn´t exist!")
+
+            log.information(f"External Filepath of predefined loadprofile is used: {predefined_profile_filepaths}")
+
+            high_activity_file = os.path.join(predefined_profile_filepaths, "BodilyActivityLevel.High.HH1.json")
+            low_activity_file = os.path.join(predefined_profile_filepaths, "BodilyActivityLevel.Low.HH1.json")
+            if self.utsp_config.profile_with_washing_machine_and_dishwasher:
+                electricity_file = os.path.join(predefined_profile_filepaths, "SumProfiles.HH1.Electricity.csv")
+            else:
+                electricity_file = os.path.join(predefined_profile_filepaths, "SumProfiles.NoFlex.HH1.Electricity.csv")
+
+            warm_water_file = os.path.join(predefined_profile_filepaths, "SumProfiles.HH1.Warm Water.csv")
+            inner_device_heat_gains_file = os.path.join(predefined_profile_filepaths, "SumProfiles.HH1.Inner Device Heat Gains.csv")
+
+        #
         # when using predefined profile there are no saved files concerning flexibility or car data
         # TODO: implement flexibility and car files?
         return (

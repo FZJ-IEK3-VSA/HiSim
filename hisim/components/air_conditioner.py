@@ -15,7 +15,8 @@ from hisim.component import (
     DisplayConfig,
     OpexCostDataClass,
 )
-from hisim.postprocessing.kpi_computation.kpi_structure import KpiTagEnumClass
+from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig
+from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiTagEnumClass
 from hisim.simulationparameters import SimulationParameters
 from hisim.loadtypes import LoadTypes, Units
 from hisim.components.weather import Weather
@@ -139,7 +140,9 @@ class AirConditioner(cp.Component):
     PV2load = "PV2load"
     Battery2Load = "Battery2Load"
     ThermalPowerDelivered = "ThermalPowerDelivered"
-    ElectricityConsumption = "ElectricityConsumption"
+    ThermalEnergyDelivered = "ThermalEnergyDelivered"
+    ElectricalPowerConsumption = "ElectricalPowerConsumption"
+    ElectricalEnergyConsumption = "ElectricalEnergyConsumption"
     Efficiency = "EnergyEfficiencyRatio"
     CoefficientOfPerformance = "CoefficientOfPerformance"
 
@@ -162,10 +165,7 @@ class AirConditioner(cp.Component):
         )
 
         # Build model from the database
-        self.build(
-            manufacturer=self.air_conditioner_config.manufacturer,
-            model_name=self.air_conditioner_config.model_name,
-        )
+        self.build()
 
         # Define input channels
         self.t_out_channel = self.add_input(
@@ -205,19 +205,33 @@ class AirConditioner(cp.Component):
         )
 
         # Define output channels
-        self.thermal_energy_generation_channel = self.add_output(
+        self.thermal_power_generation_channel = self.add_output(
             self.component_name,
             self.ThermalPowerDelivered,
             LoadTypes.HEATING,
             Units.WATT,
+            output_description="Delivered thermal power",
+        )
+        self.thermal_energy_generation_channel = self.add_output(
+            object_name=self.component_name,
+            field_name=self.ThermalEnergyDelivered,
+            load_type=LoadTypes.HEATING,
+            unit=Units.WATT_HOUR,
             output_description="Delivered thermal energy",
         )
-        self.electricity_consumption = self.add_output(
+        self.electrical_power_consumption_channel = self.add_output(
             self.component_name,
-            self.ElectricityConsumption,
+            self.ElectricalPowerConsumption,
             LoadTypes.ELECTRICITY,
             Units.WATT,
-            output_description="Electricity consumption",
+            output_description="Electrical power consumption",
+        )
+        self.electrical_energy_consumption_channel = self.add_output(
+            self.component_name,
+            self.ElectricalEnergyConsumption,
+            LoadTypes.ELECTRICITY,
+            Units.WATT_HOUR,
+            output_description="Electrical energy consumption",
         )
         self.efficiency = self.add_output(
             self.component_name,
@@ -280,20 +294,39 @@ class AirConditioner(cp.Component):
             kpi_tag=KpiTagEnumClass.AIR_CONDITIONER,
         )
 
+
     def get_cost_opex(
         self, all_outputs: List, postprocessing_results: pd.DataFrame
     ) -> OpexCostDataClass:
         """Return operational expenditure (OPEX) including maintenance."""
-        return OpexCostDataClass(
-            opex_energy_cost_in_euro=0,
-            opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
-            co2_footprint_in_kg=0,
-            consumption_in_kwh=0,
-            loadtype=LoadTypes.ELECTRICITY,
-            kpi_tag=KpiTagEnumClass.AIR_CONDITIONER,
+
+        for index, output in enumerate(all_outputs):
+            if (
+                output.component_name == self.component_name
+                and output.field_name == self.ElectricalEnergyConsumption
+                and output.unit == Units.WATT_HOUR
+            ):
+                self.electricity_consumption_kWh = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
+                break
+        assert hasattr(self, 'electricity_consumption_kWh')
+
+        emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
+            self.my_simulation_parameters.year
         )
 
-    def build(self, manufacturer: str, model_name: str):
+        opex_cost_data_class = OpexCostDataClass(
+            opex_energy_cost_in_euro=self.electricity_consumption_kWh * emissions_and_cost_factors.electricity_costs_in_euro_per_kwh,
+            opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
+            co2_footprint_in_kg=self.electricity_consumption_kWh * emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh,
+            consumption_in_kwh=self.electricity_consumption_kWh,
+            loadtype=LoadTypes.ELECTRICITY,
+            kpi_tag=KpiTagEnumClass.AIR_CONDITIONER
+        )
+
+        return opex_cost_data_class
+    
+
+    def build(self):
         """Initialize internal variables using values from air conditioner database."""
 
         # Fit polynomials to simulate continuous values based on temperature
@@ -363,41 +396,108 @@ class AirConditioner(cp.Component):
         if force_convergence:
             pass
 
-        t_out = stsv.get_input_value(self.t_out_channel)
-        mod_signal = stsv.get_input_value(self.modulating_power_signal_channel)
+        air_temperature_deg_c = stsv.get_input_value(self.t_out_channel)
+        modulation_signal = stsv.get_input_value(self.modulating_power_signal_channel)
 
         test_factor = 0.2  # Scale factor, assumed to adjust nominal values
 
         efficiency = 0
-        thermal_energy_delivered = 0
+        thermal_power_delivered_W = 0
 
-        if mod_signal > 0:
+        if modulation_signal > 0:
             # Heating mode
-            efficiency = self.calculate_coefficient_of_performance(t_out)
-            thermal_energy_delivered = (
-                self.calculate_heating_capacity(t_out)
+            efficiency = self.calculate_coefficient_of_performance(air_temperature_deg_c)
+            thermal_power_delivered_W = (
+                self.calculate_heating_capacity(air_temperature_deg_c)
                 * test_factor
-                * mod_signal
+                * modulation_signal
             )
-        elif mod_signal < 0:
+        elif modulation_signal < 0:
             # Cooling mode
-            efficiency = self.calculate_energy_efficiency_ratio(t_out)
-            thermal_energy_delivered = (
-                self.calculate_cooling_capacity(t_out)
+            efficiency = self.calculate_energy_efficiency_ratio(air_temperature_deg_c)
+            thermal_power_delivered_W = (
+                self.calculate_cooling_capacity(air_temperature_deg_c)
                 * test_factor
-                * abs(mod_signal)
+                * abs(modulation_signal)
             )
 
-        electricity_used = self.calculate_electricity_consumption(
-            thermal_energy_delivered, efficiency
+        electrical_power_consumption_W = self.calculate_electricity_consumption(
+            thermal_power_delivered_W, efficiency
+        )
+        electrical_energy_consumption_Wh = electrical_power_consumption_W * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
+        thermal_energy_delivered_Wh = (
+            thermal_power_delivered_W * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
         )
 
         # Write outputs
         stsv.set_output_value(self.efficiency, efficiency)
-        stsv.set_output_value(self.electricity_consumption, electricity_used)
+        stsv.set_output_value(self.electrical_power_consumption_channel, electrical_power_consumption_W)
+        stsv.set_output_value(self.electrical_energy_consumption_channel, electrical_energy_consumption_Wh)
         stsv.set_output_value(
-            self.thermal_energy_generation_channel, thermal_energy_delivered
+            self.thermal_power_generation_channel, thermal_power_delivered_W
         )
+        stsv.set_output_value(
+            self.thermal_energy_generation_channel, thermal_energy_delivered_Wh
+        )
+
+    def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        list_of_kpi_entries: List[KpiEntry] = []
+        opex_dataclass = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)
+        opex = KpiEntry(
+            name="Operational costs - electricity",
+            unit="EUR",
+            value=opex_dataclass.opex_energy_cost_in_euro,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(opex)
+
+        maintenance_costs = KpiEntry(
+            name="Operational costs - maintenance",
+            unit="EUR",
+            value=opex_dataclass.opex_maintenance_cost_in_euro,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(maintenance_costs)
+
+        co2_footprint = KpiEntry(
+            name="CO2 Footprint",
+            unit="kg",
+            value=opex_dataclass.co2_footprint_in_kg,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(co2_footprint)
+
+        electricity_consumption_kWh = KpiEntry(
+            name="Electrical energy consumption",
+            unit="kWh",
+            value=self.electricity_consumption_kWh,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(electricity_consumption_kWh)
+
+        thermal_energy_delivered_in_kWh: float
+        for index, output in enumerate(all_outputs):
+            if output.component_name == self.component_name:
+                if output.field_name == self.ThermalEnergyDelivered and output.unit == Units.WATT_HOUR:
+                    thermal_energy_delivered_in_kWh = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
+                    break
+
+        # make kpi entry
+        thermal_energy_delivered_entry = KpiEntry(
+            name="Thermal energy delivered",
+            unit="kWh",
+            value=thermal_energy_delivered_in_kWh,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+
+        list_of_kpi_entries.append(thermal_energy_delivered_entry)
+        return list_of_kpi_entries
 
 
 @dataclass_json
@@ -595,7 +695,11 @@ class AirConditionerController(cp.Component):
         # Returns default class, as controller itself has no opex cost
         opex_cost_data_class = OpexCostDataClass.get_default_opex_cost_data_class()
         return opex_cost_data_class
-
+    
+    def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        return []
+    
     def i_simulate(
         self,
         timestep: int,

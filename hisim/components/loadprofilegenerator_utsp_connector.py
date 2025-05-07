@@ -887,6 +887,7 @@ class UtspLpgConnector(cp.Component):
                             if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
                                 self.utsp_config.data_acquisition_mode = LpgDataAcquisitionMode.USE_LOCAL_LPG
                             elif self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_LOCAL_LPG:
+                                attempt = 1
                                 self.utsp_config.data_acquisition_mode = LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
                             else:
                                 break
@@ -1151,6 +1152,9 @@ class UtspLpgConnector(cp.Component):
             driving_distances,
         ) = self.define_required_result_files()
 
+        print(electricity)
+        print(car_states)
+
         log.information("Requesting LPG profiles from local lpg for one household.")
 
         result_folder = self.execute_local_lpg_single_household(calculation_index=1,
@@ -1163,26 +1167,29 @@ class UtspLpgConnector(cp.Component):
         inner_device_heat_gains_file = os.path.join(result_folder, inner_device_heat_gains)
         high_activity_file = os.path.join(result_folder, high_activity)
         low_activity_file = os.path.join(result_folder, low_activity)
-        if flexibility in result_folder:
-            flexibility_file = os.path.join(result_folder, flexibility)
-        else:
-            flexibility_file = ""
+        flexibility_file = os.path.join(result_folder, flexibility) if os.path.exists(
+            os.path.join(result_folder, flexibility)) else ""
 
+        car_states_file = ""
         for car_state in car_states.keys():
-            if car_state in result_folder:
-                car_states_file = os.path.join(result_folder, car_state)
-            else:
-                car_states_file = ""
+            car_state_path = os.path.join(result_folder, car_state)
+            if os.path.exists(car_state_path):
+                car_states_file = car_state_path
+                break
+
+        car_location_file = ""
         for car_location in car_locations.keys():
-            if car_location in result_folder:
-                car_locations_file = os.path.join(result_folder, car_location)
-            else:
-                car_locations_file = ""
+            car_location_path = os.path.join(result_folder, car_location)
+            if os.path.exists(car_location_path):
+                car_location_file = car_location_path
+                break
+
+        driving_distance_file = ""
         for driving_distance in driving_distances.keys():
-            if driving_distance in result_folder:
-                driving_distances_file = os.path.join(result_folder, driving_distance)
-            else:
-                driving_distances_file = ""
+            driving_distance_path = os.path.join(result_folder, driving_distance)
+            if os.path.exists(driving_distance_path):
+                driving_distance_file = driving_distance_path
+                break
 
         return (
             electricity_file,
@@ -1192,8 +1199,8 @@ class UtspLpgConnector(cp.Component):
             low_activity_file,
             flexibility_file,
             car_states_file,
-            car_locations_file,
-            driving_distances_file,
+            car_location_file,
+            driving_distance_file,
         )
 
     def calculate_multiple_lpg_request(
@@ -1242,28 +1249,29 @@ class UtspLpgConnector(cp.Component):
             high_activity_file_one_result = os.path.join(result_folder, high_activity)
             low_activity_file_one_result = os.path.join(result_folder, low_activity)
 
-            if flexibility in result_folder:
-                flexibility_file_one_result = os.path.join(result_folder, flexibility)
-            else:
-                flexibility_file_one_result = ""
+            flexibility_file_one_result = os.path.join(result_folder, flexibility) if os.path.exists(
+                os.path.join(result_folder, flexibility)) else ""
 
+            car_states_file_one_result = ""
             for car_state in car_states.keys():
-                if car_state in result_folder:
-                    car_states_file_one_result = os.path.join(result_folder, car_state)
-                else:
-                    car_states_file_one_result = ""
+                car_state_path = os.path.join(result_folder, car_state)
+                if os.path.exists(car_state_path):
+                    car_states_file_one_result = car_state_path
+                    break
 
+            car_locations_file_one_result = ""
             for car_location in car_locations.keys():
-                if car_location in result_folder:
-                    car_locations_file_one_result = os.path.join(result_folder, car_location)
-                else:
-                    car_locations_file_one_result = ""
+                car_location_path = os.path.join(result_folder, car_location)
+                if os.path.exists(car_location_path):
+                    car_locations_file_one_result = car_location_path
+                    break
 
+            driving_distances_file_one_result = ""
             for driving_distance in driving_distances.keys():
-                if driving_distance in result_folder:
-                    driving_distances_file_one_result = os.path.join(result_folder, driving_distance)
-                else:
-                    driving_distances_file_one_result = ""
+                driving_distance_path = os.path.join(result_folder, driving_distance)
+                if os.path.exists(driving_distance_path):
+                    driving_distances_file_one_result = driving_distance_path
+                    break
 
             # append to lists
             electricity_file.append(electricity_file_one_result)
@@ -1778,7 +1786,11 @@ class UtspLpgConnector(cp.Component):
         for result_file_str in list_of_result_files:
             json_acceptable_string = result_file_str.replace("'", '"')
             if json_acceptable_string != "":
-                data = json.loads(json_acceptable_string)
+                if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
+                    data = json.loads(json_acceptable_string)
+                else:
+                    with open(json_acceptable_string, encoding="utf-8") as json_file:
+                        data = json.load(json_file)
             else:
                 data = {}
             list_of_data.append(data)

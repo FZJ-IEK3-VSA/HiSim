@@ -689,9 +689,9 @@ class UtspLpgConnector(cp.Component):
                         log.warning(
                             "You chose USE_UTSP as data_acquition_mode but it is not possible to read the url and api_key from the .env file."
                             "Please check if this file is present in your system."
-                            "Otherwise the predefined LPG profile in hisim/inputs/loadprofiles will be used."
+                            "Otherwise the Local LPG will be used."
                         )
-                        self.utsp_config.data_acquisition_mode = LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
+                        self.utsp_config.data_acquisition_mode = LpgDataAcquisitionMode.USE_LOCAL_LPG
 
                 if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_LOCAL_LPG:
                     try:

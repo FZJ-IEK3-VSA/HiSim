@@ -4,6 +4,9 @@
 import os
 from typing import Optional
 
+import pandas as pd
+
+from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.simulator import SimulationParameters
 from hisim.simulator import Simulator
@@ -74,80 +77,39 @@ def setup_function(
     # Set general simulation parameters
     year = 2021
     seconds_per_timestep = 60
-
-    # Set general controller parameters
-    # Temperature comfort range in °C
-    min_comfort_temp = 21.0
-    max_comfort_temp = 24.0
-
-    # Set weather
     location = "Seville"
-
-    # Set PV system
-    time = 2019
-    power = 4e3
-    load_module_data = False
-    module_name = "Hanwha HSL60P6-PA-4-250T [2013]"
-    integrate_inverter = True
-    inverter_name = "ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_"
-    name = "PVSystem"
-    azimuth = 180
-    tilt = 30
-    source_weight = -1
-    pv_co2_footprint = power * 1e-3 * 130.7
-    pv_cost = power * 1e-3 * 535.81
-    pv_maintenance_cost_as_percentage_of_investment = 0.01
-    pv_lifetime = 25
-
-    # Set building
-    building_code = "CY.N.SFH.03.Gen.ReEx.001.003"
-    building_class = "medium"
-    initial_temperature = 21
-    heating_reference_temperature = -14
-    absolute_conditioned_floor_area_in_m2 = None
-    total_base_area_in_m2 = None
-    number_of_apartments = None
-    enable_opening_windows: bool = False
-
-    # Set air conditioner
-    ac_manufacturer = "Samsung"  # Other option: "Panasonic" , Further options are avilable in the smart_devices file
-    ac_model = "AC120HBHFKH/SA - AC120HCAFKH/SA"  # "AC120HBHFKH/SA - AC120HCAFKH/SA"     #Other option: "CS-TZ71WKEW + CU-TZ71WKE"#
-    min_operation_time = 60 * 30  # Unit: seconds
-    min_idle_time = 60 * 15  # Unit: seconds
 
     # Build components
 
     """System parameters"""
 
     if my_simulation_parameters is None:
-        my_simulation_parameters = SimulationParameters.one_day_only_with_only_plots(
-            year, seconds_per_timestep
-        )
         # my_simulation_parameters = SimulationParameters.one_day_only_with_only_plots(year, seconds_per_timestep)
-        # my_simulation_parameters = SimulationParameters.one_day_only_with_all_options(year, seconds_per_timestep)
-        # my_simulation_parameters = SimulationParameters.one_week_only(year, seconds_per_timestep)
-        # my_simulation_parameters = SimulationParameters.one_week_with_only_plots(year, seconds_per_timestep)
-        # my_simulation_parameters = SimulationParameters.three_months_only(year, seconds_per_timestep)
-        # my_simulation_parameters = SimulationParameters.three_months_with_plots_only(year, seconds_per_timestep)
-        # my_simulation_parameters = SimulationParameters.full_year_all_options(year, seconds_per_timestep)
-        my_simulation_parameters.enable_all_options()
+        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(year, seconds_per_timestep)
+        my_simulation_parameters.enable_plots_only()
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_KPIS)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_CAPEX)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.COMPUTE_OPEX)
+        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
     """Building (1/2)"""
+    heating_reference_temperatures = pd.read_csv(utils.HISIMPATH["housing_reference_temperatures"])
+    heating_reference_temperature = heating_reference_temperatures.set_index("Location").loc["ES", "HeatingReferenceTemperature"]
     my_building_config = building.BuildingConfig(
         building_name="BUI1",
         name="Building",
-        building_code=building_code,
-        building_heat_capacity_class=building_class,
-        initial_internal_temperature_in_celsius=initial_temperature,
+        building_code="ES.ME.SFH.04.Gen.ReEx.001.003",
+        building_heat_capacity_class="medium",
+        initial_internal_temperature_in_celsius=22,
         heating_reference_temperature_in_celsius=heating_reference_temperature,
-        set_heating_temperature_in_celsius=min_comfort_temp,
-        set_cooling_temperature_in_celsius=max_comfort_temp,
-        absolute_conditioned_floor_area_in_m2=absolute_conditioned_floor_area_in_m2,
-        total_base_area_in_m2=total_base_area_in_m2,
-        number_of_apartments=number_of_apartments,
-        enable_opening_windows=enable_opening_windows,
+        set_heating_temperature_in_celsius=20,
+        set_cooling_temperature_in_celsius=24,
+        absolute_conditioned_floor_area_in_m2=None,
+        total_base_area_in_m2=None,
+        number_of_apartments=None,
+        enable_opening_windows=False,
         max_thermal_building_demand_in_watt=None,
         predictive=False,
     )
@@ -155,6 +117,7 @@ def setup_function(
         config=my_building_config,
         my_simulation_parameters=my_simulation_parameters,
     )
+    my_building_information = building.BuildingInformation(config=my_building_config)
 
     """ Occupancy Profile """
     my_occupancy_config = loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig.get_default_utsp_connector_config()
@@ -177,25 +140,28 @@ def setup_function(
     my_sim.add_component(my_weather)
 
     """Photovoltaic System"""
+    power = 4e3
+    pv_co2_footprint = power * 1e-3 * 130.7
+    pv_cost = power * 1e-3 * 535.81
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig(
         building_name="BUI1",
-        time=time,
+        time=year,
         location=location,
         power_in_watt=power,
-        load_module_data=load_module_data,
-        module_name=module_name,
-        integrate_inverter=integrate_inverter,
+        load_module_data=False,
+        module_name="Hanwha HSL60P6-PA-4-250T [2013]",
+        integrate_inverter=True,
         module_database=generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
         inverter_database=generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,
-        tilt=tilt,
-        azimuth=azimuth,
-        inverter_name=inverter_name,
-        source_weight=source_weight,
-        name=name,
+        tilt=30,
+        azimuth=180,
+        inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
+        source_weight=-1,
+        name="PVSystem",
         co2_footprint=pv_co2_footprint,
         cost=pv_cost,
-        maintenance_cost_as_percentage_of_investment=pv_maintenance_cost_as_percentage_of_investment,
-        lifetime=pv_lifetime,
+        maintenance_cost_as_percentage_of_investment=0.01,
+        lifetime=25,
         share_of_maximum_pv_potential=1.0,
         predictive=False,
         predictive_control=False,
@@ -209,12 +175,9 @@ def setup_function(
     my_sim.add_component(my_photovoltaic_system)
 
     """Air Conditioner"""
-    my_air_conditioner_config = air_conditioner.AirConditionerConfig(
-        building_name="BUI1",
-        name="AirConditioner",
-        model_name=ac_model,
-        manufacturer=ac_manufacturer,
-    )
+    my_air_conditioner_config = air_conditioner.AirConditionerConfig.get_scaled_air_conditioner_config(
+        my_building_information.max_thermal_building_demand_in_watt,
+        my_building_information.heating_reference_temperature_in_celsius)
     my_air_conditioner = air_conditioner.AirConditioner(
         config=my_air_conditioner_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -231,16 +194,7 @@ def setup_function(
 
     """Air conditioner on-off controller"""
     my_air_conditioner_controller_config = (
-        air_conditioner.AirConditionerControllerConfig(
-            building_name="BU1",
-            name="AirConditionerController",
-            heating_set_temperature_deg_c=min_comfort_temp,
-            cooling_set_temperature_deg_c=max_comfort_temp,
-            minimum_idle_time_s=min_idle_time,
-            minimum_runtime_s=min_operation_time,
-            offset=2,
-            temperature_difference_full_power_deg_c=3
-        )
+        air_conditioner.AirConditionerControllerConfig.get_default_air_conditioner_controller_config()
     )
     my_air_conditioner_controller = air_conditioner.AirConditionerController(
         config=my_air_conditioner_controller_config,

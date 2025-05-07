@@ -46,6 +46,7 @@ class AirConditionerConfig(ConfigBase):
     name: str
     manufacturer: str
     model_name: str
+    scale_factor: float
     t_out_cooling_ref: float
     t_out_heating_ref: float
     eer_ref: float
@@ -62,12 +63,12 @@ class AirConditionerConfig(ConfigBase):
         """Return the full class name of the main component class."""
         return AirConditioner.get_full_classname()
     
-    def __init__(self, building_name: str, name: str, manufacturer="Panasonic", model_name="CS-RE18JKE/CU-RE18JKE"):
+    def __init__(self, building_name: str, name: str, manufacturer="Panasonic", model_name="CS-RE18JKE/CU-RE18JKE", scale_factor=1.0):
         self.building_name = building_name
         self.name=name
-        self.manufacturer="Panasonic"
-        self.model_name="CS-RE18JKE/CU-RE18JKE"
-
+        self.manufacturer = "Panasonic"
+        self.model_name = "CS-RE18JKE/CU-RE18JKE"
+        self.scale_factor = scale_factor
         air_conditioners = utils.load_smart_appliance("Air Conditioner")
         air_conditioner = next(
             (
@@ -118,14 +119,53 @@ class AirConditionerConfig(ConfigBase):
     def get_default_air_conditioner_config(
         cls,
         building_name: str = "BUI1",
-    ) -> Any:
+    ) -> "AirConditionerConfig":
         """Return default air-conditioner configuration."""
         
         return cls(
             building_name=building_name,
             name="AirConditioner",
-            manufacturer="Panasonic",
-            model_name="CS-RE18JKE/CU-RE18JKE"
+            manufacturer = "Samsung",  # Other option: "Panasonic" , Further options are avilable in the smart_devices file
+            model_name = "AC120HBHFKH/SA - AC120HCAFKH/SA",  # "AC120HBHFKH/SA - AC120HCAFKH/SA"     #Other option: "CS-TZ71WKEW + CU-TZ71WKE"#
+        )
+    
+    @classmethod
+    def get_scaled_air_conditioner_config(
+        cls,
+        heating_load: float,
+        heating_reference_temperature: float,
+        building_name: str = "BUI1",
+    ) -> Any:
+        """Return default air-conditioner configuration."""
+        air_conditioners = utils.load_smart_appliance("Air Conditioner")
+        air_conditioner_df = pd.DataFrame(air_conditioners)
+
+        # Select air conditioner whose heating capacity (at temperature closes to heating reference temperature) is closest
+        # to heating load of building
+        def get_relevant_heating_capacity_for_temperature(temperature_range, capacity):
+            closest_temperature_index = min(range(len(temperature_range)), key=lambda i: abs(temperature_range[i] - heating_reference_temperature))
+            return capacity[closest_temperature_index]
+    
+        differences = air_conditioner_df.apply(
+            lambda row: abs(get_relevant_heating_capacity_for_temperature(
+                row["Outdoor temperature range - heating"],
+                row["Heating capacity W"]
+            ) - heating_load),
+            axis=1
+        )
+
+        selected_air_conditioner = air_conditioner_df.loc[differences.idxmin()]
+        relevant_capacity_for_scaling = get_relevant_heating_capacity_for_temperature(selected_air_conditioner["Outdoor temperature range - heating"], selected_air_conditioner["Heating capacity W"])
+
+        # 0.7 was determined heuristically based on manually experimenting with different scaling factors
+        scaling_factor = relevant_capacity_for_scaling * 0.7 / heating_load
+
+        return cls(
+            building_name=building_name,
+            name="AirConditioner",
+            manufacturer = selected_air_conditioner["Manufacturer"],
+            model_name = selected_air_conditioner["Model"],
+            scale_factor = scaling_factor
         )
 
 
@@ -399,8 +439,6 @@ class AirConditioner(cp.Component):
         air_temperature_deg_c = stsv.get_input_value(self.t_out_channel)
         modulation_signal = stsv.get_input_value(self.modulating_power_signal_channel)
 
-        test_factor = 0.2  # Scale factor, assumed to adjust nominal values
-
         efficiency = 0
         thermal_power_delivered_W = 0
 
@@ -409,7 +447,7 @@ class AirConditioner(cp.Component):
             efficiency = self.calculate_coefficient_of_performance(air_temperature_deg_c)
             thermal_power_delivered_W = (
                 self.calculate_heating_capacity(air_temperature_deg_c)
-                * test_factor
+                * self.config.scale_factor
                 * modulation_signal
             )
         elif modulation_signal < 0:
@@ -417,8 +455,8 @@ class AirConditioner(cp.Component):
             efficiency = self.calculate_energy_efficiency_ratio(air_temperature_deg_c)
             thermal_power_delivered_W = (
                 self.calculate_cooling_capacity(air_temperature_deg_c)
-                * test_factor
-                * abs(modulation_signal)
+                * self.config.scale_factor
+                * modulation_signal
             )
 
         electrical_power_consumption_W = self.calculate_electricity_consumption(
@@ -444,33 +482,9 @@ class AirConditioner(cp.Component):
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         list_of_kpi_entries: List[KpiEntry] = []
         opex_dataclass = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)
-        opex = KpiEntry(
-            name="Operational costs - electricity",
-            unit="EUR",
-            value=opex_dataclass.opex_energy_cost_in_euro,
-            tag=opex_dataclass.kpi_tag,
-            description=self.component_name,
-        )
-        list_of_kpi_entries.append(opex)
+        capex_dataclass = self.get_cost_capex(self.config, self.my_simulation_parameters)
 
-        maintenance_costs = KpiEntry(
-            name="Operational costs - maintenance",
-            unit="EUR",
-            value=opex_dataclass.opex_maintenance_cost_in_euro,
-            tag=opex_dataclass.kpi_tag,
-            description=self.component_name,
-        )
-        list_of_kpi_entries.append(maintenance_costs)
-
-        co2_footprint = KpiEntry(
-            name="CO2 Footprint",
-            unit="kg",
-            value=opex_dataclass.co2_footprint_in_kg,
-            tag=opex_dataclass.kpi_tag,
-            description=self.component_name,
-        )
-        list_of_kpi_entries.append(co2_footprint)
-
+        # Energy related KPIs
         electricity_consumption_kWh = KpiEntry(
             name="Electrical energy consumption",
             unit="kWh",
@@ -480,23 +494,97 @@ class AirConditioner(cp.Component):
         )
         list_of_kpi_entries.append(electricity_consumption_kWh)
 
-        thermal_energy_delivered_in_kWh: float
+        thermal_energy_delivered_cooling_in_kWh: float
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
                 if output.field_name == self.ThermalEnergyDelivered and output.unit == Units.WATT_HOUR:
-                    thermal_energy_delivered_in_kWh = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
+                    thermal_energy_delivered_cooling_in_kWh = round(postprocessing_results.iloc[:, index][postprocessing_results.iloc[:, index] < 0].sum() * 1e-3, 1)
+                    thermal_energy_delivered_heating_in_kWh = round(postprocessing_results.iloc[:, index][postprocessing_results.iloc[:, index] > 0].sum() * 1e-3, 1)
                     break
 
-        # make kpi entry
-        thermal_energy_delivered_entry = KpiEntry(
-            name="Thermal energy delivered",
+        thermal_energy_delivered_cooling_entry = KpiEntry(
+            name="Thermal energy delivered - cooling",
             unit="kWh",
-            value=thermal_energy_delivered_in_kWh,
+            value=thermal_energy_delivered_cooling_in_kWh,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
         )
 
-        list_of_kpi_entries.append(thermal_energy_delivered_entry)
+        list_of_kpi_entries.append(thermal_energy_delivered_cooling_entry)
+
+        thermal_energy_delivered_heating_entry = KpiEntry(
+            name="Thermal energy delivered - heating",
+            unit="kWh",
+            value=thermal_energy_delivered_heating_in_kWh,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+
+        list_of_kpi_entries.append(thermal_energy_delivered_heating_entry)
+
+        # Economic and environmental KPIs
+        capex = KpiEntry(
+            name="CAPEX - Investment cost",
+            unit="EUR",
+            value=capex_dataclass.capex_investment_cost_in_euro,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(capex)
+
+        co2_footprint_capex = KpiEntry(
+            name="CAPEX - CO2 Footprint",
+            unit="kg",
+            value=capex_dataclass.device_co2_footprint_in_kg,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(co2_footprint_capex)
+
+        opex = KpiEntry(
+            name="OPEX - Electricity costs",
+            unit="EUR",
+            value=opex_dataclass.opex_energy_cost_in_euro,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(opex)
+
+        maintenance_costs = KpiEntry(
+            name="OPEX - Maintenance costs",
+            unit="EUR",
+            value=opex_dataclass.opex_maintenance_cost_in_euro,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(maintenance_costs)
+
+        co2_footprint = KpiEntry(
+            name="OPEX - CO2 Footprint",
+            unit="kg",
+            value=opex_dataclass.co2_footprint_in_kg,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(co2_footprint)
+
+        total_costs = KpiEntry(
+            name="Total Costs (CAPEX for simulated period + OPEX energy and maintenance)",
+            unit="EUR",
+            value=capex_dataclass.capex_investment_cost_for_simulated_period_in_euro + opex_dataclass.opex_energy_cost_in_euro + opex_dataclass.opex_maintenance_cost_in_euro,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(total_costs)
+
+        total_co2_footprint = KpiEntry(
+            name="Total CO2 Footprint (CAPEX for simulated period + OPEX)",
+            unit="kg",
+            value=capex_dataclass.device_co2_footprint_for_simulated_period_in_kg + opex_dataclass.co2_footprint_in_kg,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(total_co2_footprint)
         return list_of_kpi_entries
 
 
@@ -528,11 +616,11 @@ class AirConditionerControllerConfig(ConfigBase):
         return cls(
             building_name=building_name,
             name="AirConditionerControllerConfig",
-            heating_set_temperature_deg_c=18.0,
-            cooling_set_temperature_deg_c=26.0,
-            minimum_runtime_s=60 * 60,
+            heating_set_temperature_deg_c=20.0, # TODO former: 18
+            cooling_set_temperature_deg_c=24.0, # TODO former: 26
+            minimum_runtime_s=30 * 60,
             minimum_idle_time_s=15 * 60,
-            offset=2.0,
+            offset=5.0,
             temperature_difference_full_power_deg_c=3.0,
         )
 
@@ -772,35 +860,29 @@ class AirConditionerController(cp.Component):
         # Stay in cooling if within cooling deadband
         if (
             self.state.mode == "cooling"
-            and current_temperature_deg_c > cooling_setpoint - offset
-        ):
-            return "cooling"
-
-        # Switch to cooling if temperature exceeds upper cooling threshold
-        if current_temperature_deg_c > cooling_setpoint + offset:
+            or self.processed_state.mode == "cooling"
+        ) and current_temperature_deg_c > cooling_setpoint - offset:
             if self.state.mode != "cooling":
                 self.state.activate_cooling(timestep)
             return "cooling"
 
-        # Switch to heating if temperature drops below lower heating threshold
-        if current_temperature_deg_c < heating_setpoint - offset:
+        # Switch to cooling if temperature exceeds upper cooling threshold (and previously not heating)
+        if current_temperature_deg_c > cooling_setpoint and (self.state.mode != "heating"
+            and self.processed_state.mode != "heating"):
+            if self.state.mode != "cooling":
+                self.state.activate_cooling(timestep)
+            return "cooling"
+
+        # Switch to heating if temperature drops below lower heating threshold (and previously not cooling)
+        if current_temperature_deg_c < heating_setpoint and (self.state.mode != "cooling"
+            and self.processed_state.mode != "cooling"):
             if self.state.mode != "heating":
                 self.state.activate_heating(timestep)
             return "heating"
 
-        # In deadband range: switch off
-        if (
-            heating_setpoint - offset
-            < current_temperature_deg_c
-            < cooling_setpoint + offset
-        ):
-            if self.state.mode != "off":
-                self.state.deactivate(timestep)
-            return "off"
-
-        raise ValueError(
-            f"Unhandled temperature case: {current_temperature_deg_c}"
-        )
+        if self.state.mode != "off":
+            self.state.deactivate(timestep)
+        return "off"
 
     def modulate_power(
         self, current_temperature_deg_c: float, operating_mode: str
@@ -814,14 +896,14 @@ class AirConditionerController(cp.Component):
         
         if operating_mode == "heating":
             temperature_difference = max(
-                (self.config.heating_set_temperature_deg_c + 1.5)
+                (self.config.heating_set_temperature_deg_c + self.config.offset)
                 - current_temperature_deg_c,
                 0,
             )
         elif operating_mode == "cooling":
             temperature_difference = max(
                 current_temperature_deg_c
-                - (self.config.cooling_set_temperature_deg_c - 1.5),
+                - (self.config.cooling_set_temperature_deg_c - self.config.offset),
                 0,
             )
         else:
@@ -836,3 +918,38 @@ class AirConditionerController(cp.Component):
         percentage = max(1 - (1 - capped_ratio) ** 2, 0.1)
 
         return percentage
+
+    # def modulate_power(
+    #     self, current_temperature_deg_c: float, operating_mode: str
+    # ) -> float:
+    #     """
+    #     Modulates power linearly based on the temperature difference.
+    #     Power decreases linearly as the temperature approaches the setpoint.
+    #     """
+    #     if operating_mode == "off":
+    #         return 0.0
+
+    #     if operating_mode == "heating":
+    #         temperature_difference = max(
+    #             (self.config.heating_set_temperature_deg_c + self.config.offset)
+    #             - current_temperature_deg_c,
+    #             0,
+    #         )
+    #     elif operating_mode == "cooling":
+    #         temperature_difference = max(
+    #             current_temperature_deg_c
+    #             - (self.config.cooling_set_temperature_deg_c - self.config.offset),
+    #             0,
+    #         )
+    #     else:
+    #         raise ValueError(f"Unknown operating mode: {operating_mode}")
+
+    #     # Apply linear scaling
+    #     capped_ratio = min(
+    #         temperature_difference
+    #         / self.config.temperature_difference_full_power_deg_c,
+    #         1.0,
+    #     )
+    #     percentage = max(capped_ratio, 0.1)  # Ensure minimum power is 10%
+
+    #     return percentage

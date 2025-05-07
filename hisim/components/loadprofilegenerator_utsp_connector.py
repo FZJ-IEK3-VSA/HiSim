@@ -1152,9 +1152,6 @@ class UtspLpgConnector(cp.Component):
             driving_distances,
         ) = self.define_required_result_files()
 
-        print(electricity)
-        print(car_states)
-
         log.information("Requesting LPG profiles from local lpg for one household.")
 
         result_folder = self.execute_local_lpg_single_household(calculation_index=1,

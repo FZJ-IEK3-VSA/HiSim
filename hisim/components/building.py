@@ -92,9 +92,9 @@ class BuildingConfig(cp.ConfigBase):
     number_of_apartments: Optional[float]
     max_thermal_building_demand_in_watt: Optional[float]
     u_value_facade_in_watt_per_m2_per_kelvin: Optional[float]
-    u_value_roof_watt_per_m2_per_kelvin: Optional[float]
-    u_value_window_watt_per_m2_per_kelvin: Optional[float]
-    u_value_door_watt_per_m2_per_kelvin: Optional[float]
+    u_value_roof_in_watt_per_m2_per_kelvin: Optional[float]
+    u_value_window_in_watt_per_m2_per_kelvin: Optional[float]
+    u_value_door_in_watt_per_m2_per_kelvin: Optional[float]
     predictive: bool
     set_heating_temperature_in_celsius: float
     set_cooling_temperature_in_celsius: float
@@ -108,9 +108,9 @@ class BuildingConfig(cp.ConfigBase):
         heating_reference_temperature_in_celsius: float = -7.0,
         max_thermal_building_demand_in_watt: Optional[float] = None,
         u_value_facade_in_watt_per_m2_per_kelvin: Optional[float] = None,
-        u_value_roof_watt_per_m2_per_kelvin: Optional[float] = None,
-        u_value_window_watt_per_m2_per_kelvin: Optional[float] = None,
-        u_value_door_watt_per_m2_per_kelvin: Optional[float] = None,
+        u_value_roof_in_watt_per_m2_per_kelvin: Optional[float] = None,
+        u_value_window_in_watt_per_m2_per_kelvin: Optional[float] = None,
+        u_value_door_in_watt_per_m2_per_kelvin: Optional[float] = None,
         building_name: str = "BUI1",
     ) -> Any:
         """Get a default Building."""
@@ -124,9 +124,9 @@ class BuildingConfig(cp.ConfigBase):
             absolute_conditioned_floor_area_in_m2=121.2,
             max_thermal_building_demand_in_watt=max_thermal_building_demand_in_watt,
             u_value_facade_in_watt_per_m2_per_kelvin=u_value_facade_in_watt_per_m2_per_kelvin,
-            u_value_roof_watt_per_m2_per_kelvin=u_value_roof_watt_per_m2_per_kelvin,
-            u_value_window_watt_per_m2_per_kelvin=u_value_window_watt_per_m2_per_kelvin,
-            u_value_door_watt_per_m2_per_kelvin=u_value_door_watt_per_m2_per_kelvin,
+            u_value_roof_in_watt_per_m2_per_kelvin=u_value_roof_in_watt_per_m2_per_kelvin,
+            u_value_window_in_watt_per_m2_per_kelvin=u_value_window_in_watt_per_m2_per_kelvin,
+            u_value_door_in_watt_per_m2_per_kelvin=u_value_door_in_watt_per_m2_per_kelvin,
             total_base_area_in_m2=None,
             number_of_apartments=None,
             predictive=False,
@@ -255,15 +255,15 @@ class Building(cp.Component):
         # Initialization of variables
 
         self.u_value_facade_in_watt_per_m2_per_kelvin = self.buildingconfig.u_value_facade_in_watt_per_m2_per_kelvin
-        self.u_value_roof_watt_per_m2_per_kelvin = self.buildingconfig.u_value_roof_watt_per_m2_per_kelvin
-        self.u_value_window_watt_per_m2_per_kelvin = self.buildingconfig.u_value_window_watt_per_m2_per_kelvin
-        self.u_value_door_watt_per_m2_per_kelvin = self.buildingconfig.u_value_door_watt_per_m2_per_kelvin
+        self.u_value_roof_in_watt_per_m2_per_kelvin = self.buildingconfig.u_value_roof_in_watt_per_m2_per_kelvin
+        self.u_value_window_in_watt_per_m2_per_kelvin = self.buildingconfig.u_value_window_in_watt_per_m2_per_kelvin
+        self.u_value_door_in_watt_per_m2_per_kelvin = self.buildingconfig.u_value_door_in_watt_per_m2_per_kelvin
 
         if (
             self.u_value_facade_in_watt_per_m2_per_kelvin is None and
-            self.u_value_roof_watt_per_m2_per_kelvin is None and
-            self.u_value_window_watt_per_m2_per_kelvin is None and
-            self.u_value_door_watt_per_m2_per_kelvin is None
+            self.u_value_roof_in_watt_per_m2_per_kelvin is None and
+            self.u_value_window_in_watt_per_m2_per_kelvin is None and
+            self.u_value_door_in_watt_per_m2_per_kelvin is None
         ):
             self.use_tabula_data = True
             log.information("Use tabula data")
@@ -2323,9 +2323,9 @@ class BuildingInformation:
 
         # get set u values for building
         self.u_value_facade_in_watt_per_m2_per_kelvin = self.buildingconfig.u_value_facade_in_watt_per_m2_per_kelvin
-        self.u_value_roof_watt_per_m2_per_kelvin = self.buildingconfig.u_value_roof_watt_per_m2_per_kelvin
-        self.u_value_window_watt_per_m2_per_kelvin = self.buildingconfig.u_value_window_watt_per_m2_per_kelvin
-        self.u_value_door_watt_per_m2_per_kelvin = self.buildingconfig.u_value_door_watt_per_m2_per_kelvin
+        self.u_value_roof_in_watt_per_m2_per_kelvin = self.buildingconfig.u_value_roof_in_watt_per_m2_per_kelvin
+        self.u_value_window_in_watt_per_m2_per_kelvin = self.buildingconfig.u_value_window_in_watt_per_m2_per_kelvin
+        self.u_value_door_in_watt_per_m2_per_kelvin = self.buildingconfig.u_value_door_in_watt_per_m2_per_kelvin
 
         self.use_tabula_data = use_tabula_data
 
@@ -2363,15 +2363,15 @@ class BuildingInformation:
             manipulation = True
             self.manipulate_tabula_wall_parameter()
 
-        if self.u_value_roof_watt_per_m2_per_kelvin is not None:
+        if self.u_value_roof_in_watt_per_m2_per_kelvin is not None:
             manipulation = True
             self.manipulate_tabula_roof_parameter()
 
-        if self.u_value_window_watt_per_m2_per_kelvin is not None:
+        if self.u_value_window_in_watt_per_m2_per_kelvin is not None:
             manipulation = True
             self.manipulate_tabula_window_parameter()
 
-        if self.u_value_door_watt_per_m2_per_kelvin is not None:
+        if self.u_value_door_in_watt_per_m2_per_kelvin is not None:
             manipulation = True
             self.manipulate_tabula_door_parameter()
 
@@ -2804,8 +2804,8 @@ class BuildingInformation:
 
     def manipulate_tabula_roof_parameter(self,):
         """Manipulate building data of roof."""
-        self.buildingdata["U_Actual_Roof_1"] = self.u_value_roof_watt_per_m2_per_kelvin
-        self.buildingdata["U_Actual_Roof_2"] = self.u_value_roof_watt_per_m2_per_kelvin
+        self.buildingdata["U_Actual_Roof_1"] = self.u_value_roof_in_watt_per_m2_per_kelvin
+        self.buildingdata["U_Actual_Roof_2"] = self.u_value_roof_in_watt_per_m2_per_kelvin
 
         area_roof_1 = float(self.buildingdata["A_Roof_1"].values[0])
         area_roof_2 = float(self.buildingdata["A_Roof_2"].values[0])
@@ -2814,30 +2814,30 @@ class BuildingInformation:
         b_roof_2 = float(self.buildingdata["b_Transmission_Roof_2"].values[0])
 
         self.buildingdata[
-            "H_Transmission_Roof_1"] = self.u_value_roof_watt_per_m2_per_kelvin * area_roof_1 * b_roof_1  # type: ignore
+            "H_Transmission_Roof_1"] = self.u_value_roof_in_watt_per_m2_per_kelvin * area_roof_1 * b_roof_1  # type: ignore
         self.buildingdata[
-            "H_Transmission_Roof_2"] = self.u_value_roof_watt_per_m2_per_kelvin * area_roof_2 * b_roof_2  # type: ignore
+            "H_Transmission_Roof_2"] = self.u_value_roof_in_watt_per_m2_per_kelvin * area_roof_2 * b_roof_2  # type: ignore
 
     def manipulate_tabula_window_parameter(self,):
         """Manipulate building data of windows."""
-        self.buildingdata["U_Actual_Window_1"] = self.u_value_window_watt_per_m2_per_kelvin
-        self.buildingdata["U_Actual_Window_2"] = self.u_value_window_watt_per_m2_per_kelvin
+        self.buildingdata["U_Actual_Window_1"] = self.u_value_window_in_watt_per_m2_per_kelvin
+        self.buildingdata["U_Actual_Window_2"] = self.u_value_window_in_watt_per_m2_per_kelvin
 
         area_window_1 = float(self.buildingdata["A_Window_1"].values[0])
         area_window_2 = float(self.buildingdata["A_Window_2"].values[0])
 
         self.buildingdata[
-            "H_Transmission_Window_1"] = self.u_value_window_watt_per_m2_per_kelvin * area_window_1  # type: ignore
+            "H_Transmission_Window_1"] = self.u_value_window_in_watt_per_m2_per_kelvin * area_window_1  # type: ignore
         self.buildingdata[
-            "H_Transmission_Window_2"] = self.u_value_window_watt_per_m2_per_kelvin * area_window_2  # type: ignore
+            "H_Transmission_Window_2"] = self.u_value_window_in_watt_per_m2_per_kelvin * area_window_2  # type: ignore
 
     def manipulate_tabula_door_parameter(self,):
         """Manipulate building data of door."""
-        self.buildingdata["U_Actual_Door_1"] = self.u_value_door_watt_per_m2_per_kelvin
+        self.buildingdata["U_Actual_Door_1"] = self.u_value_door_in_watt_per_m2_per_kelvin
 
         area_door_1 = float(self.buildingdata["A_Door_1"].values[0])
         self.buildingdata[
-            "H_Transmission_Door_1"] = self.u_value_door_watt_per_m2_per_kelvin * area_door_1  # type: ignore
+            "H_Transmission_Door_1"] = self.u_value_door_in_watt_per_m2_per_kelvin * area_door_1  # type: ignore
 
     def manipulate_heat_transfer_coefficient(self) -> Tuple[float, float]:
         """Manipulate heat_transfer coefficient."""

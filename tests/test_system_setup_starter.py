@@ -111,6 +111,10 @@ def test_system_setup_starter_scaling():
             "set_cooling_temperature_in_celsius": 24.0,
             "enable_opening_windows": False,
             "max_thermal_building_demand_in_watt": None,
+            "u_value_facade_in_watt_per_m2_per_kelvin": None,
+            "u_value_roof_in_watt_per_m2_per_kelvin": None,
+            "u_value_window_in_watt_per_m2_per_kelvin": None,
+            "u_value_door_in_watt_per_m2_per_kelvin": None,
         },
     }
 

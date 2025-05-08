@@ -103,7 +103,11 @@ def test_household_gas_heater_system_setup_starter_pv():
             "u_value_roof_in_watt_per_m2_per_kelvin": None,
             "u_value_window_in_watt_per_m2_per_kelvin": None,
             "u_value_door_in_watt_per_m2_per_kelvin": None,
-        },
+            "co2_footprint": 0,
+            "cost": 0,
+            "maintenance_cost_as_percentage_of_investment": 0,
+            "lifetime": 0,
+    },
         "options": {"photovoltaic": True},
     }
 

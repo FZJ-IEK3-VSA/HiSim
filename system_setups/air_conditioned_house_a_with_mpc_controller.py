@@ -229,6 +229,10 @@ def air_conditioned_house(
         u_value_roof_in_watt_per_m2_per_kelvin=None,
         u_value_window_in_watt_per_m2_per_kelvin=None,
         u_value_door_in_watt_per_m2_per_kelvin=None,
+        co2_footprint=0,
+        cost=0,
+        maintenance_cost_as_percentage_of_investment=0,
+        lifetime=0,
     )
     my_building = building.Building(config=my_building_config, my_simulation_parameters=my_simulation_parameters,)
 

@@ -1125,11 +1125,11 @@ class Building(cp.Component):
             f"Transmission between Indoor Air and Internal Surface, based on ISO 13790 (H_tr_is) [W/K]: "
             f"{self.heat_transfer_coeff_indoor_air_and_internal_surface_in_watt_per_kelvin:.2f}"
         )
-
-        lines.append(
-            f"Thermal Conductance by Ventilation, based on TABULA (H_ve) [W/K]: "
-            f"{self.my_building_information.heat_transfer_coeff_by_ventilation_reference_in_watt_per_kelvin:.2f}"
-        )
+        if self.use_tabula_data:
+            lines.append(
+                f"Thermal Conductance by Ventilation, based on TABULA (H_ve) [W/K]: "
+                f"{self.my_building_information.heat_transfer_coeff_by_ventilation_reference_in_watt_per_kelvin:.2f}"
+            )
 
         lines.append("-------------------------------------------------------------------------------------------")
         lines.append("Building Construction:")

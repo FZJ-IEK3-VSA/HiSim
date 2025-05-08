@@ -1201,7 +1201,7 @@ class Building(cp.Component):
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
         if (
                 self.config.maintenance_cost_as_percentage_of_investment in [None, 0.0] or
-                self.config.cost  in [None, 0.0]
+                self.config.cost in [None, 0.0]
         ):
             opex_cost_data_class = cp.OpexCostDataClass.get_default_opex_cost_data_class()
         else:
@@ -1225,6 +1225,9 @@ class Building(cp.Component):
         ):
             capex_cost_data_class = cp.CapexCostDataClass.get_default_capex_cost_data_class()
         else:
+            assert config.lifetime is not None
+            assert config.cost is not None
+            assert config.co2_footprint is not None
             seconds_per_year = 365 * 24 * 60 * 60
             capex_per_simulated_period = ((config.cost / config.lifetime) *
                                           (simulation_parameters.duration.total_seconds() / seconds_per_year)

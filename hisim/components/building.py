@@ -141,10 +141,10 @@ class BuildingConfig(cp.ConfigBase):
             set_heating_temperature_in_celsius=set_heating_temperature_in_celsius,
             set_cooling_temperature_in_celsius=set_cooling_temperature_in_celsius,
             enable_opening_windows=False,
-            co2_footprint=0,  # todo: check value
-            cost=0,   # todo: check value
-            maintenance_cost_as_percentage_of_investment=0,  # noqa: E501 # todo: check value
-            lifetime=0,  # todo: check value
+            co2_footprint=1,  # todo: check value
+            cost=1,   # todo: check value
+            maintenance_cost_as_percentage_of_investment=0.1,  # noqa: E501 # todo: check value
+            lifetime=1,  # todo: check value
         )
         return config
 

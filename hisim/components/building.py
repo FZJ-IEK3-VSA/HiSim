@@ -1200,8 +1200,8 @@ class Building(cp.Component):
     ) -> cp.OpexCostDataClass:
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
         if (
-                self.config.maintenance_cost_as_percentage_of_investment in [None, 0] or
-                self.config.cost  in [None, 0]
+                self.config.maintenance_cost_as_percentage_of_investment in [None, 0.0] or
+                self.config.cost  in [None, 0.0]
         ):
             opex_cost_data_class = cp.OpexCostDataClass.get_default_opex_cost_data_class()
         else:
@@ -1219,9 +1219,9 @@ class Building(cp.Component):
     def get_cost_capex(config: BuildingConfig, simulation_parameters: SimulationParameters) -> cp.CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
         if (
-                config.lifetime in [None, 0] or
-                config.cost in [None, 0] or
-                config.co2_footprint in [None, 0]
+                config.lifetime in [None, 0.0] or
+                config.cost in [None, 0.0] or
+                config.co2_footprint in [None, 0.0]
         ):
             capex_cost_data_class = cp.CapexCostDataClass.get_default_capex_cost_data_class()
         else:

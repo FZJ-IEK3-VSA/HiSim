@@ -20,6 +20,7 @@ from tests import functions_for_testing as fft
         ("off", 40, "cooling"),
         ("off", 26.1, "cooling"),
         ("off", 26.0, "off"),
+        ("off", 25.9, "off"),
         ("off", 21.0, "off"),
         ("off", 18.0, "off"),
         ("off", 17.9, "heating"),
@@ -34,7 +35,6 @@ def test_determine_mode_returns_correct_operation_mode_for_temperature(
     ####### GIVEN #########
     testee = given_default_testee()
 
-    print(testee.config.minimum_idle_time_s)
     testee.previous_state = AirConditionerControllerState(start_controller_mode, 0, 0, 0.0)
 
     ######## WHEN ########
@@ -81,7 +81,8 @@ def test_determine_mode_returns_correct_operation_mode_for_operating_time(
     testee = given_default_testee(
         {"minimum_runtime_s": 60 * 15, "minimum_idle_time_s": 60 * 10}
     )
-    testee.previous_state = AirConditionerControllerState(start_controller_mode, 0, 0, 0.0)
+    testee.state = AirConditionerControllerState(start_controller_mode, 0, 0, 0.0)
+    testee.previous_state = testee.state.clone()
 
     ######## WHEN ########
     returned_mode = testee.determine_operating_mode(current_temperature_deg_c, 0)
@@ -96,12 +97,12 @@ def test_determine_mode_returns_correct_operation_mode_for_operating_time(
         ("off", 40, 0),
         ("cooling", 40, 1.0),
         ("cooling", 31, 1.0),
-        ("cooling", 28.5, 0.5),
+        ("cooling", 26.5, 0.3055555555),
         ("cooling", 26, 0.1),
         ("cooling", 21, 0.1),
         ("heating", 21, 0.1),
         ("heating", 18, 0.1),
-        ("heating", 15.5, 0.5),
+        ("heating", 17.5, 0.3055555555),
         ("heating", 13, 1.0),
         ("heating", 0, 1.0),
         ("heating", -5, 1.0),
@@ -117,20 +118,20 @@ def test_modulate_returns_correct_modulation_percentage(
     modulating_percentage = testee.modulate_power(current_temperature_deg_c, operating_mode)
 
     ######## THEN ########
-    assert modulating_percentage == expected_modulation_percentage
+    assert modulating_percentage == pytest.approx(expected_modulation_percentage)
 
 @pytest.mark.parametrize(
     ["mocked_mode", "mocked_modulation", "expected_output"],
     [
-        ("off", 0.0, 0),
-        ("cooling", 1.0, -1),
-        ("heating", 1.0, 1),
+        ("off", 0.0, 0.0),
+        ("cooling", 1.0, -1.0),
+        ("heating", 1.0, 1.0),
     ],
 )
-@patch.object(AirConditionerController, "determine_operating_mode")
 @patch.object(AirConditionerController, "modulate_power")
+@patch.object(AirConditionerController, "determine_operating_mode")
 def test_simulate_sets_correct_state_for_operation_mode(
-    mock_method_modulate, mock_method_mode, mocked_mode, mocked_modulation, expected_output
+    mock_method_mode, mock_method_modulate, mocked_mode, mocked_modulation, expected_output
 ):
     ####### GIVEN #########
     testee = given_default_testee()
@@ -147,12 +148,8 @@ def test_simulate_sets_correct_state_for_operation_mode(
 
     ######## THEN ########
     assert (
-        stsv.values[testee.operating_mode_signal_channel.global_index]
-        == expected_output
-    )
-    assert (
         stsv.values[testee.operation_modulating_signal_channel.global_index]
-        == mocked_modulation
+        == expected_output
     )
     mock_method_modulate.assert_called_once()
     mock_method_mode.assert_called_once()
@@ -166,10 +163,8 @@ def given_default_testee(
         year=2021, seconds_per_timestep=60
     )
     config = AirConditionerControllerConfig.get_default_air_conditioner_controller_config()
-    config.minimum_heating_set_temperature_deg_c = 18.0
-    config.maximum_heating_set_temperature_deg_c = 18.0
-    config.maximum_cooling_set_temperature_deg_c = 26.0
-    config.minimum_cooling_set_temp_deg_c = 26.0
+    config.heating_set_temperature_deg_c = 18.0
+    config.cooling_set_temperature_deg_c = 26.0
     config.minimum_runtime_s = config_overwrite.get("minimum_runtime_s", 0)
     config.minimum_idle_time_s = config_overwrite.get("minimum_idle_time_s", 0)
     config.offset = 0

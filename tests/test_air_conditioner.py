@@ -35,10 +35,14 @@ def test_determine_mode_returns_correct_operation_mode_for_temperature(
     ####### GIVEN #########
     testee = given_default_testee()
 
-    testee.previous_state = AirConditionerControllerState(start_controller_mode, 0, 0, 0.0)
+    testee.previous_state = AirConditionerControllerState(
+        start_controller_mode, 0, 0, 0.0
+    )
 
     ######## WHEN ########
-    returned_mode = testee.determine_operating_mode(current_temperature_deg_c, 0)
+    returned_mode = testee.determine_operating_mode(
+        current_temperature_deg_c, 0
+    )
 
     ######## THEN ########
     assert returned_mode == mode
@@ -81,18 +85,27 @@ def test_determine_mode_returns_correct_operation_mode_for_operating_time(
     testee = given_default_testee(
         {"minimum_runtime_s": 60 * 15, "minimum_idle_time_s": 60 * 10}
     )
-    testee.state = AirConditionerControllerState(start_controller_mode, 0, 0, 0.0)
+    testee.state = AirConditionerControllerState(
+        start_controller_mode, 0, 0, 0.0
+    )
     testee.previous_state = testee.state.clone()
 
     ######## WHEN ########
-    returned_mode = testee.determine_operating_mode(current_temperature_deg_c, 0)
+    returned_mode = testee.determine_operating_mode(
+        current_temperature_deg_c, 0
+    )
 
     ######## THEN ########
     assert returned_mode == expected_mode
 
+
 @pytest.mark.base
 @pytest.mark.parametrize(
-    ["operating_mode", "current_temperature_deg_c", "expected_modulation_percentage"],
+    [
+        "operating_mode",
+        "current_temperature_deg_c",
+        "expected_modulation_percentage",
+    ],
     [
         ("off", 40, 0),
         ("cooling", 40, 1.0),
@@ -109,16 +122,21 @@ def test_determine_mode_returns_correct_operation_mode_for_operating_time(
     ],
 )
 def test_modulate_returns_correct_modulation_percentage(
-        operating_mode, current_temperature_deg_c, expected_modulation_percentage
+    operating_mode, current_temperature_deg_c, expected_modulation_percentage
 ):
-     ####### GIVEN #########
+    ####### GIVEN #########
     testee = given_default_testee()
 
     ######## WHEN ########
-    modulating_percentage = testee.modulate_power(current_temperature_deg_c, operating_mode)
+    modulating_percentage = testee.modulate_power(
+        current_temperature_deg_c, operating_mode
+    )
 
     ######## THEN ########
-    assert modulating_percentage == pytest.approx(expected_modulation_percentage)
+    assert modulating_percentage == pytest.approx(
+        expected_modulation_percentage
+    )
+
 
 @pytest.mark.parametrize(
     ["mocked_mode", "mocked_modulation", "expected_output"],
@@ -131,7 +149,11 @@ def test_modulate_returns_correct_modulation_percentage(
 @patch.object(AirConditionerController, "modulate_power")
 @patch.object(AirConditionerController, "determine_operating_mode")
 def test_simulate_sets_correct_state_for_operation_mode(
-    mock_method_mode, mock_method_modulate, mocked_mode, mocked_modulation, expected_output
+    mock_method_mode,
+    mock_method_modulate,
+    mocked_mode,
+    mocked_modulation,
+    expected_output,
 ):
     ####### GIVEN #########
     testee = given_default_testee()

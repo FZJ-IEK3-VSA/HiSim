@@ -24,7 +24,10 @@ class WarmWaterStorageConfig(ConfigBase):
     slice_height_minimum: float  # [m]
 
     @classmethod
-    def get_default_config(cls, building_name: str = "BUI1",) -> Any:
+    def get_default_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Gets a default config."""
         return WarmWaterStorageConfig(
             building_name=building_name,
@@ -167,8 +170,12 @@ class AdvElectrolyzerConfig:
     max_power_percent = 100  # [%]
     min_hydrogen_production_rate_hour = 300  # [Nl/h]
     max_hydrogen_production_rate_hour = 5000  # [Nl/h]   #500
-    min_hydrogen_production_rate = min_hydrogen_production_rate_hour / 3600  # [Nl/s]
-    max_hydrogen_production_rate = max_hydrogen_production_rate_hour / 3600  # [Nl/s]
+    min_hydrogen_production_rate = (
+        min_hydrogen_production_rate_hour / 3600
+    )  # [Nl/s]
+    max_hydrogen_production_rate = (
+        max_hydrogen_production_rate_hour / 3600
+    )  # [Nl/s]
     pressure_hydrogen_output = 30  # [bar]     --> max pressure mode at 35 bar
 
     """
@@ -210,7 +217,10 @@ class ExtendedControllerConfig(ConfigBase):
     maximum_autarky: bool
 
     @classmethod
-    def get_default_config(cls, building_name: str = "BUI1",) -> Any:
+    def get_default_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Gets a default ExtendedControllerConfig."""
         return ExtendedControllerConfig(
             building_name=building_name,
@@ -253,7 +263,9 @@ class PhysicsConfig:
     specific_volume_in_m3_per_kg: float = field(init=False)
     lower_heating_value_in_joule_per_kg: float = field(init=False)
     higher_heating_value_in_joule_per_kg: float = field(init=False)
-    specific_heat_capacity_in_watthour_per_kg_per_kelvin: float = field(init=False)
+    specific_heat_capacity_in_watthour_per_kg_per_kelvin: float = field(
+        init=False
+    )
 
     def __post_init__(self):
         """Post init function.
@@ -263,17 +275,21 @@ class PhysicsConfig:
 
         self.specific_volume_in_m3_per_kg = 1 / self.density_in_kg_per_m3
         self.lower_heating_value_in_joule_per_kg = (
-            self.lower_heating_value_in_joule_per_m3 / self.density_in_kg_per_m3
+            self.lower_heating_value_in_joule_per_m3
+            / self.density_in_kg_per_m3
         )
         self.higher_heating_value_in_joule_per_kg = (
-            self.higher_heating_value_in_joule_per_m3 / self.density_in_kg_per_m3
+            self.higher_heating_value_in_joule_per_m3
+            / self.density_in_kg_per_m3
         )
         self.specific_heat_capacity_in_watthour_per_kg_per_kelvin = (
             self.specific_heat_capacity_in_joule_per_kg_per_kelvin / 3600
         )
 
     @classmethod
-    def get_properties_for_energy_carrier(cls, energy_carrier: LoadTypes) -> "PhysicsConfig":
+    def get_properties_for_energy_carrier(
+        cls, energy_carrier: LoadTypes
+    ) -> "PhysicsConfig":
         """Get physical and chemical properties from specific energy carrier."""
         if energy_carrier == LoadTypes.GAS:
             # natural gas (here we use the values of methane because this is what natural gas for residential heating mostly consists of)
@@ -307,6 +323,17 @@ class PhysicsConfig:
                 higher_heating_value_in_joule_per_m3=11.7 * 1e9,
                 specific_heat_capacity_in_joule_per_kg_per_kelvin=2500,
             )
+        if energy_carrier == LoadTypes.WOOD_CHIPS:
+            # density here = bulk density (Schüttdichte)
+            # source density and heating value: https://www.umweltbundesamt.de/sites/default/files/medien/479/publikationen/factsheet_ansatz_zur_neubewertung_von_co2-emissionen_aus_der_holzverbrennung_0.pdf
+            # source heat capacity: https://www.schweizer-fn.de/stoff/wkapazitaet/wkapazitaet_baustoff_erde.php
+            # higher heating value of wood chips unknown -> set to lower heating value
+            return PhysicsConfig(
+                density_in_kg_per_m3=250,  # approximate value based on different wood types
+                lower_heating_value_in_joule_per_m3=15.6 * 1e9,
+                higher_heating_value_in_joule_per_m3=15.6 * 1e9,
+                specific_heat_capacity_in_joule_per_kg_per_kelvin=2000,  # estimated based on values for different woods
+            )
         if energy_carrier == LoadTypes.WATER:
             return PhysicsConfig(
                 density_in_kg_per_m3=1000,
@@ -315,7 +342,9 @@ class PhysicsConfig:
                 specific_heat_capacity_in_joule_per_kg_per_kelvin=4180,
             )
 
-        raise ValueError(f"Energy carrier {energy_carrier} not implemented in PhysicsConfig yet.")
+        raise ValueError(
+            f"Energy carrier {energy_carrier} not implemented in PhysicsConfig yet."
+        )
 
     # Schmidt 2020: Wasserstofftechnik  S.170ff
     # fuel value H2:    10.782 MJ/m³    (S.172)
@@ -352,6 +381,12 @@ class EmissionFactorsAndCostsForFuelsConfig:
     oil_footprint_in_kg_per_l: float  # kgCO2eq/l
     diesel_costs_in_euro_per_l: float  # EUR/l
     diesel_footprint_in_kg_per_l: float  # kgCO2eq/l
+    pellet_costs_in_euro_per_t: float  # EUR/t
+    pellet_footprint_in_kg_per_kWh: float  # kgCo2eq/kWh
+    wood_chip_costs_in_euro_per_t: float  # EUR/t
+    wood_chip_footprint_in_kg_per_kWh: float  # kgCo2eq/kWh
+    district_heating_costs_in_euro_per_kwh: float  # EUR/kWh
+    district_heating_footprint_in_kg_per_kwh: float  # kgCo2eq/kWh
 
     @classmethod
     def get_default(cls) -> "EmissionFactorsAndCostsForFuelsConfig":
@@ -372,10 +407,18 @@ class EmissionFactorsAndCostsForFuelsConfig:
             oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
             diesel_costs_in_euro_per_l=1.617572993,  # EUR/l
             diesel_footprint_in_kg_per_l=2.6649,  # kgCO2eq/l
+            pellet_costs_in_euro_per_t=289,  # EUR/t # Source: [13]
+            pellet_footprint_in_kg_per_kWh=0.036,  # kgCo2eq/kWh # Source: [8]
+            wood_chip_costs_in_euro_per_t=96,  # EUR/t
+            wood_chip_footprint_in_kg_per_kWh=0.317,  # kgCo2eq/kWh # Source : [14]
+            district_heating_costs_in_euro_per_kwh=0.14757,  # EUR/kWh Source : [16] value for 2024
+            district_heating_footprint_in_kg_per_kwh=0,  # kgCo2eq/kWh
         )
 
     @classmethod
-    def get_values_for_year(cls, year: int) -> "EmissionFactorsAndCostsForFuelsConfig":
+    def get_values_for_year(
+        cls, year: int
+    ) -> "EmissionFactorsAndCostsForFuelsConfig":
         """Get emission factors and fuel costs for certain year.
 
         Sources:
@@ -386,6 +429,15 @@ class EmissionFactorsAndCostsForFuelsConfig:
         [5]: https://de.statista.com/statistik/daten/studie/38897/umfrage/co2-emissionsfaktor-fuer-den-strommix-in-deutschland-seit-1990/
         [6]: https://www.destatis.de/DE/Themen/Wirtschaft/Preise/Erdgas-Strom-DurchschnittsPreise/_inhalt.html#421258
         [7]: https://de.statista.com/statistik/daten/studie/250114/umfrage/preis-fuer-fernwaerme-nach-anschlusswert-in-deutschland/
+        [8]: https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://www.bafa.de/SharedDocs/Downloads/DE/Energie/eew_infoblatt_co2_faktoren_2022.pdf%3F__blob%3DpublicationFile%26v%3D6&ved=2ahUKEwjai6GzsP2MAxW6RPEDHbV2G-cQFnoECFkQAQ&usg=AOvVaw1U3FERIjm5HLPDAuuO5ig0
+        [9]: https://www.umweltbundesamt.de/themen/co2-emissionen-pro-kilowattstunde-strom-2024
+        [10]: https://www-genesis.destatis.de/datenbank/online/statistic/61243/table/61243-0002
+        [11]: https://www.bafa.de/SharedDocs/Downloads/DE/Energie/eew_infoblatt_co2_faktoren_2025.pdf?__blob=publicationFile&v=3
+        [12]: https://de.statista.com/statistik/daten/studie/2633/umfrage/entwicklung-des-verbraucherpreises-fuer-leichtes-heizoel-seit-1960/
+        [13]: https://de.statista.com/statistik/daten/studie/214738/umfrage/preisentwicklung-fuer-holzpellets-in-deutschland/
+        [14]: https://www.umweltbundesamt.de/sites/default/files/medien/479/publikationen/factsheet_ansatz_zur_neubewertung_von_co2-emissionen_aus_der_holzverbrennung_0.pdf
+        [15]: https://mediathek.fnr.de/energiepreisentwicklung.html
+        [16]: https://de.statista.com/statistik/daten/studie/250114/umfrage/preis-fuer-fernwaerme-nach-anschlusswert-in-deutschland/
         """
         if year == 2018:
             return EmissionFactorsAndCostsForFuelsConfig(
@@ -402,6 +454,12 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
                 diesel_costs_in_euro_per_l=128.90,  # EUR/l  # Source: [3]
                 diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
+                pellet_costs_in_euro_per_t=247,  # EUR/t # Source: [13]
+                pellet_footprint_in_kg_per_kWh=0.036,  # kgCo2eq/kWh # Source: [8]
+                wood_chip_costs_in_euro_per_t=96,  # EUR/t Source: [15] using value for 2024 as almost constant over past years
+                wood_chip_footprint_in_kg_per_kWh=0.0313,  # kgCo2eq/kWh # Source : [14]
+                district_heating_costs_in_euro_per_kwh=0.07672,  # EUR/kWh Source : [16]
+                district_heating_footprint_in_kg_per_kwh=0.280,  # kgCo2eq/kWh Source : [8]
             )
         if year == 2019:
             return EmissionFactorsAndCostsForFuelsConfig(
@@ -418,6 +476,12 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
                 diesel_costs_in_euro_per_l=1.2670,  # EUR/l  # Source: [3]
                 diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
+                pellet_costs_in_euro_per_t=251,  # EUR/t # Source: [13]
+                pellet_footprint_in_kg_per_kWh=0.036,  # kgCo2eq/kWh # Source: [8]
+                wood_chip_costs_in_euro_per_t=96,  # EUR/t Source: [15] using value for 2024 as almost constant over past years
+                wood_chip_footprint_in_kg_per_kWh=0.0313,  # kgCo2eq/kWh # Source : [14]
+                district_heating_costs_in_euro_per_kwh=0.07904,  # EUR/kWh Source : [16]
+                district_heating_footprint_in_kg_per_kwh=0.280,  # kgCo2eq/kWh Source : [8]
             )
         if year == 2020:
             return EmissionFactorsAndCostsForFuelsConfig(
@@ -434,6 +498,12 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
                 diesel_costs_in_euro_per_l=1.1240,  # EUR/l  # Source: [3]
                 diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
+                pellet_costs_in_euro_per_t=237,  # EUR/t # Source: [13]
+                pellet_footprint_in_kg_per_kWh=0.036,  # kgCo2eq/kWh # Source: [8]
+                wood_chip_costs_in_euro_per_t=96,  # EUR/t Source: [15] using value for 2024 as almost constant over past years
+                wood_chip_footprint_in_kg_per_kWh=0.0313,  # kgCo2eq/kWh # Source : [14]
+                district_heating_costs_in_euro_per_kwh=0.07656,  # EUR/kWh Source : [16]
+                district_heating_footprint_in_kg_per_kwh=0.280,  # kgCo2eq/kWh Source : [8]
             )
         if year == 2021:
             return EmissionFactorsAndCostsForFuelsConfig(
@@ -450,6 +520,12 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
                 diesel_costs_in_euro_per_l=1.399,  # EUR/l  # Source: [3]
                 diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
+                pellet_costs_in_euro_per_t=241,  # EUR/t # Source: [13]
+                pellet_footprint_in_kg_per_kWh=0.036,  # kgCo2eq/kWh # Source: [8]
+                wood_chip_costs_in_euro_per_t=96,  # EUR/t Source: [15] using value for 2024 as almost constant over past years
+                wood_chip_footprint_in_kg_per_kWh=0.0313,  # kgCo2eq/kWh # Source : [14]
+                district_heating_costs_in_euro_per_kwh=0.08277,  # EUR/kWh Source : [16]
+                district_heating_footprint_in_kg_per_kwh=0.280,  # kgCo2eq/kWh Source : [8]
             )
         if year == 2022:
             return EmissionFactorsAndCostsForFuelsConfig(
@@ -466,6 +542,12 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
                 diesel_costs_in_euro_per_l=1.96,  # EUR/l  # Source: [3]
                 diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
+                pellet_costs_in_euro_per_t=519,  # EUR/t # Source: [13]
+                pellet_footprint_in_kg_per_kWh=0.036,  # kgCo2eq/kWh # Source: [8]
+                wood_chip_costs_in_euro_per_t=96,  # EUR/t Source: [15] using value for 2024 as almost constant over past years
+                wood_chip_footprint_in_kg_per_kWh=0.0313,  # kgCo2eq/kWh # Source : [14]
+                district_heating_costs_in_euro_per_kwh=0.11945,  # EUR/kWh Source : [16]
+                district_heating_footprint_in_kg_per_kwh=0.280,  # kgCo2eq/kWh Source : [8]
             )
         if year == 2023:
             return EmissionFactorsAndCostsForFuelsConfig(
@@ -482,6 +564,37 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
                 diesel_costs_in_euro_per_l=1.73,  # EUR/l  # Source: [3]
                 diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
+                pellet_costs_in_euro_per_t=390,  # EUR/t # Source: [13]
+                pellet_footprint_in_kg_per_kWh=0.036,  # kgCo2eq/kWh # Source: [8]
+                wood_chip_costs_in_euro_per_t=96,  # EUR/t Source: [15] using value for 2024 as almost constant over past years
+                wood_chip_footprint_in_kg_per_kWh=0.0313,  # kgCo2eq/kWh # Source : [14]
+                district_heating_costs_in_euro_per_kwh=0.15034,  # EUR/kWh Source : [16]
+                district_heating_footprint_in_kg_per_kwh=0.280,  # kgCo2eq/kWh Source : [8]
             )
 
-        raise KeyError(f"No Emission and cost factors implemented yet for the year {year}.")
+        if year == 2024:
+            return EmissionFactorsAndCostsForFuelsConfig(
+                electricity_costs_in_euro_per_kwh=0.4113,  # EUR/kWh  # Source: [10]
+                electricity_footprint_in_kg_per_kwh=0.363,  # kgCO2eq/kWh  # Source: [9]
+                electricity_to_grid_revenue_in_euro_per_kwh=0.0692,  # EUR/kWh  # Source: [2] average of 2024 values
+                contracting_heating_costs_hot_water_in_euro_per_kwh=0.142,  # EUR/kWh  # Source: [7] 160 kW connection
+                contracting_heating_footprint_hot_water_in_kg_per_kwh=0.28,  # kgCO2eq/kWh # Source: [11] assuming its for 2024
+                contracting_heating_costs_cold_water_in_euro_per_kwh=0,
+                contracting_heating_footprint_cold_water_in_kg_per_kwh=0,
+                gas_costs_in_euro_per_kwh=0.10335,  # EUR/kWh  # Source: [6] average of both half years
+                gas_footprint_in_kg_per_kwh=0.247,  # kgCO2eq/kWh
+                oil_costs_in_euro_per_l=0.9941,  # EUR/l # Source: [12]
+                oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
+                diesel_costs_in_euro_per_l=1.6649,  # EUR/l  # Source: [3]
+                diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
+                pellet_costs_in_euro_per_t=289,  # EUR/t # Source: [13]
+                pellet_footprint_in_kg_per_kWh=0.036,  # kgCo2eq/kWh # Source: [8]
+                wood_chip_costs_in_euro_per_t=96,  # EUR/t Source: [15]
+                wood_chip_footprint_in_kg_per_kWh=0.0313,  # kgCo2eq/kWh # Source : [14]
+                district_heating_costs_in_euro_per_kwh=0.14757,  # EUR/kWh Source : [16]
+                district_heating_footprint_in_kg_per_kwh=0.280,  # kgCo2eq/kWh Source : [8]
+            )
+
+        raise KeyError(
+            f"No Emission and cost factors implemented yet for the year {year}."
+        )

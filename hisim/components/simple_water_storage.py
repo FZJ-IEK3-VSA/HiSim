@@ -43,6 +43,8 @@ class HotWaterStorageSizingEnum(IntEnum):
     SIZE_ACCORDING_TO_HEAT_PUMP = 1
     SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM = 2
     SIZE_ACCORDING_TO_GAS_HEATER = 3
+    SIZE_ACCORDING_TO_PELLET_HEATING = 4
+    SIZE_ACCORDING_TO_WOOD_CHIP_HEATING = 5
 
 
 class PositionHotWaterStorageInSystemSetup(IntEnum):
@@ -145,6 +147,14 @@ class SimpleHotWaterStorageConfig(cp.ConfigBase):
         # otherwise use approximation: 60l per kw thermal power
         elif sizing_option == HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM:
             volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 60
+
+        # large storage for pellet heating to avoid frequent on-off
+        elif sizing_option == HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_PELLET_HEATING:
+            volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 40
+
+        # large storage even more important than for pellets, as on-off behavior should be avoided
+        elif sizing_option == HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_WOOD_CHIP_HEATING:
+            volume_heating_water_storage_in_liter = max_thermal_power_in_watt_of_heating_system / 1e3 * 100
 
         # or for gas heaters make hws smaller because gas heaters are a bigger inertia than heat pump
         elif sizing_option == HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER:
@@ -1743,7 +1753,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
         # use importlib for importing the other component in order to avoid circular-import errors
         component_module_name = "hisim.components.generic_district_heating"
         component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "DistrictHeatingForDHW")
+        component_class = getattr(component_module, "DistrictHeating")
         connections = []
         dhw_boiler_classname = component_class.get_classname()
         connections.append(

@@ -1032,6 +1032,6 @@ class AirConditionerController(cp.Component):
             / self.config.temperature_difference_full_power_deg_c,
             1.0,
         )
-        percentage = max(1 - (1 - capped_ratio) ** 2, 0.1)
+        percentage = float(max(1 - (1 - capped_ratio) ** 2, 0.1))
 
         return percentage

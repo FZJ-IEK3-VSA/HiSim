@@ -701,7 +701,7 @@ class GenericBoiler(Component):
         elif self.energy_carrier == lt.LoadTypes.PELLETS:
             kpi_tag = KpiTagEnumClass.PELLETS_SPACE_HEATING
             co2_per_unit = (
-                emissions_and_cost_factors.pellet_footprint_in_kg_per_kWh
+                emissions_and_cost_factors.pellet_footprint_in_kg_per_kwh
             )
             euro_per_unit = (
                 emissions_and_cost_factors.pellet_costs_in_euro_per_t
@@ -716,7 +716,7 @@ class GenericBoiler(Component):
         elif self.energy_carrier == lt.LoadTypes.WOOD_CHIPS:
             kpi_tag = KpiTagEnumClass.WOOD_CHIP_SPACE_HEATING
             co2_per_unit = (
-                emissions_and_cost_factors.wood_chip_footprint_in_kg_per_kWh
+                emissions_and_cost_factors.wood_chip_footprint_in_kg_per_kwh
             )
             euro_per_unit = (
                 emissions_and_cost_factors.wood_chip_costs_in_euro_per_t
@@ -1598,7 +1598,8 @@ class GenericBoilerConfigForDHW(ConfigBase):
             * 49.47,  # did not find value for wood chips, using same as for pellet heating
             cost=20000,  # approximate value based on https://oekoloco.de/heizungen/heizungsarten/erneuerbare-energien/hackschnitzelheizung/
             lifetime=20,  # use same value as for others
-            maintenance_cost_as_percentage_of_investment=0.01,  # approximate value based on https://oekoloco.de/heizungen/heizungsarten/erneuerbare-energien/hackschnitzelheizung/
+            maintenance_cost_as_percentage_of_investment=0.01,  # approximate value based on:
+            # https://oekoloco.de/heizungen/heizungsarten/erneuerbare-energien/hackschnitzelheizung/
             consumption_in_kilowatt_hour=0,
         )
         return config
@@ -1794,7 +1795,7 @@ class GenericBoilerForDHW(GenericBoiler):
         elif self.energy_carrier == lt.LoadTypes.PELLETS:
             kpi_tag = KpiTagEnumClass.PELLETS_HEATING_DOMESTIC_HOT_WATER
             co2_per_unit = (
-                emissions_and_cost_factors.pellet_footprint_in_kg_per_kWh
+                emissions_and_cost_factors.pellet_footprint_in_kg_per_kwh
             )
             euro_per_unit = (
                 emissions_and_cost_factors.pellet_costs_in_euro_per_t
@@ -1809,7 +1810,7 @@ class GenericBoilerForDHW(GenericBoiler):
         elif self.energy_carrier == lt.LoadTypes.WOOD_CHIPS:
             kpi_tag = KpiTagEnumClass.WOOD_CHIP_HEATING_DOMESTIC_HOT_WATER
             co2_per_unit = (
-                emissions_and_cost_factors.wood_chip_footprint_in_kg_per_kWh
+                emissions_and_cost_factors.wood_chip_footprint_in_kg_per_kwh
             )
             euro_per_unit = (
                 emissions_and_cost_factors.wood_chip_costs_in_euro_per_t

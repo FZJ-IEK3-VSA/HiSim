@@ -79,7 +79,7 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
             energy_system_config_=energy_system_config_, archetype_config_=archetype_config_
         )
         return household_config
-    
+
     @classmethod
     def get_default_config_for_household_wood_chips(cls):
         """Get default ModularHouseholdConfig."""

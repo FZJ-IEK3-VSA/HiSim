@@ -325,7 +325,8 @@ class PhysicsConfig:
             )
         if energy_carrier == LoadTypes.WOOD_CHIPS:
             # density here = bulk density (Schüttdichte)
-            # source density and heating value: https://www.umweltbundesamt.de/sites/default/files/medien/479/publikationen/factsheet_ansatz_zur_neubewertung_von_co2-emissionen_aus_der_holzverbrennung_0.pdf
+            # source density and heating value: https://www.umweltbundesamt.de/sites/default/files/medien/479/publikationen/
+            # factsheet_ansatz_zur_neubewertung_von_co2-emissionen_aus_der_holzverbrennung_0.pdf
             # source heat capacity: https://www.schweizer-fn.de/stoff/wkapazitaet/wkapazitaet_baustoff_erde.php
             # higher heating value of wood chips unknown -> set to lower heating value
             return PhysicsConfig(
@@ -382,9 +383,9 @@ class EmissionFactorsAndCostsForFuelsConfig:
     diesel_costs_in_euro_per_l: float  # EUR/l
     diesel_footprint_in_kg_per_l: float  # kgCO2eq/l
     pellet_costs_in_euro_per_t: float  # EUR/t
-    pellet_footprint_in_kg_per_kWh: float  # kgCo2eq/kWh
+    pellet_footprint_in_kg_per_kwh: float  # kgCo2eq/kWh
     wood_chip_costs_in_euro_per_t: float  # EUR/t
-    wood_chip_footprint_in_kg_per_kWh: float  # kgCo2eq/kWh
+    wood_chip_footprint_in_kg_per_kwh: float  # kgCo2eq/kWh
     district_heating_costs_in_euro_per_kwh: float  # EUR/kWh
     district_heating_footprint_in_kg_per_kwh: float  # kgCo2eq/kWh
 
@@ -408,9 +409,9 @@ class EmissionFactorsAndCostsForFuelsConfig:
             diesel_costs_in_euro_per_l=1.617572993,  # EUR/l
             diesel_footprint_in_kg_per_l=2.6649,  # kgCO2eq/l
             pellet_costs_in_euro_per_t=289,  # EUR/t # Source: [13]
-            pellet_footprint_in_kg_per_kWh=0.036,  # kgCo2eq/kWh # Source: [8]
+            pellet_footprint_in_kg_per_kwh=0.036,  # kgCo2eq/kWh # Source: [8]
             wood_chip_costs_in_euro_per_t=96,  # EUR/t
-            wood_chip_footprint_in_kg_per_kWh=0.317,  # kgCo2eq/kWh # Source : [14]
+            wood_chip_footprint_in_kg_per_kwh=0.317,  # kgCo2eq/kWh # Source : [14]
             district_heating_costs_in_euro_per_kwh=0.14757,  # EUR/kWh Source : [16] value for 2024
             district_heating_footprint_in_kg_per_kwh=0,  # kgCo2eq/kWh
         )
@@ -418,7 +419,7 @@ class EmissionFactorsAndCostsForFuelsConfig:
     @classmethod
     def get_values_for_year(
         cls, year: int
-    ) -> "EmissionFactorsAndCostsForFuelsConfig":
+    ) -> "EmissionFactorsAndCostsForFuelsConfig":  # pylint: disable=too-many-return-statements
         """Get emission factors and fuel costs for certain year.
 
         Sources:
@@ -429,13 +430,15 @@ class EmissionFactorsAndCostsForFuelsConfig:
         [5]: https://de.statista.com/statistik/daten/studie/38897/umfrage/co2-emissionsfaktor-fuer-den-strommix-in-deutschland-seit-1990/
         [6]: https://www.destatis.de/DE/Themen/Wirtschaft/Preise/Erdgas-Strom-DurchschnittsPreise/_inhalt.html#421258
         [7]: https://de.statista.com/statistik/daten/studie/250114/umfrage/preis-fuer-fernwaerme-nach-anschlusswert-in-deutschland/
-        [8]: https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://www.bafa.de/SharedDocs/Downloads/DE/Energie/eew_infoblatt_co2_faktoren_2022.pdf%3F__blob%3DpublicationFile%26v%3D6&ved=2ahUKEwjai6GzsP2MAxW6RPEDHbV2G-cQFnoECFkQAQ&usg=AOvVaw1U3FERIjm5HLPDAuuO5ig0
+        [8]: https://www.google.com/url?sa=t&source=web&rct=j&opi=89978449&url=https://www.bafa.de/SharedDocs/Downloads/DE/Energie/
+             eew_infoblatt_co2_faktoren_2022.pdf%3F__blob%3DpublicationFile%26v%3D6&ved=2ahUKEwjai6GzsP2MAxW6RPEDHbV2G-cQFnoECFkQAQ&usg=AOvVaw1U3FERIjm5HLPDAuuO5ig0
         [9]: https://www.umweltbundesamt.de/themen/co2-emissionen-pro-kilowattstunde-strom-2024
         [10]: https://www-genesis.destatis.de/datenbank/online/statistic/61243/table/61243-0002
         [11]: https://www.bafa.de/SharedDocs/Downloads/DE/Energie/eew_infoblatt_co2_faktoren_2025.pdf?__blob=publicationFile&v=3
         [12]: https://de.statista.com/statistik/daten/studie/2633/umfrage/entwicklung-des-verbraucherpreises-fuer-leichtes-heizoel-seit-1960/
         [13]: https://de.statista.com/statistik/daten/studie/214738/umfrage/preisentwicklung-fuer-holzpellets-in-deutschland/
-        [14]: https://www.umweltbundesamt.de/sites/default/files/medien/479/publikationen/factsheet_ansatz_zur_neubewertung_von_co2-emissionen_aus_der_holzverbrennung_0.pdf
+        [14]: https://www.umweltbundesamt.de/sites/default/files/medien/479/publikationen/
+              factsheet_ansatz_zur_neubewertung_von_co2-emissionen_aus_der_holzverbrennung_0.pdf
         [15]: https://mediathek.fnr.de/energiepreisentwicklung.html
         [16]: https://de.statista.com/statistik/daten/studie/250114/umfrage/preis-fuer-fernwaerme-nach-anschlusswert-in-deutschland/
         """
@@ -455,9 +458,9 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 diesel_costs_in_euro_per_l=128.90,  # EUR/l  # Source: [3]
                 diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
                 pellet_costs_in_euro_per_t=247,  # EUR/t # Source: [13]
-                pellet_footprint_in_kg_per_kWh=0.036,  # kgCo2eq/kWh # Source: [8]
+                pellet_footprint_in_kg_per_kwh=0.036,  # kgCo2eq/kWh # Source: [8]
                 wood_chip_costs_in_euro_per_t=96,  # EUR/t Source: [15] using value for 2024 as almost constant over past years
-                wood_chip_footprint_in_kg_per_kWh=0.0313,  # kgCo2eq/kWh # Source : [14]
+                wood_chip_footprint_in_kg_per_kwh=0.0313,  # kgCo2eq/kWh # Source : [14]
                 district_heating_costs_in_euro_per_kwh=0.07672,  # EUR/kWh Source : [16]
                 district_heating_footprint_in_kg_per_kwh=0.280,  # kgCo2eq/kWh Source : [8]
             )
@@ -477,9 +480,9 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 diesel_costs_in_euro_per_l=1.2670,  # EUR/l  # Source: [3]
                 diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
                 pellet_costs_in_euro_per_t=251,  # EUR/t # Source: [13]
-                pellet_footprint_in_kg_per_kWh=0.036,  # kgCo2eq/kWh # Source: [8]
+                pellet_footprint_in_kg_per_kwh=0.036,  # kgCo2eq/kWh # Source: [8]
                 wood_chip_costs_in_euro_per_t=96,  # EUR/t Source: [15] using value for 2024 as almost constant over past years
-                wood_chip_footprint_in_kg_per_kWh=0.0313,  # kgCo2eq/kWh # Source : [14]
+                wood_chip_footprint_in_kg_per_kwh=0.0313,  # kgCo2eq/kWh # Source : [14]
                 district_heating_costs_in_euro_per_kwh=0.07904,  # EUR/kWh Source : [16]
                 district_heating_footprint_in_kg_per_kwh=0.280,  # kgCo2eq/kWh Source : [8]
             )
@@ -499,9 +502,9 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 diesel_costs_in_euro_per_l=1.1240,  # EUR/l  # Source: [3]
                 diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
                 pellet_costs_in_euro_per_t=237,  # EUR/t # Source: [13]
-                pellet_footprint_in_kg_per_kWh=0.036,  # kgCo2eq/kWh # Source: [8]
+                pellet_footprint_in_kg_per_kwh=0.036,  # kgCo2eq/kWh # Source: [8]
                 wood_chip_costs_in_euro_per_t=96,  # EUR/t Source: [15] using value for 2024 as almost constant over past years
-                wood_chip_footprint_in_kg_per_kWh=0.0313,  # kgCo2eq/kWh # Source : [14]
+                wood_chip_footprint_in_kg_per_kwh=0.0313,  # kgCo2eq/kWh # Source : [14]
                 district_heating_costs_in_euro_per_kwh=0.07656,  # EUR/kWh Source : [16]
                 district_heating_footprint_in_kg_per_kwh=0.280,  # kgCo2eq/kWh Source : [8]
             )
@@ -521,9 +524,9 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 diesel_costs_in_euro_per_l=1.399,  # EUR/l  # Source: [3]
                 diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
                 pellet_costs_in_euro_per_t=241,  # EUR/t # Source: [13]
-                pellet_footprint_in_kg_per_kWh=0.036,  # kgCo2eq/kWh # Source: [8]
+                pellet_footprint_in_kg_per_kwh=0.036,  # kgCo2eq/kWh # Source: [8]
                 wood_chip_costs_in_euro_per_t=96,  # EUR/t Source: [15] using value for 2024 as almost constant over past years
-                wood_chip_footprint_in_kg_per_kWh=0.0313,  # kgCo2eq/kWh # Source : [14]
+                wood_chip_footprint_in_kg_per_kwh=0.0313,  # kgCo2eq/kWh # Source : [14]
                 district_heating_costs_in_euro_per_kwh=0.08277,  # EUR/kWh Source : [16]
                 district_heating_footprint_in_kg_per_kwh=0.280,  # kgCo2eq/kWh Source : [8]
             )
@@ -543,9 +546,9 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 diesel_costs_in_euro_per_l=1.96,  # EUR/l  # Source: [3]
                 diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
                 pellet_costs_in_euro_per_t=519,  # EUR/t # Source: [13]
-                pellet_footprint_in_kg_per_kWh=0.036,  # kgCo2eq/kWh # Source: [8]
+                pellet_footprint_in_kg_per_kwh=0.036,  # kgCo2eq/kWh # Source: [8]
                 wood_chip_costs_in_euro_per_t=96,  # EUR/t Source: [15] using value for 2024 as almost constant over past years
-                wood_chip_footprint_in_kg_per_kWh=0.0313,  # kgCo2eq/kWh # Source : [14]
+                wood_chip_footprint_in_kg_per_kwh=0.0313,  # kgCo2eq/kWh # Source : [14]
                 district_heating_costs_in_euro_per_kwh=0.11945,  # EUR/kWh Source : [16]
                 district_heating_footprint_in_kg_per_kwh=0.280,  # kgCo2eq/kWh Source : [8]
             )
@@ -565,9 +568,9 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 diesel_costs_in_euro_per_l=1.73,  # EUR/l  # Source: [3]
                 diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
                 pellet_costs_in_euro_per_t=390,  # EUR/t # Source: [13]
-                pellet_footprint_in_kg_per_kWh=0.036,  # kgCo2eq/kWh # Source: [8]
+                pellet_footprint_in_kg_per_kwh=0.036,  # kgCo2eq/kWh # Source: [8]
                 wood_chip_costs_in_euro_per_t=96,  # EUR/t Source: [15] using value for 2024 as almost constant over past years
-                wood_chip_footprint_in_kg_per_kWh=0.0313,  # kgCo2eq/kWh # Source : [14]
+                wood_chip_footprint_in_kg_per_kwh=0.0313,  # kgCo2eq/kWh # Source : [14]
                 district_heating_costs_in_euro_per_kwh=0.15034,  # EUR/kWh Source : [16]
                 district_heating_footprint_in_kg_per_kwh=0.280,  # kgCo2eq/kWh Source : [8]
             )
@@ -588,9 +591,9 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 diesel_costs_in_euro_per_l=1.6649,  # EUR/l  # Source: [3]
                 diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
                 pellet_costs_in_euro_per_t=289,  # EUR/t # Source: [13]
-                pellet_footprint_in_kg_per_kWh=0.036,  # kgCo2eq/kWh # Source: [8]
+                pellet_footprint_in_kg_per_kwh=0.036,  # kgCo2eq/kWh # Source: [8]
                 wood_chip_costs_in_euro_per_t=96,  # EUR/t Source: [15]
-                wood_chip_footprint_in_kg_per_kWh=0.0313,  # kgCo2eq/kWh # Source : [14]
+                wood_chip_footprint_in_kg_per_kwh=0.0313,  # kgCo2eq/kWh # Source : [14]
                 district_heating_costs_in_euro_per_kwh=0.14757,  # EUR/kWh Source : [16]
                 district_heating_footprint_in_kg_per_kwh=0.280,  # kgCo2eq/kWh Source : [8]
             )

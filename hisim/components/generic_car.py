@@ -56,6 +56,9 @@ class GenericCarInformation:
         """Get important values from occupancy instance."""
         # get names of all available cars
         car_data_dict = my_occupancy_instance.car_data_dict
+        if all(isinstance(value_list, list) and all(not bool(car_info_dict) for car_info_dict in value_list) for value_list in car_data_dict.values()):
+            raise ValueError("The car data from occupancy contains only empty dictionaries in its value lists. "
+                             "If you are using the predefined occupancy profile, no car data is currently available. ")
 
         # get car names and household names
         (
@@ -488,7 +491,7 @@ class Car(cp.Component):
 
         # check if caching is possible
         file_exists, cache_filepath = utils.get_cache_file(
-            component_key=self.component_name,
+            component_key=self.config.name,
             parameter_class=config,
             my_simulation_parameters=self.my_simulation_parameters,
         )

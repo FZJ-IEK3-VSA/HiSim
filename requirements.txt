@@ -4,6 +4,7 @@ matplotlib
 seaborn
 reportlab
 pvlib # ==0.10.2
+oemof.thermal
 openpyxl
 pytest
 sphinx
@@ -29,3 +30,4 @@ wetterdienst==0.63.0
 cdsapi
 xarray
 pygfunction
+pyloadprofilegenerator

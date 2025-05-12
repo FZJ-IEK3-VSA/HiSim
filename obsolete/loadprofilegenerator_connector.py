@@ -363,7 +363,7 @@ class Occupancy(cp.Component):
         Also does the averaging to the desired time resolution conversion to the output format desired.
         """
         file_exists, cache_filepath = utils.get_cache_file(
-            component_key=self.component_name,
+            component_key=self.config.name,
             parameter_class=self.occupancy_config,
             my_simulation_parameters=self.my_simulation_parameters,
         )

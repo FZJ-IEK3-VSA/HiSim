@@ -32,19 +32,19 @@ def test_determine_mode_returns_correct_operation_mode_for_temperature(
     start_controller_mode, current_temperature_deg_c: float, mode: str
 ):
     """Test generic pv system."""
-    ####### GIVEN #########
+    """ GIVEN """
     testee = given_default_testee()
 
     testee.previous_state = AirConditionerControllerState(
         start_controller_mode, 0, 0, 0.0
     )
 
-    ######## WHEN ########
+    """ WHEN """
     returned_mode = testee.determine_operating_mode(
         current_temperature_deg_c, 0
     )
 
-    ######## THEN ########
+    """ THEN """
     assert returned_mode == mode
 
 
@@ -81,7 +81,8 @@ def test_determine_mode_returns_correct_operation_mode_for_temperature(
 def test_determine_mode_returns_correct_operation_mode_for_operating_time(
     start_controller_mode, current_temperature_deg_c: float, expected_mode: str
 ):
-    ####### GIVEN #########
+    """ Test determine_operation_mode."""
+    """ GIVEN """
     testee = given_default_testee(
         {"minimum_runtime_s": 60 * 15, "minimum_idle_time_s": 60 * 10}
     )
@@ -90,12 +91,12 @@ def test_determine_mode_returns_correct_operation_mode_for_operating_time(
     )
     testee.previous_state = testee.state.clone()
 
-    ######## WHEN ########
+    """ WHEN """
     returned_mode = testee.determine_operating_mode(
         current_temperature_deg_c, 0
     )
 
-    ######## THEN ########
+    """ THEN """
     assert returned_mode == expected_mode
 
 
@@ -124,15 +125,17 @@ def test_determine_mode_returns_correct_operation_mode_for_operating_time(
 def test_modulate_returns_correct_modulation_percentage(
     operating_mode, current_temperature_deg_c, expected_modulation_percentage
 ):
-    ####### GIVEN #########
+    """ Test modulate_power."""
+
+    """ GIVEN """
     testee = given_default_testee()
 
-    ######## WHEN ########
+    """ WHEN """
     modulating_percentage = testee.modulate_power(
         current_temperature_deg_c, operating_mode
     )
 
-    ######## THEN ########
+    """ THEN """
     assert modulating_percentage == pytest.approx(
         expected_modulation_percentage
     )
@@ -155,7 +158,9 @@ def test_simulate_sets_correct_state_for_operation_mode(
     mocked_modulation,
     expected_output,
 ):
-    ####### GIVEN #########
+    """ Test i_simulate."""
+
+    """ GIVEN """
     testee = given_default_testee()
     number_of_outputs = fft.get_number_of_outputs([testee])
     stsv: component.SingleTimeStepValues = component.SingleTimeStepValues(
@@ -165,10 +170,10 @@ def test_simulate_sets_correct_state_for_operation_mode(
     mock_method_mode.return_value = mocked_mode
     mock_method_modulate.return_value = mocked_modulation
 
-    ######## WHEN ########
+    """ WHEN """
     testee.i_simulate(0, stsv, False)
 
-    ######## THEN ########
+    """ THEN """
     assert (
         stsv.values[testee.operation_modulating_signal_channel.global_index]
         == expected_output
@@ -179,8 +184,9 @@ def test_simulate_sets_correct_state_for_operation_mode(
 
 def given_default_testee(
     config_overwrite: Dict[str, Any] = {},
-) -> AirConditionerController:
-    print("given_default_testee")
+) -> AirConditionerController:  # pylint: disable=dangerous-default-value
+    """Create and configure default testee."""
+    
     simulationparameters = sim.SimulationParameters.full_year(
         year=2021, seconds_per_timestep=60
     )

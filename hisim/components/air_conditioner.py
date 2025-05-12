@@ -76,17 +76,9 @@ class AirConditionerConfig(ConfigBase):
         model_name="CS-RE18JKE/CU-RE18JKE",
         scale_factor=1.0,
     ):
-        """Constructor
+        """Constructor."""
 
-        Args:
-            building_name (str): Name of building.
-            name (str): Name of component.
-            manufacturer (str, optional): Manufacturer. Defaults to "Panasonic".
-            model_name (str, optional): Model name. Defaults to "CS-RE18JKE/CU-RE18JKE".
-            scale_factor (float, optional): Scaling factor. Defaults to 1.0.
-        """
-        self.building_name = building_name
-        self.name = name
+        super().__init__(name, building_name)
         self.manufacturer = "Panasonic"
         self.model_name = "CS-RE18JKE/CU-RE18JKE"
         self.scale_factor = scale_factor
@@ -129,12 +121,13 @@ class AirConditionerConfig(ConfigBase):
             raise ValueError(
                 f"No installation cost information for type {air_conditioner['Type']}"
             )
-        self.cost = 3000 + installation_cost  # TODO air_conditioner["Price"]
+        self.cost = air_conditioner["Price"] + installation_cost
         self.maintenance_cost_as_percentage_of_investment = 0.05
         # Lifetime estimation:
         # 10 years https://www.deutschlandfunk.de/belastung-fuer-die-atmosphaere-der-vormarsch-der-100.html,
         # 10-15 years https://klivago.de/faq-was-man-ueber-eine-klimaanlage-wissen-sollte
-        # 15 years https://volted.ch/blogs/guides-fokus-und-bericht/wie-lange-halten-tragbare-klimaanlagen?srsltid=AfmBOoojFnnbhbCYtAGCZLzdawl4C8zeNvRtc9GFeCICEwaWB6ZdKhSt
+        # 15 years https://volted.ch/blogs/guides-fokus-und-bericht/wie-lange-halten-tragbare-
+        # klimaanlagen?srsltid=AfmBOoojFnnbhbCYtAGCZLzdawl4C8zeNvRtc9GFeCICEwaWB6ZdKhSt
         self.lifetime = 12
         self.co2_emissions_kg_co2_eq = (
             165.84  # In first step same as for heat pump
@@ -388,11 +381,11 @@ class AirConditioner(cp.Component):
                 and output.field_name == self.ElectricalEnergyConsumption
                 and output.unit == Units.WATT_HOUR
             ):
-                self.electricity_consumption_kWh = round(
+                electricity_consumption_kwh = round(
                     sum(postprocessing_results.iloc[:, index]) * 1e-3, 1
                 )
                 break
-        assert hasattr(self, "electricity_consumption_kWh")
+        assert hasattr(self, "electricity_consumption_kwh")
 
         emissions_and_cost_factors = (
             EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
@@ -401,12 +394,12 @@ class AirConditioner(cp.Component):
         )
 
         opex_cost_data_class = OpexCostDataClass(
-            opex_energy_cost_in_euro=self.electricity_consumption_kWh
+            opex_energy_cost_in_euro=electricity_consumption_kwh
             * emissions_and_cost_factors.electricity_costs_in_euro_per_kwh,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
-            co2_footprint_in_kg=self.electricity_consumption_kWh
+            co2_footprint_in_kg=electricity_consumption_kwh
             * emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh,
-            consumption_in_kwh=self.electricity_consumption_kWh,
+            consumption_in_kwh=electricity_consumption_kwh,
             loadtype=LoadTypes.ELECTRICITY,
             kpi_tag=KpiTagEnumClass.AIR_CONDITIONER,
         )
@@ -493,14 +486,14 @@ class AirConditioner(cp.Component):
         )
 
         efficiency = 0
-        thermal_power_delivered_W = 0
+        thermal_power_delivered_w = 0
 
         if modulation_signal > 0:
             # Heating mode
             efficiency = self.calculate_coefficient_of_performance(
                 air_temperature_deg_c
             )
-            thermal_power_delivered_W = (
+            thermal_power_delivered_w = (
                 self.calculate_heating_capacity(air_temperature_deg_c)
                 * self.config.scale_factor
                 * modulation_signal
@@ -510,24 +503,24 @@ class AirConditioner(cp.Component):
             efficiency = self.calculate_energy_efficiency_ratio(
                 air_temperature_deg_c
             )
-            thermal_power_delivered_W = (
+            thermal_power_delivered_w = (
                 self.calculate_cooling_capacity(air_temperature_deg_c)
                 * self.config.scale_factor
                 * modulation_signal
             )
 
-        electrical_power_consumption_W = (
+        electrical_power_consumption_w = (
             self.calculate_electricity_consumption(
-                thermal_power_delivered_W, efficiency
+                thermal_power_delivered_w, efficiency
             )
         )
-        electrical_energy_consumption_Wh = (
-            electrical_power_consumption_W
+        electrical_energy_consumption_wh = (
+            electrical_power_consumption_w
             * self.my_simulation_parameters.seconds_per_timestep
             / 3.6e3
         )
-        thermal_energy_delivered_Wh = (
-            thermal_power_delivered_W
+        thermal_energy_delivered_wh = (
+            thermal_power_delivered_w
             * self.my_simulation_parameters.seconds_per_timestep
             / 3.6e3
         )
@@ -536,17 +529,17 @@ class AirConditioner(cp.Component):
         stsv.set_output_value(self.efficiency, efficiency)
         stsv.set_output_value(
             self.electrical_power_consumption_channel,
-            electrical_power_consumption_W,
+            electrical_power_consumption_w,
         )
         stsv.set_output_value(
             self.electrical_energy_consumption_channel,
-            electrical_energy_consumption_Wh,
+            electrical_energy_consumption_wh,
         )
         stsv.set_output_value(
-            self.thermal_power_generation_channel, thermal_power_delivered_W
+            self.thermal_power_generation_channel, thermal_power_delivered_w
         )
         stsv.set_output_value(
-            self.thermal_energy_generation_channel, thermal_energy_delivered_Wh
+            self.thermal_energy_generation_channel, thermal_energy_delivered_wh
         )
 
     def get_component_kpi_entries(
@@ -565,30 +558,30 @@ class AirConditioner(cp.Component):
         )
 
         # Energy related KPIs
-        electricity_consumption_kWh = KpiEntry(
+        electricity_consumption_kwh = KpiEntry(
             name="Electrical energy consumption",
             unit="kWh",
-            value=self.electricity_consumption_kWh,
+            value=opex_dataclass.consumption_in_kwh,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
         )
-        list_of_kpi_entries.append(electricity_consumption_kWh)
+        list_of_kpi_entries.append(electricity_consumption_kwh)
 
-        thermal_energy_delivered_cooling_in_kWh: float
+        thermal_energy_delivered_cooling_in_kwh: float
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
                 if (
                     output.field_name == self.ThermalEnergyDelivered
                     and output.unit == Units.WATT_HOUR
                 ):
-                    thermal_energy_delivered_cooling_in_kWh = round(
+                    thermal_energy_delivered_cooling_in_kwh = round(
                         postprocessing_results.iloc[:, index][
                             postprocessing_results.iloc[:, index] < 0
                         ].sum()
                         * 1e-3,
                         1,
                     )
-                    thermal_energy_delivered_heating_in_kWh = round(
+                    thermal_energy_delivered_heating_in_kwh = round(
                         postprocessing_results.iloc[:, index][
                             postprocessing_results.iloc[:, index] > 0
                         ].sum()
@@ -600,7 +593,7 @@ class AirConditioner(cp.Component):
         thermal_energy_delivered_cooling_entry = KpiEntry(
             name="Thermal energy delivered - cooling",
             unit="kWh",
-            value=thermal_energy_delivered_cooling_in_kWh,
+            value=thermal_energy_delivered_cooling_in_kwh,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
         )
@@ -610,7 +603,7 @@ class AirConditioner(cp.Component):
         thermal_energy_delivered_heating_entry = KpiEntry(
             name="Thermal energy delivered - heating",
             unit="kWh",
-            value=thermal_energy_delivered_heating_in_kWh,
+            value=thermal_energy_delivered_heating_in_kwh,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
         )
@@ -936,7 +929,7 @@ class AirConditionerController(cp.Component):
 
     def determine_operating_mode(
         self, current_temperature_deg_c: float, timestep: int
-    ) -> str:
+    ) -> str:  # pylint: disable=too-many-return-statements
         """Controller takes action to maintain defined comfort range."""
 
         # Enforce minimum operation time
@@ -1004,9 +997,8 @@ class AirConditionerController(cp.Component):
     def modulate_power(
         self, current_temperature_deg_c: float, operating_mode: str
     ) -> float:
-        """
-        Power modulation.
-        
+        """Power modulation.
+
         Modulates power non-linearly (quadratic) based on the temperature difference.
         Power drops off more aggressively as the temperature nears the setpoint.
         """

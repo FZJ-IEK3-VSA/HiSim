@@ -1,6 +1,6 @@
 """Test for generic pv system."""
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from unittest.mock import patch
 import pytest
 from hisim.components.air_conditioner import (
@@ -183,10 +183,11 @@ def test_simulate_sets_correct_state_for_operation_mode(
 
 
 def given_default_testee(
-    config_overwrite: Dict[str, Any] = {},
-) -> AirConditionerController:  # pylint: disable=dangerous-default-value
+    config_overwrite: Optional[Dict[str, Any]] = None,
+) -> AirConditionerController:
     """Create and configure default testee."""
-    
+    if config_overwrite is None:
+        config_overwrite = {}
     simulationparameters = sim.SimulationParameters.full_year(
         year=2021, seconds_per_timestep=60
     )

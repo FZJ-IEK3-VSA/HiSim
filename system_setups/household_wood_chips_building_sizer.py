@@ -2,11 +2,9 @@
 
 # clean
 
-import datetime
 from typing import Optional, Any, Union, List
 import re
 import os
-from zoneinfo import ZoneInfo
 from utspclient.helpers.lpgdata import (
     ChargingStationSets,
     Households,

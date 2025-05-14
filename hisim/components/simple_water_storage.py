@@ -1753,7 +1753,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
         # use importlib for importing the other component in order to avoid circular-import errors
         component_module_name = "hisim.components.generic_district_heating"
         component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "DistrictHeating")
+        component_class = getattr(component_module, "DistrictHeatingForDHW")
         connections = []
         dhw_boiler_classname = component_class.get_classname()
         connections.append(

@@ -95,6 +95,7 @@ class LoadTypes(str, enum.Enum):
     DIESEL = "Diesel"
     OIL = "Oil"
     PELLETS = "Pellets"
+    WOOD_CHIPS = "WoodChips"
     DISTRICTHEATING = "DistrictHeating"
 
     # Controllers:
@@ -223,6 +224,7 @@ class HeatingSystems(str, enum.Enum):
     OIL_HEATING = "OilHeating"
     GAS_HEATING = "GasHeating"
     PELLET_HEATING = "PelletHeating"
+    WOOD_CHIP_HEATING = "WoodChipHeating"
     DISTRICT_HEATING = "DistrictHeating"
     HYDROGEN_HEATING = "HydrogenHeating"
 

@@ -197,7 +197,7 @@ def given_default_testee(
     config.minimum_runtime_s = config_overwrite.get("minimum_runtime_s", 0)
     config.minimum_idle_time_s = config_overwrite.get("minimum_idle_time_s", 0)
     config.offset = 0
-    testee = AirConditionerController(
+    testee: AirConditionerController = AirConditionerController(
         simulationparameters,
         config,
         component.DisplayConfig(),

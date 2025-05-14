@@ -782,7 +782,7 @@ class GenericBoiler(Component):
         list_of_kpi_entries.append(thermal_energy_delivered_entry)
 
         energy_consumption = KpiEntry(
-            name="Energy consumption for space heating",
+            name=f"{self.energy_carrier} consumption for space heating (energy)",
             unit="kWh",
             value=opex_dataclass.consumption_in_kwh,
             tag=opex_dataclass.kpi_tag,
@@ -791,7 +791,7 @@ class GenericBoiler(Component):
         list_of_kpi_entries.append(energy_consumption)
 
         fuel_consumption_l = KpiEntry(
-            name=f"{self.energy_carrier} consumption for space heating",
+            name=f"{self.energy_carrier} consumption for space heating (volume)",
             unit="l",
             value=self.fuel_consumption_in_liter,
             tag=opex_dataclass.kpi_tag,
@@ -800,7 +800,7 @@ class GenericBoiler(Component):
         list_of_kpi_entries.append(fuel_consumption_l)
 
         fuel_consumption_kg = KpiEntry(
-            name=f"{self.energy_carrier} consumption for space heating",
+            name=f"{self.energy_carrier} consumption for space heating (mass)",
             unit="kg",
             value=self.fuel_consumption_in_kg,
             tag=opex_dataclass.kpi_tag,
@@ -1850,7 +1850,7 @@ class GenericBoilerForDHW(GenericBoiler):
             postprocessing_results=postprocessing_results,
         )
         my_kpi_entry = KpiEntry(
-            name=f"{opex_dataclass.loadtype.value} consumption for DHW",
+            name=f"{opex_dataclass.loadtype.value} consumption for DHW (energy)",
             unit="kWh",
             value=opex_dataclass.consumption_in_kwh,
             tag=opex_dataclass.kpi_tag,
@@ -1860,7 +1860,7 @@ class GenericBoilerForDHW(GenericBoiler):
 
         # fuel demand in liter
         my_kpi_entry_two = KpiEntry(
-            name=f"{opex_dataclass.loadtype.value} fuel consumption for DHW (l)",
+            name=f"{opex_dataclass.loadtype.value} consumption for DHW (volume)",
             unit="l",
             value=self.fuel_consumption_in_liter,
             tag=opex_dataclass.kpi_tag,
@@ -1870,7 +1870,7 @@ class GenericBoilerForDHW(GenericBoiler):
 
         # fuel demand in kg
         my_kpi_entry_three = KpiEntry(
-            name=f"{opex_dataclass.loadtype.value} fuel consumption for DHW (kg)",
+            name=f"{opex_dataclass.loadtype.value} consumption for DHW (mass)",
             unit="kg",
             value=self.fuel_consumption_in_kg,
             tag=opex_dataclass.kpi_tag,
@@ -1905,21 +1905,8 @@ class GenericBoilerForDHW(GenericBoiler):
         return list_of_kpi_entries
 
 
-class DHWBoilerControllerState:
+class DHWBoilerControllerState(GenericBoilerControllerState):
     """Data class that saves the state of the controller."""
-
-    def __init__(
-        self,
-        on_off: int,
-        activation_time_step: int,
-        deactivation_time_step: int,
-        percentage: float,
-    ) -> None:
-        """Initializes the heat pump controller state."""
-        self.on_off: int = on_off
-        self.activation_time_step: int = activation_time_step
-        self.deactivation_time_step: int = deactivation_time_step
-        self.percentage: float = percentage
 
     def clone(self) -> "DHWBoilerControllerState":
         """Copies the current instance."""

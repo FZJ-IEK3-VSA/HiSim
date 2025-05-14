@@ -29,7 +29,7 @@ jobs:
     - name: Test with pytest
       working-directory: ./tests/
       run: |
-        sh -c 'pytest -m "not base and not buildingtest and not system_setups and not mpc and not utsp"; ret=$?; [ $ret = 5 ] && exit 0 || exit 1'
+        sh -c 'pytest -m "not base and not buildingtest and not system_setups and not utsp"; ret=$?; [ $ret = 5 ] && exit 0 || exit 1'
         #        
 
     #    # stop the build if there are Python syntax errors or undefined names

@@ -515,8 +515,8 @@ class MpcController(cp.Component):
             """
 
             """ getting cop_coef and eer_coef from the air conditioner omponenent to be used in the cost optimization"""
-            self.cop_coef = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.COPCOEFFICIENTHEATING)
-            self.eer_coef = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.EERCOEFFICIENTCOOLING)
+            self.cop_coef = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.COEFFICIENT_OF_PERFORMANCE_HEATING)
+            self.eer_coef = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.ENERGY_EFFICIENY_RATIO_COOLING)
 
     def statespace(self):
         """State Space Model of the 5R1C network, Used as a prediction model to the building behavior in the MPC."""

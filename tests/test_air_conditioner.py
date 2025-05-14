@@ -140,6 +140,7 @@ def test_modulate_returns_correct_modulation_percentage(
         expected_modulation_percentage
     )
 
+
 @pytest.mark.base
 @pytest.mark.parametrize(
     ["mocked_mode", "mocked_modulation", "expected_output"],

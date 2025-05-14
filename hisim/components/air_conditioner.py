@@ -1,7 +1,7 @@
 """Air Conditioner Component."""
 
 from dataclasses import dataclass
-from typing import Any, List
+from typing import Any, List, Optional
 from dataclasses_json import dataclass_json
 
 import numpy as np
@@ -433,19 +433,19 @@ class AirConditioner(cp.Component):
         )
 
     # Interpolation functions
-    def calculate_energy_efficiency_ratio(self, t_out):
+    def _calculate_energy_efficiency_ratio(self, t_out):
         return np.polyval(self.eer_coef, t_out)
 
-    def calculate_cooling_capacity(self, t_out):
+    def _calculate_cooling_capacity(self, t_out):
         return np.polyval(self.cooling_capacity_coef, t_out)
 
-    def calculate_coefficient_of_performance(self, t_out):
+    def _calculate_coefficient_of_performance(self, t_out):
         return np.polyval(self.cop_coef, t_out)
 
-    def calculate_heating_capacity(self, t_out):
+    def _calculate_heating_capacity(self, t_out):
         return np.polyval(self.heating_capacity_coef, t_out)
 
-    def calculate_electricity_consumption(
+    def _calculate_electricity_consumption(
         self, thermal_energy: float, efficiency: float
     ) -> float:
         """Return electricity usage based on energy and efficiency."""
@@ -459,15 +459,19 @@ class AirConditioner(cp.Component):
 
     # Simulation hooks
     def i_prepare_simulation(self):
+        """Prepares the simulation."""
         pass
 
     def i_save_state(self):
+        """Saves the state."""
         pass
 
     def i_restore_state(self):
+        """Restore the previous state."""
         pass
 
     def i_doublecheck(self, timestep: int, stsv: cp.SingleTimeStepValues):
+        """Doublechecks."""
         pass
 
     def i_simulate(
@@ -490,27 +494,27 @@ class AirConditioner(cp.Component):
 
         if modulation_signal > 0:
             # Heating mode
-            efficiency = self.calculate_coefficient_of_performance(
+            efficiency = self._calculate_coefficient_of_performance(
                 air_temperature_deg_c
             )
             thermal_power_delivered_w = (
-                self.calculate_heating_capacity(air_temperature_deg_c)
+                self._calculate_heating_capacity(air_temperature_deg_c)
                 * self.config.scale_factor
                 * modulation_signal
             )
         elif modulation_signal < 0:
             # Cooling mode
-            efficiency = self.calculate_energy_efficiency_ratio(
+            efficiency = self._calculate_energy_efficiency_ratio(
                 air_temperature_deg_c
             )
             thermal_power_delivered_w = (
-                self.calculate_cooling_capacity(air_temperature_deg_c)
+                self._calculate_cooling_capacity(air_temperature_deg_c)
                 * self.config.scale_factor
                 * modulation_signal
             )
 
         electrical_power_consumption_w = (
-            self.calculate_electricity_consumption(
+            self._calculate_electricity_consumption(
                 thermal_power_delivered_w, efficiency
             )
         )
@@ -726,6 +730,8 @@ class AirConditionerControllerState:
         deactivation_time_step: int,
         percentage: float,
     ) -> None:
+        """Constructor."""
+
         self.mode = mode  # can be "heating", "cooling", or "off"
         self.activation_time_step = activation_time_step
         self.deactivation_time_step = deactivation_time_step
@@ -839,20 +845,26 @@ class AirConditionerController(cp.Component):
         ]
 
     def i_prepare_simulation(self) -> None:
+        """Prepares the simulation."""
         pass
 
     def i_save_state(self) -> None:
+        """Saves the state."""
         self.previous_state = self.state.clone()
 
     def i_restore_state(self) -> None:
+        """Restores the state."""
         self.state = self.previous_state.clone()
 
     def i_doublecheck(
         self, timestep: int, stsv: cp.SingleTimeStepValues
     ) -> None:
+        """Doublechecks."""
         pass
 
     def write_to_report(self):
+        """Writes to report."""
+
         return self.config.get_string_dict() + [
             "Air Conditioner Controller",
             f"Heating set temperature: {self.config.heating_set_temperature_deg_c} °C",
@@ -927,11 +939,7 @@ class AirConditionerController(cp.Component):
 
         stsv.set_output_value(self.operation_modulating_signal_channel, value)
 
-    def determine_operating_mode(
-        self, current_temperature_deg_c: float, timestep: int
-    ) -> str:  # pylint: disable=too-many-return-statements
-        """Controller takes action to maintain defined comfort range."""
-
+    def _check_minimum_operation_and_idle_time(self, timestep) -> Optional[str]:
         # Enforce minimum operation time
         if self.state.mode in {"heating", "cooling"}:
             if (
@@ -949,6 +957,16 @@ class AirConditionerController(cp.Component):
                 > timestep
             ):
                 return "off"
+
+        return None
+
+    def determine_operating_mode(
+        self, current_temperature_deg_c: float, timestep: int
+    ) -> str:  # pylint: disable=too-many-return-statements
+        """Controller takes action to maintain defined comfort range."""
+        operating_time_compliant_state = self._check_minimum_operation_and_idle_time(timestep)
+        if operating_time_compliant_state is not None:
+            return operating_time_compliant_state
 
         heating_setpoint = self.config.heating_set_temperature_deg_c
         cooling_setpoint = self.config.cooling_set_temperature_deg_c

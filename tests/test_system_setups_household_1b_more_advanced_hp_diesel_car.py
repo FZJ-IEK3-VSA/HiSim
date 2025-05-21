@@ -8,7 +8,6 @@ from hisim import hisim_main
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
 from hisim import utils
-from hisim.postprocessingoptions import PostProcessingOptions
 
 
 # @pytest.mark.system_setups
@@ -22,13 +21,6 @@ def test_basic_household():
         os.remove(config_filename)
 
     path = "../system_setups/household_1b_more_advanced_hp_diesel_car.py"
-    mysimpar = SimulationParameters.one_week_only(year=2019, seconds_per_timestep=60)
-    mysimpar.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-    mysimpar.post_processing_options.append(PostProcessingOptions.OPEN_DIRECTORY_IN_EXPLORER)
-    mysimpar.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
-    mysimpar.post_processing_options.append(PostProcessingOptions.PLOT_SINGLE_DAYS)
-    mysimpar.post_processing_options.append(PostProcessingOptions.INCLUDE_CONFIGS_IN_PDF_REPORT)
-    mysimpar.post_processing_options.append(PostProcessingOptions.WRITE_COMPONENTS_TO_REPORT)
-    mysimpar.post_processing_options.append(PostProcessingOptions.GENERATE_PDF_REPORT)
+    mysimpar = SimulationParameters.one_day_only(year=2019, seconds_per_timestep=60)
     hisim_main.main(path, mysimpar)
     log.information(os.getcwd())

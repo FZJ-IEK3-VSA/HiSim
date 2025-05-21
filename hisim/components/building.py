@@ -2406,28 +2406,21 @@ class BuildingInformation:
     def manipulate_tabula_database(self,):
         """Manipulate the tabula database to u values from config."""
 
-        manipulation = False
-
         if self.u_value_facade_in_watt_per_m2_per_kelvin is not None:
-            manipulation = True
             self.manipulate_tabula_wall_parameter()
 
         if self.u_value_roof_in_watt_per_m2_per_kelvin is not None:
-            manipulation = True
             self.manipulate_tabula_roof_parameter()
 
         if self.u_value_window_in_watt_per_m2_per_kelvin is not None:
-            manipulation = True
             self.manipulate_tabula_window_parameter()
 
         if self.u_value_door_in_watt_per_m2_per_kelvin is not None:
-            manipulation = True
             self.manipulate_tabula_door_parameter()
 
-        if manipulation:
-            (self.heat_transfer_coeff_by_ventilation_ref_in_watt_per_m2_per_kelvin,
-             self.heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin) \
-                = self.manipulate_heat_transfer_coefficient()
+        (self.heat_transfer_coeff_by_ventilation_ref_in_watt_per_m2_per_kelvin,
+         self.heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin) \
+            = self.manipulate_heat_transfer_coefficient()
 
     def set_constants(self):
         """Set important constants."""

@@ -400,9 +400,14 @@ class HeatDistribution(cp.Component):
             )
         else:
             water_temperature_input_in_celsius = stsv.get_input_value(self.water_temperature_input_channel)
-            thermal_power_received_heating_system_w = stsv.get_input_value(self.thermal_power_received_heating_system_w_input_channel)
+            thermal_power_received_heating_system_w = None
+            if self.position_hot_water_storage_in_system in [
+                PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FIX
+            ]:
+                thermal_power_received_heating_system_w = stsv.get_input_value(self.thermal_power_received_heating_system_w_input_channel)
+
             # if state_controller == 1:
-            if state_controller in (1, -1) and thermal_power_received_heating_system_w != 0:
+            if state_controller in (1, -1) and (thermal_power_received_heating_system_w is None or thermal_power_received_heating_system_w != 0):
                 (
                     water_temperature_output_in_celsius,
                     thermal_power_delivered_in_watt,
@@ -413,7 +418,7 @@ class HeatDistribution(cp.Component):
                     residence_temperature_in_celsius=residence_temperature_input_in_celsius,
                 )
 
-            elif state_controller == 0 or thermal_power_received_heating_system_w == 0:
+            elif state_controller == 0 or (thermal_power_received_heating_system_w and thermal_power_received_heating_system_w == 0):
                 thermal_power_delivered_in_watt = 0.0
                 # keep temperature almost as is, as no heating/cooling occurs,
                 # but introduce small change of temperature to account for heat loss and gain

@@ -6,7 +6,7 @@
 from dataclasses import dataclass
 import enum
 import logging
-from typing import List, Any, Optional
+from typing import List, Any, Optional, Tuple
 
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -380,28 +380,17 @@ class DistrictHeating(Component):
         if force_convergence:
             return
 
-        # get inputs
+        # Retrieve inputs
         heating_mode = HeatingMode(
             stsv.get_input_value(self.heating_mode_channel)
         )
+
         if heating_mode == HeatingMode.SPACE_HEATING:
             # Get relevant inputs
             delta_temperature_needed_in_celsius = stsv.get_input_value(
                 self.delta_temperature_channel
             )
-
-            # check values
-            if delta_temperature_needed_in_celsius < 0:
-                raise ValueError(
-                    f"Delta temperature is {delta_temperature_needed_in_celsius} °C"
-                    "but it should not be negative because district heating cannot provide cooling. "
-                    "Please check your district heating controller."
-                )
-            if delta_temperature_needed_in_celsius > 100:
-                raise ValueError(
-                    f"Delta temperature is {delta_temperature_needed_in_celsius} °C in timestep {timestep}."
-                    "This is way too high. "
-                )
+            self._check_delta_temperature(delta_temperature_needed_in_celsius, timestep)
 
             water_input_temperature_deg_c = stsv.get_input_value(
                 self.water_input_temperature_sh_channel
@@ -410,40 +399,17 @@ class DistrictHeating(Component):
                 self.water_input_mass_flow_rate_sh_channel
             )
 
-            thermal_power_delivered_w = (
-                water_mass_flow_rate_in_kg_per_s
-                * PhysicsConfig.get_properties_for_energy_carrier(
-                    energy_carrier=LoadTypes.WATER
-                ).specific_heat_capacity_in_joule_per_kg_per_kelvin
-                * delta_temperature_needed_in_celsius
+            # Calculate
+            (
+                thermal_power_delivered_w,
+                thermal_energy_delivered_in_watt_hour,
+                water_output_temperature_deg_c,
+            ) = self._calculate_space_heating_outputs(
+                water_mass_flow_rate_in_kg_per_s,
+                delta_temperature_needed_in_celsius,
+                water_input_temperature_deg_c,
             )
 
-            if thermal_power_delivered_w > self.config.connected_load_w:
-                # make sure that not more power is delivered than available
-                logging.warning(
-                    "The needed thermal power for space heating is higher than the maximum connected load."
-                )
-                thermal_power_delivered_w = self.config.connected_load_w
-                delta_temperature_achieved = thermal_power_delivered_w / (
-                    water_mass_flow_rate_in_kg_per_s
-                    * PhysicsConfig.get_properties_for_energy_carrier(
-                        energy_carrier=LoadTypes.WATER
-                    ).specific_heat_capacity_in_joule_per_kg_per_kelvin
-                )
-                water_output_temperature_deg_c = (
-                    water_input_temperature_deg_c + delta_temperature_achieved
-                )
-            else:
-                water_output_temperature_deg_c = (
-                    water_input_temperature_deg_c
-                    + delta_temperature_needed_in_celsius
-                )
-
-            thermal_energy_delivered_in_watt_hour = (
-                thermal_power_delivered_w
-                * self.my_simulation_parameters.seconds_per_timestep
-                / 3.6e3
-            )
             # Set outputs
             stsv.set_output_value(
                 self.thermal_output_power_sh_channel, thermal_power_delivered_w
@@ -477,45 +443,23 @@ class DistrictHeating(Component):
             delta_temperature_needed_in_celsius = stsv.get_input_value(
                 self.delta_temperature_channel
             )
+            self._check_delta_temperature(delta_temperature_needed_in_celsius, timestep)
+
             water_input_temperature_deg_c = stsv.get_input_value(
                 self.water_input_temperature_dhw_channel
             )
 
-            # check values
-            if delta_temperature_needed_in_celsius < 0:
-                raise ValueError(
-                    f"Delta temperature is {delta_temperature_needed_in_celsius} °C"
-                    "but it should not be negative because district heating cannot provide cooling. "
-                    "Please check your district heating controller."
-                )
-
-            # calculate output temperature
-            water_target_temperature_deg_c = (
-                water_input_temperature_deg_c
-                + delta_temperature_needed_in_celsius
+            # Calculate
+            (
+                thermal_power_delivered_w,
+                thermal_energy_delivered_in_watt_hour,
+                water_output_temperature_deg_c,
+                water_mass_flow_rate_in_kg_per_s
+            ) = self._calculate_dhw_outputs(
+                water_input_temperature_deg_c,
+                delta_temperature_needed_in_celsius,
             )
 
-            # calculate thermal power delivered Q = m * cw * dT
-            thermal_power_delivered_w = (
-                self.config.connected_load_w
-                if delta_temperature_needed_in_celsius > 0
-                else 0
-            )
-            water_mass_flow_rate_in_kg_per_s = thermal_power_delivered_w / (
-                PhysicsConfig.get_properties_for_energy_carrier(
-                    energy_carrier=LoadTypes.WATER
-                ).specific_heat_capacity_in_joule_per_kg_per_kelvin
-                * delta_temperature_needed_in_celsius
-            )
-            water_target_temperature_deg_c = (
-                water_input_temperature_deg_c
-                + delta_temperature_needed_in_celsius
-            )
-            thermal_energy_delivered_in_watt_hour = (
-                thermal_power_delivered_w
-                * self.my_simulation_parameters.seconds_per_timestep
-                / 3.6e3
-            )
             # Set outputs
             stsv.set_output_value(
                 self.thermal_output_power_dhw_channel,
@@ -527,7 +471,7 @@ class DistrictHeating(Component):
             )
             stsv.set_output_value(
                 self.water_output_temperature_dhw_channel,
-                water_target_temperature_deg_c,
+                water_output_temperature_deg_c,
             )
             stsv.set_output_value(
                 self.water_mass_flow_dhw_output_channel,
@@ -569,6 +513,89 @@ class DistrictHeating(Component):
             stsv.set_output_value(self.water_mass_flow_sh_output_channel, 0)
         else:
             raise ValueError("Unknown heating mode")
+        
+    def _check_delta_temperature(self, delta_temperature: float, timestep: int):
+        if delta_temperature < 0:
+            raise ValueError(
+                f"Delta temperature is {delta_temperature} °C"
+                "but it should not be negative because district heating cannot provide cooling. "
+                "Please check your district heating controller."
+            )
+        if delta_temperature > 100:
+            raise ValueError(
+                f"Delta temperature is {delta_temperature} °C in timestep {timestep}."
+                "This is way too high. "
+            )
+
+    def _calculate_space_heating_outputs(self, water_mass_flow_rate_in_kg_per_s: float, 
+                                         delta_temperature_needed_in_celsius: float,
+                                         water_input_temperature_deg_c: float) -> Tuple[float, float, float]:
+        thermal_power_delivered_w = (
+            water_mass_flow_rate_in_kg_per_s
+            * PhysicsConfig.get_properties_for_energy_carrier(
+                energy_carrier=LoadTypes.WATER
+            ).specific_heat_capacity_in_joule_per_kg_per_kelvin
+            * delta_temperature_needed_in_celsius
+        )
+        print(thermal_power_delivered_w)
+
+        if thermal_power_delivered_w > self.config.connected_load_w:
+            # make sure that not more power is delivered than available
+            logging.warning(
+                "The needed thermal power for space heating is higher than the maximum connected load."
+            )
+            thermal_power_delivered_w = self.config.connected_load_w
+            delta_temperature_achieved = thermal_power_delivered_w / (
+                water_mass_flow_rate_in_kg_per_s
+                * PhysicsConfig.get_properties_for_energy_carrier(
+                    energy_carrier=LoadTypes.WATER
+                ).specific_heat_capacity_in_joule_per_kg_per_kelvin
+            )
+            water_output_temperature_deg_c = (
+                water_input_temperature_deg_c + delta_temperature_achieved
+            )
+        else:
+            water_output_temperature_deg_c = (
+                water_input_temperature_deg_c
+                + delta_temperature_needed_in_celsius
+            )
+
+        thermal_energy_delivered_in_watt_hour = (
+            thermal_power_delivered_w
+            * self.my_simulation_parameters.seconds_per_timestep
+            / 3.6e3
+        )
+        return thermal_power_delivered_w, thermal_energy_delivered_in_watt_hour, water_output_temperature_deg_c
+
+    def _calculate_dhw_outputs(self, water_input_temperature_deg_c: float, delta_temperature_needed_in_celsius: float):
+        water_target_temperature_deg_c = (
+            water_input_temperature_deg_c
+            + delta_temperature_needed_in_celsius
+        )
+
+        # calculate thermal power delivered Q = m * cw * dT
+        if delta_temperature_needed_in_celsius > 0:
+            thermal_power_delivered_w = self.config.connected_load_w
+            water_mass_flow_rate_in_kg_per_s = thermal_power_delivered_w / (
+            PhysicsConfig.get_properties_for_energy_carrier(
+                energy_carrier=LoadTypes.WATER
+            ).specific_heat_capacity_in_joule_per_kg_per_kelvin
+            * delta_temperature_needed_in_celsius
+        )
+        else:
+            thermal_power_delivered_w = 0
+            water_mass_flow_rate_in_kg_per_s = 0
+
+        water_target_temperature_deg_c = (
+            water_input_temperature_deg_c
+            + delta_temperature_needed_in_celsius
+        )
+        thermal_energy_delivered_in_watt_hour = (
+            thermal_power_delivered_w
+            * self.my_simulation_parameters.seconds_per_timestep
+            / 3.6e3
+        )
+        return thermal_power_delivered_w, thermal_energy_delivered_in_watt_hour, water_target_temperature_deg_c, water_mass_flow_rate_in_kg_per_s
 
     def get_cost_opex(
         self,
@@ -613,7 +640,7 @@ class DistrictHeating(Component):
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
             consumption_in_kwh=consumption_in_kwh,
             loadtype=LoadTypes.DISTRICTHEATING,
-            kpi_tag=KpiTagEnumClass.DISTRICT_HEATING_SPACE_HEATING,
+            kpi_tag=KpiTagEnumClass.DISTRICT_HEATING,
         )
 
         return opex_cost_data_class
@@ -641,7 +668,7 @@ class DistrictHeating(Component):
         )
 
         capex_cost_data_class.kpi_tag = (
-            KpiTagEnumClass.DISTRICT_HEATING_SPACE_HEATING
+            KpiTagEnumClass.DISTRICT_HEATING
         )
 
         return capex_cost_data_class

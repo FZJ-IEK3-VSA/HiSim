@@ -513,7 +513,7 @@ class DistrictHeating(Component):
             stsv.set_output_value(self.water_mass_flow_sh_output_channel, 0)
         else:
             raise ValueError("Unknown heating mode")
-        
+
     def _check_delta_temperature(self, delta_temperature: float, timestep: int):
         if delta_temperature < 0:
             raise ValueError(
@@ -527,7 +527,7 @@ class DistrictHeating(Component):
                 "This is way too high. "
             )
 
-    def _calculate_space_heating_outputs(self, water_mass_flow_rate_in_kg_per_s: float, 
+    def _calculate_space_heating_outputs(self, water_mass_flow_rate_in_kg_per_s: float,
                                          delta_temperature_needed_in_celsius: float,
                                          water_input_temperature_deg_c: float) -> Tuple[float, float, float]:
         thermal_power_delivered_w = (

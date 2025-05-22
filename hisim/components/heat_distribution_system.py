@@ -138,7 +138,7 @@ class HeatDistribution(cp.Component):
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
     ResidenceTemperatureIndoorAir = "ResidenceTemperatureIndoorAir"
     WaterMassFlowInput = "WaterMassFlowInput"
-    ThermalPowerReceived = "ThermalPowerReceived" # Relevant for district heating with DWH
+    ThermalPowerReceived = "ThermalPowerReceived"  # Relevant for district heating with DWH
 
     # Outputs
     WaterTemperatureInlet = "WaterTemperatureInlet"
@@ -415,14 +415,16 @@ class HeatDistribution(cp.Component):
 
             elif state_controller == 0 or thermal_power_received_heating_system_w == 0:
                 thermal_power_delivered_in_watt = 0.0
-                # keep temperature almost as is, as no heating/cooling occurs, 
+                # keep temperature almost as is, as no heating/cooling occurs,
                 # but introduce small change of temperature to account for heat loss and gain
                 # between heat distribution system and building
-                water_temperature_output_in_celsius = water_temperature_input_in_celsius + 0.01 * (residence_temperature_input_in_celsius - water_temperature_input_in_celsius) 
-
+                water_temperature_output_in_celsius = (
+                    water_temperature_input_in_celsius
+                    + 0.01 * (residence_temperature_input_in_celsius - water_temperature_input_in_celsius)
+                )
             else:
                 raise ValueError("unknown hds controller mode")
-        
+
         # Set outputs -----------------------------------------------------------------------------------------------------------
         stsv.set_output_value(
             self.water_temperature_inlet_channel,

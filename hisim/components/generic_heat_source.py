@@ -364,12 +364,8 @@ class HeatSource(cp.Component):
             capex_cost_data_class.kpi_tag = KpiTagEnumClass.OIL_HEATER_DOMESTIC_HOT_WATER
         elif config.fuel == lt.LoadTypes.OIL and config.water_vs_heating == lt.InandOutputType.HEATING:
             capex_cost_data_class.kpi_tag = KpiTagEnumClass.OIL_HEATER_SPACE_HEATING
-        elif (
-            config.fuel == lt.LoadTypes.DISTRICTHEATING and config.water_vs_heating == lt.InandOutputType.WATER_HEATING
-        ):
-            capex_cost_data_class.kpi_tag = KpiTagEnumClass.DISTRICT_HEATING_DOMESTIC_HOT_WATER
-        elif config.fuel == lt.LoadTypes.DISTRICTHEATING and config.water_vs_heating == lt.InandOutputType.HEATING:
-            capex_cost_data_class.kpi_tag = KpiTagEnumClass.DISTRICT_HEATING_SPACE_HEATING
+        elif config.fuel == lt.LoadTypes.DISTRICTHEATING:
+            capex_cost_data_class.kpi_tag = KpiTagEnumClass.DISTRICT_HEATING
         elif config.fuel == lt.LoadTypes.PELLETS and config.water_vs_heating == lt.InandOutputType.WATER_HEATING:
             capex_cost_data_class.kpi_tag = KpiTagEnumClass.PELLETS_HEATING_DOMESTIC_HOT_WATER
         elif config.fuel == lt.LoadTypes.PELLETS and config.water_vs_heating == lt.InandOutputType.HEATING:
@@ -429,10 +425,7 @@ class HeatSource(cp.Component):
             co2_per_simulated_period_in_kg = self.config.consumption_in_kilowatt_hour * co2_per_unit
             opex_energy_cost_per_simulated_period_in_euro = self.config.consumption_in_kilowatt_hour * euro_per_unit
 
-            if self.config.water_vs_heating == lt.InandOutputType.WATER_HEATING:
-                kpi_tag = KpiTagEnumClass.DISTRICT_HEATING_DOMESTIC_HOT_WATER
-            elif self.config.water_vs_heating == lt.InandOutputType.HEATING:
-                kpi_tag = KpiTagEnumClass.DISTRICT_HEATING_SPACE_HEATING
+            kpi_tag = KpiTagEnumClass.DISTRICT_HEATING
 
         elif self.config.fuel == lt.LoadTypes.PELLETS:
             # TODO: implement costs

@@ -256,34 +256,20 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
     # Build district heating controller
-    my_district_heating_controller_sh_config = generic_district_heating.DistrictHeatingControllerForSHConfig.get_default_district_heating_controller_config()
-    my_district_heating_controller = generic_district_heating.DistrictHeatingControllerForSH(
+    my_district_heating_controller_sh_config = generic_district_heating.DistrictHeatingControllerConfig.get_default_district_heating_controller_config(
+        with_domestic_hot_water_preparation=True
+    )
+    my_district_heating_controller = generic_district_heating.DistrictHeatingController(
         my_simulation_parameters=my_simulation_parameters, config=my_district_heating_controller_sh_config
     )
     my_sim.add_component(my_district_heating_controller, connect_automatically=True)
 
-    # Build district heating For Space Heating
-    my_district_heating_sh_config = generic_district_heating.DistrictHeatingForSHConfig.get_default_district_heating_config()
-    my_district_heating = generic_district_heating.DistrictHeatingForSH(
+    # Build district heating For Space Heating and DHW
+    my_district_heating_sh_config = generic_district_heating.DistrictHeatingConfig.get_default_district_heating_config(with_domestic_hot_water_preparation=True)
+    my_district_heating = generic_district_heating.DistrictHeating(
         config=my_district_heating_sh_config, my_simulation_parameters=my_simulation_parameters
     )
     my_sim.add_component(my_district_heating, connect_automatically=True)
-
-    # Build district heating for DHW
-    # DHW district heating and storage configs
-    my_district_heating_controller_dhw_config = generic_district_heating.DistrictHeatingControllerForDHWConfig.get_default_district_heating_dhw_controller_config()
-
-    my_district_heating_controller_for_dhw = generic_district_heating.DistrictHeatingControllerForDHW(
-        my_simulation_parameters=my_simulation_parameters, config=my_district_heating_controller_dhw_config
-    )
-    my_sim.add_component(my_district_heating_controller_for_dhw, connect_automatically=True)
-
-    my_district_heating_for_dhw_config = generic_district_heating.DistrictHeatingForDHWConfig.get_default_district_dhw_heating_config()
-
-    my_district_heating_for_dhw = generic_district_heating.DistrictHeatingForDHW(
-        config=my_district_heating_for_dhw_config, my_simulation_parameters=my_simulation_parameters
-    )
-    my_sim.add_component(my_district_heating_for_dhw, connect_automatically=True)
 
     my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
         number_of_apartments=number_of_apartments

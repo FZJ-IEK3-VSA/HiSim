@@ -352,6 +352,8 @@ class EmissionFactorsAndCostsForFuelsConfig:
     oil_footprint_in_kg_per_l: float  # kgCO2eq/l
     diesel_costs_in_euro_per_l: float  # EUR/l
     diesel_footprint_in_kg_per_l: float  # kgCO2eq/l
+    district_heating_costs_in_euro_per_kwh: float
+    district_heating_footprint_in_kg_per_kwh: float
 
     @classmethod
     def get_default(cls) -> "EmissionFactorsAndCostsForFuelsConfig":
@@ -372,6 +374,8 @@ class EmissionFactorsAndCostsForFuelsConfig:
             oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
             diesel_costs_in_euro_per_l=1.617572993,  # EUR/l
             diesel_footprint_in_kg_per_l=2.6649,  # kgCO2eq/l
+            district_heating_costs_in_euro_per_kwh=0.14757,  # EUR/kWh Source : [16]
+            district_heating_footprint_in_kg_per_kwh=0.280,  # kgCo2eq/kWh Source : [8]
         )
 
     @classmethod
@@ -402,6 +406,8 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
                 diesel_costs_in_euro_per_l=128.90,  # EUR/l  # Source: [3]
                 diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
+                district_heating_costs_in_euro_per_kwh=0.14757,  # EUR/kWh Source : [16]
+                district_heating_footprint_in_kg_per_kwh=0.280,  # kgCo2eq/kWh Source : [8]
             )
         if year == 2019:
             return EmissionFactorsAndCostsForFuelsConfig(
@@ -418,6 +424,8 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
                 diesel_costs_in_euro_per_l=1.2670,  # EUR/l  # Source: [3]
                 diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
+                district_heating_costs_in_euro_per_kwh=0.14757,  # EUR/kWh Source : [16]
+                district_heating_footprint_in_kg_per_kwh=0.280,  # kgCo2eq/kWh Source : [8]
             )
         if year == 2020:
             return EmissionFactorsAndCostsForFuelsConfig(
@@ -434,6 +442,8 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
                 diesel_costs_in_euro_per_l=1.1240,  # EUR/l  # Source: [3]
                 diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
+                district_heating_costs_in_euro_per_kwh=0.14757,  # EUR/kWh Source : [16]
+                district_heating_footprint_in_kg_per_kwh=0.280,  # kgCo2eq/kWh Source : [8]
             )
         if year == 2021:
             return EmissionFactorsAndCostsForFuelsConfig(
@@ -450,6 +460,8 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
                 diesel_costs_in_euro_per_l=1.399,  # EUR/l  # Source: [3]
                 diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
+                district_heating_costs_in_euro_per_kwh=0.14757,  # EUR/kWh Source : [16]
+                district_heating_footprint_in_kg_per_kwh=0.280,  # kgCo2eq/kWh Source : [8]
             )
         if year == 2022:
             return EmissionFactorsAndCostsForFuelsConfig(
@@ -466,6 +478,8 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
                 diesel_costs_in_euro_per_l=1.96,  # EUR/l  # Source: [3]
                 diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
+                district_heating_costs_in_euro_per_kwh=0.14757,  # EUR/kWh Source : [16]
+                district_heating_footprint_in_kg_per_kwh=0.280,  # kgCo2eq/kWh Source : [8]
             )
         if year == 2023:
             return EmissionFactorsAndCostsForFuelsConfig(
@@ -482,6 +496,8 @@ class EmissionFactorsAndCostsForFuelsConfig:
                 oil_footprint_in_kg_per_l=3.2,  # kgCO2eq/l
                 diesel_costs_in_euro_per_l=1.73,  # EUR/l  # Source: [3]
                 diesel_footprint_in_kg_per_l=2.0,  # kgCO2eq/l
+                district_heating_costs_in_euro_per_kwh=0.14757,  # EUR/kWh Source : [16]
+                district_heating_footprint_in_kg_per_kwh=0.280,  # kgCo2eq/kWh Source : [8]
             )
 
         raise KeyError(f"No Emission and cost factors implemented yet for the year {year}.")

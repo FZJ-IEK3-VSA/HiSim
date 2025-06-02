@@ -21,41 +21,49 @@ class LogPrio(IntEnum):
     PROFILE = 5
     TRACE = 6
 
-
-def error(message: str, logging_message_path: str = LOGGING_PATH) -> None:
+# The logging_message_path can not be set in the function head because it would
+# then always use the LOGGING_PATH at definition time, not at runtime.
+def error(message: str, logging_message_path: str = None) -> None:
     """Log an error message."""
+    if logging_message_path == None: logging_message_path = LOGGING_PATH
     log(LogPrio.ERROR, message, logging_message_path)
 
 
-def warning(message: str, logging_message_path: str = LOGGING_PATH) -> None:
+def warning(message: str, logging_message_path: str = None) -> None:
     """Log a warning message."""
+    if logging_message_path == None: logging_message_path = LOGGING_PATH
     log(LogPrio.WARNING, message, logging_message_path)
 
 
-def information(message: str, logging_message_path: str = LOGGING_PATH) -> None:
+def information(message: str, logging_message_path: str = None) -> None:
     """Log a information message."""
+    if logging_message_path == None: logging_message_path = LOGGING_PATH
     log(LogPrio.INFORMATION, message, logging_message_path)
 
 
-def trace(message: str, logging_message_path: str = LOGGING_PATH) -> None:
+def trace(message: str, logging_message_path: str = None) -> None:
     """Log a trace message."""
+    if logging_message_path == None: logging_message_path = LOGGING_PATH
     log(LogPrio.TRACE, message, logging_message_path)
 
 
-def debug(message: str, logging_message_path: str = LOGGING_PATH) -> None:
+def debug(message: str, logging_message_path: str = None) -> None:
     """Log a debug message."""
+    if logging_message_path == None: logging_message_path = LOGGING_PATH
     log(LogPrio.DEBUG, message, logging_message_path)
 
 
-def profile(message: str, logging_message_path: str = LOGGING_PATH) -> None:
+def profile(message: str, logging_message_path: str = None) -> None:
     """Log a profile message."""
     log(LogPrio.PROFILE, message, logging_message_path)
+    if logging_message_path == None: logging_message_path = LOGGING_PATH
     log_profile_file(message, logging_message_path)
 
 
-def log(prio: int, message: str, logging_message_path: str = LOGGING_PATH) -> None:
+def log(prio: int, message: str, logging_message_path: str = None) -> None:
     """Write and print a log message."""
     # if(prio < LogPrio.Debug):
+    if logging_message_path == None: logging_message_path = LOGGING_PATH
     prio_string: str
     if prio == LogPrio.ERROR:
         prio_string = "ERR"
@@ -87,11 +95,12 @@ def log(prio: int, message: str, logging_message_path: str = LOGGING_PATH) -> No
     
     if pre:
         global pre_logs
-        pre_logs += str(prio_string) + ":" + message + "\n"
+        pre_logs += message + "\n"
 
 
-def log_profile_file(message: str, logging_message_path: str = LOGGING_PATH) -> None:
+def log_profile_file(message: str, logging_message_path: str = None) -> None:
     """Write log message to logfile."""
+    if logging_message_path == None: logging_message_path = LOGGING_PATH
 
     if not os.path.exists(logging_message_path):
         os.makedirs(logging_message_path)
@@ -107,7 +116,7 @@ def log_profile_file(message: str, logging_message_path: str = LOGGING_PATH) -> 
 
 def initialize_properly(logging_path) -> None:
     """Move pre logs to the logging path."""
-    global pre_logs, pre
+    global pre_logs, pre, LOGGING_PATH
     LOGGING_PATH = logging_path # set actual logging path
     if not os.path.exists(LOGGING_PATH):
         os.makedirs(LOGGING_PATH) # if folder does not exist, create it

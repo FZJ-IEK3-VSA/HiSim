@@ -26,7 +26,7 @@ def main(
     # filter warnings due to pvlib, pvlib generates warnings during simulation within pvlib package
     warnings.filterwarnings("ignore")
     # before starting, delete old logging files if path and logging files exist
-    logging_default_path = log.LOGGING_DEFAULT_PATH
+    logging_default_path = log.LOGGING_PATH
     if os.path.exists(logging_default_path) and os.listdir(logging_default_path) != []:
         for file in os.listdir(logging_default_path):
             if os.path.exists(os.path.join(logging_default_path, file)):
@@ -60,12 +60,11 @@ def main(
             raise ValueError(
                 f"Directory location of module location is nonexistent!\nDirectory entered: {path_to_be_added}"
             )
-    suffix = module_filename[-3:]
-    if suffix != ".py":
-        module_full_filename = f"{module_filename}.py"
-    else:
+    if module_filename.endswith(".py"):
         module_full_filename = module_filename
         module_filename = module_filename[:-3]
+    else:
+        module_full_filename = f"{module_filename}.py"
     filepath = os.path.join(path_to_be_added, module_full_filename)
     if os.path.isfile(filepath):
         # Get setup function to executable
@@ -99,13 +98,6 @@ def main(
     log.profile("duration: " + str((endtime - starttime).total_seconds()))
     log.information("#################################")
     log.information("")
-
-    # At the end put new logging files into result directory
-    try:
-        my_sim.put_log_files_into_result_path()
-    # sometimes when running many simulations at once this leads to errors, so ignore
-    except Exception:
-        pass
 
 
 if __name__ == "__main__":

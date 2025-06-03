@@ -467,14 +467,15 @@ class PostProcessor:
             csvfilename = self.shorten_path(csvfilename)
             ppdt.results[column].to_csv(csvfilename, sep=",", decimal=".")
 
-        for column in ppdt.results_monthly:
-            csvfilename = os.path.join(
-                ppdt.simulation_parameters.result_directory,
-                f"{column.split(' ', 3)[0]}_{column.split(' ', 3)[2]}_monthly.csv",
-            )
-            header = [f"{column.split('[', 1)[0]} - monthly [" f"{column.split('[', 1)[1]}"]
-            csvfilename = self.shorten_path(csvfilename)
-            ppdt.results_monthly[column].to_csv(csvfilename, sep=",", decimal=".", header=header)
+        if PostProcessingOptions.EXPORT_MONTHLY_RESULTS in ppdt.post_processing_options:
+            for column in ppdt.results_monthly:
+                csvfilename = os.path.join(
+                    ppdt.simulation_parameters.result_directory,
+                    f"{column.split(' ', 3)[0]}_{column.split(' ', 3)[2]}_monthly.csv",
+                )
+                header = [f"{column.split('[', 1)[0]} - monthly [" f"{column.split('[', 1)[1]}"]
+                csvfilename = self.shorten_path(csvfilename)
+                ppdt.results_monthly[column].to_csv(csvfilename, sep=",", decimal=".", header=header)
 
     @utils.measure_execution_time
     def export_results_to_pickle(self, ppdt: PostProcessingDataTransfer) -> None:
@@ -490,17 +491,17 @@ class PostProcessor:
 
             with open(pickle_filename, "wb") as f:
                 pickle.dump(ppdt.results[column], f)
+        if PostProcessingOptions.EXPORT_MONTHLY_RESULTS in ppdt.post_processing_options:
+            for column in ppdt.results_monthly:
+                pickle_filename_monthly = os.path.join(
+                    ppdt.simulation_parameters.result_directory,
+                    f"{column.split(' ', 3)[0]}_{column.split(' ', 3)[2]}_monthly.pkl",
+                )
 
-        for column in ppdt.results_monthly:
-            pickle_filename_monthly = os.path.join(
-                ppdt.simulation_parameters.result_directory,
-                f"{column.split(' ', 3)[0]}_{column.split(' ', 3)[2]}_monthly.pkl",
-            )
+                pickle_filename_monthly = self.shorten_path(pickle_filename_monthly)
 
-            pickle_filename_monthly = self.shorten_path(pickle_filename_monthly)
-
-            with open(pickle_filename_monthly, "wb") as f:
-                pickle.dump(ppdt.results_monthly[column], f)
+                with open(pickle_filename_monthly, "wb") as f:
+                    pickle.dump(ppdt.results_monthly[column], f)
 
     def shorten_path(self, path, max_length=250):
         """Shorten path if its longer than 250."""

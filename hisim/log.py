@@ -8,6 +8,7 @@ LOGGING_PATH: str = r"../logs/"
 # for storing logs that are written before the filepath exists
 pre = True
 pre_logs = ""
+pre_profile = ""
 
 
 class LogPrio(IntEnum):
@@ -112,22 +113,38 @@ def log_profile_file(message: str, logging_message_path: str = None) -> None:
     except Exception:
         print("profiling_timeuse.log could not be appended. "
               "This might happen when too many simultaneous simulations are running.")
+    
+    if pre:
+        global pre_profile
+        pre_profile += message + "\n"
 
 
 def initialize_properly(logging_path) -> None:
     """Move pre logs to the logging path."""
-    global pre_logs, pre, LOGGING_PATH
+    global pre_logs, pre_profile, pre, LOGGING_PATH
     LOGGING_PATH = logging_path # set actual logging path
     if not os.path.exists(LOGGING_PATH):
         os.makedirs(LOGGING_PATH) # if folder does not exist, create it
-    file_name = os.path.join(LOGGING_PATH, "hisim_simulation.log")
+
     # write pre_logs to file
+    file_name = os.path.join(LOGGING_PATH, "hisim_simulation.log")
     try: 
         with open(file_name, "a", encoding="utf-8") as filestream:
             filestream.write(pre_logs)
     except Exception:
         print("hisim_simulation.log could not be appended. "
               "This might happen when too many simultaneous simulations are running.")
+        
+    # write pre_profile to file
+    file_name = os.path.join(LOGGING_PATH, "profiling_timeuse.log")
+    try: 
+        with open(file_name, "a", encoding="utf-8") as filestream:
+            filestream.write(pre_profile)
+    except Exception:
+        print("profiling_timeuse.log could not be appended. "
+              "This might happen when too many simultaneous simulations are running.")
+
     # turn off pre_logging and clear pre_logs
     pre = False
     pre_logs = ""
+    pre_profile = ""

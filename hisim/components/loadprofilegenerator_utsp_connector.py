@@ -480,7 +480,7 @@ class UtspLpgConnector(cp.Component):
         if self.name_of_predefined_loadprofile is None:
             self.name_of_predefined_loadprofile = "CHR01 Couple both at Work"
             log.information(f"You choose {self.utsp_config.data_acquisition_mode}, "
-                             f"but did not specify a predefined loadprofile."
+                            f"but did not specify a predefined loadprofile."
                             f" Using default profile {self.name_of_predefined_loadprofile}.")
 
         if self.predefined_loadprofile_filepaths is None:

@@ -319,8 +319,11 @@ class Simulator:
             colum_names.append(column_name)
             log.debug("Output column: " + column_name)
         self.results_data_frame = pd.DataFrame(data=all_result_lines, columns=colum_names)
-        # todo: fix this constant
-        df_index = pd.date_range("2021-01-01 00:00:00", periods=len(self.results_data_frame), freq="T")
+        df_index = pd.date_range(
+            start=self._simulation_parameters.start_date,
+            end=self._simulation_parameters.end_date,
+            freq=f"{self._simulation_parameters.seconds_per_timestep}S",
+        )[:-1]
         self.results_data_frame.index = df_index
         end_counter = time.perf_counter()
         execution_time = end_counter - start_counter
@@ -400,14 +403,9 @@ class Simulator:
         self, results_data_frame: pd.DataFrame
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Converts results into a pretty dataframe for post processing."""
-        pd_timeline = pd.date_range(
-            start=self._simulation_parameters.start_date,
-            end=self._simulation_parameters.end_date,
-            freq=f"{self._simulation_parameters.seconds_per_timestep}S",
-        )[:-1]
+
         n_columns = results_data_frame.shape[1]
 
-        results_data_frame.index = pd_timeline
         results_merged_monthly = pd.DataFrame()
         results_merged_daily = pd.DataFrame()
         results_merged_hourly = pd.DataFrame()
@@ -416,7 +414,7 @@ class Simulator:
             log.information(f"Processing column {i_column + 1}/{n_columns} - {results_data_frame.columns[i_column]}")
             temp_df = pd.DataFrame(
                 results_data_frame.values[:, i_column],
-                index=pd_timeline,
+                index=results_data_frame.index,
                 columns=[results_data_frame.columns[i_column]],
             )
 

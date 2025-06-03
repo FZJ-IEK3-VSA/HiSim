@@ -326,9 +326,11 @@ class Simulator:
         execution_time = end_counter - start_counter
         log.information(f"Simulation took {execution_time:1.2f}s.")
 
-        if (postprocessingoptions.PostProcessingOptions.PLOT_MONTHLY_BAR_CHARTS in self._simulation_parameters.post_processing_options or
-            postprocessingoptions.PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION in self._simulation_parameters.post_processing_options or
-            postprocessingoptions.PostProcessingOptions.MAKE_OPERATION_RESULTS_FOR_WEBTOOL in self._simulation_parameters.post_processing_options
+        if (
+                postprocessingoptions.PostProcessingOptions.PLOT_MONTHLY_BAR_CHARTS in self._simulation_parameters.post_processing_options or
+                postprocessingoptions.PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION in self._simulation_parameters.post_processing_options or
+                postprocessingoptions.PostProcessingOptions.MAKE_OPERATION_RESULTS_FOR_WEBTOOL in self._simulation_parameters.post_processing_options or
+                postprocessingoptions.PostProcessingOptions.EXPORT_MONTHLY_RESULTS in self._simulation_parameters.post_processing_options
         ):
             log.information("Preparing std results for post processing")
             (

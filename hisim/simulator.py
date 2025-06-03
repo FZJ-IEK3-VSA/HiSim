@@ -333,6 +333,7 @@ class Simulator:
                 postprocessingoptions.PostProcessingOptions.PLOT_MONTHLY_BAR_CHARTS in self._simulation_parameters.post_processing_options or
                 postprocessingoptions.PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION in self._simulation_parameters.post_processing_options or
                 postprocessingoptions.PostProcessingOptions.MAKE_OPERATION_RESULTS_FOR_WEBTOOL in self._simulation_parameters.post_processing_options or
+                postprocessingoptions.PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL in self._simulation_parameters.post_processing_options or
                 postprocessingoptions.PostProcessingOptions.EXPORT_MONTHLY_RESULTS in self._simulation_parameters.post_processing_options
         ):
             log.information("Preparing std results for post processing")

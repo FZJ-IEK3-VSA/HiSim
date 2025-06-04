@@ -12,9 +12,7 @@ pre_profile = ""
 
 
 class LogPrio(IntEnum):
-
     """Define a logging priority."""
-
     ERROR = 1
     WARNING = 2
     INFORMATION = 3
@@ -22,8 +20,22 @@ class LogPrio(IntEnum):
     PROFILE = 5
     TRACE = 6
 
-# The logging_message_path can not be set in the function head because it would
-# then always use the LOGGING_PATH at definition time, not at runtime.
+    @staticmethod
+    def get_prio_string(prio: int) -> str:
+        """Get the string representation of the priority."""
+        prio_strings = {
+            LogPrio.ERROR: "ERR",
+            LogPrio.WARNING: "WRN",
+            LogPrio.INFORMATION: "IFO",
+            LogPrio.DEBUG: "DBG",
+            LogPrio.PROFILE: "PRF",
+            LogPrio.TRACE: "TRC"
+        }
+        return prio_strings.get(prio, "???") # type: ignore
+
+
+# The logging_message_path can not be set in the function head because then it 
+# would always use the LOGGING_PATH at definition time, not at runtime.
 def error(message: str, logging_message_path: str = None) -> None:
     """Log an error message."""
     if logging_message_path == None: logging_message_path = LOGGING_PATH
@@ -63,26 +75,10 @@ def profile(message: str, logging_message_path: str = None) -> None:
 
 def log(prio: int, message: str, logging_message_path: str = None) -> None:
     """Write and print a log message."""
-    # if(prio < LogPrio.Debug):
-    if logging_message_path == None: logging_message_path = LOGGING_PATH
-    prio_string: str
-    if prio == LogPrio.ERROR:
-        prio_string = "ERR"
-    elif prio == LogPrio.WARNING:
-        prio_string = "WRN"
-    elif prio == LogPrio.INFORMATION:
-        prio_string = "IFO"
-    elif prio == LogPrio.DEBUG:
-        prio_string = "DBG"
-    elif prio == LogPrio.PROFILE:
-        prio_string = "PRF"
-    elif prio == LogPrio.TRACE:
-        prio_string = "TRC"
-    else:
-        raise ValueError("Unknown log priority: " + str(prio))
+    if logging_message_path == None: 
+        logging_message_path = LOGGING_PATH
     if prio <= LOGGING_LEVEL:
-        print(str(prio_string) + ":" + message)
-
+        print(str(LogPrio.get_prio_string(prio)) + ":" + message)
     if not os.path.exists(logging_message_path):
         os.makedirs(logging_message_path)
 
@@ -101,8 +97,8 @@ def log(prio: int, message: str, logging_message_path: str = None) -> None:
 
 def log_profile_file(message: str, logging_message_path: str = None) -> None:
     """Write log message to logfile."""
-    if logging_message_path == None: logging_message_path = LOGGING_PATH
-
+    if logging_message_path == None: 
+        logging_message_path = LOGGING_PATH
     if not os.path.exists(logging_message_path):
         os.makedirs(logging_message_path)
 
@@ -120,8 +116,10 @@ def log_profile_file(message: str, logging_message_path: str = None) -> None:
 
 
 def initialize_properly(logging_path) -> None:
-    """Move pre logs to the logging path."""
+    """Create actual logging path and file and move pre logs there."""
     global pre_logs, pre_profile, pre, LOGGING_PATH
+    if not pre:
+        print("WARNING! Logging seems to be already initialized.")
     LOGGING_PATH = logging_path # set actual logging path
     if not os.path.exists(LOGGING_PATH):
         os.makedirs(LOGGING_PATH) # if folder does not exist, create it

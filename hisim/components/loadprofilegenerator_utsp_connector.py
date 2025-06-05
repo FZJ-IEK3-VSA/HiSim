@@ -689,9 +689,9 @@ class UtspLpgConnector(cp.Component):
                         log.warning(
                             "You chose USE_UTSP as data_acquition_mode but it is not possible to read the url and api_key from the .env file."
                             "Please check if this file is present in your system."
-                            "Otherwise the predefined LPG profile in hisim/inputs/loadprofiles will be used."
+                            "Otherwise the Local LPG will be used."
                         )
-                        self.utsp_config.data_acquisition_mode = LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
+                        self.utsp_config.data_acquisition_mode = LpgDataAcquisitionMode.USE_LOCAL_LPG
 
                 if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_LOCAL_LPG:
                     try:
@@ -708,108 +708,44 @@ class UtspLpgConnector(cp.Component):
 
                 if (self.utsp_config.data_acquisition_mode in
                         (LpgDataAcquisitionMode.USE_UTSP, LpgDataAcquisitionMode.USE_LOCAL_LPG)):
-                    try:
-                        log.information(f"LPG data acquisition mode: {self.utsp_config.data_acquisition_mode}")
-                        new_unique_config = list_of_unique_household_configs[list_index]
-                        if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
-                            (
-                                electricity_file,
-                                warm_water_file,
-                                inner_device_heat_gains_file,
-                                high_activity_file,
-                                low_activity_file,
-                                flexibility_file,
-                                car_states_file,
-                                car_locations_file,
-                                driving_distances_file,
-                            ) = self.get_profiles_from_utsp(
-                                lpg_households=new_unique_config.household,
-                                guid=new_unique_config.guid,
-                            )
-                        elif self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_LOCAL_LPG:
-                            (
-                                electricity_file,
-                                warm_water_file,
-                                inner_device_heat_gains_file,
-                                high_activity_file,
-                                low_activity_file,
-                                flexibility_file,
-                                car_states_file,
-                                car_locations_file,
-                                driving_distances_file,
-                            ) = self.get_profiles_from_local_lpg(lpg_households=new_unique_config.household)
+                    max_attempts = 2
+                    attempt = 0
 
-                        # only one result obtained
-                        if isinstance(electricity_file, str):
-                            log.information(f"One result obtained from {self.utsp_config.data_acquisition_mode}.")
-                            (
-                                electricity_consumption,
-                                heating_by_devices,
-                                water_consumption,
-                                heating_by_residents,
-                                number_of_residents,
-                            ) = self.load_result_files_and_transform_to_lists(
-                                electricity=electricity_file,
-                                warm_water=warm_water_file,
-                                inner_device_heat_gains=inner_device_heat_gains_file,
-                                high_activity=high_activity_file,
-                                low_activity=low_activity_file,
-                                data_acquisition_mode=self.utsp_config.data_acquisition_mode,
-                            )
-                            list_of_flexibility_and_car_files = [
-                                flexibility_file,
-                                car_states_file,
-                                car_locations_file,
-                                driving_distances_file,
-                            ]
-                            if all(isinstance(file, str) for file in list_of_flexibility_and_car_files):
-                                list_of_flexibility_and_car_data = self.load_results_and_transform_string_to_data(
-                                    list_of_result_files=list_of_flexibility_and_car_files  # type: ignore
+                    while attempt < max_attempts:
+                        try:
+                            log.information(f"LPG data acquisition mode: {self.utsp_config.data_acquisition_mode}")
+                            new_unique_config = list_of_unique_household_configs[list_index]
+                            if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
+                                (
+                                    electricity_file,
+                                    warm_water_file,
+                                    inner_device_heat_gains_file,
+                                    high_activity_file,
+                                    low_activity_file,
+                                    flexibility_file,
+                                    car_states_file,
+                                    car_locations_file,
+                                    driving_distances_file,
+                                ) = self.get_profiles_from_utsp(
+                                    lpg_households=new_unique_config.household,
+                                    guid=new_unique_config.guid,
                                 )
-                            else:
-                                raise TypeError(
-                                    f"Type of flexibility and car files should be str, but it's {[type(i) for i in list_of_flexibility_and_car_files]}"
-                                )
+                            elif self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_LOCAL_LPG:
+                                (
+                                    electricity_file,
+                                    warm_water_file,
+                                    inner_device_heat_gains_file,
+                                    high_activity_file,
+                                    low_activity_file,
+                                    flexibility_file,
+                                    car_states_file,
+                                    car_locations_file,
+                                    driving_distances_file,
+                                ) = self.get_profiles_from_local_lpg(lpg_households=new_unique_config.household)
 
-                            # write lists to dict
-                            value_dict["electricity_consumption"].append(electricity_consumption)
-                            value_dict["heating_by_devices"].append(heating_by_devices)
-                            value_dict["heating_by_residents"].append(heating_by_residents)
-                            value_dict["water_consumption"].append(water_consumption)
-                            value_dict["number_of_residents"].append(number_of_residents)
-                            self.flexibility_data_dict["flexibility"].append(list_of_flexibility_and_car_data[0])
-                            self.car_data_dict["car_states"].append(list_of_flexibility_and_car_data[1])
-                            self.car_data_dict["car_locations"].append(list_of_flexibility_and_car_data[2])
-                            self.car_data_dict["driving_distances"].append(list_of_flexibility_and_car_data[3])
-
-                            # cache results for each household individually
-                            self.cache_results(
-                                cache_filepath=cache_filepath,
-                                number_of_residents=number_of_residents,
-                                electricity_consumption=electricity_consumption,
-                                heating_by_residents=heating_by_residents,
-                                water_consumption=water_consumption,
-                                heating_by_devices=heating_by_devices,
-                                flexibility=list_of_flexibility_and_car_data[0],
-                                car_states=list_of_flexibility_and_car_data[1],
-                                car_locations=list_of_flexibility_and_car_data[2],
-                                driving_distances=list_of_flexibility_and_car_data[3],
-                            )
-
-                        # multiple results obtained (when multiple households in utsp_config given and the guid in the config is not "" but has a specific value)
-                        elif isinstance(electricity_file, List):
-                            log.information(f"Multiple results obtained from {self.utsp_config.data_acquisition_mode}.")
-
-                            for index, electricity in enumerate(electricity_file):
-                                warm_water = warm_water_file[index]
-                                inner_device_heat_gains = inner_device_heat_gains_file[index]
-                                high_activity = high_activity_file[index]
-                                low_activity = low_activity_file[index]
-                                flexibility = flexibility_file[index]
-                                car_states = car_states_file[index]
-                                car_locations = car_locations_file[index]
-                                driving_distances = driving_distances_file[index]
-
+                            # only one result obtained
+                            if isinstance(electricity_file, str):
+                                log.information(f"One result obtained from {self.utsp_config.data_acquisition_mode}.")
                                 (
                                     electricity_consumption,
                                     heating_by_devices,
@@ -817,16 +753,27 @@ class UtspLpgConnector(cp.Component):
                                     heating_by_residents,
                                     number_of_residents,
                                 ) = self.load_result_files_and_transform_to_lists(
-                                    electricity=electricity,
-                                    warm_water=warm_water,
-                                    inner_device_heat_gains=inner_device_heat_gains,
-                                    high_activity=high_activity,
-                                    low_activity=low_activity,
+                                    electricity=electricity_file,
+                                    warm_water=warm_water_file,
+                                    inner_device_heat_gains=inner_device_heat_gains_file,
+                                    high_activity=high_activity_file,
+                                    low_activity=low_activity_file,
                                     data_acquisition_mode=self.utsp_config.data_acquisition_mode,
                                 )
-                                list_of_flexibility_and_car_data = self.load_results_and_transform_string_to_data(
-                                    list_of_result_files=[flexibility, car_states, car_locations, driving_distances]
-                                )
+                                list_of_flexibility_and_car_files = [
+                                    flexibility_file,
+                                    car_states_file,
+                                    car_locations_file,
+                                    driving_distances_file,
+                                ]
+                                if all(isinstance(file, str) for file in list_of_flexibility_and_car_files):
+                                    list_of_flexibility_and_car_data = self.load_results_and_transform_string_to_data(
+                                        list_of_result_files=list_of_flexibility_and_car_files  # type: ignore
+                                    )
+                                else:
+                                    raise TypeError(
+                                        f"Type of flexibility and car files should be str, but it's {[type(i) for i in list_of_flexibility_and_car_files]}"
+                                    )
 
                                 # write lists to dict
                                 value_dict["electricity_consumption"].append(electricity_consumption)
@@ -839,6 +786,89 @@ class UtspLpgConnector(cp.Component):
                                 self.car_data_dict["car_locations"].append(list_of_flexibility_and_car_data[2])
                                 self.car_data_dict["driving_distances"].append(list_of_flexibility_and_car_data[3])
 
+                                # cache results for each household individually
+                                self.cache_results(
+                                    cache_filepath=cache_filepath,
+                                    number_of_residents=number_of_residents,
+                                    electricity_consumption=electricity_consumption,
+                                    heating_by_residents=heating_by_residents,
+                                    water_consumption=water_consumption,
+                                    heating_by_devices=heating_by_devices,
+                                    flexibility=list_of_flexibility_and_car_data[0],
+                                    car_states=list_of_flexibility_and_car_data[1],
+                                    car_locations=list_of_flexibility_and_car_data[2],
+                                    driving_distances=list_of_flexibility_and_car_data[3],
+                                )
+
+                            # multiple results obtained (when multiple households in utsp_config given and the guid in the config is not "" but has a specific value)
+                            elif isinstance(electricity_file, List):
+                                log.information(f"Multiple results obtained from {self.utsp_config.data_acquisition_mode}.")
+
+                                for index, electricity in enumerate(electricity_file):
+                                    warm_water = warm_water_file[index]
+                                    inner_device_heat_gains = inner_device_heat_gains_file[index]
+                                    high_activity = high_activity_file[index]
+                                    low_activity = low_activity_file[index]
+                                    flexibility = flexibility_file[index]
+                                    car_states = car_states_file[index]
+                                    car_locations = car_locations_file[index]
+                                    driving_distances = driving_distances_file[index]
+
+                                    (
+                                        electricity_consumption,
+                                        heating_by_devices,
+                                        water_consumption,
+                                        heating_by_residents,
+                                        number_of_residents,
+                                    ) = self.load_result_files_and_transform_to_lists(
+                                        electricity=electricity,
+                                        warm_water=warm_water,
+                                        inner_device_heat_gains=inner_device_heat_gains,
+                                        high_activity=high_activity,
+                                        low_activity=low_activity,
+                                        data_acquisition_mode=self.utsp_config.data_acquisition_mode,
+                                    )
+                                    list_of_flexibility_and_car_data = self.load_results_and_transform_string_to_data(
+                                        list_of_result_files=[flexibility, car_states, car_locations, driving_distances]
+                                    )
+
+                                    # write lists to dict
+                                    value_dict["electricity_consumption"].append(electricity_consumption)
+                                    value_dict["heating_by_devices"].append(heating_by_devices)
+                                    value_dict["heating_by_residents"].append(heating_by_residents)
+                                    value_dict["water_consumption"].append(water_consumption)
+                                    value_dict["number_of_residents"].append(number_of_residents)
+                                    self.flexibility_data_dict["flexibility"].append(list_of_flexibility_and_car_data[0])
+                                    self.car_data_dict["car_states"].append(list_of_flexibility_and_car_data[1])
+                                    self.car_data_dict["car_locations"].append(list_of_flexibility_and_car_data[2])
+                                    self.car_data_dict["driving_distances"].append(list_of_flexibility_and_car_data[3])
+
+                                # get sum of all household profiles
+                                (
+                                    self.electricity_consumption,
+                                    self.heating_by_residents,
+                                    self.water_consumption,
+                                    self.heating_by_devices,
+                                    self.number_of_residents,
+                                ) = self.get_result_lists_by_summing_over_value_dict(value_dict=value_dict)
+
+                                self.max_hot_water_demand = max(self.water_consumption)
+
+                                # cache for multiple results at a time
+                                self.cache_results(
+                                    cache_filepath=cache_filepath,
+                                    number_of_residents=self.number_of_residents,
+                                    heating_by_residents=self.heating_by_residents,
+                                    water_consumption=self.water_consumption,
+                                    heating_by_devices=self.heating_by_devices,
+                                    electricity_consumption=self.electricity_consumption,
+                                    flexibility=list_of_flexibility_and_car_data[0],
+                                    car_states=list_of_flexibility_and_car_data[1],
+                                    car_locations=list_of_flexibility_and_car_data[2],
+                                    driving_distances=list_of_flexibility_and_car_data[3],
+                                )
+                                break
+
                             # get sum of all household profiles
                             (
                                 self.electricity_consumption,
@@ -850,38 +880,21 @@ class UtspLpgConnector(cp.Component):
 
                             self.max_hot_water_demand = max(self.water_consumption)
 
-                            # cache for multiple results at a time
-                            self.cache_results(
-                                cache_filepath=cache_filepath,
-                                number_of_residents=self.number_of_residents,
-                                heating_by_residents=self.heating_by_residents,
-                                water_consumption=self.water_consumption,
-                                heating_by_devices=self.heating_by_devices,
-                                electricity_consumption=self.electricity_consumption,
-                                flexibility=list_of_flexibility_and_car_data[0],
-                                car_states=list_of_flexibility_and_car_data[1],
-                                car_locations=list_of_flexibility_and_car_data[2],
-                                driving_distances=list_of_flexibility_and_car_data[3],
-                            )
                             break
 
-                        # get sum of all household profiles
-                        (
-                            self.electricity_consumption,
-                            self.heating_by_residents,
-                            self.water_consumption,
-                            self.heating_by_devices,
-                            self.number_of_residents,
-                        ) = self.get_result_lists_by_summing_over_value_dict(value_dict=value_dict)
-
-                        self.max_hot_water_demand = max(self.water_consumption)
-
-                    except Exception as e:
-                        log.warning(f"Error while {self.utsp_config.data_acquisition_mode} request: {e}")
-                        self.utsp_config.data_acquisition_mode = LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
-                        log.warning(
-                            f"LPG data acquisition mode will be set to: {self.utsp_config.data_acquisition_mode}!"
-                        )
+                        except Exception as e:
+                            log.warning(f"Error while {self.utsp_config.data_acquisition_mode} request: {e}")
+                            if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
+                                self.utsp_config.data_acquisition_mode = LpgDataAcquisitionMode.USE_LOCAL_LPG
+                            elif self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_LOCAL_LPG:
+                                attempt = 1
+                                self.utsp_config.data_acquisition_mode = LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
+                            else:
+                                break
+                            log.warning(
+                                f"LPG data acquisition mode will be set to: {self.utsp_config.data_acquisition_mode}!"
+                            )
+                            attempt += 1
 
                 if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE:
                     log.information(
@@ -1151,26 +1164,29 @@ class UtspLpgConnector(cp.Component):
         inner_device_heat_gains_file = os.path.join(result_folder, inner_device_heat_gains)
         high_activity_file = os.path.join(result_folder, high_activity)
         low_activity_file = os.path.join(result_folder, low_activity)
-        if flexibility in result_folder:
-            flexibility_file = os.path.join(result_folder, flexibility)
-        else:
-            flexibility_file = ""
+        flexibility_file = os.path.join(result_folder, flexibility) if os.path.exists(
+            os.path.join(result_folder, flexibility)) else ""
 
+        car_states_file = ""
         for car_state in car_states.keys():
-            if car_state in result_folder:
-                car_states_file = os.path.join(result_folder, car_state)
-            else:
-                car_states_file = ""
+            car_state_path = os.path.join(result_folder, car_state)
+            if os.path.exists(car_state_path):
+                car_states_file = car_state_path
+                break
+
+        car_location_file = ""
         for car_location in car_locations.keys():
-            if car_location in result_folder:
-                car_locations_file = os.path.join(result_folder, car_location)
-            else:
-                car_locations_file = ""
+            car_location_path = os.path.join(result_folder, car_location)
+            if os.path.exists(car_location_path):
+                car_location_file = car_location_path
+                break
+
+        driving_distance_file = ""
         for driving_distance in driving_distances.keys():
-            if driving_distance in result_folder:
-                driving_distances_file = os.path.join(result_folder, driving_distance)
-            else:
-                driving_distances_file = ""
+            driving_distance_path = os.path.join(result_folder, driving_distance)
+            if os.path.exists(driving_distance_path):
+                driving_distance_file = driving_distance_path
+                break
 
         return (
             electricity_file,
@@ -1180,8 +1196,8 @@ class UtspLpgConnector(cp.Component):
             low_activity_file,
             flexibility_file,
             car_states_file,
-            car_locations_file,
-            driving_distances_file,
+            car_location_file,
+            driving_distance_file,
         )
 
     def calculate_multiple_lpg_request(
@@ -1230,28 +1246,29 @@ class UtspLpgConnector(cp.Component):
             high_activity_file_one_result = os.path.join(result_folder, high_activity)
             low_activity_file_one_result = os.path.join(result_folder, low_activity)
 
-            if flexibility in result_folder:
-                flexibility_file_one_result = os.path.join(result_folder, flexibility)
-            else:
-                flexibility_file_one_result = ""
+            flexibility_file_one_result = os.path.join(result_folder, flexibility) if os.path.exists(
+                os.path.join(result_folder, flexibility)) else ""
 
+            car_states_file_one_result = ""
             for car_state in car_states.keys():
-                if car_state in result_folder:
-                    car_states_file_one_result = os.path.join(result_folder, car_state)
-                else:
-                    car_states_file_one_result = ""
+                car_state_path = os.path.join(result_folder, car_state)
+                if os.path.exists(car_state_path):
+                    car_states_file_one_result = car_state_path
+                    break
 
+            car_locations_file_one_result = ""
             for car_location in car_locations.keys():
-                if car_location in result_folder:
-                    car_locations_file_one_result = os.path.join(result_folder, car_location)
-                else:
-                    car_locations_file_one_result = ""
+                car_location_path = os.path.join(result_folder, car_location)
+                if os.path.exists(car_location_path):
+                    car_locations_file_one_result = car_location_path
+                    break
 
+            driving_distances_file_one_result = ""
             for driving_distance in driving_distances.keys():
-                if driving_distance in result_folder:
-                    driving_distances_file_one_result = os.path.join(result_folder, driving_distance)
-                else:
-                    driving_distances_file_one_result = ""
+                driving_distance_path = os.path.join(result_folder, driving_distance)
+                if os.path.exists(driving_distance_path):
+                    driving_distances_file_one_result = driving_distance_path
+                    break
 
             # append to lists
             electricity_file.append(electricity_file_one_result)
@@ -1766,7 +1783,11 @@ class UtspLpgConnector(cp.Component):
         for result_file_str in list_of_result_files:
             json_acceptable_string = result_file_str.replace("'", '"')
             if json_acceptable_string != "":
-                data = json.loads(json_acceptable_string)
+                if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
+                    data = json.loads(json_acceptable_string)
+                else:
+                    with open(json_acceptable_string, encoding="utf-8") as json_file:
+                        data = json.load(json_file)
             else:
                 data = {}
             list_of_data.append(data)

@@ -119,7 +119,7 @@ class WeatherDataImport:
         csv_path = os.path.join(speicherpfad, csv_name)
 
         if os.path.isfile(csv_path):
-            print(f"CSV file  {csv_name} under  {speicherpfad} already exists.")
+            print(f"CSV file {csv_name} under {speicherpfad} already exists.")
         else:
             print(f"Weather data is loaded from DWD and saved under {csv_path}.")
 

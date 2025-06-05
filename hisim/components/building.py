@@ -319,7 +319,7 @@ class Building(cp.Component):
             lt.Units.WATT_PER_SQUARE_METER,
             True,
         )
-        self.direct_horizontal_irradiance_channel: cp.ComponentInput = self.add_input(
+        self.diffuse_horizontal_irradiance_channel: cp.ComponentInput = self.add_input(
             self.component_name,
             self.DiffuseHorizontalIrradiance,
             lt.LoadTypes.IRRADIANCE,
@@ -618,7 +618,7 @@ class Building(cp.Component):
         if hasattr(self, "solar_gain_through_windows") is False:
             azimuth = stsv.get_input_value(self.azimuth_channel)
             direct_normal_irradiance = stsv.get_input_value(self.direct_normal_irradiance_channel)
-            direct_horizontal_irradiance = stsv.get_input_value(self.direct_horizontal_irradiance_channel)
+            diffuse_horizontal_irradiance = stsv.get_input_value(self.diffuse_horizontal_irradiance_channel)
             global_horizontal_irradiance = stsv.get_input_value(self.global_horizontal_irradiance_channel)
             direct_normal_irradiance_extra = stsv.get_input_value(self.direct_normal_irradiance_extra_channel)
             apparent_zenith = stsv.get_input_value(self.apparent_zenith_channel)
@@ -648,7 +648,7 @@ class Building(cp.Component):
             solar_heat_gain_through_windows_in_watt = self.get_solar_heat_gain_through_windows(
                 azimuth=azimuth,
                 direct_normal_irradiance=direct_normal_irradiance,
-                direct_horizontal_irradiance=direct_horizontal_irradiance,
+                diffuse_horizontal_irradiance=diffuse_horizontal_irradiance,
                 global_horizontal_irradiance=global_horizontal_irradiance,
                 direct_normal_irradiance_extra=direct_normal_irradiance_extra,
                 apparent_zenith=apparent_zenith,
@@ -822,21 +822,21 @@ class Building(cp.Component):
         if self.buildingconfig.predictive:
             # get weather forecast to compute forecasted solar gains
 
-            azimuth_forecast = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.WEATHERAZIMUTHYEARLYFORECAST)
+            azimuth_forecast = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.WEATHER_AZIMUTH_YEARLY_FORECAST)
             apparent_zenith_forecast = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.WEATHERAPPARENTZENITHYEARLYFORECAST
+                key=SingletonDictKeyEnum.WEATHE_RAPPARENT_ZENITH_YEARLY_FORECAST
             )
-            direct_horizontal_irradiance_forecast = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.WEATHERDIFFUSEHORIZONTALIRRADIANCEYEARLYFORECAST
+            diffuse_horizontal_irradiance_forecast = SingletonSimRepository().get_entry(
+                key=SingletonDictKeyEnum.WEATHER_DIFFUSE_HORIZONTAL_IRRADIANCE_YEARLY_FORECAST
             )
             direct_normal_irradiance_forecast = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEYEARLYFORECAST
+                key=SingletonDictKeyEnum.WEATHER_DIRECT_NORMAL_IRRADIANCE_YEARLY_FORECAST
             )
             direct_normal_irradiance_extra_forecast = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST
+                key=SingletonDictKeyEnum.WEATHER_DIRECT_NORMAL_IRRADIANCE_EXTRA_YEARLY_FORECAST
             )
             global_horizontal_irradiance_forecast = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.WEATHERGLOBALHORIZONTALIRRADIANCEYEARLYFORECAST
+                key=SingletonDictKeyEnum.WEATHER_GLOBAL_HORIZONTAL_IRRADIANCE_YEARLY_FORECAST
             )
 
             solar_gains_forecast = []
@@ -844,7 +844,7 @@ class Building(cp.Component):
                 solar_gains_forecast_yearly = self.get_solar_heat_gain_through_windows(
                     azimuth=azimuth_forecast[i],
                     direct_normal_irradiance=direct_normal_irradiance_forecast[i],
-                    direct_horizontal_irradiance=direct_horizontal_irradiance_forecast[i],
+                    diffuse_horizontal_irradiance=diffuse_horizontal_irradiance_forecast[i],
                     global_horizontal_irradiance=global_horizontal_irradiance_forecast[i],
                     direct_normal_irradiance_extra=direct_normal_irradiance_extra_forecast[i],
                     apparent_zenith=apparent_zenith_forecast[i],
@@ -1630,7 +1630,7 @@ class Building(cp.Component):
         self,
         azimuth,
         direct_normal_irradiance,
-        direct_horizontal_irradiance,
+        diffuse_horizontal_irradiance,
         global_horizontal_irradiance,
         direct_normal_irradiance_extra,
         apparent_zenith,
@@ -1641,12 +1641,12 @@ class Building(cp.Component):
         """
         solar_heat_gains = 0.0
 
-        if direct_normal_irradiance != 0 or direct_horizontal_irradiance != 0 or global_horizontal_irradiance != 0:
+        if direct_normal_irradiance != 0 or diffuse_horizontal_irradiance != 0 or global_horizontal_irradiance != 0:
             for window in self.windows:
                 solar_heat_gain = window.calc_solar_heat_gains(
                     sun_azimuth=azimuth,
                     direct_normal_irradiance=direct_normal_irradiance,
-                    direct_horizontal_irradiance=direct_horizontal_irradiance,
+                    diffuse_horizontal_irradiance=diffuse_horizontal_irradiance,
                     global_horizontal_irradiance=global_horizontal_irradiance,
                     direct_normal_irradiance_extra=direct_normal_irradiance_extra,
                     apparent_zenith=apparent_zenith,
@@ -2223,7 +2223,7 @@ class Window:
         self,
         sun_azimuth,
         direct_normal_irradiance,
-        direct_horizontal_irradiance,
+        diffuse_horizontal_irradiance,
         global_horizontal_irradiance,
         direct_normal_irradiance_extra,
         apparent_zenith,
@@ -2258,7 +2258,7 @@ class Window:
             sun_azimuth,
             direct_normal_irradiance,
             global_horizontal_irradiance,
-            direct_horizontal_irradiance,
+            diffuse_horizontal_irradiance,
             direct_normal_irradiance_extra,
         )
 

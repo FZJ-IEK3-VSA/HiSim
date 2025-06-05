@@ -111,7 +111,7 @@ def test_building():
     my_residence.altitude_channel.source_output = my_weather.altitude_output
     my_residence.azimuth_channel.source_output = my_weather.azimuth_output
     my_residence.direct_normal_irradiance_channel.source_output = my_weather.dni_output
-    my_residence.direct_horizontal_irradiance_channel.source_output = (
+    my_residence.diffuse_horizontal_irradiance_channel.source_output = (
         my_weather.dhi_output
     )
     my_residence.occupancy_heat_gain_channel.source_output = (

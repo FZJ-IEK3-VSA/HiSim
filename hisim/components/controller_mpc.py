@@ -441,7 +441,7 @@ class MpcController(cp.Component):
         if self.mpcconfig.predictive:
             """Get forecasted disturbance (weather)"""
             self.temp_forecast = SingletonSimRepository().get_entry(
-                key=SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST
+                key=SingletonDictKeyEnum.WEATHER_TEMPERATURE_OUTSIDE_YEARLY_FORECAST
             )[: self.my_simulation_parameters.timesteps]
             self.phi_m_forecast = SingletonSimRepository().get_entry(
                 key=SingletonDictKeyEnum.HEATFLUXTHERMALMASSNODEFORECAST

@@ -48,6 +48,7 @@ class WeatherDataSourceEnum(Enum):
     DWD_10MIN = 4
     ERA5 = 5
     DWD_15MIN = 6
+    GEOSPHERE = 7
 
 
 class LocationEnum(Enum):
@@ -665,76 +666,71 @@ class Weather(Component):
                 simulation_parameters=self.my_simulation_parameters,
             )
 
-            if self.weather_config.data_source == WeatherDataSourceEnum.NSRDB_15MIN:
-                dni = tmy_data["DNI"].resample("1T").asfreq().interpolate(method="linear")
-                temperature = tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")
-                dhi = tmy_data["DHI"].resample("1T").asfreq().interpolate(method="linear")
-                ghi = tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")
-                wind_speed = tmy_data["Wspd"].resample("1T").asfreq().interpolate(method="linear")
-                pressure = tmy_data["Pressure"].resample("1T").asfreq().interpolate(method="linear")
-            elif self.weather_config.data_source in (WeatherDataSourceEnum.DWD_10MIN, WeatherDataSourceEnum.DWD_15MIN):
-                dni = tmy_data["DNI"].resample("1T").asfreq().interpolate(method="linear")
-                temperature = tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")
-                dhi = tmy_data["DHI"].resample("1T").asfreq().interpolate(method="linear")
-                ghi = tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")
-                wind_speed = tmy_data["Wspd"].resample("1T").asfreq().interpolate(method="linear")
-                pressure = tmy_data["Pressure"].resample("1T").asfreq().interpolate(method="linear")
-            elif self.weather_config.data_source == WeatherDataSourceEnum.ERA5:
-                dni = tmy_data["DNI"].resample("1T").asfreq().interpolate(method="linear")
-                temperature = tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")
-                dhi = tmy_data["DHI"].resample("1T").asfreq().interpolate(method="linear")
-                ghi = tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")
-                wind_speed = tmy_data["Wspd"].resample("1T").asfreq().interpolate(method="linear")
-                pressure = tmy_data["Pressure"].resample("1T").asfreq().interpolate(method="linear")
+            if self.weather_config.data_source in (WeatherDataSourceEnum.NSRDB_15MIN, WeatherDataSourceEnum.DWD_10MIN, WeatherDataSourceEnum.DWD_15MIN, WeatherDataSourceEnum.GEOSPHERE, WeatherDataSourceEnum.ERA5):
+                temperature_degc = tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")
+                wind_speed_m_s = tmy_data["Wspd"].resample("1T").asfreq().interpolate(method="linear")
+                ghi_w_m2 = tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")
             else:
-                dni = self.interpolate(tmy_data["DNI"], self.my_simulation_parameters.year)
-                temperature = self.interpolate(tmy_data["T"], self.my_simulation_parameters.year)
-                dhi = self.interpolate(tmy_data["DHI"], self.my_simulation_parameters.year)
-                ghi = self.interpolate(tmy_data["GHI"], self.my_simulation_parameters.year)
-                wind_speed = self.interpolate(tmy_data["Wspd"], self.my_simulation_parameters.year)
-                pressure = self.interpolate(tmy_data["Pressure"], self.my_simulation_parameters.year)
-            # calculate extra terrestrial radiation- n eeded for perez array diffuse irradiance models
-            dni_extra = pd.Series(pvlib.irradiance.get_extra_radiation(dni.index), index=dni.index)  # type: ignore
+                temperature_degc = self.interpolate(tmy_data["T"], self.my_simulation_parameters.year)
+                wind_speed_m_s = self.interpolate(tmy_data["Wspd"], self.my_simulation_parameters.year)
+                ghi_w_m2 = self.interpolate(tmy_data["GHI"], self.my_simulation_parameters.year)
 
-            solpos = pvlib.solarposition.get_solarposition(dni.index, location_dict["latitude"], location_dict["longitude"])  # type: ignore
+            # calculate extra terrestrial radiation - needed for perez array diffuse irradiance models
+            dni_extra = pd.Series(pvlib.irradiance.get_extra_radiation(temperature_degc.index), index=temperature_degc.index)  # type: ignore
+
+            solpos = pvlib.solarposition.get_solarposition(temperature_degc.index, location_dict["latitude"], location_dict["longitude"])  # type: ignore
             altitude = solpos["elevation"]
             azimuth = solpos["azimuth"]
             apparent_zenith = solpos["apparent_zenith"]
 
-            if seconds_per_timestep != 60:
-                self.temperature_list = temperature.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                self.dry_bulb_list = temperature.resample(str(seconds_per_timestep) + "S").mean().to_list()
+            if self.weather_config.data_source in (WeatherDataSourceEnum.NSRDB_15MIN, WeatherDataSourceEnum.DWD_10MIN, WeatherDataSourceEnum.DWD_15MIN, WeatherDataSourceEnum.ERA5):
+                dni_w_m2 = tmy_data["DNI"].resample("1T").asfreq().interpolate(method="linear")
+                dhi_w_m2 = tmy_data["DHI"].resample("1T").asfreq().interpolate(method="linear")
+                pressure_hpa = tmy_data["Pressure"].resample("1T").asfreq().interpolate(method="linear")
+            elif self.weather_config.data_source == WeatherDataSourceEnum.GEOSPHERE:
+                # Only global horizontal irradiance data is provided, therefore the other components need to be estimated
+                radiation_components = pvlib.irradiance.erbs(ghi=ghi_w_m2, zenith=solpos['zenith'], datetime_or_doy=temperature_degc.index)
+                dni_w_m2 = radiation_components["dni"]
+                dhi_w_m2 = radiation_components["dhi"]
+                pressure_hpa = pd.Series([1013.25] * len(temperature_degc.index), index=temperature_degc.index)
+            else:
+                dni_w_m2 = self.interpolate(tmy_data["DNI"], self.my_simulation_parameters.year)
+                dhi_w_m2 = self.interpolate(tmy_data["DHI"], self.my_simulation_parameters.year)
+                pressure_hpa = self.interpolate(tmy_data["Pressure"], self.my_simulation_parameters.year)
+
+            if seconds_per_timestep != 60:  # resample if not minute resolution
+                self.temperature_list = temperature_degc.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                self.dry_bulb_list = temperature_degc.resample(str(seconds_per_timestep) + "S").mean().to_list()
                 self.calculate_daily_average_outside_temperature(
                     temperaturelist=self.temperature_list,
                     seconds_per_timestep=seconds_per_timestep,
                 )
 
-                self.dhi_list = dhi.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                # np.float64( ## not sure what this is fore. python float and npfloat 64 are the same.
-                self.dni_list = dni.resample(str(seconds_per_timestep) + "S").mean().tolist()  # )  # type: ignore
+                self.dhi_list = dhi_w_m2.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                self.dni_list = dni_w_m2.resample(str(seconds_per_timestep) + "S").mean().tolist()  # )  # type: ignore
                 self.dniextra_list = dni_extra.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                self.ghi_list = ghi.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                self.ghi_list = ghi_w_m2.resample(str(seconds_per_timestep) + "S").mean().tolist()
                 self.altitude_list = altitude.resample(str(seconds_per_timestep) + "S").mean().tolist()
                 self.azimuth_list = azimuth.resample(str(seconds_per_timestep) + "S").mean().tolist()
                 self.apparent_zenith_list = apparent_zenith.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                self.wind_speed_list = wind_speed.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                self.pressure_list = pressure.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                self.wind_speed_list = wind_speed_m_s.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                self.pressure_list = pressure_hpa.resample(str(seconds_per_timestep) + "S").mean().tolist()
             else:
-                self.temperature_list = temperature.tolist()
-                self.dry_bulb_list = temperature.to_list()
+                self.temperature_list = temperature_degc.tolist()
+                self.dry_bulb_list = temperature_degc.to_list()
                 self.calculate_daily_average_outside_temperature(
                     temperaturelist=self.temperature_list,
                     seconds_per_timestep=seconds_per_timestep,
                 )
-                self.dhi_list = dhi.tolist()
-                self.dni_list = dni.tolist()
+                self.dhi_list = dhi_w_m2.tolist()
+                self.dni_list = dni_w_m2.tolist()
                 self.dniextra_list = dni_extra.tolist()
-                self.ghi_list = ghi.tolist()
+                self.ghi_list = ghi_w_m2.tolist()
                 self.altitude_list = altitude.tolist()
                 self.azimuth_list = azimuth.tolist()
                 self.apparent_zenith_list = apparent_zenith.tolist()
-                self.wind_speed_list = wind_speed.resample(str(seconds_per_timestep) + "S").mean().tolist()
-                self.pressure_list = pressure.tolist()
+                self.wind_speed_list = wind_speed_m_s.resample(str(seconds_per_timestep) + "S").mean().tolist()
+                self.pressure_list = pressure_hpa.tolist()
 
             solardata = [
                 self.dni_list,
@@ -773,43 +769,43 @@ class Weather(Component):
         # write one year forecast to simulation repository for PV processing -> if PV forecasts are needed
         if self.weather_config.predictive_control:
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERTEMPERATUREOUTSIDEYEARLYFORECAST,
+                key=SingletonDictKeyEnum.WEATHER_TEMPERATURE_OUTSIDE_YEARLY_FORECAST,
                 entry=self.temperature_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERDIFFUSEHORIZONTALIRRADIANCEYEARLYFORECAST,
+                key=SingletonDictKeyEnum.WEATHER_DIFFUSE_HORIZONTAL_IRRADIANCE_YEARLY_FORECAST,
                 entry=self.dhi_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEYEARLYFORECAST,
+                key=SingletonDictKeyEnum.WEATHER_DIRECT_NORMAL_IRRADIANCE_YEARLY_FORECAST,
                 entry=self.dni_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERDIRECTNORMALIRRADIANCEEXTRAYEARLYFORECAST,
+                key=SingletonDictKeyEnum.WEATHER_DIRECT_NORMAL_IRRADIANCE_EXTRA_YEARLY_FORECAST,
                 entry=self.dniextra_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERGLOBALHORIZONTALIRRADIANCEYEARLYFORECAST,
+                key=SingletonDictKeyEnum.WEATHER_GLOBAL_HORIZONTAL_IRRADIANCE_YEARLY_FORECAST,
                 entry=self.ghi_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERAZIMUTHYEARLYFORECAST,
+                key=SingletonDictKeyEnum.WEATHER_AZIMUTH_YEARLY_FORECAST,
                 entry=self.azimuth_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERAPPARENTZENITHYEARLYFORECAST,
+                key=SingletonDictKeyEnum.WEATHE_RAPPARENT_ZENITH_YEARLY_FORECAST,
                 entry=self.apparent_zenith_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERWINDSPEEDYEARLYFORECAST,
+                key=SingletonDictKeyEnum.WEATHER_WINDSPEED_YEARLY_FORECAST,
                 entry=self.wind_speed_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERPRESSUREYEARLYFORECAST,
+                key=SingletonDictKeyEnum.WEATHER_PRESSURE_YEARLY_FORECAST,
                 entry=self.pressure_list,
             )
             SingletonSimRepository().set_entry(
-                key=SingletonDictKeyEnum.WEATHERALTITUDEYEARLYFORECAST,
+                key=SingletonDictKeyEnum.WEATHER_ALTITUDE_YEARLY_FORECAST,
                 entry=self.altitude_list,
             )
 
@@ -972,6 +968,9 @@ def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Any:
                 elif i > 1:
                     break
 
+    elif source_enum == WeatherDataSourceEnum.GEOSPHERE:
+        raise NotImplementedError() # TODO
+
     else:
         # get the geoposition
         with open(filepath + ".dat", encoding="utf-8") as file_stream:
@@ -1002,6 +1001,10 @@ def read_test_reference_year_data(weatherconfig: WeatherConfig, simulation_param
         data = read_dwd_15min_data(filepath, simulation_parameters)
     elif weatherconfig.data_source == WeatherDataSourceEnum.ERA5:
         data = read_era5_data(filepath, simulation_parameters.year)
+    elif weatherconfig.data_source == WeatherDataSourceEnum.GEOSPHERE:
+        data = read_geosphere_data(filepath, simulation_parameters.year)
+    else:
+        raise ValueError(f"Unknown weather data source {weatherconfig.data_source}")
 
     return data
 
@@ -1088,9 +1091,6 @@ def read_dwd_10min_data(filepath: str, year: int) -> pd.DataFrame:
     location = pd.read_csv(  # type: ignore
         filepath,
         nrows=1,
-        skiprows=1,
-        header=None,
-        names=pd.read_csv(filepath, nrows=1).columns,
     )
     longitude = location["longitude"][0]
     latitude = location["latitude"][0]
@@ -1200,6 +1200,10 @@ def read_era5_data(filepath: str, year: int) -> pd.DataFrame:
     data["DNI"] = calculate_direct_normal_radiation(data["direct_irradiance"], longitude, latitude)
 
     return data
+
+
+def read_geosphere_data(filepath: str, year: int) -> pd.DataFrame:
+    raise NotImplementedError() # TODO
 
 
 def calculate_direct_normal_radiation(

@@ -1640,7 +1640,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
 
         self.add_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
         self.add_default_connections(self.get_default_connections_from_generic_dhw_boiler())
-        self.add_default_connections(self.get_default_connections_from_dhw_district_heating())
+        self.add_default_connections(self.get_default_connections_from_district_heating())
         self.add_default_connections(self.get_default_connections_from_utsp())
         self.add_default_connections(self.get_default_connections_from_solar_thermal_system())
 
@@ -1745,7 +1745,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
         )
         return connections
 
-    def get_default_connections_from_dhw_district_heating(
+    def get_default_connections_from_district_heating(
         self,
     ) -> List[cp.ComponentConnection]:
         """Get dhw district heating default connections."""
@@ -1753,21 +1753,21 @@ class SimpleDHWStorage(SimpleWaterStorage):
         # use importlib for importing the other component in order to avoid circular-import errors
         component_module_name = "hisim.components.generic_district_heating"
         component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "DistrictHeatingForDHW")
+        component_class = getattr(component_module, "DistrictHeating")
         connections = []
-        dhw_boiler_classname = component_class.get_classname()
+        component_classname = component_class.get_classname()
         connections.append(
             cp.ComponentConnection(
                 SimpleDHWStorage.WaterTemperatureFromHeatGenerator,
-                dhw_boiler_classname,
-                component_class.WaterOutputTemperature,
+                component_classname,
+                component_class.WaterOutputDhwTemperature,
             )
         )
         connections.append(
             cp.ComponentConnection(
                 SimpleDHWStorage.WaterMassFlowRateFromHeatGenerator,
-                dhw_boiler_classname,
-                component_class.WaterOutputMassFlowRate,
+                component_classname,
+                component_class.WaterOutputDhwMassFlowRate,
             )
         )
         return connections

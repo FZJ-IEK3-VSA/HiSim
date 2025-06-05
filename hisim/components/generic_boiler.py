@@ -855,12 +855,12 @@ class GenericBoilerController(Component):
                 / self.config.set_temperature_difference_for_full_power
             )
             percentage = max(minimal_percentage, linear_fit)
-            return percentage
+            return percentage  # type: ignore
         if (
             water_temperature_input_in_celsius <= set_heating_flow_temperature_in_celsius
         ):  # use same hysteresis like in conditions_on_off()
             percentage = minimal_percentage
-            return percentage
+            return percentage  # type: ignore
 
         percentage = 0.0
         return percentage

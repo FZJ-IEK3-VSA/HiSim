@@ -328,7 +328,7 @@ class SimpleHeatSource(cp.Component):
             temperature_output = self.temperature_out_in_celsius
 
             thermal_power_in_watt = (massflow_in_kg_per_sec * self.cp_f *
-                                     (temperature_output - temperature_input_in_celsius))
+                                     (temperature_output - temperature_input_in_celsius))  # type: ignore
 
         elif self.config.const_source == SimpleHeatSourceType.NEAR_SURFACE_BRINE_TEMPERATURE:
             """From hplib: Calculate the soil temperature by the average Temperature of the day.

@@ -418,7 +418,7 @@ class HeatDistribution(cp.Component):
                     residence_temperature_in_celsius=residence_temperature_input_in_celsius,
                 )
 
-            elif state_controller == 0 or (thermal_power_received_heating_system_w and thermal_power_received_heating_system_w == 0):
+            elif state_controller == 0 or (thermal_power_received_heating_system_w is not None and thermal_power_received_heating_system_w == 0):
                 thermal_power_delivered_in_watt = 0.0
                 # keep temperature almost as is, as no heating/cooling occurs,
                 # but introduce small change of temperature to account for heat loss and gain

@@ -478,8 +478,10 @@ class UtspLpgConnector(cp.Component):
     ) -> Tuple[str, str, str, str, str]:
         """Get the loadprofiles for a specific predefined profile from hisim/inputs/loadprofiles."""
         if self.name_of_predefined_loadprofile is None:
-            raise ValueError(f"You choose {self.utsp_config.data_acquisition_mode}, "
-                             f"but did not specify a predefined loadprofile.")
+            self.name_of_predefined_loadprofile = "CHR01 Couple both at Work"
+            log.information(f"You choose {self.utsp_config.data_acquisition_mode}, "
+                            f"but did not specify a predefined loadprofile."
+                            f" Using default profile {self.name_of_predefined_loadprofile}.")
 
         if self.predefined_loadprofile_filepaths is None:
             log.information("Filepath of predefined loadprofile defined in hisim.utils.py is used")

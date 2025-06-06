@@ -238,6 +238,8 @@ class Building(cp.Component):
     HeatLossFromVentilation = "HeatLossFromVentilation"
     HeatDemandAccordingToTabula = "HeatDemandAccordingToTabula"
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
+    TheoreticalHeatingDemand = "TheoreticalHeatingDemand"
+    TheoreticalCoolingDemand = "TheoreticalCoolingDemand"
     HeatFluxToInternalSurface = "HeatFluxToInternalSurface"
     HeatFluxToThermalMass = "HeatFluxToThermalMass"
     TotalThermalMassHeatFlux = "TotalThermalMassHeatFlux"
@@ -482,6 +484,20 @@ class Building(cp.Component):
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
             output_description=f"here a description for {self.TheoreticalThermalBuildingDemand} will follow.",
+        )
+        self.theoretical_heating_demand_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.TheoreticalHeatingDemand,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT_HOUR,
+            output_description="Theoretical heating demand of the building",
+        )
+        self.theoretical_cooling_demand_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.TheoreticalCoolingDemand,
+            lt.LoadTypes.COOLING,
+            lt.Units.WATT_HOUR,
+            output_description="Theoretical cooling demand of the building",
         )
         self.heat_flow_rate_to_thermal_mass_node_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -781,6 +797,18 @@ class Building(cp.Component):
             heat_flux_internal_room_surface_in_watt=internal_heat_flux_to_internal_room_surface_in_watt,
         )
 
+        # Split into heating and cooling demand to avoid averaging out values when aggregating
+        theoretical_heating_demand_in_watt = (
+            theoretical_thermal_building_demand_in_watt
+            if theoretical_thermal_building_demand_in_watt > 0
+            else 0
+        )
+        theoretical_cooling_demand_in_watt = (
+            theoretical_thermal_building_demand_in_watt
+            if theoretical_thermal_building_demand_in_watt < 0
+            else 0
+        )
+
         # Returns outputs
         stsv.set_output_value(
             self.thermal_mass_temperature_channel,
@@ -820,6 +848,16 @@ class Building(cp.Component):
         stsv.set_output_value(
             self.theoretical_thermal_building_demand_channel,
             theoretical_thermal_building_demand_in_watt,
+        )
+
+        stsv.set_output_value(
+            self.theoretical_heating_demand_channel,
+            theoretical_heating_demand_in_watt,
+        )
+
+        stsv.set_output_value(
+            self.theoretical_cooling_demand_channel,
+            theoretical_cooling_demand_in_watt,
         )
 
         stsv.set_output_value(
@@ -1435,6 +1473,31 @@ class Building(cp.Component):
         energy_gains_from_solar_in_kilowatt_hour: Optional[float] = None
         energy_gains_from_internal_in_kilowatt_hour: Optional[float] = None
         energy_demand_calculated_based_on_tabula_in_kilowatt_hour: Optional[float] = None
+        heating_demand_in_kilowatt_hour: Optional[float] = None
+        cooling_demand_in_kilowatt_hour: Optional[float] = None
+
+        if output.field_name == self.TheoreticalThermalBuildingDemand:
+            thermal_demand_values = postprocessing_results.iloc[:, index]
+            heating_demand_in_kilowatt_hour = thermal_demand_values[thermal_demand_values > 0].sum()
+            cooling_demand_in_kilowatt_hour = thermal_demand_values[thermal_demand_values < 0].sum()
+
+            heating_demand_entry = KpiEntry(
+                name="Theoretical heating demand",
+                unit="kWh",
+                value=heating_demand_in_kilowatt_hour,
+                tag=KpiTagEnumClass.BUILDING,
+                description=self.component_name,
+            )
+            list_of_kpi_entries.append(heating_demand_entry)
+
+            cooling_demand_entry = KpiEntry(
+                name="Theoretical cooling demand",
+                unit="kWh",
+                value=cooling_demand_in_kilowatt_hour,
+                tag=KpiTagEnumClass.BUILDING,
+                description=self.component_name,
+            )
+            list_of_kpi_entries.append(cooling_demand_entry)
 
         if output.field_name == self.HeatLossFromTransmission:
             heat_loss_from_transmission_values_in_watt = postprocessing_results.iloc[:, index]

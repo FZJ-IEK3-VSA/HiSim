@@ -782,7 +782,7 @@ class GenericBoiler(Component):
         list_of_kpi_entries.append(thermal_energy_delivered_entry)
 
         energy_consumption = KpiEntry(
-            name=f"{self.energy_carrier} consumption for space heating (energy)",
+            name=f"{self.energy_carrier.value} consumption for space heating (energy)",
             unit="kWh",
             value=opex_dataclass.consumption_in_kwh,
             tag=opex_dataclass.kpi_tag,
@@ -791,7 +791,7 @@ class GenericBoiler(Component):
         list_of_kpi_entries.append(energy_consumption)
 
         fuel_consumption_l = KpiEntry(
-            name=f"{self.energy_carrier} consumption for space heating (volume)",
+            name=f"{self.energy_carrier.value} consumption for space heating (volume)",
             unit="l",
             value=self.fuel_consumption_in_liter,
             tag=opex_dataclass.kpi_tag,
@@ -800,7 +800,7 @@ class GenericBoiler(Component):
         list_of_kpi_entries.append(fuel_consumption_l)
 
         fuel_consumption_kg = KpiEntry(
-            name=f"{self.energy_carrier} consumption for space heating (mass)",
+            name=f"{self.energy_carrier.value} consumption for space heating (mass)",
             unit="kg",
             value=self.fuel_consumption_in_kg,
             tag=opex_dataclass.kpi_tag,

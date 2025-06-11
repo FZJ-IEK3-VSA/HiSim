@@ -4,13 +4,13 @@
 # Owned
 # import importlib
 from dataclasses import dataclass
-import enum
 import logging
 from typing import List, Any, Optional, Tuple
 
 import pandas as pd
 from dataclasses_json import dataclass_json
 
+from hisim.components.dual_circuit_system import DiverterValve, HeatingMode, SetTemperatureConfig
 from hisim.loadtypes import LoadTypes, Units
 from hisim.component import (
     Component,
@@ -47,14 +47,6 @@ __version__ = ""
 __maintainer__ = "Katharina Rieck"
 __email__ = "k.rieck@fz-juelich.de"
 __status__ = ""
-
-
-class HeatingMode(enum.Enum):
-    """Heating mode of the district heating component."""
-
-    OFF = 0
-    SPACE_HEATING = 1
-    DOMESTIC_HOT_WATER = 2
 
 
 @dataclass_json
@@ -290,7 +282,7 @@ class DistrictHeating(Component):
             ComponentConnection(
                 DistrictHeating.HeatingMode,
                 controller_classname,
-                component_class.HeatingMode,
+                component_class.OperatingMode,
             )
         )
         connections.append(
@@ -537,7 +529,6 @@ class DistrictHeating(Component):
             ).specific_heat_capacity_in_joule_per_kg_per_kelvin
             * delta_temperature_needed_in_celsius
         )
-        print(thermal_power_delivered_w)
 
         if thermal_power_delivered_w > self.config.connected_load_w:
             # make sure that not more power is delivered than available
@@ -603,6 +594,7 @@ class DistrictHeating(Component):
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
+        consumption_in_kwh = None
         for index, output in enumerate(all_outputs):
             if (
                 output.component_name == self.component_name
@@ -781,7 +773,7 @@ class DistrictHeatingControllerConfig(ConfigBase):
     building_name: str
     name: str
     set_heating_threshold_outside_temperature_in_celsius: Optional[float]
-    with_domestic_hot_water_preparation: float
+    with_domestic_hot_water_preparation: bool
     offset: float  # overheating of dhw storage
 
     @classmethod
@@ -821,7 +813,7 @@ class DistrictHeatingController(Component):
 
     # Outputs
     DeltaTemperatureNeeded = "DeltaTemperatureNeeded"
-    HeatingMode = "HeatingMode"
+    OperatingMode = "HeatingMode"
 
     def __init__(
         self,
@@ -894,10 +886,10 @@ class DistrictHeatingController(Component):
 
         self.heating_mode_output_channel: ComponentOutput = self.add_output(
             self.component_name,
-            self.HeatingMode,
+            self.OperatingMode,
             LoadTypes.ANY,
             Units.ANY,
-            output_description="Heating mode of district heating.",
+            output_description="Operating mode of district heating.",
         )
 
         self.add_default_connections(
@@ -1034,6 +1026,7 @@ class DistrictHeatingController(Component):
         heating_flow_temperature_from_heat_distribution_in_celsius = stsv.get_input_value(
             self.heating_flow_temperature_from_heat_distribution_system_channel
         )
+        water_temperature_input_from_warm_water_storage_in_celsius = None
         if self.config.with_domestic_hot_water_preparation:
             water_temperature_input_from_warm_water_storage_in_celsius = (
                 stsv.get_input_value(
@@ -1045,23 +1038,21 @@ class DistrictHeatingController(Component):
             self.daily_avg_outside_temperature_input_channel
         )
 
-        # turning district heating off when the average daily outside temperature is above a certain threshold (if threshold is set in the config)
-        summer_heating_mode = self.summer_heating_condition(
-            daily_average_outside_temperature_in_celsius=daily_avg_outside_temperature_in_celsius,
-            set_heating_threshold_temperature_in_celsius=self.district_heating_controller_config.set_heating_threshold_outside_temperature_in_celsius,
-        )
-
-        # on/off controller
-        self.determine_operating_mode(
+        # Determine which operating mode to use in dual-circuit system
+        self.controller_mode = DiverterValve.determine_operating_mode(
+            with_domestic_hot_water_preparation=self.config.with_domestic_hot_water_preparation,
+            current_controller_mode=self.controller_mode,
+            daily_average_outside_temperature=daily_avg_outside_temperature_in_celsius,
             water_temperature_input_sh_in_celsius=water_temperature_input_from_heat_distibution_in_celsius,
-            set_heating_flow_temperature_sh_in_celsius=heating_flow_temperature_from_heat_distribution_in_celsius,
             water_temperature_input_dhw_in_celsius=water_temperature_input_from_warm_water_storage_in_celsius
             if self.config.with_domestic_hot_water_preparation
             else None,
-            set_heating_flow_temperature_dhw_in_celsius=self.warm_water_temperature_aim_in_celsius
-            if self.config.with_domestic_hot_water_preparation
-            else None,
-            summer_heating_mode=summer_heating_mode,
+            set_temperatures=SetTemperatureConfig(
+                set_temperature_space_heating=heating_flow_temperature_from_heat_distribution_in_celsius,
+                set_temperature_dhw=self.warm_water_temperature_aim_in_celsius,
+                hysteresis_dhw_offset=self.config.offset,
+                outside_temperature_threshold=self.district_heating_controller_config.set_heating_threshold_outside_temperature_in_celsius
+            )
         )
 
         if self.controller_mode == HeatingMode.SPACE_HEATING:
@@ -1096,97 +1087,6 @@ class DistrictHeatingController(Component):
             self.heating_mode_output_channel, self.controller_mode.value
         )
 
-    def determine_operating_mode(
-        self,
-        water_temperature_input_sh_in_celsius: float,
-        set_heating_flow_temperature_sh_in_celsius: float,
-        water_temperature_input_dhw_in_celsius: Optional[float],
-        set_heating_flow_temperature_dhw_in_celsius: Optional[float],
-        summer_heating_mode: str,
-    ) -> None:
-        """Set conditions for the district heating controller mode."""
-
-        def dhw_heating_needed(
-            controller_mode,
-            current_water_temperature,
-            target_water_temperature,
-        ):
-            if not self.config.with_domestic_hot_water_preparation:
-                return False
-
-            assert water_temperature_input_dhw_in_celsius is not None
-            assert set_heating_flow_temperature_dhw_in_celsius is not None
-
-            if current_water_temperature < target_water_temperature:
-                return True
-
-            if (
-                controller_mode == HeatingMode.DOMESTIC_HOT_WATER
-                and current_water_temperature
-                < target_water_temperature + self.config.offset
-            ):
-                return True
-
-            return False
-
-        def space_heating_needed(
-            current_water_temperature, target_water_temperature
-        ):
-            if summer_heating_mode == "off":
-                return False
-            if current_water_temperature >= target_water_temperature:
-                return False
-            return True
-
-        needs_space_heating = space_heating_needed(
-            water_temperature_input_sh_in_celsius,
-            set_heating_flow_temperature_sh_in_celsius,
-        )
-        needs_dhw_heating = dhw_heating_needed(
-            self.controller_mode,
-            water_temperature_input_dhw_in_celsius,
-            set_heating_flow_temperature_dhw_in_celsius,
-        )
-
-        if needs_dhw_heating:
-            # DHW has higher priority
-            self.controller_mode = HeatingMode.DOMESTIC_HOT_WATER
-        elif needs_space_heating:
-            self.controller_mode = HeatingMode.SPACE_HEATING
-        else:
-            self.controller_mode = HeatingMode.OFF
-
-    def summer_heating_condition(
-        self,
-        daily_average_outside_temperature_in_celsius: float,
-        set_heating_threshold_temperature_in_celsius: Optional[float],
-    ) -> str:
-        """Set conditions for the district heating."""
-
-        # if no heating threshold is set, the gas_heater is always on
-        if set_heating_threshold_temperature_in_celsius is None:
-            heating_mode = "on"
-
-        # it is too hot for heating
-        elif (
-            daily_average_outside_temperature_in_celsius
-            > set_heating_threshold_temperature_in_celsius
-        ):
-            heating_mode = "off"
-
-        # it is cold enough for heating
-        elif (
-            daily_average_outside_temperature_in_celsius
-            < set_heating_threshold_temperature_in_celsius
-        ):
-            heating_mode = "on"
-
-        else:
-            raise ValueError(
-                f"daily average temperature {daily_average_outside_temperature_in_celsius}°C"
-                f"or heating threshold temperature {set_heating_threshold_temperature_in_celsius}°C is not acceptable."
-            )
-        return heating_mode
 
     def get_cost_opex(
         self,

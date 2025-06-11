@@ -69,7 +69,11 @@ class HeatSourceConfig(cp.ConfigBase):
 
     @classmethod
     def get_default_config_heating(
-        cls, building_name: str = "BUI1", thermal_power_in_watt: float = 6200.0, name: str = "HeatingHeatSource", boiler_type: BoilerType = BoilerType.CONVENTIONAL,
+        cls, 
+        building_name: str = "BUI1", 
+        thermal_power_in_watt: float = 6200.0, 
+        name: str = "HeatingHeatSource", 
+        boiler_type: BoilerType = BoilerType.CONVENTIONAL,
     ) -> "HeatSourceConfig":
         """Returns default configuration of a Heat Source used for heating."""
         config = HeatSourceConfig(
@@ -356,20 +360,14 @@ class HeatSource(cp.Component):
             capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
             device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
         )
-        if config.fuel == lt.LoadTypes.GAS and config.water_vs_heating == lt.InandOutputType.WATER_HEATING:
-            capex_cost_data_class.kpi_tag = KpiTagEnumClass.GAS_HEATER_DOMESTIC_HOT_WATER
-        elif config.fuel == lt.LoadTypes.GAS and config.water_vs_heating == lt.InandOutputType.HEATING:
-            capex_cost_data_class.kpi_tag = KpiTagEnumClass.GAS_HEATER_SPACE_HEATING
-        elif config.fuel == lt.LoadTypes.OIL and config.water_vs_heating == lt.InandOutputType.WATER_HEATING:
-            capex_cost_data_class.kpi_tag = KpiTagEnumClass.OIL_HEATER_DOMESTIC_HOT_WATER
-        elif config.fuel == lt.LoadTypes.OIL and config.water_vs_heating == lt.InandOutputType.HEATING:
-            capex_cost_data_class.kpi_tag = KpiTagEnumClass.OIL_HEATER_SPACE_HEATING
+        if config.fuel == lt.LoadTypes.GAS:
+            capex_cost_data_class.kpi_tag = KpiTagEnumClass.GAS_BOILER
+        elif config.fuel == lt.LoadTypes.OIL:
+            capex_cost_data_class.kpi_tag = KpiTagEnumClass.OIL_BOILER
         elif config.fuel == lt.LoadTypes.DISTRICTHEATING:
             capex_cost_data_class.kpi_tag = KpiTagEnumClass.DISTRICT_HEATING
-        elif config.fuel == lt.LoadTypes.PELLETS and config.water_vs_heating == lt.InandOutputType.WATER_HEATING:
-            capex_cost_data_class.kpi_tag = KpiTagEnumClass.PELLETS_HEATING_DOMESTIC_HOT_WATER
-        elif config.fuel == lt.LoadTypes.PELLETS and config.water_vs_heating == lt.InandOutputType.HEATING:
-            capex_cost_data_class.kpi_tag = KpiTagEnumClass.PELLETS_SPACE_HEATING
+        elif config.fuel == lt.LoadTypes.PELLETS:
+            capex_cost_data_class.kpi_tag = KpiTagEnumClass.PELLET_BOILER
         else:
             capex_cost_data_class = CapexCostDataClass.get_default_capex_cost_data_class()
 
@@ -402,10 +400,7 @@ class HeatSource(cp.Component):
             co2_per_simulated_period_in_kg = self.config.consumption_in_kilowatt_hour * co2_per_unit
             opex_energy_cost_per_simulated_period_in_euro = self.config.consumption_in_kilowatt_hour * euro_per_unit
 
-            if self.config.water_vs_heating == lt.InandOutputType.WATER_HEATING:
-                kpi_tag = KpiTagEnumClass.GAS_HEATER_DOMESTIC_HOT_WATER
-            elif self.config.water_vs_heating == lt.InandOutputType.HEATING:
-                kpi_tag = KpiTagEnumClass.GAS_HEATER_SPACE_HEATING
+            kpi_tag = KpiTagEnumClass.GAS_BOILER
 
         elif self.config.fuel == lt.LoadTypes.OIL:
             co2_per_unit = emissions_and_cost_factors.oil_footprint_in_kg_per_l
@@ -413,10 +408,7 @@ class HeatSource(cp.Component):
             co2_per_simulated_period_in_kg = self.fuel_consumption_in_liter * co2_per_unit
             opex_energy_cost_per_simulated_period_in_euro = self.fuel_consumption_in_liter * euro_per_unit
 
-            if self.config.water_vs_heating == lt.InandOutputType.WATER_HEATING:
-                kpi_tag = KpiTagEnumClass.OIL_HEATER_DOMESTIC_HOT_WATER
-            elif self.config.water_vs_heating == lt.InandOutputType.HEATING:
-                kpi_tag = KpiTagEnumClass.OIL_HEATER_SPACE_HEATING
+            kpi_tag = KpiTagEnumClass.OIL_BOILER
 
         elif self.config.fuel == lt.LoadTypes.DISTRICTHEATING:
             # TODO: implement district heating costs
@@ -434,10 +426,7 @@ class HeatSource(cp.Component):
             co2_per_simulated_period_in_kg = self.config.consumption_in_kilowatt_hour * co2_per_unit
             opex_energy_cost_per_simulated_period_in_euro = self.config.consumption_in_kilowatt_hour * euro_per_unit
 
-            if self.config.water_vs_heating == lt.InandOutputType.WATER_HEATING:
-                kpi_tag = KpiTagEnumClass.PELLETS_HEATING_DOMESTIC_HOT_WATER
-            elif self.config.water_vs_heating == lt.InandOutputType.HEATING:
-                kpi_tag = KpiTagEnumClass.PELLETS_SPACE_HEATING
+            kpi_tag = KpiTagEnumClass.PELLET_BOILER
         else:
             raise ValueError("This loadtype is not implemented for the generic heat source.")
 

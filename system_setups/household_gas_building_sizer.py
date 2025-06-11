@@ -260,7 +260,8 @@ def setup_function(
 
     # Build Gas heater For Space Heating
     my_gas_heater_config = generic_boiler.GenericBoilerConfig.get_scaled_condensing_gas_boiler_config(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+        number_of_apartments_in_building=number_of_apartments
     )
     my_gas_heater = generic_boiler.GenericBoiler(
         config=my_gas_heater_config, my_simulation_parameters=my_simulation_parameters,
@@ -269,24 +270,16 @@ def setup_function(
 
     # Build Gas Heater Controller
     my_gas_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
-        minimal_thermal_power_in_watt=my_gas_heater_config.minimal_thermal_power_in_watt, maximal_thermal_power_in_watt=my_gas_heater_config.maximal_thermal_power_in_watt
+        minimal_thermal_power_in_watt=my_gas_heater_config.minimal_thermal_power_in_watt, 
+        maximal_thermal_power_in_watt=my_gas_heater_config.maximal_thermal_power_in_watt,
+        with_domestic_hot_water_preparation=True
     )
     my_gas_heater_controller = generic_boiler.GenericBoilerController(
         my_simulation_parameters=my_simulation_parameters, config=my_gas_heater_controller_config,
     )
     my_sim.add_component(my_gas_heater_controller, connect_automatically=True)
 
-    # Build Gas Heater for DHW
-    # DHW gas heater and storage configs
-    my_gas_heater_for_dhw_config = generic_boiler.GenericBoilerConfigForDHW.get_scaled_condensing_gas_dhw_boiler_config(
-        number_of_apartments_in_building=number_of_apartments
-    )
-
-    my_gas_heater_controller_dhw_config = generic_boiler.GenericBoilerControllerConfigForDHW.get_default_modulating_dhw_boiler_controller_config(
-        minimal_thermal_power_in_watt=my_gas_heater_for_dhw_config.minimal_thermal_power_in_watt,
-        maximal_thermal_power_in_watt=my_gas_heater_for_dhw_config.maximal_thermal_power_in_watt,
-    )
-
+    # DHW storage configs
     my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
         number_of_apartments=number_of_apartments
     )
@@ -295,17 +288,7 @@ def setup_function(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 
-    my_gas_heater_controller_for_dhw = generic_boiler.GenericBoilerControllerForDHW(
-        my_simulation_parameters=my_simulation_parameters, config=my_gas_heater_controller_dhw_config
-    )
-
-    my_gas_heater_for_dhw = generic_boiler.GenericBoilerForDHW(
-        config=my_gas_heater_for_dhw_config, my_simulation_parameters=my_simulation_parameters
-    )
-
-    my_sim.add_component(my_gas_heater_for_dhw, connect_automatically=True)
     my_sim.add_component(my_dhw_storage, connect_automatically=True)
-    my_sim.add_component(my_gas_heater_controller_for_dhw, connect_automatically=True)
 
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(

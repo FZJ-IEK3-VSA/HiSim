@@ -1,4 +1,4 @@
-"""rSOC."""
+"""Reversible solid oxide cell module."""
 
 # clean
 import os

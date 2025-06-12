@@ -9,15 +9,15 @@ from utspclient.helpers.lpgdata import Households
 from utspclient.helpers.lpgpythonbindings import JsonReference
 from hisim import component as cp
 from hisim.components import (
+    hot_water_storage_modular,
     loadprofilegenerator_utsp_connector,
     building,
     advanced_heat_pump_hplib,
-    advanced_battery_bslib,
+    battery,
     controller_l2_energy_management_system,
     simple_water_storage,
     heat_distribution_system,
     generic_heat_pump_modular,
-    generic_hot_water_storage_modular,
     controller_l1_heatpump,
     electricity_meter,
 )
@@ -257,7 +257,7 @@ class GenericBuilding(cp.Component):
         my_dhw_heatpump_controller_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
             name="DHWHeatpumpController", building_name=building_name,
         )
-        my_dhw_storage_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
+        my_dhw_storage_config = hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
             number_of_apartments=my_building_information.number_of_apartments,
             default_volume_in_liter=450,
             building_name=building_name,
@@ -266,7 +266,7 @@ class GenericBuilding(cp.Component):
             temperature_difference_in_kelvin=my_dhw_heatpump_controller_config.t_max_heating_in_celsius
             - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
         )
-        my_domnestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
+        my_domnestic_hot_water_storage = hot_water_storage_modular.HotWaterStorage(
             my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
         )
         my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
@@ -326,11 +326,11 @@ class GenericBuilding(cp.Component):
             )
 
             # Build Battery
-            my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
+            my_battery_config = battery.BatteryConfig.get_scaled_battery(
                 total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt, building_name=building_name,
             )
-            my_advanced_battery = advanced_battery_bslib.Battery(
-                my_simulation_parameters=my_simulation_parameters, config=my_advanced_battery_config,
+            my_battery = battery.Battery(
+                my_simulation_parameters=my_simulation_parameters, config=my_battery_config,
             )
 
             # -----------------------------------------------------------------------------------------------------------------
@@ -424,8 +424,8 @@ class GenericBuilding(cp.Component):
             )
 
             my_electricity_controller.add_component_input_and_connect(
-                source_object_name=my_advanced_battery.component_name,
-                source_component_output=my_advanced_battery.AcBatteryPowerUsed,
+                source_object_name=my_battery.component_name,
+                source_component_output=my_battery.AcBatteryPowerUsed,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
@@ -433,7 +433,7 @@ class GenericBuilding(cp.Component):
             )
 
             loading_power_input_for_battery_in_watt = my_electricity_controller.add_component_output(
-                source_output_name=f"ElectricityToOrFrom{my_advanced_battery.get_classname()}_",
+                source_output_name=f"ElectricityToOrFrom{my_battery.get_classname()}_",
                 source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET,],
                 source_weight=5,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
@@ -443,8 +443,8 @@ class GenericBuilding(cp.Component):
 
             # -----------------------------------------------------------------------------------------------------------------
             # Connect Battery
-            my_advanced_battery.connect_dynamic_input(
-                input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
+            my_battery.connect_dynamic_input(
+                input_fieldname=battery.Battery.LoadingPowerInput,
                 src_object=loading_power_input_for_battery_in_watt,
             )
 
@@ -463,7 +463,7 @@ class GenericBuilding(cp.Component):
             # Add Remaining Components to Simulation Parameters
 
             my_sim.add_component(my_electricity_meter)
-            my_sim.add_component(my_advanced_battery)
+            my_sim.add_component(my_battery)
             my_sim.add_component(my_electricity_controller)
 
         # when no PV is used, connect electricty meter automatically

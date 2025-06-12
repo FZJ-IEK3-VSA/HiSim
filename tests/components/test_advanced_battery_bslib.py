@@ -2,7 +2,7 @@
 # clean
 import pytest
 from hisim import component as cp
-from hisim.components import advanced_battery_bslib
+from hisim.components import battery
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
@@ -10,7 +10,7 @@ from tests.base import functions_for_testing as fft
 
 
 @pytest.mark.base
-def test_advanced_battery_bslib():
+def test_battery():
     """Performs a basic test for a single calculation of the battery lib."""
     seconds_per_timestep = 60
     my_simulation_parameters = SimulationParameters.one_day_only(
@@ -32,7 +32,7 @@ def test_advanced_battery_bslib():
     lifetime_in_cycles = 5e3
     maintenance_cost_as_percentage_of_investment = 0.02
 
-    my_advanced_battery_config = advanced_battery_bslib.BatteryConfig(
+    my_battery_config = battery.BatteryConfig(
         building_name="BUI1",
         system_id=system_id,
         custom_pv_inverter_power_generic_in_watt=p_inv_custom,
@@ -47,8 +47,8 @@ def test_advanced_battery_bslib():
         lifetime_in_cycles=lifetime_in_cycles,
         maintenance_cost_as_percentage_of_investment=maintenance_cost_as_percentage_of_investment,
     )
-    my_advanced_battery = advanced_battery_bslib.Battery(
-        config=my_advanced_battery_config,
+    my_battery = battery.Battery(
+        config=my_battery_config,
         my_simulation_parameters=my_simulation_parameters,
     )
 
@@ -61,32 +61,32 @@ def test_advanced_battery_bslib():
     )
 
     number_of_outputs = fft.get_number_of_outputs(
-        [my_advanced_battery, loading_power_input]
+        [my_battery, loading_power_input]
     )
     stsv: cp.SingleTimeStepValues = cp.SingleTimeStepValues(number_of_outputs)
 
-    my_advanced_battery.loading_power_input_channel.source_output = loading_power_input
+    my_battery.loading_power_input_channel.source_output = loading_power_input
 
     # Add Global Index and set values for fake Inputs
-    fft.add_global_index_of_components([my_advanced_battery, loading_power_input])
+    fft.add_global_index_of_components([my_battery, loading_power_input])
 
     stsv.values[loading_power_input.global_index] = 4000
 
     timestep = 1000
 
     # Simulate
-    my_advanced_battery.i_simulate(timestep, stsv, False)
+    my_battery.i_simulate(timestep, stsv, False)
     log.information(str(stsv.values))
 
     # Check if set power is charged
     assert (
-        stsv.values[my_advanced_battery.ac_battery_power_channel.global_index] == 4000
+        stsv.values[my_battery.ac_battery_power_channel.global_index] == 4000
     )  # noqa B101
     assert (
-        stsv.values[my_advanced_battery.dc_battery_power_channel.global_index]
+        stsv.values[my_battery.dc_battery_power_channel.global_index]
         == 3807.546
     )  # noqa B101
     assert (
-        stsv.values[my_advanced_battery.state_of_charge_channel.global_index]
+        stsv.values[my_battery.state_of_charge_channel.global_index]
         == 0.006185227970066665
     )  # noqa B101

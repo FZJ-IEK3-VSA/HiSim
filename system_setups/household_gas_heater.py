@@ -25,9 +25,9 @@ from hisim.components import generic_car
 from hisim.components import generic_heat_pump_modular
 from hisim.components import controller_l1_heatpump
 from hisim.components import generic_hot_water_storage_modular
-from repositories.HiSim.hisim.components import pv_system
+from hisim.components import pv_system
 from hisim.components import electricity_meter
-from hisim.components import controller_l2_energy_management_system, advanced_battery_bslib
+from hisim.components import controller_l2_energy_management_system, battery
 from hisim import utils, loadtypes
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 
@@ -345,11 +345,11 @@ def setup_function(
             )
 
             # Build Battery
-            my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
+            my_battery_config = battery.BatteryConfig.get_scaled_battery(
                 total_pv_power_in_watt_peak=my_config.pv_config.power_in_watt
             )
-            my_advanced_battery = advanced_battery_bslib.Battery(
-                my_simulation_parameters=my_simulation_parameters, config=my_advanced_battery_config,
+            my_advanced_battery = battery.Battery(
+                my_simulation_parameters=my_simulation_parameters, config=my_battery_config,
             )
 
             # -----------------------------------------------------------------------------------------------------------------

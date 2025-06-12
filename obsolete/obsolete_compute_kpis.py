@@ -16,7 +16,7 @@ from hisim.utils import HISIMPATH
 from hisim.component_wrapper import ComponentWrapper
 
 from hisim import log
-from hisim.postprocessing.investment_cost_co2 import compute_investment_cost
+from obsolete.investment_cost_co2 import compute_investment_cost
 
 from hisim.components import generic_hot_water_storage_modular
 

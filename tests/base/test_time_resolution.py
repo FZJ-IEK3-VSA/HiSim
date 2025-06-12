@@ -15,15 +15,14 @@ from hisim import utils
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.components import (
     building,
+    hot_water_storage_modular,
     weather,
     loadprofilegenerator_utsp_connector,
-    advanced_heat_pump_hplib,
-    advanced_battery_bslib,
+    battery,
     controller_l2_energy_management_system,
     simple_water_storage,
     heat_distribution_system,
     generic_heat_pump_modular,
-    generic_hot_water_storage_modular,
     controller_l1_heatpump,
     electricity_meter,
 )
@@ -222,14 +221,14 @@ def run_cluster_house(
     my_dhw_heatpump_controller_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
         name="DHWHeatpumpController"
     )
-    my_dhw_storage_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
+    my_dhw_storage_config = hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
         number_of_apartments=my_building_information.number_of_apartments, default_volume_in_liter=450,
     )
     my_dhw_storage_config.compute_default_cycle(
         temperature_difference_in_kelvin=my_dhw_heatpump_controller_config.t_max_heating_in_celsius
         - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
     )
-    my_domnestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
+    my_domnestic_hot_water_storage = hot_water_storage_modular.HotWaterStorage(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
     my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
@@ -280,11 +279,11 @@ def run_cluster_house(
     )
 
     # Build Battery
-    my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
+    my_battery_config = battery.BatteryConfig.get_scaled_battery(
         total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt
     )
-    my_advanced_battery = advanced_battery_bslib.Battery(
-        my_simulation_parameters=my_simulation_parameters, config=my_advanced_battery_config,
+    my_battery = battery.Battery(
+        my_simulation_parameters=my_simulation_parameters, config=my_battery_config,
     )
 
     # -----------------------------------------------------------------------------------------------------------------
@@ -300,8 +299,8 @@ def run_cluster_house(
 
     # -----------------------------------------------------------------------------------------------------------------
     # Connect Battery
-    my_advanced_battery.connect_dynamic_input(
-        input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
+    my_battery.connect_dynamic_input(
+        input_fieldname=battery.Battery.LoadingPowerInput,
         src_object=loading_power_input_for_battery_in_watt,
     )
 
@@ -320,7 +319,7 @@ def run_cluster_house(
     # Add Remaining Components to Simulation Parameters
 
     my_sim.add_component(my_electricity_meter)
-    my_sim.add_component(my_advanced_battery)
+    my_sim.add_component(my_battery)
     my_sim.add_component(my_electricity_controller, connect_automatically=True)
 
     my_sim.run_all_timesteps()

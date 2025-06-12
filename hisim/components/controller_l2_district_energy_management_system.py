@@ -393,7 +393,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
         #  self.add_dynamic_default_connections(self.get_default_connections_from_more_advanced_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_dhw_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_advanced_heat_pump())
-        self.add_dynamic_default_connections(self.get_default_connections_from_advanced_battery())
+        self.add_dynamic_default_connections(self.get_default_connections_from_battery())
 
     def get_default_connections_from_pv_system(
         self,
@@ -591,19 +591,19 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
         )
         return dynamic_connections
 
-    def get_default_connections_from_advanced_battery(
+    def get_default_connections_from_battery(
         self,
     ):
         """Get advanced battery default connections."""
 
-        from hisim.components.advanced_battery_bslib import Battery  # pylint: disable=import-outside-toplevel
+        from hisim.components.battery import Battery  # pylint: disable=import-outside-toplevel
 
         dynamic_connections = []
-        advanced_battery_class_name = Battery.get_classname()
+        battery_class_name = Battery.get_classname()
         dynamic_connections.append(
             dynamic_component.DynamicComponentConnection(
                 source_component_class=Battery,
-                source_class_name=advanced_battery_class_name,
+                source_class_name=battery_class_name,
                 source_component_field_name=Battery.AcBatteryPowerUsed,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,

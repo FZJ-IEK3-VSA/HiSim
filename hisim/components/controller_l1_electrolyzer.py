@@ -166,9 +166,9 @@ class L1GenericElectrolyzerController(cp.Component):
     def get_default_connections_from_h2_storage(self):
         """Sets default connections for the hydrogen storage in the electrolyzer controller."""
         # use importlib for importing the other component in order to avoid circular-import errors
-        component_module_name = "hisim.components.generic_hydrogen_storage"
+        component_module_name = "hisim.components.hydrogen_storage"
         component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "GenericHydrogenStorage")
+        component_class = getattr(component_module, "HydrogenStorage")
         connections = []
         h2_storage_classname = component_class.get_classname()
         connections.append(

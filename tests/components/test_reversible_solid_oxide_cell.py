@@ -1,10 +1,10 @@
-"""Test for generic rsoc."""
+"""Test for reversible solid oxide cell."""
 
 # clean
 import pytest
 from tests.base import functions_for_testing as fft
 from hisim import component as cp
-from hisim.components import generic_rsoc
+from hisim.components import reversible_solid_oxide_cell
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
 from hisim import log
@@ -38,7 +38,7 @@ def test_electrolyzer():
 
     # ===================================================================================================================
     # Setup Electrolyzer
-    my_rsoc_config = generic_rsoc.RsocConfig(
+    my_rsoc_config = reversible_solid_oxide_cell.RsocConfig(
         building_name="BUI1",
         name=name,
         nom_load_soec=nom_load_soec,
@@ -54,7 +54,7 @@ def test_electrolyzer():
         ramp_up_rate_sofc=ramp_up_rate_sofc,
         ramp_down_rate_sofc=ramp_down_rate_sofc,
     )
-    my_rsoc = generic_rsoc.Rsoc(
+    my_rsoc = reversible_solid_oxide_cell.Rsoc(
         config=my_rsoc_config, my_simulation_parameters=my_simulation_parameters
     )
 
@@ -93,4 +93,4 @@ def test_electrolyzer():
     )  # should be zero because the systems ramp up is slow
     assert stsv.values[my_rsoc.sofc_hydrogen_flow_rate.global_index] == 0.0
 
-    # python -m pytest ../tests/test_generic_rSOC.py
+    # python -m pytest ../tests/test_reversible_solid_oxide_cell.py

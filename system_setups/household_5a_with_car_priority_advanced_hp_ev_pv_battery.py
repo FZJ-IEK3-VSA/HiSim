@@ -17,7 +17,7 @@ from utspclient.helpers.lpgdata import (
 from hisim import loadtypes as lt
 from hisim import utils
 from hisim.components import (
-    advanced_battery_bslib,
+    battery,
     advanced_ev_battery_bslib,
     advanced_heat_pump_hplib,
     building,
@@ -36,7 +36,7 @@ from hisim.components import (
 from hisim.simulator import SimulationParameters
 from hisim.system_setup_configuration import SystemSetupConfigBase
 from hisim.units import Celsius, Quantity, Seconds, Watt
-from repositories.HiSim.hisim.components import pv_system
+from hisim.components import pv_system
 
 __authors__ = "Markus Blasberg"
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
@@ -77,7 +77,7 @@ class HouseholdAdvancedHpEvPvBatteryConfig(SystemSetupConfigBase):
     car_battery_config: advanced_ev_battery_bslib.CarBatteryConfig
     car_battery_controller_config: controller_l1_generic_ev_charge.ChargingStationConfig
     electricity_meter_config: electricity_meter.ElectricityMeterConfig
-    advanced_battery_config: advanced_battery_bslib.BatteryConfig
+    battery_config: battery.BatteryConfig
     electricity_controller_config: controller_l2_energy_management_system.EMSConfig
 
     @classmethod
@@ -180,7 +180,7 @@ class HouseholdAdvancedHpEvPvBatteryConfig(SystemSetupConfigBase):
                 )
             ),
             electricity_meter_config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
-            advanced_battery_config=advanced_battery_bslib.BatteryConfig.get_scaled_battery(
+            battery_config=battery.BatteryConfig.get_scaled_battery(
                 total_pv_power_in_watt_peak=pv_config.power_in_watt
             ),
             electricity_controller_config=(controller_l2_energy_management_system.EMSConfig.get_default_config_ems()),
@@ -412,8 +412,8 @@ def setup_function(
     )
 
     # Build Battery
-    my_advanced_battery = advanced_battery_bslib.Battery(
-        my_simulation_parameters=my_simulation_parameters, config=my_config.advanced_battery_config,
+    my_battery = battery.Battery(
+        my_simulation_parameters=my_simulation_parameters, config=my_config.battery_config,
     )
 
     # -----------------------------------------------------------------------------------------------------------------
@@ -572,8 +572,8 @@ def setup_function(
 
     # connect EMS with Battery
     my_electricity_controller.add_component_input_and_connect(
-        source_object_name=my_advanced_battery.component_name,
-        source_component_output=my_advanced_battery.AcBatteryPowerUsed,
+        source_object_name=my_battery.component_name,
+        source_component_output=my_battery.AcBatteryPowerUsed,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
@@ -591,8 +591,8 @@ def setup_function(
 
     # -----------------------------------------------------------------------------------------------------------------
     # Connect Battery
-    my_advanced_battery.connect_dynamic_input(
-        input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
+    my_battery.connect_dynamic_input(
+        input_fieldname=battery.Battery.LoadingPowerInput,
         src_object=electricity_to_or_from_battery_target,
     )
 
@@ -622,7 +622,7 @@ def setup_function(
     my_sim.add_component(my_domnestic_hot_water_heatpump_controller, connect_automatically=True)
     my_sim.add_component(my_domnestic_hot_water_heatpump, connect_automatically=True)
     my_sim.add_component(my_electricity_meter)
-    my_sim.add_component(my_advanced_battery)
+    my_sim.add_component(my_battery)
     my_sim.add_component(my_electricity_controller)
     for car in my_cars:
         my_sim.add_component(car)

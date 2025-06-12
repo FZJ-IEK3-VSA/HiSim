@@ -7,7 +7,7 @@ from typing import Optional, Any
 # import hisim.components.random_numbers
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
-from hisim.components import advanced_battery_bslib
+from hisim.components import battery
 from hisim.components import weather
 
 # from hisim.components import generic_gas_heater
@@ -47,25 +47,25 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
 
     my_sim.set_simulation_parameters(my_simulation_parameters)
 
-    my_advanced_battery_config_1 = advanced_battery_bslib.BatteryConfig.get_default_config()
-    my_advanced_battery_config_1.name = "Battery1"
-    my_advanced_battery_config_1.system_id = "SG1"
-    my_advanced_battery_config_1.custom_battery_capacity_generic_in_kilowatt_hour = 10.0
-    my_advanced_battery_config_1.custom_pv_inverter_power_generic_in_watt = 5.0
-    my_advanced_battery_config_1.source_weight = 1
+    my_battery_config_1 = battery.BatteryConfig.get_default_config()
+    my_battery_config_1.name = "Battery1"
+    my_battery_config_1.system_id = "SG1"
+    my_battery_config_1.custom_battery_capacity_generic_in_kilowatt_hour = 10.0
+    my_battery_config_1.custom_pv_inverter_power_generic_in_watt = 5.0
+    my_battery_config_1.source_weight = 1
 
-    my_advanced_battery_config_2 = advanced_battery_bslib.BatteryConfig.get_default_config()
-    my_advanced_battery_config_2.name = "Battery2"
-    my_advanced_battery_config_2.system_id = "SG1"
-    my_advanced_battery_config_2.custom_battery_capacity_generic_in_kilowatt_hour = 5.0
-    my_advanced_battery_config_2.custom_pv_inverter_power_generic_in_watt = 2.5
-    my_advanced_battery_config_2.source_weight = 2
+    my_battery_config_2 = battery.BatteryConfig.get_default_config()
+    my_battery_config_2.name = "Battery2"
+    my_battery_config_2.system_id = "SG1"
+    my_battery_config_2.custom_battery_capacity_generic_in_kilowatt_hour = 5.0
+    my_battery_config_2.custom_pv_inverter_power_generic_in_watt = 2.5
+    my_battery_config_2.source_weight = 2
 
-    my_advanced_battery_1 = advanced_battery_bslib.Battery(
-        my_simulation_parameters=my_simulation_parameters, config=my_advanced_battery_config_1,
+    my_battery_1 = battery.Battery(
+        my_simulation_parameters=my_simulation_parameters, config=my_battery_config_1,
     )
-    my_advanced_battery_2 = advanced_battery_bslib.Battery(
-        my_simulation_parameters=my_simulation_parameters, config=my_advanced_battery_config_2,
+    my_battery_2 = battery.Battery(
+        my_simulation_parameters=my_simulation_parameters, config=my_battery_config_2,
     )
 
     my_advanced_fuel_cell_config_1 = advanced_fuel_cell.CHPConfig.get_default_config()
@@ -116,16 +116,16 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         source_weight=999,
     )
     my_cl2.add_component_input_and_connect(
-        source_object_name=my_advanced_battery_1.component_name,
-        source_component_output=my_advanced_battery_1.AcBatteryPowerUsed,
+        source_object_name=my_battery_1.component_name,
+        source_component_output=my_battery_1.AcBatteryPowerUsed,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
         source_weight=1,
     )
     my_cl2.add_component_input_and_connect(
-        source_object_name=my_advanced_battery_2.component_name,
-        source_component_output=my_advanced_battery_2.AcBatteryPowerUsed,
+        source_object_name=my_battery_2.component_name,
+        source_component_output=my_battery_2.AcBatteryPowerUsed,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
@@ -135,7 +135,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     electricity_to_or_from_battery_target_1 = my_cl2.add_component_output(
         source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
         source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-        source_weight=my_advanced_battery_1.source_weight,
+        source_weight=my_battery_1.source_weight,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         output_description="Target electricity for battery controller (I). ",
@@ -143,18 +143,18 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     electricity_to_or_from_battery_target_2 = my_cl2.add_component_output(
         source_output_name=lt.InandOutputType.ELECTRICITY_TARGET,
         source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_TARGET],
-        source_weight=my_advanced_battery_2.source_weight,
+        source_weight=my_battery_2.source_weight,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         output_description="Target electricity for battery controller (II). ",
     )
 
-    my_advanced_battery_1.connect_dynamic_input(
-        input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
+    my_battery_1.connect_dynamic_input(
+        input_fieldname=battery.Battery.LoadingPowerInput,
         src_object=electricity_to_or_from_battery_target_1,
     )
-    my_advanced_battery_2.connect_dynamic_input(
-        input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
+    my_battery_2.connect_dynamic_input(
+        input_fieldname=battery.Battery.LoadingPowerInput,
         src_object=electricity_to_or_from_battery_target_2,
     )
 
@@ -199,8 +199,8 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         input_fieldname=advanced_fuel_cell.CHP.ElectricityFromCHPTarget, src_object=electricity_from_fuel_cell_target_2,
     )
 
-    my_sim.add_component(my_advanced_battery_1)
-    my_sim.add_component(my_advanced_battery_2)
+    my_sim.add_component(my_battery_1)
+    my_sim.add_component(my_battery_2)
     my_sim.add_component(my_advanced_fuel_cell_1)
     my_sim.add_component(my_advanced_fuel_cell_2)
     my_sim.add_component(my_cl2)

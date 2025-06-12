@@ -25,7 +25,7 @@ __status__ = ""
 
 @dataclass_json
 @dataclass
-class GenericHydrogenStorageConfig(cp.ConfigBase):
+class HydrogenStorageConfig(cp.ConfigBase):
     """Generic hydrogen storage config class."""
 
     building_name: str
@@ -57,7 +57,7 @@ class GenericHydrogenStorageConfig(cp.ConfigBase):
         building_name: str = "BUI1",
     ) -> Any:
         """Returns default configuration for hydrogen storage."""
-        config = GenericHydrogenStorageConfig(
+        config = HydrogenStorageConfig(
             building_name=building_name,
             name="HydrogenStorage",
             source_weight=source_weight,
@@ -72,7 +72,7 @@ class GenericHydrogenStorageConfig(cp.ConfigBase):
         return config
 
 
-class GenericHydrogenStorageState:
+class HydrogenStorageState:
     """Generic hydrogen storage state that saves the state of the hydrogen storage."""
 
     def __init__(self, fill: float = 0) -> None:
@@ -81,10 +81,10 @@ class GenericHydrogenStorageState:
 
     def clone(self) -> Any:
         """Clones the state."""
-        return GenericHydrogenStorageState(fill=self.fill)
+        return HydrogenStorageState(fill=self.fill)
 
 
-class GenericHydrogenStorage(cp.Component):
+class HydrogenStorage(cp.Component):
     """Generic hydrogen storage is a simple implementation of a hydrogen storage.
 
     Components to connect to:
@@ -102,7 +102,7 @@ class GenericHydrogenStorage(cp.Component):
     def __init__(
         self,
         my_simulation_parameters: SimulationParameters,
-        config: GenericHydrogenStorageConfig,
+        config: HydrogenStorageConfig,
         my_display_config: cp.DisplayConfig = cp.DisplayConfig(),
     ) -> None:
         """Initialize the class."""
@@ -119,8 +119,8 @@ class GenericHydrogenStorage(cp.Component):
         self.loss_factor = (
             (config.loss_factor_per_day / 100) * self.my_simulation_parameters.seconds_per_timestep / (24 * 3600)
         )
-        self.state = GenericHydrogenStorageState()
-        self.previous_state = GenericHydrogenStorageState()
+        self.state = HydrogenStorageState()
+        self.previous_state = HydrogenStorageState()
 
         self.hydrogen_input_channel: cp.ComponentInput = self.add_input(
             self.component_name,
@@ -160,7 +160,7 @@ class GenericHydrogenStorage(cp.Component):
         chp_classname = generic_chp.SimpleCHP.get_classname()
         connections.append(
             cp.ComponentConnection(
-                GenericHydrogenStorage.HydrogenOutput,
+                HydrogenStorage.HydrogenOutput,
                 chp_classname,
                 generic_chp.SimpleCHP.FuelDelivered,
             )
@@ -176,7 +176,7 @@ class GenericHydrogenStorage(cp.Component):
         electrolyzer_classname = generic_electrolyzer.GenericElectrolyzer.get_classname()
         connections.append(
             cp.ComponentConnection(
-                GenericHydrogenStorage.HydrogenInput,
+                HydrogenStorage.HydrogenInput,
                 electrolyzer_classname,
                 generic_electrolyzer.GenericElectrolyzer.HydrogenOutput,
             )

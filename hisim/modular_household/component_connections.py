@@ -16,7 +16,7 @@ import hisim.loadtypes as lt
 from hisim import utils
 from hisim.component import Component
 from hisim.components import (
-    advanced_battery_bslib,
+    battery,
     advanced_ev_battery_bslib,
     building,
     controller_l1_building_heating,
@@ -31,14 +31,14 @@ from hisim.components import (
     generic_heat_pump_modular,
     generic_heat_source,
     generic_hot_water_storage_modular,
-    generic_hydrogen_storage,
-    generic_smart_device,
+    hydrogen_storage,
     weather,
     loadprofilegenerator_utsp_connector
 )
 
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.simulator import SimulationParameters
+from obsolete import generic_smart_device
 from repositories.HiSim.hisim.components import pv_system
 
 
@@ -379,7 +379,7 @@ def configure_battery(
 
     """
     if battery_capacity is not None:
-        my_advanced_battery_config = advanced_battery_bslib.BatteryConfig(
+        my_battery_config = battery.BatteryConfig(
             custom_battery_capacity_generic_in_kilowatt_hour=battery_capacity,
             custom_pv_inverter_power_generic_in_watt=battery_capacity * 0.5 * 1e3,
             source_weight=count,
@@ -395,21 +395,21 @@ def configure_battery(
             maintenance_cost_as_percentage_of_investment=0.02,
         )
     else:
-        my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_default_config()
-        my_advanced_battery_config.source_weight = count
+        my_battery_config = battery.BatteryConfig.get_default_config()
+        my_battery_config.source_weight = count
     count += 1
-    my_advanced_battery = advanced_battery_bslib.Battery(
+    my_battery = battery.Battery(
         my_simulation_parameters=my_simulation_parameters,
-        config=my_advanced_battery_config,
+        config=my_battery_config,
     )
 
     my_electricity_controller.add_component_input_and_connect(
-        source_object_name=my_advanced_battery.component_name,
-        source_component_output=my_advanced_battery.AcBatteryPowerUsed,
+        source_object_name=my_battery.component_name,
+        source_component_output=my_battery.AcBatteryPowerUsed,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[lt.ComponentType.BATTERY, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
-        source_weight=my_advanced_battery.source_weight,
+        source_weight=my_battery.source_weight,
     )
 
     electricity_to_or_from_battery_target = my_electricity_controller.add_component_output(
@@ -418,17 +418,17 @@ def configure_battery(
             lt.ComponentType.BATTERY,
             lt.InandOutputType.ELECTRICITY_TARGET,
         ],
-        source_weight=my_advanced_battery.source_weight,
+        source_weight=my_battery.source_weight,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         output_description="Target electricity for Battery Control. ",
     )
 
-    my_advanced_battery.connect_dynamic_input(
-        input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
+    my_battery.connect_dynamic_input(
+        input_fieldname=battery.Battery.LoadingPowerInput,
         src_object=electricity_to_or_from_battery_target,
     )
-    my_sim.add_component(my_advanced_battery)
+    my_sim.add_component(my_battery)
 
     return count
 
@@ -1433,13 +1433,13 @@ def configure_electrolyzer_and_h2_storage(
     )
 
     # hydrogen storage default configuration
-    h2_storage_config = generic_hydrogen_storage.GenericHydrogenStorageConfig.get_default_config(
+    h2_storage_config = hydrogen_storage.HydrogenStorageConfig.get_default_config(
         capacity=h2_storage_size,
         max_charging_rate=electrolyzer_power / (3.6e3 * 3.939e4),
         max_discharging_rate=fuel_cell_power / (3.6e3 * 3.939e4),
         source_weight=count,
     )
-    my_h2storage = generic_hydrogen_storage.GenericHydrogenStorage(
+    my_h2storage = hydrogen_storage.HydrogenStorage(
         my_simulation_parameters=my_simulation_parameters, config=h2_storage_config
     )
     my_h2storage.connect_only_predefined_connections(my_electrolyzer)

@@ -14,7 +14,7 @@
 # from hisim.components import weather
 # from hisim.components import pv_system
 # from hisim.components import csvloader
-# from hisim.components import advanced_battery_bslib
+# from hisim.components import battery
 # from hisim.components import generic_hot_water_storage
 # from hisim.components import generic_gas_heater
 # from hisim.components import building
@@ -139,9 +139,9 @@
 #     my_pvs = {my_cfg.set_name(generic_pv_system.PVSystem): my_pvs_config}
 #     # my_cfg.add_component(my_pvs)
 #     # Battery
-#     my_battery_config = advanced_battery_bslib.Battery.get_default_config()
+#     my_battery_config = battery.Battery.get_default_config()
 #     my_battery = {
-#         my_cfg.set_name(advanced_battery_bslib.Battery): my_battery_config
+#         my_cfg.set_name(battery.Battery): my_battery_config
 #     }
 #     my_cfg.add_component(my_battery)
 #     # Controller

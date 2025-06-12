@@ -25,11 +25,6 @@ from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.components.weather import Weather
 
-# from hisim.components.generic_battery import GenericBattery
-# from hisim.components.loadprofilegenerator_connector import Occupancy
-# from hisim.components.generic_price_signal import PriceSignal
-# from hisim.components.air_conditioner import AirConditioner
-# from hisim.components.pv_system import PVSystem
 from hisim import log
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 

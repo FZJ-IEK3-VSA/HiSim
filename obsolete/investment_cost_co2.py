@@ -7,18 +7,18 @@ from typing import List, Tuple
 import pandas as pd
 from hisim.components import (
     generic_hot_water_storage_modular,
-    generic_smart_device,
     generic_heat_source,
     advanced_battery_bslib,
     generic_car,
     generic_chp,
-    generic_hydrogen_storage,
     generic_electrolyzer,
+    hydrogen_storage,
 )
 from hisim.utils import HISIMPATH
 from hisim.loadtypes import LoadTypes
 from hisim.component_wrapper import ComponentWrapper
-from repositories.HiSim.hisim.components import pv_system
+from obsolete import generic_smart_device
+from hisim.components import pv_system
 
 
 def read_in_component_costs() -> pd.DataFrame:
@@ -81,7 +81,7 @@ def compute_investment_cost(components: List[ComponentWrapper],) -> Tuple[float,
             elif component.my_component.config.use == LoadTypes.HYDROGEN:
                 column = price_frame.iloc[price_frame.index == "Hydrogen fuelcell"]
             component_capacity = component.my_component.config.p_fuel * 1e-3
-        elif isinstance(component.my_component, generic_hydrogen_storage.GenericHydrogenStorage):
+        elif isinstance(component.my_component, hydrogen_storage.HydrogenStorage):
             column = price_frame.iloc[price_frame.index == "Hydrogen Storage"]
             component_capacity = component.my_component.config.max_capacity
         elif isinstance(component.my_component, generic_electrolyzer.GenericElectrolyzer):

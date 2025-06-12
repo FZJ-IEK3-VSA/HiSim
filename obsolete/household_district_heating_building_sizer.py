@@ -13,10 +13,10 @@ from utspclient.helpers.lpgpythonbindings import JsonReference
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
-from repositories.HiSim.hisim.components import pv_system
+from hisim.components import pv_system
 from hisim.components import building
 from hisim.components import (
-    advanced_battery_bslib,
+    battery,
     controller_l2_energy_management_system,
     heat_distribution_system,
     generic_district_heating,
@@ -384,11 +384,11 @@ def setup_function(
         )
 
         # Build Battery
-        my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
+        my_battery_config = battery.BatteryConfig.get_scaled_battery(
             total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt
         )
-        my_advanced_battery = advanced_battery_bslib.Battery(
-            my_simulation_parameters=my_simulation_parameters, config=my_advanced_battery_config,
+        my_battery = battery.Battery(
+            my_simulation_parameters=my_simulation_parameters, config=my_battery_config,
         )
 
         # -----------------------------------------------------------------------------------------------------------------
@@ -404,8 +404,8 @@ def setup_function(
 
         # -----------------------------------------------------------------------------------------------------------------
         # Connect Battery
-        my_advanced_battery.connect_dynamic_input(
-            input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
+        my_battery.connect_dynamic_input(
+            input_fieldname=battery.Battery.LoadingPowerInput,
             src_object=loading_power_input_for_battery_in_watt,
         )
 
@@ -452,7 +452,7 @@ def setup_function(
         # Add Remaining Components to Simulation Parameters
 
         my_sim.add_component(my_electricity_meter)
-        my_sim.add_component(my_advanced_battery)
+        my_sim.add_component(my_battery)
         my_sim.add_component(my_electricity_controller, connect_automatically=True)
 
     # when no PV is used, connect electricty meter automatically

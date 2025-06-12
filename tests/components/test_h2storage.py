@@ -10,7 +10,7 @@ from hisim import component as cp
 
 from hisim import loadtypes as lt
 from hisim.simulationparameters import SimulationParameters
-from hisim.components import generic_hydrogen_storage
+from hisim.components import hydrogen_storage
 
 
 @pytest.mark.base
@@ -23,9 +23,9 @@ def test_chp_system():
     )
 
     my_h2_storage_config = (
-        generic_hydrogen_storage.GenericHydrogenStorageConfig.get_default_config()
+        hydrogen_storage.HydrogenStorageConfig.get_default_config()
     )
-    my_h2_storage = generic_hydrogen_storage.GenericHydrogenStorage(
+    my_h2_storage = hydrogen_storage.HydrogenStorage(
         config=my_h2_storage_config, my_simulation_parameters=my_simulation_parameters
     )
 

@@ -161,19 +161,19 @@ HISIMPATH: Dict[str, Any] = {
         "VDI 4655",
     ),
     "report": os.path.join(hisim_abs_path, "results", "report.pdf"),
-    "advanced_battery": {
-        "parameter": os.path.join(hisim_abs_path, "inputs", "advanced_battery", "parameter", "PerModPAR.xlsx"),
+    "battery": {
+        "parameter": os.path.join(hisim_abs_path, "inputs", "battery", "parameter", "PerModPAR.xlsx"),
         "reference_case": os.path.join(
             hisim_abs_path,
             "inputs",
-            "advanced_battery",
+            "battery",
             "reference_case",
             "ref_case_data.npz",
         ),
-        "siemens_junelight": os.path.join(hisim_abs_path, "inputs", "advanced_battery", "Siemens_Junelight.npy"),
+        "siemens_junelight": os.path.join(hisim_abs_path, "inputs", "battery", "Siemens_Junelight.npy"),
     },
     "LoadProfileGenerator_export_directory": os.path.join(os.path.join("D:", os.sep, "Work")),
-    "bat_parameter": os.path.join(hisim_abs_path, "inputs", "advanced_battery", "Siemens_Junelight.npy"),
+    "bat_parameter": os.path.join(hisim_abs_path, "inputs", "battery", "Siemens_Junelight.npy"),
     "modular_household": os.path.join(hisim_abs_path, "modular_household"),
     "price_signal": {
         "PricePurchase": os.path.join(hisim_inputs, "price_signal", "PricePurchase.csv"),

@@ -10,7 +10,7 @@ from repositories.HiSim.hisim.components import pv_system
 from hisim.components import building
 from hisim.components import (
     advanced_heat_pump_hplib,
-    advanced_battery_bslib,
+    battery,
     controller_l2_energy_management_system,
 )
 from hisim.components import simple_water_storage
@@ -167,11 +167,11 @@ def setup_function(
     )
 
     # Build Battery
-    my_advanced_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
+    my_battery_config = battery.BatteryConfig.get_scaled_battery(
         total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt
     )
-    my_advanced_battery = advanced_battery_bslib.Battery(
-        my_simulation_parameters=my_simulation_parameters, config=my_advanced_battery_config,
+    my_battery = battery.Battery(
+        my_simulation_parameters=my_simulation_parameters, config=my_battery_config,
     )
 
     # -----------------------------------------------------------------------------------------------------------------
@@ -187,8 +187,8 @@ def setup_function(
 
     # -----------------------------------------------------------------------------------------------------------------
     # Connect Battery
-    my_advanced_battery.connect_dynamic_input(
-        input_fieldname=advanced_battery_bslib.Battery.LoadingPowerInput,
+    my_battery.connect_dynamic_input(
+        input_fieldname=battery.Battery.LoadingPowerInput,
         src_object=loading_power_input_for_battery_in_watt,
     )
 
@@ -251,5 +251,5 @@ def setup_function(
     my_sim.add_component(my_simple_hot_water_storage, connect_automatically=True)
     my_sim.add_component(my_heat_pump_controller, connect_automatically=True)
     my_sim.add_component(my_heat_pump, connect_automatically=True)
-    my_sim.add_component(my_advanced_battery)
+    my_sim.add_component(my_battery)
     my_sim.add_component(my_electricity_controller, connect_automatically=False)

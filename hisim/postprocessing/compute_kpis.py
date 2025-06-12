@@ -729,7 +729,7 @@ class KpiGenerator(JSONWizard):
                         power_timeseries_in_watt=result_dataframe["total_consumption"] - self_consumption,
                         timeresolution=self.simulation_parameters.seconds_per_timestep,
                     )
-                )  # Todo: is this correct? (maybe not so important, only used if generic_price_signal is used
+                )  # Todo: is this correct? (maybe not so important, only used if obsolete.generic_price_signal is used
             else:
                 costs_for_energy_use_in_euro = (
                     costs_for_energy_use_in_euro

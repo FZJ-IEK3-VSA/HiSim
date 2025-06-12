@@ -11,10 +11,10 @@ import numpy as np
 from hisim.components import (
     building,
     advanced_heat_pump_hplib,
-    advanced_battery_bslib,
+    battery,
+    hot_water_storage_modular,
     simple_water_storage,
     generic_heat_pump_modular,
-    generic_hot_water_storage_modular,
 )
 from hisim.units import Quantity, Watt
 
@@ -201,7 +201,7 @@ def simulation_for_one_timestep(
     )
 
     # Set Battery
-    my_battery_config = advanced_battery_bslib.BatteryConfig.get_scaled_battery(
+    my_battery_config = battery.BatteryConfig.get_scaled_battery(
         total_pv_power_in_watt_peak=my_pv_config.power_in_watt
     )
 
@@ -211,7 +211,7 @@ def simulation_for_one_timestep(
     )
 
     # Set DHW Storage modular
-    my_storage_for_dhw_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
+    my_storage_for_dhw_config = hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
         my_residence_information.number_of_apartments
     )
 

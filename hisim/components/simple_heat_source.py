@@ -60,6 +60,8 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
     const_source: Optional[SimpleHeatSourceType]
     fluid_type: FluidMediaType
     mass_fraction_of_fluid_mixed_in_water: float
+    massflow_nominal_in_kg_per_s: Optional[float]
+    use_external_massflow_as_signal_input_for_nominal_massflow: bool
     #: CO2 footprint of investment in kg
     co2_footprint: float
     #: cost for investment in Euro
@@ -88,6 +90,8 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
             temperature_out_in_celsius=None,
             fluid_type=FluidMediaType.PROPYLEN_GLYCOL,
             mass_fraction_of_fluid_mixed_in_water=0.20,
+            massflow_nominal_in_kg_per_s=0.5,
+            use_external_massflow_as_signal_input_for_nominal_massflow=False,
             co2_footprint=100,  # Todo: check value
             cost=2000,  # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
             lifetime=25,
@@ -109,6 +113,8 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
             temperature_out_in_celsius=5,
             fluid_type=FluidMediaType.PROPYLEN_GLYCOL,
             mass_fraction_of_fluid_mixed_in_water=0.20,
+            massflow_nominal_in_kg_per_s=0.5,
+            use_external_massflow_as_signal_input_for_nominal_massflow=False,
             co2_footprint=100,  # Todo: check value
             cost=2000,
             # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
@@ -132,6 +138,8 @@ class SimpleHeatSourceConfig(cp.ConfigBase):
             temperature_out_in_celsius=None,
             fluid_type=FluidMediaType.PROPYLEN_GLYCOL,
             mass_fraction_of_fluid_mixed_in_water=0.20,
+            massflow_nominal_in_kg_per_s=0.5,
+            use_external_massflow_as_signal_input_for_nominal_massflow=False,
             co2_footprint=100,  # Todo: check value
             cost=2000,
             # value from https://www.buderus.de/de/waermepumpe/kosten-einer-erdwaermeanlage-im-ueberblick for earth collector
@@ -165,6 +173,7 @@ class SimpleHeatSource(cp.Component):
     # Outputs
     ThermalPowerDelivered = "ThermalPowerDelivered"
     TemperatureOutput = "TemperatureOutput"
+    MassFlowOutput = "MassFlowOutput"
 
     def __init__(
         self,
@@ -186,6 +195,12 @@ class SimpleHeatSource(cp.Component):
 
         if self.config.const_source is None:  # type: ignore
             raise ValueError("const_source is not set.")
+
+        if (self.config.use_external_massflow_as_signal_input_for_nominal_massflow and
+                self.config.massflow_nominal_in_kg_per_s is None):
+            raise ValueError(
+                "use_external_massflow_as_signal_input is True, so massflow_nominal_in_kg_per_s can't be None."
+            )
 
         if self.config.const_source == SimpleHeatSourceType.CONSTANT_THERMAL_POWER:  # type: ignore
             self.power_th_in_watt = self.config.power_th_in_watt
@@ -248,6 +263,13 @@ class SimpleHeatSource(cp.Component):
             load_type=lt.LoadTypes.TEMPERATURE,
             unit=lt.Units.CELSIUS,
             output_description="Temperature Output",
+        )
+        self.massflow_output_channel: cp.ComponentOutput = self.add_output(
+            object_name=self.component_name,
+            field_name=self.MassFlowOutput,
+            load_type=lt.LoadTypes.VOLUME,
+            unit=lt.Units.KG_PER_SEC,
+            output_description="Massflow Output",
         )
 
         self.add_default_connections(self.get_default_connections_from_weather())
@@ -315,6 +337,10 @@ class SimpleHeatSource(cp.Component):
         massflow_in_kg_per_sec = stsv.get_input_value(
             self.massflow_input_channel
         )
+
+        if self.config.use_external_massflow_as_signal_input_for_nominal_massflow and massflow_in_kg_per_sec != 0:
+            massflow_in_kg_per_sec = self.config.massflow_nominal_in_kg_per_s
+
         temperature_input_in_celsius = stsv.get_input_value(
             self.temperature_input_channel
         )
@@ -349,6 +375,7 @@ class SimpleHeatSource(cp.Component):
         else:
             raise KeyError("Unknown heat source type")
 
+        stsv.set_output_value(self.massflow_output_channel, massflow_in_kg_per_sec)  # type: ignore
         stsv.set_output_value(self.thermal_power_delivered_channel, thermal_power_in_watt)  # type: ignore
         stsv.set_output_value(self.temperature_output_channel, temperature_output)
 

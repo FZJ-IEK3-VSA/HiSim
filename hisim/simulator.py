@@ -319,18 +319,35 @@ class Simulator:
             colum_names.append(column_name)
             log.debug("Output column: " + column_name)
         self.results_data_frame = pd.DataFrame(data=all_result_lines, columns=colum_names)
-        # todo: fix this constant
-        df_index = pd.date_range("2021-01-01 00:00:00", periods=len(self.results_data_frame), freq="T")
+        df_index = pd.date_range(
+            start=self._simulation_parameters.start_date,
+            end=self._simulation_parameters.end_date,
+            freq=f"{self._simulation_parameters.seconds_per_timestep}S",
+        )[:-1]
         self.results_data_frame.index = df_index
         end_counter = time.perf_counter()
         execution_time = end_counter - start_counter
         log.information(f"Simulation took {execution_time:1.2f}s.")
-        (
-            results_merged_cumulative,
-            results_merged_monthly,
-            results_merged_daily,
-            results_merged_hourly,
-        ) = self.get_std_results(self.results_data_frame)
+
+        if (
+                postprocessingoptions.PostProcessingOptions.PLOT_MONTHLY_BAR_CHARTS in self._simulation_parameters.post_processing_options or
+                postprocessingoptions.PostProcessingOptions.PREPARE_OUTPUTS_FOR_SCENARIO_EVALUATION in self._simulation_parameters.post_processing_options or
+                postprocessingoptions.PostProcessingOptions.MAKE_OPERATION_RESULTS_FOR_WEBTOOL in self._simulation_parameters.post_processing_options or
+                postprocessingoptions.PostProcessingOptions.MAKE_RESULT_JSON_FOR_WEBTOOL in self._simulation_parameters.post_processing_options or
+                postprocessingoptions.PostProcessingOptions.EXPORT_MONTHLY_RESULTS in self._simulation_parameters.post_processing_options
+        ):
+            log.information("Preparing std results for post processing")
+            (
+                results_merged_cumulative,
+                results_merged_monthly,
+                results_merged_daily,
+                results_merged_hourly,
+            ) = self.get_std_results(self.results_data_frame)
+        else:
+            results_merged_cumulative = None
+            results_merged_monthly = None
+            results_merged_daily = None
+            results_merged_hourly = None
 
         ppdt = PostProcessingDataTransfer(
             results=self.results_data_frame,
@@ -387,22 +404,18 @@ class Simulator:
         self, results_data_frame: pd.DataFrame
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Converts results into a pretty dataframe for post processing."""
-        pd_timeline = pd.date_range(
-            start=self._simulation_parameters.start_date,
-            end=self._simulation_parameters.end_date,
-            freq=f"{self._simulation_parameters.seconds_per_timestep}S",
-        )[:-1]
+
         n_columns = results_data_frame.shape[1]
 
-        results_data_frame.index = pd_timeline
         results_merged_monthly = pd.DataFrame()
         results_merged_daily = pd.DataFrame()
         results_merged_hourly = pd.DataFrame()
         results_merged_cumulative = pd.DataFrame()
         for i_column in range(n_columns):
+            log.information(f"Processing column {i_column + 1}/{n_columns} - {results_data_frame.columns[i_column]}")
             temp_df = pd.DataFrame(
                 results_data_frame.values[:, i_column],
-                index=pd_timeline,
+                index=results_data_frame.index,
                 columns=[results_data_frame.columns[i_column]],
             )
 

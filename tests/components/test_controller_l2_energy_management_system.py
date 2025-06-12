@@ -31,7 +31,7 @@ import hisim.loadtypes as lt
 
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.units import Quantity, Celsius, Watt
-from repositories.HiSim.hisim.components import pv_system
+from hisim.components import pv_system
 
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../system_setups/household_for_test_ems.py"

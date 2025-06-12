@@ -20,7 +20,7 @@ from hisim.units import Quantity, Watt
 
 from hisim import log
 from hisim import utils
-from repositories.HiSim.hisim.components import pv_system
+from hisim.components import pv_system
 
 
 @pytest.mark.buildingtest

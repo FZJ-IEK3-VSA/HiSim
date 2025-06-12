@@ -13,7 +13,7 @@ from utspclient.helpers.lpgpythonbindings import JsonReference
 from hisim.simulator import SimulationParameters
 from hisim.components import hot_water_storage_modular, loadprofilegenerator_utsp_connector
 from hisim.components import weather
-from repositories.HiSim.hisim.components import pv_system
+from hisim.components import pv_system
 from hisim.components import building
 from hisim.components import (
     battery,

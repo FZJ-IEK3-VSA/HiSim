@@ -24,7 +24,7 @@ from hisim.components import simple_water_storage
 from hisim.components import generic_car
 from hisim.components import generic_heat_pump_modular
 from hisim.components import controller_l1_heatpump
-from hisim.components import generic_hot_water_storage_modular
+from hisim.components import hot_water_storage_modular
 from hisim.components import pv_system
 from hisim.components import electricity_meter
 from hisim.components import controller_l2_energy_management_system, battery
@@ -71,7 +71,7 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
     simple_hot_water_storage_config: simple_water_storage.SimpleHotWaterStorageConfig
     dhw_heatpump_config: generic_heat_pump_modular.HeatPumpConfig
     dhw_heatpump_controller_config: controller_l1_heatpump.L1HeatPumpConfig
-    dhw_storage_config: generic_hot_water_storage_modular.StorageConfig
+    dhw_storage_config: hot_water_storage_modular.StorageConfig
     electricity_meter_config: electricity_meter.ElectricityMeterConfig
     weather_location: str
     # heating_system: int
@@ -194,7 +194,7 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
                 name="DHWHeatpumpController"
             ),
             dhw_storage_config=(
-                generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
+                hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
                     number_of_apartments=my_building_information.number_of_apartments
                 )
             ),
@@ -300,7 +300,7 @@ def setup_function(
         temperature_difference_in_kelvin=my_dhw_heatpump_controller_config.t_max_heating_in_celsius
         - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
     )
-    my_domestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
+    my_domestic_hot_water_storage = hot_water_storage_modular.HotWaterStorage(
         my_simulation_parameters=my_simulation_parameters,
         config=my_dhw_storage_config,
         my_display_config=DisplayConfig.show("Warmwasserspeicher"),

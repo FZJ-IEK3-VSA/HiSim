@@ -30,7 +30,7 @@ from hisim.components import (
     generic_electrolyzer,
     generic_heat_pump_modular,
     generic_heat_source,
-    generic_hot_water_storage_modular,
+    hot_water_storage_modular,
     hydrogen_storage,
     weather,
     loadprofilegenerator_utsp_connector
@@ -39,7 +39,7 @@ from hisim.components import (
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.simulator import SimulationParameters
 from obsolete import generic_smart_device
-from repositories.HiSim.hisim.components import pv_system
+from hisim.components import pv_system
 
 
 def get_heating_system_efficiency(
@@ -440,7 +440,7 @@ def configure_water_heating(
     water_heating_system_installed: lt.HeatingSystems,
     count: int,
     number_of_apartments: float,
-) -> Tuple[generic_hot_water_storage_modular.HotWaterStorage, int]:
+) -> Tuple[hot_water_storage_modular.HotWaterStorage, int]:
     """Sets Boiler with Heater, L1 Controller and L2 Controller for Water Heating System.
 
     Parameters
@@ -480,7 +480,7 @@ def configure_water_heating(
     [heater_config.source_weight, heater_l1_config.source_weight] = [count] * 2
     count += 1
     boiler_config = (
-        generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
+        hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
             number_of_apartments=number_of_apartments
         )
     )
@@ -502,7 +502,7 @@ def configure_water_heating(
         * my_occupancy.scaling_factor_according_to_number_of_apartments
     )
 
-    my_boiler = generic_hot_water_storage_modular.HotWaterStorage(
+    my_boiler = hot_water_storage_modular.HotWaterStorage(
         my_simulation_parameters=my_simulation_parameters, config=boiler_config
     )
     my_boiler.connect_only_predefined_connections(my_occupancy)
@@ -533,7 +533,7 @@ def configure_water_heating_electric(
     controllable: bool,
     count: int,
     number_of_apartments: float,
-) -> Tuple[generic_hot_water_storage_modular.HotWaterStorage, int]:
+) -> Tuple[hot_water_storage_modular.HotWaterStorage, int]:
     """Sets Boiler with Heater, L1 Controller and L2 Controller for Water Heating System.
 
     Parameters
@@ -585,7 +585,7 @@ def configure_water_heating_electric(
         * my_occupancy.scaling_factor_according_to_number_of_apartments
     )
     boiler_config = (
-        generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
+        hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
             number_of_apartments=number_of_apartments
         )
     )
@@ -594,7 +594,7 @@ def configure_water_heating_electric(
         - heatpump_l1_config.t_min_heating_in_celsius
     )
 
-    my_boiler = generic_hot_water_storage_modular.HotWaterStorage(
+    my_boiler = hot_water_storage_modular.HotWaterStorage(
         my_simulation_parameters=my_simulation_parameters, config=boiler_config
     )
     my_boiler.connect_only_predefined_connections(my_occupancy)
@@ -902,7 +902,7 @@ def configure_heating_with_buffer_electric(
     [heatpump_config.source_weight, heatpump_l1_config.source_weight] = [count] * 2
     count += 1
 
-    buffer_config = generic_hot_water_storage_modular.StorageConfig.get_default_config_buffer(
+    buffer_config = hot_water_storage_modular.StorageConfig.get_default_config_buffer(
         power=float(my_building.my_building_information.max_thermal_building_demand_in_watt)
     )
     buffer_config.compute_default_volume(
@@ -927,7 +927,7 @@ def configure_heating_with_buffer_electric(
     [buffer_config.source_weight, building_heating_controller_config.source_weight] = [count] * 2
     count += 1
 
-    my_buffer = generic_hot_water_storage_modular.HotWaterStorage(
+    my_buffer = hot_water_storage_modular.HotWaterStorage(
         my_simulation_parameters=my_simulation_parameters, config=buffer_config
     )
     my_sim.add_component(my_buffer)
@@ -1061,7 +1061,7 @@ def configure_heating_with_buffer(
     [heater_config.source_weight, heater_l1_config.source_weight] = [count] * 2
     count += 1
 
-    buffer_config = generic_hot_water_storage_modular.StorageConfig.get_default_config_buffer(
+    buffer_config = hot_water_storage_modular.StorageConfig.get_default_config_buffer(
         power=float(my_building.my_building_information.max_thermal_building_demand_in_watt)
     )
     buffer_config.compute_default_volume(
@@ -1086,7 +1086,7 @@ def configure_heating_with_buffer(
     [buffer_config.source_weight, building_heating_controller_config.source_weight] = [count] * 2
     count += 1
 
-    my_buffer = generic_hot_water_storage_modular.HotWaterStorage(
+    my_buffer = hot_water_storage_modular.HotWaterStorage(
         my_simulation_parameters=my_simulation_parameters, config=buffer_config
     )
     my_sim.add_component(my_buffer)
@@ -1121,7 +1121,7 @@ def configure_chp(
     my_sim: Any,
     my_simulation_parameters: SimulationParameters,
     my_building: building.Building,
-    my_boiler: generic_hot_water_storage_modular.HotWaterStorage,
+    my_boiler: hot_water_storage_modular.HotWaterStorage,
     my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
     chp_power: float,
     controllable: bool,
@@ -1229,8 +1229,8 @@ def configure_chp(
 def configure_chp_with_buffer(
     my_sim: Any,
     my_simulation_parameters: SimulationParameters,
-    my_buffer: generic_hot_water_storage_modular.HotWaterStorage,
-    my_boiler: generic_hot_water_storage_modular.HotWaterStorage,
+    my_buffer: hot_water_storage_modular.HotWaterStorage,
+    my_boiler: hot_water_storage_modular.HotWaterStorage,
     my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
     chp_power: float,
     controllable: bool,
@@ -1456,7 +1456,7 @@ def configure_elctrolysis_h2storage_fuelcell_system(
     my_sim: Any,
     my_simulation_parameters: SimulationParameters,
     my_building: building.Building,
-    my_boiler: generic_hot_water_storage_modular.HotWaterStorage,
+    my_boiler: hot_water_storage_modular.HotWaterStorage,
     my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
     fuel_cell_power: float,
     h2_storage_size: float,
@@ -1580,8 +1580,8 @@ def configure_elctrolysis_h2storage_fuelcell_system(
 def configure_elctrolysis_h2storage_fuelcell_system_with_buffer(
     my_sim: Any,
     my_simulation_parameters: SimulationParameters,
-    my_buffer: generic_hot_water_storage_modular.HotWaterStorage,
-    my_boiler: generic_hot_water_storage_modular.HotWaterStorage,
+    my_buffer: hot_water_storage_modular.HotWaterStorage,
+    my_boiler: hot_water_storage_modular.HotWaterStorage,
     my_electricity_controller: controller_l2_energy_management_system.L2GenericEnergyManagementSystem,
     fuel_cell_power: float,
     h2_storage_size: float,

@@ -18,7 +18,7 @@ from hisim.component_wrapper import ComponentWrapper
 from hisim import log
 from obsolete.investment_cost_co2 import compute_investment_cost
 
-from hisim.components import generic_hot_water_storage_modular
+from hisim.components import hot_water_storage_modular
 
 
 def compute_energy_from_power(
@@ -48,7 +48,7 @@ def compute_hot_water_storage_losses_and_cycles(
     # get cycle of water storages
     for elem in components:
         if isinstance(
-            elem.my_component, generic_hot_water_storage_modular.HotWaterStorage
+            elem.my_component, hot_water_storage_modular.HotWaterStorage
         ):
             use = elem.my_component.use
             if use == ComponentType.BUFFER:

@@ -10,7 +10,7 @@ from hisim.components import building
 from hisim.components import more_advanced_heat_pump_hplib
 from hisim.components import electricity_meter
 from hisim.components import simple_water_storage
-from hisim.components import generic_hot_water_storage_modular
+from hisim.components import hot_water_storage_modular
 from hisim.components import heat_distribution_system
 from hisim import loadtypes as lt
 from hisim.units import Quantity, Celsius, Watt
@@ -174,9 +174,9 @@ def setup_function(
     )
 
     # Build DHW Storage
-    my_dhw_storage_config = generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler()
+    my_dhw_storage_config = hot_water_storage_modular.StorageConfig.get_default_config_for_boiler()
 
-    my_dhw_storage = generic_hot_water_storage_modular.HotWaterStorage(
+    my_dhw_storage = hot_water_storage_modular.HotWaterStorage(
         config=my_dhw_storage_config, my_simulation_parameters=my_simulation_parameters,
     )
 

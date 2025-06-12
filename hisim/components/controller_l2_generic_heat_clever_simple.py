@@ -16,7 +16,7 @@ from hisim.loadtypes import LoadTypes, Units
 from hisim.simulationparameters import SimulationParameters
 from hisim.components import controller_l1_generic_runtime
 from hisim.components.building import Building
-from hisim.components import generic_hot_water_storage_modular
+from hisim.components import hot_water_storage_modular
 
 
 __authors__ = "edited Johanna Ganglbauer"
@@ -231,12 +231,12 @@ class L2HeatSmartController(cp.Component):
         """Get default connections from hot water storage."""
 
         connections = []
-        boiler_classname = generic_hot_water_storage_modular.HotWaterStorage.get_classname()
+        boiler_classname = hot_water_storage_modular.HotWaterStorage.get_classname()
         connections.append(
             cp.ComponentConnection(
                 L2HeatSmartController.ReferenceTemperature,
                 boiler_classname,
-                generic_hot_water_storage_modular.HotWaterStorage.TemperatureMean,
+                hot_water_storage_modular.HotWaterStorage.TemperatureMean,
             )
         )
         return connections

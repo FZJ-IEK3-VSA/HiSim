@@ -14,7 +14,7 @@ from hisim.components import simple_water_storage
 from hisim.components import generic_car
 from hisim.components import generic_heat_pump_modular
 from hisim.components import controller_l1_heatpump
-from hisim.components import generic_hot_water_storage_modular
+from hisim.components import hot_water_storage_modular
 from hisim.components import electricity_meter
 from hisim.components import pv_system
 from hisim.components import battery
@@ -152,7 +152,7 @@ def setup_function(
         - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
     )
 
-    my_domnestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
+    my_domnestic_hot_water_storage = hot_water_storage_modular.HotWaterStorage(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 

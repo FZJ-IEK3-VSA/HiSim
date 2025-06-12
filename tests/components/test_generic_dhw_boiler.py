@@ -1,7 +1,7 @@
 """Test for generic dhw boiler."""
 
 import pytest
-from hisim.components import generic_hot_water_storage_modular
+from hisim.components import hot_water_storage_modular
 from hisim.components import generic_heat_source
 from hisim.components import controller_l1_heatpump
 
@@ -25,7 +25,7 @@ def test_simple_bucket_boiler_state():
         "HP Controller"
     )
     boiler_config = (
-        generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler()
+        hot_water_storage_modular.StorageConfig.get_default_config_for_boiler()
     )
     boiler_config.volume = 200
     heater_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating(
@@ -41,7 +41,7 @@ def test_simple_bucket_boiler_state():
 
     # ===================================================================================================================
     # Set Boiler
-    my_boiler = generic_hot_water_storage_modular.HotWaterStorage(
+    my_boiler = hot_water_storage_modular.HotWaterStorage(
         config=boiler_config, my_simulation_parameters=my_simulation_parameters
     )
     my_heater = generic_heat_source.HeatSource(

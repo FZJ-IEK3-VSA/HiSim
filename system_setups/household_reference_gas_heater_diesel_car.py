@@ -23,7 +23,7 @@ from hisim.components import simple_water_storage
 from hisim.components import generic_car
 from hisim.components import generic_heat_pump_modular
 from hisim.components import controller_l1_heatpump
-from hisim.components import generic_hot_water_storage_modular
+from hisim.components import hot_water_storage_modular
 from hisim.components import electricity_meter
 from hisim import utils
 
@@ -55,7 +55,7 @@ class ReferenceHouseholdConfig(SystemSetupConfigBase):
     simple_hot_water_storage_config: simple_water_storage.SimpleHotWaterStorageConfig
     dhw_heatpump_config: generic_heat_pump_modular.HeatPumpConfig
     dhw_heatpump_controller_config: controller_l1_heatpump.L1HeatPumpConfig
-    dhw_storage_config: generic_hot_water_storage_modular.StorageConfig
+    dhw_storage_config: hot_water_storage_modular.StorageConfig
     car_config: generic_car.CarConfig
     electricity_meter_config: electricity_meter.ElectricityMeterConfig
 
@@ -130,7 +130,7 @@ class ReferenceHouseholdConfig(SystemSetupConfigBase):
                 name="DHWHeatpumpController"
             ),
             dhw_storage_config=(
-                generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
+                hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
                     number_of_apartments=my_building_information.number_of_apartments
                 )
             ),
@@ -254,7 +254,7 @@ def setup_function(
         - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
     )
 
-    my_domnestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
+    my_domnestic_hot_water_storage = hot_water_storage_modular.HotWaterStorage(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 

@@ -9,14 +9,13 @@ import pytest
 # import numpy as np
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
-from hisim.components import loadprofilegenerator_utsp_connector
+from hisim.components import hot_water_storage_modular, loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import (
     building,
     electricity_meter,
     heating_meter,
     more_advanced_heat_pump_hplib,
-    generic_hot_water_storage_modular,
     simple_water_storage,
     heat_distribution_system,
 )
@@ -24,7 +23,7 @@ from hisim import utils
 
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import log
-from repositories.HiSim.hisim.components import pv_system
+from hisim.components import pv_system
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
@@ -172,9 +171,9 @@ def test_house(
 
     # Build DHW Storage
 
-    my_dhw_storage_config = generic_hot_water_storage_modular.StorageConfig.get_default_config_for_boiler()
+    my_dhw_storage_config = hot_water_storage_modular.StorageConfig.get_default_config_for_boiler()
 
-    my_dhw_storage = generic_hot_water_storage_modular.HotWaterStorage(
+    my_dhw_storage = hot_water_storage_modular.HotWaterStorage(
         config=my_dhw_storage_config,
         my_simulation_parameters=my_simulation_parameters,
     )

@@ -6,12 +6,12 @@ Functions from this file are called in Postprocessing option compute_kpis.
 from typing import List, Tuple
 import pandas as pd
 from hisim.components import (
-    generic_hot_water_storage_modular,
     generic_heat_source,
     advanced_battery_bslib,
     generic_car,
     generic_chp,
     generic_electrolyzer,
+    hot_water_storage_modular,
     hydrogen_storage,
 )
 from hisim.utils import HISIMPATH
@@ -63,7 +63,7 @@ def compute_investment_cost(components: List[ComponentWrapper],) -> Tuple[float,
             elif component.my_component.config.fuel == LoadTypes.ELECTRICITY:
                 column = price_frame.iloc[price_frame.index == "Electric heating"]
             component_capacity = component.my_component.config.power_th * 1e-3
-        elif isinstance(component.my_component, generic_hot_water_storage_modular.HotWaterStorage):
+        elif isinstance(component.my_component, hot_water_storage_modular.HotWaterStorage):
             column = price_frame.iloc[price_frame.index == "Hot Water tank"]
             component_capacity = component.my_component.volume
         elif isinstance(component.my_component, advanced_battery_bslib.Battery):

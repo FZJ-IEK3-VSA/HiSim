@@ -26,8 +26,8 @@ from hisim.components import (
     electricity_meter,
     generic_car,
     generic_heat_pump_modular,
-    generic_hot_water_storage_modular,
     heat_distribution_system,
+    hot_water_storage_modular,
     loadprofilegenerator_utsp_connector,
     simple_water_storage,
     weather,
@@ -35,7 +35,7 @@ from hisim.components import (
 from hisim.simulator import SimulationParameters
 from hisim.system_setup_configuration import SystemSetupConfigBase
 from hisim.units import Celsius, Quantity, Seconds, Watt
-from repositories.HiSim.hisim.components import pv_system
+from hisim.components import pv_system
 
 __authors__ = "Markus Blasberg"
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
@@ -71,7 +71,7 @@ class HouseholdAdvancedHPEvPvConfig(SystemSetupConfigBase):
     simple_hot_water_storage_config: simple_water_storage.SimpleHotWaterStorageConfig
     dhw_heatpump_config: generic_heat_pump_modular.HeatPumpConfig
     dhw_heatpump_controller_config: controller_l1_heatpump.L1HeatPumpConfig
-    dhw_storage_config: generic_hot_water_storage_modular.StorageConfig
+    dhw_storage_config: hot_water_storage_modular.StorageConfig
     car_config: generic_car.CarConfig
     car_battery_config: advanced_ev_battery_bslib.CarBatteryConfig
     car_battery_controller_config: controller_l1_generic_ev_charge.ChargingStationConfig
@@ -164,7 +164,7 @@ class HouseholdAdvancedHPEvPvConfig(SystemSetupConfigBase):
                 name="DHWHeatpumpController"
             ),
             dhw_storage_config=(
-                generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
+                hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
                     number_of_apartments=my_building_information.number_of_apartments
                 )
             ),
@@ -334,7 +334,7 @@ def setup_function(
         - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
     )
 
-    my_domnestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
+    my_domnestic_hot_water_storage = hot_water_storage_modular.HotWaterStorage(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 

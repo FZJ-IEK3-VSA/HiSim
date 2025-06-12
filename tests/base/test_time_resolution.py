@@ -28,7 +28,7 @@ from hisim.components import (
 )
 from hisim.units import Quantity, Celsius, Watt
 from hisim import loadtypes as lt
-from repositories.HiSim.hisim.components import pv_system
+from hisim.components import pv_system
 
 
 def values_are_similar(lst: List, relative_tolerance: float = 0.05) -> bool:

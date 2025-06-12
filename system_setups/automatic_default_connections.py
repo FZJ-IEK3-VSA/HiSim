@@ -6,6 +6,7 @@ from hisim.simulator import SimulationParameters
 
 from hisim.components import (
     building,
+    hot_water_storage_modular,
     weather,
     advanced_heat_pump_hplib,
     loadprofilegenerator_utsp_connector,
@@ -14,10 +15,9 @@ from hisim.components import (
     heat_distribution_system,
     generic_heat_pump_modular,
     controller_l1_heatpump,
-    generic_hot_water_storage_modular,
 )
 from hisim.units import Quantity, Celsius, Watt
-from repositories.HiSim.hisim.components import pv_system
+from hisim.components import pv_system
 
 
 def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> Any:
@@ -153,7 +153,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         name="DHWHeatpumpController"
     )
 
-    my_dhw_storage_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
+    my_dhw_storage_config = hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
         number_of_apartments=my_building_information.number_of_apartments
     )
     my_dhw_storage_config.compute_default_cycle(
@@ -161,7 +161,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         - my_dhw_heatpump_controller_config.t_min_heating_in_celsius
     )
 
-    my_domnestic_hot_water_storage = generic_hot_water_storage_modular.HotWaterStorage(
+    my_domnestic_hot_water_storage = hot_water_storage_modular.HotWaterStorage(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 

@@ -12,7 +12,7 @@ from hisim.components import weather
 
 # from hisim.components import generic_gas_heater
 from hisim.components import controller_l2_energy_management_system as cl2
-from repositories.HiSim.hisim.components import pv_system
+from hisim.components import pv_system
 
 # from hisim.components import building
 from hisim.components import advanced_fuel_cell

@@ -11,7 +11,7 @@ from utspclient.helpers.lpgdata import (
 )
 from utspclient.helpers.lpgpythonbindings import JsonReference
 from hisim.simulator import SimulationParameters
-from hisim.components import loadprofilegenerator_utsp_connector
+from hisim.components import hot_water_storage_modular, loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import pv_system
 from hisim.components import building
@@ -20,7 +20,6 @@ from hisim.components import (
     controller_l2_energy_management_system,
     heat_distribution_system,
     generic_district_heating,
-    generic_hot_water_storage_modular,
     controller_l1_heatpump,
     electricity_meter,
     advanced_ev_battery_bslib,
@@ -280,7 +279,7 @@ def setup_function(
     my_district_heating_controller_dhw_config = controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
         "DHW" + lt.HeatingSystems.DISTRICT_HEATING.value + "Controller"
     )
-    my_boiler_config = generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
+    my_boiler_config = hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
         number_of_apartments=my_building_information.number_of_apartments
     )
     my_boiler_config.compute_default_cycle(
@@ -288,7 +287,7 @@ def setup_function(
         - my_district_heating_controller_dhw_config.t_min_heating_in_celsius
     )
 
-    my_boiler_for_dhw = generic_hot_water_storage_modular.HotWaterStorage(
+    my_boiler_for_dhw = hot_water_storage_modular.HotWaterStorage(
         my_simulation_parameters=my_simulation_parameters, config=my_boiler_config
     )
 

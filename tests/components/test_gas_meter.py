@@ -9,7 +9,7 @@ import pytest
 import numpy as np
 import hisim.simulator as sim
 from hisim.simulator import SimulationParameters
-from hisim.components import loadprofilegenerator_utsp_connector
+from hisim.components import hot_water_storage_modular, loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import (
     building,
@@ -18,7 +18,6 @@ from hisim.components import (
     generic_boiler,
     generic_heat_source,
     controller_l1_heatpump,
-    generic_hot_water_storage_modular,
     simple_water_storage,
     heat_distribution_system,
 )
@@ -26,7 +25,7 @@ from hisim import utils, loadtypes
 
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import log
-from repositories.HiSim.hisim.components import pv_system
+from hisim.components import pv_system
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
@@ -170,7 +169,7 @@ def test_house(
     )
 
     my_boiler_config = (
-        generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
+        hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
             number_of_apartments=my_building_information.number_of_apartments
         )
     )
@@ -179,7 +178,7 @@ def test_house(
         - my_gas_heater_controller_l1_config.t_min_heating_in_celsius
     )
 
-    my_boiler_for_dhw = generic_hot_water_storage_modular.HotWaterStorage(
+    my_boiler_for_dhw = hot_water_storage_modular.HotWaterStorage(
         my_simulation_parameters=my_simulation_parameters, config=my_boiler_config
     )
 

@@ -1,4 +1,4 @@
-"""Test for generic pv system."""
+"""Test for pv system."""
 
 import pytest
 from tests.base import functions_for_testing as fft
@@ -12,7 +12,7 @@ from hisim import log
 
 @pytest.mark.base
 def test_photovoltaic_sandia():
-    """Test generic pv system."""
+    """Test pv system."""
     # Sets inputs
     # weather_location = "Aachen"
     seconds_per_timestep = 60
@@ -97,7 +97,7 @@ def test_photovoltaic_sandia():
 
 @pytest.mark.base
 def test_photovoltaic_cec():
-    """Test generic pv system."""
+    """Test pv system."""
     # Sets inputs
     # weather_location = "Aachen"
     seconds_per_timestep = 60

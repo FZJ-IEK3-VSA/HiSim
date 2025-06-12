@@ -1,17 +1,17 @@
-"""Test for generic windturbine."""
+"""Test for windturbine."""
 import pytest
 from tests.base import functions_for_testing as fft
 from hisim import sim_repository
 from hisim import component
 from hisim.components import weather
-from hisim.components import generic_windturbine
+from hisim.components import windturbine
 from hisim import simulator as sim
 from hisim import log
 
 
 @pytest.mark.base
 def test_windturbine():
-    """Test generic windturbine."""
+    """Test windturbine."""
     # Sets inputs
     # weather_location = "Aachen"
     seconds_per_timestep = 60
@@ -35,9 +35,9 @@ def test_windturbine():
     )
     my_weather.set_sim_repo(repo)
     my_weather.i_prepare_simulation()
-    my_windturbine_config = generic_windturbine.WindturbineConfig.get_default_windturbine_config()
+    my_windturbine_config = windturbine.WindturbineConfig.get_default_windturbine_config()
     my_windturbine_config.turbine_type = turbine_type
-    my_windturbine = generic_windturbine.Windturbine(
+    my_windturbine = windturbine.Windturbine(
         config=my_windturbine_config, my_simulation_parameters=mysim
     )
     my_windturbine.set_sim_repo(repo)

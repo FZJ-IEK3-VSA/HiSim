@@ -25,7 +25,6 @@ from hisim.components import (
     generic_car,
     generic_heat_pump_modular,
     generic_hot_water_storage_modular,
-    generic_pv_system,
     heat_distribution_system,
     loadprofilegenerator_utsp_connector,
     simple_water_storage,
@@ -34,6 +33,7 @@ from hisim.components import (
 from hisim.simulator import SimulationParameters
 from hisim.system_setup_configuration import SystemSetupConfigBase
 from hisim.units import Celsius, Quantity, Seconds, Watt
+from repositories.HiSim.hisim.components import pv_system
 
 __authors__ = "Markus Blasberg"
 __copyright__ = "Copyright 2023, FZJ-IEK-3"
@@ -60,7 +60,7 @@ class HouseholdAdvancedHPDieselCarPVConfig(SystemSetupConfigBase):
     # simulation_parameters: SimulationParameters
     # total_base_area_in_m2: float
     occupancy_config: loadprofilegenerator_utsp_connector.UtspLpgConnectorConfig
-    pv_config: generic_pv_system.PVSystemConfig
+    pv_config: pv_system.PVSystemConfig
     building_config: building.BuildingConfig
     hds_controller_config: heat_distribution_system.HeatDistributionControllerConfig
     hds_config: heat_distribution_system.HeatDistributionConfig
@@ -118,7 +118,7 @@ class HouseholdAdvancedHPDieselCarPVConfig(SystemSetupConfigBase):
                 predictive_control=False,
                 predictive=False,
             ),
-            pv_config=generic_pv_system.PVSystemConfig.get_scaled_pv_system(
+            pv_config=pv_system.PVSystemConfig.get_scaled_pv_system(
                 rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
             ),
             building_config=building_config,
@@ -265,7 +265,7 @@ def setup_function(
     )
 
     # Build PV
-    my_photovoltaic_system = generic_pv_system.PVSystem(
+    my_photovoltaic_system = pv_system.PVSystem(
         config=my_config.pv_config, my_simulation_parameters=my_simulation_parameters,
     )
 

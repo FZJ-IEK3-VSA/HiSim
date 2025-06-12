@@ -153,7 +153,7 @@ Theses classes inherent from `Component` (`component.py`) class and can be used 
 - `RandomNumbers` (`random_numbers.py`)
 - `SimpleWaterStorage` (`simple_water_storage.py`)
 - `Transformer` (`transformer_rectifier.py`)
-- `PVSystem` (`generic_pv_system.py`)
+- `PVSystem` (`pv_system.py`)
 - `SimpleCHP` (`generic_chp.py`)
 - `CSVLoader` (`csvloader.py`)
 - `SumBuilderForTwoInputs` (`sumbuilder.py`)

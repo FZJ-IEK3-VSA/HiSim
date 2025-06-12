@@ -11,7 +11,7 @@ from hisim.simulator import SimulationParameters
 from hisim.components.weather import WeatherDataSourceEnum
 from hisim import loadtypes
 from hisim import utils
-from hisim.components import generic_pv_system
+from repositories.HiSim.hisim.components import pv_system
 from hisim.components import weather
 from hisim.components import electricity_meter
 from hisim.components import controller_l2_district_energy_management_system
@@ -48,8 +48,8 @@ class DistrictConfig:
     pv_district_building_name: str
     name_pv_district: str
     nominal_power_pv_district: float
-    module_database_pv_district: generic_pv_system.PVLibModuleAndInverterEnum
-    inverter_database_pv_district: generic_pv_system.PVLibModuleAndInverterEnum
+    module_database_pv_district: pv_system.PVLibModuleAndInverterEnum
+    inverter_database_pv_district: pv_system.PVLibModuleAndInverterEnum
     load_module_data_pv_district: bool
     module_name_pv_district: str
     integrate_inverter_pv_district: bool
@@ -97,8 +97,8 @@ class DistrictConfig:
             pv_district_building_name=loadtypes.DistrictNames.DISTRICT.value,
             name_pv_district="PV_Park",
             nominal_power_pv_district=0,
-            module_database_pv_district=generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
-            inverter_database_pv_district=generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,
+            module_database_pv_district=pv_system.PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
+            inverter_database_pv_district=pv_system.PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,
             load_module_data_pv_district=False,
             module_name_pv_district="Hanwha HSL60P6-PA-4-250T [2013]",
             integrate_inverter_pv_district=True,
@@ -225,7 +225,7 @@ def setup_function(
 
     # =================================================================================================================================
     # Build districts PV
-    my_photovoltaic_system_district_config = generic_pv_system.PVSystemConfig(
+    my_photovoltaic_system_district_config = pv_system.PVSystemConfig(
         building_name=my_config.pv_district_building_name,
         name=my_config.name_pv_district,
         time=my_config.start_date.year,
@@ -250,7 +250,7 @@ def setup_function(
         prediction_horizon=my_config.prediction_horizon_pv_district,
     )
 
-    my_photovoltaic_system_district = generic_pv_system.PVSystem(
+    my_photovoltaic_system_district = pv_system.PVSystem(
         config=my_photovoltaic_system_district_config, my_simulation_parameters=my_simulation_parameters,
     )
 

@@ -16,7 +16,7 @@ from hisim.components import generic_heat_pump_modular
 from hisim.components import controller_l1_heatpump
 from hisim.components import generic_hot_water_storage_modular
 from hisim.components import electricity_meter
-from hisim.components import generic_pv_system
+from repositories.HiSim.hisim.components import pv_system
 from hisim.components import advanced_battery_bslib
 from hisim.components import advanced_ev_battery_bslib
 from hisim.components import controller_l1_generic_ev_charge
@@ -106,7 +106,7 @@ def setup_function(
     )
 
     # Build PV
-    my_photovoltaic_system = generic_pv_system.PVSystem(
+    my_photovoltaic_system = pv_system.PVSystem(
         config=my_config.pv_config, my_simulation_parameters=my_simulation_parameters,
     )
 

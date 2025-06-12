@@ -400,7 +400,7 @@ class L2GenericDistrictEnergyManagementSystem(dynamic_component.DynamicComponent
     ):
         """Get pv system default connections."""
 
-        from hisim.components.generic_pv_system import PVSystem  # pylint: disable=import-outside-toplevel
+        from repositories.HiSim.hisim.components.pv_system import PVSystem  # pylint: disable=import-outside-toplevel
 
         dynamic_connections = []
         pv_class_name = PVSystem.get_classname()

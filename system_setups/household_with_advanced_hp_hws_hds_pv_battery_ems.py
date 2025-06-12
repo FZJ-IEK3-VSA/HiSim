@@ -6,7 +6,7 @@ from typing import Optional, Any
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
-from hisim.components import generic_pv_system
+from repositories.HiSim.hisim.components import pv_system
 from hisim.components import building
 from hisim.components import (
     advanced_heat_pump_hplib,
@@ -94,11 +94,11 @@ def setup_function(
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
 
     # Build PV
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
+    my_photovoltaic_system_config = pv_system.PVSystemConfig.get_scaled_pv_system(
         rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
     )
 
-    my_photovoltaic_system = generic_pv_system.PVSystem(
+    my_photovoltaic_system = pv_system.PVSystem(
         config=my_photovoltaic_system_config, my_simulation_parameters=my_simulation_parameters,
     )
     # Build Heat Distribution Controller

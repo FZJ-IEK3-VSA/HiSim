@@ -29,7 +29,7 @@ from hisim.components.weather import Weather
 # from hisim.components.loadprofilegenerator_connector import Occupancy
 # from hisim.components.generic_price_signal import PriceSignal
 # from hisim.components.air_conditioner import AirConditioner
-# from hisim.components.generic_pv_system import PVSystem
+# from hisim.components.pv_system import PVSystem
 from hisim import log
 from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDictKeyEnum
 

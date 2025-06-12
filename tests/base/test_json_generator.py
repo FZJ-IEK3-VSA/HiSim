@@ -5,7 +5,7 @@ import pytest
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
 from hisim.components import building
-from hisim.components import generic_pv_system
+from repositories.HiSim.hisim.components import pv_system
 from hisim.simulationparameters import SimulationParameters
 from hisim.json_generator import JsonConfigurationGenerator
 from hisim.postprocessingoptions import PostProcessingOptions
@@ -53,7 +53,7 @@ class ExampleConfig:
         building_entry = jcg.add_component(config=building_config)
 
         # PV
-        pv_config = generic_pv_system.PVSystemConfig.get_default_pv_system()
+        pv_config = pv_system.PVSystemConfig.get_default_pv_system()
         pv_entry = jcg.add_component(config=pv_config)
 
         jcg.add_default_connection(from_entry=weather_entry, to_entry=building_entry)

@@ -32,7 +32,6 @@ from hisim.components import (
     generic_heat_source,
     generic_hot_water_storage_modular,
     generic_hydrogen_storage,
-    generic_pv_system,
     generic_smart_device,
     weather,
     loadprofilegenerator_utsp_connector
@@ -40,6 +39,7 @@ from hisim.components import (
 
 from hisim.components.configuration import HouseholdWarmWaterDemandConfig
 from hisim.simulator import SimulationParameters
+from repositories.HiSim.hisim.components import pv_system
 
 
 def get_heating_system_efficiency(
@@ -87,17 +87,17 @@ def configure_pv_system(
 
     """
     if pv_peak_power is not None:
-        my_pv_system_config = generic_pv_system.PVSystemConfig.get_default_pv_system(
+        my_pv_system_config = pv_system.PVSystemConfig.get_default_pv_system(
             power_in_watt=pv_peak_power,
             source_weight=count,
         )
     else:
-        my_pv_system_config = generic_pv_system.PVSystemConfig.get_default_pv_system(
+        my_pv_system_config = pv_system.PVSystemConfig.get_default_pv_system(
             source_weight=count,
         )
     my_pv_system_config.location = my_weather.weather_config.location
     count += 1
-    my_pv_system = generic_pv_system.PVSystem(
+    my_pv_system = pv_system.PVSystem(
         my_simulation_parameters=my_simulation_parameters,
         config=my_pv_system_config,
     )

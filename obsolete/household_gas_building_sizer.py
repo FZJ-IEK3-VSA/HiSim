@@ -13,7 +13,7 @@ from utspclient.helpers.lpgpythonbindings import JsonReference
 from hisim.simulator import SimulationParameters
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
-from hisim.components import generic_pv_system
+from repositories.HiSim.hisim.components import pv_system
 from hisim.components import building
 from hisim.components import (
     advanced_battery_bslib,
@@ -217,13 +217,13 @@ def setup_function(
 
     # Build PV
     if pv_power_in_watt is None:
-        my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
+        my_photovoltaic_system_config = pv_system.PVSystemConfig.get_scaled_pv_system(
             rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2,
             share_of_maximum_pv_potential=share_of_maximum_pv_potential,
             location=weather_location,
         )
     else:
-        my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_pv_system(
+        my_photovoltaic_system_config = pv_system.PVSystemConfig.get_default_pv_system(
             power_in_watt=pv_power_in_watt,
             share_of_maximum_pv_potential=share_of_maximum_pv_potential,
             location=weather_location,
@@ -232,7 +232,7 @@ def setup_function(
     my_photovoltaic_system_config.azimuth = azimuth
     my_photovoltaic_system_config.tilt = tilt
 
-    my_photovoltaic_system = generic_pv_system.PVSystem(
+    my_photovoltaic_system = pv_system.PVSystem(
         config=my_photovoltaic_system_config, my_simulation_parameters=my_simulation_parameters,
     )
     # Add to simulator

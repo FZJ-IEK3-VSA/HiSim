@@ -4,7 +4,7 @@ from typing import Any, Optional
 
 from hisim import loadtypes as lt
 from hisim.components import controller_l2_energy_management_system as cl2
-from hisim.components import generic_pv_system, loadprofilegenerator_utsp_connector, weather
+from hisim.components import loadprofilegenerator_utsp_connector, weather
 from hisim.components.building import Building, BuildingConfig
 from hisim.components.controller_l1_electrolyzer_h2 import (
     ElectrolyzerController,
@@ -34,6 +34,7 @@ from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
 from hisim.sim_repository_singleton import SingletonDictKeyEnum, SingletonSimRepository
 from hisim.simulator import SimulationParameters
+from repositories.HiSim.hisim.components import pv_system
 
 
 def setup_function(
@@ -147,12 +148,12 @@ def setup_function(
     my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
 
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_pv_system(power_in_watt=pv_power)
+    my_photovoltaic_system_config = pv_system.PVSystemConfig.get_default_pv_system(power_in_watt=pv_power)
     my_photovoltaic_system_config.time = time
     my_photovoltaic_system_config.co2_footprint = pv_co2_footprint
     my_photovoltaic_system_config.cost = pv_cost
 
-    my_photovoltaic_system = generic_pv_system.PVSystem(
+    my_photovoltaic_system = pv_system.PVSystem(
         my_simulation_parameters=my_simulation_parameters, config=my_photovoltaic_system_config,
     )
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)

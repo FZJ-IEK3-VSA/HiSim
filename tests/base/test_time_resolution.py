@@ -17,7 +17,6 @@ from hisim.components import (
     building,
     weather,
     loadprofilegenerator_utsp_connector,
-    generic_pv_system,
     advanced_heat_pump_hplib,
     advanced_battery_bslib,
     controller_l2_energy_management_system,
@@ -30,6 +29,7 @@ from hisim.components import (
 )
 from hisim.units import Quantity, Celsius, Watt
 from hisim import loadtypes as lt
+from repositories.HiSim.hisim.components import pv_system
 
 
 def values_are_similar(lst: List, relative_tolerance: float = 0.05) -> bool:
@@ -66,7 +66,7 @@ def test_cluster_house_for_several_time_resolutions():
         # for these components the outputs must be identical as they are predefined input data
         if loadprofilegenerator_utsp_connector.UtspLpgConnector.get_classname() in key:
             assert values_are_similar(lst=values)
-        if generic_pv_system.PVSystem.get_classname() in key:
+        if pv_system.PVSystem.get_classname() in key:
             assert values_are_similar(lst=values)
         if weather.Weather.get_classname() in key:
             assert values_are_similar(lst=values)
@@ -160,12 +160,12 @@ def run_cluster_house(
     my_sim.add_component(my_weather)
 
     # Build PV
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
+    my_photovoltaic_system_config = pv_system.PVSystemConfig.get_scaled_pv_system(
         rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2,
         share_of_maximum_pv_potential=1,
         location=weather_location,
     )
-    my_photovoltaic_system = generic_pv_system.PVSystem(
+    my_photovoltaic_system = pv_system.PVSystem(
         config=my_photovoltaic_system_config, my_simulation_parameters=my_simulation_parameters,
     )
     # Add to simulator

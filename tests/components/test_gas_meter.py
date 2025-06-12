@@ -21,12 +21,12 @@ from hisim.components import (
     generic_hot_water_storage_modular,
     simple_water_storage,
     heat_distribution_system,
-    generic_pv_system,
 )
 from hisim import utils, loadtypes
 
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import log
+from repositories.HiSim.hisim.components import pv_system
 
 
 # PATH and FUNC needed to build simulator, PATH is fake
@@ -80,10 +80,10 @@ def test_house(
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
 
     # Build PV
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
+    my_photovoltaic_system_config = pv_system.PVSystemConfig.get_scaled_pv_system(
         share_of_maximum_pv_potential=1, rooftop_area_in_m2=120
     )
-    my_photovoltaic_system = generic_pv_system.PVSystem(
+    my_photovoltaic_system = pv_system.PVSystem(
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,
     )

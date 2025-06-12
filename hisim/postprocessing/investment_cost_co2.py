@@ -7,7 +7,6 @@ from typing import List, Tuple
 import pandas as pd
 from hisim.components import (
     generic_hot_water_storage_modular,
-    generic_pv_system,
     generic_smart_device,
     generic_heat_source,
     advanced_battery_bslib,
@@ -19,6 +18,7 @@ from hisim.components import (
 from hisim.utils import HISIMPATH
 from hisim.loadtypes import LoadTypes
 from hisim.component_wrapper import ComponentWrapper
+from repositories.HiSim.hisim.components import pv_system
 
 
 def read_in_component_costs() -> pd.DataFrame:
@@ -50,7 +50,7 @@ def compute_investment_cost(components: List[ComponentWrapper],) -> Tuple[float,
         if isinstance(component.my_component, generic_smart_device.SmartDevice):
             column = price_frame.iloc[price_frame.index == "Washing machine (or domestic appliances in general)"]
             component_capacity = 1.0
-        elif isinstance(component.my_component, generic_pv_system.PVSystem):
+        elif isinstance(component.my_component, pv_system.PVSystem):
             column = price_frame.iloc[price_frame.index == "Photovoltaic panel"]
             component_capacity = component.my_component.pvconfig.power_in_watt * 1e-3
         elif isinstance(component.my_component, generic_heat_source.HeatSource):

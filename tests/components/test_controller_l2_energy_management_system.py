@@ -18,7 +18,6 @@ from hisim.components import weather
 from hisim.components import (
     building,
     electricity_meter,
-    generic_pv_system,
     heat_distribution_system,
     advanced_battery_bslib,
     advanced_heat_pump_hplib,
@@ -33,6 +32,7 @@ import hisim.loadtypes as lt
 
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim.units import Quantity, Celsius, Watt
+from repositories.HiSim.hisim.components import pv_system
 
 # PATH and FUNC needed to build simulator, PATH is fake
 PATH = "../system_setups/household_for_test_ems.py"
@@ -105,15 +105,15 @@ def test_house(
     my_sim.add_component(my_weather)
 
     # Build PV
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
+    my_photovoltaic_system_config = pv_system.PVSystemConfig.get_scaled_pv_system(
         building_name=building_name,
         rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2,
         share_of_maximum_pv_potential=1.0,
         module_name="Hanwha HSL60P6-PA-4-250T [2013]",
-        module_database=generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
+        module_database=pv_system.PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
         inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
-        inverter_database=generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE)
-    my_photovoltaic_system = generic_pv_system.PVSystem(
+        inverter_database=pv_system.PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE)
+    my_photovoltaic_system = pv_system.PVSystem(
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,)
     # Add to simulator

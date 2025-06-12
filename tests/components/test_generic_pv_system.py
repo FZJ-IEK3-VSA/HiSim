@@ -5,7 +5,7 @@ from tests.base import functions_for_testing as fft
 from hisim import sim_repository
 from hisim import component
 from hisim.components import weather
-from hisim.components import generic_pv_system
+from repositories.HiSim.hisim.components import pv_system
 from hisim import simulator as sim
 from hisim import log
 
@@ -36,14 +36,14 @@ def test_photovoltaic_sandia():
     )
     my_weather.set_sim_repo(repo)
     my_weather.i_prepare_simulation()
-    my_pvs_config = generic_pv_system.PVSystemConfig.get_default_pv_system(
+    my_pvs_config = pv_system.PVSystemConfig.get_default_pv_system(
         module_name="Hanwha HSL60P6-PA-4-250T [2013]",
-        module_database=generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,  # noqa: E501
+        module_database=pv_system.PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,  # noqa: E501
         inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
-        inverter_database=generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,  # noqa: E501
+        inverter_database=pv_system.PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,  # noqa: E501
     )
     my_pvs_config.power_in_watt = power_in_watt
-    my_pvs = generic_pv_system.PVSystem(
+    my_pvs = pv_system.PVSystem(
         config=my_pvs_config, my_simulation_parameters=mysim
     )
     my_pvs.set_sim_repo(repo)
@@ -121,9 +121,9 @@ def test_photovoltaic_cec():
     )
     my_weather.set_sim_repo(repo)
     my_weather.i_prepare_simulation()
-    my_pvs_config = generic_pv_system.PVSystemConfig.get_default_pv_system()
+    my_pvs_config = pv_system.PVSystemConfig.get_default_pv_system()
     my_pvs_config.power_in_watt = power_in_watt
-    my_pvs = generic_pv_system.PVSystem(
+    my_pvs = pv_system.PVSystem(
         config=my_pvs_config, my_simulation_parameters=mysim
     )
     my_pvs.set_sim_repo(repo)

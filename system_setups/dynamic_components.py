@@ -12,7 +12,7 @@ from hisim.components import weather
 
 # from hisim.components import generic_gas_heater
 from hisim.components import controller_l2_energy_management_system as cl2
-from hisim.components import generic_pv_system
+from repositories.HiSim.hisim.components import pv_system
 
 # from hisim.components import building
 from hisim.components import advanced_fuel_cell
@@ -93,8 +93,8 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
 
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_pv_system()
-    my_photovoltaic_system = generic_pv_system.PVSystem(
+    my_photovoltaic_system_config = pv_system.PVSystemConfig.get_default_pv_system()
+    my_photovoltaic_system = pv_system.PVSystem(
         my_simulation_parameters=my_simulation_parameters, config=my_photovoltaic_system_config,
     )
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)

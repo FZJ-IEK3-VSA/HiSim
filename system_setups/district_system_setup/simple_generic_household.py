@@ -10,7 +10,6 @@ from utspclient.helpers.lpgpythonbindings import JsonReference
 from hisim import component as cp
 from hisim.components import (
     loadprofilegenerator_utsp_connector,
-    generic_pv_system,
     building,
     advanced_heat_pump_hplib,
     advanced_battery_bslib,
@@ -28,6 +27,7 @@ from hisim.component import (
 )
 from hisim import loadtypes as lt
 from hisim.units import Quantity, Celsius, Watt
+from repositories.HiSim.hisim.components import pv_system
 
 __authors__ = "Jonas Hoppe"
 __copyright__ = ""
@@ -175,14 +175,14 @@ class GenericBuilding(cp.Component):
 
         # Build PV
         if pv_power_in_watt is None:
-            my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
+            my_photovoltaic_system_config = pv_system.PVSystemConfig.get_scaled_pv_system(
                 rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2,
                 share_of_maximum_pv_potential=share_of_maximum_pv_potential,
                 location=location,
                 building_name=building_name,
             )
         else:
-            my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_pv_system(
+            my_photovoltaic_system_config = pv_system.PVSystemConfig.get_default_pv_system(
                 power_in_watt=pv_power_in_watt,
                 share_of_maximum_pv_potential=share_of_maximum_pv_potential,
                 location=location,
@@ -192,7 +192,7 @@ class GenericBuilding(cp.Component):
         my_photovoltaic_system_config.azimuth = azimuth
         my_photovoltaic_system_config.tilt = tilt
 
-        my_photovoltaic_system = generic_pv_system.PVSystem(
+        my_photovoltaic_system = pv_system.PVSystem(
             config=my_photovoltaic_system_config, my_simulation_parameters=my_simulation_parameters,
         )
         # Add to simulator

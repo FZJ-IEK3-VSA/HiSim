@@ -324,7 +324,7 @@ components.generic\_price\_signal module
 components.generic\_pv\_system module
 -------------------------------------
 
-.. automodule:: components.generic_pv_system
+.. automodule:: components.pv_system
    :members:
    :undoc-members:
    :show-inheritance:

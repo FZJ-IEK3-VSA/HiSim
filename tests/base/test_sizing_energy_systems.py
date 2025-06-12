@@ -10,7 +10,6 @@ import pytest
 import numpy as np
 from hisim.components import (
     building,
-    generic_pv_system,
     advanced_heat_pump_hplib,
     advanced_battery_bslib,
     simple_water_storage,
@@ -21,6 +20,7 @@ from hisim.units import Quantity, Watt
 
 from hisim import log
 from hisim import utils
+from repositories.HiSim.hisim.components import pv_system
 
 
 @pytest.mark.buildingtest
@@ -185,7 +185,7 @@ def simulation_for_one_timestep(
     )
 
     # Set PV
-    my_pv_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
+    my_pv_config = pv_system.PVSystemConfig.get_scaled_pv_system(
         rooftop_area_in_m2=my_residence_information.scaled_rooftop_area_in_m2
     )
 

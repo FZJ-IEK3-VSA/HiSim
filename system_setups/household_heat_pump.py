@@ -25,7 +25,7 @@ from hisim.components import generic_car
 from hisim.components import generic_heat_pump_modular
 from hisim.components import controller_l1_heatpump
 from hisim.components import generic_hot_water_storage_modular
-from hisim.components import generic_pv_system
+from repositories.HiSim.hisim.components import pv_system
 from hisim.components import electricity_meter
 from hisim.components import controller_l2_energy_management_system, advanced_battery_bslib
 from hisim import utils, loadtypes
@@ -78,7 +78,7 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
     # heat_pump_controller_mode: int
 
     # Optional components
-    pv_config: Optional[generic_pv_system.PVSystemConfig]
+    pv_config: Optional[pv_system.PVSystemConfig]
     car_config: Optional[generic_car.CarConfig]
 
     @classmethod
@@ -151,7 +151,7 @@ class HouseholdHeatPumpConfig(SystemSetupConfigBase):
                 predictive_control=False,
                 predictive=False,
             ),
-            pv_config=generic_pv_system.PVSystemConfig.get_scaled_pv_system(
+            pv_config=pv_system.PVSystemConfig.get_scaled_pv_system(
                 rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2, location=weather_location
             )
             if options.photovoltaic
@@ -348,7 +348,7 @@ def setup_function(
     if my_config.options.photovoltaic and my_config.pv_config is not None:
 
         # Build Photovoltaic
-        my_photovoltaic_system = generic_pv_system.PVSystem(
+        my_photovoltaic_system = pv_system.PVSystem(
             config=my_config.pv_config,
             my_simulation_parameters=my_simulation_parameters,
             my_display_config=DisplayConfig.show("Photovoltaik"),

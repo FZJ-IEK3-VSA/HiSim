@@ -12,7 +12,7 @@
 #
 # from hisim.components import controller_l2_energy_management_system
 # from hisim.components import weather
-# from hisim.components import generic_pv_system
+# from hisim.components import pv_system
 # from hisim.components import csvloader
 # from hisim.components import advanced_battery_bslib
 # from hisim.components import generic_hot_water_storage

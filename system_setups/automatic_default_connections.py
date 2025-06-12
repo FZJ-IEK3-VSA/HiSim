@@ -6,7 +6,6 @@ from hisim.simulator import SimulationParameters
 
 from hisim.components import (
     building,
-    generic_pv_system,
     weather,
     advanced_heat_pump_hplib,
     loadprofilegenerator_utsp_connector,
@@ -18,6 +17,7 @@ from hisim.components import (
     generic_hot_water_storage_modular,
 )
 from hisim.units import Quantity, Celsius, Watt
+from repositories.HiSim.hisim.components import pv_system
 
 
 def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationParameters] = None) -> Any:
@@ -83,10 +83,10 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
 
     my_weather = weather.Weather(config=my_weather_config, my_simulation_parameters=my_simulation_parameters)
     # Build PV
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_scaled_pv_system(
+    my_photovoltaic_system_config = pv_system.PVSystemConfig.get_scaled_pv_system(
         rooftop_area_in_m2=my_building_information.scaled_rooftop_area_in_m2
     )
-    my_photovoltaic_system = generic_pv_system.PVSystem(
+    my_photovoltaic_system = pv_system.PVSystem(
         config=my_photovoltaic_system_config, my_simulation_parameters=my_simulation_parameters,
     )
     # =================================================================================================================================

@@ -12,7 +12,7 @@ from hisim.simulator import SimulationParameters
 from hisim.simulator import Simulator
 from hisim.components import loadprofilegenerator_utsp_connector
 from hisim.components import weather
-from hisim.components import generic_pv_system
+from repositories.HiSim.hisim.components import pv_system
 from hisim.components import building
 from hisim.components import air_conditioner
 
@@ -169,7 +169,7 @@ def setup_function(
     power = 4e3
     pv_co2_footprint = power * 1e-3 * 130.7
     pv_cost = power * 1e-3 * 535.81
-    my_photovoltaic_system_config = generic_pv_system.PVSystemConfig(
+    my_photovoltaic_system_config = pv_system.PVSystemConfig(
         building_name="BUI1",
         time=year,
         location=location,
@@ -177,8 +177,8 @@ def setup_function(
         load_module_data=False,
         module_name="Hanwha HSL60P6-PA-4-250T [2013]",
         integrate_inverter=True,
-        module_database=generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
-        inverter_database=generic_pv_system.PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,
+        module_database=pv_system.PVLibModuleAndInverterEnum.SANDIA_MODULE_DATABASE,
+        inverter_database=pv_system.PVLibModuleAndInverterEnum.SANDIA_INVERTER_DATABASE,
         tilt=30,
         azimuth=180,
         inverter_name="ABB__MICRO_0_25_I_OUTD_US_208_208V__CEC_2014_",
@@ -193,7 +193,7 @@ def setup_function(
         predictive_control=False,
         prediction_horizon=None,
     )
-    my_photovoltaic_system = generic_pv_system.PVSystem(
+    my_photovoltaic_system = pv_system.PVSystem(
         config=my_photovoltaic_system_config,
         my_simulation_parameters=my_simulation_parameters,
     )

@@ -138,6 +138,7 @@ class HeatDistribution(cp.Component):
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
     ResidenceTemperatureIndoorAir = "ResidenceTemperatureIndoorAir"
     WaterMassFlowInput = "WaterMassFlowInput"
+    ThermalPowerReceived = "ThermalPowerReceived"  # Relevant for district heating with DWH
 
     # Outputs
     WaterTemperatureInlet = "WaterTemperatureInlet"
@@ -216,6 +217,12 @@ class HeatDistribution(cp.Component):
             # just important for heating system without parallel bufferstorage
             self.water_mass_flow_rate_hp_in_kg_per_second_channel: cp.ComponentInput = self.add_input(
                 self.component_name, self.WaterMassFlowInput, lt.LoadTypes.WATER, lt.Units.KG_PER_SEC, True,
+            )
+        if self.position_hot_water_storage_in_system in [
+            PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FIX
+        ]:
+            self.thermal_power_received_heating_system_w_input_channel : cp.ComponentInput = self.add_input(
+                self.component_name, self.ThermalPowerReceived, lt.LoadTypes.WARM_WATER, lt.Units.WATT, True,
             )
 
         # Outputs
@@ -314,13 +321,18 @@ class HeatDistribution(cp.Component):
         # for district heating as heating source no
         component_module_name = "hisim.components.generic_district_heating"
         component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "DistrictHeatingForSH")
+        component_class = getattr(component_module, "DistrictHeating")
 
         connections = []
         classname = component_class.get_classname()
         connections.append(
             cp.ComponentConnection(
-                HeatDistribution.WaterTemperatureInput, classname, component_class.WaterOutputTemperature,
+                HeatDistribution.WaterTemperatureInput, classname, component_class.WaterOutputShTemperature,
+            )
+        )
+        connections.append(
+            cp.ComponentConnection(
+                HeatDistribution.ThermalPowerReceived, classname, component_class.ThermalOutputShPower,
             )
         )
         return connections
@@ -388,8 +400,14 @@ class HeatDistribution(cp.Component):
             )
         else:
             water_temperature_input_in_celsius = stsv.get_input_value(self.water_temperature_input_channel)
+            thermal_power_received_heating_system_w = None
+            if self.position_hot_water_storage_in_system in [
+                PositionHotWaterStorageInSystemSetup.NO_STORAGE_MASS_FLOW_FIX
+            ]:
+                thermal_power_received_heating_system_w = stsv.get_input_value(self.thermal_power_received_heating_system_w_input_channel)
+
             # if state_controller == 1:
-            if state_controller in (1, -1):
+            if state_controller in (1, -1) and (thermal_power_received_heating_system_w is None or thermal_power_received_heating_system_w != 0):
                 (
                     water_temperature_output_in_celsius,
                     thermal_power_delivered_in_watt,
@@ -400,10 +418,15 @@ class HeatDistribution(cp.Component):
                     residence_temperature_in_celsius=residence_temperature_input_in_celsius,
                 )
 
-            elif state_controller == 0:
+            elif state_controller == 0 or (thermal_power_received_heating_system_w is not None and thermal_power_received_heating_system_w == 0):
                 thermal_power_delivered_in_watt = 0.0
-                water_temperature_output_in_celsius = water_temperature_input_in_celsius
-
+                # keep temperature almost as is, as no heating/cooling occurs,
+                # but introduce small change of temperature to account for heat loss and gain
+                # between heat distribution system and building
+                water_temperature_output_in_celsius = (
+                    water_temperature_input_in_celsius
+                    + 0.01 * (residence_temperature_input_in_celsius - water_temperature_input_in_celsius)
+                )
             else:
                 raise ValueError("unknown hds controller mode")
 
@@ -416,7 +439,7 @@ class HeatDistribution(cp.Component):
         stsv.set_output_value(
             self.water_temperature_outlet_channel,
             self.state.water_output_temperature_in_celsius,
-            #  water_temperature_output_in_celsius,
+            # water_temperature_output_in_celsius,
         )
         stsv.set_output_value(
             self.water_temperature_difference_channel,
@@ -426,7 +449,7 @@ class HeatDistribution(cp.Component):
         stsv.set_output_value(
             self.thermal_power_delivered_channel,
             self.state.thermal_power_delivered_in_watt,
-            #  thermal_power_delivered_in_watt,
+            # thermal_power_delivered_in_watt,
         )
         stsv.set_output_value(
             self.water_mass_flow_channel, water_mass_flow_rate_in_kg_per_second,

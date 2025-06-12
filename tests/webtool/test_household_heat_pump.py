@@ -100,7 +100,15 @@ def test_household_heat_pump_system_setup_starter_pv():
             "set_heating_temperature_in_celsius": 19.0,
             "set_cooling_temperature_in_celsius": 24.0,
             "enable_opening_windows": False,
-            "max_thermal_building_demand_in_watt": None
+            "max_thermal_building_demand_in_watt": None,
+            "u_value_facade_in_watt_per_m2_per_kelvin": None,
+            "u_value_roof_in_watt_per_m2_per_kelvin": None,
+            "u_value_window_in_watt_per_m2_per_kelvin": None,
+            "u_value_door_in_watt_per_m2_per_kelvin": None,
+            "co2_footprint": 1,
+            "cost": 1,
+            "maintenance_cost_as_percentage_of_investment": 0.01,
+            "lifetime": 1,
         },
         "options": {"photovoltaic": True},
     }

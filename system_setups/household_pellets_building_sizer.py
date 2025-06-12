@@ -255,7 +255,7 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
     # Set sizing option for Hot water Storage
-    sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM
+    sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_PELLET_HEATING
 
     # Build Pellets heater For Space Heating
     my_pellet_heater_config = generic_boiler.GenericBoilerConfig.get_scaled_conventional_pellet_boiler_config(
@@ -267,8 +267,8 @@ def setup_function(
     my_sim.add_component(my_pellet_heater, connect_automatically=True)
 
     # Build Pellet Heater Controller
-    # Pellet boiler cannot modulate! So use here on off controller
-    my_pellet_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.get_default_on_off_generic_boiler_controller_config(
+    # Pellet boiler cannot modulate and it has long run/idle times, so use specific config
+    my_pellet_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.get_default_pellet_controller_config(
         minimal_thermal_power_in_watt=my_pellet_heater_config.minimal_thermal_power_in_watt,
         maximal_thermal_power_in_watt=my_pellet_heater_config.maximal_thermal_power_in_watt,
     )
@@ -307,7 +307,7 @@ def setup_function(
     my_sim.add_component(my_dhw_storage, connect_automatically=True)
     my_sim.add_component(my_pellet_heater_controller_for_dhw, connect_automatically=True)
 
-    # Build Heat Water Storage
+    # Build Heat Water Storage; buffer storage is important for pellet heating, as it cannot modulate
     my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,

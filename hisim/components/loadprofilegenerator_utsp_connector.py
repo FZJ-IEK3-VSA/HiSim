@@ -1,4 +1,4 @@
-""" Contains a component that uses the UTSP to provide LoadProfileGenerator data. """
+"""Contains a component that uses the UTSP to provide LoadProfileGenerator data."""
 
 # clean
 
@@ -7,9 +7,11 @@ import errno
 import io
 import json
 import os
+import contextlib
 from ast import literal_eval
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple, Union
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Union, Set
 import copy
 import enum
 import pandas as pd
@@ -30,6 +32,9 @@ from utspclient.helpers.lpgdata import (
     EnergyIntensityType,
 )
 from utspclient.helpers.lpgpythonbindings import CalcOption, JsonReference
+
+from pylpg import lpg_execution
+
 from hisim.postprocessing.kpi_computation.kpi_structure import KpiEntry, KpiHelperClass, KpiTagEnumClass
 
 # Owned
@@ -43,17 +48,16 @@ from hisim.sim_repository_singleton import SingletonSimRepository, SingletonDict
 
 
 class LpgDataAcquisitionMode(enum.Enum):
-
     """Set LPG Data Acquisition Mode."""
 
     USE_PREDEFINED_PROFILE = "use_predefined_profile"
     USE_UTSP = "use_utsp"
+    USE_LOCAL_LPG = "use_local_lpg"
 
 
 @dataclass_json
 @dataclass
 class UtspLpgConnectorConfig(cp.ConfigBase):
-
     """Config class for UtspLpgConnector. Contains LPG parameters and UTSP connection parameters."""
 
     building_name: str
@@ -61,15 +65,16 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
     data_acquisition_mode: LpgDataAcquisitionMode
     household: Union[JsonReference, List[JsonReference]]
     energy_intensity: EnergyIntensityType
-    travel_route_set: JsonReference
-    transportation_device_set: JsonReference
-    charging_station_set: JsonReference
+    travel_route_set: Optional[JsonReference]
+    transportation_device_set: Optional[JsonReference]
+    charging_station_set: Optional[JsonReference]
     profile_with_washing_machine_and_dishwasher: bool
     predictive_control: bool
     predictive: bool
     result_dir_path: str
     cache_dir_path: Optional[str] = None
     name_of_predefined_loadprofile: Optional[str] = "CHR01 Couple both at Work"
+    predefined_loadprofile_filepaths: Optional[str] = None
     guid: str = ""
 
     @classmethod
@@ -78,7 +83,10 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
         return UtspLpgConnector.get_full_classname()
 
     @classmethod
-    def get_default_utsp_connector_config(cls, building_name: str = "BUI1",) -> Any:
+    def get_default_utsp_connector_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Creates a default configuration. Chooses default values for the LPG parameters."""
 
         config = UtspLpgConnectorConfig(
@@ -86,6 +94,7 @@ class UtspLpgConnectorConfig(cp.ConfigBase):
             name="UTSPConnector",
             data_acquisition_mode=LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE,
             name_of_predefined_loadprofile="CHR01 Couple both at Work",
+            predefined_loadprofile_filepaths=None,
             household=Households.CHR01_Couple_both_at_Work,
             result_dir_path=utils.HISIMPATH["utsp_results"],
             energy_intensity=EnergyIntensityType.EnergySaving,
@@ -151,16 +160,26 @@ class UtspLpgConnector(cp.Component):
             my_display_config=my_display_config,
         )
         self.name_of_predefined_loadprofile = config.name_of_predefined_loadprofile
+        self.predefined_loadprofile_filepaths = config.predefined_loadprofile_filepaths
+
         self.build()
         # dummy value as long as there is no way to consider multiple households in one house
         self.scaling_factor_according_to_number_of_apartments: float = 1.0
 
         # Inputs - Not Mandatory
         self.ww_mass_input_channel: cp.ComponentInput = self.add_input(
-            self.component_name, self.WW_MassInput, lt.LoadTypes.WARM_WATER, lt.Units.KG_PER_SEC, False,
+            self.component_name,
+            self.WW_MassInput,
+            lt.LoadTypes.WARM_WATER,
+            lt.Units.KG_PER_SEC,
+            False,
         )
         self.ww_temperature_input_channel: cp.ComponentInput = self.add_input(
-            self.component_name, self.WW_TemperatureInput, lt.LoadTypes.WARM_WATER, lt.Units.CELSIUS, False,
+            self.component_name,
+            self.WW_TemperatureInput,
+            lt.LoadTypes.WARM_WATER,
+            lt.Units.CELSIUS,
+            False,
         )
 
         self.number_of_residents_channel: cp.ComponentOutput = self.add_output(
@@ -301,9 +320,7 @@ class UtspLpgConnector(cp.Component):
         resolution = datetime.timedelta(seconds=seconds)
         return str(resolution)
 
-    def get_profiles_from_utsp(
-        self, lpg_households: Union[JsonReference, List[JsonReference]], guid: str
-    ) -> Tuple[
+    def get_profiles_from_utsp(self, lpg_households: Union[JsonReference, List[JsonReference]], guid: str) -> Tuple[
         Union[str, List],
         Union[str, List],
         Union[str, List],
@@ -328,7 +345,9 @@ class UtspLpgConnector(cp.Component):
         # choose if one lpg request should be made or several in parallel
         if isinstance(lpg_households, JsonReference):
             simulation_config = self.prepare_lpg_simulation_config_for_utsp_request(
-                start_date=start_date, end_date=end_date, household=lpg_households,
+                start_date=start_date,
+                end_date=end_date,
+                household=lpg_households,
             )
 
             (
@@ -341,7 +360,10 @@ class UtspLpgConnector(cp.Component):
                 car_states_file,
                 car_locations_file,
                 driving_distances_file,
-            ) = self.calculate_one_lpg_request(simulation_config=simulation_config, guid=guid,)
+            ) = self.calculate_one_utsp_request(
+                simulation_config=simulation_config,
+                guid=guid,
+            )
 
         elif isinstance(lpg_households, List):
             simulation_configs = []
@@ -361,8 +383,11 @@ class UtspLpgConnector(cp.Component):
                 car_states_file,
                 car_locations_file,
                 driving_distances_file,
-            ) = self.calculate_multiple_lpg_requests(  # type: ignore
-                url=self.utsp_url, api_key=self.utsp_api_key, lpg_configs=simulation_configs, guid=guid,
+            ) = self.calculate_multiple_utsp_requests(  # type: ignore
+                url=self.utsp_url,
+                api_key=self.utsp_api_key,
+                lpg_configs=simulation_configs,
+                guid=guid,
             )
 
         else:
@@ -382,24 +407,132 @@ class UtspLpgConnector(cp.Component):
             driving_distances_file,
         )
 
-    def get_profiles_from_predefined_profile(self,) -> Tuple[str, str, str, str, str]:
-        """Get the loadprofiles for a specific predefined profile from hisim/inputs/loadprofiles."""
-        predefined_profile_filepaths = utils.HISIMPATH["occupancy"][self.name_of_predefined_loadprofile]
-        # get first bodily activity files
-        bodily_activity_filepaths = predefined_profile_filepaths["number_of_residents"]
+    def get_profiles_from_local_lpg(
+        self,
+        lpg_households: Union[JsonReference, List[JsonReference]]
+    ) -> Tuple[
+        Union[str, List],
+        Union[str, List],
+        Union[str, List],
+        Union[str, List],
+        Union[str, List],
+        Union[str, List],
+        Union[str, List],
+        Union[str, List],
+        Union[str, List],
+    ]:
+        """Requests the required load profiles from local lpg. Returns raw, unparsed result file contents.
 
-        high_activity_file = bodily_activity_filepaths[0]
-        low_activity_file = bodily_activity_filepaths[1]
-        # get other files
-        if self.utsp_config.profile_with_washing_machine_and_dishwasher:
-            electricity_file = predefined_profile_filepaths["electricity_consumption"]
+        :return: a tuple of all result file contents (electricity, warm water, high bodily activity and low bodily activity),
+                 and a list of filenames of all additionally saved files
+        """
+        if isinstance(lpg_households, JsonReference):
+            (
+                electricity_file,
+                warm_water_file,
+                inner_device_heat_gains_file,
+                high_activity_file,
+                low_activity_file,
+                flexibility_file,
+                car_states_file,
+                car_locations_file,
+                driving_distances_file,
+            ) = self.calculate_one_lpg_request(
+                household=lpg_households,
+            )
+
+        elif isinstance(lpg_households, List):
+            (
+                electricity_file,
+                warm_water_file,
+                inner_device_heat_gains_file,
+                high_activity_file,
+                low_activity_file,
+                flexibility_file,
+                car_states_file,
+                car_locations_file,
+                driving_distances_file,
+            ) = self.calculate_multiple_lpg_request(  # type: ignore
+                households=lpg_households,
+            )
+
         else:
-            electricity_file = predefined_profile_filepaths[
-                "electricity_consumption_without_washing_machine_and_dishwasher"
-            ]
+            raise TypeError(
+                f"Type of lpg_households {type(lpg_households)} is invalid. It should be a JSONReference or a list of JSONReference."
+            )
 
-        warm_water_file = predefined_profile_filepaths["water_consumption"]
-        inner_device_heat_gains_file = predefined_profile_filepaths["heating_by_devices"]
+        return (
+            electricity_file,
+            warm_water_file,
+            inner_device_heat_gains_file,
+            high_activity_file,
+            low_activity_file,
+            flexibility_file,
+            car_states_file,
+            car_locations_file,
+            driving_distances_file,
+        )
+
+    def get_profiles_from_predefined_profile(
+        self,
+    ) -> Tuple[str, str, str, str, str]:
+        """Get the loadprofiles for a specific predefined profile from hisim/inputs/loadprofiles."""
+        if self.name_of_predefined_loadprofile is None:
+            self.name_of_predefined_loadprofile = "CHR01 Couple both at Work"
+            log.information(f"You choose {self.utsp_config.data_acquisition_mode}, "
+                            f"but did not specify a predefined loadprofile."
+                            f" Using default profile {self.name_of_predefined_loadprofile}.")
+
+        if self.predefined_loadprofile_filepaths is None:
+            log.information("Filepath of predefined loadprofile defined in hisim.utils.py is used")
+            predefined_profile_filepaths = utils.HISIMPATH["occupancy"][self.name_of_predefined_loadprofile]
+            # get first bodily activity files
+            bodily_activity_filepaths = predefined_profile_filepaths["number_of_residents"]
+
+            high_activity_file = bodily_activity_filepaths[0]
+            low_activity_file = bodily_activity_filepaths[1]
+            # get other files
+            if self.utsp_config.profile_with_washing_machine_and_dishwasher:
+                electricity_file = predefined_profile_filepaths["electricity_consumption"]
+            else:
+                electricity_file = predefined_profile_filepaths[
+                    "electricity_consumption_without_washing_machine_and_dishwasher"
+                ]
+
+            warm_water_file = predefined_profile_filepaths["water_consumption"]
+            inner_device_heat_gains_file = predefined_profile_filepaths["heating_by_devices"]
+
+        else:
+            clean_basename = os.path.basename(self.predefined_loadprofile_filepaths).replace("_", " ").lower().strip()
+            clean_target = self.name_of_predefined_loadprofile.replace("_", " ").lower().strip()
+
+            if clean_target in clean_basename:
+                predefined_profile_filepaths = self.predefined_loadprofile_filepaths
+            else:
+                predefined_profile_filepaths = os.path.join(self.predefined_loadprofile_filepaths,
+                                                            self.name_of_predefined_loadprofile)
+
+            if os.path.isdir(predefined_profile_filepaths):
+                files_in_dir = os.listdir(predefined_profile_filepaths)
+                if not files_in_dir:
+                    raise ValueError("Something in name or path of external predefinded loadprofile is wrong!")
+                log.information(f"{len(files_in_dir)} files of loadprofles found.")
+            else:
+                raise ValueError(f"External path of loadprofle {predefined_profile_filepaths} doesn´t exist!")
+
+            log.information(f"External Filepath of predefined loadprofile is used: {predefined_profile_filepaths}")
+
+            high_activity_file = os.path.join(predefined_profile_filepaths, "BodilyActivityLevel.High.HH1.json")
+            low_activity_file = os.path.join(predefined_profile_filepaths, "BodilyActivityLevel.Low.HH1.json")
+            if self.utsp_config.profile_with_washing_machine_and_dishwasher:
+                electricity_file = os.path.join(predefined_profile_filepaths, "SumProfiles.HH1.Electricity.csv")
+            else:
+                electricity_file = os.path.join(predefined_profile_filepaths, "SumProfiles.NoFlex.HH1.Electricity.csv")
+
+            warm_water_file = os.path.join(predefined_profile_filepaths, "SumProfiles.HH1.Warm Water.csv")
+            inner_device_heat_gains_file = os.path.join(predefined_profile_filepaths, "SumProfiles.HH1.Inner Device Heat Gains.csv")
+
+        #
         # when using predefined profile there are no saved files concerning flexibility or car data
         # TODO: implement flexibility and car files?
         return (
@@ -558,166 +691,214 @@ class UtspLpgConnector(cp.Component):
                         log.warning(
                             "You chose USE_UTSP as data_acquition_mode but it is not possible to read the url and api_key from the .env file."
                             "Please check if this file is present in your system."
+                            "Otherwise the Local LPG will be used."
+                        )
+                        self.utsp_config.data_acquisition_mode = LpgDataAcquisitionMode.USE_LOCAL_LPG
+
+                if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_LOCAL_LPG:
+                    try:
+                        pass
+                        # todo: use lokal lpg --> check if package is installed
+
+                    except Exception:
+                        log.warning(
+                            "You chose USE_LOCAL_LPG as data_acquition_mode but it is not possible to start local lpg."
+                            "Please check if lpg repo is installed."
                             "Otherwise the predefined LPG profile in hisim/inputs/loadprofiles will be used."
                         )
                         self.utsp_config.data_acquisition_mode = LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
 
-                if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
-                    log.information(f"LPG data acquisition mode: {self.utsp_config.data_acquisition_mode}")
-                    new_unique_config = list_of_unique_household_configs[list_index]
+                if (self.utsp_config.data_acquisition_mode in
+                        (LpgDataAcquisitionMode.USE_UTSP, LpgDataAcquisitionMode.USE_LOCAL_LPG)):
+                    max_attempts = 2
+                    attempt = 0
 
-                    (
-                        electricity_file,
-                        warm_water_file,
-                        inner_device_heat_gains_file,
-                        high_activity_file,
-                        low_activity_file,
-                        flexibility_file,
-                        car_states_file,
-                        car_locations_file,
-                        driving_distances_file,
-                    ) = self.get_profiles_from_utsp(
-                        lpg_households=new_unique_config.household, guid=new_unique_config.guid,
-                    )
+                    while attempt < max_attempts:
+                        try:
+                            log.information(f"LPG data acquisition mode: {self.utsp_config.data_acquisition_mode}")
+                            new_unique_config = list_of_unique_household_configs[list_index]
+                            if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
+                                (
+                                    electricity_file,
+                                    warm_water_file,
+                                    inner_device_heat_gains_file,
+                                    high_activity_file,
+                                    low_activity_file,
+                                    flexibility_file,
+                                    car_states_file,
+                                    car_locations_file,
+                                    driving_distances_file,
+                                ) = self.get_profiles_from_utsp(
+                                    lpg_households=new_unique_config.household,
+                                    guid=new_unique_config.guid,
+                                )
+                            elif self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_LOCAL_LPG:
+                                (
+                                    electricity_file,
+                                    warm_water_file,
+                                    inner_device_heat_gains_file,
+                                    high_activity_file,
+                                    low_activity_file,
+                                    flexibility_file,
+                                    car_states_file,
+                                    car_locations_file,
+                                    driving_distances_file,
+                                ) = self.get_profiles_from_local_lpg(lpg_households=new_unique_config.household)
 
-                    # only one result obtained
-                    if isinstance(electricity_file, str):
-                        log.information("One result obtained from lpg utsp connector.")
-                        (
-                            electricity_consumption,
-                            heating_by_devices,
-                            water_consumption,
-                            heating_by_residents,
-                            number_of_residents,
-                        ) = self.load_result_files_and_transform_to_lists(
-                            electricity=electricity_file,
-                            warm_water=warm_water_file,
-                            inner_device_heat_gains=inner_device_heat_gains_file,
-                            high_activity=high_activity_file,
-                            low_activity=low_activity_file,
-                            data_acquisition_mode=self.utsp_config.data_acquisition_mode,
-                        )
-                        list_of_flexibility_and_car_files = [
-                            flexibility_file,
-                            car_states_file,
-                            car_locations_file,
-                            driving_distances_file,
-                        ]
-                        if all(isinstance(file, str) for file in list_of_flexibility_and_car_files):
-                            list_of_flexibility_and_car_data = self.load_results_and_transform_string_to_data(
-                                list_of_result_files=list_of_flexibility_and_car_files  # type: ignore
-                            )
-                        else:
-                            raise TypeError(
-                                f"Type of flexibility and car files should be str, but it's {[type(i) for i in list_of_flexibility_and_car_files]}"
-                            )
+                            # only one result obtained
+                            if isinstance(electricity_file, str):
+                                log.information(f"One result obtained from {self.utsp_config.data_acquisition_mode}.")
+                                (
+                                    electricity_consumption,
+                                    heating_by_devices,
+                                    water_consumption,
+                                    heating_by_residents,
+                                    number_of_residents,
+                                ) = self.load_result_files_and_transform_to_lists(
+                                    electricity=electricity_file,
+                                    warm_water=warm_water_file,
+                                    inner_device_heat_gains=inner_device_heat_gains_file,
+                                    high_activity=high_activity_file,
+                                    low_activity=low_activity_file,
+                                    data_acquisition_mode=self.utsp_config.data_acquisition_mode,
+                                )
+                                list_of_flexibility_and_car_files = [
+                                    flexibility_file,
+                                    car_states_file,
+                                    car_locations_file,
+                                    driving_distances_file,
+                                ]
+                                if all(isinstance(file, str) for file in list_of_flexibility_and_car_files):
+                                    list_of_flexibility_and_car_data = self.load_results_and_transform_string_to_data(
+                                        list_of_result_files=list_of_flexibility_and_car_files  # type: ignore
+                                    )
+                                else:
+                                    raise TypeError(
+                                        f"Type of flexibility and car files should be str, but it's {[type(i) for i in list_of_flexibility_and_car_files]}"
+                                    )
 
-                        # write lists to dict
-                        value_dict["electricity_consumption"].append(electricity_consumption)
-                        value_dict["heating_by_devices"].append(heating_by_devices)
-                        value_dict["heating_by_residents"].append(heating_by_residents)
-                        value_dict["water_consumption"].append(water_consumption)
-                        value_dict["number_of_residents"].append(number_of_residents)
-                        self.flexibility_data_dict["flexibility"].append(list_of_flexibility_and_car_data[0])
-                        self.car_data_dict["car_states"].append(list_of_flexibility_and_car_data[1])
-                        self.car_data_dict["car_locations"].append(list_of_flexibility_and_car_data[2])
-                        self.car_data_dict["driving_distances"].append(list_of_flexibility_and_car_data[3])
+                                # write lists to dict
+                                value_dict["electricity_consumption"].append(electricity_consumption)
+                                value_dict["heating_by_devices"].append(heating_by_devices)
+                                value_dict["heating_by_residents"].append(heating_by_residents)
+                                value_dict["water_consumption"].append(water_consumption)
+                                value_dict["number_of_residents"].append(number_of_residents)
+                                self.flexibility_data_dict["flexibility"].append(list_of_flexibility_and_car_data[0])
+                                self.car_data_dict["car_states"].append(list_of_flexibility_and_car_data[1])
+                                self.car_data_dict["car_locations"].append(list_of_flexibility_and_car_data[2])
+                                self.car_data_dict["driving_distances"].append(list_of_flexibility_and_car_data[3])
 
-                        # cache results for each household individually
-                        self.cache_results(
-                            cache_filepath=cache_filepath,
-                            number_of_residents=number_of_residents,
-                            electricity_consumption=electricity_consumption,
-                            heating_by_residents=heating_by_residents,
-                            water_consumption=water_consumption,
-                            heating_by_devices=heating_by_devices,
-                            flexibility=list_of_flexibility_and_car_data[0],
-                            car_states=list_of_flexibility_and_car_data[1],
-                            car_locations=list_of_flexibility_and_car_data[2],
-                            driving_distances=list_of_flexibility_and_car_data[3],
-                        )
+                                # cache results for each household individually
+                                self.cache_results(
+                                    cache_filepath=cache_filepath,
+                                    number_of_residents=number_of_residents,
+                                    electricity_consumption=electricity_consumption,
+                                    heating_by_residents=heating_by_residents,
+                                    water_consumption=water_consumption,
+                                    heating_by_devices=heating_by_devices,
+                                    flexibility=list_of_flexibility_and_car_data[0],
+                                    car_states=list_of_flexibility_and_car_data[1],
+                                    car_locations=list_of_flexibility_and_car_data[2],
+                                    driving_distances=list_of_flexibility_and_car_data[3],
+                                )
 
-                    # multiple results obtained (when multiple households in utsp_config given and the guid in the config is not "" but has a specific value)
-                    elif isinstance(electricity_file, List):
-                        log.information("Multiple results obtained from lpg utsp connector.")
+                            # multiple results obtained (when multiple households in utsp_config given and the guid in the config is not "" but has a specific value)
+                            elif isinstance(electricity_file, List):
+                                log.information(f"Multiple results obtained from {self.utsp_config.data_acquisition_mode}.")
 
-                        for index, electricity in enumerate(electricity_file):
-                            warm_water = warm_water_file[index]
-                            inner_device_heat_gains = inner_device_heat_gains_file[index]
-                            high_activity = high_activity_file[index]
-                            low_activity = low_activity_file[index]
-                            flexibility = flexibility_file[index]
-                            car_states = car_states_file[index]
-                            car_locations = car_locations_file[index]
-                            driving_distances = driving_distances_file[index]
+                                for index, electricity in enumerate(electricity_file):
+                                    warm_water = warm_water_file[index]
+                                    inner_device_heat_gains = inner_device_heat_gains_file[index]
+                                    high_activity = high_activity_file[index]
+                                    low_activity = low_activity_file[index]
+                                    flexibility = flexibility_file[index]
+                                    car_states = car_states_file[index]
+                                    car_locations = car_locations_file[index]
+                                    driving_distances = driving_distances_file[index]
 
+                                    (
+                                        electricity_consumption,
+                                        heating_by_devices,
+                                        water_consumption,
+                                        heating_by_residents,
+                                        number_of_residents,
+                                    ) = self.load_result_files_and_transform_to_lists(
+                                        electricity=electricity,
+                                        warm_water=warm_water,
+                                        inner_device_heat_gains=inner_device_heat_gains,
+                                        high_activity=high_activity,
+                                        low_activity=low_activity,
+                                        data_acquisition_mode=self.utsp_config.data_acquisition_mode,
+                                    )
+                                    list_of_flexibility_and_car_data = self.load_results_and_transform_string_to_data(
+                                        list_of_result_files=[flexibility, car_states, car_locations, driving_distances]
+                                    )
+
+                                    # write lists to dict
+                                    value_dict["electricity_consumption"].append(electricity_consumption)
+                                    value_dict["heating_by_devices"].append(heating_by_devices)
+                                    value_dict["heating_by_residents"].append(heating_by_residents)
+                                    value_dict["water_consumption"].append(water_consumption)
+                                    value_dict["number_of_residents"].append(number_of_residents)
+                                    self.flexibility_data_dict["flexibility"].append(list_of_flexibility_and_car_data[0])
+                                    self.car_data_dict["car_states"].append(list_of_flexibility_and_car_data[1])
+                                    self.car_data_dict["car_locations"].append(list_of_flexibility_and_car_data[2])
+                                    self.car_data_dict["driving_distances"].append(list_of_flexibility_and_car_data[3])
+
+                                # get sum of all household profiles
+                                (
+                                    self.electricity_consumption,
+                                    self.heating_by_residents,
+                                    self.water_consumption,
+                                    self.heating_by_devices,
+                                    self.number_of_residents,
+                                ) = self.get_result_lists_by_summing_over_value_dict(value_dict=value_dict)
+
+                                self.max_hot_water_demand = max(self.water_consumption)
+
+                                # cache for multiple results at a time
+                                self.cache_results(
+                                    cache_filepath=cache_filepath,
+                                    number_of_residents=self.number_of_residents,
+                                    heating_by_residents=self.heating_by_residents,
+                                    water_consumption=self.water_consumption,
+                                    heating_by_devices=self.heating_by_devices,
+                                    electricity_consumption=self.electricity_consumption,
+                                    flexibility=list_of_flexibility_and_car_data[0],
+                                    car_states=list_of_flexibility_and_car_data[1],
+                                    car_locations=list_of_flexibility_and_car_data[2],
+                                    driving_distances=list_of_flexibility_and_car_data[3],
+                                )
+                                break
+
+                            # get sum of all household profiles
                             (
-                                electricity_consumption,
-                                heating_by_devices,
-                                water_consumption,
-                                heating_by_residents,
-                                number_of_residents,
-                            ) = self.load_result_files_and_transform_to_lists(
-                                electricity=electricity,
-                                warm_water=warm_water,
-                                inner_device_heat_gains=inner_device_heat_gains,
-                                high_activity=high_activity,
-                                low_activity=low_activity,
-                                data_acquisition_mode=self.utsp_config.data_acquisition_mode,
+                                self.electricity_consumption,
+                                self.heating_by_residents,
+                                self.water_consumption,
+                                self.heating_by_devices,
+                                self.number_of_residents,
+                            ) = self.get_result_lists_by_summing_over_value_dict(value_dict=value_dict)
+
+                            self.max_hot_water_demand = max(self.water_consumption)
+
+                            break
+
+                        except Exception as e:
+                            log.warning(f"Error while {self.utsp_config.data_acquisition_mode} request: {e}")
+                            if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
+                                self.utsp_config.data_acquisition_mode = LpgDataAcquisitionMode.USE_LOCAL_LPG
+                            elif self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_LOCAL_LPG:
+                                attempt = 1
+                                self.utsp_config.data_acquisition_mode = LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE
+                            else:
+                                break
+                            log.warning(
+                                f"LPG data acquisition mode will be set to: {self.utsp_config.data_acquisition_mode}!"
                             )
-                            list_of_flexibility_and_car_data = self.load_results_and_transform_string_to_data(
-                                list_of_result_files=[flexibility, car_states, car_locations, driving_distances]
-                            )
+                            attempt += 1
 
-                            # write lists to dict
-                            value_dict["electricity_consumption"].append(electricity_consumption)
-                            value_dict["heating_by_devices"].append(heating_by_devices)
-                            value_dict["heating_by_residents"].append(heating_by_residents)
-                            value_dict["water_consumption"].append(water_consumption)
-                            value_dict["number_of_residents"].append(number_of_residents)
-                            self.flexibility_data_dict["flexibility"].append(list_of_flexibility_and_car_data[0])
-                            self.car_data_dict["car_states"].append(list_of_flexibility_and_car_data[1])
-                            self.car_data_dict["car_locations"].append(list_of_flexibility_and_car_data[2])
-                            self.car_data_dict["driving_distances"].append(list_of_flexibility_and_car_data[3])
-
-                        # get sum of all household profiles
-                        (
-                            self.electricity_consumption,
-                            self.heating_by_residents,
-                            self.water_consumption,
-                            self.heating_by_devices,
-                            self.number_of_residents,
-                        ) = self.get_result_lists_by_summing_over_value_dict(value_dict=value_dict)
-
-                        self.max_hot_water_demand = max(self.water_consumption)
-
-                        # cache for multiple results at a time
-                        self.cache_results(
-                            cache_filepath=cache_filepath,
-                            number_of_residents=self.number_of_residents,
-                            heating_by_residents=self.heating_by_residents,
-                            water_consumption=self.water_consumption,
-                            heating_by_devices=self.heating_by_devices,
-                            electricity_consumption=self.electricity_consumption,
-                            flexibility=list_of_flexibility_and_car_data[0],
-                            car_states=list_of_flexibility_and_car_data[1],
-                            car_locations=list_of_flexibility_and_car_data[2],
-                            driving_distances=list_of_flexibility_and_car_data[3],
-                        )
-                        break
-
-                    # get sum of all household profiles
-                    (
-                        self.electricity_consumption,
-                        self.heating_by_residents,
-                        self.water_consumption,
-                        self.heating_by_devices,
-                        self.number_of_residents,
-                    ) = self.get_result_lists_by_summing_over_value_dict(value_dict=value_dict)
-
-                    self.max_hot_water_demand = max(self.water_consumption)
-
-                elif self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE:
+                if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE:
                     log.information(
                         f"LPG data acquisition mode: {self.utsp_config.data_acquisition_mode}. "
                         f"This means the {self.name_of_predefined_loadprofile} from hisim/inputs/loadprofiles/ is taken."
@@ -752,7 +933,8 @@ class UtspLpgConnector(cp.Component):
 
                     if self.utsp_config.predictive:
                         SingletonSimRepository().set_entry(
-                            key=SingletonDictKeyEnum.HEATINGBYRESIDENTSYEARLYFORECAST, entry=self.heating_by_residents,
+                            key=SingletonDictKeyEnum.HEATINGBYRESIDENTSYEARLYFORECAST,
+                            entry=self.heating_by_residents,
                         )
 
     def get_result_lists_by_summing_over_value_dict(
@@ -804,7 +986,7 @@ class UtspLpgConnector(cp.Component):
 
                 # check if cache for utsp config exists and get or make cache filepath
                 file_exists, cache_filepath = utils.get_cache_file(
-                    component_key=self.component_name,
+                    component_key=self.config.name,
                     parameter_class=new_config_object,
                     my_simulation_parameters=self.my_simulation_parameters,
                     cache_dir_path=cache_dir_path,
@@ -815,7 +997,7 @@ class UtspLpgConnector(cp.Component):
         # config household is one jsonreference
         else:
             file_exists, cache_filepath = utils.get_cache_file(
-                component_key=self.component_name,
+                component_key=self.config.name,
                 parameter_class=self.utsp_config,
                 my_simulation_parameters=self.my_simulation_parameters,
                 cache_dir_path=cache_dir_path,
@@ -848,7 +1030,272 @@ class UtspLpgConnector(cp.Component):
 
         return guid_list
 
-    def calculate_one_lpg_request(
+    def execute_local_lpg_single_household(self,
+                                           calculation_index,
+                                           household: JsonReference,
+                                           random_seed: Optional[int] = None
+                                           ) -> str:
+        """Using local (offline) LPG to calculate the profiles for one household."""
+
+        mobility_set: Set[Optional[str]] = set()
+        for elem in [
+            self.utsp_config.charging_station_set,
+            self.utsp_config.transportation_device_set,
+            self.utsp_config.travel_route_set,
+        ]:
+            if elem is None:
+                mobility_set.add(None)
+            else:
+                mobility_set.add(elem.Name)
+
+        if len(mobility_set) == 1 and None in mobility_set:
+            simulate_transportation = False
+        elif len(mobility_set) == 3:
+            for entry in mobility_set:
+                if entry is None:
+                    log.warning(
+                        "One element in the mobility configuration is None. Simulation of mobility will be deactivated."
+                    )
+                    simulate_transportation = False
+                    break
+            else:
+                simulate_transportation = True
+        else:
+            log.warning("Mobility configuration incomplete. Simulation of mobility  will be deactivated.")
+            simulate_transportation = False
+
+        with contextlib.redirect_stdout(None):
+            with contextlib.redirect_stderr(None):
+
+                householdref = household
+                housetype = HouseTypes.HT23_No_Infrastructure_at_all
+                startdate = f"01-01-{self.my_simulation_parameters.start_date.year}"
+                enddate = f"01-01-{self.my_simulation_parameters.end_date.year}"
+                geographic_location = None
+
+                chargingset = self.utsp_config.charging_station_set
+                transportation_device_set = self.utsp_config.transportation_device_set
+                travel_route_set = self.utsp_config.travel_route_set
+                energy_intensity = self.utsp_config.energy_intensity
+
+                resolution = self.get_resolution()
+
+                calc_options = [
+                    CalcOption.JsonHouseholdSumFiles,
+                    CalcOption.HouseholdSumProfilesFromDetailedDats,
+                    CalcOption.HouseholdSumProfilesCsvNoFlex,
+                    CalcOption.BodilyActivityStatistics,
+                    CalcOption.FlexibilityEvents,
+                ]
+
+                lpe: lpg_execution.LPGExecutor = lpg_execution.LPGExecutor(calculation_index, True)
+
+                request = lpe.make_default_lpg_settings(self.my_simulation_parameters.year)
+                if random_seed is not None and request.CalcSpec is not None:
+                    request.CalcSpec.RandomSeed = random_seed
+                assert request.House is not None, "HouseData was None"
+
+                request.House.HouseTypeCode = housetype
+                hhnamespec = lpg_execution.HouseholdNameSpecification(householdref)
+                hhn = lpg_execution.HouseholdData(
+                    HouseholdDataPersonSpec=None,
+                    HouseholdTemplateSpec=None,
+                    HouseholdNameSpec=hhnamespec,
+                    UniqueHouseholdId="hhid",
+                    Name="hhname",
+                    ChargingStationSet=chargingset,
+                    TransportationDeviceSet=transportation_device_set,
+                    TravelRouteSet=travel_route_set,
+                    TransportationDistanceModifiers=None,
+                    HouseholdDataSpecification=lpg_execution.HouseholdDataSpecificationType.ByHouseholdName,
+                )
+                request.House.Households.append(hhn)
+
+                if request.CalcSpec is None:
+                    raise Exception("Failed to initialize the calculation spec")
+                if startdate is not None:
+                    request.CalcSpec.set_StartDate(startdate)
+                if enddate is not None:
+                    request.CalcSpec.set_EndDate(enddate)
+                request.CalcSpec.EnergyIntensityType = energy_intensity
+                request.CalcSpec.GeographicLocation = geographic_location
+                request.CalcSpec.set_EnableFlexibility(True)
+                if calc_options:
+                    request.CalcSpec.CalcOptions = calc_options
+                if simulate_transportation:
+                    request.CalcSpec.set_EnableTransportation(True)
+                    request.CalcSpec.CalcOptions.append(CalcOption.TansportationDeviceJsons)
+
+                request.CalcSpec.ExternalTimeResolution = resolution
+                calcspecfilename = Path(lpe.calculation_directory, "calcspec.json")
+                with open(calcspecfilename, "w", encoding="utf-8") as calcspecfile:
+                    jsonrequest = request.to_json(indent=4)
+                    calcspecfile.write(jsonrequest)
+                lpe.execute_lpg_binaries()
+
+                path_to_result_folder = os.path.join(lpe.calculation_directory, request.CalcSpec.OutputDirectory)
+
+        return str(path_to_result_folder)
+
+    def calculate_one_lpg_request(self, household: JsonReference) -> Tuple[str, str, str, str, str, str, str, str, str]:
+        """Calculate one lpg request."""
+
+        # define required results files
+        (
+            _,
+            electricity,
+            warm_water,
+            inner_device_heat_gains,
+            high_activity,
+            low_activity,
+            flexibility,
+            car_states,
+            car_locations,
+            driving_distances,
+        ) = self.define_required_result_files()
+
+        log.information("Requesting LPG profiles from local lpg for one household.")
+
+        result_folder = self.execute_local_lpg_single_household(calculation_index=1,
+                                                                household=household,
+                                                                random_seed=None)
+
+        # decode required result files
+        electricity_file = os.path.join(result_folder, electricity)
+        warm_water_file = os.path.join(result_folder, warm_water)
+        inner_device_heat_gains_file = os.path.join(result_folder, inner_device_heat_gains)
+        high_activity_file = os.path.join(result_folder, high_activity)
+        low_activity_file = os.path.join(result_folder, low_activity)
+        flexibility_file = os.path.join(result_folder, flexibility) if os.path.exists(
+            os.path.join(result_folder, flexibility)) else ""
+
+        car_states_file = ""
+        for car_state in car_states.keys():
+            car_state_path = os.path.join(result_folder, car_state)
+            if os.path.exists(car_state_path):
+                car_states_file = car_state_path
+                break
+
+        car_location_file = ""
+        for car_location in car_locations.keys():
+            car_location_path = os.path.join(result_folder, car_location)
+            if os.path.exists(car_location_path):
+                car_location_file = car_location_path
+                break
+
+        driving_distance_file = ""
+        for driving_distance in driving_distances.keys():
+            driving_distance_path = os.path.join(result_folder, driving_distance)
+            if os.path.exists(driving_distance_path):
+                driving_distance_file = driving_distance_path
+                break
+
+        return (
+            electricity_file,
+            warm_water_file,
+            inner_device_heat_gains_file,
+            high_activity_file,
+            low_activity_file,
+            flexibility_file,
+            car_states_file,
+            car_location_file,
+            driving_distance_file,
+        )
+
+    def calculate_multiple_lpg_request(
+        self, households: List[JsonReference]
+    ) -> Tuple[List[str], List[str], List[str], List[str], List[str], List[str], List[str], List[str], List[str]]:
+        """Calculate one lpg request."""
+        # define required results files
+        (
+            _,
+            electricity,
+            warm_water,
+            inner_device_heat_gains,
+            high_activity,
+            low_activity,
+            flexibility,
+            car_states,
+            car_locations,
+            driving_distances,
+        ) = self.define_required_result_files()
+
+        log.information("Requesting LPG profiles from local lpg for multiple household.")
+        result_folder_list = []
+        calculation_index = 1
+        for household in households:
+            result_folder = self.execute_local_lpg_single_household(calculation_index=calculation_index,
+                                                                    household=household,
+                                                                    random_seed=None)
+            calculation_index = calculation_index + 1
+            result_folder_list.append(result_folder)
+
+        # append all results in lists
+        electricity_file: List = []
+        warm_water_file: List = []
+        inner_device_heat_gains_file: List = []
+        high_activity_file: List = []
+        low_activity_file: List = []
+        flexibility_file: List = []
+        car_states_file: List = []
+        car_locations_file: List = []
+        driving_distances_file: List = []
+
+        for result_folder in result_folder_list:
+            electricity_file_one_result = os.path.join(result_folder, electricity)
+            warm_water_file_one_result = os.path.join(result_folder, warm_water)
+            inner_device_heat_gains_file_one_result = os.path.join(result_folder, inner_device_heat_gains)
+            high_activity_file_one_result = os.path.join(result_folder, high_activity)
+            low_activity_file_one_result = os.path.join(result_folder, low_activity)
+
+            flexibility_file_one_result = os.path.join(result_folder, flexibility) if os.path.exists(
+                os.path.join(result_folder, flexibility)) else ""
+
+            car_states_file_one_result = ""
+            for car_state in car_states.keys():
+                car_state_path = os.path.join(result_folder, car_state)
+                if os.path.exists(car_state_path):
+                    car_states_file_one_result = car_state_path
+                    break
+
+            car_locations_file_one_result = ""
+            for car_location in car_locations.keys():
+                car_location_path = os.path.join(result_folder, car_location)
+                if os.path.exists(car_location_path):
+                    car_locations_file_one_result = car_location_path
+                    break
+
+            driving_distances_file_one_result = ""
+            for driving_distance in driving_distances.keys():
+                driving_distance_path = os.path.join(result_folder, driving_distance)
+                if os.path.exists(driving_distance_path):
+                    driving_distances_file_one_result = driving_distance_path
+                    break
+
+            # append to lists
+            electricity_file.append(electricity_file_one_result)
+            warm_water_file.append(warm_water_file_one_result)
+            inner_device_heat_gains_file.append(inner_device_heat_gains_file_one_result)
+            high_activity_file.append(high_activity_file_one_result)
+            low_activity_file.append(low_activity_file_one_result)
+            flexibility_file.append(flexibility_file_one_result)
+            car_states_file.append(car_states_file_one_result)
+            car_locations_file.append(car_locations_file_one_result)
+            driving_distances_file.append(driving_distances_file_one_result)
+
+        return (
+            electricity_file,
+            warm_water_file,
+            inner_device_heat_gains_file,
+            high_activity_file,
+            low_activity_file,
+            flexibility_file,
+            car_states_file,
+            car_locations_file,
+            driving_distances_file,
+        )
+
+    def calculate_one_utsp_request(
         self, simulation_config: HouseCreationAndCalculationJob, guid: str
     ) -> Tuple[str, str, str, str, str, str, str, str, str]:
         """Calculate one lpg request."""
@@ -912,7 +1359,7 @@ class UtspLpgConnector(cp.Component):
             driving_distances_file,
         )
 
-    def calculate_multiple_lpg_requests(
+    def calculate_multiple_utsp_requests(
         self,
         lpg_configs: List,
         url: str,
@@ -938,13 +1385,23 @@ class UtspLpgConnector(cp.Component):
 
         # Create all request objects
         all_requests: List[TimeSeriesRequest] = [
-            TimeSeriesRequest(config.to_json(), "LPG", required_result_files=result_files, guid=guid,)
+            TimeSeriesRequest(
+                config.to_json(),
+                "LPG",
+                required_result_files=result_files,
+                guid=guid,
+            )
             for config in lpg_configs
         ]
 
         log.information("Requesting LPG profiles from the UTSP for multiple household.")
 
-        results = calculate_multiple_requests(url, all_requests, api_key, raise_exceptions,)
+        results = calculate_multiple_requests(
+            url,
+            all_requests,
+            api_key,
+            raise_exceptions,
+        )
 
         # append all results in lists
         electricity_file: List = []
@@ -1043,7 +1500,8 @@ class UtspLpgConnector(cp.Component):
 
         # Define required result files
         electricity = result_file_filters.LPGFilters.sum_hh1(
-            LoadTypes.Electricity, no_flex=not self.utsp_config.profile_with_washing_machine_and_dishwasher,
+            LoadTypes.Electricity,
+            no_flex=not self.utsp_config.profile_with_washing_machine_and_dishwasher,
         )
         warm_water = result_file_filters.LPGFilters.sum_hh1(LoadTypes.Warm_Water, no_flex=False)
         inner_device_heat_gains = result_file_filters.LPGFilters.sum_hh1(
@@ -1107,7 +1565,8 @@ class UtspLpgConnector(cp.Component):
             if data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
                 json_filex = json.loads(filecontent)
             # this is used for files from predefined profile
-            elif data_acquisition_mode == LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE:
+            elif (data_acquisition_mode in
+                  (LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE, LpgDataAcquisitionMode.USE_LOCAL_LPG)):
                 with open(filecontent, encoding="utf-8") as json_file:
                     json_filex = json.load(json_file)
             else:
@@ -1137,43 +1596,64 @@ class UtspLpgConnector(cp.Component):
         if data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
             # load electricity consumption, water consumption and inner device heat gains
             electricity_data = io.StringIO(electricity)
-            pre_electricity_consumption = pd.read_csv(electricity_data, sep=";", decimal=".", encoding="cp1252",).loc[
-                : (steps_desired_in_minutes - 1)
-            ]
+            pre_electricity_consumption = pd.read_csv(
+                electricity_data,
+                sep=";",
+                decimal=".",
+                encoding="cp1252",
+            ).loc[: (steps_desired_in_minutes - 1)]
             electricity_consumption_list = pd.to_numeric(
                 pre_electricity_consumption["Sum [kWh]"] * 1000 * 60
             ).tolist()  # 1 kWh/min == 60W / min
 
             water_data = io.StringIO(warm_water)
-            pre_water_consumption = pd.read_csv(water_data, sep=";", decimal=".", encoding="cp1252",).loc[
-                : (steps_desired_in_minutes - 1)
-            ]
+            pre_water_consumption = pd.read_csv(
+                water_data,
+                sep=";",
+                decimal=".",
+                encoding="cp1252",
+            ).loc[: (steps_desired_in_minutes - 1)]
             water_consumption_list = pd.to_numeric(pre_water_consumption["Sum [L]"]).tolist()
 
             inner_device_heat_gain_data = io.StringIO(inner_device_heat_gains)
             pre_inner_device_heat_gains = pd.read_csv(
-                inner_device_heat_gain_data, sep=";", decimal=".", encoding="cp1252",
+                inner_device_heat_gain_data,
+                sep=";",
+                decimal=".",
+                encoding="cp1252",
             ).loc[: (steps_desired_in_minutes - 1)]
             inner_device_heat_gains_list = pd.to_numeric(
                 pre_inner_device_heat_gains["Sum [kWh]"] * 1000 * 60
             ).tolist()  # 1 kWh/min == 60W / min
-
-        elif data_acquisition_mode == LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE:
+        elif (data_acquisition_mode in
+              (LpgDataAcquisitionMode.USE_PREDEFINED_PROFILE, LpgDataAcquisitionMode.USE_LOCAL_LPG)):
             # load electricity consumption, water consumption and inner device heat gains
             pre_electricity_consumption = pd.read_csv(
-                electricity, sep=";", decimal=".", encoding="utf-8", usecols=["Sum [kWh]"],
+                electricity,
+                sep=";",
+                decimal=".",
+                encoding="utf-8",
+                usecols=["Sum [kWh]"],
             ).loc[: (steps_desired_in_minutes - 1)]
             electricity_consumption_list = pd.to_numeric(
                 pre_electricity_consumption.loc[:, "Sum [kWh]"] * 1000 * 60
             ).tolist()  # 1 kWh/min == 60 000 W / min
 
             pre_water_consumption = pd.read_csv(
-                warm_water, sep=";", decimal=".", encoding="utf-8", usecols=["Sum [L]"],
+                warm_water,
+                sep=";",
+                decimal=".",
+                encoding="utf-8",
+                usecols=["Sum [L]"],
             ).loc[: (steps_desired_in_minutes - 1)]
             water_consumption_list = pd.to_numeric(pre_water_consumption.loc[:, "Sum [L]"]).tolist()
 
             pre_inner_device_heat_gains = pd.read_csv(
-                inner_device_heat_gains, sep=";", decimal=".", encoding="utf-8", usecols=["Time", "Sum [kWh]"],
+                inner_device_heat_gains,
+                sep=";",
+                decimal=".",
+                encoding="utf-8",
+                usecols=["Time", "Sum [kWh]"],
             ).loc[: (steps_desired_in_minutes - 1)]
             inner_device_heat_gains_list = pd.to_numeric(
                 pre_inner_device_heat_gains.loc[:, "Sum [kWh]"] * 1000 * 60
@@ -1305,7 +1785,11 @@ class UtspLpgConnector(cp.Component):
         for result_file_str in list_of_result_files:
             json_acceptable_string = result_file_str.replace("'", '"')
             if json_acceptable_string != "":
-                data = json.loads(json_acceptable_string)
+                if self.utsp_config.data_acquisition_mode == LpgDataAcquisitionMode.USE_UTSP:
+                    data = json.loads(json_acceptable_string)
+                else:
+                    with open(json_acceptable_string, encoding="utf-8") as json_file:
+                        data = json.load(json_file)
             else:
                 data = {}
             list_of_data.append(data)
@@ -1324,7 +1808,11 @@ class UtspLpgConnector(cp.Component):
             transformed_data[key] = transformed_value
         return transformed_data
 
-    def get_component_kpi_entries(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> List[KpiEntry]:
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         occupancy_total_electricity_consumption_in_kilowatt_hour: Optional[float] = None
         occupancy_total_water_consumption_in_liter: Optional[float] = None
@@ -1334,9 +1822,11 @@ class UtspLpgConnector(cp.Component):
             if output.component_name == self.component_name:
                 if output.field_name == self.ElectricityOutput and output.unit == lt.Units.WATT:
                     occupancy_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]
-                    occupancy_total_electricity_consumption_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
-                        power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
-                        timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                    occupancy_total_electricity_consumption_in_kilowatt_hour = (
+                        KpiHelperClass.compute_total_energy_from_power_timeseries(
+                            power_timeseries_in_watt=occupancy_total_electricity_consumption_in_watt_series,
+                            timeresolution=self.my_simulation_parameters.seconds_per_timestep,
+                        )
                     )
                 if output.field_name == self.WaterConsumption and output.unit == lt.Units.LITER:
                     occupancy_total_water_consumption_in_liter = round(sum(postprocessing_results.iloc[:, index]), 1)
@@ -1349,9 +1839,11 @@ class UtspLpgConnector(cp.Component):
                             HouseholdWarmWaterDemandConfig.ww_temperature_demand
                             - HouseholdWarmWaterDemandConfig.temperature_difference_hot
                         )
-                        specific_heat_capacity_of_water_in_watthour_per_kilogram_per_celsius = PhysicsConfig.get_properties_for_energy_carrier(
-                            energy_carrier=lt.LoadTypes.WATER
-                        ).specific_heat_capacity_in_watthour_per_kg_per_kelvin
+                        specific_heat_capacity_of_water_in_watthour_per_kilogram_per_celsius = (
+                            PhysicsConfig.get_properties_for_energy_carrier(
+                                energy_carrier=lt.LoadTypes.WATER
+                            ).specific_heat_capacity_in_watthour_per_kg_per_kelvin
+                        )
                         occupancy_total_water_consumption_in_kwh = (
                             1e-3
                             * specific_heat_capacity_of_water_in_watthour_per_kilogram_per_celsius
@@ -1383,7 +1875,11 @@ class UtspLpgConnector(cp.Component):
             description=self.component_name,
         )
 
-        list_of_kpi_entries = [occupancy_total_electricity_consumption_entry, occupancy_total_water_consumption_entry, occupancy_total_water_consumption_energy_entry]
+        list_of_kpi_entries = [
+            occupancy_total_electricity_consumption_entry,
+            occupancy_total_water_consumption_entry,
+            occupancy_total_water_consumption_energy_entry,
+        ]
         return list_of_kpi_entries
 
     @staticmethod
@@ -1394,7 +1890,11 @@ class UtspLpgConnector(cp.Component):
         capex_cost_data_class = cp.CapexCostDataClass.get_default_capex_cost_data_class()
         return capex_cost_data_class
 
-    def get_cost_opex(self, all_outputs: List, postprocessing_results: pd.DataFrame,) -> OpexCostDataClass:
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> OpexCostDataClass:
         """Calculate OPEX costs, snd write total energy consumption to component-config.
 
         No electricity costs for components except for Electricity Meter,

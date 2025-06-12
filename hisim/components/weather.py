@@ -639,7 +639,7 @@ class Weather(Component):
             source_enum=self.weather_config.data_source,
         )
         self.simulation_repository.set_entry("weather_location", location_dict)
-        cachefound, cache_filepath = utils.get_cache_file("Weather", self.weather_config, self.my_simulation_parameters)
+        cachefound, cache_filepath = utils.get_cache_file(self.config.name, self.weather_config, self.my_simulation_parameters)
         if cachefound:
             # read cached files
             my_weather = pd.read_csv(cache_filepath, sep=",", decimal=".", encoding="cp1252")

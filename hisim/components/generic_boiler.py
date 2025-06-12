@@ -14,7 +14,7 @@ and as non-modulating on_off controller (which is used especially for pellet and
 # Owned
 import importlib
 from dataclasses import dataclass
-from typing import List, Any, Optional
+from typing import List, Any, Optional, Tuple
 from enum import Enum
 import pandas as pd
 from dataclasses_json import dataclass_json
@@ -1415,8 +1415,8 @@ class GenericBoilerController(Component):
             output_description="Temperature difference between actual and set water temperature.",
         )
 
-        self.controller_mode: Any
-        self.previous_controller_mode: Any
+        self.controller_mode: HeatingMode
+        self.previous_controller_mode: HeatingMode
 
         self.add_default_connections(
             self.get_default_connections_from_weather()
@@ -1538,7 +1538,6 @@ class GenericBoilerController(Component):
             pass
         else:
             # Retrieves inputs
-
             water_temperature_input_from_space_heating_water_storage_in_celsius = stsv.get_input_value(
                 self.water_temperature_space_heating_input_channel
             )
@@ -1559,69 +1558,12 @@ class GenericBoilerController(Component):
                 self.daily_avg_outside_temperature_input_channel
             )
 
-            # Determine which operating mode to use in dual-circuit system
-            previous_controller_mode = self.controller_mode
-            self.controller_mode = DiverterValve.determine_operating_mode(
-                with_domestic_hot_water_preparation=self.config.with_domestic_hot_water_preparation,
-                current_controller_mode=previous_controller_mode,
-                daily_average_outside_temperature=daily_avg_outside_temperature_in_celsius,
-                water_temperature_input_sh_in_celsius=water_temperature_input_from_space_heating_water_storage_in_celsius,
-                water_temperature_input_dhw_in_celsius=water_temperature_input_from_dhw_water_storage_in_celsius,
-                set_temperatures=SetTemperatureConfig(
-                    set_temperature_space_heating=heating_flow_temperature_from_heat_distribution_system,
-                    set_temperature_dhw=self.warm_water_temperature_aim_in_celsius,
-                    hysteresis_dhw_offset=self.config.dhw_hysteresis_offset,
-                    outside_temperature_threshold=self.config.set_heating_threshold_outside_temperature_in_celsius,
-                ),
-            )
-
-            # Enforce minimum run and idle times (if necessary overwrites previously set mode)
-            self.enforce_minimum_run_and_idle_times(
-                previous_controller_mode, timestep
-            )
-
-            if self.controller_mode == HeatingMode.SPACE_HEATING:
-                # get a modulated control signal between 0 and 1
-                if self.config.is_modulating is True:
-                    control_signal = self.modulate_power(
-                        water_temperature_input_in_celsius=water_temperature_input_from_space_heating_water_storage_in_celsius,
-                        set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
-                    )
-                else:
-                    control_signal = 1
-                temperature_delta = (
-                    heating_flow_temperature_from_heat_distribution_system
-                    - water_temperature_input_from_space_heating_water_storage_in_celsius
-                )
-            elif self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER:
-                assert (
-                    self.config.with_domestic_hot_water_preparation is not None
-                )
-                assert (
-                    water_temperature_input_from_dhw_water_storage_in_celsius
-                    is not None
-                )
-                if self.config.is_modulating is True:
-                    control_signal = self.modulate_power(
-                        water_temperature_input_in_celsius=water_temperature_input_from_dhw_water_storage_in_celsius,
-                        set_heating_flow_temperature_in_celsius=self.warm_water_temperature_aim_in_celsius
-                        + self.config.dhw_hysteresis_offset,
-                    )
-                else:
-                    control_signal = 1
-                temperature_delta = max(
-                    (
-                        self.warm_water_temperature_aim_in_celsius
-                        + self.config.dhw_hysteresis_offset
-                    )
-                    - water_temperature_input_from_dhw_water_storage_in_celsius,
-                    0,
-                )
-            elif self.controller_mode == HeatingMode.OFF:
-                control_signal = 0
-                temperature_delta = 0
-            else:
-                raise ValueError("Controller mode unknown.")
+            control_signal, temperature_delta = self.determine_operating_mode(
+                daily_avg_outside_temperature_in_celsius, 
+                water_temperature_input_from_space_heating_water_storage_in_celsius, 
+                water_temperature_input_from_dhw_water_storage_in_celsius, 
+                heating_flow_temperature_from_heat_distribution_system,
+                timestep)
 
             stsv.set_output_value(
                 self.control_signal_to_generic_boiler_channel, control_signal
@@ -1632,6 +1574,79 @@ class GenericBoilerController(Component):
             stsv.set_output_value(
                 self.temperature_delta_channel, temperature_delta
             )
+
+    def determine_operating_mode(self, 
+                                 daily_avg_outside_temperature_in_celsius: float,
+                                 water_temperature_input_from_space_heating_water_storage_in_celsius: float,
+                                 water_temperature_input_from_dhw_water_storage_in_celsius: float,
+                                 heating_flow_temperature_from_heat_distribution_system: float,
+                                 timestep
+                                 ) -> Tuple[float, float]:
+        # Determine which operating mode to use in dual-circuit system
+        previous_controller_mode = self.controller_mode
+        self.controller_mode = DiverterValve.determine_operating_mode(
+            with_domestic_hot_water_preparation=self.config.with_domestic_hot_water_preparation,
+            current_controller_mode=previous_controller_mode,
+            daily_average_outside_temperature=daily_avg_outside_temperature_in_celsius,
+            water_temperature_input_sh_in_celsius=water_temperature_input_from_space_heating_water_storage_in_celsius,
+            water_temperature_input_dhw_in_celsius=water_temperature_input_from_dhw_water_storage_in_celsius,
+            set_temperatures=SetTemperatureConfig(
+                set_temperature_space_heating=heating_flow_temperature_from_heat_distribution_system,
+                set_temperature_dhw=self.warm_water_temperature_aim_in_celsius,
+                hysteresis_dhw_offset=self.config.dhw_hysteresis_offset,
+                outside_temperature_threshold=self.config.set_heating_threshold_outside_temperature_in_celsius,
+            ),
+        )
+
+        # Enforce minimum run and idle times (if necessary overwrites previously set mode)
+        self.enforce_minimum_run_and_idle_times(
+            previous_controller_mode, timestep
+        )
+
+        if self.controller_mode == HeatingMode.SPACE_HEATING:
+            # get a modulated control signal between 0 and 1
+            if self.config.is_modulating is True:
+                control_signal = self.modulate_power(
+                    water_temperature_input_in_celsius=water_temperature_input_from_space_heating_water_storage_in_celsius,
+                    set_heating_flow_temperature_in_celsius=heating_flow_temperature_from_heat_distribution_system,
+                )
+            else:
+                control_signal = 1
+            temperature_delta = (
+                heating_flow_temperature_from_heat_distribution_system
+                - water_temperature_input_from_space_heating_water_storage_in_celsius
+            )
+        elif self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER:
+            assert (
+                self.config.with_domestic_hot_water_preparation is not None
+            )
+            assert (
+                water_temperature_input_from_dhw_water_storage_in_celsius
+                is not None
+            )
+            if self.config.is_modulating is True:
+                control_signal = self.modulate_power(
+                    water_temperature_input_in_celsius=water_temperature_input_from_dhw_water_storage_in_celsius,
+                    set_heating_flow_temperature_in_celsius=self.warm_water_temperature_aim_in_celsius
+                    + self.config.dhw_hysteresis_offset,
+                )
+            else:
+                control_signal = 1
+            temperature_delta = max(
+                (
+                    self.warm_water_temperature_aim_in_celsius
+                    + self.config.dhw_hysteresis_offset
+                )
+                - water_temperature_input_from_dhw_water_storage_in_celsius,
+                0,
+            )
+        elif self.controller_mode == HeatingMode.OFF:
+            control_signal = 0
+            temperature_delta = 0
+        else:
+            raise ValueError("Controller mode unknown.")
+
+        return control_signal, temperature_delta
 
     def enforce_minimum_run_and_idle_times(
         self, previous_controller_mode: HeatingMode, timestep: int

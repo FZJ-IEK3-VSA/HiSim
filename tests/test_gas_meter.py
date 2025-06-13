@@ -16,14 +16,11 @@ from hisim.components import (
     electricity_meter,
     gas_meter,
     generic_boiler,
-    generic_heat_source,
-    controller_l1_heatpump,
-    generic_hot_water_storage_modular,
     simple_water_storage,
     heat_distribution_system,
     generic_pv_system,
 )
-from hisim import utils, loadtypes
+from hisim import utils
 
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import log
@@ -137,12 +134,14 @@ def test_house(
     )
 
     my_gas_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
-        minimal_thermal_power_in_watt=my_gas_heater_config.minimal_thermal_power_in_watt, maximal_thermal_power_in_watt=my_gas_heater_config.maximal_thermal_power_in_watt, with_domestic_hot_water_preparation=True
+        minimal_thermal_power_in_watt=my_gas_heater_config.minimal_thermal_power_in_watt,
+        maximal_thermal_power_in_watt=my_gas_heater_config.maximal_thermal_power_in_watt,
+        with_domestic_hot_water_preparation=True,
     )
     my_gas_heater_controller = generic_boiler.GenericBoilerController(
         my_simulation_parameters=my_simulation_parameters, config=my_gas_heater_controller_config,
     )
-   
+
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
@@ -164,7 +163,6 @@ def test_house(
     )
 
     my_sim.add_component(my_dhw_storage, connect_automatically=True)
-
 
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
@@ -214,7 +212,6 @@ def test_house(
     gas_consumption_of_boiler_in_kilowatt_hour = jsondata["Gas Boiler"][
         "Gas consumption (energy)"
     ].get("value")
-
 
     opex_costs_for_gas_in_euro = jsondata["Gas Meter"]["Opex costs of gas consumption from grid"].get("value")
 

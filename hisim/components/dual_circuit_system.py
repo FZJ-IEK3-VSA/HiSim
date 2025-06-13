@@ -1,4 +1,4 @@
-# Helper classes for dual-circuit system
+""" Helper classes for dual-circuit system. """
 
 from dataclasses import dataclass
 import enum
@@ -15,6 +15,8 @@ class HeatingMode(enum.Enum):
 
 @dataclass
 class SetTemperatureConfig:
+    """Configuration of set temperatures."""
+
     set_temperature_space_heating: float
     set_temperature_dhw: Optional[float]
     hysteresis_dhw_offset: Optional[float]
@@ -22,8 +24,10 @@ class SetTemperatureConfig:
 
 
 class DiverterValve:
-    """Diverter valve to switch between space heating and
-    domestic hot water mode in a dual-circuit system
+    """Diverter valve for dual-circuit system.
+
+    Diverter valve to switch between space heating and
+    domestic hot water mode in a dual-circuit system.
     """
 
     @staticmethod
@@ -98,8 +102,11 @@ class DiverterValve:
         daily_average_outside_temperature_in_celsius: float,
         set_heating_threshold_temperature_in_celsius: Optional[float],
     ) -> str:
-        """Determines whether heating should be switched off entirely,
-        based on the average daily outside temperature."""
+        """Determine summer heating mode.
+
+        Determines whether heating should be switched off entirely,
+        based on the average daily outside temperature.
+        """
 
         # if no heating threshold is set, space heating is always on
         if set_heating_threshold_temperature_in_celsius is None:

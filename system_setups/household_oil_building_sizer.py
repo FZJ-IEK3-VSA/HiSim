@@ -257,7 +257,7 @@ def setup_function(
     # Set sizing option for Hot water Storage
     sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM
 
-    # Build Oil heater 
+    # Build Oil heater
     my_oil_heater_config = generic_boiler.GenericBoilerConfig.get_scaled_conventional_oil_boiler_config(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
     )

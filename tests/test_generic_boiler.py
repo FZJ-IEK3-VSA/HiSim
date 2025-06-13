@@ -40,6 +40,7 @@ def test_determine_mode_returns_correct_operation_mode_for_temperature_and_time(
     water_temp_dhw: float,
     expected_mode: str,
 ):
+    """Test determine_mode."""
     """ GIVEN """
     testee = given_default_testee(
         {
@@ -68,7 +69,6 @@ def test_determine_mode_returns_correct_operation_mode_for_temperature_and_time(
 
     """ THEN """
     assert testee.controller_mode == expected_mode
-
 
 
 def given_default_testee(

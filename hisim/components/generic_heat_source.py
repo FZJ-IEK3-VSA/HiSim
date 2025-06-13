@@ -69,10 +69,10 @@ class HeatSourceConfig(cp.ConfigBase):
 
     @classmethod
     def get_default_config_heating(
-        cls, 
-        building_name: str = "BUI1", 
-        thermal_power_in_watt: float = 6200.0, 
-        name: str = "HeatingHeatSource", 
+        cls,
+        building_name: str = "BUI1",
+        thermal_power_in_watt: float = 6200.0,
+        name: str = "HeatingHeatSource",
         boiler_type: BoilerType = BoilerType.CONVENTIONAL,
     ) -> "HeatSourceConfig":
         """Returns default configuration of a Heat Source used for heating."""

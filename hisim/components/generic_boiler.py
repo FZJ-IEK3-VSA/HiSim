@@ -137,6 +137,8 @@ class GenericBoilerConfig(ConfigBase):
         heating_load_of_building_in_watt: float,
         number_of_apartments_in_building: Optional[int],
     ) -> float:
+        """Scale thermal power."""
+
         maximal_thermal_power_in_watt_sh = heating_load_of_building_in_watt
         maximal_thermal_power_in_watt_dhw = (
             2500 * number_of_apartments_in_building
@@ -1450,6 +1452,7 @@ class GenericBoilerController(Component):
     def get_default_connections_from_dhw_storage(
         self,
     ) -> List[ComponentConnection]:
+        """Get default connections from DHW storage."""
         connections = []
         storage_classname = SimpleDHWStorage.get_classname()
         connections.append(
@@ -1559,9 +1562,9 @@ class GenericBoilerController(Component):
             )
 
             control_signal, temperature_delta = self.determine_operating_mode(
-                daily_avg_outside_temperature_in_celsius, 
-                water_temperature_input_from_space_heating_water_storage_in_celsius, 
-                water_temperature_input_from_dhw_water_storage_in_celsius, 
+                daily_avg_outside_temperature_in_celsius,
+                water_temperature_input_from_space_heating_water_storage_in_celsius,
+                water_temperature_input_from_dhw_water_storage_in_celsius,
                 heating_flow_temperature_from_heat_distribution_system,
                 timestep)
 
@@ -1575,14 +1578,15 @@ class GenericBoilerController(Component):
                 self.temperature_delta_channel, temperature_delta
             )
 
-    def determine_operating_mode(self, 
+    def determine_operating_mode(self,
                                  daily_avg_outside_temperature_in_celsius: float,
                                  water_temperature_input_from_space_heating_water_storage_in_celsius: float,
-                                 water_temperature_input_from_dhw_water_storage_in_celsius: float,
+                                 water_temperature_input_from_dhw_water_storage_in_celsius: Optional[float],
                                  heating_flow_temperature_from_heat_distribution_system: float,
                                  timestep
                                  ) -> Tuple[float, float]:
-        # Determine which operating mode to use in dual-circuit system
+        """Determine which operating mode to use in dual-circuit system."""
+
         previous_controller_mode = self.controller_mode
         self.controller_mode = DiverterValve.determine_operating_mode(
             with_domestic_hot_water_preparation=self.config.with_domestic_hot_water_preparation,
@@ -1651,12 +1655,7 @@ class GenericBoilerController(Component):
     def enforce_minimum_run_and_idle_times(
         self, previous_controller_mode: HeatingMode, timestep: int
     ) -> None:
-        """Enforces minimum run and idle times.
-
-        Args:
-            previous_controller_mode (HeatingMode): The previous operating state.
-            timestep (int): Timestep.
-        """
+        """Enforces minimum run and idle times."""
         if (
             previous_controller_mode != HeatingMode.OFF
             and self.state.activation_time_step
@@ -1682,11 +1681,12 @@ class GenericBoilerController(Component):
         set_heating_flow_temperature_in_celsius: float,
     ) -> float:
         """Modulate linearly between minimial_thermal_power and max_thermal_power of Generic Boiler.
+
         Use only when boiler is in operating mode, as this function will not go below the
         percentage required to fullfill the minimum thermal power requirement.
         """
 
-        minimal_percentage = (
+        minimal_percentage = float(
             self.config.minimal_thermal_power_in_watt
             / self.config.maximal_thermal_power_in_watt
         )
@@ -1701,7 +1701,7 @@ class GenericBoilerController(Component):
             water_temperature_input_in_celsius
             < set_heating_flow_temperature_in_celsius
         ):
-            linear_fit = 1 - (
+            linear_fit = 1.0 - (
                 (
                     self.config.set_temperature_difference_for_full_power
                     - (
@@ -1711,7 +1711,7 @@ class GenericBoilerController(Component):
                 )
                 / self.config.set_temperature_difference_for_full_power
             )
-            percentage = max(minimal_percentage, linear_fit)
+            percentage = float(max(minimal_percentage, linear_fit))
             return percentage  # type: ignore
         if (
             water_temperature_input_in_celsius

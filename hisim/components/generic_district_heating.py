@@ -1039,16 +1039,37 @@ class DistrictHeatingController(Component):
         )
 
         # Determine which operating mode to use in dual-circuit system
+        delta_temperature_in_celsius = self.determine_operating_mode(
+            daily_avg_outside_temperature_in_celsius, 
+            water_temperature_input_from_heat_distibution_in_celsius, 
+            heating_flow_temperature_from_heat_distribution_in_celsius,
+            water_temperature_input_from_warm_water_storage_in_celsius, 
+            )
+
+        stsv.set_output_value(
+            self.delta_temperature_to_district_heating_channel,
+            delta_temperature_in_celsius,
+        )
+        stsv.set_output_value(
+            self.heating_mode_output_channel, self.controller_mode.value
+        )
+
+
+    def determine_operating_mode(self, 
+                                 daily_avg_outside_temperature_in_celsius, 
+                                 sh_current_temperature_deg_c, 
+                                 sh_set_temperature_deg_c,
+                                 dh_current_temperature_deg_c) -> float:
         self.controller_mode = DiverterValve.determine_operating_mode(
             with_domestic_hot_water_preparation=self.config.with_domestic_hot_water_preparation,
             current_controller_mode=self.controller_mode,
             daily_average_outside_temperature=daily_avg_outside_temperature_in_celsius,
-            water_temperature_input_sh_in_celsius=water_temperature_input_from_heat_distibution_in_celsius,
-            water_temperature_input_dhw_in_celsius=water_temperature_input_from_warm_water_storage_in_celsius
+            water_temperature_input_sh_in_celsius=sh_current_temperature_deg_c,
+            water_temperature_input_dhw_in_celsius=dh_current_temperature_deg_c
             if self.config.with_domestic_hot_water_preparation
             else None,
             set_temperatures=SetTemperatureConfig(
-                set_temperature_space_heating=heating_flow_temperature_from_heat_distribution_in_celsius,
+                set_temperature_space_heating=sh_set_temperature_deg_c,
                 set_temperature_dhw=self.warm_water_temperature_aim_in_celsius,
                 hysteresis_dhw_offset=self.config.offset,
                 outside_temperature_threshold=self.district_heating_controller_config.set_heating_threshold_outside_temperature_in_celsius
@@ -1058,16 +1079,17 @@ class DistrictHeatingController(Component):
         if self.controller_mode == HeatingMode.SPACE_HEATING:
             # delta temperature should not be negative because district heating cannot provide cooling
             delta_temperature_in_celsius = max(
-                heating_flow_temperature_from_heat_distribution_in_celsius
-                - water_temperature_input_from_heat_distibution_in_celsius,
+                sh_set_temperature_deg_c
+                - sh_current_temperature_deg_c,
                 0,
             )
         elif self.controller_mode == HeatingMode.DOMESTIC_HOT_WATER:
             # delta temperature should not be negative because district heating cannot provide cooling
+            assert dh_current_temperature_deg_c is not None
             delta_temperature_in_celsius = (
                 max(
                     self.warm_water_temperature_aim_in_celsius
-                    - water_temperature_input_from_warm_water_storage_in_celsius,
+                    - dh_current_temperature_deg_c,
                     0,
                 )
                 + self.config.offset
@@ -1078,14 +1100,7 @@ class DistrictHeatingController(Component):
             raise ValueError(
                 "District Heating Controller control_signal unknown."
             )
-
-        stsv.set_output_value(
-            self.delta_temperature_to_district_heating_channel,
-            delta_temperature_in_celsius,
-        )
-        stsv.set_output_value(
-            self.heating_mode_output_channel, self.controller_mode.value
-        )
+        return delta_temperature_in_celsius
 
 
     def get_cost_opex(

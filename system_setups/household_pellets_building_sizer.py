@@ -271,23 +271,14 @@ def setup_function(
     my_pellet_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.get_default_pellet_controller_config(
         minimal_thermal_power_in_watt=my_pellet_heater_config.minimal_thermal_power_in_watt,
         maximal_thermal_power_in_watt=my_pellet_heater_config.maximal_thermal_power_in_watt,
+        with_domestic_hot_water_preparation=True
     )
     my_pellet_heater_controller = generic_boiler.GenericBoilerController(
         my_simulation_parameters=my_simulation_parameters, config=my_pellet_heater_controller_config,
     )
     my_sim.add_component(my_pellet_heater_controller, connect_automatically=True)
 
-    # Build Pellet Heater for DHW
-    # DHW Pellet heater and storage configs
-    my_pellet_heater_for_dhw_config = generic_boiler.GenericBoilerConfigForDHW.get_scaled_conventional_pellet_dhw_boiler_config(
-        number_of_apartments_in_building=number_of_apartments
-    )
-
-    my_pellet_heater_controller_dhw_config = generic_boiler.GenericBoilerControllerConfigForDHW.get_default_on_off_dhw_boiler_controller_config(
-        minimal_thermal_power_in_watt=my_pellet_heater_for_dhw_config.minimal_thermal_power_in_watt,
-        maximal_thermal_power_in_watt=my_pellet_heater_for_dhw_config.maximal_thermal_power_in_watt,
-    )
-
+    # DHW storage
     my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
         number_of_apartments=number_of_apartments
     )
@@ -296,16 +287,7 @@ def setup_function(
         my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 
-    my_pellet_heater_controller_for_dhw = generic_boiler.GenericBoilerControllerForDHW(
-        my_simulation_parameters=my_simulation_parameters, config=my_pellet_heater_controller_dhw_config
-    )
-
-    my_pellet_heater_for_dhw = generic_boiler.GenericBoilerForDHW(
-        config=my_pellet_heater_for_dhw_config, my_simulation_parameters=my_simulation_parameters
-    )
-    my_sim.add_component(my_pellet_heater_for_dhw, connect_automatically=True)
     my_sim.add_component(my_dhw_storage, connect_automatically=True)
-    my_sim.add_component(my_pellet_heater_controller_for_dhw, connect_automatically=True)
 
     # Build Heat Water Storage; buffer storage is important for pellet heating, as it cannot modulate
     my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(

@@ -449,7 +449,7 @@ class GenericBoiler(Component):
                 GenericBoiler.WaterInputTemperatureDhw,
                 lt.LoadTypes.WARM_WATER,
                 lt.Units.CELSIUS,
-                True,
+                False,
             )
         )
         self.water_output_mass_flow_dhw_channel: ComponentOutput = (

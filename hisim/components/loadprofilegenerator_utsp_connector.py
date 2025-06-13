@@ -130,11 +130,11 @@ class UtspLpgConnector(cp.Component):
     EnergyDischarged = "Energy Discharged"  # W
     DemandSatisfied = "Demand Satisfied"  # 0 or 1
 
-    NumberByResidents = "NumberByResidents"
+    NumberOfResidents = "NumberOfResidents"
     HeatingByResidents = "HeatingByResidents"
     HeatingByDevices = "HeatingByDevices"
-    ElectricityOutput = "ElectricityOutput"
-    ElectricityEnergyOutput = "ElectricityEnergyOutput"
+    ElectricalPowerConsumption = "ElectricalPowerConsumption"
+    ElectricalEnergyConsumption = "ElectricalEnergyConsumption"
     WaterConsumption = "WaterConsumption"
 
     Electricity_Demand_Forecast_24h = "Electricity_Demand_Forecast_24h"
@@ -184,10 +184,10 @@ class UtspLpgConnector(cp.Component):
 
         self.number_of_residents_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
-            self.NumberByResidents,
+            self.NumberOfResidents,
             lt.LoadTypes.ANY,
             lt.Units.ANY,
-            output_description=f"here a description for LPG UTSP {self.NumberByResidents} will follow.",
+            output_description="Number of people at home.",
         )
         self.heating_by_residents_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -205,20 +205,20 @@ class UtspLpgConnector(cp.Component):
         )
         self.electricity_output_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.ElectricityOutput,
+            field_name=self.ElectricalPowerConsumption,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT,
             postprocessing_flag=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
-            output_description=f"here a description for LPG UTSP {self.ElectricityOutput} will follow.",
+            output_description="Electrical power consumption by residents.",
         )
 
         self.electricity_energy_output_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.ElectricityEnergyOutput,
+            field_name=self.ElectricalEnergyConsumption,
             load_type=lt.LoadTypes.ELECTRICITY,
             unit=lt.Units.WATT_HOUR,
             postprocessing_flag=[lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL],
-            output_description=f"here a description for LPG UTSP {self.ElectricityEnergyOutput} will follow.",
+            output_description="Electrical energy consumption by residents.",
         )
 
         self.water_consumption_channel: cp.ComponentOutput = self.add_output(
@@ -1818,7 +1818,7 @@ class UtspLpgConnector(cp.Component):
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
-                if output.field_name == self.ElectricityOutput and output.unit == lt.Units.WATT:
+                if output.field_name == self.ElectricalPowerConsumption and output.unit == lt.Units.WATT:
                     occupancy_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]
                     occupancy_total_electricity_consumption_in_kilowatt_hour = (
                         KpiHelperClass.compute_total_energy_from_power_timeseries(
@@ -1903,7 +1903,7 @@ class UtspLpgConnector(cp.Component):
             if (
                 output.component_name == self.config.name
                 and output.load_type == lt.LoadTypes.ELECTRICITY
-                and output.field_name == self.ElectricityOutput
+                and output.field_name == self.ElectricalPowerConsumption
                 and output.unit == lt.Units.WATT
             ):
                 occupancy_total_electricity_consumption_in_watt_series = postprocessing_results.iloc[:, index]

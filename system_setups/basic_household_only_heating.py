@@ -118,7 +118,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         my_controller_heat.ControlSignalChooseStorage,
     )
     my_storage.connect_input(
-        my_storage.ThermalInputPower1, my_gas_heater.component_name, my_gas_heater.ThermalOutputPower,
+        my_storage.ThermalInputPower1, my_gas_heater.component_name, my_gas_heater.ThermalPowerGenerationSh,
     )
 
     my_storage_controller.connect_input(
@@ -151,7 +151,7 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
         my_gas_heater.ControlSignal, my_controller_heat.component_name, my_controller_heat.ControlSignalGasHeater,
     )
     my_gas_heater.connect_input(
-        my_gas_heater.WaterInputTemperature, my_storage.component_name, my_storage.WaterOutputStorageforHeaters,
+        my_gas_heater.WaterInputTemperatureSh, my_storage.component_name, my_storage.WaterOutputStorageforHeaters,
     )
 
     # =================================================================================================================================

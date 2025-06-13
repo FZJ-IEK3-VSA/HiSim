@@ -339,7 +339,7 @@ class GenericBoiler(Component):
     WaterOutputMassFlowSh = "WaterOutputMassFlowSh"
     WaterOutputTemperatureSh = "WaterOutputTemperatureSh"
     EnergyDemandSh = "EnergyDemandSh"
-    ThermalOutputPowerSh = "ThermalOutputPowerSh"
+    ThermalPowerGenerationSh = "ThermalOutputPowerSh"
     ThermalOutputEnergySh = "ThermalOutputEnergySh"
     WaterOutputMassFlowDhw = "WaterOutputMassFlowDhw"
     WaterOutputTemperatureDhw = "WaterOutputTemperatureDhw"
@@ -414,7 +414,7 @@ class GenericBoiler(Component):
         self.energy_demand_sh_channel: ComponentOutput = self.add_output(
             self.component_name,
             GenericBoiler.EnergyDemandSh,
-            lt.LoadTypes.ANY,
+            lt.LoadTypes.HEATING,
             lt.Units.WATT_HOUR,
             output_description=f"here a description for {self.EnergyDemandSh} will follow.",
             postprocessing_flag=[
@@ -423,10 +423,10 @@ class GenericBoiler(Component):
         )
         self.thermal_output_power_sh_channel: ComponentOutput = self.add_output(
             object_name=self.component_name,
-            field_name=self.ThermalOutputPowerSh,
+            field_name=self.ThermalPowerGenerationSh,
             load_type=lt.LoadTypes.HEATING,
             unit=lt.Units.WATT,
-            output_description=f"here a description for {self.ThermalOutputPowerSh} will follow.",
+            output_description=f"here a description for {self.ThermalPowerGenerationSh} will follow.",
             postprocessing_flag=[
                 lt.OutputPostprocessingRules.DISPLAY_IN_WEBTOOL
             ],
@@ -447,7 +447,7 @@ class GenericBoiler(Component):
             self.add_input(
                 self.component_name,
                 GenericBoiler.WaterInputTemperatureDhw,
-                lt.LoadTypes.WATER,
+                lt.LoadTypes.WARM_WATER,
                 lt.Units.CELSIUS,
                 True,
             )
@@ -473,7 +473,7 @@ class GenericBoiler(Component):
         self.energy_demand_dhw_channel: ComponentOutput = self.add_output(
             self.component_name,
             GenericBoiler.EnergyDemandDhw,
-            lt.LoadTypes.ANY,
+            lt.LoadTypes.WARM_WATER,
             lt.Units.WATT_HOUR,
             output_description="Energy demand",
             postprocessing_flag=[

@@ -238,8 +238,11 @@ class Building(cp.Component):
     HeatLossFromVentilation = "HeatLossFromVentilation"
     HeatDemandAccordingToTabula = "HeatDemandAccordingToTabula"
     TheoreticalThermalBuildingDemand = "TheoreticalThermalBuildingDemand"
+    TheoreticalThermalEnergyBuildingDemand = "TheoreticalThermalEnergyBuildingDemand"
     TheoreticalHeatingDemand = "TheoreticalHeatingDemand"
+    TheoreticalHeatingEnergyDemand = "TheoreticalHeatingEnergyDemand"
     TheoreticalCoolingDemand = "TheoreticalCoolingDemand"
+    TheoreticalCoolingEnergyDemand = "TheoreticalCoolingEnergyDemand"
     HeatFluxToInternalSurface = "HeatFluxToInternalSurface"
     HeatFluxToThermalMass = "HeatFluxToThermalMass"
     TotalThermalMassHeatFlux = "TotalThermalMassHeatFlux"
@@ -483,21 +486,42 @@ class Building(cp.Component):
             self.TheoreticalThermalBuildingDemand,
             lt.LoadTypes.HEATING,
             lt.Units.WATT,
-            output_description=f"here a description for {self.TheoreticalThermalBuildingDemand} will follow.",
+            output_description="Theoretical thermal power demand of building.",
+        )
+        self.theoretical_thermal_energy_building_demand_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.TheoreticalThermalEnergyBuildingDemand,
+            lt.LoadTypes.HEATING,
+            lt.Units.WATT_HOUR,
+            output_description="Theoretical thermal energy demand of building (Heizwärme-/Kühlbedarf).",
         )
         self.theoretical_heating_demand_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.TheoreticalHeatingDemand,
             lt.LoadTypes.HEATING,
+            lt.Units.WATT,
+            output_description="Theoretical heating demand of the building.",
+        )
+        self.theoretical_heating_energy_demand_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.TheoreticalHeatingEnergyDemand,
+            lt.LoadTypes.HEATING,
             lt.Units.WATT_HOUR,
-            output_description="Theoretical heating demand of the building",
+            output_description="Theoretical heating energy demand of the building (Heizwärmebedarf).",
         )
         self.theoretical_cooling_demand_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
             self.TheoreticalCoolingDemand,
             lt.LoadTypes.COOLING,
+            lt.Units.WATT,
+            output_description="Theoretical cooling demand of the building.",
+        )
+        self.theoretical_cooling_energy_demand_channel: cp.ComponentOutput = self.add_output(
+            self.component_name,
+            self.TheoreticalCoolingEnergyDemand,
+            lt.LoadTypes.COOLING,
             lt.Units.WATT_HOUR,
-            output_description="Theoretical cooling demand of the building",
+            output_description="Theoretical cooling demand of the building (Kühlbedarf).",
         )
         self.heat_flow_rate_to_thermal_mass_node_channel: cp.ComponentOutput = self.add_output(
             self.component_name,
@@ -796,6 +820,11 @@ class Building(cp.Component):
             heat_flux_indoor_air_in_watt=internal_heat_flux_to_indoor_air_in_watt,
             heat_flux_internal_room_surface_in_watt=internal_heat_flux_to_internal_room_surface_in_watt,
         )
+        theoretical_thermal_energy_building_demand_in_watt_hour = (
+            theoretical_thermal_building_demand_in_watt
+            * self.my_simulation_parameters.seconds_per_timestep
+            / 3.6e3
+        )
 
         # Split into heating and cooling demand to avoid averaging out values when aggregating
         theoretical_heating_demand_in_watt = (
@@ -803,10 +832,20 @@ class Building(cp.Component):
             if theoretical_thermal_building_demand_in_watt > 0
             else 0
         )
+        theoretical_heating_energy_demand_in_watt_hour = (
+            theoretical_heating_demand_in_watt
+            * self.my_simulation_parameters.seconds_per_timestep
+            / 3.6e3
+        )
         theoretical_cooling_demand_in_watt = (
             theoretical_thermal_building_demand_in_watt
             if theoretical_thermal_building_demand_in_watt < 0
             else 0
+        )
+        theoretical_cooling_energy_demand_in_watt_hour = (
+            theoretical_cooling_demand_in_watt
+            * self.my_simulation_parameters.seconds_per_timestep
+            / 3.6e3
         )
 
         # Returns outputs
@@ -861,9 +900,25 @@ class Building(cp.Component):
         )
 
         stsv.set_output_value(
+            self.theoretical_thermal_energy_building_demand_channel,
+            theoretical_thermal_energy_building_demand_in_watt_hour,
+        )
+
+        stsv.set_output_value(
+            self.theoretical_heating_energy_demand_channel,
+            theoretical_heating_energy_demand_in_watt_hour,
+        )
+
+        stsv.set_output_value(
+            self.theoretical_cooling_energy_demand_channel,
+            theoretical_cooling_energy_demand_in_watt_hour,
+        )
+
+        stsv.set_output_value(
             self.heat_flow_rate_to_thermal_mass_node_channel,
             internal_heat_flux_to_thermal_mass_in_watt,
         )
+
         stsv.set_output_value(
             self.heat_flow_rates_to_internal_surface_node_channel,
             internal_heat_flux_to_internal_room_surface_in_watt,
@@ -1478,8 +1533,10 @@ class Building(cp.Component):
 
         if output.field_name == self.TheoreticalThermalBuildingDemand:
             thermal_demand_values = postprocessing_results.iloc[:, index]
-            heating_demand_in_kilowatt_hour = thermal_demand_values[thermal_demand_values > 0].sum()
-            cooling_demand_in_kilowatt_hour = thermal_demand_values[thermal_demand_values < 0].sum()
+            heating_demand_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
+                thermal_demand_values[thermal_demand_values > 0], timeresolution=self.seconds_per_timestep)
+            cooling_demand_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
+                thermal_demand_values[thermal_demand_values < 0], timeresolution=self.seconds_per_timestep)
 
             heating_demand_entry = KpiEntry(
                 name="Theoretical heating demand",

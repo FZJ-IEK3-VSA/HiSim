@@ -269,7 +269,7 @@ def setup_function(
     # copied and adopted from household_with_advanced_hp_hws_hds_pv_battery_ems
     my_electricity_controller.add_component_input_and_connect(
         source_object_name=my_occupancy.component_name,
-        source_component_output=my_occupancy.ElectricityOutput,
+        source_component_output=my_occupancy.ElectricalPowerConsumption,
         source_load_type=lt.LoadTypes.ELECTRICITY,
         source_unit=lt.Units.WATT,
         source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],

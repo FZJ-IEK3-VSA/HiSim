@@ -270,7 +270,7 @@ def setup_function(
 
     # Build Gas Heater Controller
     my_gas_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
-        minimal_thermal_power_in_watt=my_gas_heater_config.minimal_thermal_power_in_watt, 
+        minimal_thermal_power_in_watt=my_gas_heater_config.minimal_thermal_power_in_watt,
         maximal_thermal_power_in_watt=my_gas_heater_config.maximal_thermal_power_in_watt,
         with_domestic_hot_water_preparation=True
     )

@@ -1058,7 +1058,7 @@ class DistrictHeatingController(Component):
                                  daily_avg_outside_temperature_in_celsius: float,
                                  sh_current_temperature_deg_c: float,
                                  sh_set_temperature_deg_c: float,
-                                 dhw_current_temperature_deg_c: float) -> float:
+                                 dhw_current_temperature_deg_c: Optional[float]) -> float:
         """Determine operating mode."""
 
         self.controller_mode = DiverterValve.determine_operating_mode(

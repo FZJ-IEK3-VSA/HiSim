@@ -853,14 +853,14 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             cp.ComponentConnection(
                 SimpleHotWaterStorage.WaterTemperatureFromHeatGenerator,
                 gasheater_classname,
-                component_class.WaterOutputTemperature,
+                component_class.WaterOutputTemperatureSh,
             )
         )
         connections.append(
             cp.ComponentConnection(
                 SimpleHotWaterStorage.WaterMassFlowRateFromHeatGenerator,
                 gasheater_classname,
-                component_class.WaterOutputMassFlow,
+                component_class.WaterOutputMassFlowSh,
             )
         )
         return connections
@@ -1699,21 +1699,21 @@ class SimpleDHWStorage(SimpleWaterStorage):
         # use importlib for importing the other component in order to avoid circular-import errors
         component_module_name = "hisim.components.generic_boiler"
         component_module = importlib.import_module(name=component_module_name)
-        component_class = getattr(component_module, "GenericBoilerForDHW")
+        component_class = getattr(component_module, "GenericBoiler")
         connections = []
         dhw_boiler_classname = component_class.get_classname()
         connections.append(
             cp.ComponentConnection(
                 SimpleDHWStorage.WaterTemperatureFromHeatGenerator,
                 dhw_boiler_classname,
-                component_class.WaterOutputTemperature,
+                component_class.WaterOutputTemperatureDhw,
             )
         )
         connections.append(
             cp.ComponentConnection(
                 SimpleDHWStorage.WaterMassFlowRateFromHeatGenerator,
                 dhw_boiler_classname,
-                component_class.WaterOutputMassFlow,
+                component_class.WaterOutputMassFlowDhw,
             )
         )
         return connections
@@ -1868,7 +1868,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
             or self.mean_water_temperature_in_water_storage_in_celsius < 0
         ):
             raise ValueError(
-                f"The water temperature in the water storage is with {self.mean_water_temperature_in_water_storage_in_celsius}°C way too high or too low."
+                f"The water temperature in the DHW water storage is with {self.mean_water_temperature_in_water_storage_in_celsius}°C way too high or too low."
             )
 
         if (water_mass_flow_rate_of_dhw_in_kg_per_second > 0) and (self.mean_water_temperature_in_water_storage_in_celsius < self.warm_water_temperature):

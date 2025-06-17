@@ -385,7 +385,7 @@ class AirConditioner(cp.Component):
                     sum(postprocessing_results.iloc[:, index]) * 1e-3, 1
                 )
                 break
-        assert hasattr(self, "electricity_consumption_kwh")
+        assert electricity_consumption_kwh is not None
 
         emissions_and_cost_factors = (
             EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(

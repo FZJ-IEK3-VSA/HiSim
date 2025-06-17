@@ -358,7 +358,7 @@ class GenericBuilding(cp.Component):
 
             my_electricity_controller.add_component_input_and_connect(
                 source_object_name=my_occupancy.component_name,
-                source_component_output=my_occupancy.ElectricityOutput,
+                source_component_output=my_occupancy.ElectricalPowerConsumption,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.ComponentType.RESIDENTS, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],

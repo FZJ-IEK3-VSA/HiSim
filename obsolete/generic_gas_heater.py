@@ -333,7 +333,7 @@ class GasHeater(Component):
             lifetime_in_years=config.lifetime,
             capex_investment_cost_for_simulated_period_in_euro=capex_per_simulated_period,
             device_co2_footprint_for_simulated_period_in_kg=device_co2_footprint_per_simulated_period,
-            kpi_tag=KpiTagEnumClass.GAS_HEATER_SPACE_HEATING
+            kpi_tag=KpiTagEnumClass.GAS_BOILER
         )
         return capex_cost_data_class
 
@@ -360,7 +360,7 @@ class GasHeater(Component):
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
             consumption_in_kwh=self.config.consumption_in_kilowatt_hour,
             loadtype=lt.LoadTypes.GAS,
-            kpi_tag=KpiTagEnumClass.GAS_HEATER_SPACE_HEATING
+            kpi_tag=KpiTagEnumClass.GAS_BOILER
         )
 
         return opex_cost_data_class
@@ -385,7 +385,7 @@ class GasHeater(Component):
             name="Gas consumption for space heating",
             unit="kWh",
             value=total_gas_consumption_in_kilowatt_hour,
-            tag=KpiTagEnumClass.GAS_HEATER_SPACE_HEATING,
+            tag=KpiTagEnumClass.GAS_BOILER,
             description=self.component_name,
         )
         list_of_kpi_entries.append(my_kpi_entry)

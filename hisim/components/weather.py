@@ -666,10 +666,18 @@ class Weather(Component):
                 simulation_parameters=self.my_simulation_parameters,
             )
 
+            # In order to make sure that the resampled data covers the entire
+            # time period that, one data point is added at the end of the time
+            # series. Otherwise, the interpolated data would end, for example,
+            # at 23:00 and not at 23:59. This last point is removed after 
+            # interpolation.
+            delta = tmy_data.index[-1] - tmy_data.index[-2]
+            tmy_data.loc[tmy_data.index[-1] + delta] = None
+
             if self.weather_config.data_source in (WeatherDataSourceEnum.NSRDB_15MIN, WeatherDataSourceEnum.DWD_10MIN, WeatherDataSourceEnum.DWD_15MIN, WeatherDataSourceEnum.GEOSPHERE, WeatherDataSourceEnum.ERA5):
-                temperature_degc = tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")
-                wind_speed_m_s = tmy_data["Wspd"].resample("1T").asfreq().interpolate(method="linear")
-                ghi_w_m2 = tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")
+                temperature_degc = tmy_data["T"].resample("1T").asfreq().interpolate(method="linear")[:-1]
+                wind_speed_m_s = tmy_data["Wspd"].resample("1T").asfreq().interpolate(method="linear")[:-1]
+                ghi_w_m2 = tmy_data["GHI"].resample("1T").asfreq().interpolate(method="linear")[:-1]
             else:
                 temperature_degc = self.interpolate(tmy_data["T"], self.my_simulation_parameters.year)
                 wind_speed_m_s = self.interpolate(tmy_data["Wspd"], self.my_simulation_parameters.year)
@@ -969,7 +977,9 @@ def get_coordinates(filepath: str, source_enum: WeatherDataSourceEnum) -> Any:
                     break
 
     elif source_enum == WeatherDataSourceEnum.GEOSPHERE:
-        raise NotImplementedError() # TODO
+        location_name = filepath.split('__')[2].split('_')[1]
+        lat = 48.21 # TODO read from file
+        lon = 16.38
 
     else:
         # get the geoposition
@@ -1201,10 +1211,12 @@ def read_era5_data(filepath: str, year: int) -> pd.DataFrame:
 
     return data
 
-
 def read_geosphere_data(filepath: str, year: int) -> pd.DataFrame:
-    raise NotImplementedError() # TODO
-
+    df = pd.read_csv(filepath, sep='\t', skiprows=4)
+    df.index = pd.date_range(f"{year}-01-01 00:00:00", periods=8760, freq="H", tz="UTC")
+    df = df.drop(columns=["Monat", "Tag", "Stunde", "RF[%]"])
+    df = df.rename(columns={"LT[degC]": "T", "KWSU[Wm-2]": "GHI", "WG[ms-1]": "Wspd"})
+    return df
 
 def calculate_direct_normal_radiation(
     direct_horizontal_irradation: pd.Series,

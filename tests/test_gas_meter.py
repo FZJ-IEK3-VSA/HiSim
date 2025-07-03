@@ -16,14 +16,11 @@ from hisim.components import (
     electricity_meter,
     gas_meter,
     generic_boiler,
-    generic_heat_source,
-    controller_l1_heatpump,
-    generic_hot_water_storage_modular,
     simple_water_storage,
     heat_distribution_system,
     generic_pv_system,
 )
-from hisim import utils, loadtypes
+from hisim import utils
 
 from hisim.postprocessingoptions import PostProcessingOptions
 from hisim import log
@@ -128,6 +125,23 @@ def test_house(
         my_simulation_parameters=my_simulation_parameters,
     )
 
+    # Gas boiler and controller
+    my_gas_heater_config = generic_boiler.GenericBoilerConfig.get_scaled_condensing_gas_boiler_config(
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+    )
+    my_gas_heater = generic_boiler.GenericBoiler(
+        config=my_gas_heater_config, my_simulation_parameters=my_simulation_parameters,
+    )
+
+    my_gas_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
+        minimal_thermal_power_in_watt=my_gas_heater_config.minimal_thermal_power_in_watt,
+        maximal_thermal_power_in_watt=my_gas_heater_config.maximal_thermal_power_in_watt,
+        with_domestic_hot_water_preparation=True,
+    )
+    my_gas_heater_controller = generic_boiler.GenericBoilerController(
+        my_simulation_parameters=my_simulation_parameters, config=my_gas_heater_controller_config,
+    )
+
     # Build Heat Water Storage
     my_simple_heat_water_storage_config = simple_water_storage.SimpleHotWaterStorageConfig.get_scaled_hot_water_storage(
         max_thermal_power_in_watt_of_heating_system=my_building_information.max_thermal_building_demand_in_watt,
@@ -139,57 +153,16 @@ def test_house(
         my_simulation_parameters=my_simulation_parameters,
     )
 
-    # Build Gas Heater Controller
-    my_gas_heater_config = generic_boiler.GenericBoilerConfig.get_scaled_condensing_gas_boiler_config(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
-    )
-    my_gas_heater = generic_boiler.GenericBoiler(
-        config=my_gas_heater_config, my_simulation_parameters=my_simulation_parameters,
+    # DHW storage
+    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
+        number_of_apartments=my_building_information.number_of_apartments
     )
 
-    # Build Gas Heater Controller
-    my_gas_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
-        minimal_thermal_power_in_watt=my_gas_heater_config.minimal_thermal_power_in_watt, maximal_thermal_power_in_watt=my_gas_heater_config.maximal_thermal_power_in_watt
-    )
-    my_gas_heater_controller = generic_boiler.GenericBoilerController(
-        my_simulation_parameters=my_simulation_parameters, config=my_gas_heater_controller_config,
-    )
-    # Build Gas Heater for DHW
-    my_gas_heater_for_dhw_config = generic_heat_source.HeatSourceConfig.get_default_config_waterheating(
-        heating_system=loadtypes.HeatingSystems.GAS_HEATING,
-        boiler_type=my_gas_heater_config.boiler_type,
-        max_warm_water_demand_in_liter=my_occupancy.max_hot_water_demand,
-        scaling_factor_according_to_number_of_apartments=my_occupancy.scaling_factor_according_to_number_of_apartments,
-        seconds_per_timestep=seconds_per_timestep,
+    my_dhw_storage = simple_water_storage.SimpleDHWStorage(
+        my_simulation_parameters=my_simulation_parameters, config=my_dhw_storage_config
     )
 
-    my_gas_heater_controller_l1_config = (
-        controller_l1_heatpump.L1HeatPumpConfig.get_default_config_heat_source_controller_dhw(
-            "DHW" + loadtypes.HeatingSystems.GAS_HEATING.value
-        )
-    )
-
-    my_boiler_config = (
-        generic_hot_water_storage_modular.StorageConfig.get_scaled_config_for_boiler_to_number_of_apartments(
-            number_of_apartments=my_building_information.number_of_apartments
-        )
-    )
-    my_boiler_config.compute_default_cycle(
-        temperature_difference_in_kelvin=my_gas_heater_controller_l1_config.t_max_heating_in_celsius
-        - my_gas_heater_controller_l1_config.t_min_heating_in_celsius
-    )
-
-    my_boiler_for_dhw = generic_hot_water_storage_modular.HotWaterStorage(
-        my_simulation_parameters=my_simulation_parameters, config=my_boiler_config
-    )
-
-    my_heater_controller_l1_for_dhw = controller_l1_heatpump.L1HeatPumpController(
-        my_simulation_parameters=my_simulation_parameters, config=my_gas_heater_controller_l1_config
-    )
-
-    my_gas_heater_for_dhw = generic_heat_source.HeatSource(
-        config=my_gas_heater_for_dhw_config, my_simulation_parameters=my_simulation_parameters
-    )
+    my_sim.add_component(my_dhw_storage, connect_automatically=True)
 
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
@@ -218,9 +191,6 @@ def test_house(
 
     my_sim.add_component(my_electricity_meter, connect_automatically=True)
     my_sim.add_component(my_gas_meter, connect_automatically=True)
-    my_sim.add_component(my_gas_heater_for_dhw, connect_automatically=True)
-    my_sim.add_component(my_boiler_for_dhw, connect_automatically=True)
-    my_sim.add_component(my_heater_controller_l1_for_dhw, connect_automatically=True)
 
     my_sim.run_all_timesteps()
 
@@ -236,13 +206,11 @@ def test_house(
         jsondata = json.load(file)
 
     jsondata = jsondata["BUI1"]
+    print(jsondata)
 
     gas_consumption_in_kilowatt_hour = jsondata["Gas Meter"]["Total gas demand from grid"].get("value")
-    gas_consumption_for_space_heating_in_kilowatt_hour = jsondata["Gas Heater For Space Heating"][
-        "Gas consumption for space heating (energy)"
-    ].get("value")
-    gas_consumption_for_domestic_hot_water_in_kilowatt_hour = jsondata["Gas Heater For Domestic Hot Water"][
-        "Gas consumption for WaterHeating"
+    gas_consumption_of_boiler_in_kilowatt_hour = jsondata["Gas Boiler"][
+        "Gas consumption (energy)"
     ].get("value")
 
     opex_costs_for_gas_in_euro = jsondata["Gas Meter"]["Opex costs of gas consumption from grid"].get("value")
@@ -250,11 +218,9 @@ def test_house(
     co2_footprint_due_to_gas_use_in_kg = jsondata["Gas Meter"]["CO2 footprint of gas consumption from grid"].get("value")
 
     log.information(
-        "Gas consumption for space heating [kWh] " + str(gas_consumption_for_space_heating_in_kilowatt_hour)
+        "Gas consumption for space heating [kWh] " + str(gas_consumption_of_boiler_in_kilowatt_hour)
     )
-    log.information(
-        "Gas consumption for domestic hot water [kWh] " + str(gas_consumption_for_domestic_hot_water_in_kilowatt_hour)
-    )
+
     log.information("Total gas consumption measured by gas meter [kWh] " + str(gas_consumption_in_kilowatt_hour))
     log.information("Opex costs for total gas consumption [€] " + str(opex_costs_for_gas_in_euro))
     log.information("CO2 footprint for total gas consumption [kg] " + str(co2_footprint_due_to_gas_use_in_kg))
@@ -262,6 +228,6 @@ def test_house(
     # test and compare with relative error of 5%
     np.testing.assert_allclose(
         gas_consumption_in_kilowatt_hour,
-        gas_consumption_for_domestic_hot_water_in_kilowatt_hour + gas_consumption_for_space_heating_in_kilowatt_hour,
+        gas_consumption_of_boiler_in_kilowatt_hour,
         rtol=0.05,
     )

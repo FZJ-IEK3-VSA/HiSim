@@ -16,30 +16,30 @@ from hisim import simulator as sim
 @pytest.mark.parametrize(
     [
         "with_warm_water",
+        "daily_avg_outside_temperature_deg_c",
         "sh_current_water_temperature",
         "sh_target_water_temperature",
         "dhw_input_temperature",
-        "dhw_target_water_temperature",
-        "summer_heating_mode",
         "expected_mode",
     ],
     [
-        (False, 20, 25, None, None, "on", HeatingMode.SPACE_HEATING),
-        (False, 25, 25, None, None, "on", HeatingMode.OFF),
-        (False, 25, 23, None, None, "on", HeatingMode.OFF),
-        (False, 20, 25, None, None, "off", HeatingMode.OFF),
-        (True, 20, 25, 50, 70, "off", HeatingMode.DOMESTIC_HOT_WATER),
-        (True, 20, 25, 50, 70, "on", HeatingMode.DOMESTIC_HOT_WATER),
-        (True, 25, 25, 50, 70, "on", HeatingMode.DOMESTIC_HOT_WATER),
+        (False, 0, 20, 25, None, HeatingMode.SPACE_HEATING),
+        (False, 0, 25, 25, None, HeatingMode.OFF),
+        (False, 0, 25, 23, None, HeatingMode.OFF),
+        (False, 20, 20, 25, None, HeatingMode.OFF),
+        (True, 0, 15, 30, 30, HeatingMode.DOMESTIC_HOT_WATER),
+        (True, 20, 15, 30, 30, HeatingMode.DOMESTIC_HOT_WATER),
+        (True, 0, 25, 25, 50, HeatingMode.OFF),
+        (True, 0, 25, 30, 50, HeatingMode.SPACE_HEATING),
+        (True, 20, 25, 30, 50, HeatingMode.OFF),
     ],
 )
 def test_controller_determine_operating_mode(
     with_warm_water,
+    daily_avg_outside_temperature_deg_c,
     sh_current_water_temperature,
     sh_target_water_temperature,
     dhw_input_temperature,
-    dhw_target_water_temperature,
-    summer_heating_mode,
     expected_mode,
 ):
     """Test determination of operating mode."""
@@ -47,11 +47,10 @@ def test_controller_determine_operating_mode(
     testee = given_default_controller_testee(with_warm_water=with_warm_water)
 
     testee.determine_operating_mode(
+        daily_avg_outside_temperature_deg_c,
         sh_current_water_temperature,
         sh_target_water_temperature,
         dhw_input_temperature,
-        dhw_target_water_temperature,
-        summer_heating_mode,
     )
 
     assert testee.controller_mode == expected_mode

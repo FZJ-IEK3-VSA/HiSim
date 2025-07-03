@@ -267,7 +267,7 @@ class ElectricityMeter(DynamicComponent):
             dynamic_component.DynamicComponentConnection(
                 source_component_class=UtspLpgConnector,
                 source_class_name=occupancy_class_name,
-                source_component_field_name=UtspLpgConnector.ElectricityOutput,
+                source_component_field_name=UtspLpgConnector.ElectricalPowerConsumption,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
                 source_tags=[lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],

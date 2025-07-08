@@ -104,13 +104,13 @@ class BuildingConfig(cp.ConfigBase):
     set_cooling_temperature_in_celsius: float
     enable_opening_windows: bool
     #: CO2 footprint of investment in kg
-    co2_footprint:  Optional[float]
+    co2_footprint: Optional[float]
     #: cost for investment in Euro
-    cost:  Optional[float]
+    cost: Optional[float]
     #: lifetime in years
-    lifetime:  Optional[float]
+    lifetime: Optional[float]
     # maintenance cost as share of investment [0..1]
-    maintenance_cost_as_percentage_of_investment:  Optional[float]
+    maintenance_cost_as_percentage_of_investment: Optional[float]
 
     @classmethod
     def get_default_german_single_family_home(
@@ -139,7 +139,7 @@ class BuildingConfig(cp.ConfigBase):
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
             absolute_conditioned_floor_area_in_m2=121.2,
             max_thermal_building_demand_in_watt=max_thermal_building_demand_in_watt,
-            facade_u_value_in_watt_per_m2_per_kelvin=facade_u_value_in_watt_per_m2_per_kelvin,#
+            facade_u_value_in_watt_per_m2_per_kelvin=facade_u_value_in_watt_per_m2_per_kelvin,  #
             facade_area_in_m2=facade_area_in_m2,
             roof_u_value_in_watt_per_m2_per_kelvin=roof_u_value_in_watt_per_m2_per_kelvin,
             roof_area_in_m2=roof_area_in_m2,
@@ -154,7 +154,7 @@ class BuildingConfig(cp.ConfigBase):
             set_cooling_temperature_in_celsius=set_cooling_temperature_in_celsius,
             enable_opening_windows=False,
             co2_footprint=None,  # todo: check value
-            cost=None,   # todo: check value
+            cost=None,  # todo: check value
             maintenance_cost_as_percentage_of_investment=None,  # noqa: E501 # todo: check value
             lifetime=None,  # todo: check value
         )
@@ -294,14 +294,14 @@ class Building(cp.Component):
         self.door_u_value_in_watt_per_m2_per_kelvin = self.buildingconfig.door_u_value_in_watt_per_m2_per_kelvin
 
         if (
-                self.facade_area_in_m2 is None and
-                self.roof_area_in_m2 is None and
-                self.window_area_in_m2 is None and
-                self.door_area_in_m2 is None and
-                self.facade_u_value_in_watt_per_m2_per_kelvin is None and
-                self.roof_u_value_in_watt_per_m2_per_kelvin is None and
-                self.window_u_value_in_watt_per_m2_per_kelvin is None and
-                self.door_u_value_in_watt_per_m2_per_kelvin is None
+            self.facade_area_in_m2 is None
+            and self.roof_area_in_m2 is None
+            and self.window_area_in_m2 is None
+            and self.door_area_in_m2 is None
+            and self.facade_u_value_in_watt_per_m2_per_kelvin is None
+            and self.roof_u_value_in_watt_per_m2_per_kelvin is None
+            and self.window_u_value_in_watt_per_m2_per_kelvin is None
+            and self.door_u_value_in_watt_per_m2_per_kelvin is None
         ):
             self.use_tabula_data = True
             log.information("Use tabula data")
@@ -325,7 +325,9 @@ class Building(cp.Component):
         self.cache: List[float]
         self.solar_heat_gain_through_windows: List[float]
 
-        self.my_building_information = BuildingInformation(config=self.buildingconfig, use_tabula_data=self.use_tabula_data)
+        self.my_building_information = BuildingInformation(
+            config=self.buildingconfig, use_tabula_data=self.use_tabula_data
+        )
         self.build()
 
         self.state: BuildingState = BuildingState(
@@ -842,31 +844,21 @@ class Building(cp.Component):
             heat_flux_internal_room_surface_in_watt=internal_heat_flux_to_internal_room_surface_in_watt,
         )
         theoretical_thermal_energy_building_demand_in_watt_hour = (
-            theoretical_thermal_building_demand_in_watt
-            * self.my_simulation_parameters.seconds_per_timestep
-            / 3.6e3
+            theoretical_thermal_building_demand_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
         )
 
         # Split into heating and cooling demand to avoid averaging out values when aggregating
         theoretical_heating_demand_in_watt = (
-            theoretical_thermal_building_demand_in_watt
-            if theoretical_thermal_building_demand_in_watt > 0
-            else 0
+            theoretical_thermal_building_demand_in_watt if theoretical_thermal_building_demand_in_watt > 0 else 0
         )
         theoretical_heating_energy_demand_in_watt_hour = (
-            theoretical_heating_demand_in_watt
-            * self.my_simulation_parameters.seconds_per_timestep
-            / 3.6e3
+            theoretical_heating_demand_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
         )
         theoretical_cooling_demand_in_watt = (
-            theoretical_thermal_building_demand_in_watt
-            if theoretical_thermal_building_demand_in_watt < 0
-            else 0
+            theoretical_thermal_building_demand_in_watt if theoretical_thermal_building_demand_in_watt < 0 else 0
         )
         theoretical_cooling_energy_demand_in_watt_hour = (
-            theoretical_cooling_demand_in_watt
-            * self.my_simulation_parameters.seconds_per_timestep
-            / 3.6e3
+            theoretical_cooling_demand_in_watt * self.my_simulation_parameters.seconds_per_timestep / 3.6e3
         )
 
         # Returns outputs
@@ -1313,10 +1305,7 @@ class Building(cp.Component):
         postprocessing_results: pd.DataFrame,
     ) -> cp.OpexCostDataClass:
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
-        if (
-                self.config.maintenance_cost_as_percentage_of_investment in [None, 0.0] or
-                self.config.cost in [None, 0.0]
-        ):
+        if self.config.maintenance_cost_as_percentage_of_investment in [None, 0.0] or self.config.cost in [None, 0.0]:
             opex_cost_data_class = cp.OpexCostDataClass.get_default_opex_cost_data_class()
         else:
             opex_cost_data_class = cp.OpexCostDataClass(
@@ -1330,26 +1319,23 @@ class Building(cp.Component):
         return opex_cost_data_class
 
     @staticmethod
-    def get_cost_capex(config: BuildingConfig, simulation_parameters: SimulationParameters) -> cp.CapexCostDataClass:  # pylint: disable=unused-argument
+    def get_cost_capex(
+        config: BuildingConfig, simulation_parameters: SimulationParameters
+    ) -> cp.CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
-        if (
-                config.lifetime in [None, 0.0] or
-                config.cost in [None, 0.0] or
-                config.co2_footprint in [None, 0.0]
-        ):
+        if config.lifetime in [None, 0.0] or config.cost in [None, 0.0] or config.co2_footprint in [None, 0.0]:
             capex_cost_data_class = cp.CapexCostDataClass.get_default_capex_cost_data_class()
         else:
             assert config.lifetime is not None
             assert config.cost is not None
             assert config.co2_footprint is not None
             seconds_per_year = 365 * 24 * 60 * 60
-            capex_per_simulated_period = ((config.cost / config.lifetime) *
-                                          (simulation_parameters.duration.total_seconds() / seconds_per_year)
-                                          )
-            device_co2_footprint_per_simulated_period = ((config.co2_footprint / config.lifetime) *
-                                                         (simulation_parameters.duration.total_seconds() /
-                                                          seconds_per_year)
-                                                         )
+            capex_per_simulated_period = (config.cost / config.lifetime) * (
+                simulation_parameters.duration.total_seconds() / seconds_per_year
+            )
+            device_co2_footprint_per_simulated_period = (config.co2_footprint / config.lifetime) * (
+                simulation_parameters.duration.total_seconds() / seconds_per_year
+            )
             capex_cost_data_class = cp.CapexCostDataClass(
                 capex_investment_cost_in_euro=config.cost,
                 device_co2_footprint_in_kg=config.co2_footprint,
@@ -1555,9 +1541,11 @@ class Building(cp.Component):
         if output.field_name == self.TheoreticalThermalBuildingDemand:
             thermal_demand_values = postprocessing_results.iloc[:, index]
             heating_demand_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
-                thermal_demand_values[thermal_demand_values > 0], timeresolution=self.seconds_per_timestep)
+                thermal_demand_values[thermal_demand_values > 0], timeresolution=self.seconds_per_timestep
+            )
             cooling_demand_in_kilowatt_hour = KpiHelperClass.compute_total_energy_from_power_timeseries(
-                thermal_demand_values[thermal_demand_values < 0], timeresolution=self.seconds_per_timestep)
+                thermal_demand_values[thermal_demand_values < 0], timeresolution=self.seconds_per_timestep
+            )
 
             heating_demand_entry = KpiEntry(
                 name="Theoretical heating demand",
@@ -2529,8 +2517,12 @@ class BuildingInformation:
         self.opaque_walls: List[str]
 
         self.get_building()
-        self.manipulate_tabula_database()
+
+        if not self.use_tabula_data:
+            self.manipulate_tabula_database()
+
         self.set_constants()
+
         self.build()
 
     def get_building(
@@ -2549,24 +2541,27 @@ class BuildingInformation:
         self.buildingdata = d_f.loc[d_f["Code_BuildingVariant"] == self.buildingconfig.building_code]
         self.buildingcode = self.buildingconfig.building_code
 
-    def manipulate_tabula_database(self,):
+    def manipulate_tabula_database(
+        self,
+    ):
         """Manipulate the tabula database to u values from config."""
 
-        if self.u_value_facade_in_watt_per_m2_per_kelvin is not None:
-            self.manipulate_tabula_wall_parameter()
+        # if self.facade_u_value_in_watt_per_m2_per_kelvin is not None or self.facade_area_in_m2 is not None:
+        self.manipulate_tabula_wall_parameter()
 
-        if self.u_value_roof_in_watt_per_m2_per_kelvin is not None:
-            self.manipulate_tabula_roof_parameter()
+        # if self.roof_u_value_in_watt_per_m2_per_kelvin is not None or self.roof_area_in_m2 is not None:
+        self.manipulate_tabula_roof_parameter()
 
-        if self.u_value_window_in_watt_per_m2_per_kelvin is not None:
-            self.manipulate_tabula_window_parameter()
+        # if self.window_u_value_in_watt_per_m2_per_kelvin is not None or self.window_area_in_m2 is not None:
+        self.manipulate_tabula_window_parameter()
 
-        if self.u_value_door_in_watt_per_m2_per_kelvin is not None:
-            self.manipulate_tabula_door_parameter()
+        # if self.door_u_value_in_watt_per_m2_per_kelvin is not None or self.door_area_in_m2 is not None:
+        self.manipulate_tabula_door_parameter()
 
-        (self.heat_transfer_coeff_by_ventilation_ref_in_watt_per_m2_per_kelvin,
-         self.heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin) \
-            = self.manipulate_heat_transfer_coefficient()
+        (
+            self.heat_transfer_coeff_by_ventilation_ref_in_watt_per_m2_per_kelvin,
+            self.heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin,
+        ) = self.manipulate_heat_transfer_coefficient()
 
     def set_constants(self):
         """Set important constants."""
@@ -2601,7 +2596,7 @@ class BuildingInformation:
         self.ven_method = "EPISCOPE"
         # Get physical parameters
         (
-            scaling_factor,
+            scaling_factor_according_to_conditioned_living_area,
             self.scaled_windows_and_door_envelope_areas_in_m2,
             self.scaled_opaque_surfaces_envelope_area_in_m2,
             self.scaled_conditioned_floor_area_in_m2,
@@ -2658,7 +2653,7 @@ class BuildingInformation:
         self.number_of_apartments = int(
             self.get_number_of_apartments(
                 conditioned_floor_area_in_m2=self.scaled_conditioned_floor_area_in_m2,
-                scaling_factor=scaling_factor,
+                scaling_factor=scaling_factor_according_to_conditioned_living_area,
                 buildingdata=self.buildingdata,
             )
         )
@@ -2679,19 +2674,19 @@ class BuildingInformation:
         """Get the physical parameters from the building data."""
 
         # Reference area [m^2] (TABULA: Reference floor area A_C_Ref )Ref: ISO standard 7.2.2.2
-        conditioned_floor_area_in_m2_reference = float((buildingdata["A_C_Ref"].values[0]))
+        conditioned_floor_area_in_m2_tabula_ref = float((buildingdata["A_C_Ref"].values[0]))
 
-        room_height_in_m = float(buildingdata["h_room"].values[0])
+        room_height_in_m_tabula_ref = float(buildingdata["h_room"].values[0])
 
-        rooftop_area_in_m2_reference = float(buildingdata["A_Roof_1"].values[0]) + float(
-            buildingdata["A_Roof_2"].values[0]
+        rooftop_area_in_m2_tabula_ref = float(buildingdata["A_Calc_Roof_1"].values[0]) + float(
+            buildingdata["A_Calc_Roof_2"].values[0]
         )
 
         number_of_storeys = float(buildingdata["n_Storey"].values[0])
 
         # Get scaled areas
         (
-            scaling_factor,
+            scaling_factor_according_to_conditioned_living_area,
             scaled_windows_and_door_envelope_areas_in_m2,
             scaled_opaque_surfaces_envelope_area_in_m2,
             scaled_conditioned_floor_area_in_m2,
@@ -2699,20 +2694,20 @@ class BuildingInformation:
             scaled_rooftop_area_in_m2,
             buildingdata,
         ) = self.scaling_over_conditioned_floor_area(
-            conditioned_floor_area_in_m2=conditioned_floor_area_in_m2_reference,
-            rooftop_area_in_m2=rooftop_area_in_m2_reference,
-            room_height_in_m=room_height_in_m,
+            conditioned_floor_area_in_m2_tabula_ref=conditioned_floor_area_in_m2_tabula_ref,
+            rooftop_area_in_m2_tabula_ref=rooftop_area_in_m2_tabula_ref,
+            room_height_in_m_tabula_ref=room_height_in_m_tabula_ref,
             buildingdata=self.buildingdata,
         )
 
         return (
-            scaling_factor,
+            scaling_factor_according_to_conditioned_living_area,
             scaled_windows_and_door_envelope_areas_in_m2,
             scaled_opaque_surfaces_envelope_area_in_m2,
             scaled_conditioned_floor_area_in_m2,
             scaled_window_areas_in_m2,
             scaled_rooftop_area_in_m2,
-            room_height_in_m,
+            room_height_in_m_tabula_ref,
             number_of_storeys,
             buildingdata,
         )
@@ -2783,9 +2778,9 @@ class BuildingInformation:
 
     def scaling_over_conditioned_floor_area(
         self,
-        conditioned_floor_area_in_m2: float,
-        rooftop_area_in_m2: float,
-        room_height_in_m: float,
+        conditioned_floor_area_in_m2_tabula_ref: float,
+        rooftop_area_in_m2_tabula_ref: float,
+        room_height_in_m_tabula_ref: float,
         buildingdata: Any,
     ) -> Tuple[float, List, List, float, List, float, Any]:
         """Calculate scaling factors for the building.
@@ -2819,59 +2814,95 @@ class BuildingInformation:
         ):
             raise ValueError("Only one variable can be used, the other one must be None.")
 
+        # scaling conditioned floor area
         if self.buildingconfig.absolute_conditioned_floor_area_in_m2 is not None:
             # this is for preventing that the conditioned_floor_area is 0 (some buildings in TABULA have conditioned_floor_area (A_C_Ref) = 0)
-            if conditioned_floor_area_in_m2 == 0:
+            if conditioned_floor_area_in_m2_tabula_ref == 0:
                 scaled_conditioned_floor_area_in_m2 = self.buildingconfig.absolute_conditioned_floor_area_in_m2
                 factor_of_absolute_floor_area_to_tabula_floor_area = 1.0
                 buildingdata["A_C_Ref"] = scaled_conditioned_floor_area_in_m2
             # scaling conditioned floor area
             else:
                 factor_of_absolute_floor_area_to_tabula_floor_area = (
-                    self.buildingconfig.absolute_conditioned_floor_area_in_m2 / conditioned_floor_area_in_m2
+                    self.buildingconfig.absolute_conditioned_floor_area_in_m2 / conditioned_floor_area_in_m2_tabula_ref
                 )
                 scaled_conditioned_floor_area_in_m2 = (
-                    conditioned_floor_area_in_m2 * factor_of_absolute_floor_area_to_tabula_floor_area
+                    conditioned_floor_area_in_m2_tabula_ref * factor_of_absolute_floor_area_to_tabula_floor_area
                 )
-            scaling_factor = factor_of_absolute_floor_area_to_tabula_floor_area
+            scaling_factor_according_to_conditioned_living_area = factor_of_absolute_floor_area_to_tabula_floor_area
 
         elif self.buildingconfig.total_base_area_in_m2 is not None:
             # this is for preventing that the conditioned_floor_area is 0
-            if conditioned_floor_area_in_m2 == 0:
+            if conditioned_floor_area_in_m2_tabula_ref == 0:
                 scaled_conditioned_floor_area_in_m2 = self.buildingconfig.total_base_area_in_m2
                 factor_of_total_base_area_to_tabula_floor_area = 1.0
                 buildingdata["A_C_Ref"] = scaled_conditioned_floor_area_in_m2
             # scaling conditioned floor area
             else:
                 factor_of_total_base_area_to_tabula_floor_area = (
-                    self.buildingconfig.total_base_area_in_m2 / conditioned_floor_area_in_m2
+                    self.buildingconfig.total_base_area_in_m2 / conditioned_floor_area_in_m2_tabula_ref
                 )
                 scaled_conditioned_floor_area_in_m2 = (
-                    conditioned_floor_area_in_m2 * factor_of_total_base_area_to_tabula_floor_area
+                    conditioned_floor_area_in_m2_tabula_ref * factor_of_total_base_area_to_tabula_floor_area
                 )
-            scaling_factor = factor_of_total_base_area_to_tabula_floor_area
+            scaling_factor_according_to_conditioned_living_area = factor_of_total_base_area_to_tabula_floor_area
 
         # if no value for building size is provided in config, use reference value from Tabula or 500 m^2.
         else:
-            if conditioned_floor_area_in_m2 == 0:
+            if conditioned_floor_area_in_m2_tabula_ref == 0:
                 scaled_conditioned_floor_area_in_m2 = 500.0
                 buildingdata["A_C_Ref"] = scaled_conditioned_floor_area_in_m2
                 log.warning(
                     "There is no reference given for absolute conditioned floor area in m^2, so a default of 500 m^2 is used."
                 )
             else:
-                scaled_conditioned_floor_area_in_m2 = conditioned_floor_area_in_m2
+                scaled_conditioned_floor_area_in_m2 = conditioned_floor_area_in_m2_tabula_ref
 
-            scaling_factor = 1.0
+            scaling_factor_according_to_conditioned_living_area = 1.0
+
+        # scaling windows and door
+        if self.buildingconfig.window_area_in_m2 is not None:
+            scaling_factor_window = 1
+        else:
+            scaling_factor_window = scaling_factor_according_to_conditioned_living_area
+        if self.buildingconfig.door_area_in_m2 is not None:
+            scaling_factor_door = 1
+        else:
+            scaling_factor_door = scaling_factor_according_to_conditioned_living_area
 
         for w_i in self.windows_and_door:
+            if w_i in ["Window_1", "Window_2"]:
+                scaling_factor = scaling_factor_window
+            else:
+                scaling_factor = scaling_factor_door
+
             scaled_windows_and_door_envelope_areas_in_m2.append(
-                float(buildingdata["A_" + w_i].values[0]) * scaling_factor
+                float(buildingdata["A_Calc_" + w_i].values[0]) * scaling_factor
             )
 
+        # scaling facade and roof
+        if self.buildingconfig.facade_area_in_m2 is not None:
+            scaling_factor_facade = 1
+        else:
+            scaling_factor_facade = scaling_factor_according_to_conditioned_living_area
+
+        if self.buildingconfig.roof_area_in_m2 is not None:
+            scaling_factor_roof = 1
+        else:
+            scaling_factor_roof = scaling_factor_according_to_conditioned_living_area
+
+        scaling_factor_floor = scaling_factor_according_to_conditioned_living_area
+
         for o_w in self.opaque_walls:
+            if o_w in ["Wall_1", "Wall_2", "Wall_3"]:
+                scaling_factor = scaling_factor_facade
+            elif o_w in ["Roof_1", "Roof_2"]:
+                scaling_factor = scaling_factor_roof
+            else:
+                scaling_factor = scaling_factor_floor
+
             scaled_opaque_surfaces_envelope_area_in_m2.append(
-                float(buildingdata["A_" + o_w].values[0]) * scaling_factor
+                float(buildingdata["A_Calc_" + o_w].values[0]) * scaling_factor
             )
 
         # scaling window areas over wall area
@@ -2884,24 +2915,26 @@ class BuildingInformation:
         ]
 
         # assumption: building is a cuboid with square floor area (area_of_one_wall = wall_length * wall_height, with wall_length = sqrt(floor_area))
-        total_wall_area_in_m2_tabula = 4 * math.sqrt(conditioned_floor_area_in_m2) * room_height_in_m
+        total_wall_area_in_m2_tabula = (
+            4 * math.sqrt(conditioned_floor_area_in_m2_tabula_ref) * room_height_in_m_tabula_ref
+        )
 
-        scaled_total_wall_area_in_m2 = 4 * math.sqrt(scaled_conditioned_floor_area_in_m2) * room_height_in_m
+        scaled_total_wall_area_in_m2 = 4 * math.sqrt(scaled_conditioned_floor_area_in_m2) * room_height_in_m_tabula_ref
 
         scaled_window_areas_in_m2 = []
         for windows_direction in self.windows_directions:
-            window_area_in_m2 = float(buildingdata["A_Window_" + windows_direction].iloc[0])
+            window_area_in_m2 = float(buildingdata["A_Calc_Window_" + windows_direction].iloc[0])
 
-            if scaling_factor != 1.0:
+            if scaling_factor_according_to_conditioned_living_area != 1.0:
                 factor_window_area_to_wall_area_tabula = window_area_in_m2 / total_wall_area_in_m2_tabula
                 scaled_window_areas_in_m2.append(scaled_total_wall_area_in_m2 * factor_window_area_to_wall_area_tabula)
             else:
                 scaled_window_areas_in_m2.append(window_area_in_m2)
 
-        scaled_rooftop_area_in_m2 = rooftop_area_in_m2 * scaling_factor
+        scaled_rooftop_area_in_m2 = rooftop_area_in_m2_tabula_ref * scaling_factor_roof
 
         return (
-            scaling_factor,
+            scaling_factor_according_to_conditioned_living_area,
             scaled_windows_and_door_envelope_areas_in_m2,
             scaled_opaque_surfaces_envelope_area_in_m2,
             scaled_conditioned_floor_area_in_m2,
@@ -2974,58 +3007,121 @@ class BuildingInformation:
 
     def manipulate_tabula_wall_parameter(self):
         """Manipulate building data of walls."""
-        self.buildingdata["U_Actual_Wall_1"] = self.u_value_facade_in_watt_per_m2_per_kelvin
-        self.buildingdata["U_Actual_Wall_2"] = self.u_value_facade_in_watt_per_m2_per_kelvin
-        self.buildingdata["U_Actual_Wall_3"] = self.u_value_facade_in_watt_per_m2_per_kelvin
+        if self.facade_u_value_in_watt_per_m2_per_kelvin is not None:
+            self.buildingdata["U_Actual_Wall_1"] = self.facade_u_value_in_watt_per_m2_per_kelvin
+            self.buildingdata["U_Actual_Wall_2"] = self.facade_u_value_in_watt_per_m2_per_kelvin
+            self.buildingdata["U_Actual_Wall_3"] = self.facade_u_value_in_watt_per_m2_per_kelvin
 
-        area_wall_1 = float(self.buildingdata["A_Wall_1"].values[0])
-        area_wall_2 = float(self.buildingdata["A_Wall_2"].values[0])
-        area_wall_3 = float(self.buildingdata["A_Wall_3"].values[0])
+        facade_u_value_in_watt_per_m2_per_kelvin_1 = float(self.buildingdata["U_Actual_Wall_1"].values[0])
+        facade_u_value_in_watt_per_m2_per_kelvin_2 = float(self.buildingdata["U_Actual_Wall_2"].values[0])
+        facade_u_value_in_watt_per_m2_per_kelvin_3 = float(self.buildingdata["U_Actual_Wall_3"].values[0])
+
+        if self.facade_area_in_m2 is not None:
+            self.buildingdata["A_Calc_Wall_1"] = self.facade_area_in_m2
+            self.buildingdata["A_Calc_Wall_2"] = 0
+            self.buildingdata["A_Calc_Wall_3"] = 0
+
+        area_wall_1 = float(self.buildingdata["A_Calc_Wall_1"].values[0])
+        area_wall_2 = float(self.buildingdata["A_Calc_Wall_2"].values[0])
+        area_wall_3 = float(self.buildingdata["A_Calc_Wall_3"].values[0])
 
         b_wall_1 = float(self.buildingdata["b_Transmission_Wall_1"].values[0])
         b_wall_2 = float(self.buildingdata["b_Transmission_Wall_2"].values[0])
         b_wall_3 = float(self.buildingdata["b_Transmission_Wall_3"].values[0])
 
-        self.buildingdata["H_Transmission_Wall_1"] = self.u_value_facade_in_watt_per_m2_per_kelvin * area_wall_1 * b_wall_1  # type: ignore
-        self.buildingdata["H_Transmission_Wall_2"] = self.u_value_facade_in_watt_per_m2_per_kelvin * area_wall_2 * b_wall_2  # type: ignore
-        self.buildingdata["H_Transmission_Wall_3"] = self.u_value_facade_in_watt_per_m2_per_kelvin * area_wall_3 * b_wall_3  # type: ignore
+        self.buildingdata["H_Transmission_Wall_1"] = facade_u_value_in_watt_per_m2_per_kelvin_1 * area_wall_1 * b_wall_1  # type: ignore
+        self.buildingdata["H_Transmission_Wall_2"] = facade_u_value_in_watt_per_m2_per_kelvin_2 * area_wall_2 * b_wall_2  # type: ignore
+        self.buildingdata["H_Transmission_Wall_3"] = facade_u_value_in_watt_per_m2_per_kelvin_3 * area_wall_3 * b_wall_3  # type: ignore
 
-    def manipulate_tabula_roof_parameter(self,):
+        self.facade_u_value_in_watt_per_m2_per_kelvin = (
+            (facade_u_value_in_watt_per_m2_per_kelvin_1 * area_wall_1)
+            + (facade_u_value_in_watt_per_m2_per_kelvin_2 * area_wall_2)
+            + (facade_u_value_in_watt_per_m2_per_kelvin_3 * area_wall_3)
+        ) / (area_wall_1 + area_wall_2 + area_wall_3)
+
+    def manipulate_tabula_roof_parameter(
+        self,
+    ):
         """Manipulate building data of roof."""
-        self.buildingdata["U_Actual_Roof_1"] = self.u_value_roof_in_watt_per_m2_per_kelvin
-        self.buildingdata["U_Actual_Roof_2"] = self.u_value_roof_in_watt_per_m2_per_kelvin
+        if self.roof_u_value_in_watt_per_m2_per_kelvin is not None:
+            self.buildingdata["U_Actual_Roof_1"] = self.roof_u_value_in_watt_per_m2_per_kelvin
+            self.buildingdata["U_Actual_Roof_2"] = self.roof_u_value_in_watt_per_m2_per_kelvin
 
-        area_roof_1 = float(self.buildingdata["A_Roof_1"].values[0])
-        area_roof_2 = float(self.buildingdata["A_Roof_2"].values[0])
+        roof_u_value_in_watt_per_m2_per_kelvin_1 = float(self.buildingdata["U_Actual_Roof_1"].values[0])
+        roof_u_value_in_watt_per_m2_per_kelvin_2 = float(self.buildingdata["U_Actual_Roof_2"].values[0])
+
+        if self.roof_area_in_m2 is not None:
+            self.buildingdata["A_Calc_Roof_1"] = self.roof_area_in_m2
+            self.buildingdata["A_Calc_Roof_2"] = 0
+
+        area_roof_1 = float(self.buildingdata["A_Calc_Roof_1"].values[0])
+        area_roof_2 = float(self.buildingdata["A_Calc_Roof_2"].values[0])
 
         b_roof_1 = float(self.buildingdata["b_Transmission_Roof_1"].values[0])
         b_roof_2 = float(self.buildingdata["b_Transmission_Roof_2"].values[0])
 
-        self.buildingdata[
-            "H_Transmission_Roof_1"] = self.u_value_roof_in_watt_per_m2_per_kelvin * area_roof_1 * b_roof_1  # type: ignore
-        self.buildingdata[
-            "H_Transmission_Roof_2"] = self.u_value_roof_in_watt_per_m2_per_kelvin * area_roof_2 * b_roof_2  # type: ignore
+        self.buildingdata["H_Transmission_Roof_1"] = (
+            roof_u_value_in_watt_per_m2_per_kelvin_1 * area_roof_1 * b_roof_1
+        )  # type: ignore
+        self.buildingdata["H_Transmission_Roof_2"] = (
+            roof_u_value_in_watt_per_m2_per_kelvin_2 * area_roof_2 * b_roof_2
+        )  # type: ignore
 
-    def manipulate_tabula_window_parameter(self,):
+        self.roof_u_value_in_watt_per_m2_per_kelvin = (
+            (roof_u_value_in_watt_per_m2_per_kelvin_1 * area_roof_1)
+            + (roof_u_value_in_watt_per_m2_per_kelvin_2 * area_roof_2)
+        ) / (area_roof_1 + area_roof_2)
+
+    def manipulate_tabula_window_parameter(
+        self,
+    ):
         """Manipulate building data of windows."""
-        self.buildingdata["U_Actual_Window_1"] = self.u_value_window_in_watt_per_m2_per_kelvin
-        self.buildingdata["U_Actual_Window_2"] = self.u_value_window_in_watt_per_m2_per_kelvin
+        if self.window_u_value_in_watt_per_m2_per_kelvin is not None:
+            self.buildingdata["U_Actual_Window_1"] = self.window_u_value_in_watt_per_m2_per_kelvin
+            self.buildingdata["U_Actual_Window_2"] = self.window_u_value_in_watt_per_m2_per_kelvin
 
-        area_window_1 = float(self.buildingdata["A_Window_1"].values[0])
-        area_window_2 = float(self.buildingdata["A_Window_2"].values[0])
+        window_u_value_in_watt_per_m2_per_kelvin_1 = float(self.buildingdata["U_Actual_Window_1"].values[0])
+        window_u_value_in_watt_per_m2_per_kelvin_2 = float(self.buildingdata["U_Actual_Window_2"].values[0])
 
-        self.buildingdata[
-            "H_Transmission_Window_1"] = self.u_value_window_in_watt_per_m2_per_kelvin * area_window_1  # type: ignore
-        self.buildingdata[
-            "H_Transmission_Window_2"] = self.u_value_window_in_watt_per_m2_per_kelvin * area_window_2  # type: ignore
+        if self.window_area_in_m2 is not None:
+            self.buildingdata["A_Calc_Window_1"] = self.window_area_in_m2
+            self.buildingdata["A_Calc_Window_2"] = 0
 
-    def manipulate_tabula_door_parameter(self,):
+        area_window_1 = float(self.buildingdata["A_Calc_Window_1"].values[0])
+        area_window_2 = float(self.buildingdata["A_Calc_Window_2"].values[0])
+
+        self.buildingdata["H_Transmission_Window_1"] = (
+            window_u_value_in_watt_per_m2_per_kelvin_1 * area_window_1
+        )  # type: ignore
+        self.buildingdata["H_Transmission_Window_2"] = (
+            window_u_value_in_watt_per_m2_per_kelvin_2 * area_window_2
+        )  # type: ignore
+
+        self.window_u_value_in_watt_per_m2_per_kelvin = (
+            (window_u_value_in_watt_per_m2_per_kelvin_1 * area_window_1)
+            + (window_u_value_in_watt_per_m2_per_kelvin_2 * area_window_2)
+        ) / (area_window_1 + area_window_2)
+
+    def manipulate_tabula_door_parameter(
+        self,
+    ):
         """Manipulate building data of door."""
-        self.buildingdata["U_Actual_Door_1"] = self.u_value_door_in_watt_per_m2_per_kelvin
+        if self.door_u_value_in_watt_per_m2_per_kelvin is not None:
+            self.buildingdata["U_Actual_Door_1"] = self.door_u_value_in_watt_per_m2_per_kelvin
 
-        area_door_1 = float(self.buildingdata["A_Door_1"].values[0])
-        self.buildingdata[
-            "H_Transmission_Door_1"] = self.u_value_door_in_watt_per_m2_per_kelvin * area_door_1  # type: ignore
+        door_u_value_in_watt_per_m2_per_kelvin = float(self.buildingdata["U_Actual_Door_1"].values[0])
+
+        if self.door_area_in_m2 is not None:
+            self.buildingdata["A_Calc_Door_1"] = self.door_area_in_m2
+
+        area_door_1 = float(self.buildingdata["A_Calc_Door_1"].values[0])
+        self.buildingdata["H_Transmission_Door_1"] = (
+            door_u_value_in_watt_per_m2_per_kelvin * area_door_1
+        )  # type: ignore
+
+        self.door_u_value_in_watt_per_m2_per_kelvin = ((door_u_value_in_watt_per_m2_per_kelvin * area_door_1)) / (
+            area_door_1
+        )
 
     def manipulate_heat_transfer_coefficient(self) -> Tuple[float, float]:
         """Manipulate heat_transfer coefficient."""
@@ -3033,35 +3129,40 @@ class BuildingInformation:
 
         reference_area = float(self.buildingdata["A_C_Ref"].values[0])
 
-        self.buildingdata["H_Transmission_Wall"] = (self.buildingdata["H_Transmission_Wall_1"] +
-                                                    self.buildingdata["H_Transmission_Wall_2"] +
-                                                    self.buildingdata["H_Transmission_Wall_3"]
-                                                    )
+        self.buildingdata["H_Transmission_Wall"] = (
+            self.buildingdata["H_Transmission_Wall_1"]
+            + self.buildingdata["H_Transmission_Wall_2"]
+            + self.buildingdata["H_Transmission_Wall_3"]
+        )
 
-        self.buildingdata["H_Transmission_Roof"] = (self.buildingdata["H_Transmission_Roof_1"] +
-                                                    self.buildingdata["H_Transmission_Roof_2"]
-                                                    )
+        self.buildingdata["H_Transmission_Roof"] = (
+            self.buildingdata["H_Transmission_Roof_1"] + self.buildingdata["H_Transmission_Roof_2"]
+        )
 
-        self.buildingdata["H_Transmission_Window"] = (self.buildingdata["H_Transmission_Window_1"] +
-                                                      self.buildingdata["H_Transmission_Window_2"]
-                                                      )
+        self.buildingdata["H_Transmission_Window"] = (
+            self.buildingdata["H_Transmission_Window_1"] + self.buildingdata["H_Transmission_Window_2"]
+        )
 
         self.buildingdata["H_Transmission_Door"] = self.buildingdata["H_Transmission_Door_1"]
 
-        self.buildingdata["H_Transmission_Floor"] = (float(self.buildingdata["H_Transmission_Floor_1"].values[0]) +
-                                                     float(self.buildingdata["H_Transmission_Floor_2"].values[0])
-                                                     )
+        self.buildingdata["H_Transmission_Floor"] = float(
+            self.buildingdata["H_Transmission_Floor_1"].values[0]
+        ) + float(self.buildingdata["H_Transmission_Floor_2"].values[0])
 
-        self.buildingdata["H_Transmission_ThermalBridging"] = float(self.buildingdata["H_Transmission_ThermalBridging"].values[0])
+        self.buildingdata["H_Transmission_ThermalBridging"] = float(
+            self.buildingdata["H_Transmission_ThermalBridging"].values[0]
+        )
 
-        heat_transfer_coeff_by_transmission_reference_in_watt_per_m2_per_kelvin = (self.buildingdata["H_Transmission_Door"] +
-                                                                                   self.buildingdata["H_Transmission_Window"] +
-                                                                                   self.buildingdata["H_Transmission_Roof"] +
-                                                                                   self.buildingdata["H_Transmission_Wall"] +
-                                                                                   self.buildingdata["H_Transmission_Floor"] +
-                                                                                   self.buildingdata["H_Transmission_ThermalBridging"]
-                                                                                   ) / reference_area
+        heat_transfer_coeff_by_transmission_reference_in_watt_per_m2_per_kelvin = (
+            self.buildingdata["H_Transmission_Door"]
+            + self.buildingdata["H_Transmission_Window"]
+            + self.buildingdata["H_Transmission_Roof"]
+            + self.buildingdata["H_Transmission_Wall"]
+            + self.buildingdata["H_Transmission_Floor"]
+            + self.buildingdata["H_Transmission_ThermalBridging"]
+        ) / reference_area
 
-        return (float(heat_transfer_coeff_by_ventilation_reference_in_watt_per_m2_per_kelvin.values[0]),
-                round(float(heat_transfer_coeff_by_transmission_reference_in_watt_per_m2_per_kelvin.values[0]), 2)
-                )
+        return (
+            float(heat_transfer_coeff_by_ventilation_reference_in_watt_per_m2_per_kelvin.values[0]),
+            round(float(heat_transfer_coeff_by_transmission_reference_in_watt_per_m2_per_kelvin.values[0]), 2),
+        )

@@ -91,10 +91,14 @@ class BuildingConfig(cp.ConfigBase):
     total_base_area_in_m2: Optional[float]
     number_of_apartments: Optional[float]
     max_thermal_building_demand_in_watt: Optional[float]
-    u_value_facade_in_watt_per_m2_per_kelvin: Optional[float]
-    u_value_roof_in_watt_per_m2_per_kelvin: Optional[float]
-    u_value_window_in_watt_per_m2_per_kelvin: Optional[float]
-    u_value_door_in_watt_per_m2_per_kelvin: Optional[float]
+    facade_u_value_in_watt_per_m2_per_kelvin: Optional[float]
+    facade_area_in_m2: Optional[float]
+    roof_u_value_in_watt_per_m2_per_kelvin: Optional[float]
+    roof_area_in_m2: Optional[float]
+    window_u_value_in_watt_per_m2_per_kelvin: Optional[float]
+    window_area_in_m2: Optional[float]
+    door_u_value_in_watt_per_m2_per_kelvin: Optional[float]
+    door_area_in_m2: Optional[float]
     predictive: bool
     set_heating_temperature_in_celsius: float
     set_cooling_temperature_in_celsius: float
@@ -115,10 +119,14 @@ class BuildingConfig(cp.ConfigBase):
         set_cooling_temperature_in_celsius: float = 25.0,
         heating_reference_temperature_in_celsius: float = -7.0,
         max_thermal_building_demand_in_watt: Optional[float] = None,
-        u_value_facade_in_watt_per_m2_per_kelvin: Optional[float] = None,
-        u_value_roof_in_watt_per_m2_per_kelvin: Optional[float] = None,
-        u_value_window_in_watt_per_m2_per_kelvin: Optional[float] = None,
-        u_value_door_in_watt_per_m2_per_kelvin: Optional[float] = None,
+        facade_u_value_in_watt_per_m2_per_kelvin: Optional[float] = None,
+        facade_area_in_m2: Optional[float] = None,
+        roof_u_value_in_watt_per_m2_per_kelvin: Optional[float] = None,
+        roof_area_in_m2: Optional[float] = None,
+        window_u_value_in_watt_per_m2_per_kelvin: Optional[float] = None,
+        window_area_in_m2: Optional[float] = None,
+        door_u_value_in_watt_per_m2_per_kelvin: Optional[float] = None,
+        door_area_in_m2: Optional[float] = None,
         building_name: str = "BUI1",
     ) -> Any:
         """Get a default Building."""
@@ -131,10 +139,14 @@ class BuildingConfig(cp.ConfigBase):
             heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
             absolute_conditioned_floor_area_in_m2=121.2,
             max_thermal_building_demand_in_watt=max_thermal_building_demand_in_watt,
-            u_value_facade_in_watt_per_m2_per_kelvin=u_value_facade_in_watt_per_m2_per_kelvin,
-            u_value_roof_in_watt_per_m2_per_kelvin=u_value_roof_in_watt_per_m2_per_kelvin,
-            u_value_window_in_watt_per_m2_per_kelvin=u_value_window_in_watt_per_m2_per_kelvin,
-            u_value_door_in_watt_per_m2_per_kelvin=u_value_door_in_watt_per_m2_per_kelvin,
+            facade_u_value_in_watt_per_m2_per_kelvin=facade_u_value_in_watt_per_m2_per_kelvin,#
+            facade_area_in_m2=facade_area_in_m2,
+            roof_u_value_in_watt_per_m2_per_kelvin=roof_u_value_in_watt_per_m2_per_kelvin,
+            roof_area_in_m2=roof_area_in_m2,
+            window_u_value_in_watt_per_m2_per_kelvin=window_u_value_in_watt_per_m2_per_kelvin,
+            window_area_in_m2=window_area_in_m2,
+            door_u_value_in_watt_per_m2_per_kelvin=door_u_value_in_watt_per_m2_per_kelvin,
+            door_area_in_m2=door_area_in_m2,
             total_base_area_in_m2=None,
             number_of_apartments=None,
             predictive=False,
@@ -271,22 +283,31 @@ class Building(cp.Component):
         # =================================================================================================================================
         # Initialization of variables
 
-        self.u_value_facade_in_watt_per_m2_per_kelvin = self.buildingconfig.u_value_facade_in_watt_per_m2_per_kelvin
-        self.u_value_roof_in_watt_per_m2_per_kelvin = self.buildingconfig.u_value_roof_in_watt_per_m2_per_kelvin
-        self.u_value_window_in_watt_per_m2_per_kelvin = self.buildingconfig.u_value_window_in_watt_per_m2_per_kelvin
-        self.u_value_door_in_watt_per_m2_per_kelvin = self.buildingconfig.u_value_door_in_watt_per_m2_per_kelvin
+        self.facade_area_in_m2 = self.buildingconfig.facade_area_in_m2
+        self.roof_area_in_m2 = self.buildingconfig.roof_area_in_m2
+        self.window_area_in_m2 = self.buildingconfig.window_area_in_m2
+        self.door_area_in_m2 = self.buildingconfig.door_area_in_m2
+
+        self.facade_u_value_in_watt_per_m2_per_kelvin = self.buildingconfig.facade_u_value_in_watt_per_m2_per_kelvin
+        self.roof_u_value_in_watt_per_m2_per_kelvin = self.buildingconfig.roof_u_value_in_watt_per_m2_per_kelvin
+        self.window_u_value_in_watt_per_m2_per_kelvin = self.buildingconfig.window_u_value_in_watt_per_m2_per_kelvin
+        self.door_u_value_in_watt_per_m2_per_kelvin = self.buildingconfig.door_u_value_in_watt_per_m2_per_kelvin
 
         if (
-            self.u_value_facade_in_watt_per_m2_per_kelvin is None and
-            self.u_value_roof_in_watt_per_m2_per_kelvin is None and
-            self.u_value_window_in_watt_per_m2_per_kelvin is None and
-            self.u_value_door_in_watt_per_m2_per_kelvin is None
+                self.facade_area_in_m2 is None and
+                self.roof_area_in_m2 is None and
+                self.window_area_in_m2 is None and
+                self.door_area_in_m2 is None and
+                self.facade_u_value_in_watt_per_m2_per_kelvin is None and
+                self.roof_u_value_in_watt_per_m2_per_kelvin is None and
+                self.window_u_value_in_watt_per_m2_per_kelvin is None and
+                self.door_u_value_in_watt_per_m2_per_kelvin is None
         ):
             self.use_tabula_data = True
             log.information("Use tabula data")
         else:
             self.use_tabula_data = False
-            log.information("Use u values from config")
+            log.information("Use U-values and areas from config")
 
         self.set_heating_temperature_in_celsius = self.buildingconfig.set_heating_temperature_in_celsius
         self.set_cooling_temperature_in_celsius = self.buildingconfig.set_cooling_temperature_in_celsius
@@ -2490,11 +2511,16 @@ class BuildingInformation:
         self.set_cooling_temperature_for_building_in_celsius = self.buildingconfig.set_cooling_temperature_in_celsius
         self.heating_reference_temperature_in_celsius = self.buildingconfig.heating_reference_temperature_in_celsius
 
-        # get set u values for building
-        self.u_value_facade_in_watt_per_m2_per_kelvin = self.buildingconfig.u_value_facade_in_watt_per_m2_per_kelvin
-        self.u_value_roof_in_watt_per_m2_per_kelvin = self.buildingconfig.u_value_roof_in_watt_per_m2_per_kelvin
-        self.u_value_window_in_watt_per_m2_per_kelvin = self.buildingconfig.u_value_window_in_watt_per_m2_per_kelvin
-        self.u_value_door_in_watt_per_m2_per_kelvin = self.buildingconfig.u_value_door_in_watt_per_m2_per_kelvin
+        # get set u values and areas for building
+        self.facade_area_in_m2 = self.buildingconfig.facade_area_in_m2
+        self.roof_area_in_m2 = self.buildingconfig.roof_area_in_m2
+        self.window_area_in_m2 = self.buildingconfig.window_area_in_m2
+        self.door_area_in_m2 = self.buildingconfig.door_area_in_m2
+
+        self.facade_u_value_in_watt_per_m2_per_kelvin = self.buildingconfig.facade_u_value_in_watt_per_m2_per_kelvin
+        self.roof_u_value_in_watt_per_m2_per_kelvin = self.buildingconfig.roof_u_value_in_watt_per_m2_per_kelvin
+        self.window_u_value_in_watt_per_m2_per_kelvin = self.buildingconfig.window_u_value_in_watt_per_m2_per_kelvin
+        self.door_u_value_in_watt_per_m2_per_kelvin = self.buildingconfig.door_u_value_in_watt_per_m2_per_kelvin
 
         self.use_tabula_data = use_tabula_data
 

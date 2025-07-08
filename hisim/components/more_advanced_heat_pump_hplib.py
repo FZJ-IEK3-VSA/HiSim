@@ -981,13 +981,9 @@ class MoreAdvancedHeatPumpHPLib(Component):
             if on_off_previous == 1 and time_on_heating < time_on_min:
                 if on_off == 0:
                     on_off = 1
-                else:
-                    on_off = on_off
             elif on_off_previous == 2 and time_on_heating < time_on_min:
                 if on_off == 0:
                     on_off = 2
-                else:
-                    on_off = on_off
             elif on_off_previous == -1 and time_on_cooling < time_on_min:
                 on_off = -1
             elif on_off_previous == 0 and time_off < time_off_min:

@@ -1148,7 +1148,6 @@ class Building(cp.Component):
         lines.append("Building Construction:")
         lines.append("--------------------------------------------")
         lines.append(f"Number of Apartments: {self.my_building_information.number_of_apartments}")
-        lines.append(f"Number of Storeys: {self.my_building_information.number_of_storeys}")
         lines.append(
             f"Conditioned Floor Area (A_f) [m2]: {self.my_building_information.scaled_conditioned_floor_area_in_m2:.2f}"
         )
@@ -2307,6 +2306,7 @@ class BuildingInformation:
     ):
         """Initialize the class."""
 
+        self.window_scaling_factor: float
         self.heat_transfer_coeff_thermal_mass_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin: float
         self.ratio_between_internal_surface_area_and_floor_area: float
         self.heat_transfer_coeff_indoor_air_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin: float
@@ -2628,7 +2628,7 @@ class BuildingInformation:
         else:
             self.window_area_in_m2 = self.buildingconfig.window_area_in_m2
 
-        window_scaling_factor = self.window_area_in_m2 / (area_window_1_ref + area_window_2_ref)
+        self.window_scaling_factor = self.window_area_in_m2 / (area_window_1_ref + area_window_2_ref)
 
         # scaling window areas over wall area
         self.windows_directions = [
@@ -2643,7 +2643,7 @@ class BuildingInformation:
         for windows_direction in self.windows_directions:
             window_area_of_direction_in_m2 = float(self.buildingdata_ref["A_Window_" + windows_direction].iloc[0])
 
-            self.scaled_window_areas_in_m2.append(window_area_of_direction_in_m2 * window_scaling_factor)
+            self.scaled_window_areas_in_m2.append(window_area_of_direction_in_m2 *  self.window_scaling_factor)
 
     def set_door_area_parameter(
         self,

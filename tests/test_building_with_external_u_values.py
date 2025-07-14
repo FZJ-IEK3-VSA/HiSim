@@ -36,7 +36,7 @@ def test_house_with_idealized_electric_heater_for_testing_u_values(
         u_value_window1_tabula,
         u_value_door1_tabula,
         u_value_roof1_tabula,
-        heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin_tabula,
+        total_heat_conductance_transmission_tabula,
         max_thermal_building_demand_in_watt_tabula,
     ) = house_with_idealized_electric_heater_for_testing_u_values(
         my_simulation_parameters=my_simulation_parameters,
@@ -54,7 +54,7 @@ def test_house_with_idealized_electric_heater_for_testing_u_values(
         u_value_window1,
         u_value_door1,
         u_value_roof1,
-        heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin,
+        total_heat_conductance_transmission,
         max_thermal_building_demand_in_watt,
     ) = house_with_idealized_electric_heater_for_testing_u_values(
         my_simulation_parameters=my_simulation_parameters,
@@ -76,19 +76,19 @@ def test_house_with_idealized_electric_heater_for_testing_u_values(
     log.information(f"u_value_roof1: {u_value_roof1} != {u_value_roof1_tabula}")
     assert abs(u_value_roof1 - u_value_roof1_tabula) < 0.01, f"u_value_roof1: {u_value_roof1} != {u_value_roof1_tabula}"
     log.information(
-        f"heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin: "
-        f"{heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin} != "
-        f"{heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin_tabula}"
+        f"total_heat_conductance_transmission: "
+        f"{total_heat_conductance_transmission} != "
+        f"{total_heat_conductance_transmission_tabula}"
     )
     assert (
         abs(
-            heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin
-            - heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin_tabula
+            total_heat_conductance_transmission
+            - total_heat_conductance_transmission_tabula
         )
         < 0.01
-    ), (f"heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin: "
-        f"{heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin} != "
-        f"{heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin_tabula}")
+    ), (f"total_heat_conductance_transmission: "
+        f"{total_heat_conductance_transmission} != "
+        f"{total_heat_conductance_transmission_tabula}")
     log.information(
         f"max_thermal_building_demand_in_watt: {max_thermal_building_demand_in_watt} != {max_thermal_building_demand_in_watt_tabula}"
     )
@@ -242,17 +242,17 @@ def house_with_idealized_electric_heater_for_testing_u_values(
     sum_heating_in_watt_timestep = sum(results_heating)
     log.information("sum heating [W*timestep] " + str(sum_heating_in_watt_timestep))
 
-    u_value_wall1 = my_building.my_building_information.buildingdata["U_Actual_Wall_1"].values[0]
+    u_value_wall1 = my_building.my_building_information.buildingdata_ref["U_Actual_Wall_1"].values[0]
 
-    u_value_window1 = my_building.my_building_information.buildingdata["U_Actual_Window_1"].values[0]
+    u_value_window1 = my_building.my_building_information.buildingdata_ref["U_Actual_Window_1"].values[0]
 
-    u_value_door1 = my_building.my_building_information.buildingdata["U_Actual_Door_1"].values[0]
+    u_value_door1 = my_building.my_building_information.buildingdata_ref["U_Actual_Door_1"].values[0]
 
-    u_value_roof1 = my_building.my_building_information.buildingdata["U_Actual_Roof_1"].values[0]
+    u_value_roof1 = my_building.my_building_information.buildingdata_ref["U_Actual_Roof_1"].values[0]
 
     max_thermal_building_demand_in_watt = my_building.my_building_information.max_thermal_building_demand_in_watt
-    heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin = (
-        my_building.my_building_information.heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin
+    total_heat_conductance_transmission = (
+        my_building.my_building_information.total_heat_conductance_transmission
     )
 
     log.information("u_value_wall1: " + str(u_value_wall1))
@@ -261,8 +261,8 @@ def house_with_idealized_electric_heater_for_testing_u_values(
     log.information("u_value_roof1: " + str(u_value_roof1))
     log.information("________")
     log.information(
-        "heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin: "
-        + str(heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin)
+        "total_heat_conductance_transmission: "
+        + str(total_heat_conductance_transmission)
     )
     log.information("max_termal_building_demand: " + str(max_thermal_building_demand_in_watt))
 
@@ -271,6 +271,6 @@ def house_with_idealized_electric_heater_for_testing_u_values(
         u_value_window1,
         u_value_door1,
         u_value_roof1,
-        heat_transfer_coeff_by_transmission_ref_in_watt_per_m2_per_kelvin,
+        total_heat_conductance_transmission,
         max_thermal_building_demand_in_watt,
     )

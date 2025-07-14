@@ -5,7 +5,6 @@ divided by the conditioned floor area given by TABULA.
 The window areas are scaled via the ratio of window area to wall area.
 """
 # clean
-import math
 import numpy as np
 import pytest
 from hisim import component

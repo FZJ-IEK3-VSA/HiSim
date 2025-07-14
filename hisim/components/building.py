@@ -2643,7 +2643,7 @@ class BuildingInformation:
         for windows_direction in self.windows_directions:
             window_area_of_direction_in_m2 = float(self.buildingdata_ref["A_Window_" + windows_direction].iloc[0])
 
-            self.scaled_window_areas_in_m2.append(window_area_of_direction_in_m2 *  self.window_scaling_factor)
+            self.scaled_window_areas_in_m2.append(window_area_of_direction_in_m2 * self.window_scaling_factor)
 
     def set_door_area_parameter(
         self,

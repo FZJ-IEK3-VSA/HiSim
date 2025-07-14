@@ -2307,41 +2307,41 @@ class BuildingInformation:
     ):
         """Initialize the class."""
 
-        self.heat_transfer_coeff_thermal_mass_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin = None
-        self.ratio_between_internal_surface_area_and_floor_area = None
-        self.heat_transfer_coeff_indoor_air_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin = None
-        self.building_heat_capacity_class_f_a = None
-        self.building_heat_capacity_class_f_c_in_joule_per_m2_per_kelvin = None
-        self.conditioned_floor_area_in_m2_tabula_ref = None
-        self.scaled_conditioned_floor_area_in_m2 = None
-        self.scaling_factor_according_to_conditioned_living_area = None
-        self.building_total_area_in_m2 = None
-        self.total_heat_conductance_transmission = None
-        self.total_heat_conductance_ventilation = None
-        self.floor_area_in_m2 = None
-        self.facade_area_in_m2 = None
-        self.roof_area_in_m2 = None
-        self.window_area_in_m2 = None
-        self.scaled_window_areas_in_m2 = None
-        self.max_thermal_building_demand_in_watt = None
-        self.door_area_in_m2 = None
-        self.floor_u_value_in_watt_per_m2_per_kelvin = None
-        self.floor_adjustment_factor_from_tabula = None
-        self.heat_conductance_floor_in_watt_per_kelvin = None
-        self.facade_u_value_in_watt_per_m2_per_kelvin = None
-        self.facade_adjustment_factor_from_tabula = None
-        self.roof_adjustment_factor_from_tabula = None
-        self.door_adjustment_factor_from_tabula = None
-        self.window_adjustment_factor_from_tabula = None
-        self.roof_u_value_in_watt_per_m2_per_kelvin = None
-        self.window_u_value_in_watt_per_m2_per_kelvin = None
-        self.door_u_value_in_watt_per_m2_per_kelvin = None
-        self.heat_conductance_facade_in_watt_per_kelvin = None
-        self.heat_conductance_roof_in_watt_per_kelvin = None
-        self.heat_conductance_window_in_watt_per_kelvin = None
-        self.heat_conductance_door_in_watt_per_kelvin = None
-        self.heat_conductance_thermal_bridging_in_watt_per_kelvin = None
-        self.heat_conductance_ventilation_in_watt_per_kelvin = None
+        self.heat_transfer_coeff_thermal_mass_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin: float
+        self.ratio_between_internal_surface_area_and_floor_area: float
+        self.heat_transfer_coeff_indoor_air_and_internal_surface_fixed_value_in_watt_per_m2_per_kelvin: float
+        self.building_heat_capacity_class_f_a: dict
+        self.building_heat_capacity_class_f_c_in_joule_per_m2_per_kelvin: dict
+        self.conditioned_floor_area_in_m2_tabula_ref: float
+        self.scaled_conditioned_floor_area_in_m2: float
+        self.scaling_factor_according_to_conditioned_living_area: float
+        self.building_total_area_in_m2: float
+        self.total_heat_conductance_transmission: float
+        self.total_heat_conductance_ventilation: float
+        self.floor_area_in_m2: float
+        self.facade_area_in_m2: float
+        self.roof_area_in_m2: float
+        self.window_area_in_m2: float
+        self.scaled_window_areas_in_m2: list
+        self.max_thermal_building_demand_in_watt: float
+        self.door_area_in_m2: float
+        self.floor_u_value_in_watt_per_m2_per_kelvin: float
+        self.floor_adjustment_factor_from_tabula: float
+        self.heat_conductance_floor_in_watt_per_kelvin: float
+        self.facade_u_value_in_watt_per_m2_per_kelvin: float
+        self.facade_adjustment_factor_from_tabula: float
+        self.roof_adjustment_factor_from_tabula: float
+        self.door_adjustment_factor_from_tabula: float
+        self.window_adjustment_factor_from_tabula: float
+        self.roof_u_value_in_watt_per_m2_per_kelvin: float
+        self.window_u_value_in_watt_per_m2_per_kelvin: float
+        self.door_u_value_in_watt_per_m2_per_kelvin: float
+        self.heat_conductance_facade_in_watt_per_kelvin: float
+        self.heat_conductance_roof_in_watt_per_kelvin: float
+        self.heat_conductance_window_in_watt_per_kelvin: float
+        self.heat_conductance_door_in_watt_per_kelvin: float
+        self.heat_conductance_thermal_bridging_in_watt_per_kelvin: float
+        self.heat_conductance_ventilation_in_watt_per_kelvin: float
         self.buildingconfig = config
 
         # get set temperatures for building

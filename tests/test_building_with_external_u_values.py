@@ -140,10 +140,10 @@ def house_with_idealized_electric_heater_for_testing_u_values(
 
     # Build Building
     my_building_config = building.BuildingConfig.get_default_german_single_family_home(
-        u_value_facade_in_watt_per_m2_per_kelvin=u_value_facade_in_watt_per_m2_per_kelvin,
-        u_value_roof_in_watt_per_m2_per_kelvin=u_value_roof_in_watt_per_m2_per_kelvin,
-        u_value_window_in_watt_per_m2_per_kelvin=u_value_window_in_watt_per_m2_per_kelvin,
-        u_value_door_in_watt_per_m2_per_kelvin=u_value_door_in_watt_per_m2_per_kelvin,
+        facade_u_value_in_watt_per_m2_per_kelvin=u_value_facade_in_watt_per_m2_per_kelvin,
+        roof_u_value_in_watt_per_m2_per_kelvin=u_value_roof_in_watt_per_m2_per_kelvin,
+        window_u_value_in_watt_per_m2_per_kelvin=u_value_window_in_watt_per_m2_per_kelvin,
+        door_u_value_in_watt_per_m2_per_kelvin=u_value_door_in_watt_per_m2_per_kelvin,
         set_cooling_temperature_in_celsius=set_cooling_temperature_for_building_in_celsius,
         set_heating_temperature_in_celsius=set_heating_temperature_for_building_in_celsius,
     )

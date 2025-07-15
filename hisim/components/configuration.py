@@ -28,6 +28,7 @@ Sources:
               factsheet_ansatz_zur_neubewertung_von_co2-emissionen_aus_der_holzverbrennung_0.pdf
         [15]: https://mediathek.fnr.de/energiepreisentwicklung.html
         [16]: https://de.statista.com/statistik/daten/studie/250114/umfrage/preis-fuer-fernwaerme-nach-anschlusswert-in-deutschland/
+        [17]: https://doi.org/10.1016/j.enbuild.2022.112480 (Knosala et al. 2022)
 """
 techno_economic_parameters = {
     2018: {
@@ -50,6 +51,8 @@ techno_economic_parameters = {
         "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
         "district_heating_costs_in_euro_per_kwh": 0.07672,  # EUR/kWh Source : [16]
         "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
+        "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # EUR/kWh  # Source: [17] using value of 2020 and assuming it is almost constant for several years
+        "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
     },
     2019: {
         "electricity_costs_in_euro_per_kwh": 0.295,  # EUR/kWh  # Source: [1]
@@ -71,6 +74,8 @@ techno_economic_parameters = {
         "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
         "district_heating_costs_in_euro_per_kwh": 0.07904,  # EUR/kWh Source : [16]
         "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
+        "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # EUR/kWh  # Source: [17] using value of 2020 and assuming it is almost constant for several years
+        "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
     },
     2020: {
         "electricity_costs_in_euro_per_kwh": 0.3005,  # EUR/kWh  # Source: [1]
@@ -92,6 +97,8 @@ techno_economic_parameters = {
         "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
         "district_heating_costs_in_euro_per_kwh": 0.07656,  # EUR/kWh Source : [16]
         "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
+        "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # EUR/kWh  # Source: [17] using value of 2020 and assuming it is almost constant for several years
+        "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
     },
     2021: {
         "electricity_costs_in_euro_per_kwh": 0.3005,  # EUR/kWh  # Source: [1]
@@ -113,6 +120,8 @@ techno_economic_parameters = {
         "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
         "district_heating_costs_in_euro_per_kwh": 0.08277,  # EUR/kWh Source : [16]
         "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
+        "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # EUR/kWh  # Source: [17] using value of 2020 and assuming it is almost constant for several years
+        "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
     },
     2022: {
         "electricity_costs_in_euro_per_kwh": 0.43025,  # EUR/kWh  # Source: [1]
@@ -134,6 +143,8 @@ techno_economic_parameters = {
         "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
         "district_heating_costs_in_euro_per_kwh": 0.11945,  # EUR/kWh Source : [16]
         "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
+        "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # EUR/kWh  # Source: [17] using value of 2020 and assuming it is almost constant for several years
+        "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
     },
     2023: {
         "electricity_costs_in_euro_per_kwh": 0.4175,  # EUR/kWh  # Source: [6]
@@ -155,6 +166,8 @@ techno_economic_parameters = {
         "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
         "district_heating_costs_in_euro_per_kwh": 0.15034,  # EUR/kWh Source : [16]
         "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
+        "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # EUR/kWh  # Source: [17] using value of 2020 and assuming it is almost constant for several years
+        "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
     },
     2024: {
         "electricity_costs_in_euro_per_kwh": 0.4113,  # EUR/kWh  # Source: [10]
@@ -176,6 +189,8 @@ techno_economic_parameters = {
         "wood_chip_footprint_in_kg_per_kwh": 0.0313,  # kgCo2eq/kWh # Source : [14]
         "district_heating_costs_in_euro_per_kwh": 0.14757,  # EUR/kWh Source : [16]
         "district_heating_footprint_in_kg_per_kwh": 0.280,  # kgCo2eq/kWh Source : [8]
+        "green_hydrogen_gas_costs_in_euro_per_kwh": 0.25,  # EUR/kWh  # Source: [17] using value of 2020 and assuming it is almost constant for several years
+        "green_hydrogen_gas_footprint_in_kg_per_kwh": 0,  # kgCO2eq/kWh
     }
 }
 
@@ -204,6 +219,8 @@ class EmissionFactorsAndCostsForFuelsConfig:
     wood_chip_footprint_in_kg_per_kwh: float  # kgCo2eq/kWh
     district_heating_costs_in_euro_per_kwh: float  # EUR/kWh
     district_heating_footprint_in_kg_per_kwh: float  # kgCo2eq/kWh
+    green_hydrogen_gas_costs_in_euro_per_kwh: float  # EUR/kWh
+    green_hydrogen_gas_footprint_in_kg_per_kwh: float  # kgCo2eq/kWh
 
     @classmethod
     def get_values_for_year(

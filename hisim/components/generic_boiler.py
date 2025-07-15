@@ -957,10 +957,10 @@ class GenericBoiler(Component):
 
         elif (
             self.energy_carrier == lt.LoadTypes.HYDROGEN
-        ):  # TODO: implement costs and co2
+        ):
             kpi_tag = KpiTagEnumClass.HYDROGEN_BOILER
-            co2_per_unit = 0
-            euro_per_unit = 0
+            co2_per_unit = emissions_and_cost_factors.green_hydrogen_gas_footprint_in_kg_per_kwh
+            euro_per_unit = emissions_and_cost_factors.green_hydrogen_gas_costs_in_euro_per_kwh
             co2_per_simulated_period_in_kg = (
                 self.config.consumption_in_kilowatt_hour * co2_per_unit
             )

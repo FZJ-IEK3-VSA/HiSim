@@ -62,10 +62,12 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     my_advanced_battery_config_2.source_weight = 2
 
     my_advanced_battery_1 = advanced_battery_bslib.Battery(
-        my_simulation_parameters=my_simulation_parameters, config=my_advanced_battery_config_1,
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_advanced_battery_config_1,
     )
     my_advanced_battery_2 = advanced_battery_bslib.Battery(
-        my_simulation_parameters=my_simulation_parameters, config=my_advanced_battery_config_2,
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_advanced_battery_config_2,
     )
 
     my_advanced_fuel_cell_config_1 = advanced_fuel_cell.CHPConfig.get_default_config()
@@ -74,10 +76,12 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     my_advanced_fuel_cell_config_2.name = "CHP2"
 
     my_advanced_fuel_cell_1 = advanced_fuel_cell.CHP(
-        my_simulation_parameters=my_simulation_parameters, config=my_advanced_fuel_cell_config_1,
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_advanced_fuel_cell_config_1,
     )
     my_advanced_fuel_cell_2 = advanced_fuel_cell.CHP(
-        my_simulation_parameters=my_simulation_parameters, config=my_advanced_fuel_cell_config_2,
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_advanced_fuel_cell_config_2,
     )
     my_cl2_config = cl2.EMSConfig.get_default_config_ems()
     my_cl2 = cl2.L2GenericEnergyManagementSystem(
@@ -95,7 +99,8 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
 
     my_photovoltaic_system_config = generic_pv_system.PVSystemConfig.get_default_pv_system()
     my_photovoltaic_system = generic_pv_system.PVSystem(
-        my_simulation_parameters=my_simulation_parameters, config=my_photovoltaic_system_config,
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_photovoltaic_system_config,
     )
     my_photovoltaic_system.connect_only_predefined_connections(my_weather)
 
@@ -193,10 +198,12 @@ def setup_function(my_sim: Any, my_simulation_parameters: Optional[SimulationPar
     )
 
     my_advanced_fuel_cell_1.connect_dynamic_input(
-        input_fieldname=advanced_fuel_cell.CHP.ElectricityFromCHPTarget, src_object=electricity_from_fuel_cell_target_1,
+        input_fieldname=advanced_fuel_cell.CHP.ElectricityFromCHPTarget,
+        src_object=electricity_from_fuel_cell_target_1,
     )
     my_advanced_fuel_cell_2.connect_dynamic_input(
-        input_fieldname=advanced_fuel_cell.CHP.ElectricityFromCHPTarget, src_object=electricity_from_fuel_cell_target_2,
+        input_fieldname=advanced_fuel_cell.CHP.ElectricityFromCHPTarget,
+        src_object=electricity_from_fuel_cell_target_2,
     )
 
     my_sim.add_component(my_advanced_battery_1)

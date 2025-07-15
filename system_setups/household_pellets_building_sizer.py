@@ -1,4 +1,4 @@
-"""  Basic household new system setup. """
+"""Basic household new system setup."""
 
 # clean
 
@@ -117,7 +117,7 @@ def setup_function(
     if heating_system != HeatingSystems.PELLET_HEATING:
         raise ValueError("Heating system needs to be pellet heater for this system setup.")
 
-    heating_reference_temperature_in_celsius = - 12.2
+    heating_reference_temperature_in_celsius = -12.2
     building_set_heating_temperature_in_celsius = 22.0
 
     # Set Weather
@@ -174,7 +174,7 @@ def setup_function(
     my_building_config = building.BuildingConfig.get_default_german_single_family_home(
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
         max_thermal_building_demand_in_watt=max_thermal_building_demand_in_watt,
-        set_heating_temperature_in_celsius=building_set_heating_temperature_in_celsius
+        set_heating_temperature_in_celsius=building_set_heating_temperature_in_celsius,
     )
     my_building_config.building_code = building_code
     my_building_config.total_base_area_in_m2 = total_base_area_in_m2
@@ -222,7 +222,8 @@ def setup_function(
     my_photovoltaic_system_config.tilt = tilt
 
     my_photovoltaic_system = generic_pv_system.PVSystem(
-        config=my_photovoltaic_system_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_photovoltaic_system_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
     # Add to simulator
     my_sim.add_component(my_photovoltaic_system, connect_automatically=True)
@@ -237,7 +238,8 @@ def setup_function(
     my_heat_distribution_controller_config.heating_system = heat_distribution_system.HeatDistributionSystemType.RADIATOR
 
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        my_simulation_parameters=my_simulation_parameters, config=my_heat_distribution_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_distribution_controller_config,
     )
     my_hds_controller_information = heat_distribution_system.HeatDistributionControllerInformation(
         config=my_heat_distribution_controller_config
@@ -253,19 +255,23 @@ def setup_function(
         heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
     )
     my_pellet_heater = generic_boiler.GenericBoiler(
-        config=my_pellet_heater_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_pellet_heater_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
     my_sim.add_component(my_pellet_heater, connect_automatically=True)
 
     # Build Pellet Heater Controller
     # Pellet boiler cannot modulate and it has long run/idle times, so use specific config
-    my_pellet_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.get_default_pellet_controller_config(
-        minimal_thermal_power_in_watt=my_pellet_heater_config.minimal_thermal_power_in_watt,
-        maximal_thermal_power_in_watt=my_pellet_heater_config.maximal_thermal_power_in_watt,
-        with_domestic_hot_water_preparation=True
+    my_pellet_heater_controller_config = (
+        generic_boiler.GenericBoilerControllerConfig.get_default_pellet_controller_config(
+            minimal_thermal_power_in_watt=my_pellet_heater_config.minimal_thermal_power_in_watt,
+            maximal_thermal_power_in_watt=my_pellet_heater_config.maximal_thermal_power_in_watt,
+            with_domestic_hot_water_preparation=True,
+        )
     )
     my_pellet_heater_controller = generic_boiler.GenericBoilerController(
-        my_simulation_parameters=my_simulation_parameters, config=my_pellet_heater_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_pellet_heater_controller_config,
     )
     my_sim.add_component(my_pellet_heater_controller, connect_automatically=True)
 
@@ -287,18 +293,22 @@ def setup_function(
         sizing_option=sizing_option,
     )
     my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
-        config=my_simple_heat_water_storage_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_simple_heat_water_storage_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
     # Add to simulator
     my_sim.add_component(my_simple_water_storage, connect_automatically=True)
 
     # Build Heat Distribution System
-    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-        water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
-        absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+    my_heat_distribution_system_config = (
+        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+            absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+        )
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
-        config=my_heat_distribution_system_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_distribution_system_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
     # Add to simulator
     my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
@@ -316,7 +326,8 @@ def setup_function(
         my_electricity_controller_config = controller_l2_energy_management_system.EMSConfig.get_default_config_ems()
 
         my_electricity_controller = controller_l2_energy_management_system.L2GenericEnergyManagementSystem(
-            my_simulation_parameters=my_simulation_parameters, config=my_electricity_controller_config,
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_electricity_controller_config,
         )
 
         # Build Battery
@@ -324,7 +335,8 @@ def setup_function(
             total_pv_power_in_watt_peak=my_photovoltaic_system_config.power_in_watt
         )
         my_advanced_battery = advanced_battery_bslib.Battery(
-            my_simulation_parameters=my_simulation_parameters, config=my_advanced_battery_config,
+            my_simulation_parameters=my_simulation_parameters,
+            config=my_advanced_battery_config,
         )
 
         # -----------------------------------------------------------------------------------------------------------------
@@ -390,7 +402,8 @@ def setup_function(
         further_result_folder_description = "default_config"
 
     SingletonSimRepository().set_entry(
-        key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME, entry=f"{scenario_hash_string}",
+        key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME,
+        entry=f"{scenario_hash_string}",
     )
 
     if my_simulation_parameters.result_directory == "":

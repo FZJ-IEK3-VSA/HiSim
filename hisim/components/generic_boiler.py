@@ -323,6 +323,35 @@ class GenericBoilerConfig(ConfigBase):
         )
         return config
 
+    @classmethod
+    def get_scaled_condensing_hydrogen_boiler_config(
+        cls,
+        heating_load_of_building_in_watt: float,
+        number_of_apartments_in_building: Optional[int] = None,
+        building_name: str = "BUI1",
+    ) -> Any:
+        """Get a scaled condensing hydrogen boiler scaled to heating load."""
+        maximal_thermal_power_in_watt = cls.scale_thermal_power(
+            heating_load_of_building_in_watt, number_of_apartments_in_building
+        )
+        config = GenericBoilerConfig(
+            building_name=building_name,
+            name="CondensingHydrogenBoiler",
+            boiler_type=BoilerType.CONDENSING,
+            energy_carrier=lt.LoadTypes.HYDROGEN,
+            temperature_delta_in_celsius=20,
+            minimal_thermal_power_in_watt=0,
+            maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
+            eff_th_min=0.60,
+            eff_th_max=0.90,
+            co2_footprint=0,  # green hydrogen is CO2-neutral
+            cost=7416,  # value from emission_factros_and_costs_devices.csv
+            lifetime=20,  # value from emission_factros_and_costs_devices.csv
+            maintenance_cost_as_percentage_of_investment=0.03,  # source: VDI2067-1
+            consumption_in_kilowatt_hour=0,
+        )
+        return config
+
 
 class GenericBoiler(Component):
     """GenericBoiler class.

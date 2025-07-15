@@ -1202,12 +1202,12 @@ class PostProcessor:
 
                 kpi_dict = kpi_config.to_dict()  # type: ignore
 
-            pathname = os.path.join(
-                ppdt.simulation_parameters.result_directory, f"{building_object}_kpi_config_for_building_sizer.json"
-            )
-            config_file_written = json.dumps(kpi_dict, ensure_ascii=False, indent=4)
-            with open(pathname, "w", encoding="utf-8") as outfile:
-                outfile.write(config_file_written)
+                pathname = os.path.join(
+                    ppdt.simulation_parameters.result_directory, f"{building_object}_kpi_config_for_building_sizer.json"
+                )
+                config_file_written = json.dumps(kpi_dict, ensure_ascii=False, indent=4)
+                with open(pathname, "w", encoding="utf-8") as outfile:
+                    outfile.write(config_file_written)
 
         else:
             raise ValueError(

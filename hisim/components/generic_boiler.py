@@ -1045,9 +1045,8 @@ class GenericBoiler(Component):
         )
 
         # Energy related KPIs
-        total_thermal_energy_delivered_in_kilowatt_hour: float
-        sh_thermal_energy_delivered_in_kilowatt_hour: float
-        dhw_thermal_energy_delivered_in_kilowatt_hour: float
+        sh_thermal_energy_delivered_in_kilowatt_hour = None
+        dhw_thermal_energy_delivered_in_kilowatt_hour = None
         for index, output in enumerate(all_outputs):
             if output.component_name == self.component_name:
                 if (
@@ -1057,7 +1056,6 @@ class GenericBoiler(Component):
                     sh_thermal_energy_delivered_in_kilowatt_hour = round(
                         sum(postprocessing_results.iloc[:, index]) * 1e-3, 1
                     )
-                    break
                 if (
                     output.field_name == self.ThermalOutputEnergyDhw
                     and output.unit == lt.Units.WATT_HOUR
@@ -1065,7 +1063,7 @@ class GenericBoiler(Component):
                     dhw_thermal_energy_delivered_in_kilowatt_hour = round(
                         sum(postprocessing_results.iloc[:, index]) * 1e-3, 1
                     )
-                    break
+
         assert sh_thermal_energy_delivered_in_kilowatt_hour is not None
         assert dhw_thermal_energy_delivered_in_kilowatt_hour is not None
         total_thermal_energy_delivered_in_kilowatt_hour = sh_thermal_energy_delivered_in_kilowatt_hour + dhw_thermal_energy_delivered_in_kilowatt_hour

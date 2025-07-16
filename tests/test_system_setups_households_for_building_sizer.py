@@ -166,6 +166,7 @@ def test_household_hydrogen_heating():
     hisim_main.main(path, my_simulation_parameters)
     log.information(os.getcwd())
 
+
 @pytest.mark.system_setups
 @utils.measure_execution_time
 def test_household_electric_heating():

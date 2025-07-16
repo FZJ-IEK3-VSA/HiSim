@@ -526,7 +526,7 @@ class PhysicsConfig:
                 higher_heating_value_in_joule_per_m3=39.819 * 1e6,
                 specific_heat_capacity_in_joule_per_kg_per_kelvin=2190,
             )
-        if energy_carrier == LoadTypes.HYDROGEN:
+        if energy_carrier == LoadTypes.GREEN_HYDROGEN:
             return PhysicsConfig(
                 density_in_kg_per_m3=0.08989,
                 lower_heating_value_in_joule_per_m3=10.783 * 1e6,

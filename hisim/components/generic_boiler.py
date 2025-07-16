@@ -338,7 +338,7 @@ class GenericBoilerConfig(ConfigBase):
             building_name=building_name,
             name="CondensingHydrogenBoiler",
             boiler_type=BoilerType.CONDENSING,
-            energy_carrier=lt.LoadTypes.HYDROGEN,
+            energy_carrier=lt.LoadTypes.GREEN_HYDROGEN,
             temperature_delta_in_celsius=20,
             minimal_thermal_power_in_watt=0,
             maximal_thermal_power_in_watt=maximal_thermal_power_in_watt,
@@ -881,7 +881,7 @@ class GenericBoiler(Component):
             capex_cost_data_class.kpi_tag = KpiTagEnumClass.GAS_BOILER
         elif config.energy_carrier == lt.LoadTypes.OIL:
             capex_cost_data_class.kpi_tag = KpiTagEnumClass.OIL_BOILER
-        elif config.energy_carrier == lt.LoadTypes.HYDROGEN:
+        elif config.energy_carrier == lt.LoadTypes.GREEN_HYDROGEN:
             capex_cost_data_class.kpi_tag = KpiTagEnumClass.HYDROGEN_BOILER
         elif config.energy_carrier == lt.LoadTypes.PELLETS:
             capex_cost_data_class.kpi_tag = KpiTagEnumClass.PELLET_BOILER
@@ -956,7 +956,7 @@ class GenericBoiler(Component):
             )
 
         elif (
-            self.energy_carrier == lt.LoadTypes.HYDROGEN
+            self.energy_carrier == lt.LoadTypes.GREEN_HYDROGEN
         ):
             kpi_tag = KpiTagEnumClass.HYDROGEN_BOILER
             co2_per_unit = emissions_and_cost_factors.green_hydrogen_gas_footprint_in_kg_per_kwh

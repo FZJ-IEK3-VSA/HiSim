@@ -568,7 +568,7 @@ class CHP(Component):
         else:
             if self.gas_type == "Hydrogen":
                 gas_demand_target = ((el_power / eff_el_real) + (th_power / eff_th_real)) / (
-                    PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.HYDROGEN).lower_heating_value_in_joule_per_kg
+                    PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.GREEN_HYDROGEN).lower_heating_value_in_joule_per_kg
                 )
                 if stsv.get_input_value(self.hydrogen_not_released_channel) == 0:
                     # Gas Demand can completly be charged from storage

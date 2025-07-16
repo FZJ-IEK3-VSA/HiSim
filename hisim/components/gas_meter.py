@@ -35,6 +35,7 @@ class GasMeterConfig(cp.ConfigBase):
     building_name: str
     name: str
     total_energy_from_grid_in_kwh: None
+    gas_loadtype: lt.LoadTypes
 
     @classmethod
     def get_gas_meter_default_config(
@@ -46,6 +47,7 @@ class GasMeterConfig(cp.ConfigBase):
             building_name=building_name,
             name="GasMeter",
             total_energy_from_grid_in_kwh=None,
+            gas_loadtype=lt.LoadTypes.GAS
         )
 
 
@@ -86,6 +88,10 @@ class GasMeter(DynamicComponent):
             my_config=config,
             my_display_config=my_display_config,
         )
+        # check if component has valid gas loadtype
+        if self.config.gas_loadtype not in [lt.LoadTypes.GAS, lt.LoadTypes.GREEN_HYDROGEN]:
+            raise ValueError(f"GasMeter {self.component_name} has invalid gas loadtype: {self.config.gas_loadtype}. "
+                             f"Either use {lt.LoadTypes.GAS} or {lt.LoadTypes.GREEN_HYDROGEN} or add new gas_type")
 
         self.production_inputs: List[ComponentInput] = []
         self.consumption_uncontrolled_inputs: List[ComponentInput] = []
@@ -99,7 +105,7 @@ class GasMeter(DynamicComponent):
         self.gas_available_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.GasAvailable,
-            load_type=lt.LoadTypes.GAS,
+            load_type=self.config.gas_loadtype,
             unit=lt.Units.WATT,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.GasAvailable} will follow.",
@@ -108,7 +114,7 @@ class GasMeter(DynamicComponent):
         self.gas_from_grid_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.GasFromGrid,
-            load_type=lt.LoadTypes.GAS,
+            load_type=self.config.gas_loadtype,
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.GasFromGrid} will follow.",
@@ -118,7 +124,7 @@ class GasMeter(DynamicComponent):
         self.gas_consumption_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.GasConsumption,
-            load_type=lt.LoadTypes.GAS,
+            load_type=self.config.gas_loadtype,
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.GasConsumption} will follow.",
@@ -127,7 +133,7 @@ class GasMeter(DynamicComponent):
         self.gas_production_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.GasProduction,
-            load_type=lt.LoadTypes.GAS,
+            load_type=self.config.gas_loadtype,
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.GasProduction} will follow.",
@@ -136,7 +142,7 @@ class GasMeter(DynamicComponent):
         self.cumulative_gas_consumption_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.CumulativeConsumption,
-            load_type=lt.LoadTypes.GAS,
+            load_type=self.config.gas_loadtype,
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.CumulativeConsumption} will follow.",
@@ -145,7 +151,7 @@ class GasMeter(DynamicComponent):
         self.cumulative_gas_production_channel: cp.ComponentOutput = self.add_output(
             object_name=self.component_name,
             field_name=self.CumulativeProduction,
-            load_type=lt.LoadTypes.GAS,
+            load_type=self.config.gas_loadtype,
             unit=lt.Units.WATT_HOUR,
             sankey_flow_direction=False,
             output_description=f"here a description for {self.CumulativeProduction} will follow.",
@@ -171,7 +177,7 @@ class GasMeter(DynamicComponent):
                 source_component_class=GenericBoiler,
                 source_class_name=gas_heater_class_name,
                 source_component_field_name=GenericBoiler.EnergyDemandSh,
-                source_load_type=lt.LoadTypes.GAS,
+                source_load_type=self.config.gas_loadtype,
                 source_unit=lt.Units.WATT_HOUR,
                 source_tags=[lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED],
                 source_weight=999,
@@ -195,7 +201,7 @@ class GasMeter(DynamicComponent):
                 source_component_class=GenericBoiler,
                 source_class_name=gas_heater_class_name,
                 source_component_field_name=GenericBoiler.EnergyDemandSh,
-                source_load_type=lt.LoadTypes.GAS,
+                source_load_type=self.config.gas_loadtype,
                 source_unit=lt.Units.WATT_HOUR,
                 source_tags=[lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED],
                 source_weight=999,
@@ -217,7 +223,7 @@ class GasMeter(DynamicComponent):
                 source_component_class=HeatSource,
                 source_class_name=heat_source_class_name,
                 source_component_field_name=HeatSource.FuelDelivered,
-                source_load_type=lt.LoadTypes.GAS,
+                source_load_type=self.config.gas_loadtype,
                 source_unit=lt.Units.WATT_HOUR,
                 source_tags=[
                     lt.InandOutputType.GAS_CONSUMPTION_UNCONTROLLED,
@@ -332,8 +338,12 @@ class GasMeter(DynamicComponent):
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year
         )
-        co2_per_unit = emissions_and_cost_factors.gas_footprint_in_kg_per_kwh
-        euro_per_unit = emissions_and_cost_factors.gas_costs_in_euro_per_kwh
+        if self.config.gas_loadtype == lt.LoadTypes.GAS:
+            co2_per_unit = emissions_and_cost_factors.gas_footprint_in_kg_per_kwh
+            euro_per_unit = emissions_and_cost_factors.gas_costs_in_euro_per_kwh
+        elif self.config.gas_loadtype == lt.LoadTypes.GREEN_HYDROGEN:
+            co2_per_unit = emissions_and_cost_factors.green_hydrogen_gas_footprint_in_kg_per_kwh
+            euro_per_unit = emissions_and_cost_factors.green_hydrogen_gas_costs_in_euro_per_kwh
 
         opex_cost_per_simulated_period_in_euro = total_energy_from_grid_in_kwh * euro_per_unit
         co2_per_simulated_period_in_kg = total_energy_from_grid_in_kwh * co2_per_unit
@@ -342,7 +352,7 @@ class GasMeter(DynamicComponent):
             opex_maintenance_cost_in_euro=0,
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
             consumption_in_kwh=self.config.total_energy_from_grid_in_kwh,
-            loadtype=lt.LoadTypes.GAS,
+            loadtype=self.config.gas_loadtype,
             kpi_tag=KpiTagEnumClass.GAS_METER
         )
 
@@ -357,13 +367,13 @@ class GasMeter(DynamicComponent):
         total_energy_from_grid_in_kwh: Optional[float] = None
         list_of_kpi_entries: List[KpiEntry] = []
         for index, output in enumerate(all_outputs):
-            if output.component_name == self.component_name and output.load_type == lt.LoadTypes.GAS and output.unit == lt.Units.WATT_HOUR:
+            if output.component_name == self.component_name and output.load_type == self.config.gas_loadtype and output.unit == lt.Units.WATT_HOUR:
                 if output.field_name == self.GasFromGrid:
                     total_energy_from_grid_in_kwh = round(postprocessing_results.iloc[:, index].sum() * 1e-3, 1)
                     break
 
         total_energy_from_grid_in_kwh_entry = KpiEntry(
-            name="Total gas demand from grid",
+            name=f"Total {self.config.gas_loadtype.value} demand from grid",
             unit="kWh",
             value=total_energy_from_grid_in_kwh,
             tag=KpiTagEnumClass.GAS_METER,
@@ -373,7 +383,7 @@ class GasMeter(DynamicComponent):
         # try to get opex costs
         opex_costs = self.get_cost_opex(all_outputs=all_outputs, postprocessing_results=postprocessing_results)
         opex_costs_in_euro_entry = KpiEntry(
-            name="Opex costs of gas consumption from grid",
+            name=f"Opex costs of {self.config.gas_loadtype.value} consumption from grid",
             unit="Euro",
             value=opex_costs.opex_energy_cost_in_euro,
             tag=KpiTagEnumClass.GAS_METER,
@@ -381,7 +391,7 @@ class GasMeter(DynamicComponent):
         )
         list_of_kpi_entries.append(opex_costs_in_euro_entry)
         co2_footprint_in_kg_entry = KpiEntry(
-            name="CO2 footprint of gas consumption from grid",
+            name=f"CO2 footprint of {self.config.gas_loadtype.value} consumption from grid",
             unit="kg",
             value=opex_costs.co2_footprint_in_kg,
             tag=KpiTagEnumClass.GAS_METER,

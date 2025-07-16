@@ -635,7 +635,7 @@ class ElectricHeating(Component):
         assert dhw_consumption_in_kwh is not None
 
         total_consumption_in_kwh = sh_consumption_in_kwh + dhw_consumption_in_kwh
-        
+
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year
         )

@@ -171,9 +171,10 @@ def test_house(
     )
 
     # Build Gas Meter
+    my_gas_meter_config = gas_meter.GasMeterConfig.get_gas_meter_default_config()
     my_gas_meter = gas_meter.GasMeter(
         my_simulation_parameters=my_simulation_parameters,
-        config=gas_meter.GasMeterConfig.get_gas_meter_default_config(),
+        config=my_gas_meter_config,
     )
 
     # =========================================================================================================================================================
@@ -206,24 +207,23 @@ def test_house(
         jsondata = json.load(file)
 
     jsondata = jsondata["BUI1"]
-    print(jsondata)
 
-    gas_consumption_in_kilowatt_hour = jsondata["Gas Meter"][f"Total {my_gas_heater_config.gas_loadtype} demand from grid"].get("value")
+    gas_consumption_in_kilowatt_hour = jsondata["Gas Meter"][f"Total {my_gas_meter_config.gas_loadtype} demand from grid"].get("value")
     gas_consumption_of_boiler_in_kilowatt_hour = jsondata["Gas Boiler"][
-        f"{my_gas_heater_config.gas_loadtype} consumption (energy)"
+        "Gas consumption (energy)"
     ].get("value")
 
-    opex_costs_for_gas_in_euro = jsondata["Gas Meter"][f"Opex costs of {my_gas_heater_config.gas_loadtype} consumption from grid"].get("value")
+    opex_costs_for_gas_in_euro = jsondata["Gas Meter"][f"Opex costs of {my_gas_meter_config.gas_loadtype} consumption from grid"].get("value")
 
-    co2_footprint_due_to_gas_use_in_kg = jsondata["Gas Meter"][f"CO2 footprint of {my_gas_heater_config.gas_loadtype} consumption from grid"].get("value")
+    co2_footprint_due_to_gas_use_in_kg = jsondata["Gas Meter"][f"CO2 footprint of {my_gas_meter_config.gas_loadtype} consumption from grid"].get("value")
 
     log.information(
-        f"{my_gas_heater_config.gas_loadtype} consumption for space heating [kWh] " + str(gas_consumption_of_boiler_in_kilowatt_hour)
+        f"{my_gas_meter_config.gas_loadtype} consumption for space heating [kWh] " + str(gas_consumption_of_boiler_in_kilowatt_hour)
     )
 
-    log.information(f"Total {my_gas_heater_config.gas_loadtype} consumption measured by gas meter [kWh] " + str(gas_consumption_in_kilowatt_hour))
-    log.information(f"Opex costs for total {my_gas_heater_config.gas_loadtype} consumption [€] " + str(opex_costs_for_gas_in_euro))
-    log.information(f"CO2 footprint for total {my_gas_heater_config.gas_loadtype} consumption [kg] " + str(co2_footprint_due_to_gas_use_in_kg))
+    log.information(f"Total {my_gas_meter_config.gas_loadtype} consumption measured by gas meter [kWh] " + str(gas_consumption_in_kilowatt_hour))
+    log.information(f"Opex costs for total {my_gas_meter_config.gas_loadtype} consumption [€] " + str(opex_costs_for_gas_in_euro))
+    log.information(f"CO2 footprint for total {my_gas_meter_config.gas_loadtype} consumption [kg] " + str(co2_footprint_due_to_gas_use_in_kg))
 
     # test and compare with relative error of 5%
     np.testing.assert_allclose(

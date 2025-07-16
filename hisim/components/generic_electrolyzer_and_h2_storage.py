@@ -89,7 +89,10 @@ class ElectrolyzerWithHydrogenStorageConfig(ConfigBase):
         return HydrogenStorage.get_full_classname()
 
     @classmethod
-    def get_default_config(cls, building_name: str = "BUI1",) -> Any:
+    def get_default_config(
+        cls,
+        building_name: str = "BUI1",
+    ) -> Any:
         """Get default config."""
         config = ElectrolyzerWithHydrogenStorageConfig(
             building_name=building_name,
@@ -179,14 +182,22 @@ class ElectrolyzerSimulation:
         )
         assert self.min_hydrogen_production_rate <= hydrogen_output_liter <= self.max_hydrogen_production_rate
         # kg/s = l/s / 1000 * kg/m³
-        hydrogen_output = (hydrogen_output_liter / 1000) * PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.GREEN_HYDROGEN).density_in_kg_per_m3
+        hydrogen_output = (hydrogen_output_liter / 1000) * PhysicsConfig.get_properties_for_energy_carrier(
+            energy_carrier=lt.LoadTypes.GREEN_HYDROGEN
+        ).density_in_kg_per_m3
         oxygen_output = hydrogen_output * (88.8 / 11.2)
 
         if hydrogen_not_stored > 0:
             hydrogen_real = hydrogen_output - hydrogen_not_stored
             if hydrogen_real == 0:
                 return hydrogen_output, 0, 0, 0
-            hydrogen_output_liter_real = hydrogen_real * 1000 / PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.GREEN_HYDROGEN).density_in_kg_per_m3
+            hydrogen_output_liter_real = (
+                hydrogen_real
+                * 1000
+                / PhysicsConfig.get_properties_for_energy_carrier(
+                    energy_carrier=lt.LoadTypes.GREEN_HYDROGEN
+                ).density_in_kg_per_m3
+            )
             power_level_real = self.min_power_percent + (
                 hydrogen_output_liter_real - self.min_hydrogen_production_rate
             ) * (self.max_power_percent - self.min_power_percent) / (
@@ -431,7 +442,10 @@ class AdvancedElectrolyzer(Component):
         try:
             # -/- = kg/s * J/kg / W
             electrolyzer_efficiency = (
-                hydrogen_output * PhysicsConfig.get_properties_for_energy_carrier(energy_carrier=lt.LoadTypes.GREEN_HYDROGEN).lower_heating_value_in_joule_per_kg
+                hydrogen_output
+                * PhysicsConfig.get_properties_for_energy_carrier(
+                    energy_carrier=lt.LoadTypes.GREEN_HYDROGEN
+                ).lower_heating_value_in_joule_per_kg
             ) / electricity_input
             assert self.min_power <= electricity_input <= self.max_power
         except ZeroDivisionError:

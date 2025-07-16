@@ -51,7 +51,6 @@ class KpiTagEnumClass(Enum):
     ELECTRIC_HEATING = "Electric Heating"
 
 
-
 @dataclass
 class KpiEntry(JSONWizard):
     """Class for storing one kpi entry."""

@@ -1,4 +1,4 @@
-""" Iterative Energy Surplus Controller.
+"""Iterative Energy Surplus Controller.
 
 It received the electricity consumption
 of all components and the PV production. According to the balance it
@@ -490,7 +490,7 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
     ):
         """Get electric heater default connections."""
 
-        from hisim.components.generic_electric_heating import ElectricHeating # pylint: disable=import-outside-toplevel
+        from hisim.components.generic_electric_heating import ElectricHeating  # pylint: disable=import-outside-toplevel
 
         dynamic_connections = []
         self.electric_heater_class_name = ElectricHeating.get_classname()
@@ -501,7 +501,10 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
                 source_component_field_name=ElectricHeating.ElectricOutputShPower,
                 source_load_type=lt.LoadTypes.ELECTRICITY,
                 source_unit=lt.Units.WATT,
-                source_tags=[lt.ComponentType.ELECTRIC_HEATING_SH, lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED],
+                source_tags=[
+                    lt.ComponentType.ELECTRIC_HEATING_SH,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_EMS_CONTROLLED,
+                ],
                 source_weight=2,
             )
         )
@@ -982,7 +985,9 @@ class L2GenericEnergyManagementSystem(dynamic_component.DynamicComponent):
         return opex_cost_data_class
 
     @staticmethod
-    def get_cost_capex(config: EMSConfig, simulation_parameters: SimulationParameters) -> cp.CapexCostDataClass:  # pylint: disable=unused-argument
+    def get_cost_capex(
+        config: EMSConfig, simulation_parameters: SimulationParameters
+    ) -> cp.CapexCostDataClass:  # pylint: disable=unused-argument
         """Returns investment cost, CO2 emissions and lifetime."""
         capex_cost_data_class = cp.CapexCostDataClass.get_default_capex_cost_data_class()
         return capex_cost_data_class

@@ -594,7 +594,8 @@ class DistrictHeating(Component):
         postprocessing_results: pd.DataFrame,
     ) -> OpexCostDataClass:
         """Calculate OPEX costs, consisting of electricity costs and revenues."""
-        consumption_in_kwh = None
+        sh_consumption_in_kwh = None
+        dhw_consumption_in_kwh = None
         for index, output in enumerate(all_outputs):
             if (
                 output.component_name == self.component_name
@@ -602,13 +603,27 @@ class DistrictHeating(Component):
                 and output.field_name == self.ThermalOutputShPower
                 and output.unit == Units.WATT
             ):
-                consumption_in_kwh = round(
+                sh_consumption_in_kwh = round(
                     sum(postprocessing_results.iloc[:, index])
                     * self.my_simulation_parameters.seconds_per_timestep
                     / 3.6e6,
                     1,
                 )
-        assert consumption_in_kwh is not None
+            if (
+                output.component_name == self.component_name
+                and output.load_type == LoadTypes.HEATING
+                and output.field_name == self.ThermalOutputDhwPower
+                and output.unit == Units.WATT
+            ):
+                dhw_consumption_in_kwh = round(
+                    sum(postprocessing_results.iloc[:, index])
+                    * self.my_simulation_parameters.seconds_per_timestep
+                    / 3.6e6,
+                    1,
+                )
+        assert sh_consumption_in_kwh is not None
+        assert dhw_consumption_in_kwh is not None
+        total_consumption_in_kwh = sh_consumption_in_kwh + dhw_consumption_in_kwh
 
         emissions_and_cost_factors = (
             EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
@@ -621,16 +636,18 @@ class DistrictHeating(Component):
         euro_per_unit = (
             emissions_and_cost_factors.district_heating_costs_in_euro_per_kwh
         )
-        co2_per_simulated_period_in_kg = consumption_in_kwh * co2_per_unit
+        co2_per_simulated_period_in_kg = total_consumption_in_kwh * co2_per_unit
         opex_energy_cost_per_simulated_period_in_euro = (
-            consumption_in_kwh * euro_per_unit
+            total_consumption_in_kwh * euro_per_unit
         )
 
         opex_cost_data_class = OpexCostDataClass(
             opex_energy_cost_in_euro=opex_energy_cost_per_simulated_period_in_euro,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
-            total_consumption_in_kwh=consumption_in_kwh,
+            total_consumption_in_kwh=total_consumption_in_kwh,
+            consumption_for_domestic_hot_water_in_kwh=dhw_consumption_in_kwh,
+            consumption_for_space_heating_in_kwh=sh_consumption_in_kwh,
             loadtype=LoadTypes.DISTRICTHEATING,
             kpi_tag=KpiTagEnumClass.DISTRICT_HEATING,
         )
@@ -683,13 +700,31 @@ class DistrictHeating(Component):
 
         # Energy related KPIs
         energy_consumption = KpiEntry(
-            name="Energy consumption for space heating",
+            name="Total energy consumption",
             unit="kWh",
             value=opex_dataclass.total_consumption_in_kwh,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
         )
         list_of_kpi_entries.append(energy_consumption)
+
+        sh_energy_consumption = KpiEntry(
+            name="Energy consumption for space heating",
+            unit="kWh",
+            value=opex_dataclass.consumption_for_space_heating_in_kwh,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(sh_energy_consumption)
+
+        dhw_energy_consumption = KpiEntry(
+            name="Energy consumption for domestic hot water",
+            unit="kWh",
+            value=opex_dataclass.consumption_for_domestic_hot_water_in_kwh,
+            tag=opex_dataclass.kpi_tag,
+            description=self.component_name,
+        )
+        list_of_kpi_entries.append(dhw_energy_consumption)
 
         # Economic and environmental KPIs
         capex = KpiEntry(

@@ -90,7 +90,7 @@ class ElectricHeatingConfig(ConfigBase):
             co2_footprint=0,  # no idea
             cost=4000,  # https://www.gebaeudeforum.de/fileadmin/gebaeudeforum/Downloads/Factsheet/Factsheet_65ProzentEE_12_Stromdirektheizung.pdf
             lifetime=22,  # https://www.gebaeudeforum.de/fileadmin/gebaeudeforum/Downloads/Factsheet/Factsheet_65ProzentEE_12_Stromdirektheizung.pdf
-            maintenance_cost_as_percentage_of_investment=0.01,  # https://www.gebaeudeforum.de/fileadmin/gebaeudeforum/Downloads/Factsheet/Factsheet_65ProzentEE_12_Stromdirektheizung.pdf (here maintenance=instandsetzung+wartungskosten)
+            maintenance_cost_as_percentage_of_investment=0.01,
             with_domestic_hot_water_preparation=with_domestic_hot_water_preparation,
         )
         return config

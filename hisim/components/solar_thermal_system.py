@@ -335,7 +335,7 @@ class SolarThermalSystem(Component):
             opex_energy_cost_in_euro=consumption_in_kilowatt_hour * emissions_and_cost_factors.electricity_costs_in_euro_per_kwh,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=consumption_in_kilowatt_hour * emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh,
-            consumption_in_kwh=consumption_in_kilowatt_hour,
+            total_consumption_in_kwh=consumption_in_kilowatt_hour,
             loadtype=loadtypes.LoadTypes.WARM_WATER,
             kpi_tag=KpiTagEnumClass.SOLAR_THERMAL
         )

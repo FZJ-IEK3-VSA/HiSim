@@ -630,7 +630,7 @@ class DistrictHeating(Component):
             opex_energy_cost_in_euro=opex_energy_cost_per_simulated_period_in_euro,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
-            consumption_in_kwh=consumption_in_kwh,
+            total_consumption_in_kwh=consumption_in_kwh,
             loadtype=LoadTypes.DISTRICTHEATING,
             kpi_tag=KpiTagEnumClass.DISTRICT_HEATING,
         )
@@ -685,7 +685,7 @@ class DistrictHeating(Component):
         energy_consumption = KpiEntry(
             name="Energy consumption for space heating",
             unit="kWh",
-            value=opex_dataclass.consumption_in_kwh,
+            value=opex_dataclass.total_consumption_in_kwh,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
         )

@@ -435,7 +435,7 @@ class HeatSource(cp.Component):
             opex_energy_cost_in_euro=opex_energy_cost_per_simulated_period_in_euro,
             opex_maintenance_cost_in_euro=0,  # TODO: needs to be implemented still
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
-            consumption_in_kwh=self.config.consumption_in_kilowatt_hour,
+            total_consumption_in_kwh=self.config.consumption_in_kilowatt_hour,
             loadtype=self.config.fuel,
             kpi_tag=kpi_tag,
         )
@@ -451,7 +451,7 @@ class HeatSource(cp.Component):
         my_kpi_entry = KpiEntry(
             name=f"{opex_dataclass.loadtype.value} consumption for {self.config.water_vs_heating.value}",
             unit="kWh",
-            value=opex_dataclass.consumption_in_kwh,
+            value=opex_dataclass.total_consumption_in_kwh,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
         )

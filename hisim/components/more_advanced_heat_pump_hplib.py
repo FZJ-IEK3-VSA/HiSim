@@ -1398,7 +1398,7 @@ class MoreAdvancedHeatPumpHPLib(Component):
             opex_energy_cost_in_euro=0,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=0,
-            consumption_in_kwh=consumption_in_kwh,
+            total_consumption_in_kwh=consumption_in_kwh,
             loadtype=LoadTypes.ELECTRICITY,
             kpi_tag=KpiTagEnumClass.HEATPUMP_SPACE_HEATING_AND_DOMESTIC_HOT_WATER,
         )

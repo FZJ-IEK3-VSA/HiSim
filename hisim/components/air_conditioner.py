@@ -399,7 +399,7 @@ class AirConditioner(cp.Component):
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=electricity_consumption_kwh
             * emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh,
-            consumption_in_kwh=electricity_consumption_kwh,
+            total_consumption_in_kwh=electricity_consumption_kwh,
             loadtype=LoadTypes.ELECTRICITY,
             kpi_tag=KpiTagEnumClass.AIR_CONDITIONER,
         )
@@ -565,7 +565,7 @@ class AirConditioner(cp.Component):
         electricity_consumption_kwh = KpiEntry(
             name="Electrical energy consumption",
             unit="kWh",
-            value=opex_dataclass.consumption_in_kwh,
+            value=opex_dataclass.total_consumption_in_kwh,
             tag=opex_dataclass.kpi_tag,
             description=self.component_name,
         )

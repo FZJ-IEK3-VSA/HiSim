@@ -465,10 +465,12 @@ class OpexCostDataClass:
     opex_energy_cost_in_euro: float
     opex_maintenance_cost_in_euro: float
     co2_footprint_in_kg: float
-    consumption_in_kwh: float
+    total_consumption_in_kwh: float
     loadtype: lt.LoadTypes
-    kpi_tag: Optional[KpiTagEnumClass]
-
+    kpi_tag: Optional[KpiTagEnumClass] = None
+    consumption_for_space_heating_in_kwh: Optional[float] = None
+    consumption_for_domestic_hot_water_in_kwh: Optional[float] = None
+    
     @classmethod
     def get_default_opex_cost_data_class(cls) -> OpexCostDataClass:
         """Return the Default for all Components without Opex Costs."""
@@ -476,7 +478,9 @@ class OpexCostDataClass:
             opex_energy_cost_in_euro=0,
             opex_maintenance_cost_in_euro=0,
             co2_footprint_in_kg=0,
-            consumption_in_kwh=0,
+            total_consumption_in_kwh=0,
+            consumption_for_space_heating_in_kwh=0,
+            consumption_for_domestic_hot_water_in_kwh=0,
             loadtype=lt.LoadTypes.ANY,
             kpi_tag=None
         )

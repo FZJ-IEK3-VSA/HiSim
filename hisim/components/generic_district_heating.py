@@ -611,7 +611,7 @@ class DistrictHeating(Component):
                 )
             if (
                 output.component_name == self.component_name
-                and output.load_type == LoadTypes.HEATING
+                and output.load_type == LoadTypes.WARM_WATER
                 and output.field_name == self.ThermalOutputDhwPower
                 and output.unit == Units.WATT
             ):

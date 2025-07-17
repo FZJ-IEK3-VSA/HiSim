@@ -1899,9 +1899,9 @@ class SimpleDHWStorage(SimpleWaterStorage):
                 f"The water temperature in the DHW water storage is with {self.mean_water_temperature_in_water_storage_in_celsius}°C way too high or too low."
             )
 
-        if (water_mass_flow_rate_of_dhw_in_kg_per_second > 0) and (self.mean_water_temperature_in_water_storage_in_celsius < self.warm_water_temperature):
-            # if there is water consumption, the temperature must be high enough
-            log.warning(f"The DHW water temperature is only {self.mean_water_temperature_in_water_storage_in_celsius}°C.")
+        # if (water_mass_flow_rate_of_dhw_in_kg_per_second > 0) and (self.mean_water_temperature_in_water_storage_in_celsius < self.warm_water_temperature):
+        #     # if there is water consumption, the temperature must be high enough
+        #     log.warning(f"The DHW water temperature is only {self.mean_water_temperature_in_water_storage_in_celsius}°C.")
 
         # Calculations ------------------------------------------------------------------------------------------------------
 

@@ -120,6 +120,16 @@ class ModularHouseholdConfig(SystemSetupConfigBase):
         )
         return household_config
 
+    @classmethod
+    def get_default_config_for_household_heatpump_solar_thermal(cls):
+        """Get default ModularHouseholdConfig."""
+        energy_system_config_ = system_config.EnergySystemConfig.get_default_config_for_energy_system_heatpump_solar_thermal()
+        archetype_config_ = archetype_config.ArcheTypeConfig()
+        household_config = ModularHouseholdConfig(
+            energy_system_config_=energy_system_config_, archetype_config_=archetype_config_
+        )
+        return household_config
+
     def get_hash(self):
         """Generate a hash for ModularHouseholdConfig."""
         household_config = ModularHouseholdConfig(

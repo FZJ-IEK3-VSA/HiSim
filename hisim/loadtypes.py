@@ -229,6 +229,7 @@ class HeatingSystems(str, enum.Enum):
     DISTRICT_HEATING = "DistrictHeating"
     HYDROGEN_HEATING = "HydrogenHeating"
     GAS_SOLAR_THERMAL = "GasSolarThermal"
+    HEAT_PUMP_SOLAR_THERMAL = "HeatPumpSolarThermal"
 
 
 @enum.unique

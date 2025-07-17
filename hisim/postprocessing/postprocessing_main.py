@@ -793,19 +793,23 @@ class PostProcessor:
 
         # --------------------------------------------------------------------------------------------------------------------------------------------------------------
         # make dictionaries with pyam data structure for hourly and yearly data
-        simple_dict_hourly_data: Dict = {
-            "model": [],
-            "scenario": [],
-            "region": [],
-            "variable": [],
-            "unit": [],
-            "time": [],
-            "value": [],
-        }
-        simple_dict_daily_data: Dict = copy.deepcopy(simple_dict_hourly_data)
-        simple_dict_monthly_data: Dict = copy.deepcopy(simple_dict_hourly_data)
+            # Base structure for time series data
+        def empty_timeseries_dict():
+            return {
+                "model": [],
+                "scenario": [],
+                "region": [],
+                "variable": [],
+                "unit": [],
+                "time": [],
+                "value": [],
+            }
 
-        simple_dict_cumulative_data: Dict = {
+        simple_dict_hourly_data = empty_timeseries_dict()
+        simple_dict_daily_data = empty_timeseries_dict()
+        simple_dict_monthly_data = empty_timeseries_dict()
+
+        simple_dict_cumulative_data = {
             "model": [],
             "scenario": [],
             "region": [],
@@ -814,64 +818,109 @@ class PostProcessor:
             "year": [],
             "value": [],
         }
-        # set model name
-        self.model = "".join(["HiSim_", ppdt.module_filename])
 
-        # set pyam scenario name
-        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME):
-            self.scenario = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
-        else:
-            self.scenario = ""
-
-        # set region
-        if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.LOCATION):
-            self.region = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
-        else:
-            self.region = ""
-
-        # set year or timeseries
+        # Set meta info
+        self.model = f"HiSim_{ppdt.module_filename}"
+        self.scenario = SingletonSimRepository().get_entry(SingletonDictKeyEnum.RESULT_SCENARIO_NAME) if SingletonSimRepository().exist_entry(SingletonDictKeyEnum.RESULT_SCENARIO_NAME) else ""
+        self.region = SingletonSimRepository().get_entry(SingletonDictKeyEnum.LOCATION) if SingletonSimRepository().exist_entry(SingletonDictKeyEnum.LOCATION) else ""
         self.year = ppdt.simulation_parameters.year
-        timeseries_hourly = ppdt.results_hourly.index
-        timeseries_daily = ppdt.results_daily.index
-        timeseries_monthly = ppdt.results_monthly.index
 
-        # got through all components and read output values, variables and units
-        # for hourly data
-        dataframe_hourly_data = self.iterate_over_results_and_add_values_to_dict(
-            results_df=ppdt.results_hourly,
-            dict_to_check=simple_dict_hourly_data,
-            timeseries=timeseries_hourly,
-        )
-        self.write_filename_and_save_to_csv(
-            dataframe=dataframe_hourly_data,
-            folder=self.result_data_folder_for_scenario_evaluation,
-            simulation_duration=ppdt.simulation_parameters.duration.days,
-            time_resolution_of_data="hourly",
-        )
-        # for daily data
-        dataframe_daily_data = self.iterate_over_results_and_add_values_to_dict(
-            results_df=ppdt.results_daily,
-            dict_to_check=simple_dict_daily_data,
-            timeseries=timeseries_daily,
-        )
-        self.write_filename_and_save_to_csv(
-            dataframe=dataframe_daily_data,
-            folder=self.result_data_folder_for_scenario_evaluation,
-            simulation_duration=ppdt.simulation_parameters.duration.days,
-            time_resolution_of_data="daily",
-        )
-        # for monthly data
-        dataframe_monthly_data = self.iterate_over_results_and_add_values_to_dict(
-            results_df=ppdt.results_monthly,
-            dict_to_check=simple_dict_monthly_data,
-            timeseries=timeseries_monthly,
-        )
-        self.write_filename_and_save_to_csv(
-            dataframe=dataframe_monthly_data,
-            folder=self.result_data_folder_for_scenario_evaluation,
-            simulation_duration=ppdt.simulation_parameters.duration.days,
-            time_resolution_of_data="monthly",
-        )
+        # Time series
+        time_configs = [
+            ("hourly", ppdt.results_hourly, simple_dict_hourly_data, ppdt.results_hourly.index),
+            ("daily", ppdt.results_daily, simple_dict_daily_data, ppdt.results_daily.index),
+            ("monthly", ppdt.results_monthly, simple_dict_monthly_data, ppdt.results_monthly.index),
+        ]
+
+        for time_res, df, target_dict, index in time_configs:
+            result_df = self.iterate_over_results_and_add_values_to_dict(
+                results_df=df, dict_to_check=target_dict, timeseries=index
+            )
+            self.write_filename_and_save_to_csv(
+                dataframe=result_df,
+                folder=self.result_data_folder_for_scenario_evaluation,
+                simulation_duration=ppdt.simulation_parameters.duration.days,
+                time_resolution_of_data=time_res,
+            )
+        # simple_dict_hourly_data: Dict = {
+        #     "model": [],
+        #     "scenario": [],
+        #     "region": [],
+        #     "variable": [],
+        #     "unit": [],
+        #     "time": [],
+        #     "value": [],
+        # }
+        # simple_dict_daily_data: Dict = copy.deepcopy(simple_dict_hourly_data)
+        # simple_dict_monthly_data: Dict = copy.deepcopy(simple_dict_hourly_data)
+
+        # simple_dict_cumulative_data: Dict = {
+        #     "model": [],
+        #     "scenario": [],
+        #     "region": [],
+        #     "variable": [],
+        #     "unit": [],
+        #     "year": [],
+        #     "value": [],
+        # }
+        # # set model name
+        # self.model = "".join(["HiSim_", ppdt.module_filename])
+
+        # # set pyam scenario name
+        # if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME):
+        #     self.scenario = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
+        # else:
+        #     self.scenario = ""
+
+        # # set region
+        # if SingletonSimRepository().exist_entry(key=SingletonDictKeyEnum.LOCATION):
+        #     self.region = SingletonSimRepository().get_entry(key=SingletonDictKeyEnum.LOCATION)
+        # else:
+        #     self.region = ""
+
+        # # set year or timeseries
+        # self.year = ppdt.simulation_parameters.year
+        # timeseries_hourly = ppdt.results_hourly.index
+        # timeseries_daily = ppdt.results_daily.index
+        # timeseries_monthly = ppdt.results_monthly.index
+
+        # # got through all components and read output values, variables and units
+        # # for hourly data
+        # dataframe_hourly_data = self.iterate_over_results_and_add_values_to_dict(
+        #     results_df=ppdt.results_hourly,
+        #     dict_to_check=simple_dict_hourly_data,
+        #     timeseries=timeseries_hourly,
+        # )
+        # self.write_filename_and_save_to_csv(
+        #     dataframe=dataframe_hourly_data,
+        #     folder=self.result_data_folder_for_scenario_evaluation,
+        #     simulation_duration=ppdt.simulation_parameters.duration.days,
+        #     time_resolution_of_data="hourly",
+        # )
+        # # for daily data
+        # dataframe_daily_data = self.iterate_over_results_and_add_values_to_dict(
+        #     results_df=ppdt.results_daily,
+        #     dict_to_check=simple_dict_daily_data,
+        #     timeseries=timeseries_daily,
+        # )
+        # self.write_filename_and_save_to_csv(
+        #     dataframe=dataframe_daily_data,
+        #     folder=self.result_data_folder_for_scenario_evaluation,
+        #     simulation_duration=ppdt.simulation_parameters.duration.days,
+        #     time_resolution_of_data="daily",
+        # )
+        # # for monthly data
+        # dataframe_monthly_data = self.iterate_over_results_and_add_values_to_dict(
+        #     results_df=ppdt.results_monthly,
+        #     dict_to_check=simple_dict_monthly_data,
+        #     timeseries=timeseries_monthly,
+        # )
+        # self.write_filename_and_save_to_csv(
+        #     dataframe=dataframe_monthly_data,
+        #     folder=self.result_data_folder_for_scenario_evaluation,
+        #     simulation_duration=ppdt.simulation_parameters.duration.days,
+        #     time_resolution_of_data="monthly",
+        # )
 
         # got through all components and read output values, variables and units for simple_dict_cumulative_data
         for column in ppdt.results_cumulative:

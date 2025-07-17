@@ -364,7 +364,7 @@ class OilHeater(Component):
             opex_energy_cost_in_euro=opex_energy_cost_per_simulated_period_in_euro,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
-            consumption_in_kwh=self.config.consumption_in_kilowatt_hour,
+            total_consumption_in_kwh=self.config.consumption_in_kilowatt_hour,
             loadtype=lt.LoadTypes.OIL,
             kpi_tag=KpiTagEnumClass.OIL_BOILER
         )

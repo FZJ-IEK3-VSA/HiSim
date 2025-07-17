@@ -1,4 +1,5 @@
 """Simple function for weather data request."""
+
 import datetime
 from hisim.components.weather_data_import import WeatherDataImport
 from hisim.components.weather import WeatherDataSourceEnum

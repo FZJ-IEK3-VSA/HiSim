@@ -1,4 +1,4 @@
-"""  Reference Household system setup with gas heater and diesel car. """
+"""Reference Household system setup with gas heater and diesel car."""
 
 # clean
 
@@ -39,7 +39,6 @@ __status__ = "development"
 @dataclass_json
 @dataclass
 class ReferenceHouseholdConfig(SystemSetupConfigBase):
-
     """Configuration for ReferenceHosuehold."""
 
     building_type: str
@@ -109,7 +108,7 @@ class ReferenceHouseholdConfig(SystemSetupConfigBase):
             gas_heater_controller_config=(
                 generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
                     minimal_thermal_power_in_watt=my_building_information.max_thermal_building_demand_in_watt / 12,
-                    maximal_thermal_power_in_watt=my_building_information.max_thermal_building_demand_in_watt
+                    maximal_thermal_power_in_watt=my_building_information.max_thermal_building_demand_in_watt,
                 )
             ),
             gas_heater_config=generic_boiler.GenericBoilerConfig.get_scaled_condensing_gas_boiler_config(
@@ -202,7 +201,8 @@ def setup_function(
 
     # Build heat Distribution System Controller
     my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
-        config=my_config.hds_controller_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_config.hds_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build Occupancy
@@ -219,12 +219,14 @@ def setup_function(
 
     # Build Building
     my_building = building.Building(
-        config=my_config.building_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_config.building_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Gas Heater Controller
     my_gasheater_controller = generic_boiler.GenericBoilerController(
-        my_simulation_parameters=my_simulation_parameters, config=my_config.gas_heater_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.gas_heater_controller_config,
     )
 
     # Gas heater
@@ -240,7 +242,8 @@ def setup_function(
 
     # Build Heat Water Storage
     my_simple_hot_water_storage = simple_water_storage.SimpleHotWaterStorage(
-        config=my_config.simple_hot_water_storage_config, my_simulation_parameters=my_simulation_parameters,
+        config=my_config.simple_hot_water_storage_config,
+        my_simulation_parameters=my_simulation_parameters,
     )
 
     # Build DHW
@@ -259,7 +262,8 @@ def setup_function(
     )
 
     my_domnestic_hot_water_heatpump_controller = controller_l1_heatpump.L1HeatPumpController(
-        my_simulation_parameters=my_simulation_parameters, config=my_dhw_heatpump_controller_config,
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_dhw_heatpump_controller_config,
     )
 
     my_domnestic_hot_water_heatpump = generic_heat_pump_modular.ModularHeatPump(
@@ -287,7 +291,8 @@ def setup_function(
 
     # Build Electricity Meter
     my_electricity_meter = electricity_meter.ElectricityMeter(
-        my_simulation_parameters=my_simulation_parameters, config=my_config.electricity_meter_config,
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_config.electricity_meter_config,
     )
 
     # =================================================================================================================================

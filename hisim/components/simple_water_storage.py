@@ -1245,7 +1245,7 @@ class SimpleHotWaterStorage(SimpleWaterStorage):
             opex_energy_cost_in_euro=0,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=0,
-            consumption_in_kwh=0,
+            total_consumption_in_kwh=0,
             loadtype=lt.LoadTypes.ANY,
             kpi_tag=KpiTagEnumClass.STORAGE_HOT_WATER_SPACE_HEATING,
         )
@@ -1643,6 +1643,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
         self.add_default_connections(self.get_default_connections_from_district_heating())
         self.add_default_connections(self.get_default_connections_from_utsp())
         self.add_default_connections(self.get_default_connections_from_solar_thermal_system())
+        self.add_default_connections(self.get_default_connections_from_electric_heating())
 
     def get_default_connections_from_more_advanced_heat_pump(
         self,
@@ -1754,6 +1755,33 @@ class SimpleDHWStorage(SimpleWaterStorage):
         component_module_name = "hisim.components.generic_district_heating"
         component_module = importlib.import_module(name=component_module_name)
         component_class = getattr(component_module, "DistrictHeating")
+        connections = []
+        component_classname = component_class.get_classname()
+        connections.append(
+            cp.ComponentConnection(
+                SimpleDHWStorage.WaterTemperatureFromHeatGenerator,
+                component_classname,
+                component_class.WaterOutputDhwTemperature,
+            )
+        )
+        connections.append(
+            cp.ComponentConnection(
+                SimpleDHWStorage.WaterMassFlowRateFromHeatGenerator,
+                component_classname,
+                component_class.WaterOutputDhwMassFlowRate,
+            )
+        )
+        return connections
+
+    def get_default_connections_from_electric_heating(
+        self,
+    ) -> List[cp.ComponentConnection]:
+        """Get dhw electric heating default connections."""
+
+        # use importlib for importing the other component in order to avoid circular-import errors
+        component_module_name = "hisim.components.generic_electric_heating"
+        component_module = importlib.import_module(name=component_module_name)
+        component_class = getattr(component_module, "ElectricHeating")
         connections = []
         component_classname = component_class.get_classname()
         connections.append(
@@ -2097,7 +2125,7 @@ class SimpleDHWStorage(SimpleWaterStorage):
             opex_energy_cost_in_euro=0,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
             co2_footprint_in_kg=0,
-            consumption_in_kwh=0,
+            total_consumption_in_kwh=0,
             loadtype=lt.LoadTypes.ANY,
             kpi_tag=KpiTagEnumClass.STORAGE_HOT_WATER_SPACE_HEATING,
         )

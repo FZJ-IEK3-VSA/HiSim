@@ -21,6 +21,7 @@ from hisim.components import (
     heat_distribution_system,
     electricity_meter,
     generic_boiler,
+    gas_meter,
 )
 
 from hisim.result_path_provider import ResultPathProviderSingleton, SortingOptionEnum
@@ -56,8 +57,8 @@ def setup_function(
         - Weather
         - Photovoltaic System
         - Building
-        - Oil Heater
-        - Oil Heater Controller
+        - Hydrogen Boiler
+        - Hydrogen Boiler Controller
         - Heat Distribution System
         - Heat Distribution Controller
         - Heat Water Storage
@@ -74,9 +75,9 @@ def setup_function(
     # try reading energ system and archetype configs
     my_config = read_in_configs(my_sim.my_module_config)
     if my_config is None:
-        my_config = ModularHouseholdConfig().get_default_config_for_household_oil()
+        my_config = ModularHouseholdConfig().get_default_config_for_household_hydrogen()
         log.warning(
-            f"Could not read the modular household config from path '{config_filename}'. Using the oil household default config instead."
+            f"Could not read the modular household config from path '{config_filename}'. Using the hydrogen household default config instead."
         )
     assert my_config.archetype_config_ is not None
     assert my_config.energy_system_config_ is not None
@@ -86,7 +87,7 @@ def setup_function(
     # Set Simulation Parameters
     if my_simulation_parameters is None:
         year = 2021
-        seconds_per_timestep = 60 * 15
+        seconds_per_timestep = 60 * 60
         my_simulation_parameters = SimulationParameters.full_year(year=year, seconds_per_timestep=seconds_per_timestep)
         cache_dir_path_simuparams = "/benchtop/2024-k-rieck-hisim/hisim_inputs_cache/"
         if os.path.exists(cache_dir_path_simuparams):
@@ -101,8 +102,8 @@ def setup_function(
         my_simulation_parameters.post_processing_options.append(
             PostProcessingOptions.WRITE_KPIS_TO_JSON_FOR_BUILDING_SIZER
         )
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
         my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
         # my_simulation_parameters.logging_level = 4
@@ -114,8 +115,8 @@ def setup_function(
 
     # Set heating systems for space heating and domestic hot water
     heating_system = energy_system_config_.heating_system
-    if heating_system != HeatingSystems.OIL_HEATING:
-        raise ValueError("Heating system needs to be oil heater for this system setup.")
+    if heating_system != HeatingSystems.HYDROGEN_HEATING:
+        raise ValueError("Heating system needs to be hydrogen heating for this system setup.")
 
     heating_reference_temperature_in_celsius = -12.2
     building_set_heating_temperature_in_celsius = 22.0
@@ -248,34 +249,34 @@ def setup_function(
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
 
     # Set sizing option for Hot water Storage
-    sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GENERAL_HEATING_SYSTEM
+    sizing_option = simple_water_storage.HotWaterStorageSizingEnum.SIZE_ACCORDING_TO_GAS_HEATER
 
-    # Build Oil heater
-    my_oil_heater_config = generic_boiler.GenericBoilerConfig.get_scaled_conventional_oil_boiler_config(
-        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt
+    # Build hydrogen boiler For Space Heating
+    my_hydrogen_boiler_config = generic_boiler.GenericBoilerConfig.get_scaled_condensing_hydrogen_boiler_config(
+        heating_load_of_building_in_watt=my_building_information.max_thermal_building_demand_in_watt,
+        number_of_apartments_in_building=number_of_apartments,
     )
-    my_oil_heater = generic_boiler.GenericBoiler(
-        config=my_oil_heater_config,
+    my_hydrogen_boiler = generic_boiler.GenericBoiler(
+        config=my_hydrogen_boiler_config,
         my_simulation_parameters=my_simulation_parameters,
     )
-    my_sim.add_component(my_oil_heater, connect_automatically=True)
+    my_sim.add_component(my_hydrogen_boiler, connect_automatically=True)
 
-    # Build Oil Heater Controller
-    my_oil_heater_controller_config = (
+    # Build hydrogen boiler Controller
+    my_hydrogen_boiler_controller_config = (
         generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
-            minimal_thermal_power_in_watt=my_oil_heater_config.minimal_thermal_power_in_watt,
-            maximal_thermal_power_in_watt=my_oil_heater_config.maximal_thermal_power_in_watt,
+            minimal_thermal_power_in_watt=my_hydrogen_boiler_config.minimal_thermal_power_in_watt,
+            maximal_thermal_power_in_watt=my_hydrogen_boiler_config.maximal_thermal_power_in_watt,
             with_domestic_hot_water_preparation=True,
         )
     )
-    my_oil_heater_controller = generic_boiler.GenericBoilerController(
-        my_simulation_parameters=my_simulation_parameters, config=my_oil_heater_controller_config
+    my_hydrogen_boiler_controller = generic_boiler.GenericBoilerController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_hydrogen_boiler_controller_config,
     )
-    my_sim.add_component(my_oil_heater_controller, connect_automatically=True)
+    my_sim.add_component(my_hydrogen_boiler_controller, connect_automatically=True)
 
-    # Build Oil Heater for DHW
-    # DHW oil heater and storage configs
-
+    # DHW storage configs
     my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
         number_of_apartments=number_of_apartments
     )
@@ -292,6 +293,7 @@ def setup_function(
         temperature_difference_between_flow_and_return_in_celsius=my_hds_controller_information.temperature_difference_between_flow_and_return_in_celsius,
         sizing_option=sizing_option,
     )
+
     my_simple_water_storage = simple_water_storage.SimpleHotWaterStorage(
         config=my_simple_heat_water_storage_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -318,6 +320,13 @@ def setup_function(
         my_simulation_parameters=my_simulation_parameters,
         config=electricity_meter.ElectricityMeterConfig.get_electricity_meter_default_config(),
     )
+
+    # Build Gas Meter
+    my_gas_meter = gas_meter.GasMeter(
+        my_simulation_parameters=my_simulation_parameters,
+        config=gas_meter.GasMeterConfig.get_gas_meter_default_config(),
+    )
+    my_sim.add_component(my_gas_meter, connect_automatically=True)
 
     # use ems and battery only when PV is used
     if share_of_maximum_pv_potential != 0:
@@ -411,7 +420,11 @@ def setup_function(
         ResultPathProviderSingleton().set_important_result_path_information(
             module_directory=my_sim.module_directory,  # "/storage_cluster/projects/2024-k-rieck-hisim-mass-simulations/analysis_austria_for_kristina_20_11_2024_2",
             model_name=my_sim.module_filename,
-            further_result_folder_description=os.path.join(*[further_result_folder_description]),
+            further_result_folder_description=os.path.join(
+                *[
+                    further_result_folder_description,
+                ]
+            ),
             variant_name="_",
             scenario_hash_string=scenario_hash_string,
             sorting_option=sorting_option,

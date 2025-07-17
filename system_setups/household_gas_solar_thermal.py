@@ -63,9 +63,7 @@ def setup_function(
     # try reading energ system and archetype configs
     my_config = read_in_configs(my_sim.my_module_config)
     if my_config is None:
-        my_config = (
-            ModularHouseholdConfig().get_default_config_for_household_oil()
-        )
+        my_config = ModularHouseholdConfig().get_default_config_for_household_oil()
         log.warning(
             f"Could not read the modular household config from path '{config_filename}'. Using the oil household default config instead."
         )
@@ -75,10 +73,8 @@ def setup_function(
 
     # Set Simulation Parameters
     if my_simulation_parameters is None:
-        my_simulation_parameters = (
-            SimulationParameters.full_year_with_only_plots(
-                year=year, seconds_per_timestep=seconds_per_timestep
-            )
+        my_simulation_parameters = SimulationParameters.full_year_with_only_plots(
+            year=year, seconds_per_timestep=seconds_per_timestep
         )
 
         # TODO: Set postprocessing options
@@ -98,12 +94,8 @@ def setup_function(
     # Build Basic Components
 
     # Building
-    my_building_config = (
-        building.BuildingConfig.get_default_german_single_family_home()
-    )
-    my_building_information = building.BuildingInformation(
-        config=my_building_config
-    )
+    my_building_config = building.BuildingConfig.get_default_german_single_family_home()
+    my_building_information = building.BuildingInformation(config=my_building_config)
     my_building = building.Building(
         config=my_building_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -117,9 +109,7 @@ def setup_function(
     )
 
     # Weather
-    my_weather_config = weather.WeatherConfig.get_default(
-        location_entry=weather.LocationEnum.AACHEN
-    )
+    my_weather_config = weather.WeatherConfig.get_default(location_entry=weather.LocationEnum.AACHEN)
     my_weather = weather.Weather(
         config=my_weather_config,
         my_simulation_parameters=my_simulation_parameters,
@@ -133,16 +123,12 @@ def setup_function(
         heating_reference_temperature_in_celsius=heating_reference_temperature_in_celsius,
     )
 
-    my_heat_distribution_controller = (
-        heat_distribution_system.HeatDistributionController(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_heat_distribution_controller_config,
-        )
+    my_heat_distribution_controller = heat_distribution_system.HeatDistributionController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_heat_distribution_controller_config,
     )
-    my_hds_controller_information = (
-        heat_distribution_system.HeatDistributionControllerInformation(
-            config=my_heat_distribution_controller_config
-        )
+    my_hds_controller_information = heat_distribution_system.HeatDistributionControllerInformation(
+        config=my_heat_distribution_controller_config
     )
 
     # Gas Heater (for space heating and DHW) - Component
@@ -155,10 +141,12 @@ def setup_function(
     )
 
     # Gas Heater (for space heating and DHW) - Controller
-    my_gas_heater_controller_config = generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
-        minimal_thermal_power_in_watt=my_gas_heater_config.minimal_thermal_power_in_watt,
-        maximal_thermal_power_in_watt=my_gas_heater_config.maximal_thermal_power_in_watt,
-        with_domestic_hot_water_preparation=True
+    my_gas_heater_controller_config = (
+        generic_boiler.GenericBoilerControllerConfig.get_default_modulating_generic_boiler_controller_config(
+            minimal_thermal_power_in_watt=my_gas_heater_config.minimal_thermal_power_in_watt,
+            maximal_thermal_power_in_watt=my_gas_heater_config.maximal_thermal_power_in_watt,
+            with_domestic_hot_water_preparation=True,
+        )
     )
     my_gas_heater_controller = generic_boiler.GenericBoilerController(
         my_simulation_parameters=my_simulation_parameters,
@@ -178,9 +166,11 @@ def setup_function(
     )
 
     # Heat Distribution System
-    my_heat_distribution_system_config = heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
-        water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
-        absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+    my_heat_distribution_system_config = (
+        heat_distribution_system.HeatDistributionConfig.get_default_heatdistributionsystem_config(
+            water_mass_flow_rate_in_kg_per_second=my_hds_controller_information.water_mass_flow_rate_in_kp_per_second,
+            absolute_conditioned_floor_area_in_m2=my_building_information.scaled_conditioned_floor_area_in_m2,
+        )
     )
     my_heat_distribution_system = heat_distribution_system.HeatDistribution(
         config=my_heat_distribution_system_config,
@@ -197,20 +187,18 @@ def setup_function(
     )
 
     # Gas Heater (for DHW) - Controller
-    my_solar_thermal_system_controller_config = solar_thermal_system.SolarThermalSystemControllerConfig.get_solar_thermal_system_controller_config()
+    my_solar_thermal_system_controller_config = (
+        solar_thermal_system.SolarThermalSystemControllerConfig.get_solar_thermal_system_controller_config()
+    )
 
-    my_solar_thermal_system_controller = (
-        solar_thermal_system.SolarThermalSystemController(
-            my_simulation_parameters=my_simulation_parameters,
-            config=my_solar_thermal_system_controller_config,
-        )
+    my_solar_thermal_system_controller = solar_thermal_system.SolarThermalSystemController(
+        my_simulation_parameters=my_simulation_parameters,
+        config=my_solar_thermal_system_controller_config,
     )
 
     # DHW Storage
-    my_dhw_storage_config = (
-        simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
-            number_of_apartments=number_of_apartments
-        )
+    my_dhw_storage_config = simple_water_storage.SimpleDHWStorageConfig.get_scaled_dhw_storage(
+        number_of_apartments=number_of_apartments
     )
 
     my_dhw_storage = simple_water_storage.SimpleDHWStorage(
@@ -238,9 +226,7 @@ def setup_function(
         source_component_output=my_occupancy.ElectricalPowerConsumption,
         source_load_type=loadtypes.LoadTypes.ELECTRICITY,
         source_unit=loadtypes.Units.WATT,
-        source_tags=[
-            loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED
-        ],
+        source_tags=[loadtypes.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED],
         source_weight=999,
     )
 
@@ -281,12 +267,8 @@ def setup_function(
     my_sim.add_component(my_building, connect_automatically=True)
     my_sim.add_component(my_occupancy)
     my_sim.add_component(my_weather)
-    my_sim.add_component(
-        my_heat_distribution_system, connect_automatically=True
-    )
-    my_sim.add_component(
-        my_heat_distribution_controller, connect_automatically=True
-    )
+    my_sim.add_component(my_heat_distribution_system, connect_automatically=True)
+    my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
     my_sim.add_component(my_dhw_storage, connect_automatically=False)
     my_sim.add_component(my_simple_water_storage, connect_automatically=True)
     my_sim.add_component(my_electricity_meter, connect_automatically=True)
@@ -294,6 +276,4 @@ def setup_function(
     my_sim.add_component(my_gas_heater_controller, connect_automatically=True)
     my_sim.add_component(my_gas_meter, connect_automatically=True)
     my_sim.add_component(my_solar_thermal_system, connect_automatically=True)
-    my_sim.add_component(
-        my_solar_thermal_system_controller, connect_automatically=True
-    )
+    my_sim.add_component(my_solar_thermal_system_controller, connect_automatically=True)

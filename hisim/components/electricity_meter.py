@@ -251,6 +251,7 @@ class ElectricityMeter(DynamicComponent):
         self.add_dynamic_default_connections(self.get_default_connections_from_pv_system())
         self.add_dynamic_default_connections(self.get_default_connections_from_dhw_heat_pump())
         self.add_dynamic_default_connections(self.get_default_connections_from_advanced_heat_pump())
+        self.add_dynamic_default_connections(self.get_default_connections_from_electric_heater())
 
     def get_default_connections_from_utsp_occupancy(
         self,
@@ -343,6 +344,45 @@ class ElectricityMeter(DynamicComponent):
                 source_unit=lt.Units.WATT,
                 source_tags=[
                     lt.ComponentType.HEAT_PUMP_BUILDING,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                ],
+                source_weight=999,
+            )
+        )
+        return dynamic_connections
+
+    def get_default_connections_from_electric_heater(
+        self,
+    ):
+        """Get electric heater default connections."""
+
+        from hisim.components.generic_electric_heating import ElectricHeating  # pylint: disable=import-outside-toplevel
+
+        dynamic_connections = []
+        electric_boiler_class_name = ElectricHeating.get_classname()
+        dynamic_connections.append(
+            DynamicComponentConnection(
+                source_component_class=ElectricHeating,
+                source_class_name=electric_boiler_class_name,
+                source_component_field_name=ElectricHeating.ElectricOutputShPower,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.ComponentType.ELECTRIC_HEATING_SH,
+                    lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
+                ],
+                source_weight=999,
+            )
+        )
+        dynamic_connections.append(
+            DynamicComponentConnection(
+                source_component_class=ElectricHeating,
+                source_class_name=electric_boiler_class_name,
+                source_component_field_name=ElectricHeating.ElectricOutputDhwPower,
+                source_load_type=lt.LoadTypes.ELECTRICITY,
+                source_unit=lt.Units.WATT,
+                source_tags=[
+                    lt.ComponentType.ELECTRIC_HEATING_DHW,
                     lt.InandOutputType.ELECTRICITY_CONSUMPTION_UNCONTROLLED,
                 ],
                 source_weight=999,
@@ -534,7 +574,7 @@ class ElectricityMeter(DynamicComponent):
             opex_energy_cost_in_euro=opex_cost_per_simulated_period_in_euro,
             opex_maintenance_cost_in_euro=0,
             co2_footprint_in_kg=co2_per_simulated_period_in_kg,
-            consumption_in_kwh=total_energy_from_grid_in_kwh,
+            total_consumption_in_kwh=total_energy_from_grid_in_kwh,
             loadtype=lt.LoadTypes.ELECTRICITY,
             kpi_tag=KpiTagEnumClass.ELECTRICITY_METER
         )

@@ -863,6 +863,7 @@ class SolarThermalSystemController(Component):
         """Calculates KPIs for the respective component and return all KPI entries as list."""
         return []
 
+
 class SolarThermalSystemControllerState:
     """Data class that saves the state of the controller."""
 

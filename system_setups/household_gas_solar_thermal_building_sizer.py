@@ -21,7 +21,7 @@ from hisim.components import (
     solar_thermal_system,
     advanced_battery_bslib,
     controller_l2_energy_management_system,
-    generic_pv_system
+    generic_pv_system,
 )
 from hisim.components import weather
 from hisim.components import building
@@ -478,7 +478,3 @@ def setup_function(
             scenario_hash_string=scenario_hash_string,
             sorting_option=sorting_option,
         )
-
-
-    
-    

@@ -318,24 +318,33 @@ class SolarThermalSystem(Component):
     ) -> OpexCostDataClass:
         # pylint: disable=unused-argument
         """Calculate OPEX."""
+        dhw_consumption_in_kilowatt_hour = None
         for index, output in enumerate(all_outputs):
             if (
                 output.component_name == self.component_name
                 and output.field_name == self.ElectricityConsumptionOutput
-                and output.unit == loadtypes.Units.WATT_HOUR
+                and output.unit == loadtypes.Units.WATT
             ):
-                consumption_in_kilowatt_hour = round(sum(postprocessing_results.iloc[:, index]) * 1e-3, 1)
+                dhw_consumption_in_kilowatt_hour = round(
+                    sum(postprocessing_results.iloc[:, index])
+                    * self.my_simulation_parameters.seconds_per_timestep
+                    / 3.6e6,
+                    1,
+                )
                 break
 
         emissions_and_cost_factors = EmissionFactorsAndCostsForFuelsConfig.get_values_for_year(
             self.my_simulation_parameters.year
         )
+        assert dhw_consumption_in_kilowatt_hour is not None
+        total_consumption_in_kilowatt_hour = dhw_consumption_in_kilowatt_hour
 
         opex_cost_data_class = OpexCostDataClass(
-            opex_energy_cost_in_euro=consumption_in_kilowatt_hour * emissions_and_cost_factors.electricity_costs_in_euro_per_kwh,
+            opex_energy_cost_in_euro=total_consumption_in_kilowatt_hour * emissions_and_cost_factors.electricity_costs_in_euro_per_kwh,
             opex_maintenance_cost_in_euro=self.calc_maintenance_cost(),
-            co2_footprint_in_kg=consumption_in_kilowatt_hour * emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh,
-            total_consumption_in_kwh=consumption_in_kilowatt_hour,
+            co2_footprint_in_kg=total_consumption_in_kilowatt_hour * emissions_and_cost_factors.electricity_footprint_in_kg_per_kwh,
+            total_consumption_in_kwh=total_consumption_in_kilowatt_hour,
+            consumption_for_domestic_hot_water_in_kwh=dhw_consumption_in_kilowatt_hour,
             loadtype=loadtypes.LoadTypes.WARM_WATER,
             kpi_tag=KpiTagEnumClass.SOLAR_THERMAL
         )
@@ -824,6 +833,35 @@ class SolarThermalSystemController(Component):
             # deactivate when mass flow is too low
             self.state.deactivate(timestep)
 
+    def get_cost_opex(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> OpexCostDataClass:
+        """Calculate OPEX costs, consisting of electricity costs and revenues."""
+        opex_cost_data_class = (
+            OpexCostDataClass.get_default_opex_cost_data_class()
+        )
+        return opex_cost_data_class
+
+    @staticmethod
+    def get_cost_capex(
+        config: SolarThermalSystemControllerConfig,
+        simulation_parameters: SimulationParameters,
+    ) -> CapexCostDataClass:  # pylint: disable=unused-argument
+        """Returns investment cost, CO2 emissions and lifetime."""
+        capex_cost_data_class = (
+            CapexCostDataClass.get_default_capex_cost_data_class()
+        )
+        return capex_cost_data_class
+
+    def get_component_kpi_entries(
+        self,
+        all_outputs: List,
+        postprocessing_results: pd.DataFrame,
+    ) -> List[KpiEntry]:
+        """Calculates KPIs for the respective component and return all KPI entries as list."""
+        return []
 
 class SolarThermalSystemControllerState:
     """Data class that saves the state of the controller."""

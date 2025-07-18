@@ -397,7 +397,7 @@ class SolarThermalSystem(Component):
         list_of_kpi_entries.append(dhw_thermal_energy_delivered_entry)
 
         energy_consumption = KpiEntry(
-            name=f"Total consumption (energy)",
+            name="Total consumption (energy)",
             unit="kWh",
             value=opex_dataclass.total_consumption_in_kwh,
             tag=opex_dataclass.kpi_tag,
@@ -406,7 +406,7 @@ class SolarThermalSystem(Component):
         list_of_kpi_entries.append(energy_consumption)
 
         dhw_energy_consumption = KpiEntry(
-            name=f"Energy consumption for doemstic hot water",
+            name="Energy consumption for doemstic hot water",
             unit="kWh",
             value=opex_dataclass.consumption_for_domestic_hot_water_in_kwh,
             tag=opex_dataclass.kpi_tag,

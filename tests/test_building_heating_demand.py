@@ -199,7 +199,7 @@ def test_house_with_idealized_electric_heater_for_testing_heating_demand(
     # Test annual floor related heating demand
 
     energy_need_for_heating_given_by_tabula_in_kilowatt_hour_per_year_per_m2 = (
-        my_building.my_building_information.buildingdata["q_h_nd"].values[0]
+        my_building.my_building_information.buildingdata_ref["q_h_nd"].values[0]
     )
 
     energy_need_for_heating_from_idealized_electric_heater_in_kilowatt_hour_per_year_per_m2 = (

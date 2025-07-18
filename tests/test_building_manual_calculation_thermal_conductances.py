@@ -62,16 +62,16 @@ def test_building_thermal_conductance_calculation():
     k = 0
     for w_i in w_s:
         list_h_tr_window.append(
-            my_residence.my_building_information.buildingdata[
+            my_residence.my_building_information.buildingdata_ref[
                 "H_Transmission_" + w_i
             ].values[0]
         )
         # with H_Tr = U * A * b_tr [W/K] -> by calculating H_tr manually one can later scale this up by scaling up A_Calc
         h_tr_i = (
-            my_residence.my_building_information.buildingdata["U_Actual_" + w_i].values[
+            my_residence.my_building_information.buildingdata_ref["U_Actual_" + w_i].values[
                 0
             ]
-            * my_residence.my_building_information.buildingdata["A_" + w_i].values[0]
+            * my_residence.my_building_information.buildingdata_ref["A_" + w_i].values[0]
             * 1.0
         )
         list_h_tr_window_calculated.append(h_tr_i)
@@ -95,17 +95,17 @@ def test_building_thermal_conductance_calculation():
     k = 0
     for o_p in opaque_walls:
         list_h_tr_opaque.append(
-            my_residence.my_building_information.buildingdata[
+            my_residence.my_building_information.buildingdata_ref[
                 "H_Transmission_" + o_p
             ].values[0]
         )
         # with H_Tr = U * A * b_tr [W/K] -> by calculating H_tr manually one can later scale this up by scaling up A_Calc
         h_tr_i = (
-            my_residence.my_building_information.buildingdata["U_Actual_" + o_p].values[
+            my_residence.my_building_information.buildingdata_ref["U_Actual_" + o_p].values[
                 0
             ]
-            * my_residence.my_building_information.buildingdata["A_" + o_p].values[0]
-            * my_residence.my_building_information.buildingdata[
+            * my_residence.my_building_information.buildingdata_ref["A_" + o_p].values[0]
+            * my_residence.my_building_information.buildingdata_ref[
                 "b_Transmission_" + o_p
             ].values[0]
         )

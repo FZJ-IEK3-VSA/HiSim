@@ -13,7 +13,6 @@ from hisim.building_sizer_utils.interface_configs.modular_household_config impor
 )
 from hisim.simulator import SimulationParameters
 from hisim.components import (
-    gas_meter,
     more_advanced_heat_pump_hplib,
     heat_distribution_system,
     loadprofilegenerator_utsp_connector,
@@ -103,7 +102,7 @@ def setup_function(
         )
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.MAKE_NETWORK_CHARTS)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_LINE)
-        my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
+        # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.PLOT_CARPET)
         # my_simulation_parameters.post_processing_options.append(PostProcessingOptions.EXPORT_TO_CSV)
         my_simulation_parameters.logging_level = 3
     my_sim.set_simulation_parameters(my_simulation_parameters)

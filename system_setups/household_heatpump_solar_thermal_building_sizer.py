@@ -251,9 +251,8 @@ def setup_function(
     # Build Heat Pump Controller for hot water (heating building)
     my_heatpump_controller_sh_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(
         heat_distribution_system_type=my_hds_controller_information.heat_distribution_system_type
-        )
+    )
     my_heatpump_controller_sh_config.mode = hp_controller_mode
-
 
     my_heatpump_controller_sh = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeating(
         config=my_heatpump_controller_sh_config, my_simulation_parameters=my_simulation_parameters
@@ -447,7 +446,7 @@ def setup_function(
     # when no PV is used, connect electricty meter automatically
     else:
         my_sim.add_component(my_electricity_meter, connect_automatically=True)
-    
+
     # Connect Heat Pump
     my_heatpump_controller_sh.connect_only_predefined_connections(
         my_heat_distribution_controller, my_weather, my_simple_water_storage
@@ -497,4 +496,3 @@ def setup_function(
             scenario_hash_string=scenario_hash_string,
             sorting_option=sorting_option,
         )
-    

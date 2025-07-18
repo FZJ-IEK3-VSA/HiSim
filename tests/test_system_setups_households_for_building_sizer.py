@@ -191,7 +191,7 @@ def test_household_electric_heating():
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_household_electric_heating():
+def test_household_gas_solar_thermal_heating():
     """Single day."""
     path = "../system_setups/household_gas_solar_thermal_building_sizer.py"
 
@@ -213,7 +213,7 @@ def test_household_electric_heating():
 
 @pytest.mark.system_setups
 @utils.measure_execution_time
-def test_household_electric_heating():
+def test_household_heatpump_solar_thermal_heating():
     """Single day."""
     path = "../system_setups/household_heatpump_solar_thermal_building_sizer.py"
 

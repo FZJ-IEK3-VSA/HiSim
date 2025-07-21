@@ -5,7 +5,6 @@ divided by the conditioned floor area given by TABULA.
 The window areas are scaled via the ratio of window area to wall area.
 """
 # clean
-import math
 import numpy as np
 import pytest
 from hisim import component
@@ -113,15 +112,15 @@ def test_building_scalability():
     my_residence.i_simulate(0, stsv, False)
 
     # some variables to test
-    opaque_surfaces_without_scaling = (
-        my_residence.my_building_information.scaled_opaque_surfaces_envelope_area_in_m2
-    )
-    window_and_door_surfaces_without_scaling = (
-        my_residence.my_building_information.scaled_windows_and_door_envelope_areas_in_m2
-    )
-    window_areas_without_scaling = (
-        my_residence.my_building_information.scaled_window_areas_in_m2
-    )
+    opaque_surfaces_without_scaling = [my_residence.my_building_information.facade_area_in_m2,
+                                       my_residence.my_building_information.roof_area_in_m2,
+                                       my_residence.my_building_information.floor_area_in_m2]
+
+    window_and_door_surfaces_without_scaling = [my_residence.my_building_information.window_area_in_m2,
+                                                my_residence.my_building_information.door_area_in_m2]
+
+    window_areas_without_scaling = my_residence.my_building_information.scaled_window_areas_in_m2
+
     log.information(str(window_areas_without_scaling))
 
     # check building test with different absolute conditioned floor areas
@@ -147,19 +146,18 @@ def test_building_scalability():
         my_residence.i_prepare_simulation()
         my_residence.i_simulate(0, stsv, False)
 
-        opaque_surfaces_with_scaling = (
-            my_residence.my_building_information.scaled_opaque_surfaces_envelope_area_in_m2
-        )
-        window_and_door_surfaces_with_scaling = (
-            my_residence.my_building_information.scaled_windows_and_door_envelope_areas_in_m2
-        )
+        opaque_surfaces_with_scaling = [my_residence.my_building_information.facade_area_in_m2,
+                                       my_residence.my_building_information.roof_area_in_m2,
+                                       my_residence.my_building_information.floor_area_in_m2]
+
+        window_and_door_surfaces_with_scaling = [my_residence.my_building_information.window_area_in_m2,
+                                                my_residence.my_building_information.door_area_in_m2,]
+
         # scaled_window_area = window_area / total_wall_area * scaled_total_wall_area
         # = window_area / (4 * sqrt(conditioned_floor_area) * room_height) * 4 * sqrt(scaled_conditioned_floor_area) * room_height
         # = window_area * sqrt(scaled_conditioned_floor_area / conditioned_floor_area)
-        scaling_factor_for_window_areas = math.sqrt(
-            absolute_conditioned_floor_area_in_m2_scaled
-            / absolute_conditioned_floor_area_in_m2
-        )
+        scaling_factor_for_window_areas = my_residence.my_building_information.window_scaling_factor
+
         window_areas_with_scaling = [
             x * scaling_factor_for_window_areas for x in window_areas_without_scaling
         ]

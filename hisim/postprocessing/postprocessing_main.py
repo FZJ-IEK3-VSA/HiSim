@@ -1,6 +1,5 @@
-""" Main postprocessing module that starts all other modules. """
+"""Main postprocessing module that starts all other modules."""
 
-import copy
 import json
 
 # clean
@@ -167,8 +166,10 @@ class PostProcessor:
             if report is not None:
                 self.write_components_to_report(ppdt, report, report_image_entries)
             else:
-                raise ValueError("report is None but should be a ReportGenerator object. "
-                                 "You probably need to set the GENERATE_PDF_REPORT option.")
+                raise ValueError(
+                    "report is None but should be a ReportGenerator object. "
+                    "You probably need to set the GENERATE_PDF_REPORT option."
+                )
             end = timer()
             duration = end - start
             log.information("Writing components to report took " + f"{duration:1.2f}s.")
@@ -179,8 +180,10 @@ class PostProcessor:
             if report is not None:
                 self.write_all_outputs_to_report(ppdt, report)
             else:
-                raise ValueError("report is None but should be a ReportGenerator object. "
-                                 "You probably need to set the GENERATE_PDF_REPORT option.")
+                raise ValueError(
+                    "report is None but should be a ReportGenerator object. "
+                    "You probably need to set the GENERATE_PDF_REPORT option."
+                )
             end = timer()
             duration = end - start
             log.information("Writing all outputs to report took " + f"{duration:1.2f}s.")
@@ -190,8 +193,10 @@ class PostProcessor:
             if report is not None:
                 self.write_network_charts_to_report(ppdt, report, system_chart_entries=system_chart_entries)
             else:
-                raise ValueError("report is None but should be a ReportGenerator object. "
-                                 "You probably need to set the GENERATE_PDF_REPORT option.")
+                raise ValueError(
+                    "report is None but should be a ReportGenerator object. "
+                    "You probably need to set the GENERATE_PDF_REPORT option."
+                )
             end = timer()
             duration = end - start
             log.information("Writing network charts to report took " + f"{duration:1.2f}s.")
@@ -234,8 +239,10 @@ class PostProcessor:
                 if isinstance(elem.my_component, building.Building):
                     building_data = elem.my_component.my_building_information.buildingdata
                     for building_object in building_objects_in_district_list:
-                        if (building_object in str(elem.my_component.component_name) or
-                                not ppdt.simulation_parameters.multiple_buildings):
+                        if (
+                            building_object in str(elem.my_component.component_name)
+                            or not ppdt.simulation_parameters.multiple_buildings
+                        ):
                             building_data["Object_Name"] = building_object
                     all_building_data = pd.concat([all_building_data, building_data], ignore_index=True)
 
@@ -659,8 +666,9 @@ class PostProcessor:
     ) -> PostProcessingDataTransfer:
         """Computes KPI's and writes them to report and to ppdt kpi collection."""
         # initialize kpi data class and compute all kpi values
-        kpi_data_class = KpiGenerator(post_processing_data_transfer=ppdt,
-                                      building_objects_in_district_list=building_objects_in_district_list)
+        kpi_data_class = KpiGenerator(
+            post_processing_data_transfer=ppdt, building_objects_in_district_list=building_objects_in_district_list
+        )
         # write kpi table to report if option is chosen
         if PostProcessingOptions.GENERATE_PDF_REPORT in ppdt.post_processing_options:
             kpi_table = kpi_data_class.return_table_for_report()
@@ -793,22 +801,7 @@ class PostProcessor:
             log.information("This result data path exists already: " + self.result_data_folder_for_scenario_evaluation)
 
         # --------------------------------------------------------------------------------------------------------------------------------------------------------------
-        # make dictionaries with pyam data structure for hourly and yearly data
-            # Base structure for time series data
-        def empty_timeseries_dict():
-            return {
-                "model": [],
-                "scenario": [],
-                "region": [],
-                "variable": [],
-                "unit": [],
-                "time": [],
-                "value": [],
-            }
-
-        simple_dict_hourly_data = empty_timeseries_dict()
-        simple_dict_daily_data = empty_timeseries_dict()
-        simple_dict_monthly_data = empty_timeseries_dict()
+        # make dictionaries with pyam data structure yearly data
 
         simple_dict_cumulative_data: Dict = {
             "model": [],
@@ -822,21 +815,27 @@ class PostProcessor:
 
         # Set meta info
         self.model = f"HiSim_{ppdt.module_filename}"
-        self.scenario = SingletonSimRepository().get_entry(SingletonDictKeyEnum.RESULT_SCENARIO_NAME) if SingletonSimRepository().exist_entry(SingletonDictKeyEnum.RESULT_SCENARIO_NAME) else ""
-        self.region = SingletonSimRepository().get_entry(SingletonDictKeyEnum.LOCATION) if SingletonSimRepository().exist_entry(SingletonDictKeyEnum.LOCATION) else ""
+        self.scenario = (
+            SingletonSimRepository().get_entry(SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
+            if SingletonSimRepository().exist_entry(SingletonDictKeyEnum.RESULT_SCENARIO_NAME)
+            else ""
+        )
+        self.region = (
+            SingletonSimRepository().get_entry(SingletonDictKeyEnum.LOCATION)
+            if SingletonSimRepository().exist_entry(SingletonDictKeyEnum.LOCATION)
+            else ""
+        )
         self.year = ppdt.simulation_parameters.year
 
         # Time series
         time_configs = [
-            ("hourly", ppdt.results_hourly, simple_dict_hourly_data, ppdt.results_hourly.index),
-            ("daily", ppdt.results_daily, simple_dict_daily_data, ppdt.results_daily.index),
-            ("monthly", ppdt.results_monthly, simple_dict_monthly_data, ppdt.results_monthly.index),
+            ("hourly", ppdt.results_hourly, ppdt.results_hourly.index),
+            ("daily", ppdt.results_daily, ppdt.results_daily.index),
+            ("monthly", ppdt.results_monthly, ppdt.results_monthly.index),
         ]
 
-        for time_res, df, target_dict, index in time_configs:
-            result_df = self.iterate_over_results_and_add_values_to_dict(
-                results_df=df, dict_to_check=target_dict, timeseries=index
-            )
+        for time_res, df, index in time_configs:
+            result_df = self.iterate_over_results_and_add_values_to_dict(results_df=df, timeseries=index)
             self.write_filename_and_save_to_csv(
                 dataframe=result_df,
                 folder=self.result_data_folder_for_scenario_evaluation,
@@ -863,7 +862,9 @@ class PostProcessor:
 
         # add kpis to yearly dict
         if PostProcessingOptions.COMPUTE_KPIS in ppdt.post_processing_options:
-            simple_dict_cumulative_data = self.write_kpis_in_dict(ppdt=ppdt, simple_dict_cumulative_data=simple_dict_cumulative_data)
+            simple_dict_cumulative_data = self.write_kpis_in_dict(
+                ppdt=ppdt, simple_dict_cumulative_data=simple_dict_cumulative_data
+            )
 
         # create dataframe
         simple_df_yearly_data = pd.DataFrame(simple_dict_cumulative_data)
@@ -924,9 +925,7 @@ class PostProcessor:
 
         # save the json config
         json_generator_config.save_to_json(
-            filename=os.path.join(
-                result_data_folder_for_scenario_evaluation, "data_for_scenario_evaluation.json"
-            )
+            filename=os.path.join(result_data_folder_for_scenario_evaluation, "data_for_scenario_evaluation.json")
         )
 
     def write_component_configurations_to_json(self, ppdt: PostProcessingDataTransfer) -> None:
@@ -987,32 +986,30 @@ class PostProcessor:
 
         return variable_name, unit
 
-    def iterate_over_results_and_add_values_to_dict(
-        self, results_df: pd.DataFrame, dict_to_check: Dict[str, Any], timeseries: Any
-    ) -> pd.DataFrame:
+    def iterate_over_results_and_add_values_to_dict(self, results_df: pd.DataFrame, timeseries: Any) -> pd.DataFrame:
         """Iterate over results and add values to dict, write to dataframe and save as csv."""
 
-        for column in results_df:
-            for index, timestep in enumerate(timeseries):
-                # values = ppdt.results_hourly[column].values
-                values = results_df[column].values
+        column_meta = {col: self.get_variable_name_and_unit_from_ppdt_results_column(col) for col in results_df.columns}
+        frames = []
 
-                (
-                    variable_name,
-                    unit,
-                ) = self.get_variable_name_and_unit_from_ppdt_results_column(column=str(column))
+        for col in results_df.columns:
+            values = results_df[col].values
+            variable_name, unit = column_meta[col]
+            frames.append(
+                pd.DataFrame(
+                    {
+                        "model": self.model,
+                        "scenario": self.scenario,
+                        "region": self.region,
+                        "variable": variable_name,
+                        "unit": unit,
+                        "time": timeseries,
+                        "value": values,
+                    }
+                )
+            )
 
-                dict_to_check["model"].append(self.model)
-                dict_to_check["scenario"].append(self.scenario)
-                dict_to_check["region"].append(self.region)
-                dict_to_check["variable"].append(variable_name)
-                dict_to_check["unit"].append(unit)
-                dict_to_check["time"].append(timestep)
-                dict_to_check["value"].append(values[index])
-
-        dataframe_from_dict = pd.DataFrame(dict_to_check)
-
-        return dataframe_from_dict
+        return pd.concat(frames, ignore_index=True)
 
     def write_filename_and_save_to_csv(
         self,
@@ -1051,7 +1048,9 @@ class PostProcessor:
         ) as file:
             file.write(data)
 
-    def write_results_for_webtool_to_json_file(self, ppdt: PostProcessingDataTransfer, building_objects_in_district_list: list) -> None:
+    def write_results_for_webtool_to_json_file(
+        self, ppdt: PostProcessingDataTransfer, building_objects_in_district_list: list
+    ) -> None:
         """Collect results and write into json for webtool."""
 
         # Check if important options were set
@@ -1070,7 +1069,7 @@ class PostProcessor:
             capex_compute_return = capex_calculation(
                 components=ppdt.wrapped_components,
                 simulation_parameters=ppdt.simulation_parameters,
-                building_objects_in_district_list=building_objects_in_district_list
+                building_objects_in_district_list=building_objects_in_district_list,
             )
 
             # Calculate opex
@@ -1079,7 +1078,7 @@ class PostProcessor:
                 all_outputs=ppdt.all_outputs,
                 postprocessing_results=ppdt.results,
                 simulation_parameters=ppdt.simulation_parameters,
-                building_objects_in_district_list=building_objects_in_district_list
+                building_objects_in_district_list=building_objects_in_district_list,
             )
 
             # Consolidate results into structured dataclass for webtool
@@ -1148,18 +1147,24 @@ class PostProcessor:
 
                 kpi_collection_dict = ppdt.kpi_collection_dict[building_object]
 
-                self_sufficiency_rate_in_percent = get_kpi_entries_for_building_sizer(data=kpi_collection_dict,
-                                                                                      target_key="Self-sufficiency rate according to solar htw berlin")
-                total_costs_in_euro = get_kpi_entries_for_building_sizer(data=kpi_collection_dict,
-                                                                         target_key="Total costs for simulated period")
-                energy_costs_in_euro = get_kpi_entries_for_building_sizer(data=kpi_collection_dict,
-                                                                          target_key="Energy grid costs for simulated period")
-                maintenance_costs_in_euro = get_kpi_entries_for_building_sizer(data=kpi_collection_dict,
-                                                                               target_key="Maintenance costs for simulated period")
-                investment_costs_in_euro = get_kpi_entries_for_building_sizer(data=kpi_collection_dict,
-                                                                              target_key="Investment costs for equipment per simulated period")
-                total_co2_emissions_in_kg = get_kpi_entries_for_building_sizer(data=kpi_collection_dict,
-                                                                               target_key="Total CO2 emissions for simulated period")
+                self_sufficiency_rate_in_percent = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Self-sufficiency rate according to solar htw berlin"
+                )
+                total_costs_in_euro = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Total costs for simulated period"
+                )
+                energy_costs_in_euro = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Energy grid costs for simulated period"
+                )
+                maintenance_costs_in_euro = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Maintenance costs for simulated period"
+                )
+                investment_costs_in_euro = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Investment costs for equipment per simulated period"
+                )
+                total_co2_emissions_in_kg = get_kpi_entries_for_building_sizer(
+                    data=kpi_collection_dict, target_key="Total CO2 emissions for simulated period"
+                )
 
                 # initialize json interface to pass kpi's to building_sizer
                 kpi_config = KPIConfig(
@@ -1168,7 +1173,7 @@ class PostProcessor:
                     total_co2_emissions_in_kg=total_co2_emissions_in_kg,
                     energy_grid_costs_in_euro=energy_costs_in_euro,
                     maintenance_costs_in_euro=maintenance_costs_in_euro,
-                    investment_costs_in_euro=investment_costs_in_euro
+                    investment_costs_in_euro=investment_costs_in_euro,
                 )
 
                 kpi_dict = kpi_config.to_dict()  # type: ignore

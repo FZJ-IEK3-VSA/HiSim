@@ -20,9 +20,6 @@ from hisim.components import (
     controller_l2_energy_management_system,
     simple_water_storage,
     heat_distribution_system,
-    generic_heat_pump_modular,
-    generic_hot_water_storage_modular,
-    controller_l1_heatpump,
     electricity_meter,
 )
 
@@ -66,9 +63,9 @@ def setup_function(
         - Heat Distribution System
         - Heat Distribution Controller
         - Heat Water Storage
+        - DHW Storage
         - Battery
         - Energy Management System
-        - Domestic water heat pump
         - Electricity Meter
     """
 
@@ -251,7 +248,6 @@ def setup_function(
     )
     # Add to simulator
     my_sim.add_component(my_heat_distribution_controller, connect_automatically=True)
-
 
     # Build Heat Pump Controller for space heating
     my_heatpump_controller_sh_config = more_advanced_heat_pump_hplib.MoreAdvancedHeatPumpHPLibControllerSpaceHeatingConfig.get_default_space_heating_controller_config(

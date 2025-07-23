@@ -779,6 +779,7 @@ class PostProcessor:
         """
         pass  # noqa: unnecessary-pass
 
+    @utils.measure_execution_time
     def prepare_results_for_scenario_evaluation(self, ppdt: PostProcessingDataTransfer) -> None:
         """Prepare the results for the scenario evaluation."""
 

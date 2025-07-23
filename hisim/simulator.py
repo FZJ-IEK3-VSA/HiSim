@@ -400,77 +400,59 @@ class Simulator:
         log.information(simulation_status)
         return datetime.datetime.now()
 
+    @utils.measure_execution_time
     def get_std_results(
         self, results_data_frame: pd.DataFrame
     ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """Converts results into a pretty dataframe for post processing."""
 
-        n_columns = results_data_frame.shape[1]
+        units_mean = {
+            Units.CELSIUS,
+            Units.KELVIN,
+            Units.ANY,
+            Units.METER_PER_SECOND,
+            Units.DEGREES,
+            Units.WATT,
+            Units.KILOWATT,
+            Units.WATT_PER_SQUARE_METER,
+            Units.KG_PER_SEC,
+            Units.PERCENT,
+            Units.PASCAL,
+        }
 
-        results_merged_monthly = pd.DataFrame()
-        results_merged_daily = pd.DataFrame()
-        results_merged_hourly = pd.DataFrame()
-        results_merged_cumulative = pd.DataFrame()
-        for i_column in range(n_columns):
-            log.information(f"Processing column {i_column + 1}/{n_columns} - {results_data_frame.columns[i_column]}")
-            temp_df = pd.DataFrame(
-                results_data_frame.values[:, i_column],
-                index=results_data_frame.index,
-                columns=[results_data_frame.columns[i_column]],
-            )
+        monthly_frames = []
+        daily_frames = []
+        cumulative_data = {}
+        hourly_frames = []
 
-            if self.all_outputs[i_column].unit in (
-                Units.CELSIUS,
-                Units.KELVIN,
-                Units.ANY,
-                Units.METER_PER_SECOND,
-                Units.DEGREES,
-                Units.WATT,
-                Units.KILOWATT,
-                Units.WATT_PER_SQUARE_METER,
-                Units.KG_PER_SEC,
-                Units.PERCENT,
-                Units.PASCAL
-            ):
-                temp_df_monthly = temp_df.resample("M").mean()
-                temp_df_daily = temp_df.resample("D").mean()
-                temp_df_cumulative = temp_df.mean()
+        use_hourly_resample = self._simulation_parameters.seconds_per_timestep != 3600
+
+        for i, column_name in enumerate(results_data_frame.columns):
+            log.debug(f"Processing column {i + 1}/{len(results_data_frame.columns)} - {column_name}")
+            col_data = results_data_frame.iloc[:, i]
+            unit = self.all_outputs[i].unit
+
+            if unit in units_mean:
+                monthly = col_data.resample("M").mean()
+                daily = col_data.resample("D").mean()
+                hourly = col_data.resample("60T").mean() if use_hourly_resample else col_data
+                cumulative = col_data.mean()
             else:
-                temp_df_monthly = temp_df.resample("M").sum()
-                temp_df_daily = temp_df.resample("D").sum()
-                temp_df_cumulative = temp_df.sum()
+                monthly = col_data.resample("M").sum()
+                daily = col_data.resample("D").sum()
+                hourly = col_data.resample("60T").sum() if use_hourly_resample else col_data
+                cumulative = col_data.sum()
 
-            # monthly results
-            results_merged_monthly[temp_df_monthly.columns[0]] = temp_df_monthly.values[:, 0]
-            results_merged_monthly.index = temp_df_monthly.index
-            # daily results
-            results_merged_daily[temp_df_daily.columns[0]] = temp_df_daily.values[:, 0]
-            results_merged_daily.index = temp_df_daily.index
+            monthly_frames.append(monthly.rename(column_name))
+            daily_frames.append(daily.rename(column_name))
+            hourly_frames.append(hourly.rename(column_name))
+            cumulative_data[column_name] = cumulative
 
-            # cumulative results
-            results_merged_cumulative[temp_df_monthly.columns[0]] = temp_df_cumulative.values
-
-            if self._simulation_parameters.seconds_per_timestep != 3600:
-                if self.all_outputs[i_column].unit in (
-                    Units.CELSIUS,
-                    Units.KELVIN,
-                    Units.ANY,
-                    Units.METER_PER_SECOND,
-                    Units.DEGREES,
-                    Units.WATT,
-                    Units.KILOWATT,
-                    Units.WATT_PER_SQUARE_METER,
-                    Units.KG_PER_SEC,
-                    Units.PERCENT,
-                ):
-                    temp_df_hourly = temp_df.resample("60T").mean()  # .interpolate(method="linear")
-                else:
-                    temp_df_hourly = temp_df.resample("60T").sum()
-
-                results_merged_hourly[temp_df_hourly.columns[0]] = temp_df_hourly.values[:, 0]
-                results_merged_hourly.index = temp_df_hourly.index
-            else:
-                results_merged_hourly[temp_df.columns[0]] = temp_df.values[:, 0]
+        # Combine at once to avoid per-column index assignment
+        results_merged_monthly = pd.concat(monthly_frames, axis=1)
+        results_merged_daily = pd.concat(daily_frames, axis=1)
+        results_merged_hourly = pd.concat(hourly_frames, axis=1)
+        results_merged_cumulative = pd.DataFrame([cumulative_data])
 
         return (
             results_merged_cumulative,

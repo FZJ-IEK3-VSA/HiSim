@@ -740,7 +740,6 @@ class SolarThermalSystem(Component):
             electric_power_demand_solar_pump_w,
         )
         # cache results at the end of the simulation
-        print(timestep, len(self.precalc_data_for_all_timesteps_data))
         self.precalc_data_for_all_timesteps_data[timestep] = (
             precalc_data
         )

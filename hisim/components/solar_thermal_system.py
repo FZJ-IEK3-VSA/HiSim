@@ -19,7 +19,7 @@ from hisim.component import (
     SingleTimeStepValues,
     DisplayConfig,
 )
-from hisim import loadtypes
+from hisim import loadtypes, log, utils
 from hisim.components.configuration import EmissionFactorsAndCostsForFuelsConfig, PhysicsConfig
 from hisim.components.simple_water_storage import SimpleDHWStorage
 from hisim.components.weather import Weather
@@ -164,6 +164,9 @@ class SolarThermalSystem(Component):
         self.previous_state = deepcopy(self.state)
         # Initialized variables
         self.factor = 1.0
+        self.precalc_data_for_all_timesteps_data: List = []
+        self.precalc_data_for_all_timesteps_output: List = []
+        self.cache_filepath: str
 
         # Add inputs
         self.t_out_channel: ComponentInput = self.add_input(
@@ -482,7 +485,6 @@ class SolarThermalSystem(Component):
         list_of_kpi_entries.append(total_co2_footprint)
         return list_of_kpi_entries
 
-
     def calc_maintenance_cost(self) -> float:
         """Calc maintenance_cost per simulated period as share of capex of component."""
         seconds_per_year = 365 * 24 * 60 * 60
@@ -580,7 +582,34 @@ class SolarThermalSystem(Component):
 
     def i_prepare_simulation(self) -> None:
         """Prepare the simulation."""
-        pass
+        file_exists, self.cache_filepath = utils.get_cache_file(
+            self.config.name, self.config, self.my_simulation_parameters
+        )
+
+        if file_exists:
+            log.information("Get solar thermal results from cache.")
+            self.precalc_data_for_all_timesteps_output = pd.read_csv(
+                self.cache_filepath, sep=",", decimal="."
+            )["precalc_data"].tolist()
+
+            if (
+                len(self.precalc_data_for_all_timesteps_output)
+                != self.my_simulation_parameters.timesteps
+            ):
+                raise Exception(
+                    "Reading the cached solar thermal precalc values seems to have failed. "
+                    + "Expected "
+                    + str(self.my_simulation_parameters.timesteps)
+                    + " values, but got "
+                    + str(len(self.precalc_data_for_all_timesteps_output))
+                )
+
+        # create empty result lists as a preparation for caching
+        # in i_simulate
+
+        self.precalc_data_for_all_timesteps_data = [
+            0
+        ] * self.my_simulation_parameters.timesteps
 
     def i_simulate(
         self,
@@ -589,51 +618,62 @@ class SolarThermalSystem(Component):
         force_convergence: bool,
     ) -> None:
         """Simulates the component."""
-        control_signal = stsv.get_input_value(self.control_signal_channel)
-        global_horizontal_irradiance_w_m2 = stsv.get_input_value(
-            self.ghi_channel
-        )
-        diffuse_horizontal_irradiance_w_m2 = stsv.get_input_value(
-            self.dhi_channel
-        )
-        ambient_air_temperature_deg_c = stsv.get_input_value(
-            self.t_out_channel
-        )
-        temperature_collector_inlet_deg_c = stsv.get_input_value(
-            self.water_temperature_input_channel
-        )
+        # check if results could be found in cache and if the list has
+        # the right length
+        if (
+            hasattr(self, "precalc_data_for_all_timesteps_output")
+            and len(self.precalc_data_for_all_timesteps_output)
+            == self.my_simulation_parameters.timesteps
+        ):
+            pass  # use precalculated data from cache
 
-        # calculate collectors heat
-        # Some more info on equation:
-        # http://www.estif.org/solarkeymarknew/the-solar-keymark-scheme-rules/21-certification-bodies/certified-products/58-collector-performance-parameters #noqa
-        time_ind = (
-            self.my_simulation_parameters.start_date
-            + datetime.timedelta(
-                0,
-                self.my_simulation_parameters.seconds_per_timestep * timestep,
+        # calculate outputs
+        else:
+            control_signal = stsv.get_input_value(self.control_signal_channel)
+            global_horizontal_irradiance_w_m2 = stsv.get_input_value(
+                self.ghi_channel
             )
-        )
+            diffuse_horizontal_irradiance_w_m2 = stsv.get_input_value(
+                self.dhi_channel
+            )
+            ambient_air_temperature_deg_c = stsv.get_input_value(
+                self.t_out_channel
+            )
+            temperature_collector_inlet_deg_c = stsv.get_input_value(
+                self.water_temperature_input_channel
+            )
 
-        precalc_data = flat_plate_precalc(
-            lat=self.config.coordinates.latitude,
-            long=self.config.coordinates.longitude,
-            collector_tilt=self.config.tilt,
-            collector_azimuth=self.config.azimuth,
-            eta_0=self.config.eta_0,  # optical efficiency of the collector
-            a_1=self.config.a_1_w_m2_k,  # thermal loss parameter 1
-            a_2=self.config.a_2_w_m2_k,  # thermal loss parameter 2
-            temp_collector_inlet=temperature_collector_inlet_deg_c,  # collectors inlet temperature
-            delta_temp_n=self.config.delta_temperature_n_k,  # temperature difference between collector inlet and mean temperature
-            irradiance_global=pd.Series(
-                global_horizontal_irradiance_w_m2, index=[time_ind]
-            ),
-            irradiance_diffuse=pd.Series(
-                diffuse_horizontal_irradiance_w_m2, index=[time_ind]
-            ),
-            temp_amb=pd.Series(
-                ambient_air_temperature_deg_c, index=[time_ind]
-            ),
-        )
+            # calculate collectors heat
+            # Some more info on equation:
+            # http://www.estif.org/solarkeymarknew/the-solar-keymark-scheme-rules/21-certification-bodies/certified-products/58-collector-performance-parameters #noqa
+            time_ind = (
+                self.my_simulation_parameters.start_date
+                + datetime.timedelta(
+                    0,
+                    self.my_simulation_parameters.seconds_per_timestep * timestep,
+                )
+            )
+
+            precalc_data = flat_plate_precalc(
+                lat=self.config.coordinates.latitude,
+                long=self.config.coordinates.longitude,
+                collector_tilt=self.config.tilt,
+                collector_azimuth=self.config.azimuth,
+                eta_0=self.config.eta_0,  # optical efficiency of the collector
+                a_1=self.config.a_1_w_m2_k,  # thermal loss parameter 1
+                a_2=self.config.a_2_w_m2_k,  # thermal loss parameter 2
+                temp_collector_inlet=temperature_collector_inlet_deg_c,  # collectors inlet temperature
+                delta_temp_n=self.config.delta_temperature_n_k,  # temperature difference between collector inlet and mean temperature
+                irradiance_global=pd.Series(
+                    global_horizontal_irradiance_w_m2, index=[time_ind]
+                ),
+                irradiance_diffuse=pd.Series(
+                    diffuse_horizontal_irradiance_w_m2, index=[time_ind]
+                ),
+                temp_amb=pd.Series(
+                    ambient_air_temperature_deg_c, index=[time_ind]
+                ),
+            )
 
         thermal_power_output_w = (
             precalc_data["collectors_heat"].iloc[0] * self.config.area_m2
@@ -699,6 +739,27 @@ class SolarThermalSystem(Component):
             self.electricity_consumption_output_channel,
             electric_power_demand_solar_pump_w,
         )
+        # cache results at the end of the simulation
+        print(timestep, len(self.precalc_data_for_all_timesteps_data))
+        self.precalc_data_for_all_timesteps_data[timestep] = (
+            precalc_data
+        )
+
+        if timestep + 1 == self.my_simulation_parameters.timesteps:
+            dict_with_results = {
+                "precalc_data": self.precalc_data_for_all_timesteps_data,  # noqa: E501
+            }
+
+            database = pd.DataFrame(
+                dict_with_results,
+                columns=[
+                    "precalc_data",
+                ],
+            )
+
+            database.to_csv(
+                self.cache_filepath, sep=",", decimal=".", index=False
+            )
 
 
 @dataclass
